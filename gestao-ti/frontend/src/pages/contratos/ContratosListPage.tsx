@@ -94,7 +94,7 @@ export function ContratosListPage() {
             </div>
             <div className="bg-white rounded-xl p-4 border border-slate-200">
               <p className="text-2xl font-bold text-slate-800">
-                R$ {valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                R$ {valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
               <p className="text-xs text-slate-500">Valor Comprometido</p>
             </div>

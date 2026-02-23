@@ -5,9 +5,22 @@ import { PrismaService } from '../prisma/prisma.service.js';
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getResumo() {
+  private resolvePeriodo(filters?: { dataInicio?: string; dataFim?: string }) {
+    const now = new Date();
+    const fim = filters?.dataFim
+      ? new Date(filters.dataFim + 'T23:59:59.999Z')
+      : now;
+    const inicio = filters?.dataInicio
+      ? new Date(filters.dataInicio + 'T00:00:00.000Z')
+      : new Date(now.getFullYear(), now.getMonth(), 1);
+    return { inicio, fim };
+  }
+
+  async getResumo(filters?: { dataInicio?: string; dataFim?: string }) {
+    const { inicio, fim } = this.resolvePeriodo(filters);
     const limitVencendo30d = new Date();
     limitVencendo30d.setDate(limitVencendo30d.getDate() + 30);
+    const periodoFilter = { gte: inicio, lte: fim };
 
     const [
       totalAbertos,
@@ -29,7 +42,7 @@ export class DashboardService {
       parcelasPendentes,
       parcelasAtrasadas,
       paradasEmAndamento,
-      totalParadasMes,
+      totalParadasPeriodo,
       projetosAtivos,
       projetosEmAndamento,
       custoProjetosPrevisto,
@@ -39,26 +52,26 @@ export class DashboardService {
       totalAtivosAtivos,
       totalArtigosPublicados,
     ] = await Promise.all([
-      this.prisma.chamado.count({ where: { status: 'ABERTO' } }),
-      this.prisma.chamado.count({ where: { status: 'EM_ATENDIMENTO' } }),
-      this.prisma.chamado.count({ where: { status: 'PENDENTE' } }),
-      this.prisma.chamado.count({ where: { status: 'RESOLVIDO' } }),
-      this.prisma.chamado.count({ where: { status: 'FECHADO' } }),
+      this.prisma.chamado.count({ where: { status: 'ABERTO', createdAt: periodoFilter } }),
+      this.prisma.chamado.count({ where: { status: 'EM_ATENDIMENTO', createdAt: periodoFilter } }),
+      this.prisma.chamado.count({ where: { status: 'PENDENTE', createdAt: periodoFilter } }),
+      this.prisma.chamado.count({ where: { status: 'RESOLVIDO', createdAt: periodoFilter } }),
+      this.prisma.chamado.count({ where: { status: 'FECHADO', createdAt: periodoFilter } }),
       this.prisma.chamado.groupBy({
         by: ['equipeAtualId'],
-        where: { status: { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE'] } },
+        where: { status: { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE'] }, createdAt: periodoFilter },
         _count: true,
       }),
       this.prisma.chamado.groupBy({
         by: ['prioridade'],
-        where: { status: { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE'] } },
+        where: { status: { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE'] }, createdAt: periodoFilter },
         _count: true,
       }),
       this.prisma.equipeTI.findMany({
         where: { status: 'ATIVO' },
         select: { id: true, nome: true, sigla: true, cor: true },
       }),
-      this.prisma.ordemServico.count({ where: { status: { in: ['ABERTA', 'EM_EXECUCAO'] } } }),
+      this.prisma.ordemServico.count({ where: { status: { in: ['ABERTA', 'EM_EXECUCAO'] }, createdAt: periodoFilter } }),
       this.prisma.software.count({ where: { status: 'ATIVO' } }),
       this.prisma.softwareLicenca.count({ where: { status: 'ATIVA' } }),
       this.prisma.softwareLicenca.count({
@@ -88,9 +101,7 @@ export class DashboardService {
       }),
       this.prisma.registroParada.count({ where: { status: 'EM_ANDAMENTO' } }),
       this.prisma.registroParada.count({
-        where: {
-          inicio: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
-        },
+        where: { inicio: periodoFilter },
       }),
       this.prisma.projeto.count({
         where: {
@@ -116,6 +127,7 @@ export class DashboardService {
         _sum: { custoRealizado: true },
       }),
       this.prisma.apontamentoHoras.aggregate({
+        where: { data: periodoFilter },
         _sum: { horas: true },
       }),
       this.prisma.riscoProjeto.count({
@@ -128,6 +140,7 @@ export class DashboardService {
     const equipeMap = Object.fromEntries(equipes.map((e) => [e.id, e]));
 
     return {
+      periodo: { inicio: inicio.toISOString(), fim: fim.toISOString() },
       chamados: {
         abertos: totalAbertos,
         emAtendimento: totalEmAtendimento,
@@ -159,7 +172,7 @@ export class DashboardService {
       },
       sustentacao: {
         paradasEmAndamento,
-        totalParadasMes,
+        totalParadasMes: totalParadasPeriodo,
       },
       projetos: {
         totalAtivos: projetosAtivos,
@@ -178,12 +191,12 @@ export class DashboardService {
     };
   }
 
-  async getExecutivo() {
+  async getExecutivo(filters?: { dataInicio?: string; dataFim?: string }) {
+    const { inicio, fim } = this.resolvePeriodo(filters);
     const now = new Date();
-    const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1);
     const limit30d = new Date();
     limit30d.setDate(limit30d.getDate() + 30);
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const periodoFilter = { gte: inicio, lte: fim };
 
     const [
       chamadosAbertos,
@@ -214,23 +227,24 @@ export class DashboardService {
       ativosPorStatus,
       totalArtigosPublicados,
     ] = await Promise.all([
-      // Chamados
-      this.prisma.chamado.count({ where: { status: 'ABERTO' } }),
-      this.prisma.chamado.count({ where: { status: 'EM_ATENDIMENTO' } }),
-      this.prisma.chamado.count({ where: { status: 'PENDENTE' } }),
+      // Chamados — filtrados por periodo
+      this.prisma.chamado.count({ where: { status: 'ABERTO', createdAt: periodoFilter } }),
+      this.prisma.chamado.count({ where: { status: 'EM_ATENDIMENTO', createdAt: periodoFilter } }),
+      this.prisma.chamado.count({ where: { status: 'PENDENTE', createdAt: periodoFilter } }),
       this.prisma.chamado.count({
-        where: { status: 'FECHADO', dataFechamento: { gte: inicioMes } },
+        where: { status: 'FECHADO', dataFechamento: periodoFilter },
       }),
       this.prisma.chamado.count({
         where: {
           status: { notIn: ['FECHADO', 'CANCELADO'] },
+          createdAt: periodoFilter,
           dataLimiteSla: { lt: now, not: null },
         },
       }),
       this.prisma.chamado.findMany({
         where: {
           status: 'FECHADO',
-          dataFechamento: { gte: inicioMes },
+          dataFechamento: periodoFilter,
           dataResolucao: { not: null },
           dataLimiteSla: { not: null },
         },
@@ -239,11 +253,11 @@ export class DashboardService {
       this.prisma.chamado.findMany({
         where: {
           status: { in: ['RESOLVIDO', 'FECHADO'] },
-          dataResolucao: { not: null, gte: thirtyDaysAgo },
+          dataResolucao: { not: null, ...periodoFilter },
         },
         select: { createdAt: true, dataResolucao: true },
       }),
-      // Contratos
+      // Contratos — snapshot
       this.prisma.contrato.count({ where: { status: 'ATIVO' } }),
       this.prisma.contrato.aggregate({
         where: { status: { in: ['ATIVO', 'SUSPENSO'] } },
@@ -255,20 +269,20 @@ export class DashboardService {
       this.prisma.parcelaContrato.count({
         where: { status: 'PENDENTE', dataVencimento: { lt: now } },
       }),
-      // Sustentacao
+      // Sustentacao — filtrados por periodo
       this.prisma.registroParada.count({ where: { status: 'EM_ANDAMENTO' } }),
       this.prisma.registroParada.count({
-        where: { inicio: { gte: inicioMes } },
+        where: { inicio: periodoFilter },
       }),
       this.prisma.registroParada.findMany({
         where: {
           status: 'FINALIZADA',
-          fim: { gte: thirtyDaysAgo },
+          fim: periodoFilter,
           duracaoMinutos: { not: null },
         },
         select: { duracaoMinutos: true },
       }),
-      // Projetos
+      // Projetos — snapshot
       this.prisma.projeto.count({
         where: { status: { in: ['PLANEJAMENTO', 'EM_ANDAMENTO', 'PAUSADO'] }, nivel: 1 },
       }),
@@ -284,7 +298,7 @@ export class DashboardService {
       this.prisma.riscoProjeto.count({
         where: { status: { in: ['IDENTIFICADO', 'EM_ANALISE', 'MITIGANDO'] } },
       }),
-      // Portfolio
+      // Portfolio — snapshot
       this.prisma.software.count({ where: { status: 'ATIVO' } }),
       this.prisma.softwareLicenca.count({ where: { status: 'ATIVA' } }),
       this.prisma.softwareLicenca.count({
@@ -294,11 +308,11 @@ export class DashboardService {
         where: { status: 'ATIVA' },
         _sum: { valorTotal: true },
       }),
-      // Ativos
+      // Ativos — snapshot
       this.prisma.ativo.count({ where: { status: 'ATIVO' } }),
       this.prisma.ativo.groupBy({ by: ['tipo'], _count: true }),
       this.prisma.ativo.groupBy({ by: ['status'], _count: true }),
-      // Conhecimento
+      // Conhecimento — snapshot
       this.prisma.artigoConhecimento.count({ where: { status: 'PUBLICADO' } }),
     ]);
 
@@ -328,6 +342,7 @@ export class DashboardService {
     }
 
     return {
+      periodo: { inicio: inicio.toISOString(), fim: fim.toISOString() },
       chamados: {
         abertos: chamadosAbertos,
         emAtendimento: chamadosEmAtendimento,
@@ -507,11 +522,24 @@ export class DashboardService {
     };
   }
 
-  async getFinanceiro() {
-    const limit90d = new Date();
-    limit90d.setDate(limit90d.getDate() + 90);
-    const limit30d = new Date();
-    limit30d.setDate(limit30d.getDate() + 30);
+  async getFinanceiro(filters?: { dataInicio?: string; dataFim?: string }) {
+    const hasPeriod = !!filters?.dataInicio || !!filters?.dataFim;
+
+    let contratosVencendoWhere: Record<string, unknown>;
+    let parcelasWhere: Record<string, unknown>;
+
+    if (hasPeriod) {
+      const { inicio, fim } = this.resolvePeriodo(filters);
+      contratosVencendoWhere = { status: 'ATIVO', dataFim: { gte: inicio, lte: fim } };
+      parcelasWhere = { status: 'PENDENTE', dataVencimento: { gte: inicio, lte: fim } };
+    } else {
+      const limit90d = new Date();
+      limit90d.setDate(limit90d.getDate() + 90);
+      const limit30d = new Date();
+      limit30d.setDate(limit30d.getDate() + 30);
+      contratosVencendoWhere = { status: 'ATIVO', dataFim: { lte: limit90d, gte: new Date() } };
+      parcelasWhere = { status: 'PENDENTE', dataVencimento: { lte: limit30d } };
+    }
 
     const [
       contratosPorTipo,
@@ -531,10 +559,7 @@ export class DashboardService {
         _count: true,
       }),
       this.prisma.contrato.findMany({
-        where: {
-          status: 'ATIVO',
-          dataFim: { lte: limit90d, gte: new Date() },
-        },
+        where: contratosVencendoWhere,
         select: {
           id: true,
           numero: true,
@@ -547,10 +572,7 @@ export class DashboardService {
         orderBy: { dataFim: 'asc' },
       }),
       this.prisma.parcelaContrato.findMany({
-        where: {
-          status: 'PENDENTE',
-          dataVencimento: { lte: limit30d },
-        },
+        where: parcelasWhere,
         include: {
           contrato: { select: { id: true, numero: true, titulo: true, fornecedor: true } },
         },
@@ -579,7 +601,12 @@ export class DashboardService {
       }
     }
 
+    const { inicio, fim } = hasPeriod
+      ? this.resolvePeriodo(filters)
+      : { inicio: new Date(), fim: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) };
+
     return {
+      periodo: { inicio: inicio.toISOString(), fim: fim.toISOString() },
       contratosPorTipo: contratosPorTipo.map((g) => ({
         tipo: g.tipo,
         total: g._count,

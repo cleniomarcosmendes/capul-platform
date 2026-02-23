@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { dashboardService } from '../../services/dashboard.service';
 import { BarChart3, AlertTriangle, Receipt, PieChart } from 'lucide-react';
+import { PeriodFilter } from '../../components/PeriodFilter';
 import type { DashboardFinanceiro } from '../../types';
 
 const tipoLabels: Record<string, string> = {
@@ -19,12 +20,18 @@ export function DashboardFinanceiroPage() {
   const [data, setData] = useState<DashboardFinanceiro | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const hoje = new Date();
+  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const [dataInicio, setDataInicio] = useState(inicioMes.toISOString().slice(0, 10));
+  const [dataFim, setDataFim] = useState(hoje.toISOString().slice(0, 10));
+
   useEffect(() => {
-    dashboardService.getFinanceiro()
+    setLoading(true);
+    dashboardService.getFinanceiro({ dataInicio, dataFim })
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [dataInicio, dataFim]);
 
   if (loading) return <><Header title="Financeiro" /><div className="p-6"><p className="text-slate-500">Carregando...</p></div></>;
   if (!data) return <><Header title="Financeiro" /><div className="p-6"><p className="text-red-500">Erro ao carregar dados financeiros</p></div></>;
@@ -35,6 +42,12 @@ export function DashboardFinanceiroPage() {
     <>
       <Header title="Dashboard Financeiro" />
       <div className="p-6">
+        <PeriodFilter
+          dataInicio={dataInicio}
+          dataFim={dataFim}
+          onPeriodChange={(inicio, fim) => { setDataInicio(inicio); setDataFim(fim); }}
+        />
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           {/* Contratos por Tipo */}
           <div className="bg-white rounded-xl border border-slate-200">
@@ -54,7 +67,7 @@ export function DashboardFinanceiroPage() {
                       <div key={item.tipo}>
                         <div className="flex items-center justify-between text-sm mb-1">
                           <span className="text-slate-700">{tipoLabels[item.tipo] || item.tipo} ({item.total})</span>
-                          <span className="font-medium text-slate-800">R$ {item.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                          <span className="font-medium text-slate-800">R$ {item.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div className="w-full bg-slate-100 rounded-full h-2">
                           <div className="bg-capul-500 h-2 rounded-full" style={{ width: `${pct}%` }} />
@@ -64,7 +77,7 @@ export function DashboardFinanceiroPage() {
                   })}
                   <div className="pt-2 border-t border-slate-200 flex justify-between text-sm font-semibold text-slate-800">
                     <span>Total</span>
-                    <span>R$ {totalGeral.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                    <span>R$ {totalGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
                 </div>
               )}
@@ -115,7 +128,7 @@ export function DashboardFinanceiroPage() {
           <div className="bg-white rounded-xl border border-slate-200">
             <div className="px-6 py-4 border-b border-slate-200">
               <h4 className="font-semibold text-slate-700 flex items-center gap-2">
-                <Receipt className="w-4 h-4" /> Parcelas Proximas (30 dias)
+                <Receipt className="w-4 h-4" /> Parcelas no Periodo
               </h4>
             </div>
             <div className="divide-y divide-slate-100">
@@ -153,11 +166,11 @@ export function DashboardFinanceiroPage() {
         <div className="bg-white rounded-xl border border-slate-200">
           <div className="px-6 py-4 border-b border-slate-200">
             <h4 className="font-semibold text-slate-700 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500" /> Contratos Vencendo (90 dias)
+              <AlertTriangle className="w-4 h-4 text-amber-500" /> Contratos Vencendo no Periodo
             </h4>
           </div>
           {data.contratosVencendo.length === 0 ? (
-            <p className="px-6 py-4 text-sm text-slate-400">Nenhum contrato vencendo nos proximos 90 dias</p>
+            <p className="px-6 py-4 text-sm text-slate-400">Nenhum contrato vencendo no periodo selecionado</p>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">

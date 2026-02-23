@@ -9,13 +9,19 @@ export class DashboardController {
   constructor(private readonly service: DashboardService) {}
 
   @Get()
-  getResumo() {
-    return this.service.getResumo();
+  getResumo(
+    @Query('dataInicio') dataInicio?: string,
+    @Query('dataFim') dataFim?: string,
+  ) {
+    return this.service.getResumo({ dataInicio, dataFim });
   }
 
   @Get('executivo')
-  getExecutivo() {
-    return this.service.getExecutivo();
+  getExecutivo(
+    @Query('dataInicio') dataInicio?: string,
+    @Query('dataFim') dataFim?: string,
+  ) {
+    return this.service.getExecutivo({ dataInicio, dataFim });
   }
 
   @Get('disponibilidade')
@@ -29,7 +35,10 @@ export class DashboardController {
   }
 
   @Get('financeiro')
-  getFinanceiro() {
-    return this.service.getFinanceiro();
+  getFinanceiro(
+    @Query('dataInicio') dataInicio?: string,
+    @Query('dataFim') dataFim?: string,
+  ) {
+    return this.service.getFinanceiro({ dataInicio, dataFim });
   }
 }

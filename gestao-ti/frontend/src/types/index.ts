@@ -227,6 +227,7 @@ export interface OrdemServico {
 }
 
 export interface DashboardResumo {
+  periodo?: { inicio: string; fim: string };
   chamados: {
     abertos: number;
     emAtendimento: number;
@@ -752,6 +753,7 @@ export interface ArtigoConhecimento {
 // === Dashboard Executivo interface ===
 
 export interface DashboardExecutivo {
+  periodo?: { inicio: string; fim: string };
   chamados: {
     abertos: number;
     emAtendimento: number;
@@ -815,6 +817,7 @@ export interface Notificacao {
 }
 
 export interface DashboardFinanceiro {
+  periodo?: { inicio: string; fim: string };
   contratosPorTipo: { tipo: TipoContrato; total: number; valorTotal: number }[];
   contratosPorStatus: { status: StatusContrato; total: number }[];
   despesasPorCentroCusto: { centroCusto: { id: string; codigo: string; nome: string }; valorTotal: number }[];

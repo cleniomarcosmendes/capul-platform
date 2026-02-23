@@ -27,7 +27,8 @@ export const coreApi = axios.create({
     (response) => response,
     async (error) => {
       const originalRequest = error.config;
-      if (error.response?.status === 401 && !originalRequest._retry) {
+      const isLoginRequest = originalRequest?.url?.includes('/login');
+      if (error.response?.status === 401 && !originalRequest._retry && !isLoginRequest) {
         originalRequest._retry = true;
         try {
           const refreshToken = localStorage.getItem('refreshToken');

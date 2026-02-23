@@ -6,6 +6,7 @@ import {
   Monitor,
   LogOut,
   User,
+  Users,
   Building2,
   ChevronDown,
 } from 'lucide-react';
@@ -91,7 +92,15 @@ export default function HubPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => navigate('/usuarios')}
+              className="flex items-center gap-2 text-sm text-slate-500 hover:text-capul-600
+                px-3 py-2 rounded-lg hover:bg-slate-50 transition-all"
+            >
+              <Users size={16} />
+              Usuarios
+            </button>
             <button
               onClick={() => navigate('/perfil')}
               className="flex items-center gap-2 text-sm text-slate-600 hover:text-capul-600
@@ -139,6 +148,7 @@ export default function HubPage() {
             ))}
           </div>
         )}
+
       </main>
 
       {/* Modal Trocar Filial */}
