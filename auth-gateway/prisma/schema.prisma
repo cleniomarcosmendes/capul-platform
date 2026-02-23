@@ -1,0 +1,244 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["core"]
+}
+
+enum StatusGeral {
+  ATIVO
+  INATIVO
+
+  @@schema("core")
+}
+
+model Empresa {
+  id           String   @id @default(uuid())
+  razaoSocial  String   @map("razao_social")
+  nomeFantasia String   @map("nome_fantasia")
+  cnpjMatriz   String?  @unique @map("cnpj_matriz")
+  endereco     String?
+  cidade       String?
+  estado       String?
+  cep          String?
+  telefone     String?
+  email        String?
+  logoUrl      String?  @map("logo_url")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  filiais Filial[]
+
+  @@map("empresas")
+  @@schema("core")
+}
+
+model Filial {
+  id           String      @id @default(uuid())
+  codigo       String      @unique
+  razaoSocial  String?     @map("razao_social")
+  nomeFantasia String      @map("nome_fantasia")
+  cnpj         String?     @unique
+  descricao    String?
+  endereco     String?
+  cidade       String?
+  estado       String?
+  cep          String?
+  telefone     String?
+  email        String?
+  status       StatusGeral @default(ATIVO)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  empresaId String  @map("empresa_id")
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+
+  departamentos  Departamento[]
+  centrosCusto   CentroCusto[]
+  usuarios       Usuario[]       @relation("FilialPrincipal")
+  usuarioFiliais UsuarioFilial[]
+
+  @@map("filiais")
+  @@schema("core")
+}
+
+model Departamento {
+  id        String      @id @default(uuid())
+  nome      String
+  descricao String?
+  status    StatusGeral @default(ATIVO)
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  filialId String @map("filial_id")
+  filial   Filial @relation(fields: [filialId], references: [id])
+
+  usuarios Usuario[]
+
+  @@unique([filialId, nome])
+  @@map("departamentos")
+  @@schema("core")
+}
+
+model CentroCusto {
+  id        String      @id @default(uuid())
+  codigo    String
+  nome      String
+  descricao String?
+  status    StatusGeral @default(ATIVO)
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  filialId String @map("filial_id")
+  filial   Filial @relation(fields: [filialId], references: [id])
+
+  @@unique([filialId, codigo])
+  @@map("centros_custo")
+  @@schema("core")
+}
+
+model Usuario {
+  id             String      @id @default(uuid())
+  username       String      @unique
+  email          String?     @unique
+  nome           String
+  senha          String
+  telefone       String?
+  cargo          String?
+  avatarUrl      String?     @map("avatar_url")
+  status         StatusGeral @default(ATIVO)
+  primeiroAcesso Boolean     @default(true) @map("primeiro_acesso")
+  ultimoLogin    DateTime?   @map("ultimo_login")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  filialPrincipalId String?       @map("filial_principal_id")
+  filialPrincipal   Filial?       @relation("FilialPrincipal", fields: [filialPrincipalId], references: [id])
+  departamentoId    String?       @map("departamento_id")
+  departamento      Departamento? @relation(fields: [departamentoId], references: [id])
+
+  filiais       UsuarioFilial[]
+  permissoes    PermissaoModulo[]
+  refreshTokens RefreshToken[]
+
+  @@map("usuarios")
+  @@schema("core")
+}
+
+model UsuarioFilial {
+  id        String    @id @default(uuid())
+  isDefault Boolean   @default(false) @map("is_default")
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by")
+  updatedAt DateTime? @updatedAt @map("updated_at")
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  filialId  String  @map("filial_id")
+  filial    Filial  @relation(fields: [filialId], references: [id])
+
+  @@unique([usuarioId, filialId])
+  @@map("usuario_filiais")
+  @@schema("core")
+}
+
+model ModuloSistema {
+  id          String      @id @default(uuid())
+  codigo      String      @unique
+  nome        String
+  descricao   String?
+  icone       String?
+  cor         String?
+  urlFrontend String?     @map("url_frontend")
+  urlBackend  String?     @map("url_backend")
+  ordem       Int         @default(0)
+  status      StatusGeral @default(ATIVO)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  rolesDisponiveis RoleModulo[]
+  permissoes       PermissaoModulo[]
+
+  @@map("modulos_sistema")
+  @@schema("core")
+}
+
+model RoleModulo {
+  id        String  @id @default(uuid())
+  codigo    String
+  nome      String
+  descricao String?
+
+  moduloId String        @map("modulo_id")
+  modulo   ModuloSistema @relation(fields: [moduloId], references: [id])
+
+  permissoes PermissaoModulo[]
+
+  @@unique([moduloId, codigo])
+  @@map("roles_modulo")
+  @@schema("core")
+}
+
+model PermissaoModulo {
+  id        String      @id @default(uuid())
+  status    StatusGeral @default(ATIVO)
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  usuarioId    String        @map("usuario_id")
+  usuario      Usuario       @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  moduloId     String        @map("modulo_id")
+  modulo       ModuloSistema @relation(fields: [moduloId], references: [id])
+  roleModuloId String        @map("role_modulo_id")
+  roleModulo   RoleModulo    @relation(fields: [roleModuloId], references: [id])
+
+  @@unique([usuarioId, moduloId])
+  @@map("permissoes_modulo")
+  @@schema("core")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+  @@schema("core")
+}
+
+model SystemConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String?
+  descricao String?
+  categoria String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_config")
+  @@schema("core")
+}
+
+model SystemLog {
+  id        String   @id @default(uuid())
+  level     String
+  message   String
+  module    String?
+  action    String?
+  usuarioId String?  @map("usuario_id")
+  ipAddress String?  @map("ip_address")
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("system_logs")
+  @@schema("core")
+}

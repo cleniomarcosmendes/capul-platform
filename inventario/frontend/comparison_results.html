@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <!-- 🔄 VERSÃO: 2.19.22 -->
+    <title>Resultado da Comparação - Capul Inventário</title>
+    <link rel="icon" type="image/png" href="/img/logo-capul-icon.png">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Capul Theme -->
+    <link href="/css/capul-theme.css" rel="stylesheet">
+
+    <style>
+        /* ✅ v2.19.40: Layout 100% para aproveitamento total da tela */
+        .container {
+            max-width: 100% !important;
+        }
+
+        :root {
+            --primary-color: #1B5E20;
+            --secondary-color: #858796;
+            --success-color: #1cc88a;
+            --warning-color: #f6c23e;
+        }
+
+        body {
+            background-color: #f8f9fc;
+            font-family: 'Nunito', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Navbar */
+        .navbar {
+            background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+        }
+
+        /* Page Header (Padrão do Sistema) */
+        .page-header {
+            background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
+            color: white;
+            padding: 2rem;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+        }
+
+        .page-header h4 {
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .page-header .btn-light {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+
+        .page-header .btn-light:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        .page-header .btn-outline-light:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Info Cards (Padrão do Sistema) */
+        .info-cards {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.05) 100%);
+            padding: 1.5rem 2rem;
+        }
+
+        .info-card {
+            background: white;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.075);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            height: 100%;
+        }
+
+        .info-card-icon {
+            font-size: 2rem;
+            color: var(--primary-color);
+            opacity: 0.8;
+        }
+
+        .info-card-content small {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--secondary-color);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.25rem;
+        }
+
+        .info-card-content strong {
+            display: block;
+            font-size: 1.1rem;
+            color: #2c3e50;
+        }
+
+        /* Tabela */
+        .table-container {
+            background: white;
+            margin: 1rem 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+            overflow: auto;
+            max-height: calc(100vh - 290px); /* Altura máxima para scroll quando necessário */
+        }
+
+        .table {
+            margin-bottom: 0;
+            font-size: 0.9rem;
+        }
+
+        .table thead th {
+            background-color: #f8f9fc;
+            border-bottom: 2px solid #e3e6f0;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            padding: 0.75rem 0.5rem;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .table tbody td {
+            padding: 0.75rem 0.5rem;
+            vertical-align: middle;
+        }
+
+        .table tbody tr:hover {
+            background-color: #f8f9fc;
+        }
+
+        /* Alert Footer */
+        .alert-footer {
+            margin: 0.5rem 2rem 2rem 2rem;
+        }
+
+        /* Badges */
+        .badge-inventory {
+            font-size: 0.85rem;
+            padding: 0.5rem 1rem;
+        }
+
+        /* Print styles */
+        @media print {
+            @page {
+                size: landscape; /* Orientação paisagem */
+                margin: 10mm; /* Margens menores */
+            }
+
+            .navbar,
+            .page-header .btn,
+            .export-section,
+            .alert-footer {
+                display: none !important;
+            }
+
+            .page-header {
+                padding: 0.5rem;
+                font-size: 0.9rem;
+            }
+
+            .page-header h4 {
+                font-size: 1.2rem;
+            }
+
+            .info-cards {
+                padding: 0.5rem;
+                font-size: 0.75rem;
+            }
+
+            .info-card {
+                padding: 0.5rem;
+            }
+
+            .info-card-icon {
+                font-size: 1.2rem;
+            }
+
+            .info-card-content strong {
+                font-size: 0.9rem;
+            }
+
+            .table-container {
+                margin: 0.5rem;
+                box-shadow: none;
+                max-height: none;
+                overflow: visible;
+            }
+
+            .table {
+                font-size: 0.7rem; /* Fonte menor para tabela */
+                page-break-inside: auto;
+            }
+
+            .table thead th {
+                padding: 3px 2px;
+                font-size: 0.65rem;
+            }
+
+            .table tbody td {
+                padding: 3px 2px;
+                font-size: 0.7rem;
+            }
+
+            .table tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+
+            .table thead {
+                display: table-header-group; /* Repetir header em cada página */
+            }
+
+            body {
+                background: white;
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+            }
+
+            /* Garantir que cores sejam impressas */
+            .row-synthetic,
+            .row-analytical,
+            .badge {
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+            }
+        }
+
+        /* ✅ v2.15.2: Classes para diferenciar linhas agregadas vs analíticas */
+        .row-synthetic {
+            background-color: #fff3cd !important; /* Amarelo claro */
+            font-weight: 500;
+        }
+
+        .row-analytical {
+            background-color: #d1e7dd !important; /* Verde claro */
+        }
+
+        .row-synthetic td:first-child,
+        .row-analytical td:first-child {
+            border-left: 4px solid #ffc107 !important;
+        }
+
+        .row-analytical td:first-child {
+            border-left: 4px solid #198754 !important;
+        }
+    </style>
+
+    <!-- ✅ v2.17.4: Utilitários globais (sessão, loading, erros) -->
+    <script src="/js/global_utils.js"></script>
+</head>
+<body>
+    <!-- Header Branco com Logo Capul -->
+    <header class="capul-header">
+        <div class="container-fluid px-4">
+            <div class="row align-items-center">
+                <div class="col-md-3">
+                    <a href="dashboard.html" class="capul-brand text-decoration-none">
+                        <img src="/img/logo-capul.png" alt="Capul" onerror="this.style.display='none'">
+                        <span>Inventário</span>
+                    </a>
+                </div>
+                <div class="col-md-6 text-center">
+                    <div class="capul-store-badge">
+                        <i class="bi bi-building"></i>
+                        <span id="headerStoreName">Carregando...</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex align-items-center justify-content-end gap-3">
+                        <div class="capul-user-info">
+                            <div class="capul-avatar" id="userAvatar">?</div>
+                            <div class="capul-user-details">
+                                <div class="capul-user-name" id="headerUserName">Carregando...</div>
+                                <div class="capul-user-role" id="userRoleBadge">
+                                    <i class="bi bi-shield-check"></i>
+                                    <span>...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn-capul-logout" onclick="logout()">
+                            <i class="bi bi-box-arrow-right me-1"></i>
+                            Sair
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Header Verde Contextual -->
+    <div class="page-header">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="mb-1" id="page-main-title">
+                        <i class="bi bi-arrow-left-right"></i> Análise Comparativa de Inventários
+                    </h4>
+                    <p class="mb-0" style="opacity: 0.9; font-size: 0.95rem;" id="page-subtitle">
+                        Visualização completa de contagens e divergências
+                    </p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-light btn-sm" onclick="voltarParaResumo()">
+                        <i class="bi bi-arrow-left"></i> Voltar
+                    </button>
+                    <button class="btn btn-outline-light btn-sm" onclick="fecharTudo()">
+                        <i class="bi bi-x-circle"></i> Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards Informativos (Padrão do Sistema) -->
+    <div class="info-cards">
+        <div class="container-fluid">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="info-card">
+                        <div class="info-card-icon">
+                            <i class="bi bi-box-seam"></i>
+                        </div>
+                        <div class="info-card-content">
+                            <small>INVENTÁRIO A</small>
+                            <strong id="card-inv-a">-</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="info-card">
+                        <div class="info-card-icon">
+                            <i class="bi bi-box-seam"></i>
+                        </div>
+                        <div class="info-card-content">
+                            <small>INVENTÁRIO B</small>
+                            <strong id="card-inv-b">-</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="info-card">
+                        <div class="info-card-icon" id="card-type-icon">
+                            <i class="bi bi-check-circle-fill"></i>
+                        </div>
+                        <div class="info-card-content">
+                            <small>TIPO</small>
+                            <strong id="card-type">Match Perfeito</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="info-card">
+                        <div class="info-card-icon">
+                            <i class="bi bi-bar-chart-fill"></i>
+                        </div>
+                        <div class="info-card-content">
+                            <small>TOTAL</small>
+                            <strong id="card-total">0 produtos</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Resultados -->
+    <div class="table-container" id="table-container">
+        <!-- Tabela será inserida aqui via JavaScript -->
+    </div>
+
+    <!-- Seção de Ações -->
+    <div class="export-section" style="margin: 2rem; padding: 1.5rem; background: white; border-radius: 0.5rem; box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);">
+        <div class="d-flex gap-2 flex-wrap justify-content-end">
+            <button class="btn btn-warning btn-sm" onclick="forceReloadData()">
+                <i class="bi bi-arrow-clockwise"></i> Atualizar Dados
+            </button>
+        </div>
+    </div>
+
+    <!-- Alert Informativo -->
+    <div class="alert-footer">
+        <div class="alert alert-success d-flex align-items-center" id="info-alert">
+            <i class="bi bi-info-circle-fill me-2"></i>
+            <div>
+                <strong>Match Perfeito:</strong> Transferências internas podem zerar divergências sem custo!
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- JS Consolidados v2.19.13 -->
+    <script src="/js/utils.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/ui.js"></script>
+    <script src="/js/export.js"></script>
+
+    <script>
+        const API_BASE_URL = window.location.origin + '/api';
+        let comparisonData = null;
+
+        // ✅ v2.19.32: Inicializar header Capul
+        function initCapulHeader() {
+            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+            const storeName = localStorage.getItem('store_name') || userData.store_name || 'Loja';
+            const storeCode = localStorage.getItem('store_code') || userData.store_code || '';
+
+            const storeEl = document.getElementById('headerStoreName');
+            if (storeEl) {
+                storeEl.textContent = storeCode ? `${storeCode} - ${storeName}` : storeName;
+            }
+
+            const userName = userData.username || userData.name || 'Usuário';
+            const userRole = userData.role || 'USER';
+
+            const userNameEl = document.getElementById('headerUserName');
+            const userAvatarEl = document.getElementById('userAvatar');
+            const userRoleEl = document.getElementById('userRoleBadge');
+
+            if (userNameEl) userNameEl.textContent = userName;
+            if (userAvatarEl) userAvatarEl.textContent = userName.charAt(0).toUpperCase();
+            if (userRoleEl) {
+                const roleSpan = userRoleEl.querySelector('span');
+                if (roleSpan) roleSpan.textContent = userRole;
+            }
+        }
+
+        function logout() {
+            localStorage.clear();
+            sessionStorage.clear();
+            window.location.href = '/static/login.html';
+        }
+
+        // Inicializar header ao carregar
+        initCapulHeader();
+
+        // ✅ v2.15.1: Função auxiliar para formatar badge de rastreamento
+        function formatTrackingBadge(tracking) {
+            if (!tracking || tracking === 'N/A' || tracking === '') {
+                return '<span class="badge" style="background-color: #6c757d; color: white; font-size: 0.75rem;">N/A</span>';
+            } else if (tracking === 'L') {
+                return '<span class="badge" style="background-color: #28a745; color: white; font-size: 0.75rem;">L</span>';
+            } else if (tracking === 'S') {
+                return '<span class="badge" style="background-color: #007bff; color: white; font-size: 0.75rem;">S</span>';
+            } else {
+                return `<span class="badge" style="background-color: #ffc107; color: black; font-size: 0.75rem;">${tracking}</span>`;
+            }
+        }
+
+        // ✅ v2.15.1: Função auxiliar para formatar número do lote
+        // ✅ v2.19.6: Concatenar com lote do fornecedor (B8_LOTEFOR)
+        function formatLotNumber(lotNumber, lotSupplier = null) {
+            if (!lotNumber) return '-';
+            if (lotSupplier) {
+                return `${lotNumber} | ${lotSupplier}`;
+            }
+            return lotNumber;
+        }
+
+        // ✅ Função para carregar dados (sessionStorage ou API)
+        async function loadComparisonData() {
+            try {
+                // ✅ v2.18.1: Verificar se é página de transferências - sempre buscar API
+                const urlParams = new URLSearchParams(window.location.search);
+                const mode = urlParams.get('mode');
+
+                // 1. Tentar recuperar do sessionStorage (EXCETO para transfers)
+                const cachedData = sessionStorage.getItem('comparisonResults');
+                if (cachedData && mode !== 'transfers') {
+                    console.log('✅ Dados encontrados no sessionStorage');
+                    comparisonData = JSON.parse(cachedData);
+                    renderComparisonResults();
+                    return;
+                }
+
+                // ✅ v2.18.1: Para transfers, SEMPRE buscar da API
+                if (mode === 'transfers') {
+                    console.log('🔄 Modo transfers: forçando busca da API...');
+                    sessionStorage.removeItem('comparisonResults');
+                }
+
+                // 2. Se não tiver no cache, verificar parâmetros da URL
+                const inventoryAId = urlParams.get('inventory_a_id');
+                const inventoryBId = urlParams.get('inventory_b_id');
+
+                console.log('🔄 Parâmetros da URL:', { inventoryAId, inventoryBId });
+
+                if (!inventoryAId || !inventoryBId) {
+                    throw new Error('Parâmetros inválidos na URL');
+                }
+
+                // 3. Fazer fetch da comparação
+                console.log('🔄 Carregando dados da API...');
+                const token = localStorage.getItem('access_token');
+
+                const response = await fetch(
+                    `${API_BASE_URL}/v1/inventory/compare?inventory_a_id=${inventoryAId}&inventory_b_id=${inventoryBId}`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error(`Erro ao carregar comparação: ${response.statusText}`);
+                }
+
+                const apiData = await response.json();
+                console.log('✅ Dados carregados da API');
+
+                // 4. Montar estrutura esperada e salvar no sessionStorage
+                // ✅ Se vindo da URL, usar 'cards' para mostrar os 4 cards, não os detalhes
+                const showMode = urlParams.get('mode') || 'cards';  // 'cards' ou 'matches' ou 'manual' ou 'transfers'
+
+                comparisonData = {
+                    type: showMode,  // Usar modo da URL ou 'cards' por padrão
+                    invA: apiData.inventory_a,
+                    invB: apiData.inventory_b,
+                    matches: apiData.matches || [],
+                    manualReview: apiData.manual_review || [],
+                    transfers: apiData.transfers || [],
+                    summary: apiData.summary || {}
+                };
+
+                sessionStorage.setItem('comparisonResults', JSON.stringify(comparisonData));
+                renderComparisonResults();
+
+            } catch (error) {
+                console.error('❌ Erro ao carregar dados:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro',
+                    text: error.message || 'Erro ao carregar dados de comparação!',
+                    confirmButtonColor: '#667eea'
+                }).then(() => {
+                    window.location.href = 'inventory.html';
+                });
+            }
+        }
+
+        // Iniciar carregamento
+        loadComparisonData();
+
+        // ✅ v2.18.1: Função para forçar atualização de dados (ignorar cache)
+        function forceReloadData() {
+            console.log('🔄 Forçando atualização de dados...');
+
+            // Limpar sessionStorage
+            sessionStorage.removeItem('comparisonResults');
+
+            // Obter parâmetros da URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const inventoryAId = urlParams.get('inventory_a_id');
+            const inventoryBId = urlParams.get('inventory_b_id');
+            const mode = urlParams.get('mode') || 'transfers';
+
+            if (!inventoryAId || !inventoryBId) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro',
+                    text: 'Parâmetros da URL não encontrados!',
+                    confirmButtonColor: '#667eea'
+                });
+                return;
+            }
+
+            // Recarregar página com parâmetros (vai buscar da API)
+            window.location.href = `comparison_results.html?inventory_a_id=${inventoryAId}&inventory_b_id=${inventoryBId}&mode=${mode}`;
+        }
+
+        function renderComparisonResults() {
+            const { type, invA, invB, matches, manualReview, transfers, summary } = comparisonData;
+            const isMatches = type === 'matches';
+            const isTransfers = type === 'transfers';
+            const data = isTransfers ? transfers : (isMatches ? matches : manualReview);
+
+            // Atualizar header principal
+            if (isTransfers) {
+                document.getElementById('page-main-title').innerHTML =
+                    '<i class="bi bi-arrow-left-right"></i> Relatório de Transferências';
+                document.getElementById('page-subtitle').textContent =
+                    'Movimentações sugeridas entre armazéns';
+            } else if (isMatches) {
+                // ✅ v2.19.48: Título unificado para Transferências
+                document.getElementById('page-main-title').innerHTML =
+                    '<i class="bi bi-arrow-left-right"></i> Transferências - Ajuste Contábil';
+                document.getElementById('page-subtitle').textContent =
+                    'Produtos com divergências opostas que permitem transferência lógica entre armazéns';
+            } else {
+                document.getElementById('page-main-title').innerHTML =
+                    '<i class="bi bi-exclamation-triangle-fill"></i> Análise Manual';
+                document.getElementById('page-subtitle').textContent =
+                    'Produtos que requerem decisão manual';
+            }
+
+            // Atualizar cards informativos
+            document.getElementById('card-inv-a').textContent = `${invA.name} - Arm. ${invA.warehouse}`;
+            document.getElementById('card-inv-b').textContent = `${invB.name} - Arm. ${invB.warehouse}`;
+            document.getElementById('card-total').textContent = `${data.length} produto${data.length !== 1 ? 's' : ''}`;
+
+            // Atualizar card TIPO
+            const typeIcon = document.getElementById('card-type-icon');
+            const typeText = document.getElementById('card-type');
+            if (isTransfers) {
+                typeIcon.innerHTML = '<i class="bi bi-arrow-left-right"></i>';
+                typeIcon.style.color = '#4e73df';
+                typeText.textContent = 'Transferências';
+            } else if (isMatches) {
+                // ✅ v2.19.48: Ícone e texto unificados para Transferências
+                typeIcon.innerHTML = '<i class="bi bi-arrow-left-right"></i>';
+                typeIcon.style.color = '#1cc88a';
+                typeText.textContent = 'Transferências';
+            } else {
+                typeIcon.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i>';
+                typeIcon.style.color = '#f6c23e';
+                typeText.textContent = 'Análise Manual';
+            }
+
+            // Atualizar alert
+            const alertDiv = document.getElementById('info-alert');
+            if (isTransfers) {
+                alertDiv.className = 'alert alert-primary d-flex align-items-center';
+                alertDiv.innerHTML = `
+                    <i class="bi bi-info-circle-fill me-2"></i>
+                    <div>
+                        <strong>Relatório de Transferências:</strong> Lista simplificada de movimentações sugeridas entre armazéns.
+                    </div>
+                `;
+            } else if (isMatches) {
+                // ✅ v2.19.48: Alert unificado para Transferências
+                alertDiv.className = 'alert alert-success d-flex align-items-center';
+                alertDiv.innerHTML = `
+                    <i class="bi bi-arrow-left-right me-2"></i>
+                    <div>
+                        <strong>Transferências Lógicas:</strong> Ajustes contábeis entre armazéns. <strong>Sem movimentação física</strong> de produtos.
+                        Inclui matches perfeitos (100%) e transferências parciais (com ajuste residual).
+                    </div>
+                `;
+            } else {
+                alertDiv.className = 'alert alert-warning d-flex align-items-center';
+                alertDiv.innerHTML = `
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <div>
+                        <strong>Atenção:</strong> Estes produtos requerem decisão manual sobre transferência ou ajuste.
+                    </div>
+                `;
+            }
+
+            // ✅ v2.18.0: Renderizar cards de resumo para análise manual
+            if (type !== 'transfers' && type !== 'matches') {
+                renderSummaryCards(data, invA, invB);
+            }
+
+            // Renderizar tabela
+            renderTable(type, data, invA, invB);
+        }
+
+        function renderSummaryCards(data, invA, invB) {
+            // ✅ v2.18.0: Cards de resumo por inventário mostrando impacto das transferências
+            let totalTransfA = 0, totalTransfB = 0;
+            let produtosZeradosA = 0, produtosZeradosB = 0;
+            let produtosReduzidosA = 0, produtosReduzidosB = 0;
+            let economiaTotal = 0;
+
+            data.forEach(item => {
+                const transf = item.transferencia_logica || {};
+                const difFinalA = item.diferenca_final_a || 0;
+                const difFinalB = item.diferenca_final_b || 0;
+                const divOriginalA = item.divergence_a || 0;
+                const divOriginalB = item.divergence_b || 0;
+
+                // Contar transferências
+                if (transf.origem === invA.warehouse) {
+                    totalTransfA += transf.quantidade_transferida || 0;
+                } else if (transf.origem === invB.warehouse) {
+                    totalTransfB += transf.quantidade_transferida || 0;
+                }
+
+                // Contar produtos zerados e reduzidos
+                if (Math.abs(difFinalA) < 0.01 && Math.abs(divOriginalA) >= 0.01) produtosZeradosA++;
+                else if (Math.abs(difFinalA) < Math.abs(divOriginalA)) produtosReduzidosA++;
+
+                if (Math.abs(difFinalB) < 0.01 && Math.abs(divOriginalB) >= 0.01) produtosZeradosB++;
+                else if (Math.abs(difFinalB) < Math.abs(divOriginalB)) produtosReduzidosB++;
+
+                // Somar economia
+                economiaTotal += transf.economia_estimada || 0;
+            });
+
+            const summaryHtml = `
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="card border-info shadow-sm">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0"><i class="bi bi-building"></i> ${invA.name} - Armazém ${invA.warehouse}</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row text-center">
+                                    <div class="col-4">
+                                        <h5 class="text-success mb-0">${produtosZeradosA}</h5>
+                                        <small class="text-muted">Produtos Zerados</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <h5 class="text-warning mb-0">${produtosReduzidosA}</h5>
+                                        <small class="text-muted">Divergências Reduzidas</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <h5 class="text-primary mb-0">${totalTransfA > 0 ? totalTransfA.toFixed(0) : '0'}</h5>
+                                        <small class="text-muted">Unid. Transferidas</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card border-danger shadow-sm">
+                            <div class="card-header bg-danger text-white">
+                                <h6 class="mb-0"><i class="bi bi-building"></i> ${invB.name} - Armazém ${invB.warehouse}</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row text-center">
+                                    <div class="col-4">
+                                        <h5 class="text-success mb-0">${produtosZeradosB}</h5>
+                                        <small class="text-muted">Produtos Zerados</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <h5 class="text-warning mb-0">${produtosReduzidosB}</h5>
+                                        <small class="text-muted">Divergências Reduzidas</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <h5 class="text-primary mb-0">${totalTransfB > 0 ? totalTransfB.toFixed(0) : '0'}</h5>
+                                        <small class="text-muted">Unid. Transferidas</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ${economiaTotal > 0 ? `
+                <div class="alert alert-success d-flex align-items-center mb-3">
+                    <i class="bi bi-piggy-bank-fill me-2 fs-4"></i>
+                    <div>
+                        <strong>💰 Economia Total Estimada:</strong> R$ ${economiaTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                        <small class="d-block text-muted">Valor dos produtos que evitarão emissão de NF de ajuste (Custo Médio × Quantidade Transferida)</small>
+                    </div>
+                </div>
+                ` : ''}
+            `;
+
+            // Inserir antes da tabela
+            const container = document.getElementById('table-container');
+            const summaryDiv = document.createElement('div');
+            summaryDiv.innerHTML = summaryHtml;
+            container.parentElement.insertBefore(summaryDiv, container);
+        }
+
+        function renderTable(type, data, invA, invB) {
+            let tableHtml = '';
+
+            // ✅ Ordenar produtos alfabeticamente por descrição
+            const sortedData = [...data].sort((a, b) => {
+                const nameA = (a.description || a.product_name || '').toLowerCase();
+                const nameB = (b.description || b.product_name || '').toLowerCase();
+                return nameA.localeCompare(nameB, 'pt-BR');
+            });
+            data = sortedData;
+
+            if (type === 'transfers') {
+                // ✅ v2.18.0: Tabela de Transferências com Transferência Lógica
+                tableHtml = `
+                    <div class="alert alert-info d-flex align-items-center mb-3">
+                        <i class="bi bi-info-circle-fill me-2 fs-4"></i>
+                        <div>
+                            <strong>💡 TRANSFERÊNCIA LÓGICA:</strong> Os produtos abaixo sugerem <strong>ajustes contábeis</strong> entre armazéns.
+                            <strong>Não há movimentação física</strong> de produtos. O objetivo é minimizar custos com emissão de NFs de ajuste (R$ 850/NF).
+                        </div>
+                    </div>
+                    <table class="table table-sm table-hover table-bordered">
+                        <thead class="table-primary">
+                            <tr>
+                                <th rowspan="2" class="text-center align-middle" style="background-color: #e9ecef; width: 7%;">Código</th>
+                                <th rowspan="2" class="text-center align-middle" style="background-color: #e9ecef; width: 12%;">Descrição</th>
+                                <th rowspan="2" class="text-center align-middle" style="background-color: #e9ecef; width: 3%;">Lote</th>
+                                <th rowspan="2" class="text-center align-middle" style="background-color: #e9ecef; width: 10%;">N.° Lote</th>
+                                <th colspan="4" class="text-center" style="background-color: #d1ecf1;">
+                                    <strong>Armazém Origem</strong>
+                                </th>
+                                <th colspan="4" class="text-center" style="background-color: #f8d7da;">
+                                    <strong>Armazém Destino</strong>
+                                </th>
+                                <th rowspan="2" class="text-center align-middle" style="background-color: #e9ecef; width: 8%;">Qtd Transf.<br>Lógica</th>
+                            </tr>
+                            <tr>
+                                <th class="text-center" style="background-color: #d1ecf1; width: 6%;">Armazém</th>
+                                <th class="text-center" style="background-color: #d1ecf1; width: 5%;">Saldo<br>Antes</th>
+                                <th class="text-center" style="background-color: #d1ecf1; width: 5%;">Qtde<br>Contada</th>
+                                <th class="text-center" style="background-color: #d1ecf1; width: 5%;">Saldo<br>Depois</th>
+                                <th class="text-center" style="background-color: #f8d7da; width: 6%;">Armazém</th>
+                                <th class="text-center" style="background-color: #f8d7da; width: 5%;">Saldo<br>Antes</th>
+                                <th class="text-center" style="background-color: #f8d7da; width: 5%;">Qtde<br>Contada</th>
+                                <th class="text-center" style="background-color: #f8d7da; width: 5%;">Saldo<br>Depois</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.map(t => {
+                                // ✅ v2.18.0: Dados da transferência lógica
+                                const transf = t.transferencia_logica || {};
+                                const sourceWarehouse = t.source_warehouse || t.transfer_from;
+                                const sourceIsA = sourceWarehouse === invA.warehouse;
+
+                                const saldoOrigemAntes = transf.saldo_origem_antes || (sourceIsA ? t.expected_a : t.expected_b) || 0;
+                                const saldoOrigemDepois = transf.saldo_origem_depois || saldoOrigemAntes;
+                                const saldoDestinoAntes = transf.saldo_destino_antes || (sourceIsA ? t.expected_b : t.expected_a) || 0;
+                                const saldoDestinoDepois = transf.saldo_destino_depois || saldoDestinoAntes;
+
+                                // ✅ v2.19.49: Qtde Contada origem e destino (baseado em qual armazém é origem)
+                                const countedOrigem = sourceIsA ? (t.counted_a || 0) : (t.counted_b || 0);
+                                const countedDestino = sourceIsA ? (t.counted_b || 0) : (t.counted_a || 0);
+
+                                // ✅ v2.15.2: Diferenciar linha agregada vs analítica
+                                const isAggregated = !t.lot_number || t.lot_number === '-';
+                                const rowClass = isAggregated ? 'row-synthetic' : 'row-analytical';
+                                const lotBadgeClass = isAggregated ? 'bg-warning text-dark' : 'bg-success';
+
+                                return `
+                                <tr class="${rowClass}">
+                                    <td class="text-center"><code>${t.product_code}</code></td>
+                                    <td title="${t.description}">${t.description}</td>
+                                    <td class="text-center"><span class="badge ${lotBadgeClass}">${t.tracking || 'N/A'}</span></td>
+                                    <td class="text-center"><small>${formatLotNumber(t.lot_number, t.lot_supplier)}</small></td>
+                                    <td class="text-center">
+                                        <span class="badge bg-primary">Arm. ${t.source_warehouse || t.transfer_from}</span>
+                                    </td>
+                                    <td class="text-end">${parseFloat(saldoOrigemAntes).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-end fw-bold">${parseFloat(countedOrigem).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-end fw-bold text-success">${parseFloat(saldoOrigemDepois).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-center">
+                                        <span class="badge bg-danger">Arm. ${t.target_warehouse || t.transfer_to}</span>
+                                    </td>
+                                    <td class="text-end">${parseFloat(saldoDestinoAntes).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-end fw-bold">${parseFloat(countedDestino).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-end fw-bold text-success">${parseFloat(saldoDestinoDepois).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-center">
+                                        <strong class="text-primary fs-5">${parseFloat(t.quantity || t.transfer_qty || 0).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</strong>
+                                    </td>
+                                </tr>
+                            `}).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } else if (type === 'matches') {
+                // ✅ v2.18.0: Tabela para Match Perfeito com Transferência Lógica
+                tableHtml = `
+                    <div class="alert alert-success d-flex align-items-center mb-3">
+                        <i class="bi bi-check-circle-fill me-2 fs-4"></i>
+                        <div>
+                            <strong>✅ MATCH PERFEITO - TRANSFERÊNCIA LÓGICA:</strong> As divergências desses produtos <strong>se anulam perfeitamente</strong> através de <strong>ajuste contábil</strong> entre armazéns.
+                            <strong>Não há movimentação física</strong> de produtos. <strong>Nenhuma NF de ajuste</strong> será necessária! 💰
+                        </div>
+                    </div>
+                    <table class="table table-sm table-hover table-bordered">
+                        <thead class="table-success">
+                            <tr>
+                                <th rowspan="2" class="text-center align-middle" style="background-color: #e9ecef; width: 7%;">Código</th>
+                                <th rowspan="2" class="text-center align-middle" style="background-color: #e9ecef; width: 12%;">Descrição</th>
+                                <th rowspan="2" class="text-center align-middle" style="background-color: #e9ecef; width: 4%;">Lote</th>
+                                <th rowspan="2" class="text-center align-middle" style="background-color: #e9ecef; width: 11%;">N.° Lote</th>
+                                <th colspan="4" class="text-center" style="background-color: #d1ecf1; width: 24%;">
+                                    <strong>${invA.name} - Armazém ${invA.warehouse}</strong>
+                                </th>
+                                <th colspan="4" class="text-center" style="background-color: #f8d7da; width: 24%;">
+                                    <strong>${invB.name} - Armazém ${invB.warehouse}</strong>
+                                </th>
+                                <th rowspan="2" class="text-center align-middle" style="background-color: #e9ecef; width: 14%;">Sugestão de<br>Ajuste Contábil</th>
+                            </tr>
+                            <tr>
+                                <th class="text-center" style="background-color: #d1ecf1; width: 6%;">Saldo Estoque +<br>Ent.Post</th>
+                                <th class="text-center" style="background-color: #d1ecf1; width: 6%;">Qtde<br>Contada</th>
+                                <th class="text-center" style="background-color: #d1ecf1; width: 6%;"
+                                    title="Quantidade após ajuste contábil lógico">Qtd Ajust.<br>Lógica</th>
+                                <th class="text-center" style="background-color: #d1ecf1; width: 6%;"
+                                    title="Ajuste contábil - não há movimentação física">Ajuste<br>p/ ${invB.warehouse}</th>
+                                <th class="text-center" style="background-color: #f8d7da; width: 6%;">Saldo Estoque +<br>Ent.Post</th>
+                                <th class="text-center" style="background-color: #f8d7da; width: 6%;">Qtde<br>Contada</th>
+                                <th class="text-center" style="background-color: #f8d7da; width: 6%;"
+                                    title="Quantidade após ajuste contábil lógico">Qtd Ajust.<br>Lógica</th>
+                                <th class="text-center" style="background-color: #f8d7da; width: 6%;"
+                                    title="Quantidade final após ajuste contábil">Qtde Final<br>Ajustada</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.map(m => {
+                                // ✅ v2.15.2: Diferenciar linha agregada vs analítica
+                                const isAggregated = !m.lot_number || m.lot_number === '-';
+                                const rowClass = isAggregated ? 'row-synthetic' : 'row-analytical';
+                                const lotBadgeClass = isAggregated ? 'bg-warning text-dark' : 'bg-success';
+
+                                // ✅ v2.18.0: Usar campos novos de transferência lógica do backend
+                                const transf = m.transferencia_logica || {};
+                                const hasTransfer = transf.quantidade_transferida > 0;
+
+                                // Usar valores calculados pelo backend se disponíveis
+                                const saldoAjustadoA = m.saldo_ajustado_a || m.expected_a;
+                                const saldoAjustadoB = m.saldo_ajustado_b || m.expected_b;
+                                const difFinalA = m.diferenca_final_a !== undefined ? m.diferenca_final_a : (m.counted_a - saldoAjustadoA);
+                                const difFinalB = m.diferenca_final_b !== undefined ? m.diferenca_final_b : (m.counted_b - saldoAjustadoB);
+
+                                // Fallback para lógica antiga se backend não retornar novos campos
+                                const transferQty = hasTransfer ? transf.quantidade_transferida : Math.min(Math.abs(m.divergence_a || 0), Math.abs(m.divergence_b || 0));
+                                const transferFromA = (transf.origem === invA.warehouse) || (m.divergence_a > 0 && m.divergence_b < 0) ? transferQty : 0;
+                                const transferFromB = (transf.origem === invB.warehouse) || (m.divergence_b > 0 && m.divergence_a < 0) ? transferQty : 0;
+                                const adjustedCountedA = (m.counted_a || 0) - transferFromA + transferFromB;
+                                const adjustedCountedB = (m.counted_b || 0) - transferFromB + transferFromA;
+
+                                return `
+                                <tr class="${rowClass}">
+                                    <td class="text-center">
+                                        <code>${m.product_code}</code>
+                                        ${hasTransfer ? '<br><span class="badge bg-info mt-1" style="font-size: 0.65rem;" title="Ajuste contábil - sem movimentação física">LÓGICA</span>' : ''}
+                                    </td>
+                                    <td title="${m.description}">${m.description}</td>
+                                    <td class="text-center"><span class="badge ${lotBadgeClass}">${m.tracking || 'N/A'}</span></td>
+                                    <td class="text-center"><small>${formatLotNumber(m.lot_number, m.lot_supplier)}</small></td>
+                                    <td class="text-end">${parseFloat(m.expected_a || 0).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-end">${parseFloat(m.counted_a || 0).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-end ${adjustedCountedA === m.expected_a ? 'text-success fw-bold' : 'text-primary fw-bold'}"
+                                        title="Quantidade após ajuste contábil lógico">${parseFloat(adjustedCountedA).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-end ${m.transfer_qty > 0 && m.transfer_from == invA.warehouse ? 'bg-info text-white fw-bold' : 'text-muted'}"
+                                        title="${transferFromA > 0 ? 'Ajuste contábil - sem movimentação física' : ''}">${m.transfer_from == invA.warehouse ? parseFloat(m.transfer_qty || 0).toLocaleString('pt-BR', {minimumFractionDigits: 0}) : '-'}</td>
+                                    <td class="text-end">${parseFloat(m.expected_b || 0).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-end">${parseFloat(m.counted_b || 0).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-end ${adjustedCountedB === m.expected_b ? 'text-success fw-bold' : 'text-primary fw-bold'}"
+                                        title="Quantidade após ajuste contábil lógico">${parseFloat(adjustedCountedB).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-end ${m.transfer_to == invB.warehouse ? 'bg-success text-white fw-bold' : 'text-muted'}"
+                                        title="${transferFromB > 0 ? 'Quantidade final após ajuste contábil' : ''}">${m.transfer_to == invB.warehouse ? parseFloat(m.transfer_qty || 0).toLocaleString('pt-BR', {minimumFractionDigits: 0}) : '-'}</td>
+                                    <td class="text-center"><small><i class="bi bi-calculator text-info"></i> ${m.suggestion || 'Ajuste contábil entre armazéns'}</small></td>
+                                </tr>
+                            `}).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } else {
+                // ✅ v2.18.0: Tabela para Análise Manual com Transferência Lógica
+                tableHtml = `
+                    <table class="table table-sm table-hover table-bordered">
+                        <thead class="table-warning">
+                            <tr>
+                                <th rowspan="2" class="text-center align-middle" style="background-color: #e9ecef; width: 6%;">Código</th>
+                                <th rowspan="2" class="text-center align-middle" style="background-color: #e9ecef; width: 11%;">Descrição</th>
+                                <th rowspan="2" class="text-center align-middle" style="background-color: #e9ecef; width: 3%;">Lote</th>
+                                <th rowspan="2" class="text-center align-middle" style="background-color: #e9ecef; width: 10%;">N.° Lote</th>
+                                <th colspan="6" class="text-center" style="background-color: #d1ecf1; width: 30%;">
+                                    <strong>${invA.name} - Armazém ${invA.warehouse}</strong>
+                                </th>
+                                <th colspan="6" class="text-center" style="background-color: #f8d7da; width: 30%;">
+                                    <strong>${invB.name} - Armazém ${invB.warehouse}</strong>
+                                </th>
+                                <th rowspan="2" class="text-center align-middle" style="background-color: #e9ecef; width: 10%;">Economia<br>(R$)</th>
+                            </tr>
+                            <tr>
+                                <th class="text-center" style="background-color: #d1ecf1; width: 5%; font-size: 0.75rem;">Saldo+Ent.P.</th>
+                                <th class="text-center" style="background-color: #d1ecf1; width: 5%; font-size: 0.75rem;">Contado</th>
+                                <th class="text-center" style="background-color: #d1ecf1; width: 5%; font-size: 0.75rem;">Diverg.</th>
+                                <th class="text-center" style="background-color: #d1ecf1; width: 5%; font-size: 0.75rem;">Transf.→B</th>
+                                <th class="text-center" style="background-color: #d1ecf1; width: 5%; font-size: 0.75rem;">Estoque Ajust.</th>
+                                <th class="text-center" style="background-color: #d1ecf1; width: 5%; font-size: 0.75rem;">Dif. Final</th>
+                                <th class="text-center" style="background-color: #f8d7da; width: 5%; font-size: 0.75rem;">Saldo+Ent.P.</th>
+                                <th class="text-center" style="background-color: #f8d7da; width: 5%; font-size: 0.75rem;">Contado</th>
+                                <th class="text-center" style="background-color: #f8d7da; width: 5%; font-size: 0.75rem;">Diverg.</th>
+                                <th class="text-center" style="background-color: #f8d7da; width: 5%; font-size: 0.75rem;">Transf.←A</th>
+                                <th class="text-center" style="background-color: #f8d7da; width: 5%; font-size: 0.75rem;">Estoque Ajust.</th>
+                                <th class="text-center" style="background-color: #f8d7da; width: 5%; font-size: 0.75rem;">Dif. Final</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.map(m => {
+                                // ✅ v2.18.0: Dados da transferência lógica do backend
+                                const transf = m.transferencia_logica || {};
+                                const saldoAjustadoA = m.saldo_ajustado_a !== undefined ? m.saldo_ajustado_a : m.expected_a;
+                                const saldoAjustadoB = m.saldo_ajustado_b !== undefined ? m.saldo_ajustado_b : m.expected_b;
+                                const difFinalA = m.diferenca_final_a !== undefined ? m.diferenca_final_a : (m.counted_a - m.expected_a);
+                                const difFinalB = m.diferenca_final_b !== undefined ? m.diferenca_final_b : (m.counted_b - m.expected_b);
+
+                                // Transferências
+                                const transfAtoB = (transf.origem === invA.warehouse) ? transf.quantidade_transferida : 0;
+                                const transfBtoA = (transf.origem === invB.warehouse) ? transf.quantidade_transferida : 0;
+
+                                // Economia
+                                const economia = transf.economia_estimada || 0;
+
+                                // ✅ v2.15.2: Diferenciar linha agregada vs analítica
+                                const isAggregated = !m.lot_number || m.lot_number === '-';
+                                const rowClass = isAggregated ? 'row-synthetic' : 'row-analytical';
+                                const lotBadgeClass = isAggregated ? 'bg-warning text-dark' : 'bg-success';
+
+                                // Color-coding por status
+                                const statusClassA = Math.abs(difFinalA) < 0.01 ? 'bg-success text-white' : Math.abs(difFinalA) < Math.abs(m.divergence_a || 0) ? 'bg-warning text-dark' : '';
+                                const statusClassB = Math.abs(difFinalB) < 0.01 ? 'bg-success text-white' : Math.abs(difFinalB) < Math.abs(m.divergence_b || 0) ? 'bg-warning text-dark' : '';
+
+                                return `
+                                <tr class="${rowClass}">
+                                    <td class="text-center"><code>${m.product_code}</code></td>
+                                    <td title="${m.description}">${m.description}</td>
+                                    <td class="text-center"><span class="badge ${lotBadgeClass}">${m.tracking || 'N/A'}</span></td>
+                                    <td class="text-center"><small>${formatLotNumber(m.lot_number, m.lot_supplier)}</small></td>
+                                    <td class="text-end">${parseFloat(m.expected_a || 0).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-end">${parseFloat(m.counted_a || 0).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-end ${(m.divergence_a || 0) > 0 ? 'text-success' : 'text-danger'}">${parseFloat(m.divergence_a || 0).toLocaleString('pt-BR', {minimumFractionDigits: 0, signDisplay: 'exceptZero'})}</td>
+                                    <td class="text-end ${transfAtoB > 0 ? 'bg-primary text-white fw-bold' : 'text-muted'}">${transfAtoB > 0 ? parseFloat(transfAtoB).toLocaleString('pt-BR', {minimumFractionDigits: 0}) : '-'}</td>
+                                    <td class="text-end fw-bold">${parseFloat(saldoAjustadoA).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-end ${statusClassA} fw-bold">${parseFloat(difFinalA).toLocaleString('pt-BR', {minimumFractionDigits: 0, signDisplay: 'exceptZero'})}</td>
+                                    <td class="text-end">${parseFloat(m.expected_b || 0).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-end">${parseFloat(m.counted_b || 0).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-end ${(m.divergence_b || 0) > 0 ? 'text-success' : 'text-danger'}">${parseFloat(m.divergence_b || 0).toLocaleString('pt-BR', {minimumFractionDigits: 0, signDisplay: 'exceptZero'})}</td>
+                                    <td class="text-end ${transfBtoA > 0 ? 'bg-primary text-white fw-bold' : 'text-muted'}">${transfBtoA > 0 ? parseFloat(transfBtoA).toLocaleString('pt-BR', {minimumFractionDigits: 0}) : '-'}</td>
+                                    <td class="text-end fw-bold">${parseFloat(saldoAjustadoB).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                    <td class="text-end ${statusClassB} fw-bold">${parseFloat(difFinalB).toLocaleString('pt-BR', {minimumFractionDigits: 0, signDisplay: 'exceptZero'})}</td>
+                                    <td class="text-center ${economia > 0 ? 'bg-success text-white fw-bold' : 'text-muted'}">${economia > 0 ? 'R$ ' + parseFloat(economia).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-'}</td>
+                                </tr>
+                            `}).join('')}
+                        </tbody>
+                    </table>
+                `;
+            }
+
+            document.getElementById('table-container').innerHTML = tableHtml;
+        }
+
+        function voltarParaResumo() {
+            console.log('🔄 [VOLTAR] Função voltarParaResumo() chamada');
+
+            // ✅ NOVA ESTRATÉGIA: Salvar flag para reabrir modal com os 4 cards
+            // Garantir que os dados da comparação estão no sessionStorage
+            if (comparisonData) {
+                // Resetar tipo para 'cards' (voltar para a tela dos 4 cards)
+                comparisonData.type = 'cards';
+                sessionStorage.setItem('comparisonResults', JSON.stringify(comparisonData));
+
+                // Adicionar flag para reabrir modal
+                sessionStorage.setItem('reopenComparisonModal', 'true');
+                console.log('✅ [VOLTAR] Dados salvos no sessionStorage e flag definido');
+            } else {
+                console.warn('⚠️ [VOLTAR] Dados de comparação não encontrados');
+            }
+
+            // Detectar se estamos em /static/ ou raiz para construir caminho correto
+            const currentPath = window.location.pathname;
+            console.log('🔄 [VOLTAR] Caminho atual:', currentPath);
+
+            let inventoryPath;
+
+            if (currentPath.includes('/static/')) {
+                // Se estamos em /static/, usar caminho absoluto
+                inventoryPath = '/static/inventory.html';
+                console.log('🔄 [VOLTAR] Usando caminho /static/');
+            } else {
+                // Se estamos na raiz, usar caminho relativo
+                inventoryPath = 'inventory.html';
+                console.log('🔄 [VOLTAR] Usando caminho relativo');
+            }
+
+            console.log('🔄 [VOLTAR] Redirecionando para:', inventoryPath);
+
+            // Voltar para inventory.html (será detectado o flag e reabrirá os 4 cards)
+            window.location.href = inventoryPath;
+        }
+
+        function fecharTudo() {
+            sessionStorage.removeItem('comparisonResults');
+
+            // Detectar se estamos em /static/ ou raiz
+            const currentPath = window.location.pathname;
+            const inventoryPath = currentPath.includes('/static/') ? '/static/inventory.html' : 'inventory.html';
+
+            window.location.href = inventoryPath;
+        }
+
+        // ========================================
+        // FUNÇÕES DE EXPORTAÇÃO
+        // ========================================
+
+        function exportToCSV() {
+            const { type, invA, invB, matches, manualReview, transfers } = comparisonData;
+            const isMatches = type === 'matches';
+            const isTransfers = type === 'transfers';
+            const data = isTransfers ? transfers : (isMatches ? matches : manualReview);
+
+            let csv = '';
+
+            // Cabeçalho baseado no tipo
+            if (isTransfers) {
+                // ✅ v2.19.49: CSV para Transferências com Qtde Contada
+                csv = 'Código,Descrição,Lote,N° Lote,Armazém Origem,Saldo Origem Antes,Qtde Contada Origem,Saldo Origem Depois,Armazém Destino,Saldo Destino Antes,Qtde Contada Destino,Saldo Destino Depois,Qtd Transf. Lógica\n';
+                data.forEach(item => {
+                    const transf = item.transferencia_logica || {};
+                    const sourceWarehouse = item.source_warehouse || item.transfer_from;
+                    const sourceIsA = sourceWarehouse === invA.warehouse;
+
+                    const saldoOrigemAntes = transf.saldo_origem_antes || (sourceIsA ? item.expected_a : item.expected_b) || 0;
+                    const saldoOrigemDepois = transf.saldo_origem_depois || saldoOrigemAntes;
+                    const saldoDestinoAntes = transf.saldo_destino_antes || (sourceIsA ? item.expected_b : item.expected_a) || 0;
+                    const saldoDestinoDepois = transf.saldo_destino_depois || saldoDestinoAntes;
+                    const countedOrigem = sourceIsA ? (item.counted_a || 0) : (item.counted_b || 0);
+                    const countedDestino = sourceIsA ? (item.counted_b || 0) : (item.counted_a || 0);
+
+                    csv += `"${item.product_code}","${item.description}","${item.tracking || 'N/A'}","${item.lot_number || '-'}","${sourceWarehouse}",${saldoOrigemAntes},${countedOrigem},${saldoOrigemDepois},"${item.target_warehouse || item.transfer_to}",${saldoDestinoAntes},${countedDestino},${saldoDestinoDepois},${parseFloat(item.quantity || item.transfer_qty || 0).toFixed(2)}\n`;
+                });
+            } else if (isMatches) {
+                csv = 'Código,Descrição,Saldo Estoque + Ent.Post A,Qtd Contada A,Qtd Contada Ajusta A,Saldo Estoque + Ent.Post B,Qtd Contada B,Qtd Contada Ajusta B,Transferir de,Transferir para,Quantidade\n';
+                data.forEach(item => {
+                    // Calcular quantidade contada ajustada
+                    const transferQty = Math.min(Math.abs(item.divergence_a || 0), Math.abs(item.divergence_b || 0));
+                    const transferFromA = (item.divergence_a > 0 && item.divergence_b < 0) ? transferQty : 0;
+                    const transferFromB = (item.divergence_b > 0 && item.divergence_a < 0) ? transferQty : 0;
+                    const adjustedCountedA = (item.counted_a || 0) - transferFromA + transferFromB;
+                    const adjustedCountedB = (item.counted_b || 0) - transferFromB + transferFromA;
+
+                    csv += `"${item.product_code}","${item.description}",${item.expected_a},${item.counted_a},${adjustedCountedA},${item.expected_b},${item.counted_b},${adjustedCountedB},"${item.transfer_from}","${item.transfer_to}",${item.transfer_qty}\n`;
+                });
+            } else {
+                // ✅ v2.18.0: CSV para Análise Manual com Transferência Lógica
+                csv = 'Código,Descrição,Lote,N° Lote,Saldo A,Contado A,Diverg. A,Transf→B,Estoque Ajust. A,Dif. Final A,Saldo B,Contado B,Diverg. B,Transf←A,Estoque Ajust. B,Dif. Final B,Economia (R$)\n';
+                data.forEach(item => {
+                    const transf = item.transferencia_logica || {};
+                    const saldoAjustadoA = item.saldo_ajustado_a !== undefined ? item.saldo_ajustado_a : item.expected_a;
+                    const saldoAjustadoB = item.saldo_ajustado_b !== undefined ? item.saldo_ajustado_b : item.expected_b;
+                    const difFinalA = item.diferenca_final_a !== undefined ? item.diferenca_final_a : (item.counted_a - item.expected_a);
+                    const difFinalB = item.diferenca_final_b !== undefined ? item.diferenca_final_b : (item.counted_b - item.expected_b);
+                    const transfAtoB = (transf.origem === invA.warehouse) ? transf.quantidade_transferida : 0;
+                    const transfBtoA = (transf.origem === invB.warehouse) ? transf.quantidade_transferida : 0;
+                    const economia = transf.economia_estimada || 0;
+
+                    csv += `"${item.product_code}","${item.description}","${item.tracking || 'N/A'}","${item.lot_number || '-'}",${item.expected_a || 0},${item.counted_a || 0},${item.divergence_a || 0},${transfAtoB},${saldoAjustadoA},${difFinalA},${item.expected_b || 0},${item.counted_b || 0},${item.divergence_b || 0},${transfBtoA},${saldoAjustadoB},${difFinalB},${economia.toFixed(2)}\n`;
+                });
+            }
+
+            // Download
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            const fileName = `comparacao_${type}_${new Date().toISOString().split('T')[0]}.csv`;
+
+            link.setAttribute('href', url);
+            link.setAttribute('download', fileName);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function exportToExcel() {
+            const { type, invA, invB, matches, manualReview, transfers } = comparisonData;
+            const isMatches = type === 'matches';
+            const isTransfers = type === 'transfers';
+            const data = isTransfers ? transfers : (isMatches ? matches : manualReview);
+
+            let html = `
+                <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+                <head>
+                    <meta charset="utf-8">
+                    <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+                    <x:Name>Comparação</x:Name>
+                    <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+                    </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+                </head>
+                <body>
+                    <table border="1">
+                        <tr>
+                            <td colspan="10" style="text-align: center; font-size: 16px; font-weight: bold; background-color: #667eea; color: white;">
+                                ANÁLISE COMPARATIVA DE INVENTÁRIOS
+                            </td>
+                        </tr>
+                        <tr>
+                            <td colspan="5" style="background-color: #e9ecef;"><strong>Inventário A:</strong> ${invA.name} - Armazém ${invA.warehouse}</td>
+                            <td colspan="5" style="background-color: #e9ecef;"><strong>Inventário B:</strong> ${invB.name} - Armazém ${invB.warehouse}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="10" style="background-color: #e9ecef;"><strong>Tipo:</strong> ${isTransfers ? 'Transferências' : (isMatches ? 'Match Perfeito' : 'Análise Manual')}</td>
+                        </tr>
+                        <tr><td colspan="10"></td></tr>
+            `;
+
+            // Cabeçalhos baseados no tipo
+            if (isTransfers) {
+                // ✅ v2.19.49: Excel para Transferências com Qtde Contada
+                html += `
+                    <tr style="background-color: #4e73df; color: white; font-weight: bold;">
+                        <th>Código</th>
+                        <th>Descrição</th>
+                        <th>Lote</th>
+                        <th>N.° Lote</th>
+                        <th>Armazém Origem</th>
+                        <th>Saldo Origem Antes</th>
+                        <th>Qtde Contada Origem</th>
+                        <th>Saldo Origem Depois</th>
+                        <th>Armazém Destino</th>
+                        <th>Saldo Destino Antes</th>
+                        <th>Qtde Contada Destino</th>
+                        <th>Saldo Destino Depois</th>
+                        <th>Qtd Transf. Lógica</th>
+                    </tr>
+                `;
+                data.forEach(item => {
+                    const transf = item.transferencia_logica || {};
+                    const sourceWarehouse = item.source_warehouse || item.transfer_from;
+                    const sourceIsA = sourceWarehouse === invA.warehouse;
+
+                    const saldoOrigemAntes = transf.saldo_origem_antes || (sourceIsA ? item.expected_a : item.expected_b) || 0;
+                    const saldoOrigemDepois = transf.saldo_origem_depois || saldoOrigemAntes;
+                    const saldoDestinoAntes = transf.saldo_destino_antes || (sourceIsA ? item.expected_b : item.expected_a) || 0;
+                    const saldoDestinoDepois = transf.saldo_destino_depois || saldoDestinoAntes;
+                    const countedOrigem = sourceIsA ? (item.counted_a || 0) : (item.counted_b || 0);
+                    const countedDestino = sourceIsA ? (item.counted_b || 0) : (item.counted_a || 0);
+
+                    html += `
+                        <tr>
+                            <td>${item.product_code}</td>
+                            <td>${item.description}</td>
+                            <td style="text-align: center;">${formatTrackingBadge(item.tracking)}</td>
+                            <td style="text-align: center;">${formatLotNumber(item.lot_number, item.lot_supplier)}</td>
+                            <td style="text-align: center;">${sourceWarehouse}</td>
+                            <td style="text-align: right;">${parseFloat(saldoOrigemAntes).toFixed(2)}</td>
+                            <td style="text-align: right; font-weight: bold;">${parseFloat(countedOrigem).toFixed(2)}</td>
+                            <td style="text-align: right; font-weight: bold; background-color: #d4edda;">${parseFloat(saldoOrigemDepois).toFixed(2)}</td>
+                            <td style="text-align: center;">${item.target_warehouse || item.transfer_to}</td>
+                            <td style="text-align: right;">${parseFloat(saldoDestinoAntes).toFixed(2)}</td>
+                            <td style="text-align: right; font-weight: bold;">${parseFloat(countedDestino).toFixed(2)}</td>
+                            <td style="text-align: right; font-weight: bold; background-color: #d4edda;">${parseFloat(saldoDestinoDepois).toFixed(2)}</td>
+                            <td style="text-align: center; font-weight: bold;">${parseFloat(item.quantity || item.transfer_qty || 0).toFixed(2)}</td>
+                        </tr>
+                    `;
+                });
+            } else if (isMatches) {
+                html += `
+                    <tr style="background-color: #1cc88a; color: white; font-weight: bold;">
+                        <th>Código</th>
+                        <th>Descrição</th>
+                        <th>Lote</th>
+                        <th>N.° Lote</th>
+                        <th>Esperado A</th>
+                        <th>Contado A</th>
+                        <th>Qtd Ajust. A</th>
+                        <th>Esperado B</th>
+                        <th>Contado B</th>
+                        <th>Qtd Ajust. B</th>
+                        <th>Transferir de</th>
+                        <th>Transferir para</th>
+                        <th>Quantidade</th>
+                    </tr>
+                `;
+                data.forEach(item => {
+                    // Calcular quantidade contada ajustada
+                    const transferQty = Math.min(Math.abs(item.divergence_a || 0), Math.abs(item.divergence_b || 0));
+                    const transferFromA = (item.divergence_a > 0 && item.divergence_b < 0) ? transferQty : 0;
+                    const transferFromB = (item.divergence_b > 0 && item.divergence_a < 0) ? transferQty : 0;
+                    const adjustedCountedA = (item.counted_a || 0) - transferFromA + transferFromB;
+                    const adjustedCountedB = (item.counted_b || 0) - transferFromB + transferFromA;
+
+                    html += `
+                        <tr>
+                            <td>${item.product_code}</td>
+                            <td>${item.description}</td>
+                            <td style="text-align: center;">${formatTrackingBadge(item.tracking)}</td>
+                            <td style="text-align: center;">${formatLotNumber(item.lot_number, item.lot_supplier)}</td>
+                            <td style="text-align: center;">${parseFloat(item.expected_a).toFixed(2)}</td>
+                            <td style="text-align: center;">${parseFloat(item.counted_a).toFixed(2)}</td>
+                            <td style="text-align: center;">${parseFloat(adjustedCountedA).toFixed(2)}</td>
+                            <td style="text-align: center;">${parseFloat(item.expected_b).toFixed(2)}</td>
+                            <td style="text-align: center;">${parseFloat(item.counted_b).toFixed(2)}</td>
+                            <td style="text-align: center;">${parseFloat(adjustedCountedB).toFixed(2)}</td>
+                            <td style="text-align: center;">${item.transfer_from}</td>
+                            <td style="text-align: center;">${item.transfer_to}</td>
+                            <td style="text-align: center;">${parseFloat(item.transfer_qty).toFixed(2)}</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                // ✅ v2.18.0: Excel para Análise Manual com Transferência Lógica
+                html += `
+                    <tr style="background-color: #f6c23e; color: white; font-weight: bold;">
+                        <th>Código</th>
+                        <th>Descrição</th>
+                        <th>Lote</th>
+                        <th>N.° Lote</th>
+                        <th>Saldo A</th>
+                        <th>Contado A</th>
+                        <th>Diverg. A</th>
+                        <th>Transf→B</th>
+                        <th>Estoque Ajust. A</th>
+                        <th>Dif. Final A</th>
+                        <th>Saldo B</th>
+                        <th>Contado B</th>
+                        <th>Diverg. B</th>
+                        <th>Transf←A</th>
+                        <th>Estoque Ajust. B</th>
+                        <th>Dif. Final B</th>
+                        <th>Economia (R$)</th>
+                    </tr>
+                `;
+                data.forEach(item => {
+                    // ✅ v2.18.0: Dados da transferência lógica do backend
+                    const transf = item.transferencia_logica || {};
+                    const saldoAjustadoA = item.saldo_ajustado_a || item.expected_a;
+                    const saldoAjustadoB = item.saldo_ajustado_b || item.expected_b;
+                    const difFinalA = item.diferenca_final_a || (item.counted_a - item.expected_a);
+                    const difFinalB = item.diferenca_final_b || (item.counted_b - item.expected_b);
+                    const transfAtoB = (transf.origem === invA.warehouse) ? transf.quantidade_transferida : 0;
+                    const transfBtoA = (transf.origem === invB.warehouse) ? transf.quantidade_transferida : 0;
+                    const economia = transf.economia_estimada || 0;
+
+                    html += `
+                        <tr>
+                            <td>${item.product_code}</td>
+                            <td>${item.description}</td>
+                            <td style="text-align: center;">${formatTrackingBadge(item.tracking)}</td>
+                            <td style="text-align: center;">${formatLotNumber(item.lot_number, item.lot_supplier)}</td>
+                            <td style="text-align: right;">${parseFloat(item.expected_a || 0).toFixed(2)}</td>
+                            <td style="text-align: right;">${parseFloat(item.counted_a || 0).toFixed(2)}</td>
+                            <td style="text-align: right;">${parseFloat(item.divergence_a || 0).toFixed(2)}</td>
+                            <td style="text-align: right; background-color: ${transfAtoB > 0 ? '#4e73df' : ''}; color: ${transfAtoB > 0 ? 'white' : ''};">${transfAtoB > 0 ? parseFloat(transfAtoB).toFixed(2) : '-'}</td>
+                            <td style="text-align: right; font-weight: bold;">${parseFloat(saldoAjustadoA).toFixed(2)}</td>
+                            <td style="text-align: right; font-weight: bold; background-color: ${Math.abs(difFinalA) < 0.01 ? '#1cc88a' : Math.abs(difFinalA) < Math.abs(item.divergence_a || 0) ? '#f6c23e' : ''}; color: ${Math.abs(difFinalA) < 0.01 ? 'white' : ''};">${parseFloat(difFinalA).toFixed(2)}</td>
+                            <td style="text-align: right;">${parseFloat(item.expected_b || 0).toFixed(2)}</td>
+                            <td style="text-align: right;">${parseFloat(item.counted_b || 0).toFixed(2)}</td>
+                            <td style="text-align: right;">${parseFloat(item.divergence_b || 0).toFixed(2)}</td>
+                            <td style="text-align: right; background-color: ${transfBtoA > 0 ? '#4e73df' : ''}; color: ${transfBtoA > 0 ? 'white' : ''};">${transfBtoA > 0 ? parseFloat(transfBtoA).toFixed(2) : '-'}</td>
+                            <td style="text-align: right; font-weight: bold;">${parseFloat(saldoAjustadoB).toFixed(2)}</td>
+                            <td style="text-align: right; font-weight: bold; background-color: ${Math.abs(difFinalB) < 0.01 ? '#1cc88a' : Math.abs(difFinalB) < Math.abs(item.divergence_b || 0) ? '#f6c23e' : ''}; color: ${Math.abs(difFinalB) < 0.01 ? 'white' : ''};">${parseFloat(difFinalB).toFixed(2)}</td>
+                            <td style="text-align: right; background-color: ${economia > 0 ? '#1cc88a' : ''}; color: ${economia > 0 ? 'white' : ''}; font-weight: bold;">${economia > 0 ? 'R$ ' + parseFloat(economia).toFixed(2) : '-'}</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            html += `
+                    </table>
+                </body>
+                </html>
+            `;
+
+            // Download
+            const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            const fileName = `comparacao_${type}_${new Date().toISOString().split('T')[0]}.xls`;
+
+            link.setAttribute('href', url);
+            link.setAttribute('download', fileName);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function exportToJSON() {
+            // Exportar todos os dados da comparação
+            const jsonData = JSON.stringify(comparisonData, null, 2);
+
+            // Download
+            const blob = new Blob([jsonData], { type: 'application/json' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            const fileName = `comparacao_${comparisonData.type}_${new Date().toISOString().split('T')[0]}.json`;
+
+            link.setAttribute('href', url);
+            link.setAttribute('download', fileName);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>

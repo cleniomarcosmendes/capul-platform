@@ -1,0 +1,90 @@
+import { gestaoApi } from './api';
+import type { Chamado, HistoricoChamado, StatusChamado, Visibilidade } from '../types';
+
+interface ListFilters {
+  status?: StatusChamado;
+  equipeId?: string;
+  visibilidade?: Visibilidade;
+  meusChamados?: boolean;
+}
+
+interface CreateChamadoPayload {
+  titulo: string;
+  descricao: string;
+  equipeAtualId: string;
+  visibilidade?: Visibilidade;
+  prioridade?: string;
+  softwareId?: string;
+  softwareModuloId?: string;
+  softwareNome?: string;
+  moduloNome?: string;
+  catalogoServicoId?: string;
+  projetoId?: string;
+}
+
+export const chamadoService = {
+  async listar(filters: ListFilters = {}): Promise<Chamado[]> {
+    const params: Record<string, string> = {};
+    if (filters.status) params.status = filters.status;
+    if (filters.equipeId) params.equipeId = filters.equipeId;
+    if (filters.visibilidade) params.visibilidade = filters.visibilidade;
+    if (filters.meusChamados) params.meusChamados = 'true';
+    const { data } = await gestaoApi.get('/chamados', { params });
+    return data;
+  },
+
+  async buscar(id: string): Promise<Chamado> {
+    const { data } = await gestaoApi.get(`/chamados/${id}`);
+    return data;
+  },
+
+  async criar(payload: CreateChamadoPayload): Promise<Chamado> {
+    const { data } = await gestaoApi.post('/chamados', payload);
+    return data;
+  },
+
+  async assumir(id: string): Promise<Chamado> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/assumir`);
+    return data;
+  },
+
+  async transferirEquipe(id: string, equipeDestinoId: string, motivo?: string): Promise<Chamado> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/transferir-equipe`, { equipeDestinoId, motivo });
+    return data;
+  },
+
+  async transferirTecnico(id: string, tecnicoId: string, motivo?: string): Promise<Chamado> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/transferir-tecnico`, { tecnicoId, motivo });
+    return data;
+  },
+
+  async comentar(id: string, descricao: string, publico = true): Promise<HistoricoChamado> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/comentar`, { descricao, publico });
+    return data;
+  },
+
+  async resolver(id: string, descricao?: string): Promise<Chamado> {
+    const { data } = await gestaoApi.patch(`/chamados/${id}/resolver`, { descricao });
+    return data;
+  },
+
+  async fechar(id: string): Promise<Chamado> {
+    const { data } = await gestaoApi.patch(`/chamados/${id}/fechar`);
+    return data;
+  },
+
+  async reabrir(id: string, motivo?: string): Promise<Chamado> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/reabrir`, { motivo });
+    return data;
+  },
+
+  async cancelar(id: string): Promise<Chamado> {
+    const { data } = await gestaoApi.patch(`/chamados/${id}/cancelar`);
+    return data;
+  },
+
+  async avaliar(id: string, nota: number, comentario?: string): Promise<Chamado> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/avaliar`, { nota, comentario });
+    return data;
+  },
+};

@@ -1,0 +1,19 @@
+import { Controller, Get, Param, Res, UseGuards } from '@nestjs/common';
+import { ExportService } from './export.service.js';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
+import { GestaoTiGuard } from '../common/guards/gestao-ti.guard.js';
+import { RolesGuard } from '../common/guards/roles.guard.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
+import type { Response } from 'express';
+
+@Controller('export')
+@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
+export class ExportController {
+  constructor(private readonly service: ExportService) {}
+
+  @Get(':entidade')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  async exportar(@Param('entidade') entidade: string, @Res() res: Response) {
+    return this.service.exportar(entidade, res);
+  }
+}

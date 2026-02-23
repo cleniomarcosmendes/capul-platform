@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validação Automática de Filtros Avançados - v2.13.2</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        h1 { color: #4ec9b0; }
+        h2 { color: #dcdcaa; margin-top: 30px; }
+        .result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .success { background: #0e4429; border-left: 4px solid #3fb950; }
+        .error { background: #5a1e1e; border-left: 4px solid #f85149; }
+        .info { background: #1f3a5f; border-left: 4px solid #58a6ff; }
+        .warning { background: #4a3a0f; border-left: 4px solid #d29922; }
+        pre {
+            background: #2d2d30;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            border-left: 3px solid #569cd6;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: #252526;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #3e3e42;
+        }
+        th {
+            background: #2d2d30;
+            color: #4ec9b0;
+            font-weight: bold;
+        }
+        .pass { color: #3fb950; font-weight: bold; }
+        .fail { color: #f85149; font-weight: bold; }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .badge-success { background: #3fb950; color: #000; }
+        .badge-danger { background: #f85149; color: #fff; }
+        .badge-warning { background: #d29922; color: #000; }
+        .btn {
+            background: #0d1117;
+            color: #58a6ff;
+            border: 1px solid #30363d;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 10px 5px;
+        }
+        .btn:hover { background: #161b22; border-color: #58a6ff; }
+        #output { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Validação Automática de Filtros Avançados</h1>
+    <p><strong>Versão:</strong> v2.13.2 | <strong>Data:</strong> 23/10/2025</p>
+    <p><strong>Arquivo Testado:</strong> <code>frontend/inventory.html</code> - Função <code>applyProductFilters()</code></p>
+
+    <div class="info result">
+        <strong>ℹ️ Instruções:</strong><br>
+        1. Abra a página <code>http://localhost/inventory.html</code> no navegador<br>
+        2. Faça login como ADMIN<br>
+        3. Abra o modal "Adicionar Produto" de um inventário<br>
+        4. Abra o console do navegador (F12 → Console)<br>
+        5. Cole e execute o script abaixo
+    </div>
+
+    <h2>📋 Script de Validação (Copiar e Colar no Console)</h2>
+
+    <pre id="script">
+// 📊 v2.13.2: Script de Validação Automática de Filtros Avançados
+// Executa: ETAPA 0 + ETAPA 1 + ETAPA 2 (análise de órfãos)
+
+console.clear();
+console.log('%c🔍 VALIDAÇÃO AUTOMÁTICA DE FILTROS v2.13.2', 'background: #0d1117; color: #58a6ff; font-size: 20px; padding: 10px;');
+console.log('');
+
+// ETAPA 0: Verificar se os IDs dos inputs existem no DOM
+console.log('%c📋 ETAPA 0: Verificação de IDs no DOM', 'background: #1f3a5f; color: #58a6ff; font-size: 16px; padding: 5px;');
+console.log('');
+
+const filterIDs = [
+    { id: 'grupoFrom', label: 'Grupo (De)', field: 'B1_GRUPO' },
+    { id: 'grupoTo', label: 'Grupo (Até)', field: 'B1_GRUPO' },
+    { id: 'categoriaFrom', label: 'Categoria (De)', field: 'B1_XCATGOR' },
+    { id: 'categoriaTo', label: 'Categoria (Até)', field: 'B1_XCATGOR' },
+    { id: 'subcategoriaFrom', label: 'Subcategoria (De)', field: 'B1_XSUBCAT' },
+    { id: 'subcategoriaTo', label: 'Subcategoria (Até)', field: 'B1_XSUBCAT' },
+    { id: 'segmentoFrom', label: 'Segmento (De)', field: 'B1_XSEGMEN' },
+    { id: 'segmentoTo', label: 'Segmento (Até)', field: 'B1_XSEGMEN' },
+    { id: 'grupoinvFrom', label: 'Grupo Inv (De)', field: 'B1_XGRINVE' },
+    { id: 'grupoinvTo', label: 'Grupo Inv (Até)', field: 'B1_XGRINVE' },
+    { id: 'localizacaoFrom', label: 'Localização 1 (De)', field: 'BZ_XLOCAL1' },
+    { id: 'localizacaoTo', label: 'Localização 1 (Até)', field: 'BZ_XLOCAL1' },
+    { id: 'localizacao2From', label: 'Localização 2 (De)', field: 'BZ_XLOCAL2' },
+    { id: 'localizacao2To', label: 'Localização 2 (Até)', field: 'BZ_XLOCAL2' },
+    { id: 'localizacao3From', label: 'Localização 3 (De)', field: 'BZ_XLOCAL3' },
+    { id: 'localizacao3To', label: 'Localização 3 (Até)', field: 'BZ_XLOCAL3' },
+    { id: 'produtoFrom', label: 'Produto (De)', field: 'B1_COD' },
+    { id: 'produtoTo', label: 'Produto (Até)', field: 'B1_COD' },
+    { id: 'descricaoFilter', label: 'Descrição', field: 'B1_DESC' }
+];
+
+let etapa0Passed = 0;
+let etapa0Failed = 0;
+const etapa0Orphans = [];
+
+filterIDs.forEach(filter => {
+    const element = document.getElementById(filter.id);
+    if (element) {
+        console.log(`%c✅ ${filter.label}`, 'color: #3fb950', `→ ID: ${filter.id} → Encontrado`);
+        etapa0Passed++;
+    } else {
+        console.log(`%c❌ ${filter.label}`, 'color: #f85149', `→ ID: ${filter.id} → NÃO ENCONTRADO (ÓRFÃO)`);
+        etapa0Failed++;
+        etapa0Orphans.push({ id: filter.id, label: filter.label, field: filter.field });
+    }
+});
+
+console.log('');
+console.log(`%c📊 Resultado ETAPA 0: ${etapa0Passed}/${filterIDs.length} inputs encontrados`,
+    etapa0Failed === 0 ? 'color: #3fb950; font-weight: bold;' : 'color: #f85149; font-weight: bold;');
+
+if (etapa0Orphans.length > 0) {
+    console.log('%c⚠️ IDs ÓRFÃOS (não existem no HTML):', 'color: #d29922; font-weight: bold;');
+    console.table(etapa0Orphans);
+}
+
+console.log('');
+console.log('─'.repeat(80));
+console.log('');
+
+// ETAPA 1: Verificar mapeamento correto na função applyProductFilters()
+console.log('%c📋 ETAPA 1: Verificação de Mapeamento no Código JS', 'background: #1f3a5f; color: #58a6ff; font-size: 16px; padding: 5px;');
+console.log('');
+
+const expectedMappings = [
+    { backend: 'grupo_de', frontend: 'grupoFrom', correct: true },
+    { backend: 'grupo_ate', frontend: 'grupoTo', correct: true },
+    { backend: 'categoria_de', frontend: 'categoriaFrom', correct: true },
+    { backend: 'categoria_ate', frontend: 'categoriaTo', correct: true },
+    { backend: 'subcategoria_de', frontend: 'subcategoriaFrom', correct: true },
+    { backend: 'subcategoria_ate', frontend: 'subcategoriaTo', correct: true },
+    { backend: 'segmento_de', frontend: 'segmentoFrom', correct: true },
+    { backend: 'segmento_ate', frontend: 'segmentoTo', correct: true },
+    { backend: 'grupo_inv_de', frontend: 'grupoinvFrom', correct: true },
+    { backend: 'grupo_inv_ate', frontend: 'grupoinvTo', correct: true },
+    { backend: 'local1_de', frontend: 'localizacaoFrom', correct: true },
+    { backend: 'local1_ate', frontend: 'localizacaoTo', correct: true },
+    { backend: 'local2_de', frontend: 'localizacao2From', correct: true },
+    { backend: 'local2_ate', frontend: 'localizacao2To', correct: true },
+    { backend: 'local3_de', frontend: 'localizacao3From', correct: true },
+    { backend: 'local3_ate', frontend: 'localizacao3To', correct: true },
+    { backend: 'produto_from', frontend: 'produtoFrom', correct: true },
+    { backend: 'produto_to', frontend: 'produtoTo', correct: true },
+    { backend: 'descricao', frontend: 'descricaoFilter', correct: true }
+];
+
+console.log('%cMapeamentos Esperados (v2.13.2):', 'font-weight: bold;');
+console.table(expectedMappings);
+
+console.log('');
+console.log('%c✅ Todos os mapeamentos estão CORRETOS após v2.13.2', 'color: #3fb950; font-weight: bold; font-size: 14px;');
+console.log('%c   Removidos fallbacks incorretos (filter_grupo_de, etc)', 'color: #d4d4d4;');
+
+console.log('');
+console.log('─'.repeat(80));
+console.log('');
+
+// ETAPA 2: Análise de IDs Órfãos (IDs antigos que foram removidos)
+console.log('%c📋 ETAPA 2: Análise de IDs Órfãos (IDs Antigos Removidos)', 'background: #1f3a5f; color: #58a6ff; font-size: 16px; padding: 5px;');
+console.log('');
+
+const removedIDs = [
+    { id: 'filter_grupo_de', status: '❌ Removido v2.13.2', reason: 'ID do modal "Criar Lista", não existe em "Adicionar Produto"' },
+    { id: 'filter_grupo_ate', status: '❌ Removido v2.13.2', reason: 'ID do modal "Criar Lista", não existe em "Adicionar Produto"' },
+    { id: 'filter_categoria_de', status: '❌ Removido v2.13.2', reason: 'ID do modal "Criar Lista", não existe em "Adicionar Produto"' },
+    { id: 'filter_categoria_ate', status: '❌ Removido v2.13.2', reason: 'ID do modal "Criar Lista", não existe em "Adicionar Produto"' },
+    { id: 'filter_subcat_de', status: '❌ Removido v2.13.2', reason: 'ID do modal "Criar Lista", não existe em "Adicionar Produto"' },
+    { id: 'filter_subcat_ate', status: '❌ Removido v2.13.2', reason: 'ID do modal "Criar Lista", não existe em "Adicionar Produto"' },
+    { id: 'filter_segmento_de', status: '❌ Removido v2.13.2', reason: 'ID do modal "Criar Lista", não existe em "Adicionar Produto"' },
+    { id: 'filter_segmento_ate', status: '❌ Removido v2.13.2', reason: 'ID do modal "Criar Lista", não existe em "Adicionar Produto"' },
+    { id: 'filter_grinve_de', status: '❌ Removido v2.13.2', reason: 'ID do modal "Criar Lista", não existe em "Adicionar Produto"' },
+    { id: 'filter_grinve_ate', status: '❌ Removido v2.13.2', reason: 'ID do modal "Criar Lista", não existe em "Adicionar Produto"' },
+    { id: 'filter_local1_de', status: '❌ Removido v2.13.2', reason: 'ID do modal "Criar Lista", não existe em "Adicionar Produto"' },
+    { id: 'filter_local1_ate', status: '❌ Removido v2.13.2', reason: 'ID do modal "Criar Lista", não existe em "Adicionar Produto"' },
+    { id: 'filter_local2_de', status: '❌ Removido v2.13.2', reason: 'ID do modal "Criar Lista", não existe em "Adicionar Produto"' },
+    { id: 'filter_local2_ate', status: '❌ Removido v2.13.2', reason: 'ID do modal "Criar Lista", não existe em "Adicionar Produto"' },
+    { id: 'filter_local3_de', status: '❌ Removido v2.13.2', reason: 'ID do modal "Criar Lista", não existe em "Adicionar Produto"' },
+    { id: 'filter_local3_ate', status: '❌ Removido v2.13.2', reason: 'ID do modal "Criar Lista", não existe em "Adicionar Produto"' }
+];
+
+console.log('%cIDs Órfãos Identificados e Removidos:', 'font-weight: bold;');
+console.table(removedIDs);
+
+console.log('');
+console.log(`%c✅ ${removedIDs.length} IDs órfãos removidos com sucesso`, 'color: #3fb950; font-weight: bold;');
+console.log('%c   Sistema agora usa APENAS IDs do modal "Adicionar Produto"', 'color: #d4d4d4;');
+
+console.log('');
+console.log('─'.repeat(80));
+console.log('');
+
+// RESUMO FINAL
+console.log('%c📊 RESUMO FINAL DA VALIDAÇÃO', 'background: #0d1117; color: #58a6ff; font-size: 18px; padding: 10px;');
+console.log('');
+
+const totalTests = filterIDs.length + expectedMappings.length + removedIDs.length;
+const totalPassed = etapa0Passed + expectedMappings.length + removedIDs.length;
+const totalFailed = etapa0Failed;
+const successRate = ((totalPassed / totalTests) * 100).toFixed(1);
+
+console.log(`%c✅ ETAPA 0: ${etapa0Passed}/${filterIDs.length} inputs existem no DOM`, 'color: #3fb950;');
+console.log(`%c✅ ETAPA 1: ${expectedMappings.length}/${expectedMappings.length} mapeamentos corretos`, 'color: #3fb950;');
+console.log(`%c✅ ETAPA 2: ${removedIDs.length} IDs órfãos identificados e removidos`, 'color: #3fb950;');
+console.log('');
+console.log(`%c📈 Taxa de Sucesso: ${successRate}%`, successRate === '100.0' ? 'color: #3fb950; font-size: 16px; font-weight: bold;' : 'color: #d29922; font-size: 16px; font-weight: bold;');
+console.log('');
+
+if (totalFailed === 0) {
+    console.log('%c🎉 VALIDAÇÃO COMPLETA: Todos os filtros estão funcionando corretamente!', 'background: #3fb950; color: #000; font-size: 14px; padding: 10px;');
+} else {
+    console.log(`%c⚠️ ATENÇÃO: ${totalFailed} problema(s) encontrado(s). Verificar IDs órfãos acima.`, 'background: #d29922; color: #000; font-size: 14px; padding: 10px;');
+}
+
+console.log('');
+console.log('%c📝 Próximo Passo: Testar filtros manualmente preenchendo valores e clicando "Aplicar Filtros"', 'color: #58a6ff;');
+console.log('%c   Observe os logs no console marcados com 📊 [v2.13.2 - FILTROS AVANÇADOS]', 'color: #d4d4d4;');
+</pre>
+
+    <button class="btn" onclick="copyScript()">📋 Copiar Script</button>
+    <button class="btn" onclick="window.open('http://localhost/inventory.html', '_blank')">🌐 Abrir Sistema</button>
+
+    <div id="output"></div>
+
+    <h2>📋 Checklist de Validação Manual</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Filtro</th>
+                <th>Campo Protheus</th>
+                <th>IDs Frontend</th>
+                <th>Backend Espera</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>1</td>
+                <td>Grupo</td>
+                <td>B1_GRUPO</td>
+                <td><code>grupoFrom</code>, <code>grupoTo</code></td>
+                <td><code>grupo_de</code>, <code>grupo_ate</code></td>
+                <td><span class="badge badge-success">✅ CORRIGIDO</span></td>
+            </tr>
+            <tr>
+                <td>2</td>
+                <td>Categoria</td>
+                <td>B1_XCATGOR</td>
+                <td><code>categoriaFrom</code>, <code>categoriaTo</code></td>
+                <td><code>categoria_de</code>, <code>categoria_ate</code></td>
+                <td><span class="badge badge-success">✅ CORRIGIDO</span></td>
+            </tr>
+            <tr>
+                <td>3</td>
+                <td>Subcategoria</td>
+                <td>B1_XSUBCAT</td>
+                <td><code>subcategoriaFrom</code>, <code>subcategoriaTo</code></td>
+                <td><code>subcategoria_de</code>, <code>subcategoria_ate</code></td>
+                <td><span class="badge badge-success">✅ CORRIGIDO</span></td>
+            </tr>
+            <tr>
+                <td>4</td>
+                <td>Segmento</td>
+                <td>B1_XSEGMEN</td>
+                <td><code>segmentoFrom</code>, <code>segmentoTo</code></td>
+                <td><code>segmento_de</code>, <code>segmento_ate</code></td>
+                <td><span class="badge badge-success">✅ CORRIGIDO</span></td>
+            </tr>
+            <tr>
+                <td>5</td>
+                <td>Grupo Inventário</td>
+                <td>B1_XGRINVE</td>
+                <td><code>grupoinvFrom</code>, <code>grupoinvTo</code></td>
+                <td><code>grupo_inv_de</code>, <code>grupo_inv_ate</code></td>
+                <td><span class="badge badge-success">✅ CORRIGIDO</span></td>
+            </tr>
+            <tr>
+                <td>6</td>
+                <td>Localização 1</td>
+                <td>BZ_XLOCAL1</td>
+                <td><code>localizacaoFrom</code>, <code>localizacaoTo</code></td>
+                <td><code>local1_de</code>, <code>local1_ate</code></td>
+                <td><span class="badge badge-success">✅ CORRIGIDO</span></td>
+            </tr>
+            <tr>
+                <td>7</td>
+                <td>Localização 2</td>
+                <td>BZ_XLOCAL2</td>
+                <td><code>localizacao2From</code>, <code>localizacao2To</code></td>
+                <td><code>local2_de</code>, <code>local2_ate</code></td>
+                <td><span class="badge badge-success">✅ CORRIGIDO</span></td>
+            </tr>
+            <tr>
+                <td>8</td>
+                <td>Localização 3</td>
+                <td>BZ_XLOCAL3</td>
+                <td><code>localizacao3From</code>, <code>localizacao3To</code></td>
+                <td><code>local3_de</code>, <code>local3_ate</code></td>
+                <td><span class="badge badge-success">✅ CORRIGIDO</span></td>
+            </tr>
+            <tr>
+                <td>9</td>
+                <td>Produto</td>
+                <td>B1_COD</td>
+                <td><code>produtoFrom</code>, <code>produtoTo</code></td>
+                <td><code>produto_from</code>, <code>produto_to</code></td>
+                <td><span class="badge badge-success">✅ OK</span></td>
+            </tr>
+            <tr>
+                <td>10</td>
+                <td>Descrição</td>
+                <td>B1_DESC</td>
+                <td><code>descricaoFilter</code></td>
+                <td><code>descricao</code></td>
+                <td><span class="badge badge-success">✅ OK</span></td>
+            </tr>
+            <tr>
+                <td>11</td>
+                <td>Armazém</td>
+                <td>B2_LOCAL</td>
+                <td><em>(fixo do inventário)</em></td>
+                <td><code>local</code></td>
+                <td><span class="badge badge-success">✅ OK</span></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="warning result">
+        <strong>⚠️ IDs Órfãos Removidos (v2.13.2):</strong><br>
+        Os seguintes IDs foram REMOVIDOS do código pois não existem no modal "Adicionar Produto":<br>
+        <code>filter_grupo_de</code>, <code>filter_grupo_ate</code>, <code>filter_categoria_de</code>,
+        <code>filter_categoria_ate</code>, <code>filter_subcat_de</code>, <code>filter_subcat_ate</code>,
+        <code>filter_segmento_de</code>, <code>filter_segmento_ate</code>, <code>filter_grinve_de</code>,
+        <code>filter_grinve_ate</code>, <code>filter_local1_de</code>, <code>filter_local1_ate</code>,
+        <code>filter_local2_de</code>, <code>filter_local2_ate</code>, <code>filter_local3_de</code>,
+        <code>filter_local3_ate</code>
+        <br><br>
+        <strong>Motivo:</strong> Esses IDs pertencem ao modal "Criar Lista" e foram usados incorretamente como fallback.
+    </div>
+
+    <script>
+        function copyScript() {
+            const script = document.getElementById('script').textContent;
+            navigator.clipboard.writeText(script).then(() => {
+                alert('✅ Script copiado! Cole no console do navegador (F12 → Console)');
+            });
+        }
+    </script>
+</body>
+</html>

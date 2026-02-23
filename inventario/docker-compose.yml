@@ -1,0 +1,125 @@
+# 🔧 CORREÇÃO DO DOCKER-COMPOSE.YML - PORTAS EXPOSTAS
+
+version: '3.8'
+
+# =================================
+# SERVICES
+# =================================
+services:
+
+  # =================================
+  # POSTGRESQL DATABASE
+  # =================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: inventario_postgres
+    environment:
+      POSTGRES_DB: inventario_protheus
+      POSTGRES_USER: inventario_user
+      POSTGRES_PASSWORD: inventario_2024!
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=pt_BR.UTF-8 --lc-ctype=pt_BR.UTF-8"
+    ports:
+      - "5432:5432"  # ✅ PORTA EXPOSTA
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - inventario_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inventario_user -d inventario_protheus"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =================================
+  # REDIS CACHE
+  # =================================
+  redis:
+    image: redis:7-alpine
+    container_name: inventario_redis
+    ports:
+      - "6379:6379"  # ✅ PORTA EXPOSTA
+    volumes:
+      - redis_data:/data
+    networks:
+      - inventario_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # =================================
+  # FASTAPI BACKEND - PORTA CORRIGIDA
+  # =================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: inventario_backend
+    ports:
+      - "8000:8000"  # ✅ HTTP (manter para compatibilidade)
+      - "8443:8443"  # 🔒 HTTPS (SSL/TLS)
+    environment:
+      - DATABASE_URL=postgresql://inventario_user:inventario_2024!@postgres:5432/inventario_protheus
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=inventario_protheus_secret_key_super_segura_2024
+      - DEBUG=true
+      - CORS_ORIGINS=["http://localhost:3000","http://localhost:8080","http://localhost"]
+      # 🔒 Certificados SSL (personalizados)
+      - SSL_CERT_FILE=/app/certs/cert.pem
+      - SSL_KEY_FILE=/app/certs/key.pem
+    volumes:
+      - ./backend:/app
+      - ./frontend:/app/frontend
+      - ./certs:/app/certs:ro  # 🔒 Certificados SSL (somente leitura)
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - inventario_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # =================================
+  # PGADMIN (OPCIONAL)
+  # =================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: inventario_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"  # ✅ PORTA EXPOSTA
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - inventario_network
+
+# =================================
+# VOLUMES
+# =================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+# =================================
+# NETWORKS
+# =================================
+networks:
+  inventario_network:
+    driver: bridge

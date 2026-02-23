@@ -1,0 +1,205 @@
+{
+  "version": "2.6",
+  "updated": "2025-10-05",
+  "description": "Contratos de API - Campos obrigatórios que o frontend espera",
+  "critical_note": "⚠️ QUALQUER MUDANÇA AQUI REQUER ATUALIZAÇÃO DO FRONTEND!",
+
+  "endpoints": {
+    "/api/v1/counting-lists/{id}/products": {
+      "method": "GET",
+      "description": "Lista produtos de uma lista de contagem (usado no modal 'Ver Detalhes')",
+      "frontend_files": [
+        "frontend/inventory.html:10291+ (renderProductsList)",
+        "frontend/inventory.html:10585+ (updateProductsStats)"
+      ],
+      "response": {
+        "success": true,
+        "data": {
+          "items": [
+            {
+              "required_fields": {
+                "id": {
+                  "type": "string (UUID)",
+                  "description": "ID único do item",
+                  "used_in": "frontend/inventory.html:10558 (botões de ação)"
+                },
+                "product_code": {
+                  "type": "string",
+                  "description": "Código do produto",
+                  "used_in": "frontend/inventory.html:10498 (coluna Código)"
+                },
+                "product_description": {
+                  "type": "string",
+                  "description": "⚠️ CRÍTICO: Nome 'product_description' (NÃO 'product_name'!)",
+                  "used_in": "frontend/inventory.html:10499 (coluna Descrição)",
+                  "breaking_change_history": [
+                    "v2.6: Corrigido mapeamento product_name → product_description"
+                  ]
+                },
+                "warehouse": {
+                  "type": "string",
+                  "description": "⚠️ CRÍTICO: Armazém específico do produto (não global!)",
+                  "used_in": "frontend/inventory.html:10501 (coluna Armazém)",
+                  "breaking_change_history": [
+                    "v2.6: Alterado de window.currentInventoryWarehouse para product.warehouse"
+                  ]
+                },
+                "system_qty": {
+                  "type": "number",
+                  "description": "⚠️ CRÍTICO: Nome 'system_qty' (NÃO 'expected_quantity'!)",
+                  "used_in": [
+                    "frontend/inventory.html:10510 (coluna Qtd Esperada)",
+                    "frontend/inventory.html:10462 (cálculos de divergência)"
+                  ],
+                  "breaking_change_history": [
+                    "v2.6: Corrigido mapeamento expected_quantity → system_qty"
+                  ]
+                },
+                "count_1": {
+                  "type": "number | null",
+                  "description": "⚠️ CRÍTICO: Nome 'count_1' (NÃO 'count_cycle_1'!)",
+                  "used_in": "frontend/inventory.html:10533 (coluna 1ª Contagem)",
+                  "breaking_change_history": [
+                    "v2.6: Corrigido mapeamento count_cycle_1 → count_1"
+                  ]
+                },
+                "count_2": {
+                  "type": "number | null",
+                  "description": "⚠️ CRÍTICO: Nome 'count_2' (NÃO 'count_cycle_2'!)",
+                  "used_in": "frontend/inventory.html:10539 (coluna 2ª Contagem)",
+                  "breaking_change_history": [
+                    "v2.6: Corrigido mapeamento count_cycle_2 → count_2"
+                  ]
+                },
+                "count_3": {
+                  "type": "number | null",
+                  "description": "⚠️ CRÍTICO: Nome 'count_3' (NÃO 'count_cycle_3'!)",
+                  "used_in": "frontend/inventory.html:10545 (coluna 3ª Contagem)",
+                  "breaking_change_history": [
+                    "v2.6: Corrigido mapeamento count_cycle_3 → count_3"
+                  ]
+                },
+                "current_cycle": {
+                  "type": "number (1-3)",
+                  "description": "Ciclo atual da lista"
+                },
+                "status": {
+                  "type": "string",
+                  "description": "Status do produto (counted, pending, etc)"
+                }
+              },
+              "optional_fields": {
+                "counted_qty": "Quantidade contada (compatibilidade)",
+                "unit": "Unidade de medida",
+                "requires_lot": "Se requer controle de lote"
+              }
+            }
+          ],
+          "total": "number"
+        }
+      },
+      "backend_file": "backend/app/main.py:8616-8739",
+      "tests": [
+        "tests/smoke-test.sh (Teste 5)",
+        "tests/validate_contracts.py (quando implementado)"
+      ]
+    },
+
+    "/api/v1/counting-lists/{id}/finalizar": {
+      "method": "POST",
+      "description": "Finalizar lista forçadamente (qualquer ciclo)",
+      "frontend_files": [
+        "frontend/inventory.html:19310+ (finalizarListaEspecifica)"
+      ],
+      "dependencies": {
+        "sqlalchemy": {
+          "required_imports": ["or_"],
+          "location": "backend/app/main.py:9154"
+        },
+        "model_fields": {
+          "CountingListItem": {
+            "needs_count_cycle_1": "boolean",
+            "needs_count_cycle_2": "boolean (⚠️ NÃO needs_recount_cycle_2!)",
+            "needs_count_cycle_3": "boolean (⚠️ NÃO needs_recount_cycle_3!)"
+          }
+        }
+      },
+      "response": {
+        "success": true,
+        "list_id": "string (UUID)",
+        "old_status": "string",
+        "new_status": "ENCERRADA",
+        "old_cycle": "number",
+        "new_cycle": "number",
+        "message": "string"
+      },
+      "backend_file": "backend/app/main.py:9105-9199",
+      "breaking_change_history": [
+        "v2.6: Corrigido uso de db.or_() → importar or_()",
+        "v2.6: Corrigido needs_recount_cycle_* → needs_count_cycle_*"
+      ]
+    },
+
+    "/api/v1/inventories": {
+      "method": "GET",
+      "description": "Lista todos os inventários",
+      "response": {
+        "data": [
+          {
+            "id": "string (UUID)",
+            "name": "string",
+            "status": "string",
+            "current_cycle": "number",
+            "use_multiple_lists": "boolean"
+          }
+        ]
+      }
+    },
+
+    "/api/v1/auth/login": {
+      "method": "POST",
+      "description": "Autenticação de usuário",
+      "request": {
+        "username": "string",
+        "password": "string"
+      },
+      "response": {
+        "access_token": "string",
+        "token_type": "Bearer",
+        "user": {
+          "id": "string (UUID)",
+          "username": "string",
+          "role": "string"
+        }
+      }
+    }
+  },
+
+  "common_breaking_changes": [
+    {
+      "type": "field_rename",
+      "description": "Renomear campo na API sem atualizar frontend",
+      "prevention": "Sempre buscar por uso do campo antigo antes de renomear",
+      "command": "grep -r 'campo_antigo' frontend/"
+    },
+    {
+      "type": "model_field_rename",
+      "description": "Renomear campo do modelo SQLAlchemy",
+      "prevention": "Verificar todas as queries que usam o campo",
+      "command": "grep -r 'CampoAntigo' backend/"
+    },
+    {
+      "type": "missing_import",
+      "description": "Usar função SQLAlchemy sem importar",
+      "prevention": "Sempre importar funções do sqlalchemy antes de usar",
+      "example": "from sqlalchemy import or_, and_, func"
+    }
+  ],
+
+  "validation_commands": {
+    "smoke_tests": "./tests/smoke-test.sh",
+    "contract_validation": "python tests/validate_contracts.py (TODO)",
+    "field_search": "grep -r 'product_description' frontend/",
+    "backend_check": "docker-compose logs backend | grep ERROR"
+  }
+}

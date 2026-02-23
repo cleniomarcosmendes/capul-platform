@@ -1,0 +1,1319 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["gestao_ti", "core"]
+}
+
+// ============================================================
+// MODELOS DO CORE — Read-Only neste backend
+// Protegido por middleware que bloqueia create/update/delete.
+// ============================================================
+
+model Filial {
+  id           String @id
+  codigo       String
+  nomeFantasia String @map("nome_fantasia")
+
+  chamados        Chamado[]
+  ordensServico   OrdemServico[]
+  softwareFiliais SoftwareFilial[]
+  moduloFiliais   ModuloFilial[]
+  paradasAfetadas ParadaFilialAfetada[]
+  departamentos   Departamento[]
+  ativos          Ativo[]
+
+  @@map("filiais")
+  @@schema("core")
+}
+
+model Usuario {
+  id       String  @id
+  username String
+  nome     String
+  email    String?
+
+  membrosEquipe        MembroEquipe[]
+  chamadosSolicitados  Chamado[]        @relation("ChamadoSolicitante")
+  chamadosTecnico      Chamado[]        @relation("ChamadoTecnico")
+  historicosChamado    HistoricoChamado[]
+  ordensServicoTecnico OrdemServico[]   @relation("OsTecnico")
+  ordensServicoSolicit OrdemServico[]   @relation("OsSolicitante")
+  historicosContrato   ContratoHistorico[]
+  paradasRegistradas   RegistroParada[]  @relation("ParadaRegistradoPor")
+  paradasFinalizadas   RegistroParada[]  @relation("ParadaFinalizadoPor")
+  projetosResponsavel  Projeto[]          @relation("ProjetoResponsavel")
+  membrosProjeto       MembroProjeto[]
+  atividadesProjeto    AtividadeProjeto[] @relation("AtividadeProjetoUsuario")
+  riscosResponsavel    RiscoProjeto[]     @relation("RiscoResponsavel")
+  anexosProjeto        AnexoProjeto[]     @relation("AnexoProjetoUsuario")
+  apontamentosHoras    ApontamentoHoras[] @relation("ApontamentoHorasUsuario")
+  ativosResponsavel    Ativo[]            @relation("AtivoResponsavel")
+  artigosAutor         ArtigoConhecimento[] @relation("ArtigoAutor")
+  notificacoes         Notificacao[]
+
+  @@map("usuarios")
+  @@schema("core")
+}
+
+model CentroCusto {
+  id     String @id
+  codigo String
+  nome   String
+
+  rateioItens ContratoRateioItem[]
+
+  @@map("centros_custo")
+  @@schema("core")
+}
+
+model Departamento {
+  id   String @id
+  nome String
+
+  filialId String @map("filial_id")
+  filial   Filial @relation(fields: [filialId], references: [id])
+
+  ativos Ativo[]
+
+  @@map("departamentos")
+  @@schema("core")
+}
+
+// ============================================================
+// MODELOS DO GESTAO_TI — Fase 1
+// ============================================================
+
+enum StatusGeral {
+  ATIVO
+  INATIVO
+
+  @@schema("gestao_ti")
+}
+
+model EquipeTI {
+  id                   String      @id @default(uuid())
+  nome                 String      @unique
+  sigla                String      @unique
+  descricao            String?
+  cor                  String?     @default("#3B82F6")
+  icone                String?     @default("users")
+  aceitaChamadoExterno Boolean     @default(true) @map("aceita_chamado_externo")
+  emailEquipe          String?     @map("email_equipe")
+  ordem                Int         @default(0)
+  status               StatusGeral @default(ATIVO)
+  createdAt            DateTime    @default(now()) @map("created_at")
+  updatedAt            DateTime    @updatedAt @map("updated_at")
+
+  membros              MembroEquipe[]
+  chamados             Chamado[]
+  catalogoServicos     CatalogoServico[]
+  slaDefinicoes        SlaDefinicao[]
+  historicosOrigem     HistoricoChamado[] @relation("HistoricoEquipeOrigem")
+  historicosDestino    HistoricoChamado[] @relation("HistoricoEquipeDestino")
+  softwaresResponsavel Software[]
+  artigos              ArtigoConhecimento[]
+
+  @@map("equipes_ti")
+  @@schema("gestao_ti")
+}
+
+model MembroEquipe {
+  id        String      @id @default(uuid())
+  isLider   Boolean     @default(false) @map("is_lider")
+  status    StatusGeral @default(ATIVO)
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  usuarioId String   @map("usuario_id")
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id])
+  equipeId  String   @map("equipe_id")
+  equipe    EquipeTI @relation(fields: [equipeId], references: [id])
+
+  @@unique([usuarioId, equipeId])
+  @@map("membros_equipe")
+  @@schema("gestao_ti")
+}
+
+// ============================================================
+// MODELOS DO GESTAO_TI — Fase 2 (Suporte)
+// ============================================================
+
+enum Prioridade {
+  BAIXA
+  MEDIA
+  ALTA
+  CRITICA
+
+  @@schema("gestao_ti")
+}
+
+enum StatusChamado {
+  ABERTO
+  EM_ATENDIMENTO
+  PENDENTE
+  RESOLVIDO
+  FECHADO
+  CANCELADO
+
+  @@schema("gestao_ti")
+}
+
+enum Visibilidade {
+  PUBLICO
+  PRIVADO
+
+  @@schema("gestao_ti")
+}
+
+enum TipoHistorico {
+  ABERTURA
+  ASSUMIDO
+  TRANSFERENCIA_EQUIPE
+  TRANSFERENCIA_TECNICO
+  COMENTARIO
+  RESOLVIDO
+  FECHADO
+  REABERTO
+  CANCELADO
+
+  @@schema("gestao_ti")
+}
+
+enum StatusOS {
+  ABERTA
+  EM_EXECUCAO
+  CONCLUIDA
+  CANCELADA
+
+  @@schema("gestao_ti")
+}
+
+model CatalogoServico {
+  id               String      @id @default(uuid())
+  nome             String
+  descricao        String?
+  prioridadePadrao Prioridade  @default(MEDIA) @map("prioridade_padrao")
+  slaPadraoHoras   Int?        @map("sla_padrao_horas")
+  ordem            Int         @default(0)
+  status           StatusGeral @default(ATIVO)
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  equipeId String   @map("equipe_id")
+  equipe   EquipeTI @relation(fields: [equipeId], references: [id])
+
+  chamados Chamado[]
+
+  @@unique([equipeId, nome])
+  @@map("catalogo_servicos")
+  @@schema("gestao_ti")
+}
+
+model SlaDefinicao {
+  id             String      @id @default(uuid())
+  nome           String
+  prioridade     Prioridade
+  horasResposta  Int         @map("horas_resposta")
+  horasResolucao Int         @map("horas_resolucao")
+  status         StatusGeral @default(ATIVO)
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  equipeId String   @map("equipe_id")
+  equipe   EquipeTI @relation(fields: [equipeId], references: [id])
+
+  chamados Chamado[]
+
+  @@unique([equipeId, prioridade])
+  @@map("sla_definicoes")
+  @@schema("gestao_ti")
+}
+
+model Chamado {
+  id                 String        @id @default(uuid())
+  numero             Int           @unique @default(autoincrement())
+  titulo             String
+  descricao          String
+  visibilidade       Visibilidade  @default(PUBLICO)
+  prioridade         Prioridade    @default(MEDIA)
+  status             StatusChamado @default(ABERTO)
+  softwareNome       String?       @map("software_nome")
+  moduloNome         String?       @map("modulo_nome")
+  dataLimiteSla      DateTime?     @map("data_limite_sla")
+  dataResolucao      DateTime?     @map("data_resolucao")
+  dataFechamento     DateTime?     @map("data_fechamento")
+  notaSatisfacao     Int?          @map("nota_satisfacao")
+  comentarioSatisfacao String?     @map("comentario_satisfacao")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  solicitanteId String  @map("solicitante_id")
+  solicitante   Usuario @relation("ChamadoSolicitante", fields: [solicitanteId], references: [id])
+
+  tecnicoId String?  @map("tecnico_id")
+  tecnico   Usuario? @relation("ChamadoTecnico", fields: [tecnicoId], references: [id])
+
+  equipeAtualId String   @map("equipe_atual_id")
+  equipeAtual   EquipeTI @relation(fields: [equipeAtualId], references: [id])
+
+  filialId String @map("filial_id")
+  filial   Filial @relation(fields: [filialId], references: [id])
+
+  catalogoServicoId String?          @map("catalogo_servico_id")
+  catalogoServico   CatalogoServico? @relation(fields: [catalogoServicoId], references: [id])
+
+  slaDefinicaoId String?       @map("sla_definicao_id")
+  slaDefinicao   SlaDefinicao? @relation(fields: [slaDefinicaoId], references: [id])
+
+  softwareId       String?         @map("software_id")
+  software         Software?       @relation(fields: [softwareId], references: [id])
+
+  softwareModuloId String?          @map("software_modulo_id")
+  softwareModulo   SoftwareModulo?  @relation(fields: [softwareModuloId], references: [id])
+
+  projetoId String?  @map("projeto_id")
+  projeto   Projeto? @relation(fields: [projetoId], references: [id])
+
+  historicos    HistoricoChamado[]
+  ordensServico OrdemServico[]
+  paradas       RegistroParada[]
+
+  @@index([status])
+  @@index([equipeAtualId, status])
+  @@index([solicitanteId])
+  @@index([tecnicoId])
+  @@map("chamados")
+  @@schema("gestao_ti")
+}
+
+model HistoricoChamado {
+  id        String        @id @default(uuid())
+  tipo      TipoHistorico
+  descricao String?
+  publico   Boolean       @default(true)
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  chamadoId String  @map("chamado_id")
+  chamado   Chamado @relation(fields: [chamadoId], references: [id])
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  equipeOrigemId  String?   @map("equipe_origem_id")
+  equipeOrigem    EquipeTI? @relation("HistoricoEquipeOrigem", fields: [equipeOrigemId], references: [id])
+
+  equipeDestinoId String?   @map("equipe_destino_id")
+  equipeDestino   EquipeTI? @relation("HistoricoEquipeDestino", fields: [equipeDestinoId], references: [id])
+
+  @@index([chamadoId])
+  @@map("historicos_chamado")
+  @@schema("gestao_ti")
+}
+
+model OrdemServico {
+  id              String   @id @default(uuid())
+  numero          Int      @unique @default(autoincrement())
+  titulo          String
+  descricao       String?
+  status          StatusOS @default(ABERTA)
+  dataAgendamento DateTime? @map("data_agendamento")
+  dataExecucao    DateTime? @map("data_execucao")
+  observacoes     String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  filialId String @map("filial_id")
+  filial   Filial @relation(fields: [filialId], references: [id])
+
+  tecnicoId String  @map("tecnico_id")
+  tecnico   Usuario @relation("OsTecnico", fields: [tecnicoId], references: [id])
+
+  solicitanteId String  @map("solicitante_id")
+  solicitante   Usuario @relation("OsSolicitante", fields: [solicitanteId], references: [id])
+
+  chamadoId String?  @map("chamado_id")
+  chamado   Chamado? @relation(fields: [chamadoId], references: [id])
+
+  @@index([status])
+  @@map("ordens_servico")
+  @@schema("gestao_ti")
+}
+
+// ============================================================
+// MODELOS DO GESTAO_TI — Fase 2B (Portfolio de Aplicacoes)
+// ============================================================
+
+enum TipoSoftware {
+  ERP
+  CRM
+  SEGURANCA
+  COLABORACAO
+  INFRAESTRUTURA
+  OPERACIONAL
+  OUTROS
+
+  @@schema("gestao_ti")
+}
+
+enum Criticidade {
+  CRITICO
+  ALTO
+  MEDIO
+  BAIXO
+
+  @@schema("gestao_ti")
+}
+
+enum AmbienteSoftware {
+  ON_PREMISE
+  CLOUD
+  HIBRIDO
+
+  @@schema("gestao_ti")
+}
+
+enum StatusSoftware {
+  ATIVO
+  EM_IMPLANTACAO
+  DESCONTINUADO
+  HOMOLOGACAO
+
+  @@schema("gestao_ti")
+}
+
+enum StatusModulo {
+  ATIVO
+  EM_IMPLANTACAO
+  DESATIVADO
+
+  @@schema("gestao_ti")
+}
+
+enum ModeloLicenca {
+  SUBSCRICAO
+  PERPETUA
+  POR_USUARIO
+  POR_ESTACAO
+  OEM
+  FREE_OPENSOURCE
+  SAAS
+  OUTRO
+
+  @@schema("gestao_ti")
+}
+
+enum StatusLicenca {
+  ATIVA
+  INATIVA
+  VENCIDA
+
+  @@schema("gestao_ti")
+}
+
+// ============================================================
+// MODELOS DO GESTAO_TI — Fase 3 (Contratos)
+// ============================================================
+
+enum TipoContrato {
+  LICENCIAMENTO
+  MANUTENCAO
+  SUPORTE
+  CONSULTORIA
+  DESENVOLVIMENTO
+  CLOUD_SAAS
+  OUTSOURCING
+  OUTRO
+
+  @@schema("gestao_ti")
+}
+
+enum StatusContrato {
+  RASCUNHO
+  ATIVO
+  SUSPENSO
+  VENCIDO
+  RENOVADO
+  CANCELADO
+
+  @@schema("gestao_ti")
+}
+
+enum ModalidadeRateio {
+  PERCENTUAL_CUSTOMIZADO
+  VALOR_FIXO
+  PROPORCIONAL_CRITERIO
+  IGUALITARIO
+  SEM_RATEIO
+
+  @@schema("gestao_ti")
+}
+
+enum StatusParcela {
+  PENDENTE
+  PAGA
+  ATRASADA
+  CANCELADA
+
+  @@schema("gestao_ti")
+}
+
+enum TipoHistoricoContrato {
+  CRIACAO
+  ATIVACAO
+  ALTERACAO
+  SUSPENSAO
+  RENOVACAO
+  CANCELAMENTO
+  VENCIMENTO
+  RATEIO_ALTERADO
+  PARCELA_PAGA
+  OBSERVACAO
+
+  @@schema("gestao_ti")
+}
+
+// ── Fase 4: Sustentacao ERP ──
+
+enum TipoParada {
+  PARADA_PROGRAMADA
+  PARADA_NAO_PROGRAMADA
+  MANUTENCAO_PREVENTIVA
+
+  @@schema("gestao_ti")
+}
+
+enum ImpactoParada {
+  TOTAL
+  PARCIAL
+
+  @@schema("gestao_ti")
+}
+
+enum StatusParada {
+  EM_ANDAMENTO
+  FINALIZADA
+  CANCELADA
+
+  @@schema("gestao_ti")
+}
+
+// ── Fase 5: Projetos de TI ──
+
+enum TipoProjeto {
+  DESENVOLVIMENTO_INTERNO
+  IMPLANTACAO_TERCEIRO
+  INFRAESTRUTURA
+  OUTRO
+
+  @@schema("gestao_ti")
+}
+
+enum ModoProjeto {
+  SIMPLES
+  COMPLETO
+
+  @@schema("gestao_ti")
+}
+
+enum StatusProjeto {
+  PLANEJAMENTO
+  EM_ANDAMENTO
+  PAUSADO
+  CONCLUIDO
+  CANCELADO
+
+  @@schema("gestao_ti")
+}
+
+enum PapelRaci {
+  RESPONSAVEL
+  APROVADOR
+  CONSULTADO
+  INFORMADO
+
+  @@schema("gestao_ti")
+}
+
+enum StatusFase {
+  PENDENTE
+  EM_ANDAMENTO
+  APROVADA
+  REJEITADA
+
+  @@schema("gestao_ti")
+}
+
+// ── Fase 5B: Projetos de TI — Enums adicionais ──
+
+enum StatusCotacao {
+  RASCUNHO
+  SOLICITADA
+  RECEBIDA
+  APROVADA
+  REJEITADA
+
+  @@schema("gestao_ti")
+}
+
+enum CategoriaCusto {
+  MAO_DE_OBRA
+  INFRAESTRUTURA
+  LICENCIAMENTO
+  CONSULTORIA
+  TREINAMENTO
+  VIAGEM
+  MATERIAL
+  OUTRO
+
+  @@schema("gestao_ti")
+}
+
+enum ProbabilidadeRisco {
+  MUITO_BAIXA
+  BAIXA
+  MEDIA
+  ALTA
+  MUITO_ALTA
+
+  @@schema("gestao_ti")
+}
+
+enum ImpactoRisco {
+  MUITO_BAIXO
+  BAIXO
+  MEDIO
+  ALTO
+  MUITO_ALTO
+
+  @@schema("gestao_ti")
+}
+
+enum StatusRisco {
+  IDENTIFICADO
+  EM_ANALISE
+  MITIGANDO
+  ACEITO
+  RESOLVIDO
+
+  @@schema("gestao_ti")
+}
+
+enum TipoDependencia {
+  BLOQUEIO
+  PREDECESSOR
+  SUCESSOR
+  RELACIONADO
+
+  @@schema("gestao_ti")
+}
+
+enum TipoAnexo {
+  DOCUMENTO
+  PLANILHA
+  IMAGEM
+  LINK
+  OUTRO
+
+  @@schema("gestao_ti")
+}
+
+// ── Fase 6A: CMDB + Base Conhecimento ──
+
+enum TipoAtivo {
+  SERVIDOR
+  ESTACAO_TRABALHO
+  NOTEBOOK
+  IMPRESSORA
+  SWITCH
+  ROTEADOR
+  STORAGE
+  OUTRO
+
+  @@schema("gestao_ti")
+}
+
+enum StatusAtivo {
+  ATIVO
+  INATIVO
+  EM_MANUTENCAO
+  DESCARTADO
+
+  @@schema("gestao_ti")
+}
+
+enum CategoriaArtigo {
+  PROCEDIMENTO
+  SOLUCAO
+  FAQ
+  CONFIGURACAO
+  OUTRO
+
+  @@schema("gestao_ti")
+}
+
+enum StatusArtigo {
+  RASCUNHO
+  PUBLICADO
+  ARQUIVADO
+
+  @@schema("gestao_ti")
+}
+
+enum TipoNotificacao {
+  CHAMADO_ATRIBUIDO
+  CHAMADO_ATUALIZADO
+  SLA_ESTOURADO
+  LICENCA_VENCENDO
+  CONTRATO_VENCENDO
+  PARCELA_ATRASADA
+  PARADA_INICIADA
+  PROJETO_ATUALIZADO
+  GERAL
+
+  @@schema("gestao_ti")
+}
+
+model Software {
+  id                  String          @id @default(uuid())
+  nome                String          @unique
+  fabricante          String?
+  tipo                TipoSoftware    @default(OUTROS)
+  criticidade         Criticidade     @default(MEDIO)
+  versaoAtual         String?         @map("versao_atual")
+  ambiente            AmbienteSoftware? @default(ON_PREMISE)
+  urlAcesso           String?         @map("url_acesso")
+  observacoes         String?
+  status              StatusSoftware  @default(ATIVO)
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+
+  equipeResponsavelId String?  @map("equipe_responsavel_id")
+  equipeResponsavel   EquipeTI? @relation(fields: [equipeResponsavelId], references: [id])
+
+  modulos   SoftwareModulo[]
+  filiais   SoftwareFilial[]
+  licencas  SoftwareLicenca[]
+  chamados  Chamado[]
+  contratos Contrato[]
+  paradas   RegistroParada[]
+  projetos  Projeto[]
+  ativos    AtivoSoftware[]
+  artigos   ArtigoConhecimento[]
+
+  @@map("softwares")
+  @@schema("gestao_ti")
+}
+
+model SoftwareModulo {
+  id          String       @id @default(uuid())
+  nome        String
+  descricao   String?
+  versao      String?
+  observacoes String?
+  status      StatusModulo @default(ATIVO)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  softwareId String   @map("software_id")
+  software   Software @relation(fields: [softwareId], references: [id])
+
+  filiais  ModuloFilial[]
+  chamados Chamado[]
+  paradas  RegistroParada[]
+
+  @@unique([softwareId, nome])
+  @@map("software_modulos")
+  @@schema("gestao_ti")
+}
+
+model SoftwareFilial {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  softwareId String   @map("software_id")
+  software   Software @relation(fields: [softwareId], references: [id])
+
+  filialId String @map("filial_id")
+  filial   Filial @relation(fields: [filialId], references: [id])
+
+  @@unique([softwareId, filialId])
+  @@map("software_filiais")
+  @@schema("gestao_ti")
+}
+
+model ModuloFilial {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  moduloId String         @map("modulo_id")
+  modulo   SoftwareModulo @relation(fields: [moduloId], references: [id])
+
+  filialId String @map("filial_id")
+  filial   Filial @relation(fields: [filialId], references: [id])
+
+  @@unique([moduloId, filialId])
+  @@map("modulo_filiais")
+  @@schema("gestao_ti")
+}
+
+model SoftwareLicenca {
+  id             String         @id @default(uuid())
+  modeloLicenca  ModeloLicenca? @map("modelo_licenca")
+  quantidade     Int?
+  valorTotal     Decimal?       @map("valor_total") @db.Decimal(12, 2)
+  valorUnitario  Decimal?       @map("valor_unitario") @db.Decimal(12, 2)
+  dataInicio     DateTime?      @map("data_inicio")
+  dataVencimento DateTime?      @map("data_vencimento")
+  chaveSerial    String?        @map("chave_serial")
+  fornecedor     String?
+  observacoes    String?
+  status         StatusLicenca  @default(ATIVA)
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  softwareId String   @map("software_id")
+  software   Software @relation(fields: [softwareId], references: [id])
+
+  contratoId String?   @map("contrato_id")
+  contrato   Contrato? @relation(fields: [contratoId], references: [id])
+
+  @@index([dataVencimento])
+  @@index([softwareId, status])
+  @@map("software_licencas")
+  @@schema("gestao_ti")
+}
+
+// ============================================================
+// Contrato e sub-modelos
+// ============================================================
+
+model Contrato {
+  id                    String         @id @default(uuid())
+  numero                Int            @unique @default(autoincrement())
+  titulo                String
+  descricao             String?
+  tipo                  TipoContrato
+  status                StatusContrato @default(RASCUNHO)
+  fornecedor            String
+  cnpjFornecedor        String?        @map("cnpj_fornecedor")
+  valorTotal            Decimal        @map("valor_total") @db.Decimal(12, 2)
+  valorMensal           Decimal?       @map("valor_mensal") @db.Decimal(12, 2)
+  dataInicio            DateTime       @map("data_inicio")
+  dataFim               DateTime       @map("data_fim")
+  dataAssinatura        DateTime?      @map("data_assinatura")
+  dataRenovacao         DateTime?      @map("data_renovacao")
+  indiceReajuste        String?        @map("indice_reajuste")
+  percentualReajuste    Decimal?       @map("percentual_reajuste") @db.Decimal(5, 2)
+  renovacaoAutomatica   Boolean        @default(false) @map("renovacao_automatica")
+  diasAlertaVencimento  Int            @default(30) @map("dias_alerta_vencimento")
+  observacoes           String?
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+
+  softwareId String?   @map("software_id")
+  software   Software? @relation(fields: [softwareId], references: [id])
+
+  parcelas     ParcelaContrato[]
+  rateioConfig ContratoRateioConfig?
+  historicos   ContratoHistorico[]
+  licencas     SoftwareLicenca[]
+  projetos     Projeto[]
+
+  @@index([status])
+  @@index([dataFim])
+  @@index([softwareId])
+  @@map("contratos")
+  @@schema("gestao_ti")
+}
+
+model ParcelaContrato {
+  id              String        @id @default(uuid())
+  numero          Int
+  descricao       String?
+  valor           Decimal       @db.Decimal(12, 2)
+  dataVencimento  DateTime      @map("data_vencimento")
+  dataPagamento   DateTime?     @map("data_pagamento")
+  status          StatusParcela @default(PENDENTE)
+  notaFiscal      String?       @map("nota_fiscal")
+  observacoes     String?
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  contratoId String   @map("contrato_id")
+  contrato   Contrato @relation(fields: [contratoId], references: [id])
+
+  @@unique([contratoId, numero])
+  @@index([dataVencimento])
+  @@index([status])
+  @@map("parcelas_contrato")
+  @@schema("gestao_ti")
+}
+
+model ContratoRateioConfig {
+  id          String           @id @default(uuid())
+  modalidade  ModalidadeRateio
+  criterio    String?
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  contratoId String   @unique @map("contrato_id")
+  contrato   Contrato @relation(fields: [contratoId], references: [id])
+
+  itens ContratoRateioItem[]
+
+  @@map("contrato_rateio_configs")
+  @@schema("gestao_ti")
+}
+
+model ContratoRateioItem {
+  id              String   @id @default(uuid())
+  percentual      Decimal? @db.Decimal(7, 4)
+  valorFixo       Decimal? @map("valor_fixo") @db.Decimal(12, 2)
+  parametro       Decimal? @db.Decimal(12, 2)
+  valorCalculado  Decimal? @map("valor_calculado") @db.Decimal(12, 2)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  configId      String               @map("config_id")
+  config        ContratoRateioConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  centroCustoId String      @map("centro_custo_id")
+  centroCusto   CentroCusto @relation(fields: [centroCustoId], references: [id])
+
+  @@unique([configId, centroCustoId])
+  @@map("contrato_rateio_itens")
+  @@schema("gestao_ti")
+}
+
+model ContratoHistorico {
+  id        String                @id @default(uuid())
+  tipo      TipoHistoricoContrato
+  descricao String?
+  dadosJson String?               @map("dados_json")
+  createdAt DateTime              @default(now()) @map("created_at")
+
+  contratoId String   @map("contrato_id")
+  contrato   Contrato @relation(fields: [contratoId], references: [id])
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@index([contratoId])
+  @@map("contrato_historicos")
+  @@schema("gestao_ti")
+}
+
+// ── Fase 4: Sustentacao ERP — Models ──
+
+model RegistroParada {
+  id             String        @id @default(uuid())
+  titulo         String
+  descricao      String?
+  tipo           TipoParada
+  impacto        ImpactoParada
+  status         StatusParada  @default(EM_ANDAMENTO)
+  inicio         DateTime
+  fim            DateTime?
+  duracaoMinutos Int?          @map("duracao_minutos")
+  observacoes    String?
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  softwareId       String          @map("software_id")
+  software         Software        @relation(fields: [softwareId], references: [id])
+
+  softwareModuloId String?         @map("software_modulo_id")
+  softwareModulo   SoftwareModulo? @relation(fields: [softwareModuloId], references: [id])
+
+  chamadoId String?  @map("chamado_id")
+  chamado   Chamado? @relation(fields: [chamadoId], references: [id])
+
+  registradoPorId String  @map("registrado_por_id")
+  registradoPor   Usuario @relation("ParadaRegistradoPor", fields: [registradoPorId], references: [id])
+
+  finalizadoPorId String?  @map("finalizado_por_id")
+  finalizadoPor   Usuario? @relation("ParadaFinalizadoPor", fields: [finalizadoPorId], references: [id])
+
+  filiaisAfetadas ParadaFilialAfetada[]
+
+  @@index([softwareId, status])
+  @@index([status])
+  @@index([inicio])
+  @@map("registros_parada")
+  @@schema("gestao_ti")
+}
+
+model ParadaFilialAfetada {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  paradaId String         @map("parada_id")
+  parada   RegistroParada @relation(fields: [paradaId], references: [id], onDelete: Cascade)
+
+  filialId String @map("filial_id")
+  filial   Filial @relation(fields: [filialId], references: [id])
+
+  @@unique([paradaId, filialId])
+  @@map("parada_filiais_afetadas")
+  @@schema("gestao_ti")
+}
+
+// ── Fase 5: Projetos de TI — Models ──
+
+model Projeto {
+  id              String        @id @default(uuid())
+  numero          Int           @unique @default(autoincrement())
+  nome            String
+  descricao       String?
+  tipo            TipoProjeto
+  modo            ModoProjeto   @default(SIMPLES)
+  status          StatusProjeto @default(PLANEJAMENTO)
+  nivel           Int           @default(1)
+  dataInicio      DateTime?     @map("data_inicio")
+  dataFimPrevista DateTime?     @map("data_fim_prevista")
+  dataFimReal     DateTime?     @map("data_fim_real")
+  custoPrevisto   Decimal?      @map("custo_previsto") @db.Decimal(12, 2)
+  custoRealizado  Decimal?      @map("custo_realizado") @db.Decimal(12, 2)
+  observacoes     String?
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  projetoPaiId String?  @map("projeto_pai_id")
+  projetoPai   Projeto? @relation("ProjetoHierarquia", fields: [projetoPaiId], references: [id])
+  subProjetos  Projeto[] @relation("ProjetoHierarquia")
+
+  softwareId String?   @map("software_id")
+  software   Software? @relation(fields: [softwareId], references: [id])
+
+  contratoId String?   @map("contrato_id")
+  contrato   Contrato? @relation(fields: [contratoId], references: [id])
+
+  responsavelId String  @map("responsavel_id")
+  responsavel   Usuario @relation("ProjetoResponsavel", fields: [responsavelId], references: [id])
+
+  membros    MembroProjeto[]
+  fases      FaseProjeto[]
+  atividades AtividadeProjeto[]
+
+  cotacoes            CotacaoProjeto[]
+  custos              CustoProjeto[]
+  riscos              RiscoProjeto[]
+  anexos              AnexoProjeto[]
+  apontamentos        ApontamentoHoras[]
+  dependenciasOrigem  DependenciaProjeto[] @relation("DependenciaOrigem")
+  dependenciasDestino DependenciaProjeto[] @relation("DependenciaDestino")
+  chamados            Chamado[]
+
+  @@index([status])
+  @@index([projetoPaiId])
+  @@index([softwareId])
+  @@map("projetos")
+  @@schema("gestao_ti")
+}
+
+model MembroProjeto {
+  id          String    @id @default(uuid())
+  papel       PapelRaci
+  observacoes String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  projetoId String  @map("projeto_id")
+  projeto   Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([projetoId, usuarioId])
+  @@map("membros_projeto")
+  @@schema("gestao_ti")
+}
+
+model FaseProjeto {
+  id              String     @id @default(uuid())
+  nome            String
+  descricao       String?
+  ordem           Int
+  status          StatusFase @default(PENDENTE)
+  dataInicio      DateTime?  @map("data_inicio")
+  dataFimPrevista DateTime?  @map("data_fim_prevista")
+  dataFimReal     DateTime?  @map("data_fim_real")
+  observacoes     String?
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  projetoId String  @map("projeto_id")
+  projeto   Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  atividades   AtividadeProjeto[]
+  apontamentos ApontamentoHoras[]
+
+  @@index([projetoId, ordem])
+  @@map("fases_projeto")
+  @@schema("gestao_ti")
+}
+
+model AtividadeProjeto {
+  id             String   @id @default(uuid())
+  titulo         String
+  descricao      String?
+  dataAtividade  DateTime @default(now()) @map("data_atividade")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  projetoId String  @map("projeto_id")
+  projeto   Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("AtividadeProjetoUsuario", fields: [usuarioId], references: [id])
+
+  faseId String?       @map("fase_id")
+  fase   FaseProjeto?  @relation(fields: [faseId], references: [id])
+
+  @@index([projetoId, dataAtividade])
+  @@map("atividades_projeto")
+  @@schema("gestao_ti")
+}
+
+// ── Fase 5B: Projetos de TI — Models adicionais ──
+
+model CotacaoProjeto {
+  id              String        @id @default(uuid())
+  fornecedor      String
+  descricao       String?
+  valor           Decimal       @db.Decimal(12, 2)
+  moeda           String        @default("BRL")
+  dataRecebimento DateTime?     @map("data_recebimento")
+  validade        DateTime?
+  status          StatusCotacao @default(RASCUNHO)
+  observacoes     String?
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  projetoId String  @map("projeto_id")
+  projeto   Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  @@index([projetoId])
+  @@map("cotacoes_projeto")
+  @@schema("gestao_ti")
+}
+
+model CustoProjeto {
+  id             String         @id @default(uuid())
+  descricao      String
+  categoria      CategoriaCusto
+  valorPrevisto  Decimal?       @map("valor_previsto") @db.Decimal(12, 2)
+  valorRealizado Decimal?       @map("valor_realizado") @db.Decimal(12, 2)
+  data           DateTime?
+  observacoes    String?
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  projetoId String  @map("projeto_id")
+  projeto   Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  @@index([projetoId])
+  @@map("custos_projeto")
+  @@schema("gestao_ti")
+}
+
+model RiscoProjeto {
+  id             String             @id @default(uuid())
+  titulo         String
+  descricao      String?
+  probabilidade  ProbabilidadeRisco
+  impacto        ImpactoRisco
+  status         StatusRisco        @default(IDENTIFICADO)
+  planoMitigacao String?            @map("plano_mitigacao")
+  observacoes    String?
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  projetoId String  @map("projeto_id")
+  projeto   Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  responsavelId String?  @map("responsavel_id")
+  responsavel   Usuario? @relation("RiscoResponsavel", fields: [responsavelId], references: [id])
+
+  @@index([projetoId])
+  @@map("riscos_projeto")
+  @@schema("gestao_ti")
+}
+
+model DependenciaProjeto {
+  id        String          @id @default(uuid())
+  tipo      TipoDependencia
+  descricao String?
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  projetoOrigemId  String  @map("projeto_origem_id")
+  projetoOrigem    Projeto @relation("DependenciaOrigem", fields: [projetoOrigemId], references: [id], onDelete: Cascade)
+
+  projetoDestinoId String  @map("projeto_destino_id")
+  projetoDestino   Projeto @relation("DependenciaDestino", fields: [projetoDestinoId], references: [id], onDelete: Cascade)
+
+  @@unique([projetoOrigemId, projetoDestinoId, tipo])
+  @@index([projetoOrigemId])
+  @@index([projetoDestinoId])
+  @@map("dependencias_projeto")
+  @@schema("gestao_ti")
+}
+
+model AnexoProjeto {
+  id        String    @id @default(uuid())
+  titulo    String
+  url       String
+  tipo      TipoAnexo @default(DOCUMENTO)
+  tamanho   String?
+  descricao String?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  projetoId String  @map("projeto_id")
+  projeto   Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("AnexoProjetoUsuario", fields: [usuarioId], references: [id])
+
+  @@index([projetoId])
+  @@map("anexos_projeto")
+  @@schema("gestao_ti")
+}
+
+model ApontamentoHoras {
+  id          String   @id @default(uuid())
+  data        DateTime
+  horas       Decimal  @db.Decimal(5, 2)
+  descricao   String
+  observacoes String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  projetoId String  @map("projeto_id")
+  projeto   Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("ApontamentoHorasUsuario", fields: [usuarioId], references: [id])
+
+  faseId String?      @map("fase_id")
+  fase   FaseProjeto? @relation(fields: [faseId], references: [id])
+
+  @@index([projetoId])
+  @@index([usuarioId, data])
+  @@map("apontamentos_horas")
+  @@schema("gestao_ti")
+}
+
+// ============================================================
+// MODELOS DO GESTAO_TI — Fase 6A (CMDB + Conhecimento)
+// ============================================================
+
+model Ativo {
+  id                 String      @id @default(uuid())
+  tag                String      @unique
+  nome               String
+  descricao          String?
+  tipo               TipoAtivo
+  status             StatusAtivo @default(ATIVO)
+  fabricante         String?
+  modelo             String?
+  numeroSerie        String?     @map("numero_serie")
+  dataAquisicao      DateTime?   @map("data_aquisicao")
+  dataGarantia       DateTime?   @map("data_garantia")
+  processador        String?
+  memoriaGB          Int?        @map("memoria_gb")
+  discoGB            Int?        @map("disco_gb")
+  sistemaOperacional String?     @map("sistema_operacional")
+  ip                 String?
+  hostname           String?
+  observacoes        String?
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+
+  filialId        String        @map("filial_id")
+  filial          Filial        @relation(fields: [filialId], references: [id])
+
+  responsavelId   String?       @map("responsavel_id")
+  responsavel     Usuario?      @relation("AtivoResponsavel", fields: [responsavelId], references: [id])
+
+  departamentoId  String?       @map("departamento_id")
+  departamento    Departamento? @relation(fields: [departamentoId], references: [id])
+
+  softwares AtivoSoftware[]
+
+  @@index([tipo])
+  @@index([status])
+  @@index([filialId])
+  @@map("ativos")
+  @@schema("gestao_ti")
+}
+
+model AtivoSoftware {
+  id              String    @id @default(uuid())
+  versaoInstalada String?   @map("versao_instalada")
+  dataInstalacao  DateTime? @map("data_instalacao")
+  observacoes     String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  ativoId    String   @map("ativo_id")
+  ativo      Ativo    @relation(fields: [ativoId], references: [id], onDelete: Cascade)
+
+  softwareId String   @map("software_id")
+  software   Software @relation(fields: [softwareId], references: [id])
+
+  @@unique([ativoId, softwareId])
+  @@index([ativoId])
+  @@map("ativos_software")
+  @@schema("gestao_ti")
+}
+
+model ArtigoConhecimento {
+  id          String          @id @default(uuid())
+  titulo      String
+  conteudo    String
+  resumo      String?
+  categoria   CategoriaArtigo
+  status      StatusArtigo    @default(RASCUNHO)
+  tags        String?
+  publicadoEm DateTime?       @map("publicado_em")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  softwareId String?   @map("software_id")
+  software   Software? @relation(fields: [softwareId], references: [id])
+
+  equipeTiId String?   @map("equipe_ti_id")
+  equipeTi   EquipeTI? @relation(fields: [equipeTiId], references: [id])
+
+  autorId String  @map("autor_id")
+  autor   Usuario @relation("ArtigoAutor", fields: [autorId], references: [id])
+
+  @@index([categoria, status])
+  @@index([softwareId])
+  @@index([autorId])
+  @@map("artigos_conhecimento")
+  @@schema("gestao_ti")
+}
+
+// ============================================================
+// MODELOS DO GESTAO_TI — Fase 6B (Notificacoes)
+// ============================================================
+
+model Notificacao {
+  id        String          @id @default(uuid())
+  tipo      TipoNotificacao
+  titulo    String
+  mensagem  String
+  lida      Boolean         @default(false)
+  dadosJson String?         @map("dados_json")
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@index([usuarioId, lida])
+  @@index([usuarioId, createdAt])
+  @@map("notificacoes")
+  @@schema("gestao_ti")
+}

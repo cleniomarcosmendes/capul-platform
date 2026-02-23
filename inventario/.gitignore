@@ -1,0 +1,103 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Docker volumes
+postgres_data/
+redis_data/
+pgadmin_data/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+log/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
+
+# Node modules (if any frontend build tools)
+node_modules/
+
+# Credentials and secrets
+secrets/
+*.key
+*.pem
+*.crt
+
+# OS files
+Thumbs.db
+desktop.ini
+
+# Project specific
+/mnt/c/temp/
+*.pid
+
+# Backups (não versionar backups locais)
+backups/
+
+# Claude Code settings local (configuração específica do ambiente)
+.claude/settings.local.json
+*.tar.gz
+backup_*.tar.gz
+
+# Build tools and binaries
+certs/mkcert
+
+# Arquivos temporários de dados
+backend/*.csv
+backend/update_*.py
+update_*.py
+*.dump
+
+# Claude Code local settings
+.claude/settings.local.json

@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Sistema de Inventário Capul</title>
+    <link rel="icon" type="image/png" href="/img/logo-capul-icon.png">
+
+    <!-- Bootstrap 5.3 -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.0/font/bootstrap-icons.min.css" rel="stylesheet">
+
+    <!-- Capul Theme -->
+    <link href="/css/capul-theme.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #1B5E20;
+            --secondary-color: #2E7D32;
+            --success-color: #22c55e;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --dark-color: #1e293b;
+            --light-bg: #f8fafc;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 50%, #475569 100%);
+            min-height: 100vh;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 450px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .login-header {
+            background: white;
+            color: var(--primary-color);
+            padding: 40px 30px 30px;
+            text-align: center;
+            position: relative;
+            border-bottom: 3px solid var(--primary-color);
+        }
+
+        .login-header::before {
+            display: none;
+        }
+
+        .login-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .login-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .login-subtitle {
+            color: #6b7280;
+            font-size: 0.95rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .login-body {
+            padding: 40px 30px;
+        }
+
+        .form-floating {
+            margin-bottom: 20px;
+        }
+
+        .form-control {
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 1rem;
+            padding: 12px 16px;
+            transition: all 0.3s ease;
+            background: rgba(248, 250, 252, 0.8);
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(27, 94, 32, 0.15);
+            background: white;
+        }
+
+        .form-floating > label {
+            color: #64748b;
+            font-weight: 500;
+        }
+
+        .btn-login {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border: none;
+            border-radius: 12px;
+            padding: 14px 30px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            width: 100%;
+            margin-top: 10px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(27, 94, 32, 0.3);
+        }
+
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(27, 94, 32, 0.4);
+            background: linear-gradient(135deg, #0D3D12, var(--primary-color));
+        }
+
+        .btn-login:active {
+            transform: translateY(0);
+        }
+
+        .btn-login:disabled {
+            opacity: 0.7;
+            transform: none;
+            cursor: not-allowed;
+        }
+
+        .connection-status {
+            margin-bottom: 20px;
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .status-online {
+            background: rgba(34, 197, 94, 0.1);
+            color: #22c55e;
+            border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+
+        .status-offline {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .status-checking {
+            background: rgba(245, 158, 11, 0.1);
+            color: #f59e0b;
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .spinner-border-sm {
+            width: 1rem;
+            height: 1rem;
+        }
+
+        .alert {
+            border-radius: 12px;
+            border: none;
+            font-weight: 500;
+            margin-bottom: 20px;
+        }
+
+        .alert-success {
+            background: rgba(34, 197, 94, 0.1);
+            color: #22c55e;
+        }
+
+        .alert-danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+
+        .alert-info {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+        }
+
+        .forgot-password {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .forgot-password a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .forgot-password a:hover {
+            text-decoration: underline;
+        }
+
+        .login-footer {
+            background: #f8fafc;
+            padding: 20px 30px;
+            text-align: center;
+            color: #64748b;
+            font-size: 0.85rem;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        /* Animações */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .login-card {
+            animation: slideIn 0.6s ease-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .pulse {
+            animation: pulse 1.5s infinite;
+        }
+
+        /* Responsividade */
+        @media (max-width: 768px) {
+            .login-container {
+                padding: 10px;
+            }
+            
+            .login-card {
+                margin: 10px;
+            }
+            
+            .login-header {
+                padding: 30px 20px 20px;
+            }
+            
+            .login-body {
+                padding: 30px 20px;
+            }
+            
+            .login-title {
+                font-size: 1.5rem;
+            }
+        }
+
+        /* Loading states */
+        .btn-loading {
+            position: relative;
+            color: transparent !important;
+        }
+
+        .btn-loading::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            top: 50%;
+            left: 50%;
+            margin-left: -10px;
+            margin-top: -10px;
+            border: 2px solid transparent;
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* =================================
+           ESTILOS MODAL DE FILIAL v2.12.0
+           ================================= */
+        /* Fix para evitar overflow horizontal no modal */
+        body.modal-open {
+            overflow-x: hidden;
+        }
+
+        .modal {
+            overflow-x: hidden;
+        }
+
+        #storeSelectionModal .modal-dialog {
+            max-width: 450px;
+        }
+
+        #storesListLogin .list-group-item {
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border: 2px solid #e2e8f0;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        #storesListLogin .list-group-item:hover {
+            border-color: var(--primary-color);
+            background-color: #f0fff4;
+            box-shadow: 0 2px 8px rgba(27, 94, 32, 0.15);
+        }
+
+        #storesListLogin .list-group-item:active {
+            background-color: #dcfce7;
+        }
+
+        #storesListLogin .badge {
+            font-size: 0.8rem;
+            padding: 4px 8px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        #storesListLogin .list-group-item h6 {
+            word-break: break-word;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <!-- Header -->
+            <div class="login-header">
+                <div class="login-icon">
+                    <img src="/img/logo-capul.png" alt="Capul" style="height: 60px; margin-bottom: 10px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                    <i class="bi bi-box-seam" style="display: none;"></i>
+                </div>
+                <h1 class="login-title">Sistema de Inventário</h1>
+                <p class="login-subtitle">Cooperativa Agropecuária Unaí Ltda</p>
+            </div>
+
+            <!-- Body -->
+            <div class="login-body">
+                <!-- Status da Conexão -->
+                <div id="connectionStatus" class="connection-status status-checking">
+                    <div class="spinner-border spinner-border-sm pulse" role="status"></div>
+                    <span>Verificando conexão...</span>
+                </div>
+
+                <!-- Alertas -->
+                <div id="alertContainer"></div>
+
+                <!-- Formulário de Login -->
+                <form id="loginForm">
+                    <div class="form-floating">
+                        <input type="text" class="form-control" id="username" placeholder="Usuário" required 
+                               autocomplete="username">
+                        <label for="username">
+                            <i class="bi bi-person me-2"></i>Usuário
+                        </label>
+                    </div>
+
+                    <div class="form-floating">
+                        <input type="password" class="form-control" id="password" placeholder="Senha" required
+                               autocomplete="current-password">
+                        <label for="password">
+                            <i class="bi bi-lock me-2"></i>Senha
+                        </label>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-login" id="loginBtn">
+                        <i class="bi bi-box-arrow-in-right me-2"></i>
+                        Entrar
+                    </button>
+                </form>
+
+                <!-- Link esqueceu senha -->
+                <div class="forgot-password">
+                    <a href="#" onclick="showDemoCredentials()">
+                        <i class="bi bi-question-circle me-1"></i>
+                        Credenciais de teste
+                    </a>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="login-footer" style="background: #1B5E20; color: rgba(255,255,255,0.95);">
+                <div>
+                    <i class="bi bi-shield-check me-1"></i>
+                    Sistema seguro | <strong>v2.19.21</strong>
+                </div>
+                <div class="mt-1">
+                    <small>&copy; 2025 Cooperativa Agropecuária Unaí Ltda</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================================
+         MODAL DE SELEÇÃO DE FILIAL v2.12.0
+         ================================= -->
+    <div class="modal fade" id="storeSelectionModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 15px; overflow: hidden;">
+                <div class="modal-header text-white" style="background: linear-gradient(135deg, #1B5E20, #2E7D32);">
+                    <h5 class="modal-title">
+                        <i class="bi bi-building me-2"></i> Selecione a Filial
+                    </h5>
+                </div>
+                <div class="modal-body" style="padding: 30px;">
+                    <p class="text-muted mb-3" style="font-size: 0.95rem;">
+                        <i class="bi bi-person-circle me-1"></i>
+                        <strong id="storeModalUsername"></strong>, selecione qual filial deseja acessar:
+                    </p>
+
+                    <div id="storesListLogin" class="list-group" style="max-height: 400px; overflow-y: auto;">
+                        <!-- Lojas carregadas dinamicamente -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="cancelStoreSelection()">
+                        <i class="bi bi-x-circle me-1"></i> Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // =================================
+        // CONFIGURAÇÕES E VARIÁVEIS
+        // =================================
+
+        const API_BASE_URL = window.location.origin;
+        let isApiOnline = false;
+        let connectionCheckInterval;
+
+        // =================================
+        // VERIFICAÇÃO DE CONEXÃO COM API
+        // =================================
+
+        async function checkApiConnection() {
+            const statusElement = document.getElementById('connectionStatus');
+            
+            try {
+                
+                const response = await fetch(`${API_BASE_URL}/health`, {
+                    method: 'GET',
+                    timeout: 5000,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    isApiOnline = true;
+                    statusElement.className = 'connection-status status-online';
+                    statusElement.innerHTML = `
+                        <i class="bi bi-wifi"></i>
+                        <span>API Online - Autenticação Real</span>
+                    `;
+                    
+                    // Verificar se há endpoints de auth
+                    await checkAuthEndpoints();
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                
+                isApiOnline = false;
+                statusElement.className = 'connection-status status-offline';
+                statusElement.innerHTML = `
+                    <i class="bi bi-wifi-off"></i>
+                    <span>API Offline - Modo Demo</span>
+                `;
+            }
+        }
+
+        async function checkAuthEndpoints() {
+            try {
+                // Verificar se a API está respondendo usando endpoint de health
+                const response = await fetch(`${API_BASE_URL}/health`);
+                if (response.ok) {
+                } else {
+                }
+            } catch (error) {
+            }
+        }
+
+        // =================================
+        // SISTEMA DE ALERTAS
+        // =================================
+
+        function showAlert(message, type = 'info', duration = 5000) {
+            const alertContainer = document.getElementById('alertContainer');
+            const alertId = `alert-${Date.now()}`;
+            
+            const alertHTML = `
+                <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    <i class="bi bi-${getAlertIcon(type)} me-2"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            alertContainer.innerHTML = alertHTML;
+            
+            // Auto-remove após duration
+            if (duration > 0) {
+                setTimeout(() => {
+                    const alertElement = document.getElementById(alertId);
+                    if (alertElement) {
+                        const bsAlert = new bootstrap.Alert(alertElement);
+                        bsAlert.close();
+                    }
+                }, duration);
+            }
+        }
+
+        function getAlertIcon(type) {
+            const icons = {
+                'success': 'check-circle',
+                'danger': 'exclamation-triangle',
+                'warning': 'exclamation-triangle',
+                'info': 'info-circle'
+            };
+            return icons[type] || 'info-circle';
+        }
+
+        function clearAlerts() {
+            document.getElementById('alertContainer').innerHTML = '';
+        }
+
+        // =================================
+        // AUTENTICAÇÃO REAL COM API
+        // =================================
+
+        async function loginWithApi(username, password) {
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/test/simple-login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.access_token) {
+                    
+                    // Salvar token no localStorage
+                    localStorage.setItem('access_token', data.access_token);
+                    localStorage.setItem('token_type', data.token_type || 'bearer');
+                    localStorage.setItem('login_time', Date.now().toString());
+                    localStorage.setItem('auth_mode', 'api');
+                    
+                    // Buscar dados do usuário
+                    await fetchUserData(data.access_token);
+                    
+                    return {
+                        success: true,
+                        token: data.access_token,
+                        message: 'Login realizado com sucesso!'
+                    };
+                } else {
+                    return {
+                        success: false,
+                        message: data.detail || 'Credenciais inválidas'
+                    };
+                }
+            } catch (error) {
+                console.error('❌ Erro na requisição de login:', error);
+                return {
+                    success: false,
+                    message: 'Erro de conexão com o servidor'
+                };
+            }
+        }
+
+        async function fetchUserData(token) {
+            try {
+                
+                const response = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const userData = await response.json();
+                    
+                    // Salvar dados do usuário
+                    localStorage.setItem('user_data', JSON.stringify(userData));
+                    localStorage.setItem('user_name', userData.full_name || userData.username);
+                    localStorage.setItem('user_role', userData.role);
+                    localStorage.setItem('store_id', userData.store_id || '');
+                    
+                    return userData;
+                } else {
+                    return null;
+                }
+            } catch (error) {
+                console.error('❌ Erro ao buscar dados do usuário:', error);
+                return null;
+            }
+        }
+
+        // =================================
+        // AUTENTICAÇÃO DEMO (FALLBACK)
+        // =================================
+
+        function loginDemo(username, password) {
+            
+            const demoCredentials = {
+                'admin': { password: 'admin123', role: 'ADMIN', name: 'Administrador' },
+                'supervisor': { password: 'admin123', role: 'SUPERVISOR', name: 'Supervisor' },
+                'operator': { password: 'admin123', role: 'OPERATOR', name: 'Operador' }
+            };
+
+            const user = demoCredentials[username.toLowerCase()];
+            
+            if (user && user.password === password) {
+                
+                // Simular token demo
+                const demoToken = `demo_token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                
+                // Salvar dados demo
+                localStorage.setItem('access_token', demoToken);
+                localStorage.setItem('token_type', 'bearer');
+                localStorage.setItem('login_time', Date.now().toString());
+                localStorage.setItem('auth_mode', 'demo');
+                localStorage.setItem('user_name', user.name);
+                localStorage.setItem('user_role', user.role);
+                localStorage.setItem('store_id', '001');
+                
+                const userData = {
+                    id: '1',
+                    username: username,
+                    full_name: user.name,
+                    role: user.role,
+                    store_id: '001',
+                    is_active: true
+                };
+                localStorage.setItem('user_data', JSON.stringify(userData));
+                
+                return {
+                    success: true,
+                    token: demoToken,
+                    message: 'Login demo realizado com sucesso!'
+                };
+            } else {
+                return {
+                    success: false,
+                    message: 'Usuário ou senha incorretos'
+                };
+            }
+        }
+
+        // =================================
+        // PROCESSAMENTO DO LOGIN
+        // =================================
+
+        async function handleLogin(event) {
+            event.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const loginBtn = document.getElementById('loginBtn');
+            
+            // Validações básicas
+            if (!username || !password) {
+                showAlert('Por favor, preencha usuário e senha', 'warning');
+                return;
+            }
+
+            if (username.length < 3) {
+                showAlert('Usuário deve ter pelo menos 3 caracteres', 'warning');
+                return;
+            }
+
+            if (password.length < 6) {
+                showAlert('Senha deve ter pelo menos 6 caracteres', 'warning');
+                return;
+            }
+
+            // Mostrar loading
+            loginBtn.disabled = true;
+            loginBtn.classList.add('btn-loading');
+            clearAlerts();
+
+
+            try {
+                let result;
+                
+                if (isApiOnline) {
+                    // Tentar login real primeiro
+                    result = await loginWithApi(username, password);
+                    
+                    // Se falhar, tentar demo como fallback
+                    if (!result.success) {
+                        result = loginDemo(username, password);
+                        if (result.success) {
+                            result.message += ' (Modo Demo)';
+                        }
+                    }
+                } else {
+                    // API offline, usar apenas demo
+                    result = loginDemo(username, password);
+                    if (result.success) {
+                        result.message += ' (Modo Demo - API Offline)';
+                    }
+                }
+
+                if (result.success) {
+                    showAlert(result.message, 'success', 2000);
+
+                    // Aguardar um pouco para mostrar o sucesso
+                    setTimeout(() => {
+                        // 🔐 RBAC: Redirecionar baseado no perfil do usuário
+                        const userRole = localStorage.getItem('user_role');
+                        if (userRole === 'OPERATOR') {
+                            window.location.href = 'counting_improved.html';  // OPERADOR → Contagem
+                        } else {
+                            window.location.href = 'dashboard.html';  // ADMIN/SUPERVISOR → Dashboard
+                        }
+                    }, 1500);
+                    
+                } else {
+                    showAlert(result.message, 'danger');
+                }
+                
+            } catch (error) {
+                console.error('💥 Erro inesperado no login:', error);
+                showAlert('Erro inesperado. Tente novamente.', 'danger');
+            } finally {
+                // Remover loading
+                setTimeout(() => {
+                    loginBtn.disabled = false;
+                    loginBtn.classList.remove('btn-loading');
+                }, 1000);
+            }
+        }
+
+        // =================================
+        // CREDENCIAIS DE TESTE
+        // =================================
+
+        function showDemoCredentials() {
+            const credentials = `
+                <strong>🔑 Credenciais dos Usuários Reais:</strong><br>
+                <small style="line-height: 1.6;">
+                <i class="bi bi-person-gear text-danger"></i> <strong>Administrador:</strong> admin / admin123<br>
+                <i class="bi bi-person-check text-warning"></i> <strong>Supervisor:</strong> supervisor1 / 123456<br>
+                <i class="bi bi-person text-info"></i> <strong>Operador (Matriz):</strong> operador1 / 123456<br>
+                <i class="bi bi-person text-success"></i> <strong>Operador (Filial):</strong> operador02 / 123456<br>
+                <hr style="margin: 8px 0;">
+                <em>⚠️ A tela de usuários mostra dados demo, use estas credenciais reais!</em><br>
+                <em>💡 Senha padrão para usuários criados: <strong>123456</strong></em>
+                </small>
+            `;
+            
+            showAlert(credentials, 'info', 12000);
+            
+            // Preencher automaticamente admin
+            document.getElementById('username').value = 'admin';
+            document.getElementById('password').value = 'admin123';
+        }
+
+        // =================================
+        // VERIFICAÇÃO DE LOGIN EXISTENTE
+        // =================================
+
+        function checkExistingLogin() {
+            const token = localStorage.getItem('access_token');
+            const loginTime = localStorage.getItem('login_time');
+            
+            if (token && loginTime) {
+                const hoursSinceLogin = (Date.now() - parseInt(loginTime)) / (1000 * 60 * 60);
+                
+                if (hoursSinceLogin < 24) { // Token válido por 24h
+                    showAlert('Você já está logado. Redirecionando...', 'info', 2000);
+
+                    setTimeout(() => {
+                        // 🔐 RBAC: Redirecionar baseado no perfil do usuário
+                        const userRole = localStorage.getItem('user_role');
+                        if (userRole === 'OPERATOR') {
+                            window.location.href = 'counting_improved.html';  // OPERADOR → Contagem
+                        } else {
+                            window.location.href = 'dashboard.html';  // ADMIN/SUPERVISOR → Dashboard
+                        }
+                    }, 1500);
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
+        // =================================
+        // INICIALIZAÇÃO
+        // =================================
+
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            // Verificar se já está logado
+            if (checkExistingLogin()) {
+                return;
+            }
+            
+            // Configurar formulário
+            document.getElementById('loginForm').addEventListener('submit', handleLogin);
+            
+            // Verificar conexão inicial
+            checkApiConnection();
+            
+            // Verificar conexão periodicamente
+            connectionCheckInterval = setInterval(checkApiConnection, 30000); // A cada 30s
+            
+            // Foco no campo usuário
+            document.getElementById('username').focus();
+            
+            // Detectar Enter em qualquer campo
+            document.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    const loginBtn = document.getElementById('loginBtn');
+                    if (!loginBtn.disabled) {
+                        loginBtn.click();
+                    }
+                }
+            });
+            
+        });
+
+        // Limpar interval ao sair da página
+        window.addEventListener('beforeunload', function() {
+            if (connectionCheckInterval) {
+                clearInterval(connectionCheckInterval);
+            }
+        });
+    </script>
+
+    <!-- =================================
+         SISTEMA MULTI-FILIAL v2.12.0
+         ================================= -->
+    <script>
+        // VARIÁVEIS GLOBAIS v2.12.0
+        let tempUserData = null;  // Armazena dados temporários após validar credenciais
+
+        // =================================
+        // NOVO FLUXO DE LOGIN (2 ETAPAS)
+        // =================================
+
+        /**
+         * Função principal de login - MODIFICADA para fluxo em 2 etapas
+         */
+        async function handleLoginMultifilial(event) {
+            event.preventDefault();
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const loginBtn = document.getElementById('loginBtn');
+
+            // Validações básicas
+            if (!username || !password) {
+                showAlert('Por favor, preencha usuário e senha', 'warning');
+                return;
+            }
+
+            if (username.length < 3) {
+                showAlert('Usuário deve ter pelo menos 3 caracteres', 'warning');
+                return;
+            }
+
+            if (password.length < 6) {
+                showAlert('Senha deve ter pelo menos 6 caracteres', 'warning');
+                return;
+            }
+
+            // Mostrar loading
+            loginBtn.disabled = true;
+            loginBtn.classList.add('btn-loading');
+            clearAlerts();
+
+            try {
+                // ETAPA 1: Validar credenciais
+                const response = await fetch(`${API_BASE_URL}/api/v1/auth/validate-credentials`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    showAlert(data.detail || 'Credenciais inválidas', 'danger');
+                    return;
+                }
+
+                // Armazenar dados temporários
+                tempUserData = data;
+
+                console.log('✅ Credenciais validadas:', data);
+
+                // ✅ v2.19.37: Se tem apenas 1 loja, pular seleção (inclui ADMIN com 1 loja)
+                if (data.stores.length === 1) {
+                    const selectedStore = data.stores[0];
+                    const storeId = selectedStore.id;
+
+                    // Salvar dados da loja ANTES de completar login
+                    localStorage.setItem('store_code', selectedStore.code || '');
+                    localStorage.setItem('store_name', selectedStore.name || '');
+                    console.log(`💾 Dados da loja pré-salvos: [${selectedStore.code}] ${selectedStore.name}`);
+
+                    console.log(`ℹ️ Login direto: apenas 1 loja disponível`);
+                    await completeLogin(data.user_id, storeId);
+                } else if (data.stores.length === 0) {
+                    // Usuário sem lojas atribuídas
+                    showAlert('Usuário não tem lojas atribuídas. Contate o administrador.', 'warning');
+                } else {
+                    // ETAPA 2: Mostrar modal de seleção de filial
+                    console.log(`ℹ️ Usuário tem ${data.stores.length} lojas - abrindo modal`);
+                    showStoreSelectionModal(data);
+                }
+
+            } catch (error) {
+                console.error('💥 Erro no login:', error);
+                showAlert('Erro de conexão com o servidor', 'danger');
+            } finally {
+                // Remover loading
+                setTimeout(() => {
+                    loginBtn.disabled = false;
+                    loginBtn.classList.remove('btn-loading');
+                }, 1000);
+            }
+        }
+
+        /**
+         * Exibe modal de seleção de filial
+         */
+        function showStoreSelectionModal(userData) {
+            document.getElementById('storeModalUsername').textContent = userData.full_name;
+
+            const storesList = document.getElementById('storesListLogin');
+            storesList.innerHTML = '';
+
+            // Ordenar: lojas padrão primeiro, depois por código
+            const sortedStores = userData.stores.sort((a, b) => {
+                if (a.is_default && !b.is_default) return -1;
+                if (!a.is_default && b.is_default) return 1;
+                // Ordenar por código (alfanumérico)
+                const codeA = a.code || '';
+                const codeB = b.code || '';
+                return codeA.localeCompare(codeB, undefined, { numeric: true });
+            });
+
+            sortedStores.forEach(store => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'list-group-item list-group-item-action';
+
+                button.innerHTML = `
+                    <div class="d-flex w-100 justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1" style="font-size: 0.85rem;">
+                                <i class="bi bi-shop text-primary me-2"></i>
+                                <strong>[${store.code}]</strong> ${store.name}
+                            </h6>
+                        </div>
+                        ${store.is_default ? '<span class="badge bg-success"><i class="bi bi-star-fill me-1"></i>Padrão</span>' : ''}
+                    </div>
+                `;
+
+                button.onclick = () => selectStore(store.id);
+                storesList.appendChild(button);
+            });
+
+            const modal = new bootstrap.Modal(document.getElementById('storeSelectionModal'));
+            modal.show();
+        }
+
+        /**
+         * Seleciona loja e completa o login
+         */
+        async function selectStore(storeId) {
+            try {
+                console.log(`ℹ️ Loja selecionada pelo usuário: ${storeId}`);
+
+                // ✅ v2.19.37: Salvar dados da loja ANTES de completar login
+                // Isso garante que store_code e store_name estejam disponíveis
+                const selectedStore = tempUserData.stores.find(s => s.id === storeId);
+                if (selectedStore) {
+                    localStorage.setItem('store_code', selectedStore.code || '');
+                    localStorage.setItem('store_name', selectedStore.name || '');
+                    console.log(`💾 Dados da loja pré-salvos: [${selectedStore.code}] ${selectedStore.name}`);
+                }
+
+                console.log(`ℹ️ Loja será enviada para o backend...`);
+
+                await completeLogin(tempUserData.user_id, storeId);
+
+                const modal = bootstrap.Modal.getInstance(document.getElementById('storeSelectionModal'));
+                if (modal) modal.hide();
+
+            } catch (error) {
+                console.error('💥 Erro ao selecionar loja:', error);
+                showAlert('Erro ao selecionar loja', 'danger');
+            }
+        }
+
+        /**
+         * Completa o login gerando token com loja selecionada
+         */
+        async function completeLogin(userId, storeId) {
+            console.log(`ℹ️ Completando login: userId=${userId}, storeId=${storeId || 'N/A'}`);
+
+            const payload = { user_id: userId, store_id: storeId };
+            console.log('📤 Payload enviado para o backend:', JSON.stringify(payload, null, 2));
+
+            const response = await fetch(`${API_BASE_URL}/api/v1/auth/login-with-store`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                console.error('❌ Erro na resposta do backend:', data);
+                throw new Error(data.detail || 'Erro ao completar login');
+            }
+
+            console.log('✅ Resposta do backend:', data);
+            console.log('🏪 Loja retornada pelo backend:', data.store);
+
+            // Salvar dados no localStorage
+            localStorage.setItem('access_token', data.access_token);
+            localStorage.setItem('token_type', data.token_type);
+            localStorage.setItem('login_time', Date.now().toString());
+            localStorage.setItem('auth_mode', 'api');
+            localStorage.setItem('user_data', JSON.stringify(data.user));
+            localStorage.setItem('user_name', data.user.full_name);
+            localStorage.setItem('user_role', data.user.role);
+            localStorage.setItem('store_id', data.store?.id || storeId || '');
+            localStorage.setItem('store_name', data.store?.name || '');
+            localStorage.setItem('store_code', data.store?.code || '');
+
+            console.log('💾 Dados salvos no localStorage:');
+            console.log('   - store_id:', localStorage.getItem('store_id'));
+            console.log('   - store_code:', localStorage.getItem('store_code'));
+            console.log('   - store_name:', localStorage.getItem('store_name'));
+
+            showAlert('Login realizado com sucesso!', 'success', 2000);
+
+            setTimeout(() => {
+                if (data.user.role === 'OPERATOR') {
+                    window.location.href = 'counting_improved.html';
+                } else {
+                    window.location.href = 'dashboard.html';
+                }
+            }, 1500);
+        }
+
+        /**
+         * Cancela seleção de loja
+         */
+        function cancelStoreSelection() {
+            tempUserData = null;
+            const modal = bootstrap.Modal.getInstance(document.getElementById('storeSelectionModal'));
+            if (modal) modal.hide();
+            showAlert('Login cancelado', 'info');
+        }
+
+        // =================================
+        // SUBSTITUIR handleLogin ORIGINAL
+        // =================================
+
+        // Backup da função original (caso necessário)
+        window.handleLoginOriginal = window.handleLogin;
+
+        // Substituir pela nova versão multi-filial
+        window.handleLogin = handleLoginMultifilial;
+
+        console.log('✅ Sistema Multi-Filial v2.12.0 carregado!');
+        console.log('ℹ️ Fluxo de login em 2 etapas ativado');
+    </script>
+</body>
+</html>

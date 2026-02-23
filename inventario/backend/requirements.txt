@@ -1,0 +1,38 @@
+# =================================
+# SISTEMA DE INVENTÁRIO PROTHEUS
+# Dependências Python FastAPI
+# =================================
+
+# Framework Web
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Banco de Dados
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9          # PostgreSQL driver
+
+# Autenticação e Segurança
+pyjwt==2.8.0                    # JSON Web Tokens
+bcrypt==4.3.0                   # Bcrypt hashing (compatível com passlib 1.7.4)
+passlib[bcrypt]==1.7.4          # Password hashing
+python-multipart==0.0.6        # Form data parsing
+
+# Validação de Dados
+pydantic==2.5.0                # Data validation
+
+# Utilitários
+python-dotenv==1.0.0           # Environment variables
+python-dateutil==2.8.2         # Date utilities
+
+# HTTP e Requests
+httpx==0.25.2                  # HTTP client for async
+requests==2.31.0               # HTTP client for sync (usado em sync_protheus v2.14.0)
+
+# Cache (v2.19.13)
+redis==5.0.1                   # Redis client for caching
+
+# Desenvolvimento e Testes
+pytest==7.4.3                  # Testing framework
+pytest-asyncio==0.21.1         # Async testing
+black==23.11.0                 # Code formatting
+flake8==6.1.0                  # Code linting

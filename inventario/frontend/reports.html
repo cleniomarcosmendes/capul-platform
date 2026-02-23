@@ -1,0 +1,1820 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatórios - Capul Inventário</title>
+    <link rel="icon" type="image/png" href="/img/logo-capul-icon.png">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <!-- Capul Theme -->
+    <link href="/css/capul-theme.css" rel="stylesheet">
+    <style>
+        /* ✅ v2.19.40: Layout 100% para aproveitamento total da tela */
+        .container {
+            max-width: 100% !important;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8f9fc;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .header-title h1 {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+
+        .header-title p {
+            opacity: 0.8;
+            font-size: 0.9rem;
+        }
+
+        .user-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        /* Botões Profissionais - PADRÃO DOS MODAIS */
+        .professional-btn {
+            border: none !important;
+            border-radius: 8px !important;
+            padding: 8px 16px !important;
+            font-weight: 500 !important;
+            transition: all 0.3s ease !important;
+            backdrop-filter: blur(10px) !important;
+            min-width: 110px !important;
+            font-size: 0.85rem !important;
+            cursor: pointer !important;
+            text-decoration: none !important;
+            display: inline-block !important;
+        }
+
+        .professional-btn:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
+        }
+
+        .btn-success-pro {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%) !important;
+            color: white !important;
+        }
+
+        .btn-warning-pro {
+            background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%) !important;
+            color: white !important;
+        }
+
+        .btn-danger-pro {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%) !important;
+            color: white !important;
+        }
+
+        .btn-secondary-pro {
+            background: linear-gradient(135deg, #718096 0%, #4a5568 100%) !important;
+            color: white !important;
+        }
+
+        .btn-info-pro {
+            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%) !important;
+            color: white !important;
+        }
+
+        /* Classes antigas para compatibilidade interna */
+        .btn {
+            border: none;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-weight: 500;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #718096 0%, #4a5568 100%);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+            color: white;
+        }
+
+        .btn-info {
+            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: white;
+        }
+
+        .info-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .info-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(5px);
+            border-radius: 10px;
+            padding: 12px 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .info-label {
+            font-size: 0.75rem;
+            opacity: 0.8;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .info-value {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .summary-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px 10px;
+            text-align: center;
+            border-top: 3px solid #1B5E20;
+            transition: all 0.3s ease;
+        }
+
+        .summary-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .summary-card.success { border-top-color: #28a745; }
+        .summary-card.warning { border-top-color: #ffc107; }
+        .summary-card.danger { border-top-color: #dc3545; }
+        .summary-card.info { border-top-color: #17a2b8; }
+
+        .summary-number {
+            font-size: 1.8em;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #333;
+        }
+
+        .summary-card.success .summary-number { color: #28a745; }
+        .summary-card.warning .summary-number { color: #ffc107; }
+        .summary-card.danger .summary-number { color: #dc3545; }
+        .summary-card.info .summary-number { color: #17a2b8; }
+
+        .summary-label {
+            font-size: 0.75em;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .inventory-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #667eea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-completed { background: #d4edda; color: #155724; }
+        .status-in_progress { background: #fff3cd; color: #856404; }
+        .status-closed { background: #cce7ff; color: #004085; }
+
+        .progress-bar {
+            background: #e9ecef;
+            border-radius: 10px;
+            height: 20px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, #28a745, #20c997);
+            height: 100%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .report-content {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .report-header {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 20px 25px;
+            border-bottom: 2px solid #dee2e6;
+            border-radius: 8px 8px 0 0;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .report-header h3 {
+            margin: 0 0 20px 0;
+            font-size: 1.8rem;
+            color: #1a202c;
+            font-weight: 700;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .report-info-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .report-info-box {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px 15px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .report-info-box.primary {
+            border-left: 4px solid #667eea;
+        }
+
+        .report-info-box.secondary {
+            border-left: 4px solid #48bb78;
+        }
+
+        .report-info-label {
+            font-size: 0.75rem;
+            color: #718096;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .report-info-value {
+            font-size: 1.1rem;
+            color: #2d3748;
+            font-weight: 600;
+        }
+
+        .report-meta {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding-top: 12px;
+            margin-top: 12px;
+            border-top: 1px solid #e2e8f0;
+            font-size: 0.85rem;
+            color: #718096;
+        }
+
+        .report-meta strong {
+            color: #2d3748;
+            font-weight: 600;
+        }
+
+        .report-body {
+            padding: 20px;
+        }
+
+        .item-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 10px; /* ✅ v2.17.1: Reduzir fonte para melhorar apresentação no PDF */
+        }
+
+        .item-table th,
+        .item-table td {
+            padding: 6px 8px; /* ✅ v2.17.1: Reduzir padding para economizar espaço */
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .item-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            font-size: 10px; /* ✅ v2.17.1: Fonte menor no header */
+        }
+
+        .item-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .variance-positive { color: #28a745; font-weight: bold; }
+        .variance-negative { color: #dc3545; font-weight: bold; }
+        .variance-neutral { color: #6c757d; }
+
+        /* Estilos para linhas sintéticas e analíticas */
+        .row-synthetic {
+            background: #fff3cd !important;
+            font-weight: 600;
+            border-left: 4px solid #ffc107;
+        }
+
+        .row-analytical {
+            background: #d4edda !important;
+            border-left: 4px solid #28a745;
+            padding-left: 20px;
+        }
+
+        .row-analytical td:first-child {
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .row-analytical td:first-child::before {
+            content: "└";
+            position: absolute;
+            left: 15px;
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .export-actions {
+            background: #e3f2fd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+
+        @media (max-width: 768px) {
+            .summary-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 8px;
+            }
+
+            .report-info-grid {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+
+            .item-table {
+                font-size: 14px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .summary-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+
+    <!-- ✅ v2.17.4: Utilitários globais (sessão, loading, erros) -->
+    <script src="/js/global_utils.js"></script>
+    <!-- JS Consolidados v2.19.13 -->
+    <script src="/js/utils.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/ui.js"></script>
+    <script src="/js/export.js"></script>
+
+    <!-- 🔐 Controle de Acesso (RBAC) -->
+    <script src="/js/access_control.js"></script>
+</head>
+<body>
+    <!-- Header Capul -->
+    <header class="capul-header">
+        <div class="container-fluid px-4">
+            <div class="row align-items-center">
+                <div class="col-md-3">
+                    <a href="dashboard.html" class="capul-brand text-decoration-none">
+                        <img src="/img/logo-capul.png" alt="Capul" onerror="this.style.display='none'">
+                        <span>Inventário</span>
+                    </a>
+                </div>
+                <div class="col-md-6 text-center">
+                    <div class="capul-store-badge">
+                        <i class="bi bi-building"></i>
+                        <span id="headerStoreName">Carregando...</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex align-items-center justify-content-end gap-3">
+                        <div class="capul-user-info">
+                            <div class="capul-avatar" id="userAvatar">?</div>
+                            <div class="capul-user-details">
+                                <div class="capul-user-name" id="currentUser">Carregando...</div>
+                                <div class="capul-user-role" id="userRoleBadge">
+                                    <i class="bi bi-shield-check"></i>
+                                    <span>...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn-capul-logout" onclick="logout()">
+                            <i class="bi bi-box-arrow-right me-1"></i>
+                            Sair
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Page Header -->
+    <div style="background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); color: white; padding: 1.5rem 2rem;">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle bg-white p-3 me-3" style="width: 60px; height: 60px; display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-file-earmark-bar-graph" style="font-size: 1.8rem; color: #1B5E20;"></i>
+                    </div>
+                    <div>
+                        <h4 class="mb-1">Relatórios de Inventário</h4>
+                        <p class="mb-0" style="opacity: 0.9; font-size: 0.95rem;">Visualização completa de estatísticas e análises</p>
+                    </div>
+                </div>
+                <div>
+                    <a href="#" onclick="voltarParaOrigem(); return false;" class="btn btn-light" style="font-weight: 600; border-radius: 8px;">
+                        <i class="bi bi-arrow-left me-2"></i>Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Cards -->
+    <div style="background: linear-gradient(135deg, rgba(27, 94, 32, 0.1) 0%, rgba(46, 125, 50, 0.05) 100%); padding: 1rem 2rem;">
+        <div class="container-fluid">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="info-card" style="background: white; border-radius: 8px; padding: 1rem; border-left: 4px solid #1B5E20;">
+                        <div class="info-label"><i class="bi bi-building me-1"></i> Loja</div>
+                        <p class="info-value" id="storeName">Carregando...</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="info-card" style="background: white; border-radius: 8px; padding: 1rem; border-left: 4px solid #2E7D32;">
+                        <div class="info-label"><i class="bi bi-person me-1"></i> Usuário</div>
+                        <p class="info-value" id="userNameCard">Carregando...</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="info-card" style="background: white; border-radius: 8px; padding: 1rem; border-left: 4px solid #388E3C;">
+                        <div class="info-label"><i class="bi bi-clipboard-check me-1"></i> Inventário</div>
+                        <p class="info-value" id="currentInventory">Nenhum</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Resumo Geral -->
+        <div class="card" id="generalCard">
+            <h2>📈 Resumo Geral dos Inventários</h2>
+            <button class="btn btn-info" onclick="loadGeneralSummary()">Atualizar Resumo</button>
+            <div id="generalContent">
+                <div class="no-data">
+                    <p>Clique em "Atualizar Resumo" para carregar os dados.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Relatório Detalhado -->
+        <div class="card" id="reportCard" style="display: none;">
+            <div id="reportContent"></div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = '';
+        let currentUser = null;
+
+        // ✅ v2.17.1: Função para formatar exibição de lote (concatenação inteligente)
+        /**
+         * Formata exibição de lote com concatenação inteligente
+         * @param {string} lotectl - Lote do cliente (B8_LOTECLT)
+         * @param {string} lotefor - Lote do fornecedor (B8_LOTEFOR)
+         * @returns {string} Lote formatado
+         */
+        function formatLoteDisplay(lotectl, lotefor) {
+            const hasLotectl = lotectl && lotectl.trim() !== '' && lotectl !== 'null';
+            const hasLotefor = lotefor && lotefor.trim() !== '' && lotefor !== 'null';
+
+            if (hasLotectl && hasLotefor) {
+                return `${lotectl} | ${lotefor}`;
+            } else if (hasLotectl) {
+                return lotectl;
+            } else if (hasLotefor) {
+                return `${lotefor} (Forn.)`;
+            } else {
+                return '-';
+            }
+        }
+
+        // 🏢 Carregar informações da filial ativa no card
+        async function loadCurrentStoreInfo() {
+            try {
+                let userInfo = JSON.parse(localStorage.getItem('user_data'));
+
+                // Se user_data não tem store_code/store_name, buscar da API
+                if (userInfo && (!userInfo.store_code || !userInfo.store_name)) {
+                    const token = localStorage.getItem('access_token');
+                    if (token) {
+                        try {
+                            const response = await fetch('/api/v1/auth/me', {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+
+                            if (response.ok) {
+                                const freshUserData = await response.json();
+                                localStorage.setItem('user_data', JSON.stringify(freshUserData));
+                                userInfo = freshUserData;
+                            }
+                        } catch (apiError) {
+                            console.error('❌ Erro ao buscar dados da API:', apiError);
+                        }
+                    }
+                }
+
+                if (!userInfo) {
+                    console.warn('⚠️ Informações do usuário não encontradas no localStorage');
+                    return;
+                }
+
+                // Elemento do card de loja
+                const storeNameEl = document.getElementById('storeName');
+
+                if (storeNameEl) {
+                    const storeCode = userInfo.store_code || '--';
+                    const storeName = userInfo.store_name || 'Filial não identificada';
+
+                    // Atualizar card com código e nome completo
+                    storeNameEl.textContent = `${storeCode} - ${storeName}`;
+
+                    console.log(`✅ Filial carregada: ${storeCode} - ${storeName}`);
+                } else {
+                    console.warn('⚠️ Elemento storeName não encontrado no DOM');
+                }
+            } catch (error) {
+                console.error('❌ Erro ao carregar informações da filial:', error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // ✅ v2.19.8: Verificar inventory_id ANTES de renderizar
+            // para evitar flash do "Resumo Geral" quando há inventário específico
+            const urlParams = new URLSearchParams(window.location.search);
+            const inventoryId = urlParams.get('inventory_id');
+
+            if (inventoryId) {
+                // Esconder card geral IMEDIATAMENTE para evitar flash
+                const generalCard = document.getElementById('generalCard');
+                if (generalCard) generalCard.style.display = 'none';
+                // Mostrar card de relatório com loading
+                const reportCard = document.getElementById('reportCard');
+                if (reportCard) {
+                    reportCard.style.display = 'block';
+                    document.getElementById('reportContent').innerHTML = '<div class="no-data"><p>Carregando relatório...</p></div>';
+                }
+            }
+
+            // ✅ Verificar controle de acesso (RBAC)
+            if (!checkAccess()) {
+                return;  // Se não tem acesso, para execução
+            }
+
+            checkAuth();
+
+            // 🏢 CARREGAR INFORMAÇÕES DA FILIAL NO HEADER
+            loadCurrentStoreInfo();
+
+            // Carregar inventário pela URL (sem delay se já escondemos o card geral)
+            if (inventoryId) {
+                loadReport(inventoryId);
+            }
+        });
+
+        function checkAuth() {
+            authToken = localStorage.getItem('access_token');
+            if (!authToken) {
+                alert('Sessão expirada.');
+                window.location.href = '/static/login.html';
+                return;
+            }
+            loadUserInfo();
+        }
+
+        async function loadUserInfo() {
+            try {
+                const response = await fetch('/api/v1/auth/me', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                if (!response.ok) throw new Error('Falha na autenticação');
+
+                currentUser = await response.json();
+                document.getElementById('userNameCard').textContent = currentUser.full_name || currentUser.username;
+
+                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                const storeData = JSON.parse(localStorage.getItem('store_data') || '{}');
+
+                const storeName = storeData.name || userData.store_name || 'Loja Principal';
+                const storeCode = storeData.code || userData.store_code || '';
+                document.getElementById('storeName').textContent = storeCode ? `${storeCode} - ${storeName}` : storeName;
+
+                loadGeneralSummary();
+
+            } catch (error) {
+                console.error('Erro:', error);
+                logout();
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('access_token');
+            window.location.href = '/static/login.html';
+        }
+
+        async function loadGeneralSummary() {
+            try {
+                const response = await fetch('/api/v1/reports/inventory-summary', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                const data = await response.json();
+                displayGeneralSummary(data);
+
+            } catch (error) {
+                console.error('Erro:', error);
+                document.getElementById('generalContent').innerHTML = `
+                    <div class="no-data">
+                        <p style="color: red;">❌ Erro ao carregar: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function displayGeneralSummary(data) {
+            const container = document.getElementById('generalContent');
+
+            if (!data.inventories || data.inventories.length === 0) {
+                container.innerHTML = `
+                    <div class="no-data">
+                        <h3>📭 Nenhum Inventário Encontrado</h3>
+                    </div>
+                `;
+                return;
+            }
+
+            const total = data.inventories.length;
+            const completed = data.inventories.filter(i => i.status === 'COMPLETED' || i.status === 'CLOSED').length;
+            const inProgress = data.inventories.filter(i => i.status === 'IN_PROGRESS').length;
+            const totalItems = data.inventories.reduce((sum, i) => sum + i.total_items, 0);
+            const counted = data.inventories.reduce((sum, i) => sum + i.counted_items, 0);
+            const discrepancies = data.inventories.reduce((sum, i) => sum + i.discrepancies_count, 0);
+
+            let html = `
+                <div class="summary-grid">
+                    <div class="summary-card">
+                        <div class="summary-number">${total}</div>
+                        <div class="summary-label">Total</div>
+                    </div>
+                    <div class="summary-card success">
+                        <div class="summary-number">${completed}</div>
+                        <div class="summary-label">Concluídos</div>
+                    </div>
+                    <div class="summary-card warning">
+                        <div class="summary-number">${inProgress}</div>
+                        <div class="summary-label">Em Andamento</div>
+                    </div>
+                    <div class="summary-card info">
+                        <div class="summary-number">${totalItems}</div>
+                        <div class="summary-label">Itens</div>
+                    </div>
+                    <div class="summary-card success">
+                        <div class="summary-number">${counted}</div>
+                        <div class="summary-label">Contados</div>
+                    </div>
+                    <div class="summary-card danger">
+                        <div class="summary-number">${discrepancies}</div>
+                        <div class="summary-label">Divergências</div>
+                    </div>
+                </div>
+                <h3 style="margin-top: 30px;">📋 Lista de Inventários</h3>
+            `;
+
+            data.inventories.forEach(inv => {
+                const statusClass = inv.status.toLowerCase();
+
+                html += `
+                    <div class="inventory-item">
+                        <div>
+                            <h4>${inv.name}</h4>
+                            <p>
+                                <span class="status-badge status-${statusClass}">${inv.status}</span>
+                                <strong>Progresso:</strong> ${inv.completion_percentage}%
+                                (${inv.counted_items}/${inv.total_items} itens)
+                            </p>
+                        </div>
+                        <button class="btn btn-info" onclick="loadReport('${inv.inventory_id}')">
+                            Ver Relatório
+                        </button>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${inv.completion_percentage}%">
+                            ${inv.completion_percentage}%
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        async function loadReport(inventoryId) {
+            try {
+                document.getElementById('generalCard').style.display = 'none';
+                document.getElementById('reportCard').style.display = 'block';
+                document.getElementById('reportContent').innerHTML = '<div class="no-data"><p>Carregando...</p></div>';
+
+                const response = await fetch(`/api/v1/inventory/lists/${inventoryId}/final-report`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                const data = await response.json();
+                displayReport(data);
+
+            } catch (error) {
+                console.error('Erro:', error);
+                document.getElementById('reportContent').innerHTML = `
+                    <div class="no-data">
+                        <p style="color: red;">❌ Erro: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function displayReport(data) {
+            // Armazenar dados para exportação
+            currentReportData = data;
+
+            const inv = data.inventory;
+            const summary = data.summary;
+            // ✅ Ordenar produtos alfabeticamente por descrição
+            const items = [...data.items].sort((a, b) => {
+                const nameA = (a.product_name || a.product_description || '').toLowerCase();
+                const nameB = (b.product_name || b.product_description || '').toLowerCase();
+                return nameA.localeCompare(nameB, 'pt-BR');
+            });
+
+            document.getElementById('currentInventory').textContent = inv.name;
+
+            // Nome do usuário atual (quem está visualizando/imprimindo)
+            const userName = currentUser ? (currentUser.full_name || currentUser.username) : 'Usuário';
+
+            const dataFormatada = new Date(inv.reference_date).toLocaleDateString('pt-BR');
+            const dataHoraAtual = new Date().toLocaleString('pt-BR');
+
+            let html = `
+                <div class="report-content">
+                    <div class="report-header">
+                        <h3>📋 Relatório de Inventário</h3>
+
+                        <div class="report-info-grid">
+                            <div class="report-info-box primary">
+                                <div class="report-info-label">📦 Inventário</div>
+                                <div class="report-info-value">${inv.name}</div>
+                            </div>
+
+                            <div class="report-info-box primary">
+                                <div class="report-info-label">🏢 Armazém</div>
+                                <div class="report-info-value">${inv.warehouse || 'N/A'}${inv.warehouse_description ? ' - ' + inv.warehouse_description : ''}</div>
+                            </div>
+
+                            <div class="report-info-box secondary">
+                                <div class="report-info-label">📅 Data Referência</div>
+                                <div class="report-info-value">${dataFormatada}</div>
+                            </div>
+                        </div>
+
+                        <div class="report-meta">
+                            <span>👤 <strong>Por:</strong> ${userName}</span>
+                        </div>
+                    </div>
+
+                    <div class="report-body">
+                        <!-- ✅ v2.19.8: Barra Financeira Visual (mesmo estilo do inventory.html) -->
+                        <div style="border: 1px solid #28a745; border-radius: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 15px; margin: 15px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; text-align: center;">
+                                <!-- Total de Itens -->
+                                <div style="padding: 10px;">
+                                    <div style="font-size: 11px; color: #666; font-weight: bold; margin-bottom: 5px;">📦 Total</div>
+                                    <div style="font-size: 18px; font-weight: bold; color: #333;">
+                                        ${summary.total_items}
+                                    </div>
+                                </div>
+
+                                <!-- Valor Esperado -->
+                                <div style="padding: 10px; border-left: 1px solid #28a745;">
+                                    <div style="font-size: 11px; color: #666; font-weight: bold; margin-bottom: 5px;">🏷️ Esperado</div>
+                                    <div style="font-size: 18px; font-weight: bold; color: #333;">
+                                        R$ ${summary.total_expected_value.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                    </div>
+                                </div>
+
+                                <!-- Valor Contado -->
+                                <div style="padding: 10px; border-left: 1px solid #28a745;">
+                                    <div style="font-size: 11px; color: #666; font-weight: bold; margin-bottom: 5px;">💰 Contado</div>
+                                    <div style="font-size: 18px; font-weight: bold; color: ${summary.total_counted_value < summary.total_expected_value ? '#dc3545' : '#28a745'};">
+                                        R$ ${summary.total_counted_value.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                    </div>
+                                </div>
+
+                                <!-- Variação Financeira -->
+                                <div style="padding: 10px; border-left: 1px solid #28a745;">
+                                    <div style="font-size: 11px; color: #666; font-weight: bold; margin-bottom: 5px;">📊 Variação R$ (${summary.variance_percentage >= 0 ? '+' : ''}${summary.variance_percentage.toFixed(2)}%)</div>
+                                    <div style="font-size: 18px; font-weight: bold; color: ${summary.variance_value >= 0 ? '#28a745' : '#dc3545'};">
+                                        R$ ${summary.variance_value >= 0 ? '+' : ''}${summary.variance_value.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                    </div>
+                                </div>
+
+                                <!-- Variação Física (Quantidade) -->
+                                <div style="padding: 10px; border-left: 1px solid #28a745;">
+                                    <div style="font-size: 11px; color: #666; font-weight: bold; margin-bottom: 5px;">
+                                        📦 Variação Qtd ${(summary.products_with_zero_cost || 0) > 0 ? '<span style="background: #ffc107; color: #333; padding: 1px 5px; border-radius: 3px; font-size: 10px; margin-left: 3px;">⚠️</span>' : ''}
+                                    </div>
+                                    <div style="font-size: 18px; font-weight: bold; color: ${(summary.qty_variance || 0) > 0 ? '#28a745' : (summary.qty_variance || 0) < 0 ? '#dc3545' : '#666'};">
+                                        ${(summary.qty_variance || 0) >= 0 ? '+' : ''}${(summary.qty_variance || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} un
+                                    </div>
+                                </div>
+                            </div>
+                            ${(summary.products_with_zero_cost || 0) > 0 ? `
+                            <!-- Alerta de produtos com custo zero -->
+                            <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 8px 12px; margin-top: 10px; font-size: 12px;">
+                                ⚠️ <strong>${summary.products_with_zero_cost} produto(s)</strong> com divergência têm custo R$ 0,00 no Protheus.
+                                A variação financeira pode estar subestimada.
+                            </div>
+                            ` : ''}
+                        </div>
+
+                        <h4 style="margin-top: 30px;">📋 Itens</h4>
+                        <table class="item-table">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Produto</th>
+                                    <th style="text-align: center;">Armazém</th>
+                                    <th style="text-align: center;">Lote</th>
+                                    <th>N.º Lote</th>
+                                    <th style="width: 100px;">Lote Fornecedor</th>
+                                    <th style="text-align: right;">Saldo Estoque</th>
+                                    <th style="text-align: right;">Entregas Post.</th>
+                                    <th style="text-align: right;">Total Esperado</th>
+                                    <th style="text-align: right;">Contado</th>
+                                    <th style="text-align: right;">Diferença</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+            `;
+
+            items.forEach(item => {
+                const varClass = item.variance > 0 ? 'variance-positive' :
+                               item.variance < 0 ? 'variance-negative' : 'variance-neutral';
+
+                const hasLot = item.has_lot || false;
+                const lotIndicator = hasLot ? 'L' : 'N';
+
+                // Se o produto controla lote E tem contagens com lotes
+                if (hasLot && item.countings && item.countings.length > 0) {
+                    // ✅ v2.15.7.7: Agrupar por lote, suportando múltiplos lotes na observation
+                    const lotGroups = {};
+                    item.countings.forEach(counting => {
+                        const countNum = counting.count_number || 1;
+
+                        // ✅ v2.15.7.7: Tentar extrair TODOS os lotes da observation primeiro
+                        const lots = extractAllLotsFromObservation(counting.observation);
+
+                        if (lots.length > 0) {
+                            // Há múltiplos lotes na observation
+                            lots.forEach(lot => {
+                                const lotNum = lot.lotNumber;
+                                const qty = lot.quantity;
+
+                                if (!lotGroups[lotNum]) {
+                                    lotGroups[lotNum] = { count_1: null, count_2: null, count_3: null };
+                                }
+
+                                if (countNum === 1) lotGroups[lotNum].count_1 = qty;
+                                else if (countNum === 2) lotGroups[lotNum].count_2 = qty;
+                                else if (countNum === 3) lotGroups[lotNum].count_3 = qty;
+                            });
+                        } else {
+                            // Fallback: usar lógica antiga (lot_number ou primeiro match)
+                            const lotNum = extractLotNumber(counting);
+                            const qty = parseFloat(counting.quantity) || 0;
+
+                            if (!lotGroups[lotNum]) {
+                                lotGroups[lotNum] = { count_1: null, count_2: null, count_3: null };
+                            }
+
+                            if (countNum === 1) lotGroups[lotNum].count_1 = qty;
+                            else if (countNum === 2) lotGroups[lotNum].count_2 = qty;
+                            else if (countNum === 3) lotGroups[lotNum].count_3 = qty;
+                        }
+                    });
+
+                    // ✅ v2.15.7.6: Criar mapa de quantidades esperadas por lote do snapshot
+                    // 📸 IMPORTANTE: snapshot_lots vem da tabela inventory_lots_snapshot (dados CONGELADOS)
+                    const lotExpectedQtyMap = {};
+                    const lotFornecedorMap = {}; // ✅ v2.17.1: Mapa para b8_lotefor
+
+                    if (item.snapshot_lots && item.snapshot_lots.length > 0) {
+                        item.snapshot_lots.forEach(snapshotLot => {
+                            const lotNum = snapshotLot.lot_number || 'SEM LOTE';
+                            const expectedQty = parseFloat(snapshotLot.quantity || 0);
+                            const loteFor = snapshotLot.b8_lotefor || '-';
+                            lotExpectedQtyMap[lotNum] = expectedQty;
+                            lotFornecedorMap[lotNum] = loteFor; // ✅ v2.17.1
+                        });
+                    } else if (item.saved_lots && item.saved_lots.length > 0) {
+                        // 🔄 v2.17.1: FALLBACK - Se não há snapshot_lots, mapear dos saved_lots (drafts)
+                        item.saved_lots.forEach(savedLot => {
+                            const lotNum = savedLot.lot_number || 'SEM LOTE';
+                            const expectedQty = parseFloat(savedLot.quantity || 0);
+                            const loteFor = savedLot.b8_lotefor || '-';
+                            lotExpectedQtyMap[lotNum] = expectedQty;
+                            lotFornecedorMap[lotNum] = loteFor; // ✅ v2.17.1 FALLBACK
+                        });
+                    }
+
+                    // LINHA SINTÉTICA (Amarela) - Totais
+                    html += `
+                        <tr class="row-synthetic">
+                            <td>${item.product_code}</td>
+                            <td>${item.product_name}</td>
+                            <td style="text-align: center;"><span class="badge bg-secondary" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">${inv.warehouse || 'N/A'}</span></td>
+                            <td style="text-align: center;"><span class="badge bg-warning text-dark">${lotIndicator}</span></td>
+                            <td></td>
+                            <td></td>
+                            <td style="text-align: right;">${parseFloat(item.expected_quantity || 0).toFixed(2)}</td>
+                            <td style="text-align: right;" class="text-primary fw-bold">${parseFloat(item.b2_xentpos || 0) > 0 ? '+' : ''}${parseFloat(item.b2_xentpos || 0).toFixed(2)}</td>
+                            <td style="text-align: right;" class="fw-bold">${(parseFloat(item.expected_quantity || 0) + parseFloat(item.b2_xentpos || 0)).toFixed(2)}</td>
+                            <td style="text-align: right;">${parseFloat(item.counted_quantity).toFixed(2)}</td>
+                            <td class="${varClass}" style="text-align: right;">
+                                ${item.variance > 0 ? '+' : ''}${parseFloat(item.variance).toFixed(2)}
+                            </td>
+                        </tr>
+                    `;
+
+                    // LINHAS ANALÍTICAS (Verdes) - Por lote
+                    Object.entries(lotGroups).forEach(([lotNumber, lotData]) => {
+                        // ✅ v2.15.7.6: Buscar quantidade esperada do lote no snapshot
+                        const lotExpectedQty = lotExpectedQtyMap[lotNumber] || 0;
+
+                        // ✅ v2.17.1: Buscar lote do fornecedor do snapshot
+                        const loteFor = lotFornecedorMap[lotNumber] || '-';
+
+                        // ✅ v2.15.7.7: Usar a ÚLTIMA contagem disponível (count_3 > count_2 > count_1)
+                        const finalCountedQty = lotData.count_3 ?? lotData.count_2 ?? lotData.count_1 ?? 0;
+
+                        // ✅ v2.17.3: Calcular diferença do lote
+                        const lotDifference = finalCountedQty - lotExpectedQty;
+                        const lotDiffClass = lotDifference > 0 ? 'text-success' : lotDifference < 0 ? 'text-danger' : 'text-muted';
+                        const lotDiffSign = lotDifference > 0 ? '+' : '';
+
+                        html += `
+                            <tr class="row-analytical">
+                                <td>${item.product_code}</td>
+                                <td>${item.product_name}</td>
+                                <td style="text-align: center;"><span class="badge bg-secondary" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">${inv.warehouse || 'N/A'}</span></td>
+                                <td style="text-align: center;"><span class="badge bg-success">${lotIndicator}</span></td>
+                                <td>${lotNumber}</td>
+                                <td class="text-center"><small class="text-muted">${loteFor}</small></td>
+                                <td style="text-align: right;"><small class="text-muted">${lotExpectedQty.toFixed(2)}</small></td>
+                                <td style="text-align: right;"></td>
+                                <td style="text-align: right;"><small class="text-muted">${lotExpectedQty.toFixed(2)}</small></td>
+                                <td style="text-align: right;">${finalCountedQty.toFixed(2)}</td>
+                                <td class="${lotDiffClass}" style="text-align: right;">${lotDiffSign}${lotDifference.toFixed(2)}</td>
+                            </tr>
+                        `;
+                    });
+                } else if (hasLot && item.snapshot_lots && item.snapshot_lots.length > 0) {
+                    // 📸 v2.15.7.6: PRODUTO COM LOTE SEM COUNTINGS - Mostrar todos os lotes do snapshot
+                    // (Corrige problema de "MULTIPLOS_LOTES" - agora mostra todos os lotes)
+
+                    // LINHA SINTÉTICA (Amarela) - Totais
+                    html += `
+                        <tr class="row-synthetic">
+                            <td>${item.product_code}</td>
+                            <td>${item.product_name}</td>
+                            <td style="text-align: center;"><span class="badge bg-secondary" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">${inv.warehouse || 'N/A'}</span></td>
+                            <td style="text-align: center;"><span class="badge bg-warning text-dark">${lotIndicator}</span></td>
+                            <td></td>
+                            <td></td>
+                            <td style="text-align: right;">${parseFloat(item.expected_quantity || 0).toFixed(2)}</td>
+                            <td style="text-align: right;" class="text-primary fw-bold">${parseFloat(item.b2_xentpos || 0) > 0 ? '+' : ''}${parseFloat(item.b2_xentpos || 0).toFixed(2)}</td>
+                            <td style="text-align: right;" class="fw-bold">${(parseFloat(item.expected_quantity || 0) + parseFloat(item.b2_xentpos || 0)).toFixed(2)}</td>
+                            <td style="text-align: right;">${parseFloat(item.counted_quantity).toFixed(2)}</td>
+                            <td class="${varClass}" style="text-align: right;">
+                                ${item.variance > 0 ? '+' : ''}${parseFloat(item.variance).toFixed(2)}
+                            </td>
+                        </tr>
+                    `;
+
+                    // LINHAS ANALÍTICAS (Verdes) - Todos os lotes do snapshot
+                    item.snapshot_lots.forEach(snapshotLot => {
+                        const lotNumber = snapshotLot.lot_number || 'SEM LOTE';
+                        const lotExpectedQty = parseFloat(snapshotLot.quantity || 0);
+                        const loteFor = snapshotLot.b8_lotefor || '-'; // ✅ v2.17.1
+
+                        html += `
+                            <tr class="row-analytical">
+                                <td>${item.product_code}</td>
+                                <td>${item.product_name}</td>
+                                <td style="text-align: center;"><span class="badge bg-secondary" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">${inv.warehouse || 'N/A'}</span></td>
+                                <td style="text-align: center;"><span class="badge bg-success">${lotIndicator}</span></td>
+                                <td>${lotNumber}</td>
+                                <td class="text-center"><small class="text-muted">${loteFor}</small></td>
+                                <td style="text-align: right;"><small class="text-muted">${lotExpectedQty.toFixed(2)}</small></td>
+                                <td style="text-align: right;"></td>
+                                <td style="text-align: right;"><small class="text-muted">${lotExpectedQty.toFixed(2)}</small></td>
+                                <td style="text-align: right;">-</td>
+                                <td style="text-align: right;">-</td>
+                            </tr>
+                        `;
+                    });
+                } else if (hasLot && item.saved_lots && item.saved_lots.length > 0) {
+                    // 🔄 v2.17.1: PRODUTOS COM LOTE SEM SNAPSHOT (saldo=0) mas FORAM CONTADOS (drafts)
+                    // Este caso trata produtos como 00010093 e 00010119 que tinham saldo=0 no Protheus
+                    // mas foram contados manualmente e têm lotes nos drafts
+
+                    // LINHA SINTÉTICA (Amarela) - Totais
+                    html += `
+                        <tr class="row-synthetic">
+                            <td>${item.product_code}</td>
+                            <td>${item.product_name}</td>
+                            <td style="text-align: center;"><span class="badge bg-secondary" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">${inv.warehouse || 'N/A'}</span></td>
+                            <td style="text-align: center;"><span class="badge bg-warning text-dark">${lotIndicator}</span></td>
+                            <td></td>
+                            <td></td>
+                            <td style="text-align: right;">${parseFloat(item.expected_quantity || 0).toFixed(2)}</td>
+                            <td style="text-align: right;" class="text-primary fw-bold">${parseFloat(item.b2_xentpos || 0) > 0 ? '+' : ''}${parseFloat(item.b2_xentpos || 0).toFixed(2)}</td>
+                            <td style="text-align: right;" class="fw-bold">${(parseFloat(item.expected_quantity || 0) + parseFloat(item.b2_xentpos || 0)).toFixed(2)}</td>
+                            <td style="text-align: right;">${parseFloat(item.counted_quantity).toFixed(2)}</td>
+                            <td class="${varClass}" style="text-align: right;">
+                                ${item.variance > 0 ? '+' : ''}${parseFloat(item.variance).toFixed(2)}
+                            </td>
+                        </tr>
+                    `;
+
+                    // LINHAS ANALÍTICAS (Verdes) - Todos os lotes dos DRAFTS
+                    item.saved_lots.forEach(savedLot => {
+                        const lotNumber = savedLot.lot_number || 'SEM LOTE';
+                        const lotExpectedQty = parseFloat(savedLot.quantity || 0);
+                        const loteFor = savedLot.b8_lotefor || '-'; // ✅ v2.17.1
+                        const lotCountedQty = parseFloat(savedLot.counted_qty || 0);
+
+                        // ✅ v2.17.3: Calcular diferença do lote (drafts)
+                        const lotDifference = lotCountedQty - lotExpectedQty;
+                        const lotDiffClass = lotDifference > 0 ? 'text-success' : lotDifference < 0 ? 'text-danger' : 'text-muted';
+                        const lotDiffSign = lotDifference > 0 ? '+' : '';
+
+                        html += `
+                            <tr class="row-analytical">
+                                <td>${item.product_code}</td>
+                                <td>${item.product_name}</td>
+                                <td style="text-align: center;"><span class="badge bg-secondary" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">${inv.warehouse || 'N/A'}</span></td>
+                                <td style="text-align: center;"><span class="badge bg-success">${lotIndicator}</span></td>
+                                <td>${lotNumber}</td>
+                                <td class="text-center"><small class="text-muted">${loteFor}</small></td>
+                                <td style="text-align: right;"><small class="text-muted">${lotExpectedQty.toFixed(2)}</small></td>
+                                <td style="text-align: right;"></td>
+                                <td style="text-align: right;"><small class="text-muted">${lotExpectedQty.toFixed(2)}</small></td>
+                                <td style="text-align: right;">${lotCountedQty.toFixed(2)}</td>
+                                <td class="${lotDiffClass}" style="text-align: right;">${lotDiffSign}${lotDifference.toFixed(2)}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    // PRODUTO SEM LOTE - Linha única
+                    html += `
+                        <tr>
+                            <td>${item.product_code}</td>
+                            <td>${item.product_name}</td>
+                            <td style="text-align: center;"><span class="badge bg-secondary" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">${inv.warehouse || 'N/A'}</span></td>
+                            <td style="text-align: center;"><span class="badge bg-secondary">${lotIndicator}</span></td>
+                            <td></td>
+                            <td></td>
+                            <td style="text-align: right;">${parseFloat(item.expected_quantity || 0).toFixed(2)}</td>
+                            <td style="text-align: right;" class="text-primary fw-bold">${parseFloat(item.b2_xentpos || 0) > 0 ? '+' : ''}${parseFloat(item.b2_xentpos || 0).toFixed(2)}</td>
+                            <td style="text-align: right;" class="fw-bold">${(parseFloat(item.expected_quantity || 0) + parseFloat(item.b2_xentpos || 0)).toFixed(2)}</td>
+                            <td style="text-align: right;">${parseFloat(item.counted_quantity).toFixed(2)}</td>
+                            <td class="${varClass}" style="text-align: right;">
+                                ${item.variance > 0 ? '+' : ''}${parseFloat(item.variance).toFixed(2)}
+                            </td>
+                        </tr>
+                    `;
+                }
+            });
+
+            html += `
+                            </tbody>
+                        </table>
+
+
+                        <div style="margin-top: 30px; text-align: center; color: #6c757d;">
+                            <p><strong>Gerado por:</strong> ${data.generated_by} em ${new Date(data.generated_at).toLocaleString()}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('reportContent').innerHTML = html;
+        }
+
+        // Variável global para armazenar dados do relatório atual
+        let currentReportData = null;
+
+        // ✅ FUNÇÃO HELPER: Extrair número do lote da observation
+        function extractLotNumber(counting) {
+            // Tentar pegar do campo lot_number primeiro
+            if (counting.lot_number && counting.lot_number.trim() !== '') {
+                return counting.lot_number.trim();
+            }
+
+            // Se vazio, tentar extrair da observation
+            // Formato: "Contagem por lotes: 000000000019201:300 - 11/10/2025, 18:22:09"
+            if (counting.observation) {
+                const match = counting.observation.match(/Contagem por lotes:\s*(\d+):/);
+                if (match && match[1]) {
+                    return match[1];
+                }
+            }
+
+            // Fallback
+            return 'SEM_LOTE';
+        }
+
+        // ✅ v2.15.7.7: Extrair TODOS os lotes da observation (múltiplos lotes)
+        // ✅ v2.15.7.8: Corrigir regex para ignorar timestamp (ex: 09:26:22)
+        function extractAllLotsFromObservation(observation) {
+            if (!observation || typeof observation !== 'string') return [];
+
+            // Formato esperado: "Contagem por lotes: 000000000021555:72, 000000000022629:612, 000000000023408:144 - 29/10/2025, 09:26:22"
+            // ⚠️ IMPORTANTE: Ignorar timestamp no final (ex: 09:26:22)
+            // Regex: Apenas números com 10+ dígitos (lotes válidos), seguidos de ":" e quantidade
+            const regex = /(\d{10,})\s*:\s*([\d.]+)/g;
+            const lots = [];
+            let match;
+
+            while ((match = regex.exec(observation)) !== null) {
+                lots.push({
+                    lotNumber: match[1],
+                    quantity: parseFloat(match[2]) || 0
+                });
+            }
+
+            return lots;
+        }
+
+        function exportToCSV(inventoryId) {
+            if (!currentReportData) {
+                alert('❌ Erro: Dados do relatório não disponíveis');
+                return;
+            }
+
+            const { inventory, items } = currentReportData;
+
+            // Cabeçalho CSV com novas colunas
+            let csv = 'Tipo Linha,Código,Produto,Armazém,Lote,N.º Lote,Lote Fornecedor,Saldo Estoque,Entrega Posterior,Qtd Esperada,Contado,Diferença\n';  // ✅ v2.17.3
+
+            // Adicionar itens
+            items.forEach(item => {
+                const variance = item.variance > 0 ? `+${item.variance}` : item.variance;
+                const hasLot = item.has_lot || false;
+                const lotIndicator = hasLot ? 'L' : 'N';
+
+                if (hasLot && item.countings && item.countings.length > 0) {
+                    // ✅ v2.15.7.7: Agrupar por lote, suportando múltiplos lotes na observation
+                    const lotGroups = {};
+                    item.countings.forEach(counting => {
+                        const countNum = counting.count_number || 1;
+
+                        const lots = extractAllLotsFromObservation(counting.observation);
+
+                        if (lots.length > 0) {
+                            lots.forEach(lot => {
+                                const lotNum = lot.lotNumber;
+                                const qty = lot.quantity;
+
+                                if (!lotGroups[lotNum]) {
+                                    lotGroups[lotNum] = { count_1: null, count_2: null, count_3: null };
+                                }
+
+                                if (countNum === 1) lotGroups[lotNum].count_1 = qty;
+                                else if (countNum === 2) lotGroups[lotNum].count_2 = qty;
+                                else if (countNum === 3) lotGroups[lotNum].count_3 = qty;
+                            });
+                        } else {
+                            const lotNum = extractLotNumber(counting);
+                            const qty = parseFloat(counting.quantity) || 0;
+
+                            if (!lotGroups[lotNum]) {
+                                lotGroups[lotNum] = { count_1: null, count_2: null, count_3: null };
+                            }
+
+                            if (countNum === 1) lotGroups[lotNum].count_1 = qty;
+                            else if (countNum === 2) lotGroups[lotNum].count_2 = qty;
+                            else if (countNum === 3) lotGroups[lotNum].count_3 = qty;
+                        }
+                    });
+
+                    // ✅ v2.15.7.6: Criar mapa de quantidades esperadas por lote do snapshot
+                    const lotExpectedQtyMap = {};
+                    const lotFornecedorMap = {}; // ✅ v2.17.1
+                    if (item.snapshot_lots && item.snapshot_lots.length > 0) {
+                        item.snapshot_lots.forEach(snapshotLot => {
+                            const lotNum = snapshotLot.lot_number || 'SEM LOTE';
+                            const expectedQty = parseFloat(snapshotLot.quantity || 0);
+                            const loteFor = snapshotLot.b8_lotefor || '-'; // ✅ v2.17.1
+                            lotExpectedQtyMap[lotNum] = expectedQty;
+                            lotFornecedorMap[lotNum] = loteFor; // ✅ v2.17.1
+                        });
+                    } else if (item.saved_lots && item.saved_lots.length > 0) {
+                        // 🔄 v2.17.1: FALLBACK - Se não há snapshot_lots, mapear dos saved_lots (drafts)
+                        console.log(`🔍 [v2.17.1 - CSV] Produto ${item.product_code} - usando saved_lots (DRAFT):`, item.saved_lots);
+                        item.saved_lots.forEach(savedLot => {
+                            const lotNum = savedLot.lot_number || 'SEM LOTE';
+                            const expectedQty = parseFloat(savedLot.quantity || 0);
+                            const loteFor = savedLot.b8_lotefor || '-';
+                            lotExpectedQtyMap[lotNum] = expectedQty;
+                            lotFornecedorMap[lotNum] = loteFor; // ✅ v2.17.1 FALLBACK
+                        });
+                    }
+
+                    // Linha sintética
+                    const b2_xentpos = parseFloat(item.b2_xentpos || 0);  // ✅ v2.17.0
+                    const expectedQty = parseFloat(item.expected_quantity).toFixed(2);
+                    const expectedQtyAdjusted = (parseFloat(item.expected_quantity) + b2_xentpos).toFixed(2);  // ✅ v2.17.0
+                    const countedQty = parseFloat(item.counted_quantity).toFixed(2);
+                    const varianceFormatted = parseFloat(item.variance).toFixed(2);
+                    csv += `SINTÉTICA,"${item.product_code}","${item.product_name}","${inventory.warehouse || 'N/A'}","${lotIndicator}","","",${expectedQty},${b2_xentpos.toFixed(2)},${expectedQtyAdjusted},${countedQty},${item.variance > 0 ? '+' : ''}${varianceFormatted}\n`;
+
+                    // Linhas analíticas por lote
+                    Object.entries(lotGroups).forEach(([lotNumber, lotData]) => {
+                        const lotExpectedQty = lotExpectedQtyMap[lotNumber] || 0;
+                        const loteFor = lotFornecedorMap[lotNumber] || '-'; // ✅ v2.17.1
+                        const finalCountedQty = lotData.count_3 ?? lotData.count_2 ?? lotData.count_1 ?? 0;
+                        const lotDifference = finalCountedQty - lotExpectedQty; // ✅ v2.17.3
+                        const lotDiffSign = lotDifference > 0 ? '+' : '';
+                        csv += `ANALÍTICA,"${item.product_code}","${item.product_name}","${inventory.warehouse || 'N/A'}","${lotIndicator}","${lotNumber}","${loteFor}",${lotExpectedQty.toFixed(2)},"",${lotExpectedQty.toFixed(2)},${finalCountedQty.toFixed(2)},${lotDiffSign}${lotDifference.toFixed(2)}\n`;  // ✅ v2.17.3
+                    });
+                } else if (hasLot && item.snapshot_lots && item.snapshot_lots.length > 0) {
+                    // ✅ v2.15.7.6: PRODUTO COM LOTE SEM COUNTINGS - Mostrar todos os lotes do snapshot
+                    const b2_xentpos = parseFloat(item.b2_xentpos || 0);  // ✅ v2.17.0
+                    const expectedQty = parseFloat(item.expected_quantity).toFixed(2);
+                    const expectedQtyAdjusted = (parseFloat(item.expected_quantity) + b2_xentpos).toFixed(2);  // ✅ v2.17.0
+                    const countedQty = parseFloat(item.counted_quantity).toFixed(2);
+                    const varianceFormatted = parseFloat(item.variance).toFixed(2);
+                    csv += `SINTÉTICA,"${item.product_code}","${item.product_name}","${inventory.warehouse || 'N/A'}","${lotIndicator}","","",${expectedQty},${b2_xentpos.toFixed(2)},${expectedQtyAdjusted},${countedQty},${item.variance > 0 ? '+' : ''}${varianceFormatted}\n`;
+
+                    // Linhas analíticas - todos os lotes do snapshot
+                    item.snapshot_lots.forEach(snapshotLot => {
+                        const lotNumber = snapshotLot.lot_number || 'SEM LOTE';
+                        const loteFor = snapshotLot.b8_lotefor || '-'; // ✅ v2.17.1
+                        const lotExpectedQty = parseFloat(snapshotLot.quantity || 0);
+                        csv += `ANALÍTICA,"${item.product_code}","${item.product_name}","${inventory.warehouse || 'N/A'}","${lotIndicator}","${lotNumber}","${loteFor}",${lotExpectedQty.toFixed(2)},"",${lotExpectedQty.toFixed(2)},"-","-"\n`;  // ✅ v2.17.3
+                    });
+                } else if (hasLot && item.saved_lots && item.saved_lots.length > 0) {
+                    // 🔄 v2.17.1: PRODUTOS COM LOTE SEM SNAPSHOT (saldo=0) mas FORAM CONTADOS (drafts)
+                    const b2_xentpos = parseFloat(item.b2_xentpos || 0);
+                    const expectedQty = parseFloat(item.expected_quantity).toFixed(2);
+                    const expectedQtyAdjusted = (parseFloat(item.expected_quantity) + b2_xentpos).toFixed(2);
+                    const countedQty = parseFloat(item.counted_quantity).toFixed(2);
+                    const varianceFormatted = parseFloat(item.variance).toFixed(2);
+                    csv += `SINTÉTICA,"${item.product_code}","${item.product_name}","${inventory.warehouse || 'N/A'}","${lotIndicator}","","",${expectedQty},${b2_xentpos.toFixed(2)},${expectedQtyAdjusted},${countedQty},${item.variance > 0 ? '+' : ''}${varianceFormatted}\n`;
+
+                    // Linhas analíticas - todos os lotes dos DRAFTS
+                    item.saved_lots.forEach(savedLot => {
+                        const lotNumber = savedLot.lot_number || 'SEM LOTE';
+                        const loteFor = savedLot.b8_lotefor || '-'; // ✅ v2.17.1
+                        const lotExpectedQty = parseFloat(savedLot.quantity || 0);
+                        const countedQty = parseFloat(savedLot.counted_qty || 0);
+                        const lotDifference = countedQty - lotExpectedQty; // ✅ v2.17.3
+                        const lotDiffSign = lotDifference > 0 ? '+' : '';
+                        csv += `ANALÍTICA,"${item.product_code}","${item.product_name}","${inventory.warehouse || 'N/A'}","${lotIndicator}","${lotNumber}","${loteFor}",${lotExpectedQty.toFixed(2)},"",${lotExpectedQty.toFixed(2)},${countedQty.toFixed(2)},${lotDiffSign}${lotDifference.toFixed(2)}\n`;  // ✅ v2.17.3 DRAFTS
+                    });
+                } else {
+                    // Produto sem lote - linha única
+                    const b2_xentpos = parseFloat(item.b2_xentpos || 0);  // ✅ v2.17.0
+                    const expectedQty = parseFloat(item.expected_quantity).toFixed(2);
+                    const expectedQtyAdjusted = (parseFloat(item.expected_quantity) + b2_xentpos).toFixed(2);  // ✅ v2.17.0
+                    const countedQty = parseFloat(item.counted_quantity).toFixed(2);
+                    const varianceFormatted = parseFloat(item.variance).toFixed(2);
+                    csv += `NORMAL,"${item.product_code}","${item.product_name}","${inventory.warehouse || 'N/A'}","${lotIndicator}","","",${expectedQty},${b2_xentpos.toFixed(2)},${expectedQtyAdjusted},${countedQty},${item.variance > 0 ? '+' : ''}${varianceFormatted}\n`;  // ✅ v2.17.3
+                }
+            });
+
+            // Download do arquivo
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+
+            link.setAttribute('href', url);
+            link.setAttribute('download', `relatorio_${inventory.name}_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function exportToExcel(inventoryId) {
+            if (!currentReportData) {
+                alert('❌ Erro: Dados do relatório não disponíveis');
+                return;
+            }
+
+            const { inventory, summary, items } = currentReportData;
+            const userName = currentUser ? (currentUser.full_name || currentUser.username) : 'Usuário';
+
+            // Criar HTML table completo para Excel
+            let html = `
+                <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+                <head>
+                    <meta charset="utf-8">
+                    <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+                    <x:Name>Relatório</x:Name>
+                    <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+                    </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+                </head>
+                <body>
+                    <table>
+                        <tr><td colspan="11"><h2>📋 Relatório de Inventário</h2></td></tr>
+                        <tr><td><b>Inventário:</b></td><td colspan="10">${inventory.name}</td></tr>
+                        <tr><td><b>Armazém:</b></td><td colspan="10">${inventory.warehouse || 'N/A'}</td></tr>
+                        <tr><td><b>Data Referência:</b></td><td colspan="10">${new Date(inventory.reference_date).toLocaleDateString('pt-BR')}</td></tr>
+                        <tr><td><b>Por:</b></td><td colspan="10">${userName}</td></tr>
+                        <tr><td colspan="11">&nbsp;</td></tr>
+                        <tr>
+                            <td><b>Total Itens:</b></td>
+                            <td>${summary.total_items}</td>
+                            <td><b>💰 Esperado:</b></td>
+                            <td>R$ ${summary.total_expected_value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                            <td><b>💰 Contado:</b></td>
+                            <td>R$ ${summary.total_counted_value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                            <td colspan="5">&nbsp;</td>
+                        </tr>
+                        <tr>
+                            <td><b>📊 Variação R$:</b></td>
+                            <td>R$ ${summary.variance_value.toLocaleString('pt-BR', {minimumFractionDigits: 2})} (${summary.variance_percentage.toFixed(2)}%)</td>
+                            <td><b>📦 Variação Qtd:</b></td>
+                            <td>${(summary.qty_variance || 0) >= 0 ? '+' : ''}${(summary.qty_variance || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})} un</td>
+                            <td colspan="7">${(summary.products_with_zero_cost || 0) > 0 ? '⚠️ ' + summary.products_with_zero_cost + ' produto(s) com custo R$ 0,00' : ''}</td>
+                        </tr>
+                        <tr><td colspan="11">&nbsp;</td></tr>
+                        <tr style="background: #f0f0f0; font-weight: bold;">
+                            <td>Código</td>
+                            <td>Produto</td>
+                            <td>Armazém</td>
+                            <td>Lote</td>
+                            <td>N.º Lote</td>
+                            <td>Lote Fornecedor</td>
+                            <td>Saldo Estoque</td>
+                            <td>Entregas Post.</td>
+                            <td>Total Esperado</td>
+                            <td>Contado</td>
+                            <td>Diferença</td>
+                        </tr>
+            `;
+
+            items.forEach(item => {
+                const variance = item.variance > 0 ? `+${item.variance}` : item.variance;
+                const hasLot = item.has_lot || false;
+                const lotIndicator = hasLot ? 'L' : 'N';
+
+                if (hasLot && item.countings && item.countings.length > 0) {
+                    // ✅ v2.15.7.7: Agrupar por lote, suportando múltiplos lotes na observation
+                    const lotGroups = {};
+                    item.countings.forEach(counting => {
+                        const countNum = counting.count_number || 1;
+
+                        const lots = extractAllLotsFromObservation(counting.observation);
+
+                        if (lots.length > 0) {
+                            lots.forEach(lot => {
+                                const lotNum = lot.lotNumber;
+                                const qty = lot.quantity;
+
+                                if (!lotGroups[lotNum]) {
+                                    lotGroups[lotNum] = { count_1: null, count_2: null, count_3: null };
+                                }
+
+                                if (countNum === 1) lotGroups[lotNum].count_1 = qty;
+                                else if (countNum === 2) lotGroups[lotNum].count_2 = qty;
+                                else if (countNum === 3) lotGroups[lotNum].count_3 = qty;
+                            });
+                        } else {
+                            const lotNum = extractLotNumber(counting);
+                            const qty = parseFloat(counting.quantity) || 0;
+
+                            if (!lotGroups[lotNum]) {
+                                lotGroups[lotNum] = { count_1: null, count_2: null, count_3: null };
+                            }
+
+                            if (countNum === 1) lotGroups[lotNum].count_1 = qty;
+                            else if (countNum === 2) lotGroups[lotNum].count_2 = qty;
+                            else if (countNum === 3) lotGroups[lotNum].count_3 = qty;
+                        }
+                    });
+
+                    // ✅ v2.15.7.6: Criar mapa de quantidades esperadas por lote do snapshot
+                    const lotExpectedQtyMap = {};
+                    const lotFornecedorMap = {}; // ✅ v2.17.1
+                    if (item.snapshot_lots && item.snapshot_lots.length > 0) {
+                        item.snapshot_lots.forEach(snapshotLot => {
+                            const lotNum = snapshotLot.lot_number || 'SEM LOTE';
+                            const expectedQty = parseFloat(snapshotLot.quantity || 0);
+                            const loteFor = snapshotLot.b8_lotefor || '-'; // ✅ v2.17.1
+                            lotExpectedQtyMap[lotNum] = expectedQty;
+                            lotFornecedorMap[lotNum] = loteFor; // ✅ v2.17.1
+                        });
+                    } else if (item.saved_lots && item.saved_lots.length > 0) {
+                        // 🔄 v2.17.1: FALLBACK - Se não há snapshot_lots, mapear dos saved_lots (drafts)
+                        console.log(`🔍 [v2.17.1 - Excel] Produto ${item.product_code} - usando saved_lots (DRAFT):`, item.saved_lots);
+                        item.saved_lots.forEach(savedLot => {
+                            const lotNum = savedLot.lot_number || 'SEM LOTE';
+                            const expectedQty = parseFloat(savedLot.quantity || 0);
+                            const loteFor = savedLot.b8_lotefor || '-';
+                            lotExpectedQtyMap[lotNum] = expectedQty;
+                            lotFornecedorMap[lotNum] = loteFor; // ✅ v2.17.1 FALLBACK
+                        });
+                    }
+
+                    // Linha sintética (amarela)
+                    const expectedQty = parseFloat(item.expected_quantity).toFixed(2);
+                    const b2_xentpos = parseFloat(item.b2_xentpos || 0).toFixed(2);
+                    const expectedQtyAdjusted = (parseFloat(item.expected_quantity) + parseFloat(item.b2_xentpos || 0)).toFixed(2);
+                    const countedQty = parseFloat(item.counted_quantity).toFixed(2);
+                    const varianceFormatted = parseFloat(item.variance).toFixed(2);
+                    html += `
+                        <tr style="background: #fff3cd; font-weight: bold;">
+                            <td>${item.product_code}</td>
+                            <td>${item.product_name}</td>
+                            <td>${inventory.warehouse || 'N/A'}</td>
+                            <td>${lotIndicator}</td>
+                            <td></td>
+                            <td></td>
+                            <td>${expectedQty}</td>
+                            <td>${parseFloat(item.b2_xentpos || 0) > 0 ? '+' : ''}${b2_xentpos}</td>
+                            <td>${expectedQtyAdjusted}</td>
+                            <td>${countedQty}</td>
+                            <td>${item.variance > 0 ? '+' : ''}${varianceFormatted}</td>
+                        </tr>
+                    `;
+
+                    // Linhas analíticas (verdes) por lote
+                    Object.entries(lotGroups).forEach(([lotNumber, lotData]) => {
+                        const lotExpectedQty = lotExpectedQtyMap[lotNumber] || 0;
+                        const loteFor = lotFornecedorMap[lotNumber] || '-'; // ✅ v2.17.1
+                        const finalCountedQty = lotData.count_3 ?? lotData.count_2 ?? lotData.count_1 ?? 0;
+
+                        // ✅ v2.17.3: Calcular diferença do lote (print)
+                        const lotDifference = finalCountedQty - lotExpectedQty;
+                        const lotDiffSign = lotDifference > 0 ? '+' : '';
+
+                        html += `
+                            <tr style="background: #d4edda;">
+                                <td>&nbsp;&nbsp;${item.product_code}</td>
+                                <td>${item.product_name}</td>
+                                <td>${inventory.warehouse || 'N/A'}</td>
+                                <td>${lotIndicator}</td>
+                                <td>${lotNumber}</td>
+                                <td>${loteFor}</td>
+                                <td>${lotExpectedQty.toFixed(2)}</td>
+                                <td></td>
+                                <td>${lotExpectedQty.toFixed(2)}</td>
+                                <td>${finalCountedQty.toFixed(2)}</td>
+                                <td>${lotDiffSign}${lotDifference.toFixed(2)}</td>
+                            </tr>
+                        `;
+                    });
+                } else if (hasLot && item.snapshot_lots && item.snapshot_lots.length > 0) {
+                    // ✅ v2.15.7.6: PRODUTO COM LOTE SEM COUNTINGS - Mostrar todos os lotes do snapshot
+                    const expectedQty = parseFloat(item.expected_quantity).toFixed(2);
+                    const b2_xentpos = parseFloat(item.b2_xentpos || 0).toFixed(2);
+                    const expectedQtyAdjusted = (parseFloat(item.expected_quantity) + parseFloat(item.b2_xentpos || 0)).toFixed(2);
+                    const countedQty = parseFloat(item.counted_quantity).toFixed(2);
+                    const varianceFormatted = parseFloat(item.variance).toFixed(2);
+                    html += `
+                        <tr style="background: #fff3cd; font-weight: bold;">
+                            <td>${item.product_code}</td>
+                            <td>${item.product_name}</td>
+                            <td>${inventory.warehouse || 'N/A'}</td>
+                            <td>${lotIndicator}</td>
+                            <td></td>
+                            <td></td>
+                            <td>${expectedQty}</td>
+                            <td>${parseFloat(item.b2_xentpos || 0) > 0 ? '+' : ''}${b2_xentpos}</td>
+                            <td>${expectedQtyAdjusted}</td>
+                            <td>${countedQty}</td>
+                            <td>${item.variance > 0 ? '+' : ''}${varianceFormatted}</td>
+                        </tr>
+                    `;
+
+                    // Linhas analíticas - todos os lotes do snapshot
+                    item.snapshot_lots.forEach(snapshotLot => {
+                        const lotNumber = snapshotLot.lot_number || 'SEM LOTE';
+                        const loteFor = snapshotLot.b8_lotefor || '-'; // ✅ v2.17.1
+                        const lotExpectedQty = parseFloat(snapshotLot.quantity || 0);
+
+                        // ✅ v2.17.3: Calcular diferença do lote (snapshot - print)
+                        // Snapshot sem contagem = diferença é zero (ainda não contado)
+                        const lotDifference = 0;
+
+                        html += `
+                            <tr style="background: #d4edda;">
+                                <td>&nbsp;&nbsp;${item.product_code}</td>
+                                <td>${item.product_name}</td>
+                                <td>${inventory.warehouse || 'N/A'}</td>
+                                <td>${lotIndicator}</td>
+                                <td>${lotNumber}</td>
+                                <td>${loteFor}</td>
+                                <td>${lotExpectedQty.toFixed(2)}</td>
+                                <td></td>
+                                <td>${lotExpectedQty.toFixed(2)}</td>
+                                <td>-</td>
+                                <td>-</td>
+                            </tr>
+                        `;
+                    });
+                } else if (hasLot && item.saved_lots && item.saved_lots.length > 0) {
+                    // 🔄 v2.17.1: PRODUTOS COM LOTE SEM SNAPSHOT (saldo=0) mas FORAM CONTADOS (drafts)
+                    const expectedQty = parseFloat(item.expected_quantity).toFixed(2);
+                    const b2_xentpos = parseFloat(item.b2_xentpos || 0).toFixed(2);
+                    const expectedQtyAdjusted = (parseFloat(item.expected_quantity) + parseFloat(item.b2_xentpos || 0)).toFixed(2);
+                    const countedQty = parseFloat(item.counted_quantity).toFixed(2);
+                    const varianceFormatted = parseFloat(item.variance).toFixed(2);
+                    html += `
+                        <tr style="background: #fff3cd; font-weight: bold;">
+                            <td>${item.product_code}</td>
+                            <td>${item.product_name}</td>
+                            <td>${inventory.warehouse || 'N/A'}</td>
+                            <td>${lotIndicator}</td>
+                            <td></td>
+                            <td></td>
+                            <td>${expectedQty}</td>
+                            <td>${parseFloat(item.b2_xentpos || 0) > 0 ? '+' : ''}${b2_xentpos}</td>
+                            <td>${expectedQtyAdjusted}</td>
+                            <td>${countedQty}</td>
+                            <td>${item.variance > 0 ? '+' : ''}${varianceFormatted}</td>
+                        </tr>
+                    `;
+
+                    // Linhas analíticas - todos os lotes dos DRAFTS
+                    item.saved_lots.forEach(savedLot => {
+                        const lotNumber = savedLot.lot_number || 'SEM LOTE';
+                        const loteFor = savedLot.b8_lotefor || '-'; // ✅ v2.17.1
+                        const lotExpectedQty = parseFloat(savedLot.quantity || 0);
+                        const countedQty = parseFloat(savedLot.counted_qty || 0);
+
+                        // ✅ v2.17.3: Calcular diferença do lote (drafts - print)
+                        const lotDifference = countedQty - lotExpectedQty;
+                        const lotDiffSign = lotDifference > 0 ? '+' : '';
+
+                        html += `
+                            <tr style="background: #d4edda;">
+                                <td>&nbsp;&nbsp;${item.product_code}</td>
+                                <td>${item.product_name}</td>
+                                <td>${inventory.warehouse || 'N/A'}</td>
+                                <td>${lotIndicator}</td>
+                                <td>${lotNumber}</td>
+                                <td>${loteFor}</td>
+                                <td>${lotExpectedQty.toFixed(2)}</td>
+                                <td></td>
+                                <td>${lotExpectedQty.toFixed(2)}</td>
+                                <td>${countedQty.toFixed(2)}</td>
+                                <td>${lotDiffSign}${lotDifference.toFixed(2)}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    // Produto sem lote - linha única
+                    const expectedQty = parseFloat(item.expected_quantity).toFixed(2);
+                    const b2_xentpos = parseFloat(item.b2_xentpos || 0).toFixed(2);
+                    const expectedQtyAdjusted = (parseFloat(item.expected_quantity) + parseFloat(item.b2_xentpos || 0)).toFixed(2);
+                    const countedQty = parseFloat(item.counted_quantity).toFixed(2);
+                    const varianceFormatted = parseFloat(item.variance).toFixed(2);
+                    html += `
+                        <tr>
+                            <td>${item.product_code}</td>
+                            <td>${item.product_name}</td>
+                            <td>${inventory.warehouse || 'N/A'}</td>
+                            <td>${lotIndicator}</td>
+                            <td></td>
+                            <td></td>
+                            <td>${expectedQty}</td>
+                            <td>${parseFloat(item.b2_xentpos || 0) > 0 ? '+' : ''}${b2_xentpos}</td>
+                            <td>${expectedQtyAdjusted}</td>
+                            <td>${countedQty}</td>
+                            <td>${item.variance > 0 ? '+' : ''}${varianceFormatted}</td>
+                        </tr>
+                    `;
+                }
+            });
+
+            html += `
+                    </table>
+                </body>
+                </html>
+            `;
+
+            // Download do arquivo Excel
+            const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+
+            link.setAttribute('href', url);
+            link.setAttribute('download', `relatorio_${inventory.name}_${new Date().toISOString().split('T')[0]}.xls`);
+            link.style.visibility = 'hidden';
+
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function exportToJSON(inventoryId) {
+            if (!currentReportData) {
+                alert('❌ Erro: Dados do relatório não disponíveis');
+                return;
+            }
+
+            // Formatar JSON de forma legível
+            const jsonData = JSON.stringify(currentReportData, null, 2);
+
+            // Download do arquivo JSON
+            const blob = new Blob([jsonData], { type: 'application/json' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+
+            link.setAttribute('href', url);
+            link.setAttribute('download', `relatorio_${currentReportData.inventory.name}_${new Date().toISOString().split('T')[0]}.json`);
+            link.style.visibility = 'hidden';
+
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // ✅ Função para voltar inteligentemente
+        function voltarParaOrigem() {
+            console.log('🔙 Voltando para origem...');
+
+            // Verificar se foi aberto em nova aba (sem histórico anterior)
+            if (window.history.length <= 1 || window.opener) {
+                // Fechar a aba
+                window.close();
+
+                // Se não conseguir fechar (bloqueado pelo navegador), redirecionar
+                setTimeout(() => {
+                    window.location.href = '/static/inventory.html';
+                }, 100);
+            } else {
+                // Tem histórico, voltar normalmente
+                window.history.back();
+            }
+        }
+
+        // =================================
+        // HEADER INITIALIZATION
+        // =================================
+        function initCapulHeader() {
+            try {
+                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                const storeName = localStorage.getItem('store_name') || 'Filial';
+                const storeCode = localStorage.getItem('store_code') || '';
+
+                // Update store name
+                const headerStore = document.getElementById('headerStoreName');
+                if (headerStore) {
+                    headerStore.textContent = storeCode ? `${storeCode} - ${storeName}` : storeName;
+                }
+
+                // Update user info
+                const userAvatar = document.getElementById('userAvatar');
+                const userName = document.getElementById('currentUser');
+                const userRole = document.getElementById('userRoleBadge');
+
+                if (userAvatar && userData.username) {
+                    userAvatar.textContent = userData.username.charAt(0).toUpperCase();
+                }
+                if (userName && userData.username) {
+                    userName.textContent = userData.full_name || userData.username;
+                }
+                if (userRole && userData.role) {
+                    const roleLabels = { 'ADMIN': 'Administrador', 'SUPERVISOR': 'Supervisor', 'OPERATOR': 'Operador' };
+                    userRole.querySelector('span').textContent = roleLabels[userData.role] || userData.role;
+                }
+            } catch (e) {
+                console.error('Erro ao inicializar header:', e);
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('user_data');
+            window.location.href = 'login.html';
+        }
+
+        // Initialize header on load
+        initCapulHeader();
+    </script>
+
+    <!-- Footer Capul -->
+    <footer class="capul-footer mt-4">
+        <i class="bi bi-shield-check me-1"></i> <span class="capul-version">v2.19.46</span> - Capul Inventário |
+        <strong>v2.19.22</strong> - Capul Inventario |
+        &copy; 2025copy; 2026 Cooperativa Agropecuária Unaí Ltda
+    </footer>
+</body>
+</html>

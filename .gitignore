@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build
+dist/
+build/
+.next/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Docker
+postgres_data/
+redis_data/
+
+# Prisma
+generated/
+
+# Certs (dev only - DO NOT commit production certs)
+nginx/certs/*.pem
+nginx/certs/*.key
+
+# Coverage
+coverage/

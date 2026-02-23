@@ -1,0 +1,157 @@
+services:
+  # =======================================
+  # REVERSE PROXY
+  # =======================================
+  nginx:
+    image: nginx:alpine
+    container_name: capul-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - hub
+      - auth-gateway
+      - gestao-ti-frontend
+    restart: unless-stopped
+
+  # =======================================
+  # INFRAESTRUTURA
+  # =======================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: capul-db
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: capul_platform
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init-schemas.sql:/docker-entrypoint-initdb.d/01-schemas.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: capul-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  # =======================================
+  # CORE — Auth Gateway + Portal Hub
+  # =======================================
+  auth-gateway:
+    build: ./auth-gateway
+    container_name: capul-auth
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=core
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-15m}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-7d}
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  hub:
+    build: ./hub
+    container_name: capul-hub
+    ports:
+      - "5170:5170"
+    depends_on:
+      - auth-gateway
+    restart: unless-stopped
+
+  # =======================================
+  # MODULO — Inventario
+  # =======================================
+  inventario-backend:
+    build: ./inventario/backend
+    container_name: capul-inventario-api
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform
+      JWT_SECRET: ${JWT_SECRET}
+      DB_SCHEMA: inventario
+      CORE_SCHEMA: core
+      UNIFIED_AUTH: "true"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  inventario-frontend:
+    build: ./inventario/frontend
+    container_name: capul-inventario-web
+    ports:
+      - "8443:8443"
+    depends_on:
+      - inventario-backend
+    restart: unless-stopped
+
+  # =======================================
+  # MODULO — Gestao de T.I.
+  # =======================================
+  gestao-ti-backend:
+    build: ./gestao-ti/backend
+    container_name: capul-gestao-ti-api
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform
+      JWT_SECRET: ${JWT_SECRET}
+      DB_SCHEMA: gestao_ti
+      CORE_SCHEMA: core
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  gestao-ti-frontend:
+    build: ./gestao-ti/frontend
+    container_name: capul-gestao-ti-web
+    ports:
+      - "5173:5173"
+    depends_on:
+      - gestao-ti-backend
+    restart: unless-stopped
+
+  # =======================================
+  # FERRAMENTAS
+  # =======================================
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: capul-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
+  redis_data:
