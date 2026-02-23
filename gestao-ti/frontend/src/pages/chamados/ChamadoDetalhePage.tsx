@@ -51,10 +51,14 @@ export function ChamadoDetalhePage() {
   const [comentarioTexto, setComentarioTexto] = useState('');
   const [comentarioPublico, setComentarioPublico] = useState(true);
 
-  const [showTransferirEquipe, setShowTransferirEquipe] = useState(false);
+  const [showTransferir, setShowTransferir] = useState(false);
+  const [transferirTab, setTransferirTab] = useState<'equipe' | 'tecnico'>('equipe');
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);
   const [equipeDestinoId, setEquipeDestinoId] = useState('');
   const [transferMotivo, setTransferMotivo] = useState('');
+  const [membrosEquipe, setMembrosEquipe] = useState<EquipeTI | null>(null);
+  const [tecnicoDestinoId, setTecnicoDestinoId] = useState('');
+  const [transferTecnicoMotivo, setTransferTecnicoMotivo] = useState('');
 
   const [showResolver, setShowResolver] = useState(false);
   const [resolverDescricao, setResolverDescricao] = useState('');
@@ -77,10 +81,13 @@ export function ChamadoDetalhePage() {
   }, [id]);
 
   useEffect(() => {
-    if (showTransferirEquipe && equipes.length === 0) {
+    if (showTransferir && equipes.length === 0) {
       equipeService.listar('ATIVO').then(setEquipes).catch(() => {});
     }
-  }, [showTransferirEquipe, equipes.length]);
+    if (showTransferir && chamado?.equipeAtualId) {
+      equipeService.buscar(chamado.equipeAtualId).then(setMembrosEquipe).catch(() => {});
+    }
+  }, [showTransferir, equipes.length, chamado?.equipeAtualId]);
 
   async function runAction(fn: () => Promise<Chamado>) {
     setActionLoading(true);
@@ -101,12 +108,14 @@ export function ChamadoDetalhePage() {
 
   function closeAllPanels() {
     setShowComentario(false);
-    setShowTransferirEquipe(false);
+    setShowTransferir(false);
     setShowResolver(false);
     setShowReabrir(false);
     setShowAvaliar(false);
     setComentarioTexto('');
     setTransferMotivo('');
+    setTecnicoDestinoId('');
+    setTransferTecnicoMotivo('');
     setResolverDescricao('');
     setReabrirMotivo('');
     setCsatComentario('');
@@ -170,7 +179,7 @@ export function ChamadoDetalhePage() {
                 </button>
               )}
               {canTransferir && (
-                <button onClick={() => { closeAllPanels(); setShowTransferirEquipe(true); }}
+                <button onClick={() => { closeAllPanels(); setShowTransferir(true); setTransferirTab('equipe'); }}
                   className="flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm hover:bg-slate-200">
                   <ArrowRightLeft className="w-4 h-4" /> Transferir
                 </button>
@@ -230,26 +239,79 @@ export function ChamadoDetalhePage() {
               </div>
             )}
 
-            {showTransferirEquipe && (
+            {showTransferir && (
               <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-                <h4 className="font-medium text-sm text-slate-700">Transferir para outra Equipe</h4>
-                <select value={equipeDestinoId} onChange={(e) => setEquipeDestinoId(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-                  <option value="">Selecione a equipe destino</option>
-                  {equipes.filter((e) => e.id !== chamado.equipeAtualId).map((e) => (
-                    <option key={e.id} value={e.id}>{e.sigla} - {e.nome}</option>
-                  ))}
-                </select>
-                <input value={transferMotivo} onChange={(e) => setTransferMotivo(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Motivo da transferencia (opcional)" />
-                <div className="flex gap-2">
-                  <button onClick={() => runAction(() => chamadoService.transferirEquipe(chamado.id, equipeDestinoId, transferMotivo || undefined))}
-                    disabled={actionLoading || !equipeDestinoId}
-                    className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
-                    Transferir
+                <div className="flex gap-1 border-b border-slate-200 -mx-4 px-4">
+                  <button
+                    onClick={() => setTransferirTab('equipe')}
+                    className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                      transferirTab === 'equipe'
+                        ? 'border-capul-600 text-capul-600'
+                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5"><ArrowRightLeft className="w-3.5 h-3.5" /> Para Equipe</span>
                   </button>
-                  <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+                  <button
+                    onClick={() => setTransferirTab('tecnico')}
+                    className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                      transferirTab === 'tecnico'
+                        ? 'border-capul-600 text-capul-600'
+                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> Para Tecnico</span>
+                  </button>
                 </div>
+
+                {transferirTab === 'equipe' && (
+                  <div className="space-y-3">
+                    <select value={equipeDestinoId} onChange={(e) => setEquipeDestinoId(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                      <option value="">Selecione a equipe destino</option>
+                      {equipes.filter((e) => e.id !== chamado.equipeAtualId).map((e) => (
+                        <option key={e.id} value={e.id}>{e.sigla} - {e.nome}</option>
+                      ))}
+                    </select>
+                    <input value={transferMotivo} onChange={(e) => setTransferMotivo(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Motivo da transferencia (opcional)" />
+                    <div className="flex gap-2">
+                      <button onClick={() => runAction(() => chamadoService.transferirEquipe(chamado.id, equipeDestinoId, transferMotivo || undefined))}
+                        disabled={actionLoading || !equipeDestinoId}
+                        className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
+                        Transferir
+                      </button>
+                      <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+                    </div>
+                  </div>
+                )}
+
+                {transferirTab === 'tecnico' && (
+                  <div className="space-y-3">
+                    <p className="text-xs text-slate-500">Equipe atual: <strong>{chamado.equipeAtual.nome}</strong></p>
+                    <select value={tecnicoDestinoId} onChange={(e) => setTecnicoDestinoId(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                      <option value="">Selecione o tecnico</option>
+                      {membrosEquipe?.membros
+                        .filter((m) => m.status === 'ATIVO' && m.usuarioId !== chamado.tecnicoId)
+                        .map((m) => (
+                          <option key={m.usuarioId} value={m.usuarioId}>
+                            {m.usuario.nome}{m.isLider ? ' (Lider)' : ''}
+                          </option>
+                        ))}
+                    </select>
+                    <input value={transferTecnicoMotivo} onChange={(e) => setTransferTecnicoMotivo(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Motivo da transferencia (opcional)" />
+                    <div className="flex gap-2">
+                      <button onClick={() => runAction(() => chamadoService.transferirTecnico(chamado.id, tecnicoDestinoId, transferTecnicoMotivo || undefined))}
+                        disabled={actionLoading || !tecnicoDestinoId}
+                        className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
+                        Transferir
+                      </button>
+                      <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
