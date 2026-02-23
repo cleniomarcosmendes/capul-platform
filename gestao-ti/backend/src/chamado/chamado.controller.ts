@@ -29,6 +29,7 @@ export class ChamadoController {
     @Query('visibilidade') visibilidade?: Visibilidade,
     @Query('meusChamados') meusChamados?: string,
     @Query('projetoId') projetoId?: string,
+    @Query('filialId') filialId?: string,
   ) {
     return this.service.findAll(user, role, {
       status,
@@ -36,6 +37,7 @@ export class ChamadoController {
       visibilidade,
       meusChamados: meusChamados === 'true',
       projetoId,
+      filialId,
     });
   }
 

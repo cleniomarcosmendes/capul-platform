@@ -38,4 +38,9 @@ export const coreService = {
     const { data } = await coreApi.get('/usuarios');
     return data;
   },
+
+  async listarFiliais(): Promise<{ id: string; codigo: string; nomeFantasia: string }[]> {
+    const { data } = await coreApi.get('/filiais');
+    return data;
+  },
 };

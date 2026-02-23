@@ -6,6 +6,7 @@ interface ListFilters {
   equipeId?: string;
   visibilidade?: Visibilidade;
   meusChamados?: boolean;
+  filialId?: string;
 }
 
 interface CreateChamadoPayload {
@@ -29,6 +30,7 @@ export const chamadoService = {
     if (filters.equipeId) params.equipeId = filters.equipeId;
     if (filters.visibilidade) params.visibilidade = filters.visibilidade;
     if (filters.meusChamados) params.meusChamados = 'true';
+    if (filters.filialId) params.filialId = filters.filialId;
     const { data } = await gestaoApi.get('/chamados', { params });
     return data;
   },

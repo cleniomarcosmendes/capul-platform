@@ -4,9 +4,16 @@ import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { chamadoService } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
+import { coreService } from '../../services/core.service';
 import { Plus, Eye, Download } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import type { Chamado, EquipeTI, StatusChamado, Visibilidade } from '../../types';
+
+interface FilialOption {
+  id: string;
+  codigo: string;
+  nomeFantasia: string;
+}
 
 const statusLabels: Record<StatusChamado, string> = {
   ABERTO: 'Aberto',
@@ -36,34 +43,42 @@ const prioridadeColors: Record<string, string> = {
 };
 
 export function ChamadosListPage() {
-  const { gestaoTiRole } = useAuth();
+  const { gestaoTiRole, usuario } = useAuth();
   const [chamados, setChamados] = useState<Chamado[]>([]);
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);
+  const [filiais, setFiliais] = useState<FilialOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<StatusChamado | ''>('');
   const [filterEquipe, setFilterEquipe] = useState('');
   const [filterVisibilidade, setFilterVisibilidade] = useState<Visibilidade | ''>('');
   const [meusChamados, setMeusChamados] = useState(false);
+  // 'atual' = filial do usuario, '' = todas, uuid = filial especifica
+  const [filterFilial, setFilterFilial] = useState<string>('atual');
 
   const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
 
   useEffect(() => {
     equipeService.listar('ATIVO').then(setEquipes).catch(() => {});
+    coreService.listarFiliais().then(setFiliais).catch(() => {});
   }, []);
 
   useEffect(() => {
     setLoading(true);
+    const filialId = filterFilial === 'atual'
+      ? usuario?.filialAtual?.id
+      : filterFilial || undefined;
     chamadoService
       .listar({
         status: filterStatus || undefined,
         equipeId: filterEquipe || undefined,
         visibilidade: filterVisibilidade || undefined,
         meusChamados: meusChamados || undefined,
+        filialId,
       })
       .then(setChamados)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados]);
+  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, usuario]);
 
   return (
     <>
@@ -71,6 +86,18 @@ export function ChamadosListPage() {
       <div className="p-6">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div className="flex flex-wrap gap-3">
+            <select
+              value={filterFilial}
+              onChange={(e) => setFilterFilial(e.target.value)}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+            >
+              <option value="atual">Filial Atual{usuario?.filialAtual ? ` (${usuario.filialAtual.codigo})` : ''}</option>
+              <option value="">Todas as Filiais</option>
+              {filiais.map((f) => (
+                <option key={f.id} value={f.id}>{f.codigo} - {f.nomeFantasia}</option>
+              ))}
+            </select>
+
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as StatusChamado | '')}
@@ -151,6 +178,7 @@ export function ChamadosListPage() {
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Equipe</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Tecnico</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Solicitante</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">Filial</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Data</th>
                   <th className="px-4 py-3"></th>
                 </tr>
@@ -185,6 +213,7 @@ export function ChamadosListPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-600">{c.tecnico?.nome || '-'}</td>
                     <td className="px-4 py-3 text-slate-600">{c.solicitante.nome}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs">{c.filial?.codigo || '—'}</td>
                     <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
                       {new Date(c.createdAt).toLocaleDateString('pt-BR')}
                     </td>

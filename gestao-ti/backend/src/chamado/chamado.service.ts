@@ -38,6 +38,7 @@ export class ChamadoService {
     visibilidade?: Visibilidade;
     meusChamados?: boolean;
     projetoId?: string;
+    filialId?: string;
   }) {
     const where: Record<string, unknown> = {};
 
@@ -45,6 +46,7 @@ export class ChamadoService {
     if (filters.equipeId) where.equipeAtualId = filters.equipeId;
     if (filters.visibilidade) where.visibilidade = filters.visibilidade;
     if (filters.projetoId) where.projetoId = filters.projetoId;
+    if (filters.filialId) where.filialId = filters.filialId;
 
     if (role === 'USUARIO_FINAL') {
       where.solicitanteId = user.sub;
