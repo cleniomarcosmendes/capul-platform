@@ -10,10 +10,13 @@ async function main() {
 
   const filial = await prisma.filial.findFirstOrThrow({ where: { codigo: '01' } });
   const admin = await prisma.usuario.findFirstOrThrow({ where: { username: 'admin' } });
+  const deptoTI = await prisma.departamento.findFirstOrThrow({ where: { nome: 'Tecnologia da Informacao', filialId: filial.id } });
   const filialId = filial.id;
   const adminId = admin.id;
+  const departamentoId = deptoTI.id;
   console.log(`Filial: ${filial.nomeFantasia} (${filialId})`);
-  console.log(`Admin:  ${admin.nome} (${adminId})\n`);
+  console.log(`Admin:  ${admin.nome} (${adminId})`);
+  console.log(`Depto:  ${deptoTI.nome} (${departamentoId})\n`);
 
   // ── 2. Equipes TI ────────────────────────────────────────────────
 
@@ -457,6 +460,7 @@ async function main() {
         ...c,
         solicitanteId: adminId,
         filialId,
+        departamentoId,
       },
     });
     chamados.push(chamado);

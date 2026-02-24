@@ -1,4 +1,4 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, Max } from 'class-validator';
 
 export class ResolverChamadoDto {
   @IsOptional()
@@ -19,6 +19,9 @@ export class ReabrirChamadoDto {
 }
 
 export class CsatDto {
+  @IsInt()
+  @Min(1)
+  @Max(5)
   nota: number;
 
   @IsOptional()

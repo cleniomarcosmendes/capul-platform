@@ -16,11 +16,12 @@ export class DashboardService {
     return { inicio, fim };
   }
 
-  async getResumo(filters?: { dataInicio?: string; dataFim?: string }) {
+  async getResumo(filters?: { dataInicio?: string; dataFim?: string; departamentoId?: string }) {
     const { inicio, fim } = this.resolvePeriodo(filters);
     const limitVencendo30d = new Date();
     limitVencendo30d.setDate(limitVencendo30d.getDate() + 30);
     const periodoFilter = { gte: inicio, lte: fim };
+    const deptoFilter = filters?.departamentoId ? { departamentoId: filters.departamentoId } : {};
 
     const [
       totalAbertos,
@@ -52,19 +53,19 @@ export class DashboardService {
       totalAtivosAtivos,
       totalArtigosPublicados,
     ] = await Promise.all([
-      this.prisma.chamado.count({ where: { status: 'ABERTO', createdAt: periodoFilter } }),
-      this.prisma.chamado.count({ where: { status: 'EM_ATENDIMENTO', createdAt: periodoFilter } }),
-      this.prisma.chamado.count({ where: { status: 'PENDENTE', createdAt: periodoFilter } }),
-      this.prisma.chamado.count({ where: { status: 'RESOLVIDO', createdAt: periodoFilter } }),
-      this.prisma.chamado.count({ where: { status: 'FECHADO', createdAt: periodoFilter } }),
+      this.prisma.chamado.count({ where: { status: 'ABERTO', createdAt: periodoFilter, ...deptoFilter } }),
+      this.prisma.chamado.count({ where: { status: 'EM_ATENDIMENTO', createdAt: periodoFilter, ...deptoFilter } }),
+      this.prisma.chamado.count({ where: { status: 'PENDENTE', createdAt: periodoFilter, ...deptoFilter } }),
+      this.prisma.chamado.count({ where: { status: 'RESOLVIDO', createdAt: periodoFilter, ...deptoFilter } }),
+      this.prisma.chamado.count({ where: { status: 'FECHADO', createdAt: periodoFilter, ...deptoFilter } }),
       this.prisma.chamado.groupBy({
         by: ['equipeAtualId'],
-        where: { status: { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE'] }, createdAt: periodoFilter },
+        where: { status: { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE'] }, createdAt: periodoFilter, ...deptoFilter },
         _count: true,
       }),
       this.prisma.chamado.groupBy({
         by: ['prioridade'],
-        where: { status: { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE'] }, createdAt: periodoFilter },
+        where: { status: { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE'] }, createdAt: periodoFilter, ...deptoFilter },
         _count: true,
       }),
       this.prisma.equipeTI.findMany({
@@ -628,9 +629,10 @@ export class DashboardService {
     };
   }
 
-  async getCsat(filters?: { dataInicio?: string; dataFim?: string }) {
+  async getCsat(filters?: { dataInicio?: string; dataFim?: string; departamentoId?: string }) {
     const { inicio, fim } = this.resolvePeriodo(filters);
     const periodoFilter = { gte: inicio, lte: fim };
+    const deptoFilter = filters?.departamentoId ? { departamentoId: filters.departamentoId } : {};
 
     // Ultimos 6 meses para evolucao
     const seisAtras = new Date();
@@ -650,44 +652,44 @@ export class DashboardService {
       chamadosNotaBaixa,
     ] = await Promise.all([
       this.prisma.chamado.count({
-        where: { status: { in: ['RESOLVIDO', 'FECHADO'] }, createdAt: periodoFilter },
+        where: { status: { in: ['RESOLVIDO', 'FECHADO'] }, createdAt: periodoFilter, ...deptoFilter },
       }),
       this.prisma.chamado.count({
-        where: { notaSatisfacao: { not: null }, createdAt: periodoFilter },
+        where: { notaSatisfacao: { not: null }, createdAt: periodoFilter, ...deptoFilter },
       }),
       this.prisma.chamado.aggregate({
-        where: { notaSatisfacao: { not: null }, createdAt: periodoFilter },
+        where: { notaSatisfacao: { not: null }, createdAt: periodoFilter, ...deptoFilter },
         _avg: { notaSatisfacao: true },
       }),
       this.prisma.chamado.groupBy({
         by: ['notaSatisfacao'],
-        where: { notaSatisfacao: { not: null }, createdAt: periodoFilter },
+        where: { notaSatisfacao: { not: null }, createdAt: periodoFilter, ...deptoFilter },
         _count: true,
       }),
       this.prisma.chamado.groupBy({
         by: ['tecnicoId'],
-        where: { notaSatisfacao: { not: null }, tecnicoId: { not: null }, createdAt: periodoFilter },
+        where: { notaSatisfacao: { not: null }, tecnicoId: { not: null }, createdAt: periodoFilter, ...deptoFilter },
         _count: true,
         _avg: { notaSatisfacao: true },
       }),
       this.prisma.chamado.groupBy({
         by: ['equipeAtualId'],
-        where: { notaSatisfacao: { not: null }, createdAt: periodoFilter },
+        where: { notaSatisfacao: { not: null }, createdAt: periodoFilter, ...deptoFilter },
         _count: true,
         _avg: { notaSatisfacao: true },
       }),
       this.prisma.chamado.groupBy({
         by: ['catalogoServicoId'],
-        where: { notaSatisfacao: { not: null }, createdAt: periodoFilter },
+        where: { notaSatisfacao: { not: null }, createdAt: periodoFilter, ...deptoFilter },
         _count: true,
         _avg: { notaSatisfacao: true },
       }),
       this.prisma.chamado.findMany({
-        where: { notaSatisfacao: { not: null }, createdAt: { gte: seisAtras } },
+        where: { notaSatisfacao: { not: null }, createdAt: { gte: seisAtras }, ...deptoFilter },
         select: { notaSatisfacao: true, createdAt: true },
       }),
       this.prisma.chamado.findMany({
-        where: { notaSatisfacao: { lte: 2 }, createdAt: periodoFilter },
+        where: { notaSatisfacao: { lte: 2 }, createdAt: periodoFilter, ...deptoFilter },
         select: {
           id: true, numero: true, titulo: true, notaSatisfacao: true,
           comentarioSatisfacao: true, status: true, createdAt: true,

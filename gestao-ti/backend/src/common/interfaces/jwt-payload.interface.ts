@@ -9,5 +9,7 @@ export class JwtPayload {
   email: string | null;
   filialId: string;
   filialCodigo: string;
+  departamentoId: string;
+  departamentoNome: string;
   modulos: ModuloPayload[];
 }

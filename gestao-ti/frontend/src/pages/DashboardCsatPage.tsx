@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Header } from '../layouts/Header';
 import { dashboardService } from '../services/dashboard.service';
+import { coreService } from '../services/core.service';
 import { Star, Users, Layers, TrendingUp, AlertTriangle, BarChart3 } from 'lucide-react';
 import { PeriodFilter } from '../components/PeriodFilter';
-import type { DashboardCsat } from '../types';
+import type { DashboardCsat, Departamento } from '../types';
 
 const starColors = [
   'bg-red-100 text-red-700',
@@ -17,6 +18,8 @@ const starColors = [
 export function DashboardCsatPage() {
   const [data, setData] = useState<DashboardCsat | null>(null);
   const [loading, setLoading] = useState(true);
+  const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
+  const [filterDepartamento, setFilterDepartamento] = useState('');
 
   const hoje = new Date();
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
@@ -24,12 +27,16 @@ export function DashboardCsatPage() {
   const [dataFim, setDataFim] = useState(hoje.toISOString().slice(0, 10));
 
   useEffect(() => {
+    coreService.listarDepartamentos().then(setDepartamentos).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     setLoading(true);
-    dashboardService.getCsat({ dataInicio, dataFim })
+    dashboardService.getCsat({ dataInicio, dataFim, departamentoId: filterDepartamento || undefined })
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [dataInicio, dataFim]);
+  }, [dataInicio, dataFim, filterDepartamento]);
 
   if (loading) {
     return (
@@ -55,11 +62,23 @@ export function DashboardCsatPage() {
     <>
       <Header title="Dashboard de Satisfacao (CSAT)" />
       <div className="p-6">
-        <PeriodFilter
-          dataInicio={dataInicio}
-          dataFim={dataFim}
-          onPeriodChange={(inicio, fim) => { setDataInicio(inicio); setDataFim(fim); }}
-        />
+        <div className="flex flex-wrap items-end gap-4 mb-6">
+          <PeriodFilter
+            dataInicio={dataInicio}
+            dataFim={dataFim}
+            onPeriodChange={(inicio, fim) => { setDataInicio(inicio); setDataFim(fim); }}
+          />
+          <select
+            value={filterDepartamento}
+            onChange={(e) => setFilterDepartamento(e.target.value)}
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+          >
+            <option value="">Todos os Departamentos</option>
+            {departamentos.map((d) => (
+              <option key={d.id} value={d.id}>{d.nome}</option>
+            ))}
+          </select>
+        </div>
 
         {/* Overview Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

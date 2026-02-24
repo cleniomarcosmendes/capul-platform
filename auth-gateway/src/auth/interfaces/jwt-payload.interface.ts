@@ -4,6 +4,8 @@ export interface JwtPayload {
   email: string | null;
   filialId: string | null;
   filialCodigo: string | null;
+  departamentoId: string;
+  departamentoNome: string;
   modulos: ModuloPayload[];
 }
 

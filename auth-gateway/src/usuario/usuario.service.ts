@@ -35,6 +35,7 @@ export class UsuarioService {
         ultimoLogin: true,
         createdAt: true,
         filialPrincipal: { select: { id: true, codigo: true, nomeFantasia: true } },
+        departamento: { select: { id: true, nome: true } },
         permissoes: {
           where: { status: 'ATIVO' },
           select: {
@@ -119,6 +120,7 @@ export class UsuarioService {
       data: dto,
       include: {
         filialPrincipal: true,
+        departamento: true,
         permissoes: { include: { modulo: true, roleModulo: true } },
       },
     });

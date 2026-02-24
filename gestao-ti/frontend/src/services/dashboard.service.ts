@@ -2,7 +2,7 @@ import { gestaoApi } from './api';
 import type { DashboardResumo, DashboardFinanceiro, DashboardDisponibilidade, DashboardExecutivo, DashboardCsat } from '../types';
 
 export const dashboardService = {
-  async getResumo(params?: { dataInicio?: string; dataFim?: string }): Promise<DashboardResumo> {
+  async getResumo(params?: { dataInicio?: string; dataFim?: string; departamentoId?: string }): Promise<DashboardResumo> {
     const { data } = await gestaoApi.get('/dashboard', { params });
     return data;
   },
@@ -27,7 +27,7 @@ export const dashboardService = {
     return data;
   },
 
-  async getCsat(params?: { dataInicio?: string; dataFim?: string }): Promise<DashboardCsat> {
+  async getCsat(params?: { dataInicio?: string; dataFim?: string; departamentoId?: string }): Promise<DashboardCsat> {
     const { data } = await gestaoApi.get('/dashboard/csat', { params });
     return data;
   },

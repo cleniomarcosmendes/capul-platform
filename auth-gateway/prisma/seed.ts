@@ -90,7 +90,31 @@ async function main() {
   });
   console.log('Roles criadas: 3 Inventario + 7 Gestao TI = 10 total');
 
-  // 6. Admin master
+  // 6. Departamentos
+  const deptoTI = await prisma.departamento.create({
+    data: {
+      nome: 'Tecnologia da Informacao',
+      descricao: 'Departamento de TI',
+      filialId: filial.id,
+    },
+  });
+  const deptoAdmin = await prisma.departamento.create({
+    data: {
+      nome: 'Administrativo',
+      descricao: 'Departamento Administrativo',
+      filialId: filial.id,
+    },
+  });
+  await prisma.departamento.create({
+    data: {
+      nome: 'Operacoes',
+      descricao: 'Departamento de Operacoes',
+      filialId: filial.id,
+    },
+  });
+  console.log('Departamentos criados: TI, Administrativo, Operacoes');
+
+  // 7. Admin master
   const admin = await prisma.usuario.create({
     data: {
       username: 'admin',
@@ -98,6 +122,7 @@ async function main() {
       nome: 'Administrador',
       senha: await bcrypt.hash('admin123', 10),
       filialPrincipalId: filial.id,
+      departamentoId: deptoTI.id,
       primeiroAcesso: false,
       filiais: {
         create: { filialId: filial.id, isDefault: true },

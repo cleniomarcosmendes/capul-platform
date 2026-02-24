@@ -50,9 +50,9 @@ export class CreateUsuarioDto {
   @IsUUID()
   filialPrincipalId?: string;
 
-  @IsOptional()
+  @IsNotEmpty()
   @IsUUID()
-  departamentoId?: string;
+  departamentoId: string;
 
   @IsOptional()
   @IsArray()

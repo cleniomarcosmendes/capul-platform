@@ -19,6 +19,7 @@ export interface UsuarioLogado {
   username: string;
   nome: string;
   email: string | null;
+  departamento: { id: string; nome: string };
   filialAtual: FilialUsuario;
   modulos: ModuloUsuario[];
 }
@@ -188,6 +189,8 @@ export interface Chamado {
   historicos?: HistoricoChamado[];
   projetoId: string | null;
   projeto: { id: string; numero: number; nome: string } | null;
+  departamentoId: string | null;
+  departamento: { id: string; nome: string } | null;
 }
 
 export interface HistoricoChamado {

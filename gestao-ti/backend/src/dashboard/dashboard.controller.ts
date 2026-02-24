@@ -12,8 +12,9 @@ export class DashboardController {
   getResumo(
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
+    @Query('departamentoId') departamentoId?: string,
   ) {
-    return this.service.getResumo({ dataInicio, dataFim });
+    return this.service.getResumo({ dataInicio, dataFim, departamentoId });
   }
 
   @Get('executivo')
@@ -46,7 +47,8 @@ export class DashboardController {
   getCsat(
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
+    @Query('departamentoId') departamentoId?: string,
   ) {
-    return this.service.getCsat({ dataInicio, dataFim });
+    return this.service.getCsat({ dataInicio, dataFim, departamentoId });
   }
 }

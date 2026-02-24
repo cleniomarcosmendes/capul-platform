@@ -7,6 +7,7 @@ interface ListFilters {
   visibilidade?: Visibilidade;
   meusChamados?: boolean;
   filialId?: string;
+  departamentoId?: string;
   pendentesAvaliacao?: boolean;
 }
 
@@ -32,6 +33,7 @@ export const chamadoService = {
     if (filters.visibilidade) params.visibilidade = filters.visibilidade;
     if (filters.meusChamados) params.meusChamados = 'true';
     if (filters.filialId) params.filialId = filters.filialId;
+    if (filters.departamentoId) params.departamentoId = filters.departamentoId;
     if (filters.pendentesAvaliacao) params.pendentesAvaliacao = 'true';
     const { data } = await gestaoApi.get('/chamados', { params });
     return data;

@@ -4,9 +4,10 @@ import { Header } from '../layouts/Header';
 import { useAuth } from '../contexts/AuthContext';
 import { dashboardService } from '../services/dashboard.service';
 import { chamadoService } from '../services/chamado.service';
+import { coreService } from '../services/core.service';
 import { Ticket, Clock, CheckCircle, AlertTriangle, Wrench, Users, AppWindow, KeyRound, DollarSign, FileText, Receipt, Activity, FolderKanban, Timer, Server, BookMarked, Star, MessageSquare } from 'lucide-react';
 import { PeriodFilter } from '../components/PeriodFilter';
-import type { DashboardResumo, Chamado } from '../types';
+import type { DashboardResumo, Chamado, Departamento } from '../types';
 import type { LucideIcon } from 'lucide-react';
 
 const prioridadeCores: Record<string, string> = {
@@ -248,11 +249,17 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TabKey>('suporte');
   const [pendentesCount, setPendentesCount] = useState(0);
+  const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
+  const [filterDepartamento, setFilterDepartamento] = useState('');
 
   const hoje = new Date();
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
   const [dataInicio, setDataInicio] = useState(inicioMes.toISOString().slice(0, 10));
   const [dataFim, setDataFim] = useState(hoje.toISOString().slice(0, 10));
+
+  useEffect(() => {
+    coreService.listarDepartamentos().then(setDepartamentos).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (gestaoTiRole === 'USUARIO_FINAL') {
@@ -262,12 +269,12 @@ export function DashboardPage() {
     } else {
       setLoading(true);
       dashboardService
-        .getResumo({ dataInicio, dataFim })
+        .getResumo({ dataInicio, dataFim, departamentoId: filterDepartamento || undefined })
         .then(setResumo)
         .catch(() => {})
         .finally(() => setLoading(false));
     }
-  }, [gestaoTiRole, dataInicio, dataFim]);
+  }, [gestaoTiRole, dataInicio, dataFim, filterDepartamento]);
 
   // Dashboard simplificado para USUARIO_FINAL
   if (gestaoTiRole === 'USUARIO_FINAL') {
@@ -288,11 +295,23 @@ export function DashboardPage() {
           </p>
         </div>
 
-        <PeriodFilter
-          dataInicio={dataInicio}
-          dataFim={dataFim}
-          onPeriodChange={(inicio, fim) => { setDataInicio(inicio); setDataFim(fim); }}
-        />
+        <div className="flex flex-wrap items-end gap-4 mb-6">
+          <PeriodFilter
+            dataInicio={dataInicio}
+            dataFim={dataFim}
+            onPeriodChange={(inicio, fim) => { setDataInicio(inicio); setDataFim(fim); }}
+          />
+          <select
+            value={filterDepartamento}
+            onChange={(e) => setFilterDepartamento(e.target.value)}
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+          >
+            <option value="">Todos os Departamentos</option>
+            {departamentos.map((d) => (
+              <option key={d.id} value={d.id}>{d.nome}</option>
+            ))}
+          </select>
+        </div>
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 border-b border-slate-200">

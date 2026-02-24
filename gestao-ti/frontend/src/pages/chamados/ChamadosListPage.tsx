@@ -7,7 +7,7 @@ import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
 import { Plus, Eye, Download, Star } from 'lucide-react';
 import { exportService } from '../../services/export.service';
-import type { Chamado, EquipeTI, StatusChamado, Visibilidade } from '../../types';
+import type { Chamado, EquipeTI, Departamento, StatusChamado, Visibilidade } from '../../types';
 
 interface FilialOption {
   id: string;
@@ -47,6 +47,7 @@ export function ChamadosListPage() {
   const [searchParams] = useSearchParams();
   const [chamados, setChamados] = useState<Chamado[]>([]);
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);
+  const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [filiais, setFiliais] = useState<FilialOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<StatusChamado | ''>('');
@@ -55,6 +56,7 @@ export function ChamadosListPage() {
   const [meusChamados, setMeusChamados] = useState(false);
   // 'atual' = filial do usuario, '' = todas, uuid = filial especifica
   const [filterFilial, setFilterFilial] = useState<string>('atual');
+  const [filterDepartamento, setFilterDepartamento] = useState('');
   const [pendentesAvaliacao, setPendentesAvaliacao] = useState(searchParams.get('pendentes') === '1');
 
   const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
@@ -62,6 +64,7 @@ export function ChamadosListPage() {
   useEffect(() => {
     equipeService.listar('ATIVO').then(setEquipes).catch(() => {});
     coreService.listarFiliais().then(setFiliais).catch(() => {});
+    coreService.listarDepartamentos().then(setDepartamentos).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -83,12 +86,13 @@ export function ChamadosListPage() {
           visibilidade: filterVisibilidade || undefined,
           meusChamados: meusChamados || undefined,
           filialId,
+          departamentoId: filterDepartamento || undefined,
         })
         .then(setChamados)
         .catch(() => {})
         .finally(() => setLoading(false));
     }
-  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, usuario, pendentesAvaliacao]);
+  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, filterDepartamento, usuario, pendentesAvaliacao]);
 
   return (
     <>
@@ -186,6 +190,17 @@ export function ChamadosListPage() {
                     <option value="PRIVADO">Privado</option>
                   </select>
 
+                  <select
+                    value={filterDepartamento}
+                    onChange={(e) => setFilterDepartamento(e.target.value)}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                  >
+                    <option value="">Todos Departamentos</option>
+                    {departamentos.map((d) => (
+                      <option key={d.id} value={d.id}>{d.nome}</option>
+                    ))}
+                  </select>
+
                   <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
                     <input
                       type="checkbox"
@@ -252,6 +267,7 @@ export function ChamadosListPage() {
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Equipe</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Tecnico</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Solicitante</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">Depto</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Filial</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Data</th>
                   <th className="px-4 py-3"></th>
@@ -287,6 +303,7 @@ export function ChamadosListPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-600">{c.tecnico?.nome || '-'}</td>
                     <td className="px-4 py-3 text-slate-600">{c.solicitante.nome}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs">{c.departamento?.nome || '—'}</td>
                     <td className="px-4 py-3 text-slate-500 text-xs">{c.filial?.codigo || '—'}</td>
                     <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
                       {new Date(c.createdAt).toLocaleDateString('pt-BR')}

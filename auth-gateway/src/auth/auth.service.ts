@@ -40,6 +40,7 @@ export class AuthService {
         filiais: {
           include: { filial: true },
         },
+        departamento: true,
       },
     });
 
@@ -61,6 +62,8 @@ export class AuthService {
       email: usuario.email,
       filialId: filialAtiva?.filialId || null,
       filialCodigo: filialAtiva?.filial?.codigo || null,
+      departamentoId: usuario.departamentoId,
+      departamentoNome: usuario.departamento.nome,
       modulos: usuario.permissoes.map((p) => ({
         codigo: p.modulo.codigo,
         role: p.roleModulo.codigo,
@@ -88,6 +91,10 @@ export class AuthService {
         nome: usuario.nome,
         email: usuario.email,
         primeiroAcesso: usuario.primeiroAcesso,
+        departamento: {
+          id: usuario.departamento.id,
+          nome: usuario.departamento.nome,
+        },
         filialAtual: filialAtiva
           ? {
               id: filialAtiva.filialId,
@@ -121,6 +128,7 @@ export class AuthService {
             filiais: {
               include: { filial: true },
             },
+            departamento: true,
           },
         },
       },
@@ -150,6 +158,8 @@ export class AuthService {
       email: usuario.email,
       filialId: filialAtiva?.filialId || null,
       filialCodigo: filialAtiva?.filial?.codigo || null,
+      departamentoId: usuario.departamentoId,
+      departamentoNome: usuario.departamento.nome,
       modulos: usuario.permissoes.map((p) => ({
         codigo: p.modulo.codigo,
         role: p.roleModulo.codigo,
@@ -242,6 +252,10 @@ export class AuthService {
       cargo: usuario.cargo,
       avatarUrl: usuario.avatarUrl,
       primeiroAcesso: usuario.primeiroAcesso,
+      departamento: {
+        id: usuario.departamento.id,
+        nome: usuario.departamento.nome,
+      },
       filialAtual: filialAtiva
         ? {
             id: filialAtiva.filialId,
@@ -304,6 +318,7 @@ export class AuthService {
           where: { status: 'ATIVO' },
           include: { modulo: true, roleModulo: true },
         },
+        departamento: true,
       },
     });
 
@@ -317,6 +332,8 @@ export class AuthService {
       email: usuario.email,
       filialId: usuarioFilial.filialId,
       filialCodigo: usuarioFilial.filial.codigo,
+      departamentoId: usuario.departamentoId,
+      departamentoNome: usuario.departamento.nome,
       modulos: usuario.permissoes.map((p) => ({
         codigo: p.modulo.codigo,
         role: p.roleModulo.codigo,

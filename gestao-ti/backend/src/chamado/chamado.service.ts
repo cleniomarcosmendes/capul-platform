@@ -18,6 +18,7 @@ const chamadoInclude = {
   tecnico: { select: { id: true, nome: true, username: true, email: true } },
   equipeAtual: { select: { id: true, nome: true, sigla: true, cor: true } },
   filial: { select: { id: true, codigo: true, nomeFantasia: true } },
+  departamento: { select: { id: true, nome: true } },
   catalogoServico: { select: { id: true, nome: true } },
   slaDefinicao: true,
   software: { select: { id: true, nome: true, tipo: true } },
@@ -39,6 +40,7 @@ export class ChamadoService {
     meusChamados?: boolean;
     projetoId?: string;
     filialId?: string;
+    departamentoId?: string;
     pendentesAvaliacao?: boolean;
   }) {
     const where: Record<string, unknown> = {};
@@ -53,6 +55,7 @@ export class ChamadoService {
       if (filters.visibilidade) where.visibilidade = filters.visibilidade;
       if (filters.projetoId) where.projetoId = filters.projetoId;
       if (filters.filialId) where.filialId = filters.filialId;
+      if (filters.departamentoId) where.departamentoId = filters.departamentoId;
 
       if (role === 'USUARIO_FINAL') {
         where.solicitanteId = user.sub;
@@ -149,6 +152,7 @@ export class ChamadoService {
         solicitanteId: user.sub,
         equipeAtualId: dto.equipeAtualId,
         filialId: user.filialId,
+        departamentoId: user.departamentoId,
         softwareNome,
         moduloNome,
         softwareId: dto.softwareId,

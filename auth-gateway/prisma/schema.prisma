@@ -116,10 +116,10 @@ model Usuario {
   createdAt      DateTime    @default(now()) @map("created_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")
 
-  filialPrincipalId String?       @map("filial_principal_id")
-  filialPrincipal   Filial?       @relation("FilialPrincipal", fields: [filialPrincipalId], references: [id])
-  departamentoId    String?       @map("departamento_id")
-  departamento      Departamento? @relation(fields: [departamentoId], references: [id])
+  filialPrincipalId String?      @map("filial_principal_id")
+  filialPrincipal   Filial?      @relation("FilialPrincipal", fields: [filialPrincipalId], references: [id])
+  departamentoId    String       @map("departamento_id")
+  departamento      Departamento @relation(fields: [departamentoId], references: [id])
 
   filiais       UsuarioFilial[]
   permissoes    PermissaoModulo[]
