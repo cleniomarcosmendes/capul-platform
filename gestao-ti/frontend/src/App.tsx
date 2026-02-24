@@ -35,6 +35,7 @@ import { ConhecimentoListPage } from './pages/conhecimento/ConhecimentoListPage'
 import { ConhecimentoFormPage } from './pages/conhecimento/ConhecimentoFormPage';
 import { ConhecimentoDetalhePage } from './pages/conhecimento/ConhecimentoDetalhePage';
 import { DashboardExecutivoPage } from './pages/DashboardExecutivoPage';
+import { DashboardCsatPage } from './pages/DashboardCsatPage';
 import { NotificacoesPage } from './pages/notificacoes/NotificacoesPage';
 import { ImportPage } from './pages/import/ImportPage';
 import type { ReactNode } from 'react';
@@ -118,6 +119,7 @@ function AppRoutes() {
         <Route path="conhecimento/:id" element={<ConhecimentoDetalhePage />} />
         <Route path="conhecimento/:id/editar" element={<ConhecimentoFormPage />} />
         <Route path="executivo" element={<DashboardExecutivoPage />} />
+        <Route path="csat" element={<DashboardCsatPage />} />
         <Route path="notificacoes" element={<NotificacoesPage />} />
         <Route path="importar" element={<ImportPage />} />
         <Route path="catalogo" element={<CatalogoServicosPage />} />

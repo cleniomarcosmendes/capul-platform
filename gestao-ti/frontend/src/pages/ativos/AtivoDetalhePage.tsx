@@ -4,7 +4,7 @@ import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { ativoService } from '../../services/ativo.service';
 import { softwareService } from '../../services/software.service';
-import { Server, Edit, Trash2, Plus, X, Cpu, HardDrive, Monitor, Wifi } from 'lucide-react';
+import { ArrowLeft, Server, Edit, Trash2, Plus, X, Cpu, HardDrive, Monitor, Wifi } from 'lucide-react';
 import type { Ativo, AtivoSoftwareItem, StatusAtivo, TipoAtivo, Software } from '../../types';
 
 const tipoLabel: Record<TipoAtivo, string> = {
@@ -105,6 +105,10 @@ export function AtivoDetalhePage() {
     <>
       <Header title={`Ativo ${ativo.tag}`} />
       <div className="p-6">
+        <button onClick={() => navigate('/gestao-ti/ativos')} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4">
+          <ArrowLeft className="w-4 h-4" /> Voltar
+        </button>
+
         {/* Info card */}
         <div className="bg-white rounded-lg border border-slate-200 p-6 mb-6">
           <div className="flex items-start justify-between">

@@ -627,4 +627,155 @@ export class DashboardService {
       })),
     };
   }
+
+  async getCsat(filters?: { dataInicio?: string; dataFim?: string }) {
+    const { inicio, fim } = this.resolvePeriodo(filters);
+    const periodoFilter = { gte: inicio, lte: fim };
+
+    // Ultimos 6 meses para evolucao
+    const seisAtras = new Date();
+    seisAtras.setMonth(seisAtras.getMonth() - 5);
+    seisAtras.setDate(1);
+    seisAtras.setHours(0, 0, 0, 0);
+
+    const [
+      totalFechados,
+      totalAvaliados,
+      somaNotas,
+      distribuicaoRaw,
+      avaliadosComTecnico,
+      avaliadosComEquipe,
+      avaliadosComServico,
+      evolucaoRaw,
+      chamadosNotaBaixa,
+    ] = await Promise.all([
+      this.prisma.chamado.count({
+        where: { status: { in: ['RESOLVIDO', 'FECHADO'] }, createdAt: periodoFilter },
+      }),
+      this.prisma.chamado.count({
+        where: { notaSatisfacao: { not: null }, createdAt: periodoFilter },
+      }),
+      this.prisma.chamado.aggregate({
+        where: { notaSatisfacao: { not: null }, createdAt: periodoFilter },
+        _avg: { notaSatisfacao: true },
+      }),
+      this.prisma.chamado.groupBy({
+        by: ['notaSatisfacao'],
+        where: { notaSatisfacao: { not: null }, createdAt: periodoFilter },
+        _count: true,
+      }),
+      this.prisma.chamado.groupBy({
+        by: ['tecnicoId'],
+        where: { notaSatisfacao: { not: null }, tecnicoId: { not: null }, createdAt: periodoFilter },
+        _count: true,
+        _avg: { notaSatisfacao: true },
+      }),
+      this.prisma.chamado.groupBy({
+        by: ['equipeAtualId'],
+        where: { notaSatisfacao: { not: null }, createdAt: periodoFilter },
+        _count: true,
+        _avg: { notaSatisfacao: true },
+      }),
+      this.prisma.chamado.groupBy({
+        by: ['catalogoServicoId'],
+        where: { notaSatisfacao: { not: null }, createdAt: periodoFilter },
+        _count: true,
+        _avg: { notaSatisfacao: true },
+      }),
+      this.prisma.chamado.findMany({
+        where: { notaSatisfacao: { not: null }, createdAt: { gte: seisAtras } },
+        select: { notaSatisfacao: true, createdAt: true },
+      }),
+      this.prisma.chamado.findMany({
+        where: { notaSatisfacao: { lte: 2 }, createdAt: periodoFilter },
+        select: {
+          id: true, numero: true, titulo: true, notaSatisfacao: true,
+          comentarioSatisfacao: true, status: true, createdAt: true,
+          solicitante: { select: { id: true, nome: true } },
+          tecnico: { select: { id: true, nome: true } },
+          equipeAtual: { select: { id: true, nome: true, sigla: true } },
+          catalogoServico: { select: { id: true, nome: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    // Buscar nomes de tecnicos
+    const tecnicoIds = avaliadosComTecnico.map((t) => t.tecnicoId).filter(Boolean) as string[];
+    const tecnicos = tecnicoIds.length > 0
+      ? await this.prisma.usuario.findMany({ where: { id: { in: tecnicoIds } }, select: { id: true, nome: true } })
+      : [];
+    const tecnicoMap = Object.fromEntries(tecnicos.map((t) => [t.id, t]));
+
+    // Buscar nomes de equipes
+    const equipeIds = avaliadosComEquipe.map((e) => e.equipeAtualId);
+    const equipes = equipeIds.length > 0
+      ? await this.prisma.equipeTI.findMany({ where: { id: { in: equipeIds } }, select: { id: true, nome: true, sigla: true } })
+      : [];
+    const equipeMap = Object.fromEntries(equipes.map((e) => [e.id, e]));
+
+    // Buscar nomes de servicos
+    const servicoIds = avaliadosComServico.map((s) => s.catalogoServicoId).filter(Boolean) as string[];
+    const servicos = servicoIds.length > 0
+      ? await this.prisma.catalogoServico.findMany({ where: { id: { in: servicoIds } }, select: { id: true, nome: true } })
+      : [];
+    const servicoMap = Object.fromEntries(servicos.map((s) => [s.id, s]));
+
+    // Distribuicao de notas (garantir 1-5)
+    const distMap = new Map<number, number>();
+    for (const d of distribuicaoRaw) {
+      if (d.notaSatisfacao !== null) distMap.set(d.notaSatisfacao, d._count);
+    }
+    const distribuicaoNotas = [1, 2, 3, 4, 5].map((nota) => ({
+      nota,
+      total: distMap.get(nota) || 0,
+    }));
+
+    // Evolucao mensal
+    const mesMap = new Map<string, { soma: number; count: number }>();
+    for (const c of evolucaoRaw) {
+      const d = new Date(c.createdAt);
+      const mes = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const existing = mesMap.get(mes);
+      if (existing) {
+        existing.soma += c.notaSatisfacao!;
+        existing.count++;
+      } else {
+        mesMap.set(mes, { soma: c.notaSatisfacao!, count: 1 });
+      }
+    }
+    const evolucaoMensal = Array.from(mesMap.entries())
+      .map(([mes, v]) => ({ mes, media: +(v.soma / v.count).toFixed(2), total: v.count }))
+      .sort((a, b) => a.mes.localeCompare(b.mes));
+
+    const taxaResposta = totalFechados > 0
+      ? +((totalAvaliados / totalFechados) * 100).toFixed(1)
+      : 0;
+
+    return {
+      periodo: { inicio: inicio.toISOString(), fim: fim.toISOString() },
+      totalFechados,
+      totalAvaliados,
+      taxaResposta,
+      csatMedio: +(somaNotas._avg.notaSatisfacao ?? 0).toFixed(2),
+      distribuicaoNotas,
+      porTecnico: avaliadosComTecnico.map((t) => ({
+        tecnico: tecnicoMap[t.tecnicoId!] || { id: t.tecnicoId, nome: 'Desconhecido' },
+        media: +(t._avg.notaSatisfacao ?? 0).toFixed(2),
+        total: t._count,
+      })).sort((a, b) => b.media - a.media),
+      porEquipe: avaliadosComEquipe.map((e) => ({
+        equipe: equipeMap[e.equipeAtualId] || { id: e.equipeAtualId, nome: 'Desconhecida', sigla: '?' },
+        media: +(e._avg.notaSatisfacao ?? 0).toFixed(2),
+        total: e._count,
+      })).sort((a, b) => b.media - a.media),
+      porCategoria: avaliadosComServico.map((s) => ({
+        servico: s.catalogoServicoId ? (servicoMap[s.catalogoServicoId] || null) : null,
+        media: +(s._avg.notaSatisfacao ?? 0).toFixed(2),
+        total: s._count,
+      })).sort((a, b) => b.media - a.media),
+      evolucaoMensal,
+      chamadosNotaBaixa,
+    };
+  }
 }

@@ -41,4 +41,12 @@ export class DashboardController {
   ) {
     return this.service.getFinanceiro({ dataInicio, dataFim });
   }
+
+  @Get('csat')
+  getCsat(
+    @Query('dataInicio') dataInicio?: string,
+    @Query('dataFim') dataFim?: string,
+  ) {
+    return this.service.getCsat({ dataInicio, dataFim });
+  }
 }

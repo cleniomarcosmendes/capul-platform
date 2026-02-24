@@ -85,7 +85,7 @@ export interface CentroCusto {
 export type Prioridade = 'CRITICA' | 'ALTA' | 'MEDIA' | 'BAIXA';
 export type StatusChamado = 'ABERTO' | 'EM_ATENDIMENTO' | 'PENDENTE' | 'RESOLVIDO' | 'FECHADO' | 'CANCELADO' | 'REABERTO';
 export type Visibilidade = 'PUBLICO' | 'PRIVADO';
-export type TipoHistorico = 'ABERTURA' | 'ASSUMIDO' | 'COMENTARIO' | 'TRANSFERENCIA_EQUIPE' | 'TRANSFERENCIA_TECNICO' | 'RESOLVIDO' | 'FECHADO' | 'REABERTO' | 'CANCELADO';
+export type TipoHistorico = 'ABERTURA' | 'ASSUMIDO' | 'COMENTARIO' | 'TRANSFERENCIA_EQUIPE' | 'TRANSFERENCIA_TECNICO' | 'RESOLVIDO' | 'FECHADO' | 'REABERTO' | 'CANCELADO' | 'AVALIADO';
 export type StatusOS = 'ABERTA' | 'EM_EXECUCAO' | 'CONCLUIDA' | 'CANCELADA';
 
 // === Fase 2B — Portfólio types ===
@@ -823,4 +823,32 @@ export interface DashboardFinanceiro {
   despesasPorCentroCusto: { centroCusto: { id: string; codigo: string; nome: string }; valorTotal: number }[];
   contratosVencendo: { id: string; numero: number; titulo: string; fornecedor: string; valorTotal: number; dataFim: string; software: { id: string; nome: string } | null }[];
   parcelasProximas: { id: string; numero: number; valor: number; dataVencimento: string; status: StatusParcela; contrato: { id: string; numero: number; titulo: string; fornecedor: string } }[];
+}
+
+// === Dashboard CSAT ===
+
+export interface DashboardCsat {
+  periodo?: { inicio: string; fim: string };
+  totalFechados: number;
+  totalAvaliados: number;
+  taxaResposta: number;
+  csatMedio: number;
+  distribuicaoNotas: { nota: number; total: number }[];
+  porTecnico: { tecnico: { id: string; nome: string }; media: number; total: number }[];
+  porEquipe: { equipe: { id: string; nome: string; sigla: string }; media: number; total: number }[];
+  porCategoria: { servico: { id: string; nome: string } | null; media: number; total: number }[];
+  evolucaoMensal: { mes: string; media: number; total: number }[];
+  chamadosNotaBaixa: {
+    id: string;
+    numero: number;
+    titulo: string;
+    notaSatisfacao: number;
+    comentarioSatisfacao: string | null;
+    status: StatusChamado;
+    createdAt: string;
+    solicitante: { id: string; nome: string };
+    tecnico: { id: string; nome: string } | null;
+    equipeAtual: { id: string; nome: string; sigla: string };
+    catalogoServico: { id: string; nome: string } | null;
+  }[];
 }

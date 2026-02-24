@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom';
 import { Header } from '../layouts/Header';
 import { useAuth } from '../contexts/AuthContext';
 import { dashboardService } from '../services/dashboard.service';
-import { Ticket, Clock, CheckCircle, AlertTriangle, Wrench, Users, AppWindow, KeyRound, DollarSign, FileText, Receipt, Activity, FolderKanban, Timer, Server, BookMarked } from 'lucide-react';
+import { chamadoService } from '../services/chamado.service';
+import { Ticket, Clock, CheckCircle, AlertTriangle, Wrench, Users, AppWindow, KeyRound, DollarSign, FileText, Receipt, Activity, FolderKanban, Timer, Server, BookMarked, Star, MessageSquare } from 'lucide-react';
 import { PeriodFilter } from '../components/PeriodFilter';
-import type { DashboardResumo } from '../types';
+import type { DashboardResumo, Chamado } from '../types';
 import type { LucideIcon } from 'lucide-react';
 
 const prioridadeCores: Record<string, string> = {
@@ -15,15 +16,37 @@ const prioridadeCores: Record<string, string> = {
   BAIXA: 'bg-green-100 text-green-700',
 };
 
+const statusLabels: Record<string, string> = {
+  ABERTO: 'Aberto',
+  EM_ATENDIMENTO: 'Em Atendimento',
+  PENDENTE: 'Pendente',
+  RESOLVIDO: 'Resolvido',
+  FECHADO: 'Fechado',
+  CANCELADO: 'Cancelado',
+  REABERTO: 'Reaberto',
+};
+
+const statusColors: Record<string, string> = {
+  ABERTO: 'bg-blue-100 text-blue-700',
+  EM_ATENDIMENTO: 'bg-yellow-100 text-yellow-700',
+  PENDENTE: 'bg-orange-100 text-orange-700',
+  RESOLVIDO: 'bg-green-100 text-green-700',
+  FECHADO: 'bg-slate-100 text-slate-600',
+  CANCELADO: 'bg-red-100 text-red-600',
+  REABERTO: 'bg-purple-100 text-purple-700',
+};
+
 type TabKey = 'suporte' | 'portfolio' | 'contratos' | 'sustentacao' | 'projetos' | 'infraestrutura';
 
-const tabsDef: { key: TabKey; label: string; icon: LucideIcon }[] = [
+const STAFF_ROLES = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR'];
+
+const tabsDef: { key: TabKey; label: string; icon: LucideIcon; roles?: string[] }[] = [
   { key: 'suporte', label: 'Suporte', icon: Ticket },
-  { key: 'portfolio', label: 'Portfolio', icon: AppWindow },
-  { key: 'contratos', label: 'Contratos', icon: FileText },
-  { key: 'sustentacao', label: 'Sustentacao', icon: Activity },
-  { key: 'projetos', label: 'Projetos', icon: FolderKanban },
-  { key: 'infraestrutura', label: 'Infraestrutura', icon: Server },
+  { key: 'portfolio', label: 'Portfolio', icon: AppWindow, roles: [...STAFF_ROLES, 'FINANCEIRO'] },
+  { key: 'contratos', label: 'Contratos', icon: FileText, roles: [...STAFF_ROLES, 'FINANCEIRO'] },
+  { key: 'sustentacao', label: 'Sustentacao', icon: Activity, roles: STAFF_ROLES },
+  { key: 'projetos', label: 'Projetos', icon: FolderKanban, roles: [...STAFF_ROLES, 'GERENTE_PROJETO'] },
+  { key: 'infraestrutura', label: 'Infraestrutura', icon: Server, roles: STAFF_ROLES },
 ];
 
 interface CardItem {
@@ -52,11 +75,179 @@ function CardGrid({ cards, cols = 'grid-cols-2 md:grid-cols-4' }: { cards: CardI
   );
 }
 
+// === Dashboard simplificado para USUARIO_FINAL ===
+
+function DashboardUsuarioFinal({ usuario, pendentesCount }: { usuario: { nome: string } | null; pendentesCount: number }) {
+  const [meusChamados, setMeusChamados] = useState<Chamado[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    chamadoService.listar({})
+      .then(setMeusChamados)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const abertos = meusChamados.filter((c) => c.status === 'ABERTO').length;
+  const emAtendimento = meusChamados.filter((c) => c.status === 'EM_ATENDIMENTO').length;
+  const pendentes = meusChamados.filter((c) => c.status === 'PENDENTE').length;
+  const resolvidos = meusChamados.filter((c) => c.status === 'RESOLVIDO').length;
+  const fechados = meusChamados.filter((c) => c.status === 'FECHADO').length;
+  const reabertos = meusChamados.filter((c) => c.status === 'REABERTO').length;
+
+  // Chamados ativos (nao fechados/cancelados) ordenados por data
+  const ativos = meusChamados
+    .filter((c) => !['FECHADO', 'CANCELADO'].includes(c.status))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5);
+
+  return (
+    <>
+      <Header title="Meus Chamados" />
+      <div className="p-6">
+        <div className="mb-6">
+          <h3 className="text-xl font-semibold text-slate-800">
+            Bem-vindo, {usuario?.nome}!
+          </h3>
+          <p className="text-slate-500 text-sm mt-1">
+            Acompanhe seus chamados de T.I.
+          </p>
+        </div>
+
+        {/* Banner pendentes avaliacao */}
+        {pendentesCount > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+                <Star className="w-5 h-5 text-amber-500" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-amber-800">
+                  Voce tem {pendentesCount} chamado(s) pendente(s) de avaliacao
+                </p>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  Sua opiniao e importante para melhorar o atendimento
+                </p>
+              </div>
+            </div>
+            <Link
+              to="/gestao-ti/chamados?pendentes=1"
+              className="flex items-center gap-1.5 bg-amber-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-amber-600 transition-colors"
+            >
+              <Star className="w-4 h-4" /> Avaliar
+            </Link>
+          </div>
+        )}
+
+        {loading ? (
+          <p className="text-slate-500">Carregando...</p>
+        ) : (
+          <>
+            {/* Cards resumo */}
+            <CardGrid
+              cols="grid-cols-2 md:grid-cols-3 lg:grid-cols-6"
+              cards={[
+                { label: 'Abertos', value: abertos, icon: Ticket, color: 'bg-blue-100 text-blue-600' },
+                { label: 'Em Atendimento', value: emAtendimento, icon: Clock, color: 'bg-yellow-100 text-yellow-600' },
+                { label: 'Pendentes', value: pendentes, icon: AlertTriangle, color: 'bg-orange-100 text-orange-600' },
+                { label: 'Resolvidos', value: resolvidos, icon: CheckCircle, color: 'bg-green-100 text-green-600' },
+                { label: 'Fechados', value: fechados, icon: CheckCircle, color: 'bg-slate-100 text-slate-600' },
+                { label: 'Reabertos', value: reabertos, icon: MessageSquare, color: 'bg-purple-100 text-purple-600' },
+              ]}
+            />
+
+            {/* Chamados ativos recentes */}
+            <div className="mt-6 bg-white rounded-xl border border-slate-200">
+              <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                <h4 className="font-semibold text-slate-700 flex items-center gap-2">
+                  <Ticket className="w-4 h-4" />
+                  Chamados em Andamento
+                </h4>
+                <Link to="/gestao-ti/chamados" className="text-xs text-capul-600 hover:underline">
+                  Ver todos
+                </Link>
+              </div>
+              {ativos.length === 0 ? (
+                <div className="px-6 py-8 text-center">
+                  <p className="text-sm text-slate-400">Nenhum chamado em andamento</p>
+                  <Link
+                    to="/gestao-ti/chamados/novo"
+                    className="inline-flex items-center gap-2 mt-3 text-sm text-capul-600 hover:underline"
+                  >
+                    <Ticket className="w-4 h-4" /> Abrir novo chamado
+                  </Link>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {ativos.map((c) => (
+                    <Link
+                      key={c.id}
+                      to={`/gestao-ti/chamados/${c.id}`}
+                      className="flex items-center justify-between px-6 py-3.5 hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-xs text-slate-400 font-mono">#{c.numero}</span>
+                        <span className="text-sm font-medium text-slate-800 truncate">{c.titulo}</span>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${statusColors[c.status]}`}>
+                          {statusLabels[c.status]}
+                        </span>
+                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${prioridadeCores[c.prioridade]}`}>
+                          {c.prioridade}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {c.tecnico?.nome || 'Sem tecnico'}
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Acoes rapidas */}
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Link
+                to="/gestao-ti/chamados/novo"
+                className="flex items-center gap-4 bg-white rounded-xl border border-slate-200 p-5 hover:border-capul-300 hover:bg-capul-50/30 transition-colors"
+              >
+                <div className="w-12 h-12 rounded-lg bg-capul-100 text-capul-600 flex items-center justify-center">
+                  <Ticket className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Abrir Novo Chamado</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Solicitar suporte ou reportar um problema</p>
+                </div>
+              </Link>
+              <Link
+                to="/gestao-ti/conhecimento"
+                className="flex items-center gap-4 bg-white rounded-xl border border-slate-200 p-5 hover:border-amber-300 hover:bg-amber-50/30 transition-colors"
+              >
+                <div className="w-12 h-12 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center">
+                  <BookMarked className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Base de Conhecimento</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Consultar artigos e tutoriais</p>
+                </div>
+              </Link>
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+// === Dashboard completo para STAFF ===
+
 export function DashboardPage() {
   const { usuario, gestaoTiRole } = useAuth();
   const [resumo, setResumo] = useState<DashboardResumo | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TabKey>('suporte');
+  const [pendentesCount, setPendentesCount] = useState(0);
 
   const hoje = new Date();
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
@@ -64,14 +255,26 @@ export function DashboardPage() {
   const [dataFim, setDataFim] = useState(hoje.toISOString().slice(0, 10));
 
   useEffect(() => {
-    setLoading(true);
-    dashboardService
-      .getResumo({ dataInicio, dataFim })
-      .then(setResumo)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [dataInicio, dataFim]);
+    if (gestaoTiRole === 'USUARIO_FINAL') {
+      chamadoService.listar({ pendentesAvaliacao: true })
+        .then((list) => setPendentesCount(list.length))
+        .catch(() => {});
+    } else {
+      setLoading(true);
+      dashboardService
+        .getResumo({ dataInicio, dataFim })
+        .then(setResumo)
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    }
+  }, [gestaoTiRole, dataInicio, dataFim]);
 
+  // Dashboard simplificado para USUARIO_FINAL
+  if (gestaoTiRole === 'USUARIO_FINAL') {
+    return <DashboardUsuarioFinal usuario={usuario} pendentesCount={pendentesCount} />;
+  }
+
+  // Dashboard completo para STAFF
   return (
     <>
       <Header title="Dashboard" />
@@ -93,7 +296,7 @@ export function DashboardPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 border-b border-slate-200">
-          {tabsDef.map((t) => {
+          {tabsDef.filter((t) => !t.roles || (gestaoTiRole && t.roles.includes(gestaoTiRole))).map((t) => {
             const Icon = t.icon;
             return (
               <button

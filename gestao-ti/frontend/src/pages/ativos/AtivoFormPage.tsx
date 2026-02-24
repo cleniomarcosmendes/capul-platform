@@ -4,6 +4,7 @@ import { Header } from '../../layouts/Header';
 import { ativoService } from '../../services/ativo.service';
 import { coreService } from '../../services/core.service';
 import { coreApi } from '../../services/api';
+import { ArrowLeft } from 'lucide-react';
 import type { Ativo, TipoAtivo, FilialResumo, Departamento, UsuarioCore } from '../../types';
 
 const tipoOptions: { value: TipoAtivo; label: string }[] = [
@@ -139,6 +140,10 @@ export function AtivoFormPage() {
     <>
       <Header title={isEdit ? 'Editar Ativo' : 'Novo Ativo'} />
       <div className="p-6 max-w-4xl">
+        <button onClick={() => navigate(isEdit ? `/gestao-ti/ativos/${id}` : '/gestao-ti/ativos')} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4">
+          <ArrowLeft className="w-4 h-4" /> Voltar
+        </button>
+
         <form onSubmit={handleSubmit} className="space-y-6">
           {erro && <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm">{erro}</div>}
 

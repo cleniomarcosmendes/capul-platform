@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { chamadoService } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
-import { Plus, Eye, Download } from 'lucide-react';
+import { Plus, Eye, Download, Star } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import type { Chamado, EquipeTI, StatusChamado, Visibilidade } from '../../types';
 
@@ -44,6 +44,7 @@ const prioridadeColors: Record<string, string> = {
 
 export function ChamadosListPage() {
   const { gestaoTiRole, usuario } = useAuth();
+  const [searchParams] = useSearchParams();
   const [chamados, setChamados] = useState<Chamado[]>([]);
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);
   const [filiais, setFiliais] = useState<FilialOption[]>([]);
@@ -54,6 +55,7 @@ export function ChamadosListPage() {
   const [meusChamados, setMeusChamados] = useState(false);
   // 'atual' = filial do usuario, '' = todas, uuid = filial especifica
   const [filterFilial, setFilterFilial] = useState<string>('atual');
+  const [pendentesAvaliacao, setPendentesAvaliacao] = useState(searchParams.get('pendentes') === '1');
 
   const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
 
@@ -64,94 +66,162 @@ export function ChamadosListPage() {
 
   useEffect(() => {
     setLoading(true);
-    const filialId = filterFilial === 'atual'
-      ? usuario?.filialAtual?.id
-      : filterFilial || undefined;
-    chamadoService
-      .listar({
-        status: filterStatus || undefined,
-        equipeId: filterEquipe || undefined,
-        visibilidade: filterVisibilidade || undefined,
-        meusChamados: meusChamados || undefined,
-        filialId,
-      })
-      .then(setChamados)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, usuario]);
+    if (pendentesAvaliacao) {
+      chamadoService
+        .listar({ pendentesAvaliacao: true })
+        .then(setChamados)
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    } else {
+      const filialId = filterFilial === 'atual'
+        ? usuario?.filialAtual?.id
+        : filterFilial || undefined;
+      chamadoService
+        .listar({
+          status: filterStatus || undefined,
+          equipeId: filterEquipe || undefined,
+          visibilidade: filterVisibilidade || undefined,
+          meusChamados: meusChamados || undefined,
+          filialId,
+        })
+        .then(setChamados)
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    }
+  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, usuario, pendentesAvaliacao]);
 
   return (
     <>
       <Header title="Chamados" />
       <div className="p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <div className="flex flex-wrap gap-3">
-            <select
-              value={filterFilial}
-              onChange={(e) => setFilterFilial(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
-            >
-              <option value="atual">Filial Atual{usuario?.filialAtual ? ` (${usuario.filialAtual.codigo})` : ''}</option>
-              <option value="">Todas as Filiais</option>
-              {filiais.map((f) => (
-                <option key={f.id} value={f.id}>{f.codigo} - {f.nomeFantasia}</option>
-              ))}
-            </select>
-
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as StatusChamado | '')}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
-            >
-              <option value="">Todos os Status</option>
-              {Object.entries(statusLabels).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
-            </select>
-
-            {!isUsuarioFinal && (
-              <>
-                <select
-                  value={filterEquipe}
-                  onChange={(e) => setFilterEquipe(e.target.value)}
-                  className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
-                >
-                  <option value="">Todas as Equipes</option>
-                  {equipes.map((e) => (
-                    <option key={e.id} value={e.id}>{e.sigla} - {e.nome}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={filterVisibilidade}
-                  onChange={(e) => setFilterVisibilidade(e.target.value as Visibilidade | '')}
-                  className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
-                >
-                  <option value="">Todas Visibilidades</option>
-                  <option value="PUBLICO">Publico</option>
-                  <option value="PRIVADO">Privado</option>
-                </select>
-
-                <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={meusChamados}
-                    onChange={(e) => setMeusChamados(e.target.checked)}
-                    className="rounded border-slate-300"
-                  />
-                  Meus chamados
-                </label>
-              </>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
+        {/* Tabs para USUARIO_FINAL */}
+        {isUsuarioFinal && (
+          <div className="flex gap-1 mb-4 border-b border-slate-200">
             <button
-              onClick={() => exportService.exportar('chamados')}
-              className="flex items-center gap-2 bg-slate-100 text-slate-600 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors"
+              onClick={() => setPendentesAvaliacao(false)}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                !pendentesAvaliacao
+                  ? 'border-capul-600 text-capul-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
             >
-              <Download className="w-4 h-4" /> Exportar
+              Meus Chamados
             </button>
+            <button
+              onClick={() => setPendentesAvaliacao(true)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                pendentesAvaliacao
+                  ? 'border-amber-500 text-amber-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <Star className="w-4 h-4" />
+              Pendentes de Avaliacao
+            </button>
+          </div>
+        )}
+
+        {/* Banner de pendentes */}
+        {pendentesAvaliacao && !loading && chamados.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4 flex items-center gap-3">
+            <Star className="w-5 h-5 text-amber-500 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-amber-800">
+                Voce tem {chamados.length} chamado(s) pendente(s) de avaliacao
+              </p>
+              <p className="text-xs text-amber-600 mt-0.5">
+                Sua avaliacao ajuda a melhorar nosso atendimento!
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Filtros - esconder quando pendentesAvaliacao esta ativo */}
+        {!pendentesAvaliacao && (
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <div className="flex flex-wrap gap-3">
+              <select
+                value={filterFilial}
+                onChange={(e) => setFilterFilial(e.target.value)}
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+              >
+                <option value="atual">Filial Atual{usuario?.filialAtual ? ` (${usuario.filialAtual.codigo})` : ''}</option>
+                <option value="">Todas as Filiais</option>
+                {filiais.map((f) => (
+                  <option key={f.id} value={f.id}>{f.codigo} - {f.nomeFantasia}</option>
+                ))}
+              </select>
+
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value as StatusChamado | '')}
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+              >
+                <option value="">Todos os Status</option>
+                {Object.entries(statusLabels).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+
+              {!isUsuarioFinal && (
+                <>
+                  <select
+                    value={filterEquipe}
+                    onChange={(e) => setFilterEquipe(e.target.value)}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                  >
+                    <option value="">Todas as Equipes</option>
+                    {equipes.map((e) => (
+                      <option key={e.id} value={e.id}>{e.sigla} - {e.nome}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={filterVisibilidade}
+                    onChange={(e) => setFilterVisibilidade(e.target.value as Visibilidade | '')}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                  >
+                    <option value="">Todas Visibilidades</option>
+                    <option value="PUBLICO">Publico</option>
+                    <option value="PRIVADO">Privado</option>
+                  </select>
+
+                  <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={meusChamados}
+                      onChange={(e) => setMeusChamados(e.target.checked)}
+                      className="rounded border-slate-300"
+                    />
+                    Meus chamados
+                  </label>
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {!isUsuarioFinal && (
+                <button
+                  onClick={() => exportService.exportar('chamados')}
+                  className="flex items-center gap-2 bg-slate-100 text-slate-600 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors"
+                >
+                  <Download className="w-4 h-4" /> Exportar
+                </button>
+              )}
+              <Link
+                to="/gestao-ti/chamados/novo"
+                className="flex items-center gap-2 bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Novo Chamado
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Botao Novo Chamado quando pendentes ativo */}
+        {pendentesAvaliacao && (
+          <div className="flex justify-end mb-4">
             <Link
               to="/gestao-ti/chamados/novo"
               className="flex items-center gap-2 bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 transition-colors"
@@ -160,12 +230,16 @@ export function ChamadosListPage() {
               Novo Chamado
             </Link>
           </div>
-        </div>
+        )}
 
         {loading ? (
           <p className="text-slate-500">Carregando...</p>
         ) : chamados.length === 0 ? (
-          <div className="text-center py-12 text-slate-400">Nenhum chamado encontrado</div>
+          <div className="text-center py-12 text-slate-400">
+            {pendentesAvaliacao
+              ? 'Nenhum chamado pendente de avaliacao. Tudo em dia!'
+              : 'Nenhum chamado encontrado'}
+          </div>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <table className="w-full text-sm">
@@ -218,13 +292,23 @@ export function ChamadosListPage() {
                       {new Date(c.createdAt).toLocaleDateString('pt-BR')}
                     </td>
                     <td className="px-4 py-3">
-                      <Link
-                        to={`/gestao-ti/chamados/${c.id}`}
-                        className="text-capul-600 hover:text-capul-800"
-                        title="Ver detalhes"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to={`/gestao-ti/chamados/${c.id}`}
+                          className="text-capul-600 hover:text-capul-800"
+                          title="Ver detalhes"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Link>
+                        {pendentesAvaliacao && (
+                          <Link
+                            to={`/gestao-ti/chamados/${c.id}`}
+                            className="flex items-center gap-1 text-xs bg-amber-500 text-white px-2 py-1 rounded hover:bg-amber-600"
+                          >
+                            <Star className="w-3 h-3" /> Avaliar
+                          </Link>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

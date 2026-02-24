@@ -34,6 +34,7 @@ const tipoIcons: Record<TipoHistorico, typeof MessageSquare> = {
   ABERTURA: Send, ASSUMIDO: UserPlus, COMENTARIO: MessageSquare,
   TRANSFERENCIA_EQUIPE: ArrowRightLeft, TRANSFERENCIA_TECNICO: Users,
   RESOLVIDO: CheckCircle, FECHADO: Lock, REABERTO: RotateCcw, CANCELADO: XCircle,
+  AVALIADO: Star,
 };
 
 export function ChamadoDetalhePage() {

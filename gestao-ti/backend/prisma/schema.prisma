@@ -180,6 +180,7 @@ enum TipoHistorico {
   FECHADO
   REABERTO
   CANCELADO
+  AVALIADO
 
   @@schema("gestao_ti")
 }

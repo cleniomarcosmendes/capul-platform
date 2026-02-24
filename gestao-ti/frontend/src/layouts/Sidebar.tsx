@@ -23,43 +23,65 @@ import {
   Server,
   BookMarked,
   Upload,
+  Star,
 } from 'lucide-react';
 
 type MenuItem =
-  | { section: string }
-  | { label: string; icon: React.ComponentType<{ className?: string }>; path: string };
+  | { section: string; roles?: string[] }
+  | { label: string; icon: React.ComponentType<{ className?: string }>; path: string; roles?: string[] };
+
+const STAFF = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR'];
+const MANAGERS = ['ADMIN', 'GESTOR_TI'];
 
 const menuItems: MenuItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/gestao-ti/' },
-  { label: 'Executivo', icon: PieChart, path: '/gestao-ti/executivo' },
+  { label: 'Executivo', icon: PieChart, path: '/gestao-ti/executivo', roles: MANAGERS },
+  { label: 'Satisfacao (CSAT)', icon: Star, path: '/gestao-ti/csat', roles: MANAGERS },
   { section: 'SUPORTE' },
   { label: 'Chamados', icon: Ticket, path: '/gestao-ti/chamados' },
-  { label: 'Ordens de Servico', icon: ClipboardList, path: '/gestao-ti/ordens-servico' },
+  { label: 'Ordens de Servico', icon: ClipboardList, path: '/gestao-ti/ordens-servico', roles: STAFF },
   { label: 'Base de Conhecimento', icon: BookMarked, path: '/gestao-ti/conhecimento' },
-  { section: 'PORTFOLIO' },
-  { label: 'Softwares', icon: AppWindow, path: '/gestao-ti/softwares' },
-  { label: 'Licencas', icon: KeyRound, path: '/gestao-ti/licencas' },
-  { label: 'Contratos', icon: FileText, path: '/gestao-ti/contratos' },
-  { label: 'Financeiro', icon: BarChart3, path: '/gestao-ti/financeiro' },
-  { section: 'SUSTENTACAO' },
-  { label: 'Paradas', icon: Activity, path: '/gestao-ti/paradas' },
-  { label: 'Disponibilidade', icon: BarChart2, path: '/gestao-ti/disponibilidade' },
-  { section: 'PROJETOS' },
-  { label: 'Projetos', icon: FolderKanban, path: '/gestao-ti/projetos' },
-  { section: 'INFRAESTRUTURA' },
-  { label: 'Ativos', icon: Server, path: '/gestao-ti/ativos' },
-  { section: 'CONFIGURACOES' },
-  { label: 'Equipes de T.I.', icon: Users, path: '/gestao-ti/equipes' },
-  { label: 'Catalogo de Servicos', icon: BookOpen, path: '/gestao-ti/catalogo' },
-  { label: 'SLA', icon: Clock, path: '/gestao-ti/sla' },
-  { label: 'Importar Dados', icon: Upload, path: '/gestao-ti/importar' },
-  { section: 'CADASTROS' },
-  { label: 'Departamentos', icon: Building2, path: '/gestao-ti/departamentos' },
-  { label: 'Centros de Custo', icon: Wallet, path: '/gestao-ti/centros-custo' },
+  { section: 'PORTFOLIO', roles: [...STAFF, 'FINANCEIRO'] },
+  { label: 'Softwares', icon: AppWindow, path: '/gestao-ti/softwares', roles: [...STAFF, 'FINANCEIRO'] },
+  { label: 'Licencas', icon: KeyRound, path: '/gestao-ti/licencas', roles: [...STAFF, 'FINANCEIRO'] },
+  { label: 'Contratos', icon: FileText, path: '/gestao-ti/contratos', roles: [...STAFF, 'FINANCEIRO'] },
+  { label: 'Financeiro', icon: BarChart3, path: '/gestao-ti/financeiro', roles: [...MANAGERS, 'FINANCEIRO'] },
+  { section: 'SUSTENTACAO', roles: STAFF },
+  { label: 'Paradas', icon: Activity, path: '/gestao-ti/paradas', roles: STAFF },
+  { label: 'Disponibilidade', icon: BarChart2, path: '/gestao-ti/disponibilidade', roles: STAFF },
+  { section: 'PROJETOS', roles: [...STAFF, 'GERENTE_PROJETO'] },
+  { label: 'Projetos', icon: FolderKanban, path: '/gestao-ti/projetos', roles: [...STAFF, 'GERENTE_PROJETO'] },
+  { section: 'INFRAESTRUTURA', roles: STAFF },
+  { label: 'Ativos', icon: Server, path: '/gestao-ti/ativos', roles: STAFF },
+  { section: 'CONFIGURACOES', roles: MANAGERS },
+  { label: 'Equipes de T.I.', icon: Users, path: '/gestao-ti/equipes', roles: MANAGERS },
+  { label: 'Catalogo de Servicos', icon: BookOpen, path: '/gestao-ti/catalogo', roles: MANAGERS },
+  { label: 'SLA', icon: Clock, path: '/gestao-ti/sla', roles: MANAGERS },
+  { label: 'Importar Dados', icon: Upload, path: '/gestao-ti/importar', roles: MANAGERS },
+  { section: 'CADASTROS', roles: MANAGERS },
+  { label: 'Departamentos', icon: Building2, path: '/gestao-ti/departamentos', roles: MANAGERS },
+  { label: 'Centros de Custo', icon: Wallet, path: '/gestao-ti/centros-custo', roles: MANAGERS },
 ];
 
+function filterMenuByRole(items: MenuItem[], role: string | null): MenuItem[] {
+  const filtered = items.filter((item) => {
+    if (!item.roles) return true;
+    return role ? item.roles.includes(role) : false;
+  });
+
+  // Remove section headers that have no items after them
+  return filtered.filter((item, idx) => {
+    if ('section' in item) {
+      const next = filtered[idx + 1];
+      return next && !('section' in next);
+    }
+    return true;
+  });
+}
+
 export function Sidebar() {
-  const { usuario, logout } = useAuth();
+  const { usuario, gestaoTiRole, logout } = useAuth();
+  const visibleItems = filterMenuByRole(menuItems, gestaoTiRole);
 
   return (
     <aside className="w-64 min-h-screen flex flex-col" style={{ backgroundColor: 'var(--bg-sidebar)' }}>
@@ -76,7 +98,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 py-4 overflow-y-auto">
-        {menuItems.map((item, idx) => {
+        {visibleItems.map((item, idx) => {
           if ('section' in item) {
             return (
               <p key={idx} className="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mt-4 first:mt-0">

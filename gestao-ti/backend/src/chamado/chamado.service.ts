@@ -39,20 +39,27 @@ export class ChamadoService {
     meusChamados?: boolean;
     projetoId?: string;
     filialId?: string;
+    pendentesAvaliacao?: boolean;
   }) {
     const where: Record<string, unknown> = {};
 
-    if (filters.status) where.status = filters.status;
-    if (filters.equipeId) where.equipeAtualId = filters.equipeId;
-    if (filters.visibilidade) where.visibilidade = filters.visibilidade;
-    if (filters.projetoId) where.projetoId = filters.projetoId;
-    if (filters.filialId) where.filialId = filters.filialId;
-
-    if (role === 'USUARIO_FINAL') {
+    if (filters.pendentesAvaliacao) {
       where.solicitanteId = user.sub;
-      where.visibilidade = 'PUBLICO';
-    } else if (filters.meusChamados) {
-      where.tecnicoId = user.sub;
+      where.status = { in: ['RESOLVIDO', 'FECHADO'] };
+      where.notaSatisfacao = null;
+    } else {
+      if (filters.status) where.status = filters.status;
+      if (filters.equipeId) where.equipeAtualId = filters.equipeId;
+      if (filters.visibilidade) where.visibilidade = filters.visibilidade;
+      if (filters.projetoId) where.projetoId = filters.projetoId;
+      if (filters.filialId) where.filialId = filters.filialId;
+
+      if (role === 'USUARIO_FINAL') {
+        where.solicitanteId = user.sub;
+        where.visibilidade = 'PUBLICO';
+      } else if (filters.meusChamados) {
+        where.tecnicoId = user.sub;
+      }
     }
 
     return this.prisma.chamado.findMany({
@@ -454,7 +461,7 @@ export class ChamadoService {
       throw new BadRequestException('Chamado precisa estar resolvido ou fechado para avaliar');
     }
 
-    return this.prisma.chamado.update({
+    const updated = await this.prisma.chamado.update({
       where: { id },
       data: {
         notaSatisfacao: dto.nota,
@@ -462,6 +469,30 @@ export class ChamadoService {
       },
       include: chamadoInclude,
     });
+
+    // Historico de avaliacao
+    await this.prisma.historicoChamado.create({
+      data: {
+        tipo: 'AVALIADO',
+        descricao: `Avaliacao: ${dto.nota}/5${dto.comentario ? ` - "${dto.comentario}"` : ''}`,
+        publico: true,
+        chamadoId: id,
+        usuarioId: user.sub,
+      },
+    });
+
+    // Notificar tecnico (fire-and-forget)
+    if (chamado.tecnicoId) {
+      this.notificacaoService.criarParaUsuario(
+        chamado.tecnicoId,
+        'CHAMADO_ATUALIZADO',
+        `Chamado #${chamado.numero} avaliado`,
+        `O chamado "${chamado.titulo}" recebeu avaliacao ${dto.nota}/5.`,
+        { chamadoId: id },
+      ).catch(() => {});
+    }
+
+    return updated;
   }
 
   private async getChamadoOrFail(id: string) {

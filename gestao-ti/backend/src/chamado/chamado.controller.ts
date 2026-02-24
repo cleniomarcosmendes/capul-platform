@@ -30,6 +30,7 @@ export class ChamadoController {
     @Query('meusChamados') meusChamados?: string,
     @Query('projetoId') projetoId?: string,
     @Query('filialId') filialId?: string,
+    @Query('pendentesAvaliacao') pendentesAvaliacao?: string,
   ) {
     return this.service.findAll(user, role, {
       status,
@@ -38,6 +39,7 @@ export class ChamadoController {
       meusChamados: meusChamados === 'true',
       projetoId,
       filialId,
+      pendentesAvaliacao: pendentesAvaliacao === 'true',
     });
   }
 

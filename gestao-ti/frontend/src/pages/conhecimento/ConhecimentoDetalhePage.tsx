@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { conhecimentoService } from '../../services/conhecimento.service';
-import { BookMarked, Edit, Trash2, Send, Archive } from 'lucide-react';
+import { ArrowLeft, BookMarked, Edit, Trash2, Send, Archive } from 'lucide-react';
 import type { ArtigoConhecimento, CategoriaArtigo, StatusArtigo } from '../../types';
 
 const categoriaLabel: Record<CategoriaArtigo, string> = {
@@ -60,6 +60,10 @@ export function ConhecimentoDetalhePage() {
     <>
       <Header title="Artigo" />
       <div className="p-6 max-w-4xl">
+        <button onClick={() => navigate('/gestao-ti/conhecimento')} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4">
+          <ArrowLeft className="w-4 h-4" /> Voltar
+        </button>
+
         {/* Metadata bar */}
         <div className="bg-white rounded-lg border border-slate-200 p-5 mb-6">
           <div className="flex items-start justify-between">

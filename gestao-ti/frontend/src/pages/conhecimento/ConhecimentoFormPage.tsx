@@ -4,6 +4,7 @@ import { Header } from '../../layouts/Header';
 import { conhecimentoService } from '../../services/conhecimento.service';
 import { softwareService } from '../../services/software.service';
 import { equipeService } from '../../services/equipe.service';
+import { ArrowLeft } from 'lucide-react';
 import type { ArtigoConhecimento, CategoriaArtigo, Software, EquipeTI } from '../../types';
 
 const categoriaOptions: { value: CategoriaArtigo; label: string }[] = [
@@ -98,6 +99,10 @@ export function ConhecimentoFormPage() {
     <>
       <Header title={isEdit ? 'Editar Artigo' : 'Novo Artigo'} />
       <div className="p-6 max-w-4xl">
+        <button onClick={() => navigate(isEdit ? `/gestao-ti/conhecimento/${id}` : '/gestao-ti/conhecimento')} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4">
+          <ArrowLeft className="w-4 h-4" /> Voltar
+        </button>
+
         <form onSubmit={handleSubmit} className="space-y-6">
           {erro && <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm">{erro}</div>}
 
