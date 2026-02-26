@@ -309,3 +309,99 @@ export interface SyncStatus {
   products_synced: number;
   errors: number;
 }
+
+// === Monitoring ===
+
+export type AnomalySeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM';
+
+export interface MonitoringHealth {
+  status: string;
+  active_inventories: number;
+}
+
+export interface MonitoringAnomaly {
+  title: string;
+  description: string;
+  severity: AnomalySeverity;
+  inventory_name?: string;
+  counting_list_code?: string;
+  affected_products?: number;
+  detected_at: string;
+}
+
+export interface MonitoringAnomaliesResponse {
+  summary: {
+    total_anomalies: number;
+    estimated_financial_risk: number;
+    by_severity: Record<AnomalySeverity, number>;
+  };
+  anomalies: MonitoringAnomaly[];
+}
+
+// === Discrepancy ===
+
+export interface Discrepancy {
+  id: string;
+  product_code: string;
+  product_description: string;
+  expected_quantity: number;
+  counted_quantity?: number;
+  variance_quantity: number;
+  variance_percentage: number;
+  tolerance_exceeded: boolean;
+  status: 'PENDING' | 'RESOLVED';
+  observation: string;
+  inventory_name: string;
+  created_at: string;
+}
+
+export interface ClosedRound {
+  round_key: string;
+  display_text: string;
+}
+
+// === Comparison ===
+
+export interface ComparisonItem {
+  product_code: string;
+  description: string;
+  tracking: string;
+  lot_number: string | null;
+  lot_supplier: string | null;
+  expected_a: number;
+  expected_b: number;
+  counted_a: number;
+  counted_b: number;
+  divergence_a: number;
+  divergence_b: number;
+  saldo_ajustado_a: number;
+  saldo_ajustado_b: number;
+  diferenca_final_a: number;
+  diferenca_final_b: number;
+  transferencia_logica: {
+    quantidade_transferida: number;
+    origem: string;
+    destino: string;
+    economia_estimada: number;
+    saldo_origem_antes: number;
+    saldo_origem_depois: number;
+    saldo_destino_antes: number;
+    saldo_destino_depois: number;
+  };
+}
+
+export interface ComparisonResult {
+  matches: ComparisonItem[];
+  manual_review: ComparisonItem[];
+  transfers: ComparisonItem[];
+  summary: {
+    total_products: number;
+    total_economy: number;
+    zeroed_a: number;
+    zeroed_b: number;
+    reduced_a: number;
+    reduced_b: number;
+  };
+  inventory_a: { id: string; name: string; warehouse: string };
+  inventory_b: { id: string; name: string; warehouse: string };
+}

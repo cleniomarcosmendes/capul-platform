@@ -11,6 +11,8 @@ import {
   BarChart2,
   FileSpreadsheet,
   ScanLine,
+  Activity,
+  AlertTriangle,
 } from 'lucide-react';
 
 type MenuItem =
@@ -31,6 +33,8 @@ const menuItems: MenuItem[] = [
   { label: 'Sincronizacao', icon: RefreshCw, path: '/inventario/sincronizacao', roles: STAFF },
   { label: 'Relatorios', icon: BarChart2, path: '/inventario/relatorios', roles: STAFF },
   { label: 'Importacao', icon: FileSpreadsheet, path: '/inventario/importacao', roles: STAFF },
+  { label: 'Monitoramento', icon: Activity, path: '/inventario/monitoramento', roles: STAFF },
+  { label: 'Divergencias', icon: AlertTriangle, path: '/inventario/divergencias', roles: STAFF },
 ];
 
 function filterMenuByRole(items: MenuItem[], role: string | null): MenuItem[] {

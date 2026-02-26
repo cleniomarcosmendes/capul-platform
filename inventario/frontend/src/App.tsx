@@ -14,6 +14,9 @@ import { ArmazensPage } from './pages/ArmazensPage';
 import { RelatoriosPage } from './pages/RelatoriosPage';
 import { SincronizacaoPage } from './pages/SincronizacaoPage';
 import { ImportPage } from './pages/ImportPage';
+import MonitoramentoPage from './pages/MonitoramentoPage';
+import DivergenciasPage from './pages/DivergenciasPage';
+import ComparacaoPage from './pages/ComparacaoPage';
 import type { ReactNode } from 'react';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -70,6 +73,9 @@ function AppRoutes() {
         <Route path="relatorios" element={<RelatoriosPage />} />
         <Route path="sincronizacao" element={<SincronizacaoPage />} />
         <Route path="importacao" element={<ImportPage />} />
+        <Route path="monitoramento" element={<MonitoramentoPage />} />
+        <Route path="divergencias" element={<DivergenciasPage />} />
+        <Route path="comparacao" element={<ComparacaoPage />} />
       </Route>
 
       {/* Contagem Mobile — fullscreen, SEM sidebar */}
