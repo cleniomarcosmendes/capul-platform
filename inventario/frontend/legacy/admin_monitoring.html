@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoramento - Capul Inventário</title>
+    <link rel="icon" type="image/png" href="/img/logo-capul-icon.png">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Capul Theme -->
+    <link href="/css/capul-theme.css" rel="stylesheet">
+    <style>
+        /* ✅ v2.19.40: Layout 100% para aproveitamento total da tela */
+        .container {
+            max-width: 100% !important;
+        }
+
+        :root {
+            --primary-color: #1B5E20;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --info-color: #3b82f6;
+        }
+
+        body {
+            background: #f8f9fc;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .header {
+            background: white;
+            padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            color: var(--primary-color);
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+            height: 100%;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-icon.success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .stat-icon.warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .stat-icon.danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+        .stat-icon.info { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+
+        .stat-icon i { color: white; }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #1f2937;
+            line-height: 1;
+        }
+
+        .stat-label {
+            color: #6b7280;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 0.5rem;
+        }
+
+        .anomaly-card {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+        }
+
+        .anomaly-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .anomaly-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .severity-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .severity-badge.critical {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .severity-badge.high {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
+        .severity-badge.medium {
+            background: #dbeafe;
+            color: #2563eb;
+        }
+
+        .anomaly-item {
+            border-left: 4px solid;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .anomaly-item.critical { border-left-color: #dc2626; }
+        .anomaly-item.high { border-left-color: #d97706; }
+        .anomaly-item.medium { border-left-color: #2563eb; }
+
+        .refresh-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .refresh-btn:hover {
+            background: #6d28d9;
+            transform: scale(1.05);
+        }
+
+        .auto-refresh-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: #f3f4f6;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+
+        .pulse {
+            width: 8px;
+            height: 8px;
+            background: var(--success-color);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #9ca3af;
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            border-width: 0.3rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header Capul -->
+    <header class="capul-header">
+        <div class="container-fluid px-4">
+            <div class="row align-items-center">
+                <div class="col-md-3">
+                    <a href="dashboard.html" class="capul-brand text-decoration-none">
+                        <img src="/img/logo-capul.png" alt="Capul" onerror="this.style.display='none'">
+                        <span>Inventário</span>
+                    </a>
+                </div>
+                <div class="col-md-6 text-center">
+                    <div class="capul-store-badge">
+                        <i class="bi bi-building"></i>
+                        <span id="headerStoreName">Carregando...</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex align-items-center justify-content-end gap-3">
+                        <div class="capul-user-info">
+                            <div class="capul-avatar" id="userAvatar">?</div>
+                            <div class="capul-user-details">
+                                <div class="capul-user-name" id="currentUser">Carregando...</div>
+                                <div class="capul-user-role" id="userRoleBadge">
+                                    <i class="bi bi-shield-check"></i>
+                                    <span>...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn-capul-logout" onclick="logout()">
+                            <i class="bi bi-box-arrow-right me-1"></i>
+                            Sair
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Page Header -->
+    <div style="background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); color: white; padding: 1.5rem 2rem;">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle bg-white p-3 me-3" style="width: 60px; height: 60px; display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-graph-up-arrow" style="font-size: 1.8rem; color: #1B5E20;"></i>
+                    </div>
+                    <div>
+                        <h4 class="mb-1">Monitoramento do Sistema</h4>
+                        <p class="mb-0" style="opacity: 0.9; font-size: 0.95rem;">Dashboard de Alertas e Anomalias v2.19.22</p>
+                    </div>
+                </div>
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="auto-refresh-indicator" style="color: white;">
+                        <span class="pulse"></span>
+                        <span>Atualização automática (30s)</span>
+                    </div>
+                    <button class="btn btn-light" onclick="loadDashboard()" style="font-weight: 600; border-radius: 8px;">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Atualizar
+                    </button>
+                    <a href="inventory.html" class="btn btn-outline-light" style="font-weight: 600; border-radius: 8px;">
+                        <i class="bi bi-arrow-left me-1"></i> Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-fluid">
+        <!-- Estatísticas -->
+        <div class="row mb-4" id="stats-container">
+            <div class="col-md-3 mb-3">
+                <div class="stat-card">
+                    <div class="stat-icon success">
+                        <i class="fas fa-shield-check"></i>
+                    </div>
+                    <div class="stat-value" id="stat-status">--</div>
+                    <div class="stat-label">Status do Sistema</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card">
+                    <div class="stat-icon info">
+                        <i class="fas fa-boxes"></i>
+                    </div>
+                    <div class="stat-value" id="stat-inventories">0</div>
+                    <div class="stat-label">Inventários Ativos</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card">
+                    <div class="stat-icon warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="stat-value" id="stat-anomalies">0</div>
+                    <div class="stat-label">Anomalias Detectadas</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card">
+                    <div class="stat-icon danger">
+                        <i class="fas fa-dollar-sign"></i>
+                    </div>
+                    <div class="stat-value" id="stat-risk">R$ 0</div>
+                    <div class="stat-label">Risco Financeiro</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alertas Críticos -->
+        <div class="row" id="alerts-container">
+            <div class="col-12">
+                <div class="anomaly-card">
+                    <div class="anomaly-header">
+                        <h3 class="anomaly-title">
+                            <i class="fas fa-bell text-danger"></i> Alertas Críticos
+                        </h3>
+                        <span class="badge bg-danger" id="critical-count">0</span>
+                    </div>
+                    <div id="critical-alerts">
+                        <div class="loading">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Carregando...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Todas as Anomalias -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="anomaly-card">
+                    <div class="anomaly-header">
+                        <h3 class="anomaly-title">
+                            <i class="fas fa-list"></i> Todas as Anomalias
+                        </h3>
+                        <div class="d-flex gap-2">
+                            <span class="badge bg-danger" id="total-critical">0 Críticas</span>
+                            <span class="badge bg-warning text-dark" id="total-high">0 Altas</span>
+                            <span class="badge bg-info" id="total-medium">0 Médias</span>
+                        </div>
+                    </div>
+                    <div id="all-anomalies">
+                        <div class="loading">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Carregando...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- JS Consolidados v2.19.13 -->
+    <script src="/js/utils.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/ui.js"></script>
+    <script src="/js/export.js"></script>
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        let autoRefreshInterval;
+
+        // Carregar dashboard
+        async function loadDashboard() {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            try {
+                // Carregar health status
+                const healthResponse = await fetch(`${API_BASE}/monitoring/health`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const health = await healthResponse.json();
+                updateHealthStats(health);
+
+                // Carregar estatísticas
+                const statsResponse = await fetch(`${API_BASE}/monitoring/statistics`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const stats = await statsResponse.json();
+                updateStats(stats);
+
+                // Carregar anomalias
+                const anomaliesResponse = await fetch(`${API_BASE}/monitoring/anomalies`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const anomaliesData = await anomaliesResponse.json();
+                updateAnomalies(anomaliesData);
+
+            } catch (error) {
+                console.error('Erro ao carregar dashboard:', error);
+                showError('Erro ao carregar dados do sistema');
+            }
+        }
+
+        // Atualizar estatísticas de health
+        function updateHealthStats(health) {
+            const statusEl = document.getElementById('stat-status');
+            const statusCard = statusEl.closest('.stat-card');
+
+            if (health.status === 'healthy') {
+                statusEl.textContent = 'Saudável';
+                statusEl.style.color = 'var(--success-color)';
+            } else {
+                statusEl.textContent = 'Alerta';
+                statusEl.style.color = 'var(--warning-color)';
+            }
+
+            document.getElementById('stat-inventories').textContent = health.active_inventories || 0;
+        }
+
+        // Atualizar estatísticas gerais
+        function updateStats(stats) {
+            // Atualizado pelos dados reais quando disponível
+        }
+
+        // Atualizar anomalias
+        function updateAnomalies(data) {
+            const { summary, anomalies } = data;
+
+            // Atualizar contadores
+            document.getElementById('stat-anomalies').textContent = summary.total_anomalies;
+            document.getElementById('stat-risk').textContent = formatCurrency(summary.estimated_financial_risk);
+            document.getElementById('critical-count').textContent = summary.by_severity.CRITICAL;
+            document.getElementById('total-critical').textContent = `${summary.by_severity.CRITICAL} Críticas`;
+            document.getElementById('total-high').textContent = `${summary.by_severity.HIGH} Altas`;
+            document.getElementById('total-medium').textContent = `${summary.by_severity.MEDIUM} Médias`;
+
+            // Renderizar alertas críticos
+            const criticalAnomalies = anomalies.filter(a => a.severity === 'CRITICAL');
+            renderCriticalAlerts(criticalAnomalies);
+
+            // Renderizar todas as anomalias
+            renderAllAnomalies(anomalies);
+        }
+
+        // Renderizar alertas críticos
+        function renderCriticalAlerts(anomalies) {
+            const container = document.getElementById('critical-alerts');
+
+            if (anomalies.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-check-circle text-success"></i>
+                        <p class="mt-3"><strong>Nenhum alerta crítico!</strong></p>
+                        <p class="text-muted">Sistema operando normalmente.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = anomalies.map(anomaly => `
+                <div class="anomaly-item critical">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h5 class="mb-0">${anomaly.title}</h5>
+                        <span class="severity-badge critical">CRÍTICO</span>
+                    </div>
+                    <p class="text-muted mb-2">${anomaly.description}</p>
+                    <div class="d-flex gap-3 text-sm">
+                        ${anomaly.inventory_name ? `<span><i class="fas fa-box"></i> ${anomaly.inventory_name}</span>` : ''}
+                        ${anomaly.affected_products ? `<span><i class="fas fa-boxes"></i> ${anomaly.affected_products} produtos</span>` : ''}
+                        <span><i class="fas fa-clock"></i> ${formatDate(anomaly.detected_at)}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Renderizar todas as anomalias
+        function renderAllAnomalies(anomalies) {
+            const container = document.getElementById('all-anomalies');
+
+            if (anomalies.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-check-circle text-success"></i>
+                        <p class="mt-3"><strong>Nenhuma anomalia detectada!</strong></p>
+                        <p class="text-muted">Todos os inventários estão operando corretamente.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const grouped = {
+                CRITICAL: anomalies.filter(a => a.severity === 'CRITICAL'),
+                HIGH: anomalies.filter(a => a.severity === 'HIGH'),
+                MEDIUM: anomalies.filter(a => a.severity === 'MEDIUM')
+            };
+
+            container.innerHTML = Object.entries(grouped).map(([severity, items]) => {
+                if (items.length === 0) return '';
+
+                const severityClass = severity.toLowerCase();
+                return items.map(anomaly => `
+                    <div class="anomaly-item ${severityClass}">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="mb-0">${anomaly.title}</h6>
+                            <span class="severity-badge ${severityClass}">${severity}</span>
+                        </div>
+                        <p class="text-muted mb-2 small">${anomaly.description}</p>
+                        <div class="d-flex gap-3 text-sm small text-muted">
+                            ${anomaly.inventory_name ? `<span><i class="fas fa-box"></i> ${anomaly.inventory_name}</span>` : ''}
+                            ${anomaly.counting_list_code ? `<span><i class="fas fa-list"></i> ${anomaly.counting_list_code}</span>` : ''}
+                            ${anomaly.affected_products ? `<span><i class="fas fa-boxes"></i> ${anomaly.affected_products} produtos</span>` : ''}
+                            <span><i class="fas fa-clock"></i> ${formatDate(anomaly.detected_at)}</span>
+                        </div>
+                    </div>
+                `).join('');
+            }).join('');
+        }
+
+        // Formatadores
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            }).format(value);
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000 / 60); // minutos
+
+            if (diff < 1) return 'Agora';
+            if (diff < 60) return `${diff} min atrás`;
+            if (diff < 1440) return `${Math.floor(diff / 60)}h atrás`;
+            return date.toLocaleDateString('pt-BR');
+        }
+
+        function showError(message) {
+            alert(message);
+        }
+
+        // Auto-refresh a cada 30 segundos
+        function startAutoRefresh() {
+            autoRefreshInterval = setInterval(loadDashboard, 30000);
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        }
+
+        // Inicializar
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDashboard();
+            startAutoRefresh();
+            initCapulHeader();
+        });
+
+        // Limpar interval ao sair
+        window.addEventListener('beforeunload', stopAutoRefresh);
+
+        // =================================
+        // HEADER INITIALIZATION
+        // =================================
+        function initCapulHeader() {
+            try {
+                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                const storeName = localStorage.getItem('store_name') || 'Filial';
+                const storeCode = localStorage.getItem('store_code') || '';
+
+                // Update store name
+                const headerStore = document.getElementById('headerStoreName');
+                if (headerStore) {
+                    headerStore.textContent = storeCode ? `${storeCode} - ${storeName}` : storeName;
+                }
+
+                // Update user info
+                const userAvatar = document.getElementById('userAvatar');
+                const userName = document.getElementById('currentUser');
+                const userRole = document.getElementById('userRoleBadge');
+
+                if (userAvatar && userData.username) {
+                    userAvatar.textContent = userData.username.charAt(0).toUpperCase();
+                }
+                if (userName && userData.username) {
+                    userName.textContent = userData.full_name || userData.username;
+                }
+                if (userRole && userData.role) {
+                    const roleLabels = { 'ADMIN': 'Administrador', 'SUPERVISOR': 'Supervisor', 'OPERATOR': 'Operador' };
+                    userRole.querySelector('span').textContent = roleLabels[userData.role] || userData.role;
+                }
+            } catch (e) {
+                console.error('Erro ao inicializar header:', e);
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('user_data');
+            window.location.href = 'login.html';
+        }
+    </script>
+
+    <!-- Footer Capul -->
+    <footer class="capul-footer mt-4">
+        <i class="bi bi-shield-check me-1"></i> <span class="capul-version">v2.19.46</span> - Capul Inventário |
+        <strong>v2.19.22</strong> - Capul Inventario |
+        &copy; 2025copy; 2026 Cooperativa Agropecuária Unaí Ltda
+    </footer>
+</body>
+</html>

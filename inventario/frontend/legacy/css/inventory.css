@@ -1,0 +1,989 @@
+        :root {
+            --primary-color: #2563eb;
+            --primary-gradient: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --info-color: #3b82f6;
+            --dark-color: #1f2937;
+            --light-bg: #f8fafc;
+            --border-color: #e5e7eb;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--light-bg);
+            color: var(--dark-color);
+        }
+
+        .navbar {
+            background: var(--primary-gradient);
+            box-shadow: 0 2px 20px rgba(37, 99, 235, 0.2);
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.4rem;
+        }
+
+        .nav-link {
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover {
+            transform: translateY(-1px);
+        }
+
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+        }
+
+        /* Estilos para linhas clicáveis no modal de produtos */
+        .clickable-row {
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .clickable-row:hover {
+            background-color: rgba(37, 99, 235, 0.05) !important;
+        }
+
+        .clickable-row:active {
+            background-color: rgba(37, 99, 235, 0.1) !important;
+        }
+
+        /* Feedback visual para linha selecionada */
+        .clickable-row .form-check-input:checked {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        /* Destacar linha quando checkbox está marcado */
+        .clickable-row:has(.form-check-input:checked) {
+            background-color: rgba(37, 99, 235, 0.03) !important;
+        }
+
+        /* Desabilitar efeito hover em linhas desabilitadas */
+        .product-row:has(.form-check-input:disabled) {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .product-row:has(.form-check-input:disabled):hover {
+            background-color: inherit !important;
+        }
+
+        /* Estilos para botões de ação com ícones */
+        .btn-action-icon {
+            width: 45px;
+            height: 45px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            font-size: 1.25rem;
+            transition: all 0.2s ease;
+            border-width: 2px;
+        }
+
+        .btn-action-icon:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-action-icon i {
+            font-size: 1.25rem;
+        }
+
+        /* Cores específicas para cada ação */
+        .btn-action-icon.btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            border-color: #2563eb;
+        }
+
+        .btn-action-icon.btn-primary:hover {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            border-color: #1d4ed8;
+        }
+
+        .btn-action-icon.btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-color: #059669;
+        }
+
+        .btn-action-icon.btn-success:hover {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            border-color: #047857;
+        }
+
+        .page-header {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+            padding: 2rem;
+        }
+
+        .stats-cards {
+            margin-bottom: 2rem;
+        }
+
+        .stats-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            border: none;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* Cards compactos */
+        .stats-card-compact {
+            padding: 1rem !important;
+            min-height: 120px;
+        }
+        
+        .stats-card-compact h4 {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        
+        .stats-card-compact .stats-icon {
+            width: 35px;
+            height: 35px;
+            font-size: 16px;
+        }
+        
+        .stats-card-compact small {
+            font-size: 0.75rem;
+        }
+
+        .stats-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+            margin-bottom: 1rem;
+        }
+
+        .icon-total { background: var(--primary-gradient); }
+        .icon-active { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .icon-completed { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
+        .icon-progress { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+
+        .controls-section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .inventory-table {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .table {
+            margin: 0;
+        }
+
+        .table thead th {
+            background: var(--light-bg);
+            border: none;
+            font-weight: 600;
+            color: var(--dark-color);
+            padding: 1rem;
+        }
+
+        .table tbody td {
+            padding: 1rem;
+            vertical-align: middle;
+            border-color: var(--border-color);
+        }
+
+        .btn-primary {
+            background: var(--primary-gradient);
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            padding: 0.5rem 1.5rem;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+        }
+
+        .btn-outline-primary {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+            border-radius: 8px;
+        }
+
+        /* Melhorar visibilidade dos botões de ação na tabela */
+        #inventoryTableBody .btn-group .btn {
+            min-width: 32px;
+            min-height: 32px;
+            border-width: 1.5px;
+            font-weight: 500;
+        }
+
+        #inventoryTableBody .btn-outline-primary {
+            border-color: #0d6efd;
+            color: #0d6efd;
+            background-color: rgba(13, 110, 253, 0.05);
+        }
+
+        #inventoryTableBody .btn-outline-primary:hover {
+            background-color: #0d6efd;
+            color: white;
+        }
+
+        #inventoryTableBody .btn-outline-warning {
+            border-color: #fd7e14;
+            color: #fd7e14;
+            background-color: rgba(253, 126, 20, 0.05);
+        }
+
+        #inventoryTableBody .btn-outline-warning:hover {
+            background-color: #fd7e14;
+            color: white;
+        }
+
+        #inventoryTableBody .btn-outline-success {
+            border-color: #198754;
+            color: #198754;
+            background-color: rgba(25, 135, 84, 0.05);
+        }
+
+        #inventoryTableBody .btn-outline-success:hover {
+            background-color: #198754;
+            color: white;
+        }
+
+        #inventoryTableBody .btn-outline-danger {
+            border-color: #dc3545;
+            color: #dc3545;
+            background-color: rgba(220, 53, 69, 0.05);
+        }
+
+        #inventoryTableBody .btn-outline-danger:hover {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        /* Botão VOLTAR padronizado */
+        .btn-back-standard {
+            background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            padding: 0.6rem 1.5rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(100, 116, 139, 0.3);
+        }
+
+        .btn-back-standard:hover {
+            background: linear-gradient(135deg, #475569 0%, #334155 100%);
+            color: white;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(100, 116, 139, 0.4);
+        }
+
+        .btn-back-standard i {
+            margin-right: 0.5rem;
+        }
+
+        .btn-back-standard:hover i {
+            transform: translateX(-2px);
+        }
+
+        .btn-success {
+            background: var(--success-color);
+            border: none;
+            border-radius: 8px;
+        }
+
+        .btn-warning {
+            background: var(--warning-color);
+            border: none;
+            border-radius: 8px;
+        }
+
+        .btn-danger {
+            background: var(--danger-color);
+            border: none;
+            border-radius: 8px;
+        }
+
+        .btn-info {
+            background: var(--info-color);
+            border: none;
+            border-radius: 8px;
+        }
+
+        .badge {
+            font-size: 0.8rem;
+            padding: 0.5rem 0.8rem;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+
+
+        .badge.status-draft {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+
+        .badge.status-in-progress {
+            background: linear-gradient(135deg, #fd7e14 0%, #e55a00 100%);
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+
+        .badge.status-completed {
+            background: linear-gradient(135deg, #198754 0%, #0f5132 100%);
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+
+        .badge.status-finalizado {
+            background: linear-gradient(135deg, #dc3545 0%, #b02a37 100%);
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+
+        .badge.status-closed {
+            background: linear-gradient(135deg, #6f42c1 0%, #5a2d91 100%);
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+
+        .badge.status-pending {
+            background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%);
+            color: #212529;
+            border: none;
+            font-weight: 600;
+        }
+
+        /* Novos estilos para badges unificados */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .badge-draft {
+            background: linear-gradient(135deg, #74b9ff, #0984e3);
+            color: white;
+            border: 1px solid #0984e3;
+        }
+        
+        .badge-progress {
+            background: linear-gradient(135deg, #74b9ff, #0984e3);
+            color: white;
+            border: 1px solid #0984e3;
+        }
+        
+        .badge-completed {
+            background: linear-gradient(135deg, #00b894, #00a085);
+            color: white;
+            border: 1px solid #00a085;
+        }
+        
+        .badge-finalized {
+            background: linear-gradient(135deg, #6c5ce7, #5f3dc4);
+            color: white;
+            border: 1px solid #5f3dc4;
+        }
+        
+        /* 🎯 SISTEMA DE 3 CICLOS - Classes CSS para novos status */
+        .badge-awaiting-count {
+            background: linear-gradient(135deg, #ffeaa7, #fdcb6e);
+            color: #2d3436;
+            border: 1px solid #fdcb6e;
+        }
+        
+        .badge-awaiting-release {
+            background: linear-gradient(135deg, #fd79a8, #e84393);
+            color: white;
+            border: 1px solid #e84393;
+        }
+        
+        .badge-recount-pending {
+            background: linear-gradient(135deg, #74b9ff, #0984e3);
+            color: white;
+            border: 1px solid #0984e3;
+        }
+        
+        .badge-final-count-pending {
+            background: linear-gradient(135deg, #fd79a8, #e84393);
+            color: white;
+            border: 1px solid #e84393;
+        }
+        
+        .badge-counted {
+            background: linear-gradient(135deg, #00b894, #00a085);
+            color: white;
+            border: 1px solid #00a085;
+        }
+        
+        .badge-divergence {
+            background: linear-gradient(135deg, #e17055, #d63031);
+            color: white;
+            border: 1px solid #d63031;
+        }
+        
+        .badge-zero-confirmed {
+            background: linear-gradient(135deg, #55a3ff, #2d3436);
+            color: white;
+            border: 1px solid #2d3436;
+        }
+
+        /* Destaque visual para inventários encerrados */
+        .inventory-row-closed {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-left: 4px solid #6c5ce7;
+            opacity: 0.85;
+        }
+        
+        .inventory-row-closed:hover {
+            background: linear-gradient(135deg, #e9ecef, #dee2e6);
+            opacity: 1;
+        }
+        
+        /* Botões desabilitados para inventários encerrados */
+        .btn-disabled-closed {
+            opacity: 0.5;
+            pointer-events: none;
+            cursor: not-allowed;
+        }
+        
+        /* Ícone especial para inventários encerrados */
+        .icon-closed {
+            color: #6c5ce7;
+            font-size: 1.1em;
+            margin-right: 5px;
+        }
+
+
+        .progress {
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+        }
+
+        .progress-bar {
+            background: var(--success-color);
+            border-radius: 4px;
+        }
+
+        .form-control, .form-select {
+            border-radius: 8px;
+            border: 2px solid var(--border-color);
+            padding: 0.75rem 1rem;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
+        }
+
+        .modal-content {
+            border-radius: 12px;
+            border: none;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .modal-header {
+            border-bottom: 2px solid var(--border-color);
+            border-radius: 12px 12px 0 0;
+        }
+
+        .modal-footer {
+            border-top: 2px solid var(--border-color);
+        }
+
+        .pagination {
+            margin: 0;
+        }
+
+        .page-link {
+            border-radius: 8px;
+            margin: 0 2px;
+            border: none;
+            color: var(--primary-color);
+        }
+
+        .page-link:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .page-item.active .page-link {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #6b7280;
+        }
+
+        .spinner-border {
+            color: var(--primary-color);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #6b7280;
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .inventory-name {
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+
+        .inventory-description {
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+
+        .inventory-date {
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+
+        .progress-text {
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-top: 0.25rem;
+            color: #495057 !important; /* Cor escura para boa visibilidade */
+        }
+
+        .alert-warning {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border: none;
+            border-radius: 12px;
+            color: #92400e;
+        }
+
+        .alert-info {
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border: none;
+            border-radius: 12px;
+            color: #1e40af;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            z-index: 1050;
+            font-size: 0.9rem;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+
+        .status-online {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .status-offline {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        .date-input-group {
+            position: relative;
+        }
+
+        .date-input-group input[type="datetime-local"] {
+            padding-right: 2.5rem;
+        }
+
+        .date-input-group .input-group-text {
+            position: absolute;
+            right: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        @media (max-width: 768px) {
+            .page-header {
+                padding: 1rem;
+                margin: 1rem;
+            }
+
+            .stats-cards {
+                margin: 0 1rem;
+            }
+
+            .controls-section, .inventory-table {
+                margin: 0 1rem;
+                border-radius: 8px;
+            }
+
+            .table-responsive {
+                font-size: 0.9rem;
+            }
+
+            .btn {
+                font-size: 0.8rem;
+                padding: 0.4rem 0.8rem;
+            }
+        }
+
+        /* Animações */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        
+        /* Correção de alinhamento para cards de configuração */
+        #configModal .card {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #configModal .card-body {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+        
+        #configModal .card-title {
+            margin-bottom: 0.75rem;
+            min-height: 1.5rem;
+        }
+        
+        #configModal .card-text {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin-bottom: 1rem;
+            min-height: 3rem;
+        }
+        
+        #configModal .card-body .btn {
+            margin-top: auto;
+        }
+        /* Animação de pulse para botões */
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.7);
+            }
+            50% {
+                transform: scale(1.02);
+                box-shadow: 0 0 20px 5px rgba(25, 135, 84, 0);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(25, 135, 84, 0);
+            }
+        }
+        
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        
+        /* Estilo melhorado para o modal de produtos - OCUPAR TELA TODA */
+        #productSelectionModal .modal-dialog {
+            max-width: 100%;
+            margin: 0;
+        }
+        
+        #productSelectionModal .modal-content {
+            height: 100vh;
+            border-radius: 0;
+        }
+        
+        #productSelectionModal .table-responsive {
+            width: 100%;
+        }
+        
+        #productSelectionModal .card {
+            transition: all 0.3s ease;
+        }
+        
+        #productSelectionModal .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        #productSelectionModal .accordion-button:not(.collapsed) {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        #productSelectionModal .table tbody tr:hover {
+            background-color: rgba(102, 126, 234, 0.05);
+        }
+        
+        #productSelectionModal .form-control:focus,
+        #productSelectionModal .form-select:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        
+        /* Loader para a barra de progresso */
+        #loadingProgress.active {
+            animation: loading 2s ease-in-out infinite;
+        }
+        
+        @keyframes loading {
+            0% { width: 0%; }
+            50% { width: 70%; }
+            100% { width: 100%; }
+        }
+        
+        /* Estilos específicos para o modal Criar Listas */
+        #cleanAssignmentModal .card {
+            transition: all 0.3s ease;
+            border: none;
+        }
+        
+        /* Correção para estabilizar scroll horizontal */
+        #productListTable {
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        
+        .table-responsive {
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+        }
+        
+        /* Prevenir tremor no sticky header */
+        #productListTable thead th {
+            background-color: #f8f9fa !important;
+            border-bottom: 2px solid #dee2e6;
+            will-change: transform;
+        }
+        
+        #cleanAssignmentModal .card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        #cleanAssignmentModal .table tbody tr:hover {
+            background-color: rgba(17, 153, 142, 0.05);
+            transform: scale(1.005);
+            transition: all 0.2s ease;
+        }
+        
+        #cleanAssignmentModal .product-checkbox:checked + label {
+            background-color: rgba(17, 153, 142, 0.1);
+        }
+        
+        #cleanAssignmentModal .form-control:focus,
+        #cleanAssignmentModal .form-select:focus {
+            border-color: #11998e;
+            box-shadow: 0 0 0 0.2rem rgba(17, 153, 142, 0.25);
+        }
+        
+        #cleanAssignmentModal .accordion-button:not(.collapsed) {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        /* Animação para seleção de produtos */
+        #cleanAssignmentModal .product-checkbox {
+            transform: scale(1.2);
+            transition: all 0.2s ease;
+        }
+        
+        #cleanAssignmentModal .product-checkbox:checked {
+            transform: scale(1.3);
+            filter: drop-shadow(0 0 3px rgba(17, 153, 142, 0.5));
+        }
+        
+        /* Estados do botão de atribuição */
+        #assignButton:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        #assignButton:not(:disabled) {
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+        }
+        
+        /* Estado de erro para campos obrigatórios */
+        #cleanAssignmentModal .form-select.is-invalid,
+        #cleanAssignmentModal .form-control.is-invalid {
+            border-color: #dc3545;
+            box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+            animation: shake 0.5s ease-in-out;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+            20%, 40%, 60%, 80% { transform: translateX(2px); }
+        }
+        
+        /* Estilos para o modal de campo obrigatório */
+        #requiredFieldModal .modal-content {
+            border-radius: 15px;
+            overflow: hidden;
+        }
+        
+        #requiredFieldModal .modal-header {
+            border: none;
+            padding: 1.5rem;
+        }
+        
+        #requiredFieldModal .modal-body {
+            padding: 2rem;
+        }
+        
+        #requiredFieldModal .modal-footer {
+            border: none;
+            padding: 1.5rem;
+        }
+        
+        #requiredFieldModal .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+        }
+        
+        #requiredFieldModal .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+        
+        #requiredFieldModal .badge {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        /* Animação de entrada */
+        #requiredFieldModal.show .modal-dialog {
+            animation: modalSlideIn 0.4s ease-out;
+        }
+        
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translate(0, -50px) scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: translate(0, 0) scale(1);
+            }
+        }
+        
+        /* Corrigir tremida da barra de rolagem no hover */
+        .table-responsive {
+            scrollbar-gutter: stable both-edges !important;
+        }
+        
+        /* Garantir que hover não altere dimensões */
+        .table-hover tbody tr {
+            transition: background-color 0.15s ease-in-out;
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: rgba(0, 123, 255, 0.075) !important;
+        }
+        
+        /* 🔍 ESTILOS PARA BADGES CLICÁVEIS DE FILTRO */
+        .clickable-badge {
+            cursor: pointer !important;
+            transition: all 0.3s ease !important;
+            user-select: none;
+        }
+        
+        .clickable-badge:hover {
+            transform: scale(1.05) !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+            filter: brightness(1.1) !important;
+        }
+        
+        .clickable-badge:active {
+            transform: scale(0.95) !important;
+        }
+        
+        /* Estados específicos de filtro ativo */
+        .clickable-badge.filter-active {
+            transform: scale(1.1) !important;
+            box-shadow: 0 0 15px rgba(0,123,255,0.6) !important;
+            font-weight: bold !important;
+            border: 2px solid rgba(255,255,255,0.8) !important;
+        }
+
+        /* ✅ CORREÇÃO: Alinhamento dos botões na tabela de listas de contagem */
+        #countingListsGrid td {
+            vertical-align: middle !important;
+        }
+
+        #countingListsGrid .btn {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 38px !important;
+            height: 38px !important;
+            min-width: 38px !important;
+            min-height: 38px !important;
+            padding: 8px !important;
+            margin: 0 !important;
+            flex-shrink: 0 !important;
+        }
+
+        /* Container de ações da tabela de contagem */
+        #countingListsGrid .d-flex,
+        #countingListsGrid [style*="display: inline-flex"] {
+            gap: 8px !important;
+            align-items: center !important;
+            justify-content: center !important;
+            display: inline-flex !important;
+        }

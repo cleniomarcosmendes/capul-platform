@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Produtos - Capul Inventário</title>
+    <link rel="icon" type="image/png" href="/img/logo-capul-icon.png">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Select2 CSS (dropdowns pesquisáveis) -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet">
+    <!-- Capul Theme -->
+    <link href="/css/capul-theme.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <style>
+        /* ✅ v2.19.40: Layout 100% para aproveitamento total da tela */
+        .container {
+            max-width: 100% !important;
+        }
+
+        /* 🎯 Select2: Ajustes para tamanho small */
+        .select2-container--bootstrap-5 .select2-selection--single {
+            height: calc(1.5em + 0.5rem + 2px) !important;
+            padding: 0.25rem 0.5rem !important;
+            font-size: 0.875rem !important;
+        }
+        .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
+            line-height: 1.5 !important;
+        }
+        .select2-container--bootstrap-5 .select2-selection--single .select2-selection__arrow {
+            height: calc(1.5em + 0.5rem) !important;
+        }
+        .select2-container {
+            width: 100% !important;
+        }
+
+        :root {
+            --primary-color: #1B5E20;
+            --primary-gradient: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --dark-color: #1f2937;
+            --light-bg: #f8fafc;
+            --border-color: #e5e7eb;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--light-bg);
+            color: var(--dark-color);
+        }
+
+        .navbar {
+            background: var(--primary-gradient);
+            box-shadow: 0 2px 20px rgba(27, 94, 32, 0.2);
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.4rem;
+        }
+
+        .nav-link {
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover {
+            transform: translateY(-1px);
+        }
+
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+        }
+
+        .page-header {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+            padding: 2rem;
+        }
+
+        /* Animação Fade In */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .stats-cards {
+            margin-bottom: 2rem;
+        }
+
+        .stats-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            border: none;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .stats-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+            margin-bottom: 1rem;
+        }
+
+        .icon-products { background: var(--primary-gradient); }
+        .icon-categories { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .icon-stock { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .icon-value { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
+
+        .controls-section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .products-table {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .table {
+            margin-bottom: 0;
+        }
+
+        .table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+
+        /* Preservar cabeçalhos escuros do Bootstrap */
+        .table-dark th {
+            background-color: #212529 !important;
+            color: #fff !important;
+            font-weight: 600;
+        }
+
+        .product-code {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .product-info strong {
+            color: var(--dark-color);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #6c757d;
+        }
+
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            border-width: 0.3rem;
+            color: var(--primary-color);
+        }
+
+        /* Animações */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Responsividade */
+        @media (max-width: 768px) {
+            /* Cabeçalho empilhado em mobile */
+            .card-header .d-flex.justify-content-between {
+                flex-direction: column !important;
+                gap: 1rem;
+            }
+
+            .card-header .d-flex.align-items-center.gap-2 {
+                width: 100%;
+                justify-content: center !important;
+                flex-wrap: wrap;
+            }
+
+            .card-header .btn {
+                font-size: 0.85rem !important;
+                padding: 8px 12px !important;
+            }
+
+            .stats-card {
+                margin-bottom: 1rem;
+            }
+            
+            .controls-section .row > div {
+                margin-bottom: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header Capul -->
+    <header class="capul-header">
+        <div class="container-fluid px-4">
+            <div class="row align-items-center">
+                <div class="col-md-3">
+                    <a href="dashboard.html" class="capul-brand text-decoration-none">
+                        <img src="/img/logo-capul.png" alt="Capul" onerror="this.style.display='none'">
+                        <span>Inventário</span>
+                    </a>
+                </div>
+                <div class="col-md-6 text-center">
+                    <div class="capul-store-badge">
+                        <i class="bi bi-building"></i>
+                        <span id="headerStoreName">Carregando...</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex align-items-center justify-content-end gap-3">
+                        <div class="capul-user-info">
+                            <div class="capul-avatar" id="userAvatar">?</div>
+                            <div class="capul-user-details">
+                                <div class="capul-user-name" id="currentUser">Carregando...</div>
+                                <div class="capul-user-role" id="userRoleBadge">
+                                    <i class="bi bi-shield-check"></i>
+                                    <span>...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn-capul-logout" onclick="logout()">
+                            <i class="bi bi-box-arrow-right me-1"></i>
+                            Sair
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Menu -->
+    <nav class="navbar navbar-expand-lg" style="background: linear-gradient(135deg, #1B5E20, #2E7D32);">
+        <div class="container">
+            <button class="navbar-toggler border-light" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav mx-auto">
+                    <li class="nav-item" id="menuDashboard">
+                        <a class="nav-link text-white" href="dashboard.html">
+                            <i class="bi bi-speedometer2 me-1"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item" id="menuProducts">
+                        <a class="nav-link text-white active fw-bold" href="products.html" style="background: rgba(255,255,255,0.2); border-radius: 8px;">
+                            <i class="bi bi-box-seam me-1"></i> Produtos
+                        </a>
+                    </li>
+                    <li class="nav-item" id="menuInventory">
+                        <a class="nav-link text-white" href="inventory.html">
+                            <i class="bi bi-list-check me-1"></i> Inventários
+                        </a>
+                    </li>
+                    <li class="nav-item" id="menuCounting">
+                        <a class="nav-link text-white" href="counting_improved.html">
+                            <i class="bi bi-upc-scan me-1"></i> Contagem
+                        </a>
+                    </li>
+                    <li class="nav-item" id="menuUsers">
+                        <a class="nav-link text-white" href="users.html">
+                            <i class="bi bi-people me-1"></i> Usuários
+                        </a>
+                    </li>
+                    <li class="nav-item" id="menuStores">
+                        <a class="nav-link text-white" href="stores.html">
+                            <i class="bi bi-building me-1"></i> Lojas
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container-fluid mt-4">
+        <!-- Page Header - Design Moderno Padronizado -->
+        <div class="card shadow-lg border-0 mb-4 fade-in" style="border-radius: 12px; overflow: hidden;">
+            <div class="card-header text-white p-4" style="background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center flex-grow-1">
+                        <div class="rounded-circle bg-white p-3 me-3" style="width: 60px; height: 60px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-box-seam" style="font-size: 1.8rem; color: #1B5E20;"></i>
+                        </div>
+                        <div>
+                            <h3 class="mb-1" style="font-weight: 600;">Gestão de Produtos</h3>
+                            <p class="mb-0" style="opacity: 0.9; font-size: 0.95rem;">Controle completo do catálogo de produtos com sincronização em tempo real</p>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <a href="/static/import.html" class="btn btn-light d-flex align-items-center" style="font-weight: 600; border-radius: 8px; padding: 10px 20px;">
+                            <i class="bi bi-cloud-download me-2"></i>
+                            Importar
+                        </a>
+                        <!-- Botão Voltar -->
+                        <a href="/static/dashboard.html" class="btn btn-light d-flex align-items-center" style="font-weight: 600; border-radius: 8px; padding: 10px 20px;">
+                            <i class="bi bi-arrow-left me-2"></i>
+                            Voltar
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ✅ Informação da Filial Ativa (área destacada) -->
+            <div class="card-body p-3" id="userStoreInfo" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-top: 3px solid #2196F3; display: block;">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-building text-primary me-2" style="font-size: 1.2rem;"></i>
+                    <strong class="text-primary me-2">Filial Ativa:</strong>
+                    <span id="userStoreText" style="font-size: 0.95rem; font-weight: 500;">Carregando informações...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls Section -->
+        <div class="controls-section fade-in">
+            <!-- Linha 1: Busca + Grupo + Categoria + Subcategoria + Segmento -->
+            <div class="row g-2 align-items-center">
+                <div class="col-md-3">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" class="form-control" id="searchInput"
+                               placeholder="Buscar código ou descrição...">
+                    </div>
+                </div>
+
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" id="grupoFilter" onchange="filterByGrupo()">
+                        <option value="">Todos Grupos</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" id="categoryFilter">
+                        <option value="">Todas Categorias</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" id="subcategoryFilter">
+                        <option value="">Todas Subcat</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" id="segmentoFilter" onchange="filterBySegmento()">
+                        <option value="">Todos Segmentos</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Linha 2: Armazém + Page Size + Botões -->
+            <div class="row g-2 align-items-center mt-2">
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" id="armazemFilter" onchange="filterByArmazem()">
+                        <option value="">Todos Armazéns</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" id="pageSize">
+                        <option value="20">20 por página</option>
+                        <option value="50">50 por página</option>
+                        <option value="100">100 por página</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <button class="btn btn-outline-primary btn-sm w-100" onclick="refreshProducts()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>
+                        Atualizar
+                    </button>
+                </div>
+
+                <div class="col-md-2">
+                    <button class="btn btn-outline-secondary btn-sm w-100" onclick="clearFilters()">
+                        <i class="bi bi-x-circle me-1"></i>
+                        Limpar Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Products Table -->
+        <div class="products-table fade-in">
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Descrição</th>
+                            <th>Grupo</th>
+                            <th>Categoria</th>
+                            <th>Subcategoria</th>
+                            <th>Segmento</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productsTableBody">
+                        <!-- Loading State -->
+                        <tr id="loadingRow">
+                            <td colspan="7" class="loading">
+                                <div class="spinner-border" role="status"></div>
+                                <p class="mt-2">Carregando produtos...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            <div class="p-3 border-top">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <span class="text-muted" id="paginationInfo">
+                            Mostrando 0 - 0 de 0 produtos
+                        </span>
+                    </div>
+                    <div class="col-md-6">
+                        <nav aria-label="Products pagination">
+                            <ul class="pagination justify-content-end mb-0" id="pagination">
+                                <!-- Pagination will be generated by JavaScript -->
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Detalhes do Produto -->
+    <div class="modal fade" id="productDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Detalhes do Produto
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="productDetailContent">
+                    <div class="text-center py-4">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                        <p class="mt-2">Carregando detalhes...</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-lg me-1"></i>
+                        Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- jQuery (necessário para Select2) -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+    <!-- Select2 JS (dropdowns pesquisáveis) -->
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <!-- JS Consolidados v2.19.13 -->
+    <script src="/js/utils.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/ui.js"></script>
+    <script src="/js/export.js"></script>
+    <!-- 🔐 Controle de Acesso (RBAC) -->
+    <script src="/js/access_control.js"></script>
+    <script>
+        // Constantes da API
+        const API_BASE_URL = window.location.origin;
+        const API_VERSION = '/api/v1';
+
+        // Função auxiliar para obter headers autenticados
+        function getAuthHeaders() {
+            const token = localStorage.getItem('access_token');
+            return {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            };
+        }
+
+        // Função para carregar informações da loja do usuário
+        async function loadUserStoreInfo(userData) {
+            try {
+                if (!userData.store_id) {
+                    document.getElementById('userStoreInfo').style.display = 'block';
+                    document.getElementById('userStoreText').textContent = 'Usuário sem loja atribuída';
+                    return;
+                }
+
+                const response = await fetch(`${API_BASE_URL}${API_VERSION}/stores/${userData.store_id}`, {
+                    method: 'GET',
+                    headers: getAuthHeaders()
+                });
+
+                if (response.ok) {
+                    const store = await response.json();
+
+                    document.getElementById('userStoreInfo').style.display = 'block';
+                    document.getElementById('userStoreText').textContent =
+                        `${store.code} - ${store.name}`;
+
+                } else {
+                    document.getElementById('userStoreInfo').style.display = 'block';
+                    document.getElementById('userStoreText').textContent =
+                        `Loja: ${userData.store_id} (erro ao carregar detalhes)`;
+                }
+
+            } catch (error) {
+                document.getElementById('userStoreInfo').style.display = 'block';
+                document.getElementById('userStoreText').textContent = 'Erro ao carregar informações da loja';
+            }
+        }
+
+        // Configurações da página
+        let currentPage = 1;
+        let pageSize = 20;
+        let totalProducts = 0;
+        let totalPages = 1;      // ✅ v2.19.15: Total de páginas para paginação
+        let currentSearch = '';
+        let currentCategory = '';
+        let currentSubcategory = '';
+        let currentFilial = '';  // Filial do usuário logado
+        let currentGrupo = '';   // ✅ v2.19.11: Filtro por grupo
+        let currentSegmento = ''; // ✅ v2.19.11: Filtro por segmento
+        let currentArmazem = '';  // ✅ v2.19.11: Filtro por armazém
+
+        // Função para carregar filtros - OTIMIZADO para evitar travamento
+        async function loadFilters() {
+            try {
+                const token = localStorage.getItem('access_token');
+                if (!token) return;
+
+                let url = '/api/v1/products/filters';
+                if (currentFilial) {
+                    url += `?filial=${currentFilial}`;
+                }
+
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const filters = await response.json();
+
+                    // ✅ OTIMIZADO: Construir HTML como string antes de inserir (evita múltiplos re-renders)
+
+                    // Grupos
+                    let gruposHtml = '<option value="">Todos Grupos</option>';
+                    if (filters.grupos && filters.grupos.length > 0) {
+                        gruposHtml += filters.grupos.map(g =>
+                            `<option value="${g.codigo}">${g.codigo} - ${g.descricao}</option>`
+                        ).join('');
+                    }
+                    document.getElementById('grupoFilter').innerHTML = gruposHtml;
+
+                    // Categorias
+                    let categoriasHtml = '<option value="">Todas Categorias</option>';
+                    if (filters.categorias && filters.categorias.length > 0) {
+                        categoriasHtml += filters.categorias.map(cat =>
+                            `<option value="${cat.codigo}">${cat.codigo} - ${cat.descricao}</option>`
+                        ).join('');
+                    }
+                    document.getElementById('categoryFilter').innerHTML = categoriasHtml;
+
+                    // Subcategorias
+                    let subcategoriasHtml = '<option value="">Todas Subcat</option>';
+                    if (filters.subcategorias && filters.subcategorias.length > 0) {
+                        subcategoriasHtml += filters.subcategorias.map(sub =>
+                            `<option value="${sub.codigo}">${sub.codigo} - ${sub.descricao}</option>`
+                        ).join('');
+                    }
+                    document.getElementById('subcategoryFilter').innerHTML = subcategoriasHtml;
+
+                    // Segmentos
+                    let segmentosHtml = '<option value="">Todos Segmentos</option>';
+                    if (filters.segmentos && filters.segmentos.length > 0) {
+                        segmentosHtml += filters.segmentos.map(s =>
+                            `<option value="${s.codigo}">${s.codigo} - ${s.descricao}</option>`
+                        ).join('');
+                    }
+                    document.getElementById('segmentoFilter').innerHTML = segmentosHtml;
+
+                    // Armazéns
+                    let armazensHtml = '<option value="">Todos Armazéns</option>';
+                    if (filters.armazens && filters.armazens.length > 0) {
+                        armazensHtml += filters.armazens.map(arm =>
+                            `<option value="${arm.codigo}">${arm.codigo} - ${arm.descricao}</option>`
+                        ).join('');
+                    }
+                    document.getElementById('armazemFilter').innerHTML = armazensHtml;
+
+                    // 🔍 Inicializar Select2 para pesquisa inteligente
+                    initSelect2Filters();
+                }
+            } catch (error) {
+                console.error('Erro ao carregar filtros:', error);
+            }
+        }
+
+        // 🔍 Função para inicializar Select2 nos filtros
+        function initSelect2Filters() {
+            const filterIds = ['grupoFilter', 'categoryFilter', 'subcategoryFilter', 'segmentoFilter', 'armazemFilter'];
+
+            filterIds.forEach(id => {
+                const select = document.getElementById(id);
+                if (select) {
+                    // Destruir instância anterior se existir
+                    if ($(select).hasClass('select2-hidden-accessible')) {
+                        $(select).select2('destroy');
+                    }
+
+                    $(select).select2({
+                        theme: 'bootstrap-5',
+                        allowClear: true,
+                        width: '100%',
+                        language: {
+                            noResults: function() { return "Nenhum resultado encontrado"; },
+                            searching: function() { return "Pesquisando..."; }
+                        },
+                        // 🔍 Pesquisa inteligente: ignora acentos e case
+                        matcher: function(params, data) {
+                            if ($.trim(params.term) === '') {
+                                return data;
+                            }
+                            const removeAccents = (str) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            const term = removeAccents(params.term.toLowerCase());
+                            const text = removeAccents((data.text || '').toLowerCase());
+                            if (text.indexOf(term) > -1) {
+                                return data;
+                            }
+                            return null;
+                        }
+                    });
+
+                    // Ao mudar seleção, chamar a função de filtro correspondente
+                    $(select).on('select2:select select2:clear', function() {
+                        const funcName = select.getAttribute('onchange');
+                        if (funcName) {
+                            eval(funcName);
+                        }
+                    });
+                }
+            });
+        }
+
+        // Função para carregar produtos da API
+        async function loadProducts(page = 1) {
+            console.log(`loadProducts chamado: página ${page}`);
+            try {
+                // Mostrar loading
+                const tbody = document.getElementById('productsTableBody');
+                tbody.innerHTML = '<tr id="loadingRow"><td colspan="6" class="loading"><div class="spinner-border" role="status"></div><p class="mt-2">Carregando produtos...</p></td></tr>';
+
+                // Obter token
+                const token = localStorage.getItem('access_token');
+                if (!token) {
+                    window.location.href = '/static/login.html';
+                    return;
+                }
+
+                // Construir URL com parâmetros
+                const params = new URLSearchParams({
+                    page: page,
+                    limit: pageSize
+                });
+
+                if (currentSearch) {
+                    params.append('search', currentSearch);
+                }
+
+                if (currentCategory) {
+                    params.append('categoria', currentCategory);
+                }
+
+                if (currentSubcategory) {
+                    params.append('subcategoria', currentSubcategory);
+                }
+
+                // ✅ v2.19.11: Filtro por grupo
+                if (currentGrupo) {
+                    params.append('grupo', currentGrupo);
+                }
+
+                // ✅ v2.19.11: Filtro por segmento
+                if (currentSegmento) {
+                    params.append('segmento', currentSegmento);
+                }
+
+                // ✅ v2.19.11: Filtro por armazém
+                if (currentArmazem) {
+                    params.append('armazem', currentArmazem);
+                }
+
+                // ✅ v2.19.11: Filtro por filial
+                if (currentFilial) {
+                    params.append('filial', currentFilial);
+                }
+
+                // Fazer requisição
+                const response = await fetch(`/api/v1/products/?${params}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Erro ao carregar produtos');
+                }
+
+                const data = await response.json();
+                console.log(`API response: page=${data.page}, pages=${data.pages}, total=${data.total}, products=${data.products?.length}`);
+
+                // Atualizar variáveis globais
+                totalProducts = data.total;
+                currentPage = data.page;
+
+                // Renderizar produtos
+                renderProducts(data.products);
+
+                // Atualizar paginação
+                updatePagination(data.page, data.pages, data.total);
+
+            } catch (error) {
+                console.error('Erro:', error);
+                showError('Erro ao carregar produtos. Tente novamente.');
+            }
+        }
+
+        // Função para renderizar produtos na tabela
+        function renderProducts(products) {
+            const tbody = document.getElementById('productsTableBody');
+            
+            if (!products || products.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center py-4">
+                            <i class="bi bi-inbox fs-1 d-block mb-2 text-muted"></i>
+                            <h5>Nenhum produto encontrado</h5>
+                            <p class="text-muted">Tente ajustar os filtros ou adicione novos produtos.</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            let html = '';
+            products.forEach(product => {
+                html += `
+                    <tr>
+                        <td>${product.b1_cod || product.id}</td>
+                        <td>${product.b1_desc || product.description}</td>
+                        <td title="Código: ${product.b1_grupo || ''}">${product.grupo_desc || product.b1_grupo || '-'}</td>
+                        <td title="Código: ${product.b1_xcatgor || ''}">${product.categoria_desc || product.b1_xcatgor || '-'}</td>
+                        <td title="Código: ${product.b1_xsubcat || ''}">${product.subcategoria_desc || product.b1_xsubcat || '-'}</td>
+                        <td title="Código: ${product.b1_xsegmen || ''}">${product.segmento_desc || product.b1_xsegmen || '-'}</td>
+                        <td class="text-center">
+                            <button class="btn btn-outline-secondary btn-sm" onclick="viewProduct('${product.b1_cod || product.id}')" title="Ver detalhes">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = html;
+        }
+
+        // ✅ v2.19.15: Função para atualizar paginação (corrigida e melhorada)
+        function updatePagination(page, pages, total) {
+            const paginationInfo = document.getElementById('paginationInfo');
+            const pagination = document.getElementById('pagination');
+
+            // ✅ Atualizar variável global
+            totalPages = pages;
+
+            console.log(`updatePagination: page=${page}, pages=${pages}, total=${total}`);
+
+            // Atualizar informação
+            const start = total > 0 ? (page - 1) * pageSize + 1 : 0;
+            const end = Math.min(page * pageSize, total);
+            paginationInfo.textContent = `Mostrando ${start} - ${end} de ${total} produtos`;
+
+            // Se não há páginas, não mostrar paginação
+            if (pages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+
+            // Criar botões de paginação
+            let paginationHtml = '';
+
+            // Botão anterior
+            const prevDisabled = page <= 1;
+            paginationHtml += `
+                <li class="page-item ${prevDisabled ? 'disabled' : ''}">
+                    <a class="page-link" href="javascript:void(0)" ${prevDisabled ? '' : `onclick="goToPage(${page - 1})"`}>
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
+            `;
+
+            // ✅ v2.19.15: Mostrar páginas ao redor da atual (smart pagination)
+            // Mostrar: primeira, ..., atual-1, atual, atual+1, ..., última
+            const maxButtons = 5;
+            let startPage = Math.max(1, page - Math.floor(maxButtons / 2));
+            let endPage = Math.min(pages, startPage + maxButtons - 1);
+
+            // Ajustar se estiver perto do final
+            if (endPage - startPage < maxButtons - 1) {
+                startPage = Math.max(1, endPage - maxButtons + 1);
+            }
+
+            // Primeira página e reticências
+            if (startPage > 1) {
+                paginationHtml += `
+                    <li class="page-item">
+                        <a class="page-link" href="javascript:void(0)" onclick="goToPage(1)">1</a>
+                    </li>
+                `;
+                if (startPage > 2) {
+                    paginationHtml += `
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                    `;
+                }
+            }
+
+            // Páginas do range
+            for (let i = startPage; i <= endPage; i++) {
+                paginationHtml += `
+                    <li class="page-item ${i === page ? 'active' : ''}">
+                        <a class="page-link" href="javascript:void(0)" onclick="goToPage(${i})">${i}</a>
+                    </li>
+                `;
+            }
+
+            // Última página e reticências
+            if (endPage < pages) {
+                if (endPage < pages - 1) {
+                    paginationHtml += `
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                    `;
+                }
+                paginationHtml += `
+                    <li class="page-item">
+                        <a class="page-link" href="javascript:void(0)" onclick="goToPage(${pages})">${pages}</a>
+                    </li>
+                `;
+            }
+
+            // Botão próximo
+            const nextDisabled = page >= pages;
+            paginationHtml += `
+                <li class="page-item ${nextDisabled ? 'disabled' : ''}">
+                    <a class="page-link" href="javascript:void(0)" ${nextDisabled ? '' : `onclick="goToPage(${page + 1})"`}>
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+            `;
+
+            pagination.innerHTML = paginationHtml;
+        }
+
+        // Função para mudar de página
+        function goToPage(page) {
+            console.log(`goToPage chamado: página ${page}, totalPages: ${totalPages}`);
+            if (page < 1 || page > totalPages) {
+                console.log(`Página ${page} fora do intervalo válido (1-${totalPages})`);
+                return false;
+            }
+            currentPage = page;
+            loadProducts(page);
+            return false;
+        }
+
+        // Função para pesquisar
+        function searchProducts() {
+            currentSearch = document.getElementById('searchInput').value;
+            currentPage = 1;
+            loadProducts(1);
+        }
+        
+        // Função para filtrar por categoria
+        function filterByCategory() {
+            currentCategory = document.getElementById('categoryFilter').value;
+            currentPage = 1;
+            loadProducts(1);
+        }
+        
+        // Função para filtrar por subcategoria
+        function filterBySubcategory() {
+            currentSubcategory = document.getElementById('subcategoryFilter').value;
+            currentPage = 1;
+            loadProducts(1);
+        }
+
+        // ✅ v2.19.11: Função para filtrar por grupo
+        function filterByGrupo() {
+            currentGrupo = document.getElementById('grupoFilter').value;
+            currentPage = 1;
+            loadProducts(1);
+        }
+
+        // ✅ v2.19.11: Função para filtrar por segmento
+        function filterBySegmento() {
+            currentSegmento = document.getElementById('segmentoFilter').value;
+            currentPage = 1;
+            loadProducts(1);
+        }
+
+        // ✅ v2.19.11: Função para filtrar por armazém
+        function filterByArmazem() {
+            currentArmazem = document.getElementById('armazemFilter').value;
+            currentPage = 1;
+            loadProducts(1);
+        }
+
+        // ✅ v2.19.11: Função para limpar todos os filtros
+        function clearFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('grupoFilter').value = '';
+            document.getElementById('categoryFilter').value = '';
+            document.getElementById('subcategoryFilter').value = '';
+            document.getElementById('segmentoFilter').value = '';
+            document.getElementById('armazemFilter').value = '';
+
+            currentSearch = '';
+            currentGrupo = '';
+            currentCategory = '';
+            currentSubcategory = '';
+            currentSegmento = '';
+            currentArmazem = '';
+            currentPage = 1;
+
+            loadProducts(1);
+        }
+
+        // Função para atualizar tamanho da página
+        function updatePageSize() {
+            pageSize = parseInt(document.getElementById('pageSize').value);
+            currentPage = 1;
+            loadProducts(1);
+        }
+
+        // Função para atualizar produtos
+        function refreshProducts() {
+            loadProducts(currentPage);
+        }
+
+        // Função para ver detalhes do produto
+        async function viewProduct(productId) {
+            try {
+                // Mostrar modal com loading
+                const modal = new bootstrap.Modal(document.getElementById('productDetailModal'));
+                modal.show();
+                
+                // Reset conteúdo para loading
+                document.getElementById('productDetailContent').innerHTML = `
+                    <div class="text-center py-4">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                        <p class="mt-2">Carregando detalhes...</p>
+                    </div>
+                `;
+                
+                // Obter token
+                const token = localStorage.getItem('access_token');
+                if (!token) {
+                    throw new Error('Token não encontrado');
+                }
+                
+                // Buscar detalhes do produto
+                const response = await fetch(`/api/v1/products/${productId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Erro ao carregar detalhes');
+                }
+                
+                const product = await response.json();
+                
+                // Renderizar detalhes com abas
+                document.getElementById('productDetailContent').innerHTML = `
+                    <!-- Informações Básicas do Produto -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0"><i class="bi bi-info-circle me-1"></i>Informações Básicas</h6>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm table-borderless">
+                                        <tr><td><strong>Código:</strong></td><td class="product-code">${product.codigo}</td></tr>
+                                        <tr><td><strong>Descrição:</strong></td><td>${product.descricao}</td></tr>
+                                        <tr><td><strong>Tipo:</strong></td><td>${product.tipo || 'N/A'}</td></tr>
+                                        <tr><td><strong>Unidade:</strong></td><td>${product.unidade || 'UN'}</td></tr>
+                                        <tr><td><strong>Localização:</strong></td><td>${product.localizacao_padrao || 'N/A'}</td></tr>
+                                        <tr><td><strong>Controla Lote:</strong></td><td>
+                                            <span class="badge ${product.controla_lote ? 'bg-success' : 'bg-secondary'}">
+                                                ${product.controla_lote ? 'Sim' : 'Não'}
+                                            </span>
+                                        </td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0"><i class="bi bi-tags me-1"></i>Classificações</h6>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm table-borderless">
+                                        <tr>
+                                            <td><strong>Grupo:</strong></td>
+                                            <td>
+                                                <span class="badge bg-info">${product.grupo && product.grupo.descricao ? product.grupo.descricao : 'N/A'}</span>
+                                                <small class="text-muted">(${product.grupo && product.grupo.codigo ? product.grupo.codigo : 'N/A'})</small>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Categoria:</strong></td>
+                                            <td>
+                                                <span class="badge bg-warning text-dark">${product.categoria && product.categoria.descricao ? product.categoria.descricao : 'N/A'}</span>
+                                                <small class="text-muted">(${product.categoria && product.categoria.codigo ? product.categoria.codigo : 'N/A'})</small>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Subcategoria:</strong></td>
+                                            <td>
+                                                <span class="badge bg-info text-dark">${product.subcategoria && product.subcategoria.descricao ? product.subcategoria.descricao : 'N/A'}</span>
+                                                <small class="text-muted">(${product.subcategoria && product.subcategoria.codigo ? product.subcategoria.codigo : 'N/A'})</small>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Segmento:</strong></td>
+                                            <td>
+                                                <span class="badge bg-secondary">${product.segmento && product.segmento.descricao ? product.segmento.descricao : 'N/A'}</span>
+                                                <small class="text-muted">(${product.segmento && product.segmento.codigo ? product.segmento.codigo : 'N/A'})</small>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Grupo Inventário:</strong></td>
+                                            <td>
+                                                <span class="badge bg-dark">${product.grupo_inventario && product.grupo_inventario.descricao ? product.grupo_inventario.descricao : 'N/A'}</span>
+                                                <small class="text-muted">(${product.grupo_inventario && product.grupo_inventario.codigo ? product.grupo_inventario.codigo : 'N/A'})</small>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Indicadores por Filial (SBZ010) - Card separado pois é único por loja -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0"><i class="bi bi-geo-alt me-1"></i>Indicadores por Filial (SBZ010)</h6>
+                                </div>
+                                <div class="card-body">
+                                    ${product.indicadores_filial && product.indicadores_filial.length > 0 ? 
+                                        `<div class="table-responsive">
+                                            <table class="table table-sm table-striped">
+                                                <thead class="table-dark">
+                                                    <tr>
+                                                        <th>Filial</th>
+                                                        <th>Localização 1</th>
+                                                        <th>Localização 2</th>
+                                                        <th>Localização 3</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    ${product.indicadores_filial.map(ind => 
+                                                        `<tr>
+                                                            <td><span class="badge bg-primary">${ind.filial}</span></td>
+                                                            <td>${ind.localizacao1 || '-'}</td>
+                                                            <td>${ind.localizacao2 || '-'}</td>
+                                                            <td>${ind.localizacao3 || '-'}</td>
+                                                        </tr>`
+                                                    ).join('')}
+                                                </tbody>
+                                            </table>
+                                        </div>` : 
+                                        '<div class="text-muted">Nenhum indicador por filial cadastrado</div>'
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Abas para dados com múltiplos registros -->
+                    <div class="card">
+                        <div class="card-header bg-light p-0">
+                            <ul class="nav nav-tabs card-header-tabs" id="productDetailTabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="barcode-tab" data-bs-toggle="tab" data-bs-target="#barcode-pane" type="button" role="tab">
+                                        <i class="bi bi-upc-scan me-1"></i>Códigos de Barras 
+                                        ${product.codigos_barras && product.codigos_barras.length > 0 ? `<span class="badge bg-primary ms-1">${product.codigos_barras.length}</span>` : ''}
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="stock-tab" data-bs-toggle="tab" data-bs-target="#stock-pane" type="button" role="tab">
+                                        <i class="bi bi-box me-1"></i>Saldo em Estoque 
+                                        ${product.saldos_estoque && product.saldos_estoque.length > 0 ? `<span class="badge bg-success ms-1">${product.saldos_estoque.length}</span>` : ''}
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="lot-tab" data-bs-toggle="tab" data-bs-target="#lot-pane" type="button" role="tab">
+                                        <i class="bi bi-list-ol me-1"></i>Saldo por Lote 
+                                        ${product.saldos_lote && product.saldos_lote.length > 0 ? `<span class="badge bg-warning ms-1">${product.saldos_lote.length}</span>` : ''}
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="card-body">
+                            <div class="tab-content" id="productDetailTabContent">
+                                <!-- Aba Códigos de Barras -->
+                                <div class="tab-pane fade show active" id="barcode-pane" role="tabpanel">
+                                    ${product.codigo_barras_principal ? 
+                                        `<div class="alert alert-info mb-3">
+                                            <strong><i class="bi bi-star-fill me-1"></i>Código Principal:</strong> 
+                                            <code class="ms-2">${product.codigo_barras_principal}</code>
+                                        </div>` : 
+                                        '<div class="alert alert-warning mb-3">Nenhum código de barras principal cadastrado</div>'
+                                    }
+                                    
+                                    ${product.codigos_barras && product.codigos_barras.length > 0 ? 
+                                        `<div class="table-responsive">
+                                            <table class="table table-hover">
+                                                <thead class="table-dark">
+                                                    <tr>
+                                                        <th><i class="bi bi-building me-1"></i>Filial</th>
+                                                        <th><i class="bi bi-upc-scan me-1"></i>Código de Barras</th>
+                                                        <th><i class="bi bi-box me-1"></i>Produto</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    ${product.codigos_barras.map(bc => 
+                                                        `<tr>
+                                                            <td><span class="badge bg-info">${bc.filial}</span></td>
+                                                            <td><code class="fs-6">${bc.codigo}</code></td>
+                                                            <td><span class="text-muted">${bc.produto.trim()}</span></td>
+                                                        </tr>`
+                                                    ).join('')}
+                                                </tbody>
+                                            </table>
+                                        </div>` : 
+                                        '<div class="text-muted text-center py-4">Nenhum código adicional cadastrado</div>'
+                                    }
+                                </div>
+                                
+                                <!-- Aba Saldo em Estoque -->
+                                <div class="tab-pane fade" id="stock-pane" role="tabpanel">
+                                    ${product.saldos_estoque && product.saldos_estoque.length > 0 ?
+                                        `<div class="table-responsive">
+                                            <table class="table table-hover table-sm">
+                                                <thead class="table-dark">
+                                                    <tr>
+                                                        <th><i class="bi bi-building me-1"></i>Filial</th>
+                                                        <th><i class="bi bi-geo-alt me-1"></i>Local</th>
+                                                        <th class="text-end"><i class="bi bi-box me-1"></i>Qtd Atual</th>
+                                                        <th class="text-end"><i class="bi bi-lock me-1"></i>Qtd Emp.</th>
+                                                        <th class="text-end"><i class="bi bi-bookmark me-1"></i>Qtd Res.</th>
+                                                        <th class="text-end"><i class="bi bi-check-circle me-1"></i>Qtd Disp.</th>
+                                                        <th class="text-end"><i class="bi bi-currency-dollar me-1"></i>Custo Médio</th>
+                                                        <th class="text-end"><i class="bi bi-cash-stack me-1"></i>Valor Total</th>
+                                                        <th class="text-end"><i class="bi bi-cart-plus me-1"></i>Ent. POS</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    ${product.saldos_estoque.map(saldo =>
+                                                        `<tr>
+                                                            <td><span class="badge bg-success">${saldo.filial}</span></td>
+                                                            <td><span class="badge bg-secondary">${saldo.local}</span></td>
+                                                            <td class="text-end">${saldo.quantidade_atual.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                                                            <td class="text-end">${saldo.quantidade_empenhada.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                                                            <td class="text-end">${(saldo.quantidade_reservada || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                                                            <td class="text-end">${saldo.quantidade_disponivel.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                                                            <td class="text-end">R$ ${saldo.custo_medio.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                                                            <td class="text-end">R$ ${(saldo.valor_total || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                                                            <td class="text-end">${(saldo.entradas_pos || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                                                        </tr>`
+                                                    ).join('')}
+                                                </tbody>
+                                            </table>
+                                        </div>` :
+                                        '<div class="text-muted text-center py-4">Nenhum saldo em estoque encontrado</div>'
+                                    }
+                                </div>
+                                
+                                <!-- Aba Saldo por Lote (SB8010) -->
+                                <div class="tab-pane fade" id="lot-pane" role="tabpanel">
+                                    ${!product.controla_lote ? 
+                                        '<div class="alert alert-info text-center"><i class="bi bi-info-circle me-2"></i>Este produto não possui controle de lote</div>' :
+                                        (product.saldos_lote && product.saldos_lote.length > 0 ? 
+                                            `<div class="table-responsive">
+                                                <table class="table table-hover">
+                                                    <thead class="table-dark">
+                                                        <tr>
+                                                            <th><i class="bi bi-building me-1"></i>Filial</th>
+                                                            <th><i class="bi bi-geo-alt me-1"></i>Local</th>
+                                                            <th><i class="bi bi-tag me-1"></i>Lote</th>
+                                                            <th><i class="bi bi-tags me-1"></i>Sublote</th>
+                                                            <th class="text-end"><i class="bi bi-box me-1"></i>Saldo</th>
+                                                            <th class="text-center"><i class="bi bi-calendar-x me-1"></i>Dt. Validade</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        ${product.saldos_lote.map(lote => 
+                                                            `<tr class="${lote.data_validade && new Date(lote.data_validade) < new Date() ? 'table-danger' : ''}">
+                                                                <td><span class="badge bg-warning text-dark">${lote.filial}</span></td>
+                                                                <td><span class="badge bg-secondary">${lote.local}</span></td>
+                                                                <td><strong class="text-dark">${lote.lote.trim()}</strong></td>
+                                                                <td><span class="text-muted">${lote.sublote.trim() || '-'}</span></td>
+                                                                <td class="text-end"><strong class="text-primary">${lote.saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong></td>
+                                                                <td class="text-center ${lote.data_validade && new Date(lote.data_validade) < new Date() ? 'text-danger fw-bold' : 'text-dark'}">
+                                                                    <strong>${lote.data_validade ? new Date(lote.data_validade).toLocaleDateString('pt-BR') : '-'}</strong>
+                                                                    ${lote.data_validade && new Date(lote.data_validade) < new Date() ? ' <i class="bi bi-exclamation-triangle-fill text-danger ms-1"></i>' : ''}
+                                                                </td>
+                                                            </tr>`
+                                                        ).join('')}
+                                                    </tbody>
+                                                </table>
+                                            </div>` : 
+                                            '<div class="text-muted text-center py-4">Produto controla lote mas não há saldos por lote cadastrados</div>'
+                                        )
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+            } catch (error) {
+                console.error('Erro ao carregar detalhes:', error);
+                document.getElementById('productDetailContent').innerHTML = `
+                    <div class="text-center py-4 text-danger">
+                        <i class="bi bi-exclamation-triangle fs-1 d-block mb-2"></i>
+                        <h5>Erro ao carregar detalhes</h5>
+                        <p>${error.message}</p>
+                        <button class="btn btn-primary" onclick="viewProduct('${productId}')">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Tentar Novamente
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // Função para mostrar erro
+        function showError(message) {
+            const tbody = document.getElementById('productsTableBody');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center py-4 text-danger">
+                        <i class="bi bi-exclamation-triangle fs-1 d-block mb-2"></i>
+                        <h5>Erro</h5>
+                        <p>${message}</p>
+                        <button class="btn btn-primary" onclick="refreshProducts()">
+                            <i class="bi bi-arrow-clockwise me-2"></i>Tentar Novamente
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
+
+        // Função de logout
+        function logout() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('user_data');
+            window.location.href = '/static/login.html';
+        }
+
+        // Inicializar quando a página carregar
+        document.addEventListener('DOMContentLoaded', function() {
+            // ✅ Verificar controle de acesso (RBAC)
+            if (!checkAccess()) {
+                return;  // Se não tem acesso, para execução
+            }
+
+            // Verificar autenticação
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                window.location.href = '/static/login.html';
+                return;
+            }
+
+            // Carregar informações do usuário e da loja
+            const userData = JSON.parse(localStorage.getItem('user_data'));
+            console.log('🔍 [DEBUG] userData:', userData);
+
+            if (userData && userData.store_id) {
+                console.log('🔍 [DEBUG] store_id encontrado:', userData.store_id);
+                loadUserStoreInfo(userData);
+
+                // ✅ v2.19.11: Obter código da filial para filtro de armazéns
+                // O store_id é o UUID, precisamos do código da filial
+                fetch(`${API_BASE_URL}${API_VERSION}/stores/${userData.store_id}`, {
+                    headers: getAuthHeaders()
+                }).then(response => {
+                    console.log('🔍 [DEBUG] Response status:', response.status);
+                    return response.json();
+                }).then(store => {
+                    console.log('🔍 [DEBUG] Store data:', store);
+                    if (store && store.code) {
+                        currentFilial = store.code;
+                        console.log('✅ Filial obtida:', currentFilial);
+                        // Carregar filtros COM a filial correta (incluindo armazéns)
+                        loadFilters();
+                    } else {
+                        console.warn('⚠️ [DEBUG] Store sem código, carregando filtros sem filial');
+                        loadFilters();
+                    }
+                }).catch(err => {
+                    console.error('❌ Erro ao obter filial:', err);
+                    // Carregar filtros mesmo sem filial (armazéns ficará vazio)
+                    loadFilters();
+                });
+            } else {
+                console.warn('⚠️ [DEBUG] userData sem store_id:', userData);
+                // Sem store_id, carrega filtros sem armazéns
+                loadFilters();
+            }
+
+            // Configurar eventos
+            document.getElementById('searchInput').addEventListener('keyup', function(e) {
+                if (e.key === 'Enter') {
+                    searchProducts();
+                }
+            });
+
+            document.getElementById('pageSize').addEventListener('change', updatePageSize);
+            document.getElementById('categoryFilter').addEventListener('change', filterByCategory);
+            document.getElementById('subcategoryFilter').addEventListener('change', filterBySubcategory);
+
+            // Carregar produtos (filtros são carregados após obter a filial)
+            loadProducts(1);
+
+            // Preencher header Capul
+            initCapulHeader();
+        });
+
+        // Preencher header Capul
+        function initCapulHeader() {
+            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+            const storeCode = localStorage.getItem('store_code') || '??';
+            const storeName = localStorage.getItem('store_name') || 'Filial';
+            const displayName = userData.full_name || userData.username || 'Usuário';
+            const role = userData.role || 'OPERATOR';
+
+            const headerStoreName = document.getElementById('headerStoreName');
+            const currentUser = document.getElementById('currentUser');
+            const userAvatar = document.getElementById('userAvatar');
+            const userRoleBadge = document.getElementById('userRoleBadge');
+
+            if (headerStoreName) headerStoreName.textContent = `${storeCode} - ${storeName}`;
+            if (currentUser) currentUser.textContent = displayName;
+            if (userAvatar) userAvatar.textContent = displayName.charAt(0).toUpperCase();
+            if (userRoleBadge) userRoleBadge.innerHTML = `<i class="bi bi-shield-check"></i><span>${role}</span>`;
+        }
+    </script>
+
+    <!-- Footer Capul -->
+    <footer class="capul-footer mt-4">
+        <i class="bi bi-shield-check me-1"></i> <span class="capul-version">v2.19.46</span> - Capul Inventário |
+        <span class="capul-slogan">Cooperar gera valor</span> |
+        &copy; 2025copy; 2026 Cooperativa Agropecuária Unaí Ltda
+    </footer>
+</body>
+</html>
