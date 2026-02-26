@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { countingListService } from '../../../services/counting-list.service';
 
@@ -9,6 +9,7 @@ interface Props {
 }
 
 export function CriarListaModal({ inventoryId, onClose, onCreated }: Props) {
+  const [visible, setVisible] = useState(false);
   const [listName, setListName] = useState('');
   const [description, setDescription] = useState('');
   const [counterCycle1, setCounterCycle1] = useState('');
@@ -16,6 +17,13 @@ export function CriarListaModal({ inventoryId, onClose, onCreated }: Props) {
   const [counterCycle3, setCounterCycle3] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => { requestAnimationFrame(() => setVisible(true)); }, []);
+
+  function handleClose() {
+    setVisible(false);
+    setTimeout(onClose, 200);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,11 +53,11 @@ export function CriarListaModal({ inventoryId, onClose, onCreated }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-200 ${visible ? 'bg-black/40' : 'bg-transparent'}`}>
+      <div className={`bg-white rounded-xl shadow-xl w-full max-w-md mx-4 transition-all duration-200 ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
         <div className="flex items-center justify-between p-4 border-b border-slate-200">
           <h3 className="text-lg font-semibold text-slate-800">Nova Lista de Contagem</h3>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600">
+          <button onClick={handleClose} className="p-1 text-slate-400 hover:text-slate-600">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -127,7 +135,7 @@ export function CriarListaModal({ inventoryId, onClose, onCreated }: Props) {
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50"
             >
               Cancelar

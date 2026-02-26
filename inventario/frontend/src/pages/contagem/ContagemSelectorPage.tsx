@@ -49,7 +49,7 @@ export function ContagemSelectorPage() {
   return (
     <>
       <Header title="Contagem" />
-      <div className="p-6 space-y-4">
+      <div className="p-4 md:p-6 space-y-4">
         {/* Cards resumo */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white rounded-xl border border-slate-200 p-4">

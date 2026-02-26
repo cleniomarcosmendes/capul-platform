@@ -229,7 +229,7 @@ export function TabAnalise({ inventoryId, listas }: Props) {
             <p className="text-green-600 text-xs mt-1">Todas as contagens conferem com o sistema.</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">

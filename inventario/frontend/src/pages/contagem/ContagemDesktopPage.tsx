@@ -97,7 +97,7 @@ export function ContagemDesktopPage() {
     return (
       <>
         <Header title="Contagem" />
-        <div className="p-6"><TableSkeleton rows={8} cols={8} /></div>
+        <div className="p-4 md:p-6"><TableSkeleton rows={8} cols={8} /></div>
       </>
     );
   }
@@ -105,7 +105,7 @@ export function ContagemDesktopPage() {
   return (
     <>
       <Header title={`Contagem — ${inventario?.name || 'Inventario'}`} />
-      <div className="p-6 space-y-4">
+      <div className="p-4 md:p-6 space-y-4">
         {/* Voltar */}
         <button
           onClick={() => navigate('/inventario/contagem')}
@@ -181,7 +181,7 @@ export function ContagemDesktopPage() {
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">

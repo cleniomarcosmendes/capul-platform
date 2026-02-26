@@ -95,7 +95,7 @@ export function SincronizacaoPage() {
 
         {/* Tabs */}
         <div className="border-b border-slate-200">
-          <div className="flex gap-1">
+          <div className="flex gap-1 overflow-x-auto scrollbar-hide">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.key;
@@ -103,7 +103,7 @@ export function SincronizacaoPage() {
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
-                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                     isActive
                       ? 'border-capul-600 text-capul-600'
                       : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -299,7 +299,7 @@ function TabEnvio() {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-slate-50 border-b border-slate-200">

@@ -25,9 +25,12 @@ interface Props {
 }
 
 export function ListaDetalheModal({ lista, onClose }: Props) {
+  const [visible, setVisible] = useState(false);
   const [products, setProducts] = useState<CountingListProduct[]>([]);
   const [currentCycle, setCurrentCycle] = useState(lista.current_cycle);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => { requestAnimationFrame(() => setVisible(true)); }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -39,6 +42,11 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
       .catch(() => setProducts([]))
       .finally(() => setLoading(false));
   }, [lista.id, lista.current_cycle]);
+
+  function handleClose() {
+    setVisible(false);
+    setTimeout(onClose, 200);
+  }
 
   const lsc = listStatusConfig[lista.list_status] || listStatusConfig.PREPARACAO;
 
@@ -53,8 +61,8 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
   }).length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-6xl mx-4 max-h-[90vh] flex flex-col">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-200 ${visible ? 'bg-black/40' : 'bg-transparent'}`}>
+      <div className={`bg-white rounded-xl shadow-xl w-full max-w-6xl mx-4 max-h-[90vh] flex flex-col transition-all duration-200 ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-200 shrink-0">
           <div>
@@ -68,7 +76,7 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
               <p className="text-xs text-slate-500 mt-0.5">{lista.description}</p>
             )}
           </div>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600">
+          <button onClick={handleClose} className="p-1 text-slate-400 hover:text-slate-600">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -116,7 +124,7 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
               <p className="text-slate-500 text-sm">Nenhum produto nesta lista.</p>
             </div>
           ) : (
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
@@ -239,7 +247,7 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
           </div>
           <div className="flex-1" />
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="px-4 py-1.5 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50"
           >
             Fechar

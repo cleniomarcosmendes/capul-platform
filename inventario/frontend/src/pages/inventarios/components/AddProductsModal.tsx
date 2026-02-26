@@ -11,6 +11,7 @@ interface Props {
 }
 
 export function AddProductsModal({ inventoryId, onClose, onAdded }: Props) {
+  const [visible, setVisible] = useState(false);
   const [products, setProducts] = useState<ProtheusProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -21,6 +22,8 @@ export function AddProductsModal({ inventoryId, onClose, onAdded }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{ added: number; errors: string[] } | null>(null);
+
+  useEffect(() => { requestAnimationFrame(() => setVisible(true)); }, []);
 
   const loadProducts = useCallback(() => {
     setLoading(true);
@@ -106,9 +109,14 @@ export function AddProductsModal({ inventoryId, onClose, onAdded }: Props) {
 
   const allOnPageSelected = products.length > 0 && products.every((p) => selected.has(p.id));
 
+  function handleClose() {
+    setVisible(false);
+    setTimeout(onClose, 200);
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-200 ${visible ? 'bg-black/40' : 'bg-transparent'}`}>
+      <div className={`bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col transition-all duration-200 ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-200 shrink-0">
           <div>
@@ -119,7 +127,7 @@ export function AddProductsModal({ inventoryId, onClose, onAdded }: Props) {
                 : 'Selecione os produtos para adicionar ao inventario'}
             </p>
           </div>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600">
+          <button onClick={handleClose} className="p-1 text-slate-400 hover:text-slate-600">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -243,7 +251,7 @@ export function AddProductsModal({ inventoryId, onClose, onAdded }: Props) {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50"
             >
               Fechar

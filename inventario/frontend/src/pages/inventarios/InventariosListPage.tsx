@@ -67,7 +67,7 @@ export function InventariosListPage() {
   return (
     <>
       <Header title="Inventarios" />
-      <div className="p-6 space-y-4">
+      <div className="p-4 md:p-6 space-y-4">
         {/* Toolbar: filtros + botao novo */}
         <div className="flex flex-wrap items-center gap-3">
           <select
@@ -140,7 +140,7 @@ export function InventariosListPage() {
           <>
             <div className="text-sm text-slate-500">{total} inventario{total !== 1 ? 's' : ''} encontrado{total !== 1 ? 's' : ''}</div>
 
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">

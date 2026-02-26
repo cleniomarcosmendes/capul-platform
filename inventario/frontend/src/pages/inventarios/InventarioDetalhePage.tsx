@@ -158,7 +158,7 @@ export function InventarioDetalhePage() {
     return (
       <>
         <Header title="Inventario" />
-        <div className="p-6"><PageSkeleton /></div>
+        <div className="p-4 md:p-6"><PageSkeleton /></div>
       </>
     );
   }
@@ -167,7 +167,7 @@ export function InventarioDetalhePage() {
     return (
       <>
         <Header title="Inventario" />
-        <div className="p-6"><ErrorState message="Erro ao carregar inventario." onRetry={() => window.location.reload()} /></div>
+        <div className="p-4 md:p-6"><ErrorState message="Erro ao carregar inventario." onRetry={() => window.location.reload()} /></div>
       </>
     );
   }
@@ -193,7 +193,7 @@ export function InventarioDetalhePage() {
   return (
     <>
       <Header title={inventario.name} />
-      <div className="p-6 space-y-4">
+      <div className="p-4 md:p-6 space-y-4">
         {/* Voltar */}
         <button
           onClick={() => navigate('/inventario/inventarios')}
@@ -274,7 +274,7 @@ export function InventarioDetalhePage() {
 
         {/* Tabs */}
         <div className="border-b border-slate-200">
-          <div className="flex gap-1">
+          <div className="flex gap-1 overflow-x-auto scrollbar-hide">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.key;
@@ -282,7 +282,7 @@ export function InventarioDetalhePage() {
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
-                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                     isActive
                       ? 'border-capul-600 text-capul-600'
                       : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -396,7 +396,7 @@ function TabItens({ itens, page, totalPages, statusFilter, inventoryStatus, onPa
           <p className="text-slate-500 text-sm">Nenhum item neste inventario.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
@@ -629,7 +629,7 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">

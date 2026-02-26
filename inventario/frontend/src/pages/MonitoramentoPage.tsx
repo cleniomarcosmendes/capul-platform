@@ -69,7 +69,7 @@ export default function MonitoramentoPage() {
   return (
     <>
       <Header title="Monitoramento" />
-      <div className="p-6 space-y-6">
+      <div className="p-4 md:p-6 space-y-6">
         {loading ? (
           <DashboardSkeleton />
         ) : error ? (

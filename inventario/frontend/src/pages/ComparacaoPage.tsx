@@ -117,7 +117,7 @@ export default function ComparacaoPage() {
     return (
       <>
         <Header title="Comparacao de Inventarios" />
-        <div className="p-6">
+        <div className="p-4 md:p-6">
           <ErrorState message="Parametros inv_a e inv_b sao obrigatorios na URL." />
         </div>
       </>
@@ -127,7 +127,7 @@ export default function ComparacaoPage() {
   return (
     <>
       <Header title="Comparacao de Inventarios" />
-      <div className="p-6 space-y-6">
+      <div className="p-4 md:p-6 space-y-6">
         {loading ? (
           <PageSkeleton />
         ) : error ? (
@@ -165,12 +165,12 @@ export default function ComparacaoPage() {
             </div>
 
             {/* Mode tabs */}
-            <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
+            <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit overflow-x-auto scrollbar-hide">
               {(['matches', 'transfers', 'manual'] as Mode[]).map((m) => (
                 <button
                   key={m}
                   onClick={() => setMode(m)}
-                  className={`px-4 py-2 text-sm rounded-md transition-colors ${mode === m ? 'bg-white shadow text-capul-700 font-medium' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-4 py-2 text-sm rounded-md transition-colors whitespace-nowrap ${mode === m ? 'bg-white shadow text-capul-700 font-medium' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   {modeLabels[m]}
                 </button>

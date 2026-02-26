@@ -63,7 +63,7 @@ export function InventarioCreatePage() {
   return (
     <>
       <Header title="Novo Inventario" />
-      <div className="p-6 max-w-2xl">
+      <div className="p-4 md:p-6 max-w-2xl">
         <button
           onClick={() => navigate(-1)}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4"

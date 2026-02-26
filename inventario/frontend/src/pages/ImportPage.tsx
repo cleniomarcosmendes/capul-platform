@@ -69,7 +69,7 @@ export function ImportPage() {
   return (
     <>
       <Header title="Importacao de Dados" />
-      <div className="p-6">
+      <div className="p-4 md:p-6">
         {/* Steps indicator */}
         <div className="flex items-center gap-2 mb-6">
           {[
