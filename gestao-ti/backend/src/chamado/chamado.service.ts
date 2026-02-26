@@ -12,6 +12,8 @@ import { ResolverChamadoDto, ReabrirChamadoDto, CsatDto } from './dto/resolver-c
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { NotificacaoService } from '../notificacao/notificacao.service.js';
 import { StatusChamado, Visibilidade } from '@prisma/client';
+import * as path from 'path';
+import * as fs from 'fs';
 
 const chamadoInclude = {
   solicitante: { select: { id: true, nome: true, username: true, email: true } },
@@ -24,7 +26,13 @@ const chamadoInclude = {
   software: { select: { id: true, nome: true, tipo: true } },
   softwareModulo: { select: { id: true, nome: true } },
   projeto: { select: { id: true, numero: true, nome: true } },
+  anexos: {
+    select: { id: true, nomeOriginal: true, mimeType: true, tamanho: true, descricao: true, createdAt: true, usuarioId: true, usuario: { select: { id: true, nome: true } } },
+    orderBy: { createdAt: 'desc' as const },
+  },
 };
+
+const UPLOADS_DIR = path.join(process.cwd(), 'uploads', 'chamados');
 
 @Injectable()
 export class ChamadoService {
@@ -143,6 +151,24 @@ export class ChamadoService {
       if (mod) moduloNome = mod.nome;
     }
 
+    // Determinar filial, departamento e centro de custo:
+    // Tecnicos podem informar valores diferentes (abertura em nome de outro setor)
+    let filialId = user.filialId;
+    let departamentoId: string | undefined = user.departamentoId;
+
+    if (role !== 'USUARIO_FINAL') {
+      if (dto.filialId) {
+        const filial = await this.prisma.filial.findUnique({ where: { id: dto.filialId } });
+        if (!filial) throw new BadRequestException('Filial nao encontrada');
+        filialId = dto.filialId;
+      }
+      if (dto.departamentoId) {
+        const depto = await this.prisma.departamento.findUnique({ where: { id: dto.departamentoId } });
+        if (!depto) throw new BadRequestException('Departamento nao encontrado');
+        departamentoId = dto.departamentoId;
+      }
+    }
+
     const chamado = await this.prisma.chamado.create({
       data: {
         titulo: dto.titulo,
@@ -151,8 +177,8 @@ export class ChamadoService {
         prioridade: dto.prioridade ?? 'MEDIA',
         solicitanteId: user.sub,
         equipeAtualId: dto.equipeAtualId,
-        filialId: user.filialId,
-        departamentoId: user.departamentoId,
+        filialId,
+        departamentoId,
         softwareNome,
         moduloNome,
         softwareId: dto.softwareId,
@@ -497,6 +523,62 @@ export class ChamadoService {
     }
 
     return updated;
+  }
+
+  // === Anexos ===
+
+  async listAnexos(chamadoId: string) {
+    await this.getChamadoOrFail(chamadoId);
+    return this.prisma.anexoChamado.findMany({
+      where: { chamadoId },
+      include: { usuario: { select: { id: true, nome: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async addAnexo(chamadoId: string, file: Express.Multer.File, userId: string, descricao?: string) {
+    await this.getChamadoOrFail(chamadoId);
+    return this.prisma.anexoChamado.create({
+      data: {
+        nomeOriginal: file.originalname,
+        nomeArquivo: file.filename,
+        mimeType: file.mimetype,
+        tamanho: file.size,
+        descricao,
+        chamadoId,
+        usuarioId: userId,
+      },
+      include: { usuario: { select: { id: true, nome: true } } },
+    });
+  }
+
+  async getAnexoFile(chamadoId: string, anexoId: string) {
+    const anexo = await this.prisma.anexoChamado.findFirst({
+      where: { id: anexoId, chamadoId },
+    });
+    if (!anexo) throw new NotFoundException('Anexo nao encontrado neste chamado');
+
+    const filePath = path.join(UPLOADS_DIR, anexo.nomeArquivo);
+    if (!fs.existsSync(filePath)) {
+      throw new NotFoundException('Arquivo nao encontrado no disco');
+    }
+    return { filePath, anexo };
+  }
+
+  async removeAnexo(chamadoId: string, anexoId: string) {
+    const anexo = await this.prisma.anexoChamado.findFirst({
+      where: { id: anexoId, chamadoId },
+    });
+    if (!anexo) throw new NotFoundException('Anexo nao encontrado neste chamado');
+
+    // Remove do disco
+    const filePath = path.join(UPLOADS_DIR, anexo.nomeArquivo);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    await this.prisma.anexoChamado.delete({ where: { id: anexoId } });
+    return { deleted: true };
   }
 
   private async getChamadoOrFail(id: string) {

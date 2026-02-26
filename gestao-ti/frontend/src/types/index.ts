@@ -187,6 +187,7 @@ export interface Chamado {
   createdAt: string;
   updatedAt: string;
   historicos?: HistoricoChamado[];
+  anexos?: AnexoChamado[];
   projetoId: string | null;
   projeto: { id: string; numero: number; nome: string } | null;
   departamentoId: string | null;
@@ -816,6 +817,17 @@ export interface Notificacao {
   lida: boolean;
   dadosJson: string | null;
   usuarioId: string;
+  createdAt: string;
+}
+
+export interface AnexoChamado {
+  id: string;
+  nomeOriginal: string;
+  mimeType: string;
+  tamanho: number;
+  descricao: string | null;
+  usuarioId: string;
+  usuario: { id: string; nome: string };
   createdAt: string;
 }
 

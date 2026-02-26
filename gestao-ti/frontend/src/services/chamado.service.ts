@@ -1,5 +1,5 @@
 import { gestaoApi } from './api';
-import type { Chamado, HistoricoChamado, StatusChamado, Visibilidade } from '../types';
+import type { Chamado, HistoricoChamado, AnexoChamado, StatusChamado, Visibilidade } from '../types';
 
 interface ListFilters {
   status?: StatusChamado;
@@ -23,6 +23,8 @@ interface CreateChamadoPayload {
   moduloNome?: string;
   catalogoServicoId?: string;
   projetoId?: string;
+  filialId?: string;
+  departamentoId?: string;
 }
 
 export const chamadoService = {
@@ -92,5 +94,36 @@ export const chamadoService = {
   async avaliar(id: string, nota: number, comentario?: string): Promise<Chamado> {
     const { data } = await gestaoApi.post(`/chamados/${id}/avaliar`, { nota, comentario });
     return data;
+  },
+
+  async listarAnexos(id: string): Promise<AnexoChamado[]> {
+    const { data } = await gestaoApi.get(`/chamados/${id}/anexos`);
+    return data;
+  },
+
+  async uploadAnexo(id: string, file: File, descricao?: string): Promise<AnexoChamado> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (descricao) formData.append('descricao', descricao);
+    const { data } = await gestaoApi.post(`/chamados/${id}/anexos`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
+
+  async downloadAnexo(id: string, anexoId: string, nomeOriginal: string): Promise<void> {
+    const { data } = await gestaoApi.get(`/chamados/${id}/anexos/${anexoId}/download`, {
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeOriginal;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  },
+
+  async removerAnexo(id: string, anexoId: string): Promise<void> {
+    await gestaoApi.delete(`/chamados/${id}/anexos/${anexoId}`);
   },
 };

@@ -46,4 +46,13 @@ export class CreateChamadoDto {
   @IsOptional()
   @IsString()
   projetoId?: string;
+
+  @IsOptional()
+  @IsString()
+  filialId?: string;
+
+  @IsOptional()
+  @IsString()
+  departamentoId?: string;
+
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
@@ -7,8 +7,9 @@ import { equipeService } from '../../services/equipe.service';
 import {
   ArrowLeft, UserPlus, ArrowRightLeft, Send, CheckCircle,
   XCircle, RotateCcw, Lock, Star, Users, MessageSquare,
+  Paperclip, Download, Trash2, FileText, Image, FileSpreadsheet, File,
 } from 'lucide-react';
-import type { Chamado, EquipeTI, StatusChamado, TipoHistorico } from '../../types';
+import type { Chamado, EquipeTI, AnexoChamado, StatusChamado, TipoHistorico } from '../../types';
 
 const statusLabels: Record<StatusChamado, string> = {
   ABERTO: 'Aberto', EM_ATENDIMENTO: 'Em Atendimento', PENDENTE: 'Pendente',
@@ -36,6 +37,19 @@ const tipoIcons: Record<TipoHistorico, typeof MessageSquare> = {
   RESOLVIDO: CheckCircle, FECHADO: Lock, REABERTO: RotateCcw, CANCELADO: XCircle,
   AVALIADO: Star,
 };
+
+function getFileIcon(mimeType: string) {
+  if (mimeType.startsWith('image/')) return Image;
+  if (mimeType.includes('pdf')) return FileText;
+  if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || mimeType.includes('csv')) return FileSpreadsheet;
+  return File;
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 export function ChamadoDetalhePage() {
   const { id } = useParams<{ id: string }>();
@@ -71,6 +85,11 @@ export function ChamadoDetalhePage() {
   const [csatNota, setCsatNota] = useState(5);
   const [csatComentario, setCsatComentario] = useState('');
 
+  // Anexos
+  const [anexos, setAnexos] = useState<AnexoChamado[]>([]);
+  const [uploadingAnexo, setUploadingAnexo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
   const isTecnico = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR'].includes(gestaoTiRole || '');
   const isSolicitante = chamado?.solicitanteId === usuario?.id;
@@ -78,7 +97,10 @@ export function ChamadoDetalhePage() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    chamadoService.buscar(id).then(setChamado).catch(() => setError('Chamado nao encontrado')).finally(() => setLoading(false));
+    chamadoService.buscar(id).then((data) => {
+      setChamado(data);
+      if (data.anexos) setAnexos(data.anexos);
+    }).catch(() => setError('Chamado nao encontrado')).finally(() => setLoading(false));
   }, [id]);
 
   useEffect(() => {
@@ -98,6 +120,7 @@ export function ChamadoDetalhePage() {
       // Reload full detail with historicos
       const full = await chamadoService.buscar(updated.id);
       setChamado(full);
+      if (full.anexos) setAnexos(full.anexos);
       closeAllPanels();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -122,6 +145,33 @@ export function ChamadoDetalhePage() {
     setCsatComentario('');
   }
 
+  async function handleUploadAnexo(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files || !chamado) return;
+    setUploadingAnexo(true);
+    setError('');
+    try {
+      const files = Array.from(e.target.files);
+      const uploaded = await Promise.all(files.map((f) => chamadoService.uploadAnexo(chamado.id, f)));
+      setAnexos((prev) => [...uploaded, ...prev]);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg || 'Erro ao enviar anexo');
+    } finally {
+      setUploadingAnexo(false);
+      e.target.value = '';
+    }
+  }
+
+  async function handleRemoveAnexo(anexoId: string) {
+    if (!chamado || !confirm('Remover este anexo?')) return;
+    try {
+      await chamadoService.removerAnexo(chamado.id, anexoId);
+      setAnexos((prev) => prev.filter((a) => a.id !== anexoId));
+    } catch {
+      setError('Erro ao remover anexo');
+    }
+  }
+
   if (loading) return <><Header title="Chamado" /><div className="p-6 text-slate-500">Carregando...</div></>;
   if (!chamado) return <><Header title="Chamado" /><div className="p-6 text-red-500">{error || 'Nao encontrado'}</div></>;
 
@@ -133,6 +183,7 @@ export function ChamadoDetalhePage() {
   const canCancelar = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '') && !['FECHADO', 'CANCELADO'].includes(chamado.status);
   const canAvaliar = isSolicitante && (chamado.status === 'RESOLVIDO' || chamado.status === 'FECHADO') && !chamado.notaSatisfacao;
   const canComentar = !['FECHADO', 'CANCELADO'].includes(chamado.status);
+  const canAnexar = !['FECHADO', 'CANCELADO'].includes(chamado.status);
 
   return (
     <>
@@ -164,6 +215,78 @@ export function ChamadoDetalhePage() {
                 <p className="text-xs text-slate-500">Modulo: <span className="text-slate-700">{chamado.moduloNome}</span></p>
               )}
             </div>
+
+            {/* Anexos */}
+            {(anexos.length > 0 || canAnexar) && (
+              <div className="bg-white rounded-xl border border-slate-200">
+                <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                  <h4 className="font-semibold text-slate-700 flex items-center gap-2">
+                    <Paperclip className="w-4 h-4" />
+                    Anexos {anexos.length > 0 && <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{anexos.length}</span>}
+                  </h4>
+                  {canAnexar && (
+                    <>
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingAnexo}
+                        className="text-sm text-capul-600 hover:text-capul-700 flex items-center gap-1 disabled:opacity-50"
+                      >
+                        <Paperclip className="w-3.5 h-3.5" />
+                        {uploadingAnexo ? 'Enviando...' : 'Anexar'}
+                      </button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        onChange={handleUploadAnexo}
+                        className="hidden"
+                        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.7z"
+                      />
+                    </>
+                  )}
+                </div>
+                <div className="p-4">
+                  {anexos.length === 0 ? (
+                    <p className="text-sm text-slate-400">Nenhum anexo</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {anexos.map((a) => {
+                        const Icon = getFileIcon(a.mimeType);
+                        return (
+                          <div key={a.id} className="flex items-center gap-3 bg-slate-50 rounded-lg px-4 py-3">
+                            <Icon className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-slate-700 truncate">{a.nomeOriginal}</p>
+                              <p className="text-xs text-slate-400">
+                                {formatFileSize(a.tamanho)} — {a.usuario.nome} — {new Date(a.createdAt).toLocaleString('pt-BR')}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => chamadoService.downloadAnexo(chamado.id, a.id, a.nomeOriginal)}
+                                className="p-1.5 text-slate-400 hover:text-capul-600 rounded"
+                                title="Download"
+                              >
+                                <Download className="w-4 h-4" />
+                              </button>
+                              {isTecnico && (
+                                <button
+                                  onClick={() => handleRemoveAnexo(a.id)}
+                                  className="p-1.5 text-slate-400 hover:text-red-500 rounded"
+                                  title="Remover"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Actions bar */}
             <div className="flex flex-wrap gap-2">
@@ -446,6 +569,12 @@ export function ChamadoDetalhePage() {
               <InfoRow label="Filial">
                 <span className="text-xs text-slate-600">{chamado.filial.codigo} - {chamado.filial.nomeFantasia}</span>
               </InfoRow>
+
+              {chamado.departamento && (
+                <InfoRow label="Departamento">
+                  <span className="text-xs text-slate-600">{chamado.departamento.nome}</span>
+                </InfoRow>
+              )}
 
               {chamado.catalogoServico && (
                 <InfoRow label="Servico">

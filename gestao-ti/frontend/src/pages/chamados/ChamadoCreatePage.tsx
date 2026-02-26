@@ -7,14 +7,15 @@ import { equipeService } from '../../services/equipe.service';
 import { catalogoService } from '../../services/catalogo.service';
 import { softwareService } from '../../services/software.service';
 import { projetoService } from '../../services/projeto.service';
-import { ArrowLeft, FolderKanban } from 'lucide-react';
-import type { EquipeTI, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto } from '../../types';
+import { coreService } from '../../services/core.service';
+import { ArrowLeft, FolderKanban, Paperclip, X } from 'lucide-react';
+import type { EquipeTI, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento } from '../../types';
 
 export function ChamadoCreatePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const projetoIdParam = searchParams.get('projetoId');
-  const { gestaoTiRole } = useAuth();
+  const { usuario, gestaoTiRole } = useAuth();
   const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
   const [projetoVinculado, setProjetoVinculado] = useState<Projeto | null>(null);
 
@@ -22,6 +23,8 @@ export function ChamadoCreatePage() {
   const [catalogos, setCatalogos] = useState<CatalogoServico[]>([]);
   const [softwaresList, setSoftwaresList] = useState<Software[]>([]);
   const [modulosList, setModulosList] = useState<SoftwareModulo[]>([]);
+  const [filiais, setFiliais] = useState<{ id: string; codigo: string; nomeFantasia: string }[]>([]);
+  const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -36,6 +39,13 @@ export function ChamadoCreatePage() {
   const [moduloNome, setModuloNome] = useState('');
   const [catalogoServicoId, setCatalogoServicoId] = useState('');
 
+  // Filial/Departamento para tecnicos
+  const [filialId, setFilialId] = useState('');
+  const [departamentoId, setDepartamentoId] = useState('');
+
+  // Anexos
+  const [arquivos, setArquivos] = useState<File[]>([]);
+
   useEffect(() => {
     equipeService.listar('ATIVO').then((data) => {
       const filtered = isUsuarioFinal ? data.filter((e) => e.aceitaChamadoExterno) : data;
@@ -45,7 +55,26 @@ export function ChamadoCreatePage() {
     if (projetoIdParam) {
       projetoService.buscar(projetoIdParam).then(setProjetoVinculado).catch(() => {});
     }
+    // Carregar filiais para tecnicos
+    if (!isUsuarioFinal) {
+      coreService.listarFiliais().then(setFiliais).catch(() => {});
+    }
   }, [isUsuarioFinal]);
+
+  // Pre-preencher filial/depto do usuario logado
+  useEffect(() => {
+    if (!isUsuarioFinal && usuario) {
+      setFilialId(usuario.filialAtual.id);
+      setDepartamentoId(usuario.departamento.id);
+    }
+  }, [isUsuarioFinal, usuario]);
+
+  // Recarregar departamentos quando filial muda
+  useEffect(() => {
+    if (!isUsuarioFinal && filialId) {
+      coreService.listarDepartamentos(filialId).then(setDepartamentos).catch(() => setDepartamentos([]));
+    }
+  }, [isUsuarioFinal, filialId]);
 
   useEffect(() => {
     if (softwareId) {
@@ -71,6 +100,24 @@ export function ChamadoCreatePage() {
     setCatalogoServicoId('');
   }, [equipeAtualId]);
 
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files) {
+      const novos = Array.from(e.target.files);
+      setArquivos((prev) => [...prev, ...novos]);
+    }
+    e.target.value = '';
+  }
+
+  function removeFile(index: number) {
+    setArquivos((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function formatFileSize(bytes: number) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -89,7 +136,15 @@ export function ChamadoCreatePage() {
         moduloNome: moduloNome || undefined,
         catalogoServicoId: catalogoServicoId || undefined,
         projetoId: projetoIdParam || undefined,
+        filialId: (!isUsuarioFinal && filialId && filialId !== usuario?.filialAtual.id) ? filialId : undefined,
+        departamentoId: (!isUsuarioFinal && departamentoId && departamentoId !== usuario?.departamento.id) ? departamentoId : undefined,
       });
+
+      // Upload dos anexos
+      if (arquivos.length > 0) {
+        await Promise.all(arquivos.map((file) => chamadoService.uploadAnexo(chamado.id, file)));
+      }
+
       navigate(`/gestao-ti/chamados/${chamado.id}`);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -194,6 +249,45 @@ export function ChamadoCreatePage() {
             </div>
           )}
 
+          {/* Filial e Departamento — somente para tecnicos */}
+          {!isUsuarioFinal && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
+              <p className="text-xs text-slate-500">Altere caso esteja abrindo em nome de outro setor/filial</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Filial do solicitante</label>
+                  <select
+                    value={filialId}
+                    onChange={(e) => {
+                      setFilialId(e.target.value);
+                      setDepartamentoId('');
+                    }}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                  >
+                    <option value="">Selecione</option>
+                    {filiais.map((f) => (
+                      <option key={f.id} value={f.id}>{f.codigo} - {f.nomeFantasia}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Departamento do solicitante</label>
+                  <select
+                    value={departamentoId}
+                    onChange={(e) => setDepartamentoId(e.target.value)}
+                    disabled={!filialId}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white disabled:opacity-50"
+                  >
+                    <option value="">Selecione</option>
+                    {departamentos.map((d) => (
+                      <option key={d.id} value={d.id}>{d.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
           {catalogos.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Servico do Catalogo</label>
@@ -241,6 +335,37 @@ export function ChamadoCreatePage() {
                   <option key={m.id} value={m.id}>{m.nome}</option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          {/* Anexos */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Anexos (opcional)</label>
+            <div className="border border-dashed border-slate-300 rounded-lg p-4">
+              <label className="flex items-center gap-2 text-sm text-capul-600 hover:text-capul-700 cursor-pointer w-fit">
+                <Paperclip className="w-4 h-4" />
+                Selecionar arquivos
+                <input
+                  type="file"
+                  multiple
+                  onChange={handleFileChange}
+                  className="hidden"
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.7z"
+                />
+              </label>
+              <p className="text-xs text-slate-400 mt-1">Max 10MB por arquivo. Imagens, PDF, documentos, planilhas, ZIP.</p>
+              {arquivos.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {arquivos.map((file, i) => (
+                    <div key={i} className="flex items-center justify-between bg-slate-50 rounded px-3 py-2 text-sm">
+                      <span className="text-slate-700 truncate">{file.name} <span className="text-slate-400">({formatFileSize(file.size)})</span></span>
+                      <button type="button" onClick={() => removeFile(i)} className="text-slate-400 hover:text-red-500">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

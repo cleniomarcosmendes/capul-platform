@@ -51,6 +51,7 @@ model Usuario {
   atividadesProjeto    AtividadeProjeto[] @relation("AtividadeProjetoUsuario")
   riscosResponsavel    RiscoProjeto[]     @relation("RiscoResponsavel")
   anexosProjeto        AnexoProjeto[]     @relation("AnexoProjetoUsuario")
+  anexosChamado        AnexoChamado[]     @relation("AnexoChamadoUsuario")
   apontamentosHoras    ApontamentoHoras[] @relation("ApontamentoHorasUsuario")
   ativosResponsavel    Ativo[]            @relation("AtivoResponsavel")
   artigosAutor         ArtigoConhecimento[] @relation("ArtigoAutor")
@@ -287,6 +288,7 @@ model Chamado {
   historicos    HistoricoChamado[]
   ordensServico OrdemServico[]
   paradas       RegistroParada[]
+  anexos        AnexoChamado[]
 
   @@index([status])
   @@index([equipeAtualId, status])
@@ -317,6 +319,26 @@ model HistoricoChamado {
 
   @@index([chamadoId])
   @@map("historicos_chamado")
+  @@schema("gestao_ti")
+}
+
+model AnexoChamado {
+  id            String   @id @default(uuid())
+  nomeOriginal  String   @map("nome_original")
+  nomeArquivo   String   @map("nome_arquivo")
+  mimeType      String   @map("mime_type")
+  tamanho       Int
+  descricao     String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  chamadoId String  @map("chamado_id")
+  chamado   Chamado @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("AnexoChamadoUsuario", fields: [usuarioId], references: [id])
+
+  @@index([chamadoId])
+  @@map("anexos_chamado")
   @@schema("gestao_ti")
 }
 
