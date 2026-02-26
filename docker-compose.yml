@@ -14,6 +14,7 @@ services:
       - hub
       - auth-gateway
       - gestao-ti-frontend
+      - inventario-frontend
     restart: unless-stopped
 
   # =======================================
@@ -91,18 +92,27 @@ services:
       DB_SCHEMA: inventario
       CORE_SCHEMA: core
       UNIFIED_AUTH: "true"
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: "http://localhost,http://localhost:80"
+      ENVIRONMENT: production
+      DEBUG: "false"
+      PROTHEUS_API_URL: ${PROTHEUS_API_URL:-}
+      PROTHEUS_API_AUTH: ${PROTHEUS_API_AUTH:-}
+      PROTHEUS_API_TIMEOUT: ${PROTHEUS_API_TIMEOUT:-30}
     ports:
       - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_started
     restart: unless-stopped
 
   inventario-frontend:
     build: ./inventario/frontend
     container_name: capul-inventario-web
     ports:
-      - "8443:8443"
+      - "5174:5174"
     depends_on:
       - inventario-backend
     restart: unless-stopped

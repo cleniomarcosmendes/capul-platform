@@ -40,8 +40,8 @@ class Settings:
             return self.DATABASE_URL.split("/")[-1]
         return "inventario_protheus"
     
-    # Segurança
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production-256-bits")
+    # Seguranca — JWT_SECRET da plataforma tem prioridade sobre SECRET_KEY local
+    SECRET_KEY: str = os.getenv("JWT_SECRET", os.getenv("SECRET_KEY", "your-secret-key-change-in-production-256-bits"))
     # ✅ v2.19.8: Aumentado de 60 para 480 minutos (8 horas) para evitar expiração durante uso
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 480))
     ALGORITHM: str = "HS256"
