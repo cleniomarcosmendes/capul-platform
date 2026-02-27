@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUUID, IsIn } from 'class-validator';
 
 export class CreateCentroCustoDto {
   @IsNotEmpty()
@@ -30,4 +30,8 @@ export class UpdateCentroCustoDto {
   @IsOptional()
   @IsString()
   descricao?: string;
+
+  @IsOptional()
+  @IsIn(['ATIVO', 'INATIVO'])
+  status?: 'ATIVO' | 'INATIVO';
 }

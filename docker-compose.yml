@@ -13,6 +13,7 @@ services:
     depends_on:
       - hub
       - auth-gateway
+      - configurador
       - gestao-ti-frontend
       - inventario-frontend
     restart: unless-stopped
@@ -76,6 +77,15 @@ services:
     container_name: capul-hub
     ports:
       - "5170:5170"
+    depends_on:
+      - auth-gateway
+    restart: unless-stopped
+
+  configurador:
+    build: ./configurador
+    container_name: capul-configurador
+    ports:
+      - "5175:5175"
     depends_on:
       - auth-gateway
     restart: unless-stopped

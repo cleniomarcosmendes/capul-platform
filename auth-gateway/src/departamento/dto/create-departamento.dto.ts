@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUUID, IsIn } from 'class-validator';
 
 export class CreateDepartamentoDto {
   @IsNotEmpty()
@@ -22,4 +22,8 @@ export class UpdateDepartamentoDto {
   @IsOptional()
   @IsString()
   descricao?: string;
+
+  @IsOptional()
+  @IsIn(['ATIVO', 'INATIVO'])
+  status?: 'ATIVO' | 'INATIVO';
 }

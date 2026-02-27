@@ -3,8 +3,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import HubPage from './pages/HubPage';
 import PerfilPage from './pages/PerfilPage';
-import UsuariosPage from './pages/UsuariosPage';
-import UsuarioFormPage from './pages/UsuarioFormPage';
 import './index.css';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -43,30 +41,6 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <PerfilPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/usuarios"
-        element={
-          <ProtectedRoute>
-            <UsuariosPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/usuarios/novo"
-        element={
-          <ProtectedRoute>
-            <UsuarioFormPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/usuarios/:id"
-        element={
-          <ProtectedRoute>
-            <UsuarioFormPage />
           </ProtectedRoute>
         }
       />

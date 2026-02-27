@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, IsUUID, IsEmail } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUUID, IsEmail, IsIn } from 'class-validator';
 
 export class CreateFilialDto {
   @IsNotEmpty()
@@ -51,6 +51,10 @@ export class CreateFilialDto {
 }
 
 export class UpdateFilialDto {
+  @IsOptional()
+  @IsIn(['ATIVO', 'INATIVO'])
+  status?: 'ATIVO' | 'INATIVO';
+
   @IsOptional()
   @IsString()
   codigo?: string;

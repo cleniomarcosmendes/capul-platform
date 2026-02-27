@@ -1,16 +1,10 @@
 import { coreApi } from './api';
-import type {
-  UsuarioListItem,
-  UsuarioDetalhe,
-  ModuloSistema,
-  FilialOption,
-} from '../types';
+import type { UsuarioListItem, UsuarioDetalhe, ModuloSistema, FilialOption } from '../types';
 
 export const usuarioService = {
   async listar(filialId?: string): Promise<UsuarioListItem[]> {
-    const { data } = await coreApi.get('/usuarios', {
-      params: filialId ? { filialId } : undefined,
-    });
+    const params = filialId ? { filialId } : {};
+    const { data } = await coreApi.get('/usuarios', { params });
     return data;
   },
 
@@ -27,46 +21,38 @@ export const usuarioService = {
     telefone?: string;
     cargo?: string;
     filialPrincipalId?: string;
+    departamentoId: string;
     filialIds?: string[];
     permissoes?: { moduloId: string; roleModuloId: string }[];
-  }) {
+  }): Promise<UsuarioDetalhe> {
     const { data } = await coreApi.post('/usuarios', dto);
     return data;
   },
 
-  async atualizar(
-    id: string,
-    dto: {
-      username?: string;
-      nome?: string;
-      email?: string;
-      telefone?: string;
-      cargo?: string;
-      filialPrincipalId?: string;
-    },
-  ) {
+  async atualizar(id: string, dto: {
+    username?: string;
+    nome?: string;
+    email?: string;
+    telefone?: string;
+    cargo?: string;
+    filialPrincipalId?: string;
+    departamentoId?: string;
+  }): Promise<UsuarioDetalhe> {
     const { data } = await coreApi.patch(`/usuarios/${id}`, dto);
     return data;
   },
 
-  async atualizarStatus(id: string, status: 'ATIVO' | 'INATIVO') {
+  async atualizarStatus(id: string, status: 'ATIVO' | 'INATIVO'): Promise<UsuarioDetalhe> {
     const { data } = await coreApi.patch(`/usuarios/${id}/status`, { status });
     return data;
   },
 
-  async atribuirPermissao(
-    id: string,
-    dto: { moduloId: string; roleModuloId: string },
-  ) {
-    const { data } = await coreApi.post(`/usuarios/${id}/permissoes`, dto);
-    return data;
+  async atribuirPermissao(id: string, dto: { moduloId: string; roleModuloId: string }): Promise<void> {
+    await coreApi.post(`/usuarios/${id}/permissoes`, dto);
   },
 
-  async revogarPermissao(id: string, moduloId: string) {
-    const { data } = await coreApi.delete(
-      `/usuarios/${id}/permissoes/${moduloId}`,
-    );
-    return data;
+  async revogarPermissao(id: string, moduloId: string): Promise<void> {
+    await coreApi.delete(`/usuarios/${id}/permissoes/${moduloId}`);
   },
 
   async listarModulos(): Promise<ModuloSistema[]> {
