@@ -6,7 +6,6 @@ import { inventoryService } from '../services/inventory.service';
 import type { Integration } from '../services/integration.service';
 import type { InventoryList, SyncStatus } from '../types';
 import {
-  RefreshCw,
   Send,
   History,
   Package,
@@ -18,11 +17,12 @@ import {
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 import { TableSkeleton } from '../components/LoadingSkeleton';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
-type Tab = 'sync' | 'envio' | 'historico';
+type Tab = 'envio' | 'historico';
 
 export function SincronizacaoPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('sync');
+  const [activeTab, setActiveTab] = useState<Tab>('envio');
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
 
   useEffect(() => {
@@ -30,32 +30,16 @@ export function SincronizacaoPage() {
   }, []);
 
   const tabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { key: 'sync', label: 'Sincronizacao', icon: RefreshCw },
     { key: 'envio', label: 'Envio ao Protheus', icon: Send },
     { key: 'historico', label: 'Historico', icon: History },
   ];
 
   return (
     <>
-      <Header title="Integracao Protheus" />
+      <Header title="Envio ao Protheus" />
       <div className="p-6 space-y-4">
         {/* Cards resumo */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <RefreshCw className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">Ultima Sync</p>
-                <p className="text-sm font-bold text-slate-800">
-                  {syncStatus?.last_sync
-                    ? new Date(syncStatus.last_sync).toLocaleString('pt-BR')
-                    : 'Nunca'}
-                </p>
-              </div>
-            </div>
-          </div>
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-green-100 rounded-lg">
@@ -91,6 +75,21 @@ export function SincronizacaoPage() {
               </div>
             </div>
           </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Clock className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Ultima Sync</p>
+                <p className="text-sm font-bold text-slate-800">
+                  {syncStatus?.last_sync
+                    ? new Date(syncStatus.last_sync).toLocaleString('pt-BR')
+                    : 'Nunca'}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -118,115 +117,10 @@ export function SincronizacaoPage() {
         </div>
 
         {/* Tab content */}
-        {activeTab === 'sync' && <TabSync onSyncComplete={() => syncService.getStatus().then(setSyncStatus).catch(() => {})} />}
         {activeTab === 'envio' && <TabEnvio />}
         {activeTab === 'historico' && <TabHistorico syncStatus={syncStatus} />}
-        {/* Toast available via useToast() in sub-components */}
       </div>
     </>
-  );
-}
-
-// === Tab Sincronizacao ===
-
-function TabSync({ onSyncComplete }: { onSyncComplete: () => void }) {
-  const [syncingHierarchy, setSyncingHierarchy] = useState(false);
-  const [syncingStock, setSyncingStock] = useState(false);
-  const [resultHierarchy, setResultHierarchy] = useState<string | null>(null);
-  const [resultStock, setResultStock] = useState<string | null>(null);
-
-  async function handleSyncHierarchy() {
-    setSyncingHierarchy(true);
-    setResultHierarchy(null);
-    try {
-      await syncService.sincronizarHierarquia();
-      setResultHierarchy('Hierarquia sincronizada com sucesso!');
-      onSyncComplete();
-    } catch {
-      setResultHierarchy('Erro ao sincronizar hierarquia.');
-    } finally {
-      setSyncingHierarchy(false);
-    }
-  }
-
-  async function handleSyncStock() {
-    setSyncingStock(true);
-    setResultStock(null);
-    try {
-      const res = await syncService.sincronizarEstoque();
-      setResultStock(`Saldos sincronizados: ${res.synced} registros, ${res.errors} erros.`);
-      onSyncComplete();
-    } catch {
-      setResultStock('Erro ao sincronizar saldos.');
-    } finally {
-      setSyncingStock(false);
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* Hierarquia */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="font-semibold text-slate-800">Hierarquia Mercadologica</h3>
-            <p className="text-sm text-slate-500 mt-1">
-              Produtos, grupos, categorias, subcategorias, segmentos, localizacoes, codigos de barras e precos.
-            </p>
-            <p className="text-xs text-slate-400 mt-1">Tabelas: SB1, SBM, SZD, SZE, SZF, SBZ, SLK, DA1</p>
-          </div>
-          <button
-            onClick={handleSyncHierarchy}
-            disabled={syncingHierarchy}
-            className="flex items-center gap-2 px-4 py-2 bg-capul-600 text-white text-sm rounded-lg hover:bg-capul-700 disabled:opacity-50 shrink-0"
-          >
-            {syncingHierarchy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            {syncingHierarchy ? 'Sincronizando...' : 'Sincronizar Agora'}
-          </button>
-        </div>
-        {resultHierarchy && (
-          <div className={`mt-3 p-3 rounded-lg text-sm ${
-            resultHierarchy.includes('Erro') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'
-          }`}>
-            {resultHierarchy}
-          </div>
-        )}
-      </div>
-
-      {/* Saldos */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="font-semibold text-slate-800">Saldos e Lotes</h3>
-            <p className="text-sm text-slate-500 mt-1">
-              Saldos de estoque e controle de lotes do Protheus.
-            </p>
-            <p className="text-xs text-slate-400 mt-1">Tabelas: SB2, SB8</p>
-          </div>
-          <button
-            onClick={handleSyncStock}
-            disabled={syncingStock}
-            className="flex items-center gap-2 px-4 py-2 bg-capul-600 text-white text-sm rounded-lg hover:bg-capul-700 disabled:opacity-50 shrink-0"
-          >
-            {syncingStock ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
-            {syncingStock ? 'Sincronizando...' : 'Sincronizar Agora'}
-          </button>
-        </div>
-        {resultStock && (
-          <div className={`mt-3 p-3 rounded-lg text-sm ${
-            resultStock.includes('Erro') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'
-          }`}>
-            {resultStock}
-          </div>
-        )}
-      </div>
-
-      {/* Warning */}
-      <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-        <span>A sincronizacao pode levar alguns minutos. Nao feche esta pagina durante o processo.</span>
-      </div>
-    </div>
   );
 }
 
@@ -238,12 +132,17 @@ function TabEnvio() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [integrations, setIntegrations] = useState<Map<string, Integration | null>>(new Map());
+  const [confirmAction, setConfirmAction] = useState<{
+    type: 'preview' | 'send';
+    inventoryId: string;
+    integrationId?: string;
+    inventoryName?: string;
+  } | null>(null);
 
   useEffect(() => {
     inventoryService.listar({ status: 'COMPLETED', size: '50' })
       .then(async (res) => {
         setInventarios(res.items);
-        // Check existing integrations for each inventory
         const map = new Map<string, Integration | null>();
         for (const inv of res.items) {
           const existing = await integrationService.buscarExistente(inv.id);
@@ -255,8 +154,7 @@ function TabEnvio() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function handlePreviewAndSave(inventoryId: string) {
-    if (!confirm('Gerar preview e salvar integracao para este inventario?')) return;
+  async function doPreviewAndSave(inventoryId: string) {
     setActionLoading(inventoryId);
     try {
       const integration = await integrationService.salvar(inventoryId);
@@ -269,8 +167,7 @@ function TabEnvio() {
     }
   }
 
-  async function handleSend(integrationId: string, inventoryId: string) {
-    if (!confirm('Enviar resultado ao Protheus? Esta acao e irreversivel.')) return;
+  async function doSend(integrationId: string, inventoryId: string) {
     setActionLoading(inventoryId);
     try {
       await integrationService.enviar(integrationId);
@@ -282,6 +179,16 @@ function TabEnvio() {
     } finally {
       setActionLoading(null);
     }
+  }
+
+  function handleConfirm() {
+    if (!confirmAction) return;
+    if (confirmAction.type === 'preview') {
+      doPreviewAndSave(confirmAction.inventoryId);
+    } else if (confirmAction.integrationId) {
+      doSend(confirmAction.integrationId, confirmAction.inventoryId);
+    }
+    setConfirmAction(null);
   }
 
   if (loading) {
@@ -340,14 +247,14 @@ function TabEnvio() {
                     <Loader2 className="w-4 h-4 animate-spin text-slate-400 ml-auto" />
                   ) : !integration ? (
                     <button
-                      onClick={() => handlePreviewAndSave(inv.id)}
+                      onClick={() => setConfirmAction({ type: 'preview', inventoryId: inv.id, inventoryName: inv.name })}
                       className="text-sm text-capul-600 hover:underline"
                     >
                       Preparar Envio
                     </button>
                   ) : integration.status === 'PENDENTE' ? (
                     <button
-                      onClick={() => handleSend(integration.id, inv.id)}
+                      onClick={() => setConfirmAction({ type: 'send', inventoryId: inv.id, integrationId: integration.id, inventoryName: inv.name })}
                       className="flex items-center gap-1 text-sm text-capul-600 hover:underline ml-auto"
                     >
                       <Send className="w-3 h-3" />
@@ -364,6 +271,21 @@ function TabEnvio() {
           })}
         </tbody>
       </table>
+
+      <ConfirmDialog
+        open={!!confirmAction}
+        title={confirmAction?.type === 'preview' ? 'Preparar Envio' : 'Enviar ao Protheus'}
+        description={
+          confirmAction?.type === 'preview'
+            ? 'Gerar preview e salvar a integracao para este inventario?'
+            : 'Enviar o resultado ao Protheus? Esta acao e irreversivel.'
+        }
+        details={confirmAction?.inventoryName ? [`Inventario: ${confirmAction.inventoryName}`] : undefined}
+        variant={confirmAction?.type === 'send' ? 'danger' : 'info'}
+        confirmLabel={confirmAction?.type === 'preview' ? 'Preparar' : 'Enviar'}
+        onConfirm={handleConfirm}
+        onCancel={() => setConfirmAction(null)}
+      />
     </div>
   );
 }

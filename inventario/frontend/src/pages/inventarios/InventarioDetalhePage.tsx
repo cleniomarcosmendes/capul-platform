@@ -6,25 +6,27 @@ import { countingListService } from '../../services/counting-list.service';
 import { CriarListaModal } from './components/CriarListaModal';
 import { AddProductsModal } from './components/AddProductsModal';
 import { ListaDetalheModal } from './components/ListaDetalheModal';
+import { AtribuirProdutosModal } from './components/AtribuirProdutosModal';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { TabAnalise } from './components/TabAnalise';
+import { TabVisaoGeral } from './components/TabVisaoGeral';
 import { cycleBadgeColor, cycleLabel } from '../../utils/cycles';
 import { downloadCSV } from '../../utils/csv';
 import {
   ArrowLeft,
+  LayoutDashboard,
   ListChecks,
   BarChart2,
   History,
   Trash2,
-  Play,
   Package,
   Plus,
-  Shuffle,
   Eye,
   Unlock,
   CheckCircle2,
   Lock,
-  MoreVertical,
   Download,
+  UserCog,
 } from 'lucide-react';
 import { PageSkeleton } from '../../components/LoadingSkeleton';
 import { ErrorState } from '../../components/ErrorState';
@@ -33,6 +35,7 @@ import type {
   InventoryList,
   InventoryItem,
   CountingList,
+  CountingListCreate,
   ItemStatus,
   ListStatus,
 } from '../../types';
@@ -46,6 +49,7 @@ const statusConfig: Record<string, { label: string; color: string }> = {
 
 const listStatusConfig: Record<string, { label: string; color: string }> = {
   PREPARACAO: { label: 'Preparacao', color: 'bg-slate-100 text-slate-700' },
+  ABERTA: { label: 'Aberta', color: 'bg-sky-100 text-sky-700' },
   LIBERADA: { label: 'Liberada', color: 'bg-blue-100 text-blue-700' },
   EM_CONTAGEM: { label: 'Em Contagem', color: 'bg-amber-100 text-amber-700' },
   ENCERRADA: { label: 'Encerrada', color: 'bg-green-100 text-green-700' },
@@ -59,7 +63,7 @@ const itemStatusConfig: Record<string, { label: string; color: string }> = {
   ZERO_CONFIRMED: { label: 'Zero Confirmado', color: 'bg-purple-100 text-purple-700' },
 };
 
-type Tab = 'itens' | 'listas' | 'analise' | 'historico';
+type Tab = 'visao-geral' | 'itens' | 'listas' | 'analise' | 'historico';
 
 export function InventarioDetalhePage() {
   const { id } = useParams<{ id: string }>();
@@ -70,7 +74,7 @@ export function InventarioDetalhePage() {
   const [listas, setListas] = useState<CountingList[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>('itens');
+  const [activeTab, setActiveTab] = useState<Tab>('visao-geral');
   const [itemsPage, setItemsPage] = useState(1);
   const [itemsTotal, setItemsTotal] = useState(0);
   const [itemsTotalPages, setItemsTotalPages] = useState(1);
@@ -143,17 +147,6 @@ export function InventarioDetalhePage() {
     }
   }
 
-  async function handleStartCounting() {
-    if (!id) return;
-    try {
-      const updated = await inventoryService.atualizar(id, { status: 'IN_PROGRESS' });
-      setInventario(updated);
-      toast.success('Inventario iniciado.');
-    } catch {
-      toast.error('Erro ao iniciar inventario.');
-    }
-  }
-
   if (loading) {
     return (
       <>
@@ -184,6 +177,7 @@ export function InventarioDetalhePage() {
   const sc = statusConfig[inventario.status] || statusConfig.DRAFT;
 
   const tabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { key: 'visao-geral', label: 'Visao Geral', icon: LayoutDashboard },
     { key: 'itens', label: `Itens (${itemsTotal})`, icon: Package },
     { key: 'listas', label: `Listas (${listas.length})`, icon: ListChecks },
     { key: 'analise', label: 'Analise', icon: BarChart2 },
@@ -219,22 +213,13 @@ export function InventarioDetalhePage() {
             </div>
             <div className="flex gap-2">
               {inventario.status === 'DRAFT' && (
-                <>
-                  <button
-                    onClick={handleStartCounting}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-capul-600 text-white text-sm rounded-lg hover:bg-capul-700"
-                  >
-                    <Play className="w-4 h-4" />
-                    Iniciar
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    className="flex items-center gap-1.5 px-3 py-1.5 border border-red-300 text-red-600 text-sm rounded-lg hover:bg-red-50"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Excluir
-                  </button>
-                </>
+                <button
+                  onClick={handleDelete}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-red-300 text-red-600 text-sm rounded-lg hover:bg-red-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Excluir
+                </button>
               )}
             </div>
           </div>
@@ -297,6 +282,16 @@ export function InventarioDetalhePage() {
         </div>
 
         {/* Conteudo tab */}
+        {activeTab === 'visao-geral' && (
+          <TabVisaoGeral
+            inventario={inventario}
+            itensTotal={itemsTotal}
+            listas={listas}
+            onNavigateTab={setActiveTab}
+            onAddProducts={() => setShowAddProducts(true)}
+            onReload={() => { reloadItens(); reloadListas(); reloadInventario(); }}
+          />
+        )}
         {activeTab === 'itens' && (
           <TabItens
             itens={itens}
@@ -324,6 +319,7 @@ export function InventarioDetalhePage() {
         {showAddProducts && (
           <AddProductsModal
             inventoryId={id!}
+            warehouse={inventario?.warehouse}
             onClose={() => setShowAddProducts(false)}
             onAdded={() => { reloadItens(); reloadInventario(); }}
           />
@@ -366,9 +362,9 @@ function TabItens({ itens, page, totalPages, statusFilter, inventoryStatus, onPa
         {itens.length > 0 && (
           <button
             onClick={() => {
-              const header = 'Seq;Codigo;Descricao;UN;Esperado;Contado;Variacao;Status\n';
+              const header = 'Seq;Codigo;Descricao;Local;Saldo Estoque;Entregas Post;Grupo;Grupo Inv;Categoria;Subcategoria;Segmento;Local 1;Local 2;Local 3;Lote;Esperado;Contado;Variacao;Status\n';
               const rows = itens.map((item) =>
-                `${item.sequence};${item.product_code};${item.product_name};${item.product_unit};${item.expected_quantity.toFixed(2)};${item.counted_quantity > 0 ? item.counted_quantity.toFixed(2) : ''};${item.status !== 'PENDING' ? item.variance.toFixed(2) : ''};${item.status}`,
+                `${item.sequence};${item.product_code};${item.product_name};${item.warehouse || ''};${(item.product_estoque ?? 0).toFixed(2)};${(item.product_entregas_post ?? 0).toFixed(2)};${item.product_grupo || ''};${item.product_grupo_inv || ''};${item.product_categoria || ''};${item.product_subcategoria || ''};${item.product_segmento || ''};${item.product_local1 || ''};${item.product_local2 || ''};${item.product_local3 || ''};${item.product_lote || ''};${item.expected_quantity.toFixed(2)};${item.counted_quantity > 0 ? item.counted_quantity.toFixed(2) : ''};${item.status !== 'PENDING' ? item.variance.toFixed(2) : ''};${item.status}`,
               );
               downloadCSV(`itens_inventario_${new Date().toISOString().slice(0, 10)}.csv`, header, rows);
             }}
@@ -400,20 +396,32 @@ function TabItens({ itens, page, totalPages, statusFilter, inventoryStatus, onPa
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left py-2.5 px-3 font-medium text-slate-600 w-12">#</th>
-                <th className="text-left py-2.5 px-3 font-medium text-slate-600">Codigo</th>
-                <th className="text-left py-2.5 px-3 font-medium text-slate-600">Descricao</th>
-                <th className="text-left py-2.5 px-3 font-medium text-slate-600">UN</th>
-                <th className="text-right py-2.5 px-3 font-medium text-slate-600">Esperado</th>
-                <th className="text-right py-2.5 px-3 font-medium text-slate-600">Contado</th>
-                <th className="text-right py-2.5 px-3 font-medium text-slate-600">Variacao</th>
-                <th className="text-left py-2.5 px-3 font-medium text-slate-600">Status</th>
+                <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] w-10">SEQ</th>
+                <th className="text-left py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Codigo</th>
+                <th className="text-left py-2 px-2 font-medium text-slate-600 text-[11px]">Descricao</th>
+                <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Local</th>
+                <th className="text-right py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Saldo Est.</th>
+                <th className="text-right py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Ent. Post.</th>
+                <th className="text-left py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Grupo</th>
+                <th className="text-left py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Grp. Inv</th>
+                <th className="text-left py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Categoria</th>
+                <th className="text-left py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Subcateg.</th>
+                <th className="text-left py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Segmento</th>
+                <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Loc 1</th>
+                <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Loc 2</th>
+                <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Loc 3</th>
+                <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Lote</th>
+                <th className="text-right py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Esperado</th>
+                <th className="text-right py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Contado</th>
+                <th className="text-right py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Variacao</th>
+                <th className="text-left py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Status</th>
               </tr>
             </thead>
             <tbody>
               {itens.map((item) => {
                 const isc = itemStatusConfig[item.status] || itemStatusConfig.PENDING;
                 const hasVariance = item.variance !== 0 && item.status !== 'PENDING';
+                const loteDisplay = item.product_lote === 'L' ? 'Sim' : item.product_lote === 'S' ? 'Serie' : '';
                 return (
                   <tr
                     key={item.id}
@@ -421,28 +429,43 @@ function TabItens({ itens, page, totalPages, statusFilter, inventoryStatus, onPa
                       hasVariance ? 'bg-amber-50' : item.status === 'APPROVED' ? 'bg-green-50/50' : 'hover:bg-slate-50'
                     }`}
                   >
-                    <td className="py-2.5 px-3 text-slate-400 text-xs">{item.sequence}</td>
-                    <td className="py-2.5 px-3 font-mono text-sm text-slate-700">{item.product_code}</td>
-                    <td className="py-2.5 px-3 text-slate-800 truncate max-w-xs">{item.product_name}</td>
-                    <td className="py-2.5 px-3 text-slate-500">{item.product_unit}</td>
-                    <td className="py-2.5 px-3 text-right text-slate-600">{item.expected_quantity.toFixed(2)}</td>
-                    <td className="py-2.5 px-3 text-right font-medium text-slate-800">
-                      {item.counted_quantity > 0 ? item.counted_quantity.toFixed(2) : '-'}
+                    <td className="py-2 px-1 text-center text-[11px] tabular-nums text-slate-400">{item.sequence}</td>
+                    <td className="py-2 px-2 font-mono text-[11px] text-slate-700 whitespace-nowrap">{item.product_code}</td>
+                    <td className="py-2 px-2 text-[11px] text-slate-800 truncate max-w-[180px]" title={item.product_name}>{item.product_name}</td>
+                    <td className="py-2 px-1 text-center text-[11px] font-mono text-slate-600">{item.warehouse || '—'}</td>
+                    <td className="py-2 px-2 text-right text-[11px] font-mono tabular-nums text-slate-700 whitespace-nowrap">
+                      {(item.product_estoque ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td className={`py-2.5 px-3 text-right font-medium ${
+                    <td className="py-2 px-2 text-right text-[11px] font-mono tabular-nums text-slate-600 whitespace-nowrap">
+                      {(item.product_entregas_post ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td className="py-2 px-1 text-[11px] text-slate-600">{item.product_grupo || '—'}</td>
+                    <td className="py-2 px-1 text-[11px] text-slate-600">{item.product_grupo_inv || '—'}</td>
+                    <td className="py-2 px-1 text-[11px] text-slate-600">{item.product_categoria || '—'}</td>
+                    <td className="py-2 px-1 text-[11px] text-slate-600">{item.product_subcategoria || '—'}</td>
+                    <td className="py-2 px-1 text-[11px] text-slate-600">{item.product_segmento || '—'}</td>
+                    <td className="py-2 px-1 text-center text-[11px] font-mono text-slate-600">{item.product_local1 || '—'}</td>
+                    <td className="py-2 px-1 text-center text-[11px] font-mono text-slate-600">{item.product_local2 || '—'}</td>
+                    <td className="py-2 px-1 text-center text-[11px] font-mono text-slate-600">{item.product_local3 || '—'}</td>
+                    <td className="py-2 px-1 text-center text-[11px] text-slate-600">{loteDisplay || '—'}</td>
+                    <td className="py-2 px-2 text-right text-[11px] font-mono tabular-nums text-slate-600 whitespace-nowrap">{item.expected_quantity.toFixed(2)}</td>
+                    <td className="py-2 px-2 text-right text-[11px] font-mono tabular-nums font-medium text-slate-800 whitespace-nowrap">
+                      {item.counted_quantity > 0 ? item.counted_quantity.toFixed(2) : '—'}
+                    </td>
+                    <td className={`py-2 px-2 text-right text-[11px] font-mono tabular-nums font-medium whitespace-nowrap ${
                       item.variance > 0 ? 'text-green-600' : item.variance < 0 ? 'text-red-600' : 'text-slate-400'
                     }`}>
                       {item.status !== 'PENDING' ? (
                         <>
                           {item.variance > 0 ? '+' : ''}{item.variance.toFixed(2)}
                           {item.variance_percentage !== 0 && (
-                            <span className="text-xs ml-1">({item.variance_percentage.toFixed(1)}%)</span>
+                            <span className="text-[10px] ml-0.5">({item.variance_percentage.toFixed(1)}%)</span>
                           )}
                         </>
-                      ) : '-'}
+                      ) : '—'}
                     </td>
-                    <td className="py-2.5 px-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isc.color}`}>
+                    <td className="py-2 px-1">
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap ${isc.color}`}>
                         {isc.label}
                       </span>
                     </td>
@@ -491,8 +514,37 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [detalheLista, setDetalheLista] = useState<CountingList | null>(null);
   const [statusFilter, setStatusFilter] = useState<ListStatus | ''>('');
-  const [actionMenuId, setActionMenuId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [atribuirLista, setAtribuirLista] = useState<CountingList | null>(null);
+  const [changeCounterList, setChangeCounterList] = useState<CountingList | null>(null);
+  const [newCounterId, setNewCounterId] = useState('');
+  const [availableCounters, setAvailableCounters] = useState<{ user_id: string; full_name: string; username: string }[]>([]);
+
+  // Confirm dialog
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    description: string;
+    details?: string[];
+    variant: 'warning' | 'danger' | 'info';
+    confirmLabel: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  // Mapa de UUID → nome para exibir nomes dos contadores
+  const [counterNames, setCounterNames] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    countingListService.listarContadoresDisponiveis(inventoryId)
+      .then((counters) => {
+        const map: Record<string, string> = {};
+        counters.forEach((c) => {
+          map[c.user_id] = c.full_name || c.username;
+        });
+        setCounterNames(map);
+        setAvailableCounters(counters.map((c) => ({ user_id: c.user_id, full_name: c.full_name, username: c.username })));
+      })
+      .catch(() => {});
+  }, [inventoryId]);
 
   const filtered = statusFilter
     ? listas.filter((l) => l.list_status === statusFilter)
@@ -500,77 +552,128 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
 
   const canCreate = inventoryStatus !== 'CLOSED';
 
-  async function handleDistribuir() {
-    if (!confirm('Distribuir produtos automaticamente nas listas de contagem?')) return;
-    setActionLoading('distribute');
-    try {
-      await inventoryService.distribuirProdutos(inventoryId);
-      onReload();
-      toast.success('Produtos distribuidos nas listas.');
-    } catch {
-      toast.error('Erro ao distribuir produtos.');
-    } finally {
-      setActionLoading(null);
-    }
+  function handleLiberar(listId: string) {
+    const lista = listas.find((l) => l.id === listId);
+    setConfirmDialog({
+      title: 'Liberar Lista para Contagem',
+      description: 'Ao liberar, os contadores atribuidos poderao iniciar a contagem dos produtos desta lista.',
+      details: lista ? [`Lista: ${lista.list_name}`, `Itens: ${lista.total_items ?? 0} produtos`] : undefined,
+      variant: 'info',
+      confirmLabel: 'Liberar',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        setActionLoading(listId);
+        try {
+          await countingListService.liberar(listId);
+          onReload();
+          toast.success('Lista liberada para contagem.');
+        } catch (err: unknown) {
+          const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+          toast.error(detail || 'Erro ao liberar lista.');
+        } finally {
+          setActionLoading(null);
+        }
+      },
+    });
   }
 
-  async function handleLiberar(listId: string) {
-    if (!confirm('Liberar esta lista para contagem?')) return;
-    setActionLoading(listId);
-    try {
-      await countingListService.liberar(listId);
-      onReload();
-      toast.success('Lista liberada para contagem.');
-    } catch {
-      toast.error('Erro ao liberar lista.');
-    } finally {
-      setActionLoading(null);
-      setActionMenuId(null);
-    }
+  function handleFinalizarCiclo(listId: string) {
+    const lista = listas.find((l) => l.id === listId);
+    setConfirmDialog({
+      title: 'Finalizar Ciclo de Contagem',
+      description: 'O ciclo atual sera encerrado. Produtos com divergencia poderao ser recontados no proximo ciclo.',
+      details: lista ? [`Lista: ${lista.list_name}`, `Ciclo atual: ${lista.current_cycle}o`] : undefined,
+      variant: 'warning',
+      confirmLabel: 'Finalizar Ciclo',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        setActionLoading(listId);
+        try {
+          await countingListService.finalizarCiclo(listId);
+          onReload();
+          toast.success('Ciclo finalizado com sucesso.');
+        } catch (err: unknown) {
+          const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+          toast.error(detail || 'Erro ao finalizar ciclo.');
+        } finally {
+          setActionLoading(null);
+        }
+      },
+    });
   }
 
-  async function handleFinalizarCiclo(listId: string) {
-    if (!confirm('Finalizar o ciclo atual desta lista?')) return;
-    setActionLoading(listId);
-    try {
-      await countingListService.finalizarCiclo(listId);
-      onReload();
-      toast.success('Ciclo finalizado.');
-    } catch {
-      toast.error('Erro ao finalizar ciclo.');
-    } finally {
-      setActionLoading(null);
-      setActionMenuId(null);
-    }
+  function handleEncerrar(listId: string) {
+    const lista = listas.find((l) => l.id === listId);
+    setConfirmDialog({
+      title: 'Encerrar Lista de Contagem',
+      description: 'Esta acao e irreversivel. A lista sera encerrada permanentemente e nao podera ser reaberta para novas contagens.',
+      details: lista ? [`Lista: ${lista.list_name}`] : undefined,
+      variant: 'danger',
+      confirmLabel: 'Encerrar Lista',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        setActionLoading(listId);
+        try {
+          await countingListService.finalizar(listId);
+          onReload();
+          toast.success('Lista encerrada.');
+        } catch (err: unknown) {
+          const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+          toast.error(detail || 'Erro ao encerrar lista.');
+        } finally {
+          setActionLoading(null);
+        }
+      },
+    });
   }
 
-  async function handleEncerrar(listId: string) {
-    if (!confirm('Encerrar esta lista de contagem? Nao sera possivel reabrir.')) return;
-    setActionLoading(listId);
-    try {
-      await countingListService.finalizar(listId);
-      onReload();
-      toast.success('Lista encerrada.');
-    } catch {
-      toast.error('Erro ao encerrar lista.');
-    } finally {
-      setActionLoading(null);
-      setActionMenuId(null);
-    }
+  function handleExcluir(listId: string, listName: string) {
+    setConfirmDialog({
+      title: 'Excluir Lista de Contagem',
+      description: 'A lista e todos os seus itens serao removidos permanentemente. Esta acao nao pode ser desfeita.',
+      details: [`Lista: ${listName}`],
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        setActionLoading(listId);
+        try {
+          await countingListService.excluir(listId);
+          onReload();
+          toast.success('Lista excluida.');
+        } catch (err: unknown) {
+          const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+          toast.error(detail || 'Erro ao excluir lista.');
+        } finally {
+          setActionLoading(null);
+        }
+      },
+    });
   }
 
-  async function handleExcluir(listId: string, listName: string) {
-    if (!confirm(`Excluir a lista "${listName}"?`)) return;
-    setActionLoading(listId);
+  function handleOpenChangeCounter(lista: CountingList) {
+    const cycleKey = `counter_cycle_${lista.current_cycle}` as keyof CountingList;
+    setNewCounterId((lista[cycleKey] as string) || '');
+    setChangeCounterList(lista);
+  }
+
+  async function handleSaveCounter() {
+    if (!changeCounterList || !newCounterId) return;
+    setActionLoading(changeCounterList.id);
     try {
-      await countingListService.excluir(listId);
+      const cycleKey = `counter_cycle_${changeCounterList.current_cycle}`;
+      await countingListService.atualizar(changeCounterList.id, {
+        [cycleKey]: newCounterId,
+      } as Partial<CountingListCreate>);
       onReload();
-      toast.success('Lista excluida.');
-    } catch {
-      toast.error('Erro ao excluir lista.');
+      toast.success(`Contador do ${changeCounterList.current_cycle}o ciclo atualizado.`);
+      setChangeCounterList(null);
+      setNewCounterId('');
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Erro ao alterar contador.');
     } finally {
       setActionLoading(null);
-      setActionMenuId(null);
     }
   }
 
@@ -585,6 +688,7 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
         >
           <option value="">Todos os Status</option>
           <option value="PREPARACAO">Preparacao</option>
+          <option value="ABERTA">Aberta</option>
           <option value="LIBERADA">Liberada</option>
           <option value="EM_CONTAGEM">Em Contagem</option>
           <option value="ENCERRADA">Encerrada</option>
@@ -593,23 +697,13 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
         <div className="flex-1" />
 
         {canCreate && (
-          <>
-            <button
-              onClick={handleDistribuir}
-              disabled={actionLoading === 'distribute'}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-300 text-slate-600 text-sm rounded-lg hover:bg-slate-50 disabled:opacity-50"
-            >
-              <Shuffle className="w-4 h-4" />
-              {actionLoading === 'distribute' ? 'Distribuindo...' : 'Distribuir Produtos'}
-            </button>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-capul-600 text-white text-sm rounded-lg hover:bg-capul-700"
-            >
-              <Plus className="w-4 h-4" />
-              Nova Lista
-            </button>
-          </>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-capul-600 text-white text-sm rounded-lg hover:bg-capul-700"
+          >
+            <Plus className="w-4 h-4" />
+            Nova Lista
+          </button>
         )}
       </div>
 
@@ -629,28 +723,28 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+        <div className="bg-white rounded-xl border border-slate-200">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="text-left py-2.5 px-4 font-medium text-slate-600">Nome</th>
-                <th className="text-left py-2.5 px-4 font-medium text-slate-600">Ciclo</th>
-                <th className="text-left py-2.5 px-4 font-medium text-slate-600">Status</th>
-                <th className="text-left py-2.5 px-4 font-medium text-slate-600">Contadores</th>
-                <th className="text-left py-2.5 px-4 font-medium text-slate-600">Itens</th>
-                <th className="text-left py-2.5 px-4 font-medium text-slate-600">Criado em</th>
-                <th className="text-right py-2.5 px-4 font-medium text-slate-600 w-20">Acoes</th>
+                <th className="text-center py-2.5 px-3 font-medium text-slate-600 w-20">Ciclo</th>
+                <th className="text-center py-2.5 px-3 font-medium text-slate-600 w-24">Status</th>
+                <th className="text-left py-2.5 px-3 font-medium text-slate-600">Contadores</th>
+                <th className="text-center py-2.5 px-3 font-medium text-slate-600 w-16">Itens</th>
+                <th className="text-center py-2.5 px-3 font-medium text-slate-600 w-24">Criado em</th>
+                <th className="text-center py-2.5 px-3 font-medium text-slate-600">Acoes</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((lista) => {
                 const lsc = listStatusConfig[lista.list_status] || listStatusConfig.PREPARACAO;
                 const isLoading = actionLoading === lista.id;
-                const menuOpen = actionMenuId === lista.id;
+                const isPrepOrAberta = lista.list_status === 'PREPARACAO' || lista.list_status === 'ABERTA';
 
                 return (
                   <tr key={lista.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-2.5 px-4">
+                    <td className="py-3 px-4">
                       <button onClick={() => setDetalheLista(lista)} className="font-medium text-capul-600 hover:underline text-left">
                         {lista.list_name}
                       </button>
@@ -658,110 +752,111 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
                         <p className="text-xs text-slate-400 mt-0.5 truncate max-w-xs">{lista.description}</p>
                       )}
                     </td>
-                    <td className="py-2.5 px-4">
+                    <td className="py-3 px-3 text-center">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cycleBadgeColor(lista.current_cycle)}`}>
                         {cycleLabel(lista.current_cycle)}
                       </span>
                     </td>
-                    <td className="py-2.5 px-4">
+                    <td className="py-3 px-3 text-center">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${lsc.color}`}>
                         {lsc.label}
                       </span>
                     </td>
-                    <td className="py-2.5 px-4">
+                    <td className="py-3 px-3">
                       <div className="text-xs text-slate-500 space-y-0.5">
-                        {lista.counter_cycle_1 && <div>C1: {lista.counter_cycle_1}</div>}
-                        {lista.counter_cycle_2 && <div>C2: {lista.counter_cycle_2}</div>}
-                        {lista.counter_cycle_3 && <div>C3: {lista.counter_cycle_3}</div>}
+                        {lista.counter_cycle_1 && <div>C1: {counterNames[lista.counter_cycle_1] || lista.counter_cycle_1.slice(0, 8)}</div>}
+                        {lista.counter_cycle_2 && <div>C2: {counterNames[lista.counter_cycle_2] || lista.counter_cycle_2.slice(0, 8)}</div>}
+                        {lista.counter_cycle_3 && <div>C3: {counterNames[lista.counter_cycle_3] || lista.counter_cycle_3.slice(0, 8)}</div>}
                         {!lista.counter_cycle_1 && !lista.counter_cycle_2 && !lista.counter_cycle_3 && (
                           <span className="text-slate-400">—</span>
                         )}
                       </div>
                     </td>
-                    <td className="py-2.5 px-4 text-slate-600">
+                    <td className="py-3 px-3 text-center text-slate-600">
                       <span className="font-medium">{lista.counted_items ?? 0}</span>
                       <span className="text-slate-400">/{lista.total_items ?? 0}</span>
                     </td>
-                    <td className="py-2.5 px-4 text-slate-500 text-xs">
+                    <td className="py-3 px-3 text-center text-slate-500 text-xs">
                       {new Date(lista.created_at).toLocaleDateString('pt-BR')}
                     </td>
-                    <td className="py-2.5 px-4 text-right">
+                    <td className="py-3 px-3">
                       {isLoading ? (
                         <span className="text-xs text-slate-400">Aguarde...</span>
                       ) : (
-                        <div className="relative inline-block">
+                        <div className="flex items-center justify-center gap-1 flex-wrap">
                           <button
-                            onClick={() => setActionMenuId(menuOpen ? null : lista.id)}
-                            className="p-1 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100"
+                            onClick={() => setDetalheLista(lista)}
+                            title="Ver Detalhes"
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-md hover:bg-slate-100 transition-colors"
                           >
-                            <MoreVertical className="w-4 h-4" />
+                            <Eye className="w-3.5 h-3.5" />
+                            Detalhes
                           </button>
 
-                          {menuOpen && (
-                            <>
-                              {/* Overlay para fechar menu */}
-                              <div
-                                className="fixed inset-0 z-10"
-                                onClick={() => setActionMenuId(null)}
-                              />
-                              <div className="absolute right-0 top-8 z-20 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[180px]">
-                                {/* Ver Detalhes — sempre disponivel */}
-                                <button
-                                  onClick={() => { setActionMenuId(null); setDetalheLista(lista); }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                  Ver Detalhes
-                                </button>
+                          {lista.list_status === 'PREPARACAO' && (
+                            <button
+                              onClick={() => setAtribuirLista(lista)}
+                              title="Adicionar Produtos"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md hover:bg-emerald-100 transition-colors"
+                            >
+                              <Package className="w-3.5 h-3.5" />
+                              Produtos
+                            </button>
+                          )}
 
-                                {/* Liberar — apenas PREPARACAO */}
-                                {lista.list_status === 'PREPARACAO' && (
-                                  <button
-                                    onClick={() => handleLiberar(lista.id)}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50"
-                                  >
-                                    <Unlock className="w-4 h-4" />
-                                    Liberar para Contagem
-                                  </button>
-                                )}
+                          {lista.list_status === 'ABERTA' && (
+                            <button
+                              onClick={() => handleOpenChangeCounter(lista)}
+                              title="Alterar Contador"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-md hover:bg-purple-100 transition-colors"
+                            >
+                              <UserCog className="w-3.5 h-3.5" />
+                              Contador
+                            </button>
+                          )}
 
-                                {/* Finalizar Ciclo — apenas EM_CONTAGEM */}
-                                {(lista.list_status === 'LIBERADA' || lista.list_status === 'EM_CONTAGEM') && (
-                                  <button
-                                    onClick={() => handleFinalizarCiclo(lista.id)}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-amber-600 hover:bg-amber-50"
-                                  >
-                                    <CheckCircle2 className="w-4 h-4" />
-                                    Finalizar Ciclo
-                                  </button>
-                                )}
+                          {isPrepOrAberta && (
+                            <button
+                              onClick={() => handleLiberar(lista.id)}
+                              title="Liberar para Contagem"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors"
+                            >
+                              <Unlock className="w-3.5 h-3.5" />
+                              Liberar
+                            </button>
+                          )}
 
-                                {/* Encerrar — LIBERADA ou EM_CONTAGEM */}
-                                {lista.list_status !== 'ENCERRADA' && lista.list_status !== 'PREPARACAO' && (
-                                  <button
-                                    onClick={() => handleEncerrar(lista.id)}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-600 hover:bg-green-50"
-                                  >
-                                    <Lock className="w-4 h-4" />
-                                    Encerrar Lista
-                                  </button>
-                                )}
+                          {(lista.list_status === 'LIBERADA' || lista.list_status === 'EM_CONTAGEM') && (
+                            <button
+                              onClick={() => handleFinalizarCiclo(lista.id)}
+                              title="Finalizar Ciclo"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md hover:bg-amber-100 transition-colors"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Fin. Ciclo
+                            </button>
+                          )}
 
-                                {/* Excluir — apenas PREPARACAO */}
-                                {lista.list_status === 'PREPARACAO' && (
-                                  <>
-                                    <div className="border-t border-slate-100 my-1" />
-                                    <button
-                                      onClick={() => handleExcluir(lista.id, lista.list_name)}
-                                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                      Excluir
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </>
+                          {lista.list_status !== 'ENCERRADA' && lista.list_status !== 'PREPARACAO' && (
+                            <button
+                              onClick={() => handleEncerrar(lista.id)}
+                              title="Encerrar Lista"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors"
+                            >
+                              <Lock className="w-3.5 h-3.5" />
+                              Encerrar
+                            </button>
+                          )}
+
+                          {isPrepOrAberta && (
+                            <button
+                              onClick={() => handleExcluir(lista.id, lista.list_name)}
+                              title="Excluir"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Excluir
+                            </button>
                           )}
                         </div>
                       )}
@@ -800,6 +895,90 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
           onClose={() => setDetalheLista(null)}
         />
       )}
+
+      {/* Modal atribuir produtos a lista */}
+      {atribuirLista && (
+        <AtribuirProdutosModal
+          inventoryId={inventoryId}
+          listId={atribuirLista.id}
+          listName={atribuirLista.list_name}
+          onClose={() => setAtribuirLista(null)}
+          onAdded={() => onReload()}
+        />
+      )}
+
+      {/* Modal alterar contador */}
+      {changeCounterList && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">Alterar Contador</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                Selecione o contador para o <strong>{changeCounterList.current_cycle}o ciclo</strong> da lista <strong>{changeCounterList.list_name}</strong>.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Contador do {changeCounterList.current_cycle}o Ciclo
+              </label>
+              <select
+                value={newCounterId}
+                onChange={(e) => setNewCounterId(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500"
+              >
+                <option value="">Selecione um contador...</option>
+                {availableCounters.map((c) => (
+                  <option key={c.user_id} value={c.user_id}>
+                    {c.full_name || c.username}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Info dos outros ciclos */}
+            <div className="text-xs text-slate-500 space-y-1 bg-slate-50 rounded-lg p-3">
+              {changeCounterList.counter_cycle_1 && (
+                <div>C1: <strong>{counterNames[changeCounterList.counter_cycle_1] || changeCounterList.counter_cycle_1.slice(0, 8)}</strong></div>
+              )}
+              {changeCounterList.counter_cycle_2 && changeCounterList.current_cycle !== 2 && (
+                <div>C2: <strong>{counterNames[changeCounterList.counter_cycle_2] || changeCounterList.counter_cycle_2.slice(0, 8)}</strong></div>
+              )}
+              {changeCounterList.counter_cycle_3 && changeCounterList.current_cycle !== 3 && (
+                <div>C3: <strong>{counterNames[changeCounterList.counter_cycle_3] || changeCounterList.counter_cycle_3.slice(0, 8)}</strong></div>
+              )}
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => { setChangeCounterList(null); setNewCounterId(''); }}
+                className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveCounter}
+                disabled={!newCounterId || actionLoading === changeCounterList.id}
+                className="px-4 py-2 text-sm text-white bg-capul-600 rounded-lg hover:bg-capul-700 disabled:opacity-50"
+              >
+                {actionLoading === changeCounterList.id ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm dialog */}
+      <ConfirmDialog
+        open={confirmDialog !== null}
+        title={confirmDialog?.title ?? ''}
+        description={confirmDialog?.description}
+        details={confirmDialog?.details}
+        variant={confirmDialog?.variant ?? 'warning'}
+        confirmLabel={confirmDialog?.confirmLabel ?? 'Confirmar'}
+        onConfirm={() => { if (confirmDialog?.onConfirm) confirmDialog.onConfirm(); }}
+        onCancel={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

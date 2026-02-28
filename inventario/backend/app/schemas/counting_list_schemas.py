@@ -13,6 +13,7 @@ from enum import Enum
 
 class ListStatus(str, Enum):
     PREPARACAO = "PREPARACAO"
+    ABERTA = "ABERTA"
     LIBERADA = "LIBERADA"
     EM_CONTAGEM = "EM_CONTAGEM"
     ENCERRADA = "ENCERRADA"

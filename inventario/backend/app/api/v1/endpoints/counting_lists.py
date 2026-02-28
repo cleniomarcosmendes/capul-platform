@@ -263,14 +263,14 @@ async def create_counting_list(
     return new_list
 
 
-@router.get("/inventories/{inventory_id}/counting-lists", response_model=List[CountingListResponse])
+@router.get("/inventories/{inventory_id}/counting-lists")
 async def get_inventory_counting_lists(
     inventory_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Listar todas as listas de contagem de um inventário
+    Listar todas as listas de contagem de um inventário (com contagens de itens)
     """
     # Verificar se o inventário existe
     inventory = db.query(InventoryList).filter(InventoryList.id == inventory_id).first()
@@ -285,7 +285,43 @@ async def get_inventory_counting_lists(
         CountingList.inventory_id == inventory_id
     ).order_by(CountingList.list_name).all()
 
-    return lists
+    result = []
+    for cl in lists:
+        total_products = db.query(CountingListItem).filter(
+            CountingListItem.counting_list_id == cl.id
+        ).count()
+
+        current_cycle = cl.current_cycle or 1
+        cycle_col = {1: CountingListItem.count_cycle_1, 2: CountingListItem.count_cycle_2, 3: CountingListItem.count_cycle_3}.get(current_cycle)
+        counted_items = 0
+        if cycle_col is not None:
+            counted_items = db.query(CountingListItem).filter(
+                CountingListItem.counting_list_id == cl.id,
+                cycle_col != None  # noqa: E711
+            ).count()
+
+        result.append({
+            "id": str(cl.id),
+            "inventory_id": str(cl.inventory_id),
+            "list_name": cl.list_name,
+            "description": cl.description or "",
+            "list_status": cl.list_status,
+            "current_cycle": cl.current_cycle,
+            "counter_cycle_1": str(cl.counter_cycle_1) if cl.counter_cycle_1 else None,
+            "counter_cycle_2": str(cl.counter_cycle_2) if cl.counter_cycle_2 else None,
+            "counter_cycle_3": str(cl.counter_cycle_3) if cl.counter_cycle_3 else None,
+            "total_products": total_products,
+            "counted_items": counted_items,
+            "released_at": cl.released_at.isoformat() if cl.released_at else None,
+            "released_by": str(cl.released_by) if cl.released_by else None,
+            "closed_at": cl.closed_at.isoformat() if cl.closed_at else None,
+            "closed_by": str(cl.closed_by) if cl.closed_by else None,
+            "created_at": cl.created_at.isoformat() if cl.created_at else None,
+            "created_by": str(cl.created_by) if cl.created_by else None,
+            "updated_at": cl.updated_at.isoformat() if cl.updated_at else None,
+        })
+
+    return result
 
 
 @router.get("/counting-lists/{list_id}")  # response_model=CountingListWithItems (temporariamente desabilitado)
@@ -578,98 +614,23 @@ async def release_counting_list(
     counting_list.released_at = func.now()
     counting_list.released_by = current_user.id
 
+    # Atualizar status do inventário para IN_PROGRESS se ainda estiver em DRAFT
+    inventory = db.query(InventoryList).filter(
+        InventoryList.id == counting_list.inventory_id
+    ).first()
+    if inventory and inventory.status in ('DRAFT', 'draft'):
+        inventory.status = 'IN_PROGRESS'
+        logger.info(f"Inventário {inventory.id} atualizado para IN_PROGRESS")
+
     db.commit()
 
     logger.info(f"Lista {list_id} liberada para contagem (ABERTA → EM_CONTAGEM)")
     return {"message": "Lista liberada com sucesso", "status": "EM_CONTAGEM"}
 
 
-@router.post("/counting-lists/{list_id}/finalize-cycle")
-async def finalize_counting_cycle(
-    list_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Finalizar o ciclo atual de contagem e avançar para o próximo
-    """
-    # Buscar a lista
-    counting_list = db.query(CountingList).filter(CountingList.id == list_id).first()
-    if not counting_list:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Lista de contagem não encontrada"
-        )
-
-    # Verificar se todos os itens foram contados no ciclo atual
-    cycle_field = f"count_cycle_{counting_list.current_cycle}"
-    needs_field = f"needs_count_cycle_{counting_list.current_cycle}"
-
-    pending_items = db.query(CountingListItem).filter(
-        and_(
-            CountingListItem.counting_list_id == list_id,
-            getattr(CountingListItem, needs_field) == True,
-            getattr(CountingListItem, cycle_field) == None
-        )
-    ).count()
-
-    if pending_items > 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Ainda existem {pending_items} itens pendentes de contagem neste ciclo"
-        )
-
-    # Identificar divergências para próximo ciclo
-    if counting_list.current_cycle < 3:
-        # Marcar itens com divergência para recontagem
-        items = db.query(CountingListItem).join(InventoryItem).filter(
-            CountingListItem.counting_list_id == list_id
-        ).all()
-
-        divergent_count = 0
-        next_cycle = counting_list.current_cycle + 1
-        next_needs_field = f"needs_count_cycle_{next_cycle}"
-
-        for item in items:
-            current_count = getattr(item, cycle_field)
-            expected = item.inventory_item.expected_quantity
-
-            if current_count is not None and expected is not None:
-                if abs(float(current_count) - float(expected)) > 0.01:
-                    setattr(item, next_needs_field, True)
-                    divergent_count += 1
-
-        # Avançar para próximo ciclo (EM_CONTAGEM → ABERTA)
-        counting_list.current_cycle = next_cycle
-        counting_list.list_status = 'ABERTA'
-
-        # ✅ REGRA GENÉRICA: Se não realizei nova reatribuição, o contador permanece o mesmo
-        # Atribuir automaticamente o contador do ciclo anterior para o próximo ciclo
-        if next_cycle == 2 and counting_list.counter_cycle_1 and not counting_list.counter_cycle_2:
-            counting_list.counter_cycle_2 = counting_list.counter_cycle_1
-            logger.info(f"Contador do ciclo 1 ({counting_list.counter_cycle_1}) automaticamente atribuído ao ciclo 2")
-        elif next_cycle == 3 and counting_list.counter_cycle_2 and not counting_list.counter_cycle_3:
-            counting_list.counter_cycle_3 = counting_list.counter_cycle_2
-            logger.info(f"Contador do ciclo 2 ({counting_list.counter_cycle_2}) automaticamente atribuído ao ciclo 3")
-
-        db.commit()
-
-        logger.info(f"Lista {list_id} avançou para ciclo {next_cycle} com {divergent_count} divergências")
-        return {
-            "message": f"Ciclo {counting_list.current_cycle - 1} finalizado",
-            "next_cycle": next_cycle,
-            "divergent_items": divergent_count
-        }
-    else:
-        # Finalizar lista após 3º ciclo
-        counting_list.list_status = 'ENCERRADA'
-        counting_list.closed_at = func.now()
-        counting_list.closed_by = current_user.id
-
-        db.commit()
-
-        logger.info(f"Lista {list_id} encerrada após 3º ciclo")
-        return {"message": "Lista de contagem encerrada", "status": "ENCERRADA"}
+# finalize-cycle: endpoint removido deste router para evitar conflito.
+# A implementacao completa (com recalculate_discrepancies_for_list, validacao de role,
+# e audit log) esta em main.py @app.post("/api/v1/counting-lists/{list_id}/finalize-cycle")
 
 
 @router.post("/counting-lists/{list_id}/finalizar")

@@ -1029,7 +1029,7 @@ class CountingList(Base):
 
     # Controle de ciclos desta lista específica
     current_cycle = Column(Integer, default=1)
-    list_status = Column(String(20), default='ABERTA')  # ABERTA, EM_CONTAGEM, ENCERRADA
+    list_status = Column(String(20), default='PREPARACAO')  # PREPARACAO, ABERTA, EM_CONTAGEM, ENCERRADA
     finalization_type = Column(String(20), default='automatic')  # automatic, manual
 
     # Timestamps de controle desta lista

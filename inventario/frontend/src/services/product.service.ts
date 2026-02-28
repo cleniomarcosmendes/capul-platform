@@ -1,5 +1,5 @@
 import { inventarioApi } from './api';
-import type { Product, ProtheusProductResponse } from '../types';
+import type { Product, ProtheusProductResponse, ProductFilterOptions, FilteredProductResponse } from '../types';
 
 export const productService = {
   async listar(params?: Record<string, string>): Promise<Product[]> {
@@ -18,10 +18,15 @@ export const productService = {
     return data;
   },
 
-  async importar(payload: FormData): Promise<{ imported: number; errors: number }> {
-    const { data } = await inventarioApi.post('/import/products', payload, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+  async obterOpcoesFiltro(filial?: string): Promise<ProductFilterOptions> {
+    const params: Record<string, string> = {};
+    if (filial) params.filial = filial;
+    const { data } = await inventarioApi.get('/products/filters', { params });
+    return data;
+  },
+
+  async filtrarPorFaixa(params: Record<string, string>): Promise<FilteredProductResponse> {
+    const { data } = await inventarioApi.get('/products/filter', { params });
     return data;
   },
 };

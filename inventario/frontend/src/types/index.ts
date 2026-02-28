@@ -38,7 +38,7 @@ export interface PaginatedResponse<T> {
 // === Enums ===
 
 export type InventoryStatus = 'DRAFT' | 'IN_PROGRESS' | 'COMPLETED' | 'CLOSED';
-export type ListStatus = 'PREPARACAO' | 'LIBERADA' | 'EM_CONTAGEM' | 'ENCERRADA';
+export type ListStatus = 'PREPARACAO' | 'ABERTA' | 'LIBERADA' | 'EM_CONTAGEM' | 'ENCERRADA';
 export type ItemStatus = 'PENDING' | 'COUNTED' | 'REVIEWED' | 'APPROVED' | 'ZERO_CONFIRMED';
 
 // === Inventory List ===
@@ -98,6 +98,18 @@ export interface InventoryItem {
   product_code: string;
   product_name: string;
   product_unit: string;
+  product_grupo?: string;
+  product_categoria?: string;
+  product_subcategoria?: string;
+  product_segmento?: string;
+  product_grupo_inv?: string;
+  product_lote?: string;
+  product_estoque?: number;
+  product_entregas_post?: number;
+  product_local1?: string;
+  product_local2?: string;
+  product_local3?: string;
+  warehouse?: string;
   counted_quantity: number;
   variance: number;
   variance_percentage: number;
@@ -225,6 +237,70 @@ export interface Store {
   updated_at: string;
 }
 
+// === Product Filter Options (from /api/v1/products/filters) ===
+
+export interface FilterOption {
+  codigo: string;
+  descricao: string;
+}
+
+export interface ProductFilterOptions {
+  grupos: FilterOption[];
+  categorias: FilterOption[];
+  subcategorias: FilterOption[];
+  segmentos: FilterOption[];
+  armazens: FilterOption[];
+}
+
+// === Filtered Product (from /api/v1/products/filter) ===
+
+export interface FilteredProduct {
+  b1_cod: string;
+  b1_desc: string;
+  b1_tipo: string;
+  b1_um: string;
+  b1_grupo: string;
+  b1_xcatgor: string;
+  b1_xsubcat: string;
+  b1_xsegmen: string;
+  b1_xgrinve: string;
+  b1_rastro: string;
+  b2_qatu: number;
+  b2_xentpos: number;
+  current_quantity: number;
+  local1: string | null;
+  local2: string | null;
+  local3: string | null;
+  has_lot: boolean;
+  // Inventory status fields (from POST /inventory/filter-products)
+  inventory_status?: 'AVAILABLE' | 'IN_CURRENT_INVENTORY' | 'IN_OTHER_INVENTORY';
+  other_inventory_name?: string | null;
+  is_in_other_inventory?: boolean;
+  is_in_current_inventory?: boolean;
+}
+
+export interface FilteredProductResponse {
+  products: FilteredProduct[];
+  total: number;
+  total_count: number;
+  page: number;
+  total_pages: number;
+  limit: number;
+  offset: number;
+  filters_applied: Record<string, string | null>;
+}
+
+export interface InventoryFilterProductsResponse {
+  produtos: FilteredProduct[];
+  total: number;
+  total_count: number;
+  page: number;
+  total_pages: number;
+  size: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
 // === Protheus Product (from /api/v1/products) ===
 
 export interface ProtheusProduct {
@@ -273,6 +349,23 @@ export interface CountingListProduct {
   sequence: number;
   created_at: string;
   finalQuantity: number | null;
+  requires_lot?: boolean;
+  has_lot?: boolean;
+  snapshot_lots?: SnapshotLot[];
+}
+
+export interface SnapshotLot {
+  lot_number: string;
+  b8_lotectl: string;
+  b8_lotefor?: string;
+  system_qty: number;
+  counted_qty: number | null;
+  barcode?: string;
+}
+
+export interface LotCount {
+  lot_number: string;
+  quantity: number;
 }
 
 export interface CountingListProductsResponse {
@@ -404,4 +497,37 @@ export interface ComparisonResult {
   };
   inventory_a: { id: string; name: string; warehouse: string };
   inventory_b: { id: string; name: string; warehouse: string };
+}
+
+// === Assignable Item (for counting list product assignment) ===
+
+export interface AssignableItem {
+  id: string;
+  product_code: string;
+  product_name: string;
+  product_estoque: number;
+  entregas_post: number;
+  warehouse: string;
+  grupo: string;
+  categoria: string;
+  subcategoria: string;
+  segmento: string;
+  grupo_inv: string;
+  local1: string;
+  local2: string;
+  local3: string;
+  lote: string;
+  assignment_status: 'AVAILABLE' | 'IN_LIST' | 'IN_OTHER_LIST';
+  assigned_list_name?: string | null;
+}
+
+export interface AssignableItemsResponse {
+  items: AssignableItem[];
+  total: number;
+  page: number;
+  size: number;
+  total_pages: number;
+  total_available: number;
+  total_in_list: number;
+  total_in_other: number;
 }

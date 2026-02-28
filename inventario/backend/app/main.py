@@ -773,14 +773,14 @@ async def get_inventory_items(
             )
         
         # Buscar itens com atribuições do usuário E dados do produto
-        from app.models.models import SB1010
+        from app.models.models import SB1010, SB2010, SBZ010
         from sqlalchemy import func
         
         # ✅ NOVA ABORDAGEM: Buscar itens únicos primeiro, depois buscar dados adicionais
         unique_items = db.query(InventoryItem).filter(
             InventoryItem.inventory_list_id == inventory_id
         ).all()
-        
+
         # 🔧 SINCRONIZAÇÃO: Buscar current_cycle da counting_lists se disponível
         from app.models.models import CountingList
         counting_list = db.query(CountingList).filter(
@@ -794,7 +794,28 @@ async def get_inventory_items(
         else:
             current_cycle = getattr(inventory, 'current_cycle', 1)
             print(f"🔄 [SYNC] Usando current_cycle={current_cycle} da inventory_lists para inventory/items")
-        
+
+        # Batch fetch SB2010 (saldos) e SBZ010 (localizações) para evitar N+1
+        product_codes_stripped = list(set([
+            item.product_code.strip() for item in unique_items if item.product_code
+        ]))
+
+        sb2_lookup = {}
+        sbz_lookup = {}
+        if product_codes_stripped:
+            sb2_rows = db.query(SB2010).filter(
+                func.trim(SB2010.b2_cod).in_(product_codes_stripped)
+            ).all()
+            for sb2 in sb2_rows:
+                key = (sb2.b2_cod.strip(), sb2.b2_local.strip() if sb2.b2_local else '')
+                sb2_lookup[key] = sb2
+
+            sbz_rows = db.query(SBZ010).filter(
+                func.trim(SBZ010.bz_cod).in_(product_codes_stripped)
+            ).all()
+            for sbz in sbz_rows:
+                sbz_lookup[sbz.bz_cod.strip()] = sbz
+
         items_with_assignments = []
         for item in unique_items:
             # Buscar atribuição do usuário para este item
@@ -802,12 +823,12 @@ async def get_inventory_items(
                 CountingAssignment.inventory_item_id == item.id,
                 CountingAssignment.assigned_to == current_user.id
             ).first()
-            
+
             # Buscar dados do produto
             product = db.query(SB1010).filter(
                 func.trim(SB1010.b1_cod) == func.trim(item.product_code)
             ).first()
-            
+
             items_with_assignments.append((item, assignment, product))
         
         # 🎯 SISTEMA DE 3 CICLOS - Aplicar filtro de status se especificado
@@ -820,14 +841,32 @@ async def get_inventory_items(
         for item, assignment, product in items_with_assignments:
             # Usar descrição real do produto ou fallback
             product_name = product.b1_desc.strip() if product and product.b1_desc else f"Produto {item.product_code.strip()}"
-            
+
+            # Lookup SB2/SBZ dos batches
+            pc = item.product_code.strip() if item.product_code else ''
+            wh = item.warehouse.strip() if item.warehouse else ''
+            sb2 = sb2_lookup.get((pc, wh))
+            sbz = sbz_lookup.get(pc)
+
             item_data = {
                 "id": str(item.id),
                 "product_code": item.product_code.strip() if item.product_code else "",
                 "product_name": product_name,
+                "product_unit": product.b1_um.strip() if product and product.b1_um else "UN",
+                "product_grupo": product.b1_grupo.strip() if product and product.b1_grupo else "",
+                "product_categoria": product.b1_xcatgor.strip() if product and product.b1_xcatgor else "",
+                "product_subcategoria": product.b1_xsubcat.strip() if product and product.b1_xsubcat else "",
+                "product_segmento": product.b1_xsegmen.strip() if product and product.b1_xsegmen else "",
+                "product_grupo_inv": product.b1_xgrinve.strip() if product and product.b1_xgrinve else "",
+                "product_lote": product.b1_rastro.strip() if product and product.b1_rastro else "N",
+                "product_estoque": float(sb2.b2_qatu) if sb2 and sb2.b2_qatu else 0.0,
+                "product_entregas_post": float(sb2.b2_xentpos) if sb2 and sb2.b2_xentpos else 0.0,
+                "product_local1": sbz.bz_xlocal1.strip() if sbz and sbz.bz_xlocal1 else "",
+                "product_local2": sbz.bz_xlocal2.strip() if sbz and sbz.bz_xlocal2 else "",
+                "product_local3": sbz.bz_xlocal3.strip() if sbz and sbz.bz_xlocal3 else "",
                 "sequence": item.sequence,
                 "expected_quantity": float(item.expected_quantity) if item.expected_quantity else 0.0,
-                "warehouse": item.warehouse,  # ✅ CORREÇÃO v2.15.0: Adicionar warehouse
+                "warehouse": item.warehouse,
                 "status": item.status,
                 # ✅ ADICIONAR DADOS DAS CONTAGENS POR CICLO
                 "count_cycle_1": float(item.count_cycle_1) if item.count_cycle_1 is not None else None,
@@ -1696,8 +1735,9 @@ async def filter_products_for_inventory(
                 # 🎯 LÓGICA CORRETA: Inventários ATIVOS (não finalizados) bloqueiam produtos
                 # DRAFT = Em preparação (bloqueia - inventário ativo)
                 # IN_PROGRESS = Em andamento (bloqueia - inventário ativo)
-                # COMPLETED = Finalizado (NÃO bloqueia - inventário encerrado)
-                InventoryListOther.status != "COMPLETED",                       # Inventários ativos (não finalizados)
+                # COMPLETED = Finalizado (NÃO bloqueia)
+                # CLOSED = Encerrado (NÃO bloqueia)
+                InventoryListOther.status.in_(["DRAFT", "IN_PROGRESS"]),        # Apenas inventários ativos bloqueiam
                 InventoryListOther.store_id == current_user.store_id,           # Mesma loja
                 InventoryListOther.id != current_inventory_id,                  # Não o inventário atual
                 InventoryListOther.warehouse == target_warehouse                # ✅ NOVO v2.15.0: Mesmo armazém (produto + armazém)
@@ -3534,80 +3574,126 @@ async def get_available_counters(
     """Listar usuários disponíveis para designar como contadores"""
     try:
         from app.models.models import InventoryList
+        from app.core.security import UNIFIED_AUTH
         import uuid
-        
-        # ✅ v2.15.4: Verificar se inventário existe e se usuário tem acesso (multi-filial)
-        inventory_uuid = uuid.UUID(inventory_id)
-        from app.models.models import UserStore
 
-        if current_user.role == 'ADMIN':
-            # ADMIN pode acessar inventários de qualquer loja
-            inventory = db.query(InventoryList).filter(
-                InventoryList.id == inventory_uuid
-            ).first()
-        else:
-            # ✅ Outros usuários só podem acessar inventários das lojas que têm acesso
-            # Verificar através de user_stores (sistema multi-filial)
-            inventory = db.query(InventoryList).join(
-                UserStore, UserStore.store_id == InventoryList.store_id
-            ).filter(
-                InventoryList.id == inventory_uuid,
-                UserStore.user_id == current_user.id
-            ).first()
-        
+        inventory_uuid = uuid.UUID(inventory_id)
+
+        # Verificar se inventário existe
+        inventory = db.query(InventoryList).filter(
+            InventoryList.id == inventory_uuid
+        ).first()
+
         if not inventory:
             raise HTTPException(status_code=404, detail="Inventário não encontrado")
-        
-        # ✅ v2.15.4: Buscar usuários disponíveis para contagem (sistema multi-filial)
-        # Agora usa tabela user_stores para suportar usuários com múltiplas filiais
-        from sqlalchemy import and_
-        from app.models.models import UserStore
 
-        if current_user.role == 'ADMIN':
-            # ADMIN pode atribuir usuários da loja do inventário
-            users = db.query(User).join(
-                UserStore, UserStore.user_id == User.id
-            ).filter(
-                and_(
-                    UserStore.store_id == inventory.store_id,  # ✅ Através de user_stores!
-                    User.is_active == True,
-                    User.role.notin_(['ADMIN'])  # Excluir apenas admins
-                )
-            ).order_by(User.full_name).all()
-        else:
-            # Outros usuários veem apenas da loja do inventário atual
-            users = db.query(User).join(
-                UserStore, UserStore.user_id == User.id
-            ).filter(
-                and_(
-                    UserStore.store_id == inventory.store_id,  # ✅ Usa store_id do inventário!
-                    User.is_active == True,
-                    User.role.notin_(['ADMIN'])  # Excluir apenas admins
-                )
-            ).order_by(User.full_name).all()
-        
-        logger.info(f"🔍 Filtrados usuários SEM contagens ativas: {len(users)} disponíveis")
-        
-        # Converter para formato da API
         available_counters = []
-        for user in users:
-            available_counters.append({
-                "user_id": str(user.id),
-                "username": user.username,
-                "full_name": user.full_name,
-                "role": user.role.value,
-                "is_current_user": user.id == current_user.id
-            })
-        
-        logger.info(f"✅ Listados {len(available_counters)} contadores disponíveis")
-        
+
+        if UNIFIED_AUTH:
+            # ✅ Modo plataforma unificada: buscar usuários do schema core
+            from app.models.core_models import (
+                CoreUsuario, CoreUsuarioFilial, CorePermissaoModulo,
+                CoreModuloSistema, CoreRoleModulo
+            )
+            from sqlalchemy import and_
+
+            # Buscar usuarios ativos que:
+            # 1. Tem permissao no modulo INVENTARIO
+            # 2. Tem acesso a filial do inventario (via usuario_filiais)
+            users = db.query(
+                CoreUsuario.id,
+                CoreUsuario.username,
+                CoreUsuario.nome,
+                CoreRoleModulo.codigo.label('role_codigo'),
+            ).join(
+                CorePermissaoModulo, CorePermissaoModulo.usuario_id == CoreUsuario.id
+            ).join(
+                CoreModuloSistema, CoreModuloSistema.id == CorePermissaoModulo.modulo_id
+            ).join(
+                CoreRoleModulo, CoreRoleModulo.id == CorePermissaoModulo.role_modulo_id
+            ).join(
+                CoreUsuarioFilial, CoreUsuarioFilial.usuario_id == CoreUsuario.id
+            ).filter(
+                and_(
+                    CoreModuloSistema.codigo == 'INVENTARIO',
+                    CorePermissaoModulo.status == 'ATIVO',
+                    CoreUsuario.status == 'ATIVO',
+                    CoreUsuarioFilial.filial_id == str(inventory.store_id),
+                )
+            ).order_by(CoreUsuario.nome).all()
+
+            # ✅ Auto-sync: garantir que esses usuários existam em inventario.users
+            # para que FKs em counting_lists.counter_cycle_* funcionem
+            from app.models.models import UserStore, UserRole
+            for user in users:
+                user_uuid = uuid.UUID(str(user.id))
+                existing = db.query(User).filter(User.id == user_uuid).first()
+                if not existing:
+                    role_map = {'ADMIN': UserRole.ADMIN, 'SUPERVISOR': UserRole.SUPERVISOR, 'OPERATOR': UserRole.OPERATOR}
+                    new_user = User(
+                        id=user_uuid,
+                        username=user.username,
+                        full_name=user.nome or user.username,
+                        password_hash='synced_from_core',
+                        role=role_map.get(user.role_codigo, UserRole.OPERATOR),
+                        store_id=inventory.store_id,
+                        is_active=True,
+                    )
+                    db.add(new_user)
+                    # Vincular à filial do inventário
+                    new_us = UserStore(user_id=user_uuid, store_id=inventory.store_id)
+                    db.add(new_us)
+                    logger.info(f"✅ Auto-sync: usuario '{user.username}' criado em inventario.users")
+                else:
+                    # Atualizar nome e role se mudou
+                    role_map = {'ADMIN': UserRole.ADMIN, 'SUPERVISOR': UserRole.SUPERVISOR, 'OPERATOR': UserRole.OPERATOR}
+                    existing.full_name = user.nome or user.username
+                    existing.role = role_map.get(user.role_codigo, existing.role)
+                    existing.is_active = True
+
+            db.commit()
+
+            for user in users:
+                available_counters.append({
+                    "user_id": str(user.id),
+                    "username": user.username,
+                    "full_name": user.nome or user.username,
+                    "role": user.role_codigo or "OPERATOR",
+                    "is_current_user": str(user.id) == str(current_user.id)
+                })
+        else:
+            # Modo standalone: buscar do schema inventario (legado)
+            from app.models.models import UserStore
+            from sqlalchemy import and_
+
+            users = db.query(User).join(
+                UserStore, UserStore.user_id == User.id
+            ).filter(
+                and_(
+                    UserStore.store_id == inventory.store_id,
+                    User.is_active == True,
+                )
+            ).order_by(User.full_name).all()
+
+            for user in users:
+                role_val = user.role.value if hasattr(user.role, 'value') else str(user.role)
+                available_counters.append({
+                    "user_id": str(user.id),
+                    "username": user.username,
+                    "full_name": user.full_name,
+                    "role": role_val,
+                    "is_current_user": user.id == current_user.id
+                })
+
+        logger.info(f"✅ Listados {len(available_counters)} contadores disponíveis (UNIFIED_AUTH={UNIFIED_AUTH})")
+
         return {
             "inventory_id": inventory_id,
             "inventory_name": inventory.name,
             "available_counters": available_counters,
             "total": len(available_counters)
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -6334,6 +6420,50 @@ async def search_product_in_inventory(
         logger.error(f"❌ Erro ao buscar produto no inventário: {e}")
         raise HTTPException(status_code=500, detail=safe_error_response(e, "ao buscar produto"))
 
+class SimpleCountRequest(BaseModel):
+    quantity: float
+    lot_number: Optional[str] = None
+    observation: Optional[str] = None
+    location: Optional[str] = None
+    lot_counts: Optional[List[LotCount]] = None
+
+@app.post("/api/v1/inventory/items/{item_id}/count", tags=["Counting"])
+async def register_count_simple(
+    item_id: str,
+    count_data: SimpleCountRequest,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Registrar contagem — endpoint simplificado (item_id na URL)"""
+    try:
+        import uuid
+        from app.models.models import InventoryItem
+        item_uuid = uuid.UUID(item_id)
+        item = db.query(InventoryItem).filter(InventoryItem.id == item_uuid).first()
+        if not item:
+            raise HTTPException(status_code=404, detail="Item não encontrado")
+
+        # Delegar ao endpoint principal, montando o RegisterCountRequest
+        full_request = RegisterCountRequest(
+            inventory_item_id=item_id,
+            quantity=count_data.quantity,
+            lot_number=count_data.lot_number,
+            observation=count_data.observation,
+            location=count_data.location,
+            lot_counts=count_data.lot_counts,
+        )
+        return await register_count(
+            inventory_id=str(item.inventory_list_id),
+            count_data=full_request,
+            current_user=current_user,
+            db=db,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar contagem (simple): {e}")
+        raise HTTPException(status_code=500, detail=safe_error_response(e, "ao registrar contagem"))
+
 @app.post("/api/v1/counting/inventory/{inventory_id}/register-count", tags=["Counting"])
 async def register_count(
     inventory_id: str,
@@ -6419,9 +6549,16 @@ async def register_count(
         if not inventory_item:
             raise HTTPException(status_code=404, detail="Item não encontrado no inventário")
         
-        # ✅ SIMPLIFICAÇÃO: Se chegou até aqui, usuário tem permissão (validado no modal "Gerenciar Lista") 
-        # Removemos todas as validações de permissão redundantes conforme solicitado pelo usuário
-        logger.info(f"✅ Permissão validada no frontend - usuário pode contar todos os produtos do inventário")
+        # Validar que o usuario logado e o contador atribuido ao ciclo atual da lista
+        if counting_list:
+            counter_field = f"counter_cycle_{cycle_number}"
+            assigned_counter = getattr(counting_list, counter_field, None)
+            if assigned_counter and str(assigned_counter) != str(current_user.id):
+                logger.warning(f"🚫 Usuario {current_user.id} tentou contar mas o contador do ciclo {cycle_number} e {assigned_counter}")
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Voce nao e o contador atribuido ao {cycle_number}o ciclo desta lista."
+                )
         
         # Verificar se produto tem controle de lote e se foram fornecidos dados de lotes
         has_lot_control = count_data.lot_counts and len(count_data.lot_counts) > 0
@@ -6443,14 +6580,29 @@ async def register_count(
                 existing_count.updated_at = datetime.now()
                 
                 # ✅ CORREÇÃO CRÍTICA: Atualizar campos count_cycle_X na tabela inventory_items
-                # USAR cycle_number (ciclo atual) para atualizar o campo correto
                 if cycle_number == 1:
                     inventory_item.count_cycle_1 = count_data.quantity
                 elif cycle_number == 2:
                     inventory_item.count_cycle_2 = count_data.quantity
                 elif cycle_number == 3:
                     inventory_item.count_cycle_3 = count_data.quantity
-                
+
+                # ✅ Sincronizar counting_list_items
+                from app.models.models import CountingListItem
+                cli_upd = db.query(CountingListItem).filter(
+                    CountingListItem.inventory_item_id == item_uuid,
+                    CountingListItem.counting_list_id == counting_list.id if counting_list else None
+                ).first()
+                if cli_upd:
+                    if cycle_number == 1:
+                        cli_upd.count_cycle_1 = count_data.quantity
+                    elif cycle_number == 2:
+                        cli_upd.count_cycle_2 = count_data.quantity
+                    elif cycle_number == 3:
+                        cli_upd.count_cycle_3 = count_data.quantity
+                    cli_upd.last_counted_at = datetime.utcnow()
+                    cli_upd.last_counted_by = str(current_user.id)
+
                 db.commit()
                 
                 # ✅ SIMPLIFICAÇÃO: Não precisamos mais atualizar status de assignment específico
@@ -6597,12 +6749,29 @@ async def register_count(
             inventory_item.count_cycle_1 = total_quantity
         elif cycle_number == 2:
             inventory_item.count_cycle_2 = total_quantity
-            # 🔥 CORREÇÃO v2.18.2: Resetar flag needs_recount_cycle_2 após contagem
             inventory_item.needs_recount_cycle_2 = False
         elif cycle_number == 3:
             inventory_item.count_cycle_3 = total_quantity
-            # 🔥 CORREÇÃO v2.18.2: Resetar flag needs_recount_cycle_3 após contagem
             inventory_item.needs_recount_cycle_3 = False
+
+        # ✅ CORREÇÃO: Sincronizar counting_list_items com a contagem registrada
+        from app.models.models import CountingListItem
+        cli = db.query(CountingListItem).filter(
+            CountingListItem.inventory_item_id == item_uuid,
+            CountingListItem.counting_list_id == counting_list.id if counting_list else None
+        ).first()
+        if cli:
+            if cycle_number == 1:
+                cli.count_cycle_1 = total_quantity
+                cli.needs_count_cycle_1 = False
+            elif cycle_number == 2:
+                cli.count_cycle_2 = total_quantity
+                cli.needs_count_cycle_2 = False
+            elif cycle_number == 3:
+                cli.count_cycle_3 = total_quantity
+                cli.needs_count_cycle_3 = False
+            cli.last_counted_at = datetime.utcnow()
+            cli.last_counted_by = str(current_user.id)
 
         db.commit()
         
@@ -8203,10 +8372,10 @@ async def filter_products_by_range(  # 🔥 RENOMEADO para evitar conflito com l
         class ProductResult:
             def __init__(self, row):
                 self.b1_cod = row.b1_cod
-                self.b1_desc = row.b1_desc  
+                self.b1_desc = row.b1_desc
                 self.b1_tipo = row.b1_tipo
                 self.b1_um = row.b1_um
-                self.b1_locpad = row.b1_locpad
+                self.b1_locpad = row.b2_local
                 self.b1_grupo = row.b1_grupo
                 self.b1_xcatgor = row.b1_xcatgor
                 self.b1_xsubcat = row.b1_xsubcat
@@ -8214,6 +8383,7 @@ async def filter_products_by_range(  # 🔥 RENOMEADO para evitar conflito com l
                 self.b1_xgrinve = row.b1_xgrinve
                 self.b1_rastro = row.b1_rastro
                 self.b2_qatu = row.b2_qatu
+                self.b2_xentpos = row.b2_xentpos if hasattr(row, 'b2_xentpos') else 0
         
         products = [ProductResult(row) for row in raw_products]
         
@@ -8703,7 +8873,7 @@ async def get_product_details(product_id: str, db: Session = Depends(get_db)):
                     "lote": lote.b8_lotectl,
                     "sublote": lote.b8_numlote,
                     "saldo": float(lote.b8_saldo) if lote.b8_saldo else 0,
-                    "data_validade": lote.b8_dtvalid.isoformat() if lote.b8_dtvalid else None
+                    "data_validade": lote.b8_dtvalid if lote.b8_dtvalid else None
                 } for lote in saldos_lote
             ],
             
@@ -8790,94 +8960,181 @@ try:
 except Exception as e:
     logger.error(f"❌ Erro ao registrar router de listas de contagem: {e}")
 
-# ✅ ENDPOINT REAL para listas de contagem baseado em counting_assignments
-@app.get("/api/v1/inventories/{inventory_id}/counting-lists", tags=["Counting Lists"])
-async def get_inventory_counting_lists(inventory_id: str, db: Session = Depends(get_db)):
-    """
-    🎯 SISTEMA MULTILISTA: Buscar listas de contagem por inventário
+# NOTA: GET /inventories/{inventory_id}/counting-lists movido para counting_lists.py router
 
-    Retorna todas as counting_lists vinculadas ao inventário (não counting_assignments)
+# ✅ ENDPOINT: Itens do inventário para atribuição a listas de contagem
+@app.get("/api/v1/inventories/{inventory_id}/items-for-assignment", tags=["Counting Lists"])
+async def get_items_for_assignment(
+    inventory_id: str,
+    list_id: str = Query(None, description="ID da lista atual (para marcar itens 'nesta lista')"),
+    search: str = Query(None, description="Busca por código ou descrição do produto"),
+    assignment_status: str = Query(None, description="Filtro: AVAILABLE, IN_LIST, IN_OTHER_LIST"),
+    # Filtros avançados (range) baseados no snapshot
+    grupo_de: str = Query(None), grupo_ate: str = Query(None),
+    categoria_de: str = Query(None), categoria_ate: str = Query(None),
+    subcategoria_de: str = Query(None), subcategoria_ate: str = Query(None),
+    segmento_de: str = Query(None), segmento_ate: str = Query(None),
+    grupo_inv_de: str = Query(None), grupo_inv_ate: str = Query(None),
+    local1_from: str = Query(None), local1_to: str = Query(None),
+    local2_from: str = Query(None), local2_to: str = Query(None),
+    local3_from: str = Query(None), local3_to: str = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """
+    Retorna itens do inventário com status de atribuição a listas de contagem.
+    Suporta filtros avançados por grupo, categoria, subcategoria, segmento, etc.
     """
     try:
-        from app.models.models import InventoryList, CountingList, User
-        from sqlalchemy import func, text
+        from app.models.models import (
+            InventoryList, InventoryItem, InventoryItemSnapshot,
+            CountingList, CountingListItem
+        )
         import uuid
 
-        # Verificar se inventário existe
         inventory_uuid = uuid.UUID(inventory_id)
+        list_uuid = uuid.UUID(list_id) if list_id else None
+
+        # Verificar se inventário existe
         inventory = db.query(InventoryList).filter(InventoryList.id == inventory_uuid).first()
         if not inventory:
             raise HTTPException(status_code=404, detail="Inventário não encontrado")
 
-        # ✅ BUSCAR COUNTING_LISTS (sistema multilista)
-        counting_lists = db.query(CountingList).filter(
+        # Subquery: atribuição de cada item a uma lista
+        cli_subq = db.query(
+            CountingListItem.inventory_item_id,
+            CountingListItem.counting_list_id,
+            CountingList.list_name,
+        ).join(
+            CountingList, CountingList.id == CountingListItem.counting_list_id
+        ).filter(
             CountingList.inventory_id == inventory_uuid
-        ).all()
+        ).subquery()
 
-        if not counting_lists:
-            logger.warning(f"⚠️ Nenhuma counting_list encontrada para inventário {inventory_id}")
-            return []
+        # Query principal com snapshot para dados do produto
+        query = db.query(
+            InventoryItem.id,
+            InventoryItem.product_code,
+            InventoryItem.expected_quantity,
+            InventoryItem.warehouse,
+            InventoryItem.sequence,
+            InventoryItemSnapshot.b1_desc.label("product_name"),
+            InventoryItemSnapshot.b2_qatu.label("product_estoque"),
+            InventoryItemSnapshot.b2_xentpos.label("entregas_post"),
+            InventoryItemSnapshot.b1_grupo.label("grupo"),
+            InventoryItemSnapshot.b1_xcatgor.label("categoria"),
+            InventoryItemSnapshot.b1_xsubcat.label("subcategoria"),
+            InventoryItemSnapshot.b1_xsegmen.label("segmento"),
+            InventoryItemSnapshot.b1_xgrinve.label("grupo_inv"),
+            InventoryItemSnapshot.bz_xlocal1.label("local1"),
+            InventoryItemSnapshot.bz_xlocal2.label("local2"),
+            InventoryItemSnapshot.bz_xlocal3.label("local3"),
+            InventoryItemSnapshot.b1_rastro.label("rastro"),
+            cli_subq.c.counting_list_id.label("assigned_list_id"),
+            cli_subq.c.list_name.label("assigned_list_name"),
+        ).outerjoin(
+            InventoryItemSnapshot,
+            InventoryItemSnapshot.inventory_item_id == InventoryItem.id
+        ).outerjoin(
+            cli_subq,
+            cli_subq.c.inventory_item_id == InventoryItem.id
+        ).filter(
+            InventoryItem.inventory_list_id == inventory_uuid
+        )
 
-        # Preparar resposta
-        result = []
-        for counting_list in counting_lists:
-            # Buscar nomes dos contadores (ciclos 1, 2 e 3)
-            counter1 = db.query(User).filter(User.id == counting_list.counter_cycle_1).first() if counting_list.counter_cycle_1 else None
-            counter2 = db.query(User).filter(User.id == counting_list.counter_cycle_2).first() if counting_list.counter_cycle_2 else None
-            counter3 = db.query(User).filter(User.id == counting_list.counter_cycle_3).first() if counting_list.counter_cycle_3 else None
+        # Filtro de busca por código ou descrição
+        if search:
+            search_term = f"%{search.strip()}%"
+            query = query.filter(
+                (InventoryItem.product_code.ilike(search_term)) |
+                (InventoryItemSnapshot.b1_desc.ilike(search_term))
+            )
 
-            # Contar produtos desta lista
-            from app.models.models import CountingListItem
-            total_products = db.query(CountingListItem).filter(
-                CountingListItem.counting_list_id == counting_list.id
-            ).count()
+        # Filtros avançados (range) no snapshot
+        def apply_range(col, val_de, val_ate):
+            nonlocal query
+            if val_de:
+                query = query.filter(col >= val_de.strip())
+            if val_ate:
+                query = query.filter(col <= val_ate.strip())
 
-            # ✅ v2.18.2: Contar produtos contados no ciclo atual
-            current_cycle = counting_list.current_cycle or 1
-            if current_cycle == 1:
-                counted_items = db.query(CountingListItem).filter(
-                    CountingListItem.counting_list_id == counting_list.id,
-                    CountingListItem.count_cycle_1 != None
-                ).count()
-            elif current_cycle == 2:
-                counted_items = db.query(CountingListItem).filter(
-                    CountingListItem.counting_list_id == counting_list.id,
-                    CountingListItem.count_cycle_2 != None
-                ).count()
-            elif current_cycle == 3:
-                counted_items = db.query(CountingListItem).filter(
-                    CountingListItem.counting_list_id == counting_list.id,
-                    CountingListItem.count_cycle_3 != None
-                ).count()
+        apply_range(InventoryItemSnapshot.b1_grupo, grupo_de, grupo_ate)
+        apply_range(InventoryItemSnapshot.b1_xcatgor, categoria_de, categoria_ate)
+        apply_range(InventoryItemSnapshot.b1_xsubcat, subcategoria_de, subcategoria_ate)
+        apply_range(InventoryItemSnapshot.b1_xsegmen, segmento_de, segmento_ate)
+        apply_range(InventoryItemSnapshot.b1_xgrinve, grupo_inv_de, grupo_inv_ate)
+        apply_range(InventoryItemSnapshot.bz_xlocal1, local1_from, local1_to)
+        apply_range(InventoryItemSnapshot.bz_xlocal2, local2_from, local2_to)
+        apply_range(InventoryItemSnapshot.bz_xlocal3, local3_from, local3_to)
+
+        # Ordenar por sequência
+        query = query.order_by(InventoryItem.sequence)
+
+        # Executar query completa para filtrar por assignment_status
+        all_rows = query.all()
+
+        # Classificar cada item
+        items_classified = []
+        for row in all_rows:
+            if row.assigned_list_id is None:
+                item_status = "AVAILABLE"
+            elif list_uuid and str(row.assigned_list_id) == str(list_uuid):
+                item_status = "IN_LIST"
             else:
-                counted_items = 0
+                item_status = "IN_OTHER_LIST"
 
-            result.append({
-                "id": str(counting_list.id),  # ✅ UUID real da counting_list
-                "list_name": counting_list.list_name,
-                "description": counting_list.description or "",
-                "list_status": counting_list.list_status,  # ABERTA, EM_CONTAGEM, ENCERRADA
-                "current_cycle": counting_list.current_cycle,  # 1, 2 ou 3
-                "counter_cycle_1": str(counting_list.counter_cycle_1) if counting_list.counter_cycle_1 else None,
-                "counter_cycle_2": str(counting_list.counter_cycle_2) if counting_list.counter_cycle_2 else None,
-                "counter_cycle_3": str(counting_list.counter_cycle_3) if counting_list.counter_cycle_3 else None,
-                "counter_name": counter1.full_name if counter1 else "Não atribuído",
-                "counter_name_cycle_2": counter2.full_name if counter2 else None,
-                "counter_name_cycle_3": counter3.full_name if counter3 else None,
-                "total_products": total_products,
-                "counted_items": counted_items,  # ✅ v2.18.2: Produtos contados no ciclo atual
-                "created_at": counting_list.created_at.isoformat() if counting_list.created_at else None,
-                "updated_at": counting_list.updated_at.isoformat() if counting_list.updated_at else None,
-                "finalization_type": counting_list.finalization_type if counting_list.finalization_type else 'automatic'
+            if assignment_status and item_status != assignment_status:
+                continue
+
+            items_classified.append({
+                "id": str(row.id),
+                "product_code": row.product_code or "",
+                "product_name": row.product_name or row.product_code or "",
+                "product_estoque": float(row.product_estoque) if row.product_estoque else 0,
+                "entregas_post": float(row.entregas_post) if row.entregas_post else 0,
+                "warehouse": row.warehouse or "",
+                "grupo": (row.grupo or "").strip(),
+                "categoria": (row.categoria or "").strip(),
+                "subcategoria": (row.subcategoria or "").strip(),
+                "segmento": (row.segmento or "").strip(),
+                "grupo_inv": (row.grupo_inv or "").strip(),
+                "local1": (row.local1 or "").strip(),
+                "local2": (row.local2 or "").strip(),
+                "local3": (row.local3 or "").strip(),
+                "lote": "Sim" if row.rastro == 'L' else ("Serie" if row.rastro == 'S' else ""),
+                "assignment_status": item_status,
+                "assigned_list_name": row.assigned_list_name if item_status == "IN_OTHER_LIST" else None,
             })
 
-        logger.info(f"✅ Retornando {len(result)} counting_lists para inventário {inventory_id}")
-        return result
+        # Contadores
+        total = len(items_classified)
+        total_available = sum(1 for i in items_classified if i["assignment_status"] == "AVAILABLE")
+        total_in_list = sum(1 for i in items_classified if i["assignment_status"] == "IN_LIST")
+        total_in_other = sum(1 for i in items_classified if i["assignment_status"] == "IN_OTHER_LIST")
+
+        # Paginação
+        offset = (page - 1) * size
+        paginated_items = items_classified[offset:offset + size]
+
+        return {
+            "items": paginated_items,
+            "total": total,
+            "page": page,
+            "size": size,
+            "total_pages": (total + size - 1) // size if total > 0 else 1,
+            "total_available": total_available,
+            "total_in_list": total_in_list,
+            "total_in_other": total_in_other,
+        }
 
     except ValueError:
-        raise HTTPException(status_code=400, detail="ID de inventário inválido")
+        raise HTTPException(status_code=400, detail="ID inválido")
+    except HTTPException:
+        raise
     except Exception as e:
-        return {"error": f"Erro: {str(e)}", "inventory_id": inventory_id}
+        logger.error(f"❌ Erro ao buscar itens para atribuição: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
 
 
 # ❌ ENDPOINT LEGADO DESABILITADO - Conflita com endpoint modularizado em counting_lists.py
@@ -8962,9 +9219,39 @@ async def release_counting_list(list_id: str, db: Session = Depends(get_db)):
         console_log = []
         console_log.append(f"🚀 [BACKEND] Liberando lista específica: {list_id}")
 
-        # Extrair user_id do list_id formato "user_{uuid}"
+        # Verificar se é UUID direto (novo sistema) ou formato "user_{uuid}" (legado)
         if not list_id.startswith("user_"):
-            raise HTTPException(status_code=400, detail="ID de lista inválido")
+            # Novo sistema: list_id é UUID de counting_list
+            from app.models.models import CountingList
+            counting_list = db.query(CountingList).filter(CountingList.id == list_id).first()
+            if not counting_list:
+                raise HTTPException(status_code=404, detail="Lista de contagem não encontrada")
+
+            if counting_list.list_status == "ENCERRADA":
+                raise HTTPException(status_code=400, detail="Lista já está encerrada")
+
+            # Recalcular divergências se ciclo >= 2
+            if counting_list.current_cycle >= 2:
+                logger.info(f"🔄 [RELEASE] Recalculando divergências antes de liberar ciclo {counting_list.current_cycle}")
+                discrepancy_result = recalculate_discrepancies_for_list(
+                    db, list_id, counting_list.current_cycle - 1,
+                    inventory_list_id=str(counting_list.inventory_id)
+                )
+                if discrepancy_result.get("success"):
+                    logger.info(f"✅ [RELEASE] {discrepancy_result.get('products_needing_recount', 0)} produtos para recontagem")
+
+            counting_list.list_status = "EM_CONTAGEM"
+            counting_list.released_at = datetime.utcnow()
+            db.commit()
+
+            logger.info(f"✅ Lista {list_id} liberada para contagem (ciclo {counting_list.current_cycle})")
+            return {
+                "success": True,
+                "list_id": list_id,
+                "message": f"Lista liberada para contagem ({counting_list.current_cycle}o ciclo)",
+                "current_cycle": counting_list.current_cycle,
+                "console_log": [f"✅ Lista {counting_list.list_name} liberada para {counting_list.current_cycle}o ciclo"]
+            }
 
         user_id = list_id.replace("user_", "")
         user_uuid = uuid.UUID(user_id)
@@ -9841,8 +10128,11 @@ async def get_list_products(
             else:
                 raise ValueError("ID de lista inválido")
 
-        # CORREÇÃO: Buscar dados sempre de inventory_items (fonte primária)
-        # e sincronizar com counting_list_items quando necessário
+        # Buscar info da lista para o response wrapper
+        _list_info_q = text("SELECT list_name, current_cycle FROM inventario.counting_lists WHERE id = :lid LIMIT 1")
+        _list_info = db.execute(_list_info_q, {"lid": str(list_uuid)}).fetchone()
+        _list_name = _list_info.list_name if _list_info else ""
+        _current_cycle = _list_info.current_cycle if _list_info else 1
 
         # 🎯 Construir query com filtro condicional por ciclo
         # ✅ CORREÇÃO CRÍTICA: Buscar contagens de counting_list_items, não de inventory_items
@@ -9852,13 +10142,9 @@ async def get_list_products(
             SELECT
                 ii.id,
                 ii.product_code,
-                -- 📸 v2.10.0: Priorizar descrição do SNAPSHOT, depois CACHE, depois products
-                COALESCE(iis.b1_desc, prod_cache.b1_desc, p.description, CONCAT('Produto ', ii.product_code)) as product_description,
-                -- 📸 v2.10.0: Usar quantidade do SNAPSHOT (congelada) em vez de expected_quantity
+                COALESCE(iis.b1_desc, p.description, CONCAT('Produto ', ii.product_code)) as product_description,
                 COALESCE(iis.b2_qatu, ii.expected_quantity, 0) as system_qty,
-                -- ✅ v2.17.0: Adicionar entregas posteriores do snapshot
                 COALESCE(iis.b2_xentpos, 0) as b2_xentpos,
-                -- 📸 v2.10.0: Adicionar custo médio do snapshot
                 COALESCE(iis.b2_cm1, 0) as snapshot_cost,
                 cli.count_cycle_1 as count_1,
                 cli.count_cycle_2 as count_2,
@@ -9867,16 +10153,14 @@ async def get_list_products(
                 COALESCE(cli.needs_count_cycle_2, ii.needs_recount_cycle_2) as needs_count_cycle_2,
                 COALESCE(cli.needs_count_cycle_3, ii.needs_recount_cycle_3) as needs_count_cycle_3,
                 ii.warehouse,
+                ii.sequence,
                 COALESCE(p.unit, 'UN') as unit,
                 cl.current_cycle,
-                -- 📸 v2.10.0: Priorizar rastreamento do SNAPSHOT, depois CACHE
-                COALESCE(iis.b1_rastro, prod_cache.b1_rastro) as b1_rastro,
-                -- 📸 v2.10.0: Adicionar informações de snapshot
+                COALESCE(iis.b1_rastro, '') as b1_rastro,
                 iis.created_at as snapshot_created_at,
                 iis.bz_xlocal1,
                 iis.bz_xlocal2,
                 iis.bz_xlocal3,
-                -- 📍 v2.19.8: Localização dinâmica baseada em szb010.zb_xsbzlcz
                 COALESCE(szb_loc.zb_xsbzlcz, '1') as zb_xsbzlcz,
                 CASE COALESCE(szb_loc.zb_xsbzlcz, '1')
                     WHEN '1' THEN NULLIF(TRIM(iis.bz_xlocal1), '')
@@ -9884,20 +10168,14 @@ async def get_list_products(
                     WHEN '3' THEN NULLIF(TRIM(iis.bz_xlocal3), '')
                     ELSE NULLIF(TRIM(iis.bz_xlocal1), '')
                 END as location,
-                -- 🚀 v2.18.3: Código de barras principal do CACHE (pré-calculado)
-                prod_cache.b1_codbar as b1_codbar,
-                -- 🚀 v2.18.3: Códigos de barras alternativos do CACHE (JSONB, 1.860x mais rápido)
-                COALESCE(prod_cache.alternative_barcodes, '[]'::jsonb) as alternative_barcodes,
-                -- 📸 v2.13.0: Lotes do snapshot (agregados como JSON para produtos com controle de lote)
-                -- IMPORTANTE: Dados vêm de inventory_lots_snapshot (dados CONGELADOS do inventário)
-                -- Campo b8_saldo (banco) é renomeado para 'quantity' (JSON da API)
-                -- Fluxo: inventory_lots_snapshot.b8_saldo → json['quantity'] → frontend.snapshotLot.quantity
+                '' as b1_codbar,
+                '[]'::jsonb as alternative_barcodes,
                 COALESCE(
                     json_agg(
                         json_build_object(
-                            'lot_number', ils.b8_lotectl,    -- Número do lote (snapshot)
-                            'quantity', ils.b8_saldo,        -- Quantidade esperada do lote (snapshot) - renomeado para 'quantity' no JSON
-                            'b8_lotefor', ils.b8_lotefor     -- Lote do fornecedor (snapshot) - adicionado v2.17.0
+                            'lot_number', ils.b8_lotectl,
+                            'quantity', ils.b8_saldo,
+                            'b8_lotefor', ils.b8_lotefor
                         )
                     ) FILTER (WHERE ils.id IS NOT NULL),
                     '[]'::json
@@ -9905,14 +10183,9 @@ async def get_list_products(
             FROM inventario.counting_list_items cli
             JOIN inventario.counting_lists cl ON cli.counting_list_id = cl.id
             JOIN inventario.inventory_items ii ON cli.inventory_item_id = ii.id
-            -- 📸 v2.10.0: Adicionar snapshot (dados congelados)
             LEFT JOIN inventario.inventory_items_snapshot iis ON iis.inventory_item_id = ii.id
-            -- 📸 v2.13.0: JOIN com lotes do snapshot (dados congelados de SB8010)
             LEFT JOIN inventario.inventory_lots_snapshot ils ON ils.inventory_item_id = ii.id
             LEFT JOIN inventario.products p ON ii.product_id = p.id
-            -- 🚀 v2.18.3: Usar CACHE ao invés de SB1010/SLK010 (performance 1.860x melhor)
-            LEFT JOIN inventario.products prod_cache ON prod_cache.code = ii.product_code
-            -- 📍 v2.19.8: JOIN com inventory_lists, stores e szb010 para localização dinâmica
             JOIN inventario.inventory_lists il ON cl.inventory_id = il.id
             JOIN inventario.stores st ON il.store_id = st.id
             LEFT JOIN inventario.szb010 szb_loc ON szb_loc.zb_filial = st.code AND szb_loc.zb_xlocal = ii.warehouse
@@ -9942,24 +10215,22 @@ async def get_list_products(
 
         base_query += """
             GROUP BY
-                ii.id, ii.product_code, ii.expected_quantity, ii.warehouse,
+                ii.id, ii.product_code, ii.expected_quantity, ii.warehouse, ii.sequence,
                 cli.count_cycle_1, cli.count_cycle_2, cli.count_cycle_3,
                 cli.needs_count_cycle_1, cli.needs_count_cycle_2, cli.needs_count_cycle_3,
                 ii.needs_recount_cycle_1, ii.needs_recount_cycle_2, ii.needs_recount_cycle_3,
                 p.description, p.unit, cl.current_cycle,
-                prod_cache.b1_desc, prod_cache.b1_rastro, prod_cache.b1_codbar, prod_cache.alternative_barcodes,
                 iis.b1_desc, iis.b2_qatu, iis.b2_xentpos, iis.b2_cm1, iis.b1_rastro,
                 iis.created_at, iis.bz_xlocal1, iis.bz_xlocal2, iis.bz_xlocal3,
                 szb_loc.zb_xsbzlcz
             ORDER BY
-                -- 📍 v2.19.8: Ordenar por Localização (NULLS LAST) e depois por Descrição
                 CASE COALESCE(szb_loc.zb_xsbzlcz, '1')
                     WHEN '1' THEN NULLIF(TRIM(iis.bz_xlocal1), '')
                     WHEN '2' THEN NULLIF(TRIM(iis.bz_xlocal2), '')
                     WHEN '3' THEN NULLIF(TRIM(iis.bz_xlocal3), '')
                     ELSE NULLIF(TRIM(iis.bz_xlocal1), '')
                 END NULLS LAST,
-                COALESCE(iis.b1_desc, prod_cache.b1_desc, p.description, ii.product_code)
+                COALESCE(iis.b1_desc, p.description, ii.product_code)
         """
 
         query = text(base_query)
@@ -9978,8 +10249,12 @@ async def get_list_products(
                 "success": True,
                 "message": "Nenhum produto atribuído a este usuário",
                 "data": {
+                    "products": [],
                     "items": [],
-                    "total": 0
+                    "total": 0,
+                    "current_cycle": _current_cycle,
+                    "list_id": str(list_uuid),
+                    "list_name": _list_name,
                 }
             }
 
@@ -9996,6 +10271,20 @@ async def get_list_products(
                 count_value = row.count_2
             elif current_cycle == 3:
                 count_value = row.count_3
+
+            # Determinar se o item foi resolvido em ciclo ANTERIOR (só C2+ pode ser APPROVED)
+            # No C1, tudo é COUNTED ou PENDING (não existe "ciclo anterior")
+            # No C2, se needs_count_cycle_2=False → resolvido no C1 → APPROVED
+            # No C3, se needs_count_cycle_3=False → resolvido no C1 ou C2 → APPROVED
+            resolved_in_prior_cycle = False
+            if current_cycle >= 2:
+                needs_c2 = row.needs_count_cycle_2 if row.needs_count_cycle_2 is not None else False
+                if not needs_c2:
+                    resolved_in_prior_cycle = True
+            if current_cycle >= 3 and not resolved_in_prior_cycle:
+                needs_c3 = row.needs_count_cycle_3 if row.needs_count_cycle_3 is not None else False
+                if not needs_c3:
+                    resolved_in_prior_cycle = True
 
             # ✅ BUSCAR COUNTINGS DETALHADOS (para rastreamento de lotes)
             # 🔧 FIX v2.17.1: Buscar apenas o ÚLTIMO registro de cada ciclo (evita duplicados)
@@ -10071,24 +10360,30 @@ async def get_list_products(
                 "id": str(row.id),
                 "product_code": row.product_code,
                 "product_description": row.product_description or f"Produto {row.product_code}",
+                "product_name": row.product_description or f"Produto {row.product_code}",
                 # 📸 v2.10.0: Quantidade do SNAPSHOT (congelada)
                 "system_qty": float(row.system_qty) if row.system_qty else 0.0,
                 # ✅ v2.17.0: Entregas posteriores do snapshot
                 "b2_xentpos": float(row.b2_xentpos) if row.b2_xentpos else 0.0,
                 "expected_quantity": float(row.system_qty) if row.system_qty else 0.0,  # ✅ v2.10.0.18: Alias para compatibilidade
                 "counted_qty": float(count_value) if count_value is not None else None,  # Compatibilidade
-                # ✅ ADICIONAR: Todos os ciclos para o modal
+                # ✅ Todos os ciclos de contagem
+                "count_cycle_1": float(row.count_1) if row.count_1 is not None else None,
+                "count_cycle_2": float(row.count_2) if row.count_2 is not None else None,
+                "count_cycle_3": float(row.count_3) if row.count_3 is not None else None,
+                # ✅ Compatibilidade com frontend legado
                 "count_1": float(row.count_1) if row.count_1 is not None else None,
                 "count_2": float(row.count_2) if row.count_2 is not None else None,
                 "count_3": float(row.count_3) if row.count_3 is not None else None,
-                # ✅ v2.10.0.21: Flags de controle de ciclo (essencial para estatísticas)
+                # ✅ Flags de controle de ciclo
+                "needs_count_cycle_1": row.needs_count_cycle_1 if hasattr(row, 'needs_count_cycle_1') else True,
                 "needs_count_cycle_2": row.needs_count_cycle_2 if hasattr(row, 'needs_count_cycle_2') else False,
                 "needs_count_cycle_3": row.needs_count_cycle_3 if hasattr(row, 'needs_count_cycle_3') else False,
                 "counted_at": None,  # Por simplicidade, removido por enquanto
                 "warehouse": row.warehouse or "01",
                 "unit": row.unit or "UN",
                 "current_cycle": current_cycle,
-                "status": "counted" if count_value is not None else "pending",
+                "status": "APPROVED" if resolved_in_prior_cycle else ("COUNTED" if count_value is not None else "PENDING"),
                 # ✅ ADICIONAR: Informação de controle de lote
                 "requires_lot": row.b1_rastro in ['L', 'S'] if row.b1_rastro else False,
                 "has_lot": row.b1_rastro in ['L', 'S'] if row.b1_rastro else False,
@@ -10115,15 +10410,23 @@ async def get_list_products(
                     "location_2": row.bz_xlocal2 if hasattr(row, 'bz_xlocal2') else None,
                     "location_3": row.bz_xlocal3 if hasattr(row, 'bz_xlocal3') else None,
                     "location": row.location if hasattr(row, 'location') and row.location else None  # 📍 v2.19.8
-                } if hasattr(row, 'snapshot_created_at') and row.snapshot_created_at else None
+                } if hasattr(row, 'snapshot_created_at') and row.snapshot_created_at else None,
+                # ✅ Campos obrigatórios para CountingListProduct
+                "sequence": row.sequence if hasattr(row, 'sequence') and row.sequence else 1,
+                "created_at": None,
+                "finalQuantity": None,
             })
 
         return {
             "success": True,
             "message": f"Encontrados {len(items)} produtos para este usuário",
             "data": {
+                "products": items,
                 "items": items,
-                "total": len(items)
+                "total": len(items),
+                "current_cycle": _current_cycle,
+                "list_id": str(list_uuid),
+                "list_name": _list_name,
             }
         }
 
@@ -10914,6 +11217,147 @@ async def get_new_counting_lists(
             "data": [],
             "message": f"Erro ao buscar listas: {str(e)}"
         }
+
+
+@app.post("/api/v1/counting-lists/{list_id}/finalize-cycle", tags=["Counting Lists"])
+async def finalize_counting_cycle(
+    list_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Finalizar o ciclo atual e avançar para o próximo.
+    - Valida que existem contagens no ciclo atual
+    - Recalcula divergências
+    - Avança current_cycle + 1
+    - Muda status para ABERTA (pronto para trocar contador e liberar)
+    """
+    try:
+        from app.models.models import CountingList, CountingListItem
+        from datetime import datetime
+
+        counting_list = db.query(CountingList).filter(CountingList.id == list_id).first()
+        if not counting_list:
+            raise HTTPException(status_code=404, detail="Lista de contagem não encontrada")
+
+        if current_user.role not in ["ADMIN", "SUPERVISOR"]:
+            raise HTTPException(status_code=403, detail="Apenas ADMIN e SUPERVISOR podem finalizar ciclos")
+
+        if counting_list.list_status == "ENCERRADA":
+            raise HTTPException(status_code=400, detail="Lista já está encerrada")
+
+        old_cycle = counting_list.current_cycle
+
+        if old_cycle >= 3:
+            raise HTTPException(status_code=400, detail="Já está no 3o ciclo. Use 'Encerrar' para finalizar a lista.")
+
+        # Validar que existem contagens no ciclo atual
+        if old_cycle == 1:
+            has_counts = db.query(CountingListItem).filter(
+                CountingListItem.counting_list_id == list_id,
+                CountingListItem.count_cycle_1.isnot(None)
+            ).first() is not None
+        elif old_cycle == 2:
+            has_counts = db.query(CountingListItem).filter(
+                CountingListItem.counting_list_id == list_id,
+                CountingListItem.count_cycle_2.isnot(None)
+            ).first() is not None
+        else:
+            has_counts = True
+
+        if not has_counts:
+            raise HTTPException(
+                status_code=400,
+                detail=f"É necessário ter ao menos 1 produto contado no {old_cycle}o ciclo antes de finalizar."
+            )
+
+        # Recalcular divergências para determinar quais produtos precisam recontagem
+        discrepancy_result = recalculate_discrepancies_for_list(
+            db, list_id, old_cycle,
+            user_id=str(current_user.id),
+            inventory_list_id=str(counting_list.inventory_id)
+        )
+
+        # Avançar ciclo
+        new_cycle = old_cycle + 1
+        counting_list.current_cycle = new_cycle
+        counting_list.list_status = "ABERTA"  # Pronto para trocar contador e liberar
+        counting_list.updated_at = datetime.utcnow()
+
+        db.commit()
+
+        products_needing_recount = discrepancy_result.get("products_needing_recount", 0) if discrepancy_result.get("success") else 0
+
+        logger.info(f"✅ Ciclo {old_cycle} finalizado para lista {list_id}. Novo ciclo: {new_cycle}. Produtos para recontagem: {products_needing_recount}")
+
+        return {
+            "success": True,
+            "list_id": list_id,
+            "old_cycle": old_cycle,
+            "new_cycle": new_cycle,
+            "products_needing_recount": products_needing_recount,
+            "message": f"Ciclo {old_cycle}o finalizado. Avançado para {new_cycle}o ciclo com {products_needing_recount} produtos para recontagem."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Erro ao finalizar ciclo: {e}")
+        raise HTTPException(status_code=500, detail=safe_error_response(e, "ao finalizar ciclo"))
+
+
+@app.put("/api/v1/counting-lists/{list_id}", tags=["Counting Lists"])
+async def update_counting_list(
+    list_id: str,
+    update_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Atualizar dados de uma lista de contagem (nome, descrição, contadores).
+    Permite trocar contadores entre ciclos.
+    """
+    try:
+        from app.models.models import CountingList
+        from datetime import datetime
+
+        counting_list = db.query(CountingList).filter(CountingList.id == list_id).first()
+        if not counting_list:
+            raise HTTPException(status_code=404, detail="Lista de contagem não encontrada")
+
+        if current_user.role not in ["ADMIN", "SUPERVISOR"]:
+            raise HTTPException(status_code=403, detail="Apenas ADMIN e SUPERVISOR podem editar listas")
+
+        # Campos atualizáveis
+        allowed_fields = ["list_name", "description", "counter_cycle_1", "counter_cycle_2", "counter_cycle_3"]
+        for field in allowed_fields:
+            if field in update_data and update_data[field] is not None:
+                setattr(counting_list, field, update_data[field])
+
+        counting_list.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(counting_list)
+
+        logger.info(f"✅ Lista {list_id} atualizada: {list(update_data.keys())}")
+
+        return {
+            "success": True,
+            "id": str(counting_list.id),
+            "list_name": counting_list.list_name,
+            "current_cycle": counting_list.current_cycle,
+            "list_status": counting_list.list_status,
+            "counter_cycle_1": str(counting_list.counter_cycle_1) if counting_list.counter_cycle_1 else None,
+            "counter_cycle_2": str(counting_list.counter_cycle_2) if counting_list.counter_cycle_2 else None,
+            "counter_cycle_3": str(counting_list.counter_cycle_3) if counting_list.counter_cycle_3 else None,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Erro ao atualizar lista: {e}")
+        raise HTTPException(status_code=500, detail=safe_error_response(e, "ao atualizar lista"))
 
 
 @app.post("/api/v1/counting-lists/{list_id}/finalizar")

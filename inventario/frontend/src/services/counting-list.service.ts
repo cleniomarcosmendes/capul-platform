@@ -1,7 +1,20 @@
 import { inventarioApi } from './api';
 import type { CountingList, CountingListCreate, CountingListProductsResponse } from '../types';
 
+export interface AvailableCounter {
+  user_id: string;
+  username: string;
+  full_name: string;
+  role: string;
+  is_current_user: boolean;
+}
+
 export const countingListService = {
+  async listarContadoresDisponiveis(inventoryId: string): Promise<AvailableCounter[]> {
+    const { data } = await inventarioApi.get(`/inventory/lists/${inventoryId}/available-counters`);
+    return data.available_counters ?? [];
+  },
+
   async listar(inventoryId: string): Promise<CountingList[]> {
     const { data } = await inventarioApi.get(`/inventories/${inventoryId}/counting-lists`);
     // Backend returns total_products/counted_items; frontend expects total_items/counted_items
@@ -37,17 +50,18 @@ export const countingListService = {
     return data;
   },
 
-  async listarItens(listId: string): Promise<CountingListProductsResponse> {
-    const { data } = await inventarioApi.get(`/counting-lists/${listId}/items`);
-    // Backend returns { success, data: { items, total_items, list_info: { list_id, list_name, current_cycle } } }
-    // Frontend expects { data: { products, current_cycle, list_id, list_name } }
+  async listarItens(listId: string, showAll = false): Promise<CountingListProductsResponse> {
+    const { data } = await inventarioApi.get(`/counting-lists/${listId}/products`, {
+      params: { show_all: showAll },
+    });
+    // Backend returns { success, data: { products, current_cycle, list_id, list_name } }
     const inner = data?.data ?? data;
     return {
       data: {
-        products: inner?.items ?? inner?.products ?? [],
-        current_cycle: inner?.list_info?.current_cycle ?? inner?.current_cycle ?? 1,
-        list_id: inner?.list_info?.list_id ?? inner?.list_id ?? '',
-        list_name: inner?.list_info?.list_name ?? inner?.list_name ?? '',
+        products: inner?.products ?? inner?.items ?? [],
+        current_cycle: inner?.current_cycle ?? inner?.list_info?.current_cycle ?? 1,
+        list_id: inner?.list_id ?? inner?.list_info?.list_id ?? '',
+        list_name: inner?.list_name ?? inner?.list_info?.list_name ?? '',
       },
     };
   },

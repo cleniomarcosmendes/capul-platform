@@ -1,58 +1,20 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { X, Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Package, Filter, Loader2 } from 'lucide-react';
-import { productService } from '../../../services/product.service';
 import { inventoryService } from '../../../services/inventory.service';
-import type { ProductFilterOptions, FilteredProduct, FilterOption } from '../../../types';
+import { productService } from '../../../services/product.service';
+import { countingListService } from '../../../services/counting-list.service';
+import { useToast } from '../../../contexts/ToastContext';
+import type { AssignableItem, ProductFilterOptions, FilterOption } from '../../../types';
 
 interface Props {
   inventoryId: string;
-  warehouse?: string;
+  listId: string;
+  listName: string;
   onClose: () => void;
   onAdded: () => void;
 }
 
-// === Unified display product ===
-type InventoryStatus = 'AVAILABLE' | 'IN_CURRENT_INVENTORY' | 'IN_OTHER_INVENTORY';
-
-interface DisplayProduct {
-  code: string;
-  description: string;
-  local: string;
-  estoque: number;
-  entregasPost: number;
-  grupo: string;
-  grupoInv: string;
-  categoria: string;
-  subcategoria: string;
-  segmento: string;
-  local1: string;
-  local2: string;
-  local3: string;
-  lote: string;
-  inventoryStatus: InventoryStatus;
-  otherInventoryName?: string;
-}
-
-function fromFiltered(p: FilteredProduct, warehouse?: string): DisplayProduct {
-  return {
-    code: (p.b1_cod || '').trim(),
-    description: p.b1_desc,
-    local: warehouse || '',
-    estoque: p.current_quantity,
-    entregasPost: p.b2_xentpos || 0,
-    grupo: p.b1_grupo,
-    grupoInv: p.b1_xgrinve || '',
-    categoria: p.b1_xcatgor,
-    subcategoria: p.b1_xsubcat || '',
-    segmento: p.b1_xsegmen || '',
-    local1: p.local1 || '',
-    local2: p.local2 || '',
-    local3: p.local3 || '',
-    lote: p.b1_rastro === 'L' ? 'Sim' : p.b1_rastro === 'S' ? 'Serie' : '',
-    inventoryStatus: p.inventory_status || 'AVAILABLE',
-    otherInventoryName: p.other_inventory_name || undefined,
-  };
-}
+type AssignmentFilter = '' | 'AVAILABLE' | 'IN_LIST' | 'IN_OTHER_LIST';
 
 // === Range filter state ===
 interface RangeFilter {
@@ -92,13 +54,11 @@ function countActiveFilters(f: AdvancedFilters): number {
   return count;
 }
 
-/** Returns true if range has DE > ATE (invalid) */
 function isRangeInvalid(r: RangeFilter): boolean {
   if (!r.from || !r.to) return false;
   return r.from > r.to;
 }
 
-/** Returns keys of filters that have invalid ranges */
 function getInvalidRanges(f: AdvancedFilters): (keyof AdvancedFilters)[] {
   const invalid: (keyof AdvancedFilters)[] = [];
   for (const [key, val] of Object.entries(f)) {
@@ -107,14 +67,17 @@ function getInvalidRanges(f: AdvancedFilters): (keyof AdvancedFilters)[] {
   return invalid;
 }
 
-// === Status config ===
-const statusConfig: Record<InventoryStatus, { label: string; rowClass: string; badgeClass: string }> = {
-  AVAILABLE: { label: 'Disponivel', rowClass: '', badgeClass: '' },
-  IN_CURRENT_INVENTORY: { label: 'Ja adicionado', rowClass: 'bg-blue-50/60', badgeClass: 'bg-blue-100 text-blue-700' },
-  IN_OTHER_INVENTORY: { label: 'Em outro inventario', rowClass: 'bg-amber-50/60', badgeClass: 'bg-amber-100 text-amber-700' },
+const statusConfig: Record<string, { label: string; rowClass: string; badgeClass: string }> = {
+  AVAILABLE: { label: 'Disponivel', rowClass: '', badgeClass: 'bg-emerald-100 text-emerald-700' },
+  IN_LIST: { label: 'Nesta lista', rowClass: 'bg-green-50/60', badgeClass: 'bg-green-100 text-green-700' },
+  IN_OTHER_LIST: { label: 'Outra lista', rowClass: 'bg-sky-50/60', badgeClass: 'bg-sky-100 text-sky-700' },
 };
 
-export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: Props) {
+const PAGE_SIZE = 50;
+const COL_COUNT = 17; // checkbox + 16 data columns
+
+export function AtribuirProdutosModal({ inventoryId, listId, listName, onClose, onAdded }: Props) {
+  const toast = useToast();
   const [visible, setVisible] = useState(false);
 
   // Search mode
@@ -132,27 +95,24 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
   const [loadingOptions, setLoadingOptions] = useState(false);
   const filterOptionsLoaded = useRef(false);
 
-  // Products
-  const [products, setProducts] = useState<DisplayProduct[]>([]);
+  // Data
+  const [items, setItems] = useState<AssignableItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [totalAvailable, setTotalAvailable] = useState(0);
+  const [totalInList, setTotalInList] = useState(0);
+  const [totalInOther, setTotalInOther] = useState(0);
 
-  // Selection
+  // Status filter
+  const [statusFilter, setStatusFilter] = useState<AssignmentFilter>('');
+
+  // Selection — persists across pages
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  // Save
+  // Saving
   const [saving, setSaving] = useState(false);
-  const [result, setResult] = useState<{
-    success: boolean;
-    message: string;
-    added: number;
-    skipped: number;
-    errors: number;
-  } | null>(null);
-
-  const PAGE_SIZE = 50;
 
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true));
@@ -170,60 +130,62 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
     }
   }, [showAdvancedPanel]);
 
-  // Load products — ALWAYS uses POST /inventory/filter-products for inventory status
-  const loadProducts = useCallback(() => {
+  const loadItems = useCallback(() => {
     setLoading(true);
-    const body: Record<string, unknown> = {
+
+    const params: Record<string, string | number | undefined> = {
+      list_id: listId,
+      assignment_status: statusFilter || undefined,
       page,
       size: PAGE_SIZE,
-      inventory_id: inventoryId,
     };
-    if (warehouse) body.local = warehouse;
 
     // Basic text search
     if (!isAdvancedMode && search) {
-      body.descricao = search;
+      params.search = search;
     }
 
     // Advanced range filters
     if (isAdvancedMode) {
       const f = appliedFilters;
-      if (f.grupo.from) body.grupo_de = f.grupo.from;
-      if (f.grupo.to) body.grupo_ate = f.grupo.to;
-      if (f.categoria.from) body.categoria_de = f.categoria.from;
-      if (f.categoria.to) body.categoria_ate = f.categoria.to;
-      if (f.subcategoria.from) body.subcategoria_de = f.subcategoria.from;
-      if (f.subcategoria.to) body.subcategoria_ate = f.subcategoria.to;
-      if (f.segmento.from) body.segmento_de = f.segmento.from;
-      if (f.segmento.to) body.segmento_ate = f.segmento.to;
-      if (f.grupoInv.from) body.grupo_inv_de = f.grupoInv.from;
-      if (f.grupoInv.to) body.grupo_inv_ate = f.grupoInv.to;
-      if (f.local1.from) body.local1_from = f.local1.from;
-      if (f.local1.to) body.local1_to = f.local1.to;
-      if (f.local2.from) body.local2_from = f.local2.from;
-      if (f.local2.to) body.local2_to = f.local2.to;
-      if (f.local3.from) body.local3_from = f.local3.from;
-      if (f.local3.to) body.local3_to = f.local3.to;
+      if (f.grupo.from) params.grupo_de = f.grupo.from;
+      if (f.grupo.to) params.grupo_ate = f.grupo.to;
+      if (f.categoria.from) params.categoria_de = f.categoria.from;
+      if (f.categoria.to) params.categoria_ate = f.categoria.to;
+      if (f.subcategoria.from) params.subcategoria_de = f.subcategoria.from;
+      if (f.subcategoria.to) params.subcategoria_ate = f.subcategoria.to;
+      if (f.segmento.from) params.segmento_de = f.segmento.from;
+      if (f.segmento.to) params.segmento_ate = f.segmento.to;
+      if (f.grupoInv.from) params.grupo_inv_de = f.grupoInv.from;
+      if (f.grupoInv.to) params.grupo_inv_ate = f.grupoInv.to;
+      if (f.local1.from) params.local1_from = f.local1.from;
+      if (f.local1.to) params.local1_to = f.local1.to;
+      if (f.local2.from) params.local2_from = f.local2.from;
+      if (f.local2.to) params.local2_to = f.local2.to;
+      if (f.local3.from) params.local3_from = f.local3.from;
+      if (f.local3.to) params.local3_to = f.local3.to;
     }
 
-    inventoryService.filtrarProdutosParaInventario(body)
+    inventoryService.listarItensParaAtribuicao(inventoryId, params)
       .then((res) => {
-        setProducts((res.produtos || []).map((p) => fromFiltered(p, warehouse)));
-        setTotalCount(res.total_count || 0);
-        setTotalPages(res.total_pages || 1);
+        setItems(res.items || []);
+        setTotalCount(res.total);
+        setTotalPages(res.total_pages);
+        setTotalAvailable(res.total_available);
+        setTotalInList(res.total_in_list);
+        setTotalInOther(res.total_in_other);
       })
       .catch(() => {
-        setProducts([]);
+        setItems([]);
         setTotalCount(0);
         setTotalPages(1);
       })
       .finally(() => setLoading(false));
-  }, [page, search, isAdvancedMode, appliedFilters, inventoryId, warehouse]);
+  }, [inventoryId, listId, search, isAdvancedMode, appliedFilters, statusFilter, page]);
 
-  // Trigger data load on mode/page/search change
   useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
+    loadItems();
+  }, [loadItems]);
 
   // === Search handlers ===
   function handleBasicSearch(e: React.FormEvent) {
@@ -238,7 +200,6 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
     setAppliedFilters({ ...filters });
     setIsAdvancedMode(true);
     setPage(1);
-    setResult(null);
   }
 
   const hasInvalidRanges = getInvalidRanges(filters).length > 0;
@@ -249,82 +210,64 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
     setAppliedFilters(empty);
     setIsAdvancedMode(false);
     setPage(1);
-    setResult(null);
   }
 
-  // === Selection (skip products already in current inventory) ===
-  const selectableProducts = products.filter((p) => p.inventoryStatus !== 'IN_CURRENT_INVENTORY');
+  // Selection — only AVAILABLE items can be selected
+  const selectableItems = items.filter((i) => i.assignment_status === 'AVAILABLE');
 
-  function toggleSelect(code: string) {
-    const p = products.find((x) => x.code === code);
-    if (p && p.inventoryStatus === 'IN_CURRENT_INVENTORY') return;
+  function toggleSelect(id: string) {
+    const item = items.find((i) => i.id === id);
+    if (!item || item.assignment_status !== 'AVAILABLE') return;
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(code)) next.delete(code);
-      else next.add(code);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }
 
   function toggleSelectAll() {
-    if (selectableProducts.every((p) => selected.has(p.code))) {
+    if (selectableItems.every((i) => selected.has(i.id))) {
       setSelected((prev) => {
         const next = new Set(prev);
-        selectableProducts.forEach((p) => next.delete(p.code));
+        selectableItems.forEach((i) => next.delete(i.id));
         return next;
       });
     } else {
       setSelected((prev) => {
         const next = new Set(prev);
-        selectableProducts.forEach((p) => next.add(p.code));
+        selectableItems.forEach((i) => next.add(i.id));
         return next;
       });
     }
   }
 
-  const allOnPageSelected = selectableProducts.length > 0 && selectableProducts.every((p) => selected.has(p.code));
+  const allOnPageSelected = selectableItems.length > 0 && selectableItems.every((i) => selected.has(i.id));
 
-  // === Add products ===
+  // Add products to counting list
   async function handleAdd() {
     if (selected.size === 0) return;
     setSaving(true);
-    setResult(null);
-
     try {
-      const res = await inventoryService.adicionarProdutosPorCodigos(
-        inventoryId,
-        Array.from(selected),
-      );
-      const summary = res.summary || { added_count: 0, skipped_duplicates: 0, error_count: 0 };
-      setResult({
-        success: res.success,
-        message: res.message || '',
-        added: summary.added_count,
-        skipped: summary.skipped_duplicates,
-        errors: summary.error_count,
-      });
-      if (summary.added_count > 0) {
-        setSelected(new Set());
-        onAdded();
-        // Reload to update inventory status
-        loadProducts();
-      }
+      await countingListService.adicionarItens(listId, Array.from(selected));
+      toast.success(`${selected.size} produto${selected.size !== 1 ? 's' : ''} adicionado${selected.size !== 1 ? 's' : ''} a "${listName}"`);
+      setSelected(new Set());
+      onAdded();
+      loadItems();
     } catch {
-      setResult({ success: false, message: 'Erro inesperado ao adicionar produtos.', added: 0, skipped: 0, errors: 1 });
+      toast.error('Erro ao adicionar produtos a lista.');
     } finally {
       setSaving(false);
     }
   }
 
-  // === Close ===
   function handleClose() {
     setVisible(false);
     setTimeout(onClose, 200);
   }
 
   const activeFilterCount = countActiveFilters(appliedFilters);
-  const skeletonRows = Array.from({ length: 20 }, (_, i) => i);
-  const colCount = 16;
+  const skeletonRows = Array.from({ length: 15 }, (_, i) => i);
 
   return (
     <div
@@ -336,11 +279,11 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0">
           <div>
-            <h3 className="text-lg font-semibold text-slate-800">Adicionar Produtos</h3>
+            <h3 className="text-lg font-semibold text-slate-800">Adicionar Produtos a Lista</h3>
             <p className="text-xs text-slate-500 mt-0.5">
               {selected.size > 0
-                ? `${selected.size} produto${selected.size !== 1 ? 's' : ''} selecionado${selected.size !== 1 ? 's' : ''}`
-                : `Selecione os produtos para adicionar ao inventario${warehouse ? ` (Armazem ${warehouse})` : ''}`}
+                ? <><span className="font-medium text-capul-600">{selected.size}</span> produto{selected.size !== 1 ? 's' : ''} selecionado{selected.size !== 1 ? 's' : ''} para <span className="font-medium">"{listName}"</span></>
+                : <>Selecione os produtos do inventario para adicionar a <span className="font-medium">"{listName}"</span></>}
             </p>
           </div>
           <button onClick={handleClose} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
@@ -348,28 +291,41 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
           </button>
         </div>
 
-        {/* Search + filter toggle */}
+        {/* Search + filter toggle + status */}
         <div className="px-5 py-3 border-b border-slate-100 shrink-0 space-y-2">
-          <form onSubmit={handleBasicSearch} className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Buscar por codigo ou descricao..."
+          <div className="flex gap-2">
+            <form onSubmit={handleBasicSearch} className="flex gap-2 flex-1">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="Buscar por codigo ou descricao..."
+                  disabled={isAdvancedMode}
+                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-capul-500 disabled:bg-slate-100 disabled:text-slate-400"
+                />
+              </div>
+              <button
+                type="submit"
                 disabled={isAdvancedMode}
-                className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-capul-500 disabled:bg-slate-100 disabled:text-slate-400"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={isAdvancedMode}
-              className="px-4 py-2 bg-slate-100 text-slate-700 text-sm rounded-lg hover:bg-slate-200 disabled:opacity-50"
+                className="px-4 py-2 bg-slate-100 text-slate-700 text-sm rounded-lg hover:bg-slate-200 disabled:opacity-50"
+              >
+                Buscar
+              </button>
+            </form>
+
+            <select
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value as AssignmentFilter); setPage(1); }}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500 bg-white min-w-[160px]"
             >
-              Buscar
-            </button>
-          </form>
+              <option value="">Todos os status</option>
+              <option value="AVAILABLE">Disponiveis ({totalAvailable})</option>
+              <option value="IN_LIST">Nesta lista ({totalInList})</option>
+              <option value="IN_OTHER_LIST">Em outra lista ({totalInOther})</option>
+            </select>
+          </div>
 
           <div className="flex items-center gap-3">
             <button
@@ -491,24 +447,6 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
           </div>
         )}
 
-        {/* Result message */}
-        {result && (
-          <div className={`mx-5 mt-3 p-3 rounded-lg text-sm shrink-0 ${
-            result.success && result.added > 0
-              ? 'bg-green-50 border border-green-200 text-green-700'
-              : result.skipped > 0 && result.errors === 0
-                ? 'bg-amber-50 border border-amber-200 text-amber-700'
-                : 'bg-red-50 border border-red-200 text-red-700'
-          }`}>
-            {result.message}
-            {result.added > 0 && result.skipped > 0 && (
-              <span className="block text-xs mt-1 opacity-75">
-                {result.added} adicionado{result.added !== 1 ? 's' : ''}, {result.skipped} ja existia{result.skipped !== 1 ? 'm' : ''} no inventario.
-              </span>
-            )}
-          </div>
-        )}
-
         {/* Table area */}
         <div className="flex-1 overflow-auto min-h-0">
           <table className="w-full text-sm">
@@ -519,14 +457,13 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
                     type="checkbox"
                     checked={allOnPageSelected}
                     onChange={toggleSelectAll}
-                    disabled={loading || selectableProducts.length === 0}
+                    disabled={loading || selectableItems.length === 0}
                     className="rounded border-slate-300"
                   />
                 </th>
                 <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap w-10">SEQ</th>
                 <th className="text-left py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Codigo</th>
                 <th className="text-left py-2 px-2 font-medium text-slate-600 text-[11px]">Descricao</th>
-                <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Local</th>
                 <th className="text-right py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Saldo Est.</th>
                 <th className="text-right py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Ent. Post.</th>
                 <th className="text-left py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Grupo</th>
@@ -538,6 +475,7 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
                 <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Loc 2</th>
                 <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Loc 3</th>
                 <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Lote</th>
+                <th className="text-center py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -548,7 +486,6 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
                     <td className="py-2 px-1"><div className="w-6 h-3 bg-slate-200 rounded animate-pulse mx-auto" /></td>
                     <td className="py-2 px-2"><div className="w-16 h-3 bg-slate-200 rounded animate-pulse" /></td>
                     <td className="py-2 px-2"><div className="h-3 bg-slate-200 rounded animate-pulse" style={{ width: `${50 + (i % 4) * 15}%` }} /></td>
-                    <td className="py-2 px-1"><div className="w-6 h-3 bg-slate-200 rounded animate-pulse mx-auto" /></td>
                     <td className="py-2 px-2"><div className="w-14 h-3 bg-slate-200 rounded animate-pulse ml-auto" /></td>
                     <td className="py-2 px-2"><div className="w-14 h-3 bg-slate-200 rounded animate-pulse ml-auto" /></td>
                     <td className="py-2 px-1"><div className="w-10 h-3 bg-slate-200 rounded animate-pulse" /></td>
@@ -560,78 +497,82 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
                     <td className="py-2 px-1"><div className="w-8 h-3 bg-slate-200 rounded animate-pulse mx-auto" /></td>
                     <td className="py-2 px-1"><div className="w-8 h-3 bg-slate-200 rounded animate-pulse mx-auto" /></td>
                     <td className="py-2 px-1"><div className="w-8 h-3 bg-slate-200 rounded animate-pulse mx-auto" /></td>
+                    <td className="py-2 px-2"><div className="w-20 h-5 bg-slate-200 rounded animate-pulse mx-auto" /></td>
                   </tr>
                 ))
-              ) : products.length === 0 ? (
+              ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={colCount} className="py-16 text-center">
+                  <td colSpan={COL_COUNT} className="py-16 text-center">
                     <Package className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                    <p className="text-slate-500 text-sm">Nenhum produto encontrado.</p>
-                    {isAdvancedMode && (
-                      <p className="text-slate-400 text-xs mt-1">Tente ajustar os filtros avancados.</p>
+                    <p className="text-slate-500 text-sm">Nenhum item encontrado.</p>
+                    {(statusFilter || isAdvancedMode) && (
+                      <p className="text-slate-400 text-xs mt-1">Tente ajustar os filtros.</p>
                     )}
                   </td>
                 </tr>
               ) : (
-                products.map((p, idx) => {
-                  const isCurrent = p.inventoryStatus === 'IN_CURRENT_INVENTORY';
-                  const isOther = p.inventoryStatus === 'IN_OTHER_INVENTORY';
-                  const sc = statusConfig[p.inventoryStatus];
+                items.map((item, idx) => {
+                  const isAvailable = item.assignment_status === 'AVAILABLE';
+                  const isInList = item.assignment_status === 'IN_LIST';
+                  const isInOther = item.assignment_status === 'IN_OTHER_LIST';
+                  const sc = statusConfig[item.assignment_status];
                   const seq = (page - 1) * PAGE_SIZE + idx + 1;
-                  const dimClass = isCurrent ? 'text-slate-400' : 'text-slate-600';
+                  const dimClass = isAvailable ? 'text-slate-600' : 'text-slate-400';
 
                   return (
                     <tr
-                      key={p.code}
-                      onClick={() => toggleSelect(p.code)}
+                      key={item.id}
+                      onClick={() => toggleSelect(item.id)}
                       className={`border-b border-slate-100 transition-colors ${
-                        isCurrent
+                        isInList
                           ? `${sc.rowClass} cursor-default`
-                          : selected.has(p.code)
-                            ? 'bg-capul-50 hover:bg-capul-100 cursor-pointer'
-                            : isOther
-                              ? `${sc.rowClass} cursor-pointer`
+                          : isInOther
+                            ? `${sc.rowClass} cursor-default`
+                            : selected.has(item.id)
+                              ? 'bg-capul-50 hover:bg-capul-100 cursor-pointer'
                               : 'hover:bg-slate-50 cursor-pointer'
                       }`}
-                      title={isOther ? `Em outro inventario: ${p.otherInventoryName}` : isCurrent ? 'Ja adicionado neste inventario' : ''}
                     >
                       <td className="py-2 px-2">
                         <input
                           type="checkbox"
-                          checked={selected.has(p.code)}
-                          onChange={() => toggleSelect(p.code)}
-                          disabled={isCurrent}
+                          checked={selected.has(item.id)}
+                          onChange={() => toggleSelect(item.id)}
+                          disabled={!isAvailable}
                           className="rounded border-slate-300 disabled:opacity-30"
                         />
                       </td>
                       <td className={`py-2 px-1 text-center text-[11px] tabular-nums ${dimClass}`}>{seq}</td>
                       <td className="py-2 px-2 whitespace-nowrap">
-                        <div className="flex items-center gap-1">
-                          <span className={`font-mono text-[11px] ${isCurrent ? 'text-slate-400' : 'text-slate-700'}`}>{p.code}</span>
-                          {(isCurrent || isOther) && (
-                            <span className={`px-1 py-0.5 rounded text-[9px] font-medium whitespace-nowrap ${sc.badgeClass}`}>
-                              {sc.label}
-                            </span>
-                          )}
-                        </div>
+                        <span className={`font-mono text-[11px] ${isAvailable ? 'text-slate-700' : 'text-slate-400'}`}>
+                          {item.product_code}
+                        </span>
                       </td>
-                      <td className={`py-2 px-2 text-[11px] truncate max-w-[200px] ${isCurrent ? 'text-slate-400' : 'text-slate-800'}`} title={p.description}>{p.description}</td>
-                      <td className={`py-2 px-1 text-center text-[11px] font-mono ${dimClass}`}>{p.local || '—'}</td>
-                      <td className={`py-2 px-2 text-right text-[11px] font-mono tabular-nums whitespace-nowrap ${isCurrent ? 'text-slate-400' : 'text-slate-700'}`}>
-                        {p.estoque?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0,00'}
+                      <td className={`py-2 px-2 text-[11px] truncate max-w-[200px] ${isAvailable ? 'text-slate-800' : 'text-slate-400'}`} title={item.product_name}>
+                        {item.product_name}
+                      </td>
+                      <td className={`py-2 px-2 text-right text-[11px] font-mono tabular-nums whitespace-nowrap ${isAvailable ? 'text-slate-700' : 'text-slate-400'}`}>
+                        {item.product_estoque?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0,00'}
                       </td>
                       <td className={`py-2 px-2 text-right text-[11px] font-mono tabular-nums whitespace-nowrap ${dimClass}`}>
-                        {p.entregasPost?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0,00'}
+                        {item.entregas_post?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0,00'}
                       </td>
-                      <td className={`py-2 px-1 text-[11px] ${dimClass}`}>{p.grupo}</td>
-                      <td className={`py-2 px-1 text-[11px] ${dimClass}`}>{p.grupoInv || '—'}</td>
-                      <td className={`py-2 px-1 text-[11px] ${dimClass}`}>{p.categoria || '—'}</td>
-                      <td className={`py-2 px-1 text-[11px] ${dimClass}`}>{p.subcategoria || '—'}</td>
-                      <td className={`py-2 px-1 text-[11px] ${dimClass}`}>{p.segmento || '—'}</td>
-                      <td className={`py-2 px-1 text-center text-[11px] font-mono ${dimClass}`}>{p.local1 || '—'}</td>
-                      <td className={`py-2 px-1 text-center text-[11px] font-mono ${dimClass}`}>{p.local2 || '—'}</td>
-                      <td className={`py-2 px-1 text-center text-[11px] font-mono ${dimClass}`}>{p.local3 || '—'}</td>
-                      <td className={`py-2 px-1 text-center text-[11px] ${dimClass}`}>{p.lote || '—'}</td>
+                      <td className={`py-2 px-1 text-[11px] ${dimClass}`}>{item.grupo || '—'}</td>
+                      <td className={`py-2 px-1 text-[11px] ${dimClass}`}>{item.grupo_inv || '—'}</td>
+                      <td className={`py-2 px-1 text-[11px] ${dimClass}`}>{item.categoria || '—'}</td>
+                      <td className={`py-2 px-1 text-[11px] ${dimClass}`}>{item.subcategoria || '—'}</td>
+                      <td className={`py-2 px-1 text-[11px] ${dimClass}`}>{item.segmento || '—'}</td>
+                      <td className={`py-2 px-1 text-center text-[11px] font-mono ${dimClass}`}>{item.local1 || '—'}</td>
+                      <td className={`py-2 px-1 text-center text-[11px] font-mono ${dimClass}`}>{item.local2 || '—'}</td>
+                      <td className={`py-2 px-1 text-center text-[11px] font-mono ${dimClass}`}>{item.local3 || '—'}</td>
+                      <td className={`py-2 px-1 text-center text-[11px] ${dimClass}`}>{item.lote || '—'}</td>
+                      <td className="py-2 px-2 text-center">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${sc.badgeClass}`}>
+                          {isInOther && item.assigned_list_name
+                            ? item.assigned_list_name
+                            : sc.label}
+                        </span>
+                      </td>
                     </tr>
                   );
                 })
@@ -643,7 +584,7 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 shrink-0 bg-white rounded-b-xl">
           <div className="flex items-center gap-4 text-sm text-slate-500">
-            <span>{totalCount.toLocaleString('pt-BR')} produto{totalCount !== 1 ? 's' : ''}</span>
+            <span>{totalCount} ite{totalCount !== 1 ? 'ns' : 'm'}</span>
             {totalPages > 1 && (
               <div className="flex items-center gap-1">
                 <button
@@ -653,7 +594,7 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="text-xs px-2 tabular-nums">{page} / {totalPages.toLocaleString('pt-BR')}</span>
+                <span className="text-xs px-2 tabular-nums">{page} / {totalPages}</span>
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page >= totalPages}
@@ -667,12 +608,16 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
             {/* Legend */}
             <div className="flex items-center gap-3 ml-4 border-l border-slate-200 pl-4">
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded bg-blue-100 border border-blue-300" />
-                <span className="text-xs text-slate-500">Ja adicionado</span>
+                <div className="w-3 h-3 rounded bg-emerald-100 border border-emerald-300" />
+                <span className="text-xs text-slate-500">Disponivel</span>
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded bg-amber-100 border border-amber-300" />
-                <span className="text-xs text-slate-500">Em outro inventario</span>
+                <div className="w-3 h-3 rounded bg-green-100 border border-green-300" />
+                <span className="text-xs text-slate-500">Nesta lista</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded bg-sky-100 border border-sky-300" />
+                <span className="text-xs text-slate-500">Outra lista</span>
               </div>
             </div>
           </div>
@@ -681,16 +626,21 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
               onClick={handleClose}
               className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50"
             >
-              Fechar
+              Cancelar
             </button>
             <button
               onClick={handleAdd}
               disabled={selected.size === 0 || saving}
               className="px-4 py-2 text-sm text-white bg-capul-600 rounded-lg hover:bg-capul-700 disabled:opacity-50"
             >
-              {saving
-                ? 'Adicionando...'
-                : `Adicionar${selected.size > 0 ? ` (${selected.size})` : ''}`}
+              {saving ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Adicionando...
+                </span>
+              ) : (
+                `Adicionar${selected.size > 0 ? ` (${selected.size})` : ''}`
+              )}
             </button>
           </div>
         </div>

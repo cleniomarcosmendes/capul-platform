@@ -106,8 +106,8 @@ services:
       CORS_ORIGINS: "http://localhost,http://localhost:80"
       ENVIRONMENT: production
       DEBUG: "false"
-      PROTHEUS_API_URL: ${PROTHEUS_API_URL:-}
-      PROTHEUS_API_AUTH: ${PROTHEUS_API_AUTH:-}
+      PROTHEUS_API_URL: ${PROTHEUS_API_URL:-https://apiportal.capul.com.br:8104/rest/api/INFOCLIENTES/hierarquiaMercadologica}
+      PROTHEUS_API_AUTH: ${PROTHEUS_API_AUTH:-Basic QVBJQ0FQVUw6QXAxQzRwdTFQUkQ=}
       PROTHEUS_API_TIMEOUT: ${PROTHEUS_API_TIMEOUT:-30}
     ports:
       - "8000:8000"

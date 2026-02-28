@@ -119,8 +119,8 @@ async def get_item_lots_snapshot(
             }
         }
 
-    # Verificar se produto tem rastreamento de lote
-    if item_snapshot.b1_rastro != 'L':
+    # Verificar se produto tem rastreamento de lote (L=Lote, S=Sub-lote/Serial)
+    if item_snapshot.b1_rastro not in ('L', 'S'):
         logger.info(f"ℹ️ Produto {item_snapshot.b2_cod} não tem rastreamento de lote (b1_rastro={item_snapshot.b1_rastro})")
         return {
             "success": True,
