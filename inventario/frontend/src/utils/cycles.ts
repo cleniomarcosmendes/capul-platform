@@ -29,6 +29,21 @@ export function calcularQuantidadeFinal(
 }
 
 /**
+ * Quantidade esperada incluindo entregas posteriores.
+ * Formula: system_qty (b2_qatu) + b2_xentpos (entregas posteriores)
+ */
+export function getExpectedQty(systemQty: number, b2Xentpos: number | undefined | null): number {
+  return systemQty + (b2Xentpos || 0);
+}
+
+/**
+ * Verifica se algum produto tem entregas posteriores (b2_xentpos > 0).
+ */
+export function hasAnyEntregasPosterior(products: { b2_xentpos?: number }[]): boolean {
+  return products.some((p) => (p.b2_xentpos || 0) > 0.001);
+}
+
+/**
  * Verificar se o item precisa de próximo ciclo (recontagem).
  */
 export function precisaProximoCiclo(

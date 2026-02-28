@@ -11,6 +11,7 @@ import { ArrowLeft, RefreshCw, Package, Search, Layers } from 'lucide-react';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
 import { useToast } from '../../contexts/ToastContext';
 import type { CountingListProduct, LotCount } from '../../types';
+import { getExpectedQty, hasAnyEntregasPosterior } from '../../utils/cycles';
 
 const filterOptions: { key: CountingFilter; label: string }[] = [
   { key: 'all', label: 'Todos' },
@@ -35,11 +36,12 @@ export function ContagemDesktopPage() {
   const { inventoryId } = useParams<{ inventoryId: string }>();
   const navigate = useNavigate();
   const {
-    inventario, products, loading, filter, setFilter, stats,
+    inventario, products, allProducts, loading, filter, setFilter, stats,
     currentCycle, getCountedQty, countCycleKey, updateProduct, reload,
     noAssignedList, listNotReleased,
   } = useCountingData(inventoryId!);
   const toast = useToast();
+  const showEntregasPost = hasAnyEntregasPosterior(allProducts);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -270,7 +272,15 @@ export function ContagemDesktopPage() {
                     <th className="text-left py-2 px-2 font-medium text-slate-500 w-8">#</th>
                     <th className="text-left py-2 px-2 font-medium text-slate-600">Codigo</th>
                     <th className="text-left py-2 px-2 font-medium text-slate-600">Descricao</th>
-                    <th className="text-right py-2 px-2 font-medium text-slate-600">Saldo Sist.</th>
+                    {showEntregasPost ? (
+                      <>
+                        <th className="text-right py-2 px-2 font-medium text-slate-600">Saldo Est.</th>
+                        <th className="text-right py-2 px-2 font-medium text-sky-600">Ent. Post.</th>
+                        <th className="text-right py-2 px-2 font-semibold text-slate-700">Esperado</th>
+                      </>
+                    ) : (
+                      <th className="text-right py-2 px-2 font-medium text-slate-600">Saldo Sist.</th>
+                    )}
                     {currentCycle >= 2 && (
                       <th className="text-right py-2 px-2 font-medium text-green-700 bg-green-50/50">C1</th>
                     )}
@@ -291,7 +301,8 @@ export function ContagemDesktopPage() {
                     const isHighlighted = highlightId === p.id;
                     const isc = itemStatusConfig[p.status] || itemStatusConfig.PENDING;
                     const countedQty = getCountedQty(p);
-                    const diff = countedQty !== null ? countedQty - p.system_qty : null;
+                    const expectedQty = getExpectedQty(p.system_qty, p.b2_xentpos);
+                    const diff = countedQty !== null ? countedQty - expectedQty : null;
                     const hasDivergence = diff !== null && Math.abs(diff) >= 0.01;
 
                     return (
@@ -315,7 +326,17 @@ export function ContagemDesktopPage() {
                         <td className="py-1.5 px-2 text-slate-800 truncate max-w-[250px]" title={p.product_description || p.product_name}>
                           {p.product_description || p.product_name}
                         </td>
-                        <td className="py-1.5 px-2 text-right text-slate-600 tabular-nums">{p.system_qty.toFixed(2)}</td>
+                        {showEntregasPost ? (
+                          <>
+                            <td className="py-1.5 px-2 text-right text-slate-600 tabular-nums">{p.system_qty.toFixed(2)}</td>
+                            <td className="py-1.5 px-2 text-right text-sky-600 tabular-nums">
+                              {(p.b2_xentpos || 0) > 0.001 ? `+${(p.b2_xentpos || 0).toFixed(2)}` : '0.00'}
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-semibold text-slate-800 tabular-nums">{expectedQty.toFixed(2)}</td>
+                          </>
+                        ) : (
+                          <td className="py-1.5 px-2 text-right text-slate-600 tabular-nums">{p.system_qty.toFixed(2)}</td>
+                        )}
 
                         {/* Ciclos anteriores (somente leitura) */}
                         {currentCycle >= 2 && (

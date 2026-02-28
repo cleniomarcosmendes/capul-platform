@@ -3,6 +3,7 @@ import { countingListService } from '../../../services/counting-list.service';
 import { inventoryService } from '../../../services/inventory.service';
 import { useAuth } from '../../../contexts/AuthContext';
 import type { InventoryList, CountingList, CountingListProduct } from '../../../types';
+import { getExpectedQty } from '../../../utils/cycles';
 
 export type CountingFilter = 'all' | 'pending' | 'counted' | 'divergent';
 
@@ -132,7 +133,7 @@ export function useCountingData(inventoryId: string) {
         return products.filter((p) => {
           if (isStatusPending(p.status)) return false;
           const qty = getCountForCycle(p, currentCycle) ?? 0;
-          return Math.abs(qty - p.system_qty) >= 0.01;
+          return Math.abs(qty - getExpectedQty(p.system_qty, p.b2_xentpos)) >= 0.01;
         });
       default:
         return products;
@@ -147,7 +148,7 @@ export function useCountingData(inventoryId: string) {
     const divergent = products.filter((p) => {
       if (isStatusPending(p.status)) return false;
       const qty = getCountForCycle(p, currentCycle) ?? 0;
-      return Math.abs(qty - p.system_qty) >= 0.01;
+      return Math.abs(qty - getExpectedQty(p.system_qty, p.b2_xentpos)) >= 0.01;
     }).length;
     const progress = total > 0 ? Math.round((counted / total) * 100) : 0;
     return { total, counted, pending, divergent, progress };

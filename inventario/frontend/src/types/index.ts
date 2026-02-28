@@ -337,6 +337,7 @@ export interface CountingListProduct {
   warehouse: string;
   expected_quantity: number;
   system_qty: number;
+  b2_xentpos: number;
   count_cycle_1: number | null;
   count_cycle_2: number | null;
   count_cycle_3: number | null;

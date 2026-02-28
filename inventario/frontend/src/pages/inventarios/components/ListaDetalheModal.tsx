@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, Package, AlertTriangle, CheckCircle2, Clock, Search } from 'lucide-react';
 import { countingListService } from '../../../services/counting-list.service';
-import { calcularQuantidadeFinal } from '../../../utils/cycles';
+import { calcularQuantidadeFinal, getExpectedQty, hasAnyEntregasPosterior } from '../../../utils/cycles';
 import type { CountingList, CountingListProduct } from '../../../types';
 
 const listStatusConfig: Record<string, { label: string; color: string }> = {
@@ -66,6 +66,7 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
   }
 
   const lsc = listStatusConfig[lista.list_status] || listStatusConfig.PREPARACAO;
+  const showEntregasPost = hasAnyEntregasPosterior(products);
 
   // Filter products
   const filteredProducts = products.filter((p) => {
@@ -80,10 +81,11 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
     if (statusFilter === 'pending') return p.status === 'PENDING' || p.status === 'pending';
     if (statusFilter === 'counted') return p.status !== 'PENDING' && p.status !== 'pending';
     if (statusFilter === 'divergent') {
+      const expectedQty = getExpectedQty(p.system_qty, p.b2_xentpos);
       const finalQty = p.finalQuantity ?? calcularQuantidadeFinal(
-        p.count_cycle_1, p.count_cycle_2, p.count_cycle_3, p.system_qty,
+        p.count_cycle_1, p.count_cycle_2, p.count_cycle_3, expectedQty,
       );
-      return (p.status !== 'PENDING' && p.status !== 'pending') && Math.abs(finalQty - p.system_qty) >= 0.01;
+      return (p.status !== 'PENDING' && p.status !== 'pending') && Math.abs(finalQty - expectedQty) >= 0.01;
     }
     return true;
   });
@@ -92,10 +94,11 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
   const totalItems = products.length;
   const countedItems = products.filter((p) => p.status !== 'PENDING' && p.status !== 'pending').length;
   const divergences = products.filter((p) => {
+    const expectedQty = getExpectedQty(p.system_qty, p.b2_xentpos);
     const finalQty = p.finalQuantity ?? calcularQuantidadeFinal(
-      p.count_cycle_1, p.count_cycle_2, p.count_cycle_3, p.system_qty,
+      p.count_cycle_1, p.count_cycle_2, p.count_cycle_3, expectedQty,
     );
-    return (p.status !== 'PENDING' && p.status !== 'pending') && Math.abs(finalQty - p.system_qty) >= 0.01;
+    return (p.status !== 'PENDING' && p.status !== 'pending') && Math.abs(finalQty - expectedQty) >= 0.01;
   }).length;
 
   return (
@@ -203,7 +206,15 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
                     <th className="text-left py-2 px-3 font-medium text-slate-500 w-8">#</th>
                     <th className="text-left py-2 px-3 font-medium text-slate-600">Codigo</th>
                     <th className="text-left py-2 px-3 font-medium text-slate-600">Descricao</th>
-                    <th className="text-right py-2 px-3 font-medium text-slate-600">Sistema</th>
+                    {showEntregasPost ? (
+                      <>
+                        <th className="text-right py-2 px-3 font-medium text-slate-600">Saldo Est.</th>
+                        <th className="text-right py-2 px-3 font-medium text-sky-600">Ent. Post.</th>
+                        <th className="text-right py-2 px-3 font-semibold text-slate-700">Esperado</th>
+                      </>
+                    ) : (
+                      <th className="text-right py-2 px-3 font-medium text-slate-600">Sistema</th>
+                    )}
                     <th className="text-right py-2 px-3 font-medium text-green-700 bg-green-50/50">C1</th>
                     <th className="text-right py-2 px-3 font-medium text-amber-700 bg-amber-50/50">C2</th>
                     <th className="text-right py-2 px-3 font-medium text-red-700 bg-red-50/50">C3</th>
@@ -214,11 +225,12 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
                 </thead>
                 <tbody>
                   {filteredProducts.map((p, idx) => {
+                    const expectedQty = getExpectedQty(p.system_qty, p.b2_xentpos);
                     const finalQty = p.finalQuantity ?? calcularQuantidadeFinal(
-                      p.count_cycle_1, p.count_cycle_2, p.count_cycle_3, p.system_qty,
+                      p.count_cycle_1, p.count_cycle_2, p.count_cycle_3, expectedQty,
                     );
                     const isPending = p.status === 'PENDING' || p.status === 'pending';
-                    const diff = !isPending ? finalQty - p.system_qty : 0;
+                    const diff = !isPending ? finalQty - expectedQty : 0;
                     const hasDivergence = Math.abs(diff) >= 0.01;
 
                     // Status visual: prioriza divergencia sobre status do backend
@@ -246,7 +258,17 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
                         <td className="py-1.5 px-3 text-slate-800 truncate max-w-[220px]" title={p.product_description || p.product_name}>
                           {p.product_description || p.product_name}
                         </td>
-                        <td className="py-1.5 px-3 text-right text-slate-600 tabular-nums">{p.system_qty.toFixed(2)}</td>
+                        {showEntregasPost ? (
+                          <>
+                            <td className="py-1.5 px-3 text-right text-slate-600 tabular-nums">{p.system_qty.toFixed(2)}</td>
+                            <td className="py-1.5 px-3 text-right text-sky-600 tabular-nums">
+                              {(p.b2_xentpos || 0) > 0.001 ? `+${(p.b2_xentpos || 0).toFixed(2)}` : '0.00'}
+                            </td>
+                            <td className="py-1.5 px-3 text-right font-semibold text-slate-800 tabular-nums">{expectedQty.toFixed(2)}</td>
+                          </>
+                        ) : (
+                          <td className="py-1.5 px-3 text-right text-slate-600 tabular-nums">{p.system_qty.toFixed(2)}</td>
+                        )}
 
                         {/* C1 */}
                         <td className="py-1.5 px-3 text-right bg-green-50/30 tabular-nums">

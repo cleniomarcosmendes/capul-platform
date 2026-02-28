@@ -254,6 +254,13 @@ export function ContagemMobilePage() {
               {/* Contagem cega: NAO mostrar saldo sistema */}
             </div>
 
+            {/* Hint: entrega posterior */}
+            {(currentProduct.b2_xentpos || 0) > 0.001 && (
+              <div className="p-2 bg-sky-50 border border-sky-200 rounded-lg text-xs text-sky-700">
+                Este produto possui entregas posteriores.
+              </div>
+            )}
+
             {/* Contagens de ciclos anteriores (sem revelar saldo) */}
             {currentCycle >= 2 && currentProduct.count_cycle_1 !== null && (
               <div className="p-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
