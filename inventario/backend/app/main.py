@@ -7997,19 +7997,22 @@ async def generate_final_inventory_report(
         from collections import defaultdict
         item_ids = [item.id for item, _, _ in items_query]
 
-        all_countings = db.query(Counting, User).join(
-            User, Counting.counted_by == User.id
-        ).filter(
-            Counting.inventory_item_id.in_(item_ids)
-        ).order_by(Counting.count_number).all()
         countings_by_item = defaultdict(list)
-        for c, u in all_countings:
-            countings_by_item[c.inventory_item_id].append((c, u))
+        disc_by_item = {}
 
-        all_discrepancies = db.query(Discrepancy).filter(
-            Discrepancy.inventory_item_id.in_(item_ids)
-        ).all()
-        disc_by_item = {d.inventory_item_id: d for d in all_discrepancies}
+        if item_ids:
+            all_countings = db.query(Counting, User).outerjoin(
+                User, Counting.counted_by == User.id
+            ).filter(
+                Counting.inventory_item_id.in_(item_ids)
+            ).order_by(Counting.count_number).all()
+            for c, u in all_countings:
+                countings_by_item[c.inventory_item_id].append((c, u))
+
+            all_discrepancies = db.query(Discrepancy).filter(
+                Discrepancy.inventory_item_id.in_(item_ids)
+            ).all()
+            disc_by_item = {d.inventory_item_id: d for d in all_discrepancies}
 
         for item, product, snapshot in items_query:
             total_items += 1
@@ -8077,21 +8080,26 @@ async def generate_final_inventory_report(
             saved_lots_list = []
             if product.b1_rastro == 'L':
                 try:
-                    # Query SQL direta para buscar drafts
-                    draft_query = text("""
-                        SELECT draft_data
-                        FROM inventario.lot_counting_drafts
-                        WHERE inventory_item_id = :item_id
-                          AND current_cycle = :cycle
-                        LIMIT 1
-                    """)
-                    draft_result = db.execute(draft_query, {
-                        'item_id': str(item.id),
-                        'cycle': inventory.current_cycle
-                    }).fetchone()
+                    # Usar savepoint para não corromper transação se tabela não existir
+                    nested = db.begin_nested()
+                    try:
+                        draft_query = text("""
+                            SELECT draft_data
+                            FROM inventario.lot_counting_drafts
+                            WHERE inventory_item_id = :item_id
+                              AND current_cycle = :cycle
+                            LIMIT 1
+                        """)
+                        draft_result = db.execute(draft_query, {
+                            'item_id': str(item.id),
+                            'cycle': inventory.current_cycle
+                        }).fetchone()
+                        nested.commit()
+                    except Exception:
+                        nested.rollback()
+                        draft_result = None
 
                     if draft_result and draft_result[0]:
-                        # draft_data é um JSONB com estrutura: {"lots": [...], "timestamp": "..."}
                         draft_data = draft_result[0]
                         lots_data = draft_data.get('lots', [])
                         for lot in lots_data:
@@ -8099,11 +8107,10 @@ async def generate_final_inventory_report(
                                 "lot_number": lot.get('lot_number') or lot.get('b8_lotectl'),
                                 "quantity": float(lot.get('system_qty', 0)),
                                 "counted_qty": float(lot.get('counted_qty', 0)),
-                                "b8_lotefor": lot.get('b8_lotefor', '')  # ✅ v2.17.1: Campo do fornecedor
+                                "b8_lotefor": lot.get('b8_lotefor', '')
                             })
                 except Exception as e:
                     logger.warning(f"⚠️ Erro ao buscar drafts para item {item.id}: {e}")
-                    # Continuar sem drafts
 
             # Preparar dados do item
             item_data = {
@@ -8133,12 +8140,30 @@ async def generate_final_inventory_report(
                 "snapshot_lots": snapshot_lots,
                 # 🔄 v2.17.1: Adicionar lotes dos drafts (para produtos com saldo=0)
                 "saved_lots": saved_lots_list,
+                # ✅ Lotes contados extraídos dos countings (fonte real de dados por lote)
+                "counted_lots": [],
                 # ✅ Contagens por ciclo (para relatório de divergências no frontend)
                 "count_cycle_1": c1,
                 "count_cycle_2": c2,
                 "count_cycle_3": c3,
             }
-            
+
+            # ✅ Construir counted_lots a partir dos countings (agrupado por lote, ciclo mais alto)
+            if product.b1_rastro == 'L' and countings:
+                lots_by_number = {}
+                for counting, user in countings:
+                    lot_num = counting.lot_number
+                    if lot_num:
+                        cycle = counting.count_number or 1
+                        existing = lots_by_number.get(lot_num)
+                        if not existing or cycle > existing['cycle']:
+                            lots_by_number[lot_num] = {
+                                "lot_number": lot_num,
+                                "counted_qty": float(counting.quantity) if counting.quantity else 0,
+                                "cycle": cycle,
+                            }
+                item_data["counted_lots"] = list(lots_by_number.values())
+
             # Adicionar contagens
             for counting, user in countings:
                 item_data["countings"].append({
@@ -8147,7 +8172,7 @@ async def generate_final_inventory_report(
                     "lot_number": counting.lot_number,
                     "serial_number": counting.serial_number,
                     "observation": counting.observation,
-                    "counted_by": user.full_name,
+                    "counted_by": user.full_name if user else "Desconhecido",
                     "counted_at": counting.created_at.isoformat()
                 })
             
@@ -10626,21 +10651,25 @@ async def get_list_products(
             # 🔄 v2.17.0: BUSCAR LOTES DOS DRAFTS (para produtos que não têm snapshot_lots)
             saved_lots_list = []
             try:
-                # Query SQL direta (modelo não existe em models.py)
-                draft_query = text("""
-                    SELECT draft_data
-                    FROM inventario.lot_counting_drafts
-                    WHERE inventory_item_id = :item_id
-                      AND current_cycle = :cycle
-                    LIMIT 1
-                """)
-                draft_result = db.execute(draft_query, {
-                    'item_id': str(row.id),
-                    'cycle': current_cycle
-                }).fetchone()
+                nested = db.begin_nested()
+                try:
+                    draft_query = text("""
+                        SELECT draft_data
+                        FROM inventario.lot_counting_drafts
+                        WHERE inventory_item_id = :item_id
+                          AND current_cycle = :cycle
+                        LIMIT 1
+                    """)
+                    draft_result = db.execute(draft_query, {
+                        'item_id': str(row.id),
+                        'cycle': current_cycle
+                    }).fetchone()
+                    nested.commit()
+                except Exception:
+                    nested.rollback()
+                    draft_result = None
 
                 if draft_result and draft_result[0]:
-                    # draft_data é um JSONB com estrutura: {"lots": [...], "timestamp": "..."}
                     draft_data = draft_result[0]
                     lots_data = draft_data.get('lots', [])
                     for lot in lots_data:
@@ -10648,11 +10677,10 @@ async def get_list_products(
                             "lot_number": lot.get('lot_number') or lot.get('b8_lotectl'),
                             "quantity": float(lot.get('system_qty', 0)),
                             "counted_qty": float(lot.get('counted_qty', 0)),
-                            "b8_lotefor": lot.get('b8_lotefor', '')  # ✅ Campo do fornecedor
+                            "b8_lotefor": lot.get('b8_lotefor', '')
                         })
             except Exception as e:
-                print(f"⚠️ Erro ao buscar drafts para item {row.id}: {e}")
-                # Continuar sem drafts
+                logger.warning(f"⚠️ Erro ao buscar drafts para item {row.id}: {e}")
 
             items.append({
                 "id": str(row.id),
@@ -11316,19 +11344,25 @@ async def encerrar_lista_ciclo(
 
             # 🧹 LIMPAR RASCUNHOS DO CICLO ANTERIOR ao avançar
             try:
-                cleanup_query = text("""
-                    DELETE FROM inventario.lot_counting_drafts
-                    WHERE inventory_item_id IN (
-                        SELECT id FROM inventario.inventory_items
-                        WHERE inventory_list_id = :inventory_id
-                    )
-                    AND current_cycle = :old_cycle
-                """)
-                result = db.execute(cleanup_query, {
-                    "inventory_id": counting_list.inventory_id,
-                    "old_cycle": old_cycle
-                })
-                logger.info(f"🧹 Rascunhos do ciclo {old_cycle} limpos: {result.rowcount} registros removidos")
+                nested = db.begin_nested()
+                try:
+                    cleanup_query = text("""
+                        DELETE FROM inventario.lot_counting_drafts
+                        WHERE inventory_item_id IN (
+                            SELECT id FROM inventario.inventory_items
+                            WHERE inventory_list_id = :inventory_id
+                        )
+                        AND current_cycle = :old_cycle
+                    """)
+                    result = db.execute(cleanup_query, {
+                        "inventory_id": counting_list.inventory_id,
+                        "old_cycle": old_cycle
+                    })
+                    nested.commit()
+                    logger.info(f"🧹 Rascunhos do ciclo {old_cycle} limpos: {result.rowcount} registros removidos")
+                except Exception:
+                    nested.rollback()
+                    logger.warning(f"⚠️ Tabela lot_counting_drafts não existe, limpeza ignorada")
             except Exception as cleanup_error:
                 logger.warning(f"⚠️ Erro ao limpar rascunhos do ciclo anterior: {cleanup_error}")
 

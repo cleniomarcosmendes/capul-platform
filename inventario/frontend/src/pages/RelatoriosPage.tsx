@@ -480,20 +480,24 @@ function TabLotes({ items, loading, inventoryName }: { items: FinalReportItem[];
     );
   }
 
-  // Flatten lots per item
-  const flatRows: { product_code: string; product_name: string; lot_number: string; snapshot_qty: number; counted_qty: number | null; b8_lotefor: string }[] = [];
+  // Flatten lots per item — cruzar snapshot_lots (saldo sistema) com counted_lots (contagem real)
+  const flatRows: { product_code: string; product_name: string; lot_number: string; system_qty: number; counted_qty: number | null; b8_lotefor: string }[] = [];
   for (const it of items) {
+    const countedMap = new Map<string, number>();
+    for (const cl of (it.counted_lots ?? [])) {
+      countedMap.set(cl.lot_number, cl.counted_qty);
+    }
+
     if (it.snapshot_lots.length > 0) {
       for (const lot of it.snapshot_lots) {
-        const saved = it.saved_lots.find((s) => s.lot_number === lot.lot_number);
-        flatRows.push({ product_code: it.product_code, product_name: it.product_name, lot_number: lot.lot_number, snapshot_qty: lot.quantity, counted_qty: saved?.counted_qty ?? null, b8_lotefor: lot.b8_lotefor ?? '' });
+        const counted = countedMap.get(lot.lot_number) ?? null;
+        flatRows.push({ product_code: it.product_code, product_name: it.product_name, lot_number: lot.lot_number, system_qty: lot.quantity, counted_qty: counted, b8_lotefor: lot.b8_lotefor ?? '' });
+        countedMap.delete(lot.lot_number);
       }
     }
-    // Also add saved lots that are not in snapshot
-    for (const saved of it.saved_lots) {
-      if (!it.snapshot_lots.some((s) => s.lot_number === saved.lot_number)) {
-        flatRows.push({ product_code: it.product_code, product_name: it.product_name, lot_number: saved.lot_number, snapshot_qty: 0, counted_qty: saved.counted_qty, b8_lotefor: saved.b8_lotefor ?? '' });
-      }
+    // Lotes contados que não existiam no snapshot (saldo zero no sistema)
+    for (const [lotNum, qty] of countedMap) {
+      flatRows.push({ product_code: it.product_code, product_name: it.product_name, lot_number: lotNum, system_qty: 0, counted_qty: qty, b8_lotefor: '' });
     }
   }
 
@@ -502,28 +506,28 @@ function TabLotes({ items, loading, inventoryName }: { items: FinalReportItem[];
       <div className="flex justify-end">
         <ExportDropdown
           onCSV={() => {
-            const header = 'Codigo;Descricao;Lote;Lote Forn.;Qtd Snapshot;Qtd Contada;Diferenca\n';
+            const header = 'Codigo;Descricao;Lote;Lote Forn.;Saldo Sistema;Qtd Contada;Diferenca\n';
             const rows = flatRows.map((r) => {
-              const diff = r.counted_qty !== null ? r.counted_qty - r.snapshot_qty : '';
-              return `${r.product_code};${r.product_name};${r.lot_number};${r.b8_lotefor};${r.snapshot_qty.toFixed(2)};${r.counted_qty?.toFixed(2) ?? ''};${typeof diff === 'number' ? diff.toFixed(2) : ''}`;
+              const diff = r.counted_qty !== null ? r.counted_qty - r.system_qty : '';
+              return `${r.product_code};${r.product_name};${r.lot_number};${r.b8_lotefor};${r.system_qty.toFixed(2)};${r.counted_qty?.toFixed(2) ?? ''};${typeof diff === 'number' ? diff.toFixed(2) : ''}`;
             });
             downloadCSV(`relatorio_lotes_${new Date().toISOString().slice(0, 10)}.csv`, header, rows);
           }}
           onExcel={() => {
             downloadExcel(`relatorio_lotes_${new Date().toISOString().slice(0, 10)}`, 'Lotes',
-              ['Codigo', 'Descricao', 'Lote', 'Lote Forn.', 'Qtd Snapshot', 'Qtd Contada', 'Diferenca'],
+              ['Codigo', 'Descricao', 'Lote', 'Lote Forn.', 'Saldo Sistema', 'Qtd Contada', 'Diferenca'],
               flatRows.map((r) => {
-                const diff = r.counted_qty !== null ? r.counted_qty - r.snapshot_qty : null;
-                return [r.product_code, r.product_name, r.lot_number, r.b8_lotefor, r.snapshot_qty, r.counted_qty, diff];
+                const diff = r.counted_qty !== null ? r.counted_qty - r.system_qty : null;
+                return [r.product_code, r.product_name, r.lot_number, r.b8_lotefor, r.system_qty, r.counted_qty, diff];
               }),
             );
           }}
           onPrint={() => {
             printTable(`Relatorio por Lote — ${inventoryName}`,
-              ['Codigo', 'Descricao', 'Lote', 'Lote Forn.', 'Qtd Snapshot', 'Qtd Contada', 'Diferenca'],
+              ['Codigo', 'Descricao', 'Lote', 'Lote Forn.', 'Saldo Sistema', 'Qtd Contada', 'Diferenca'],
               flatRows.map((r) => {
-                const diff = r.counted_qty !== null ? r.counted_qty - r.snapshot_qty : null;
-                return [r.product_code, r.product_name, r.lot_number, r.b8_lotefor, r.snapshot_qty.toFixed(2), r.counted_qty?.toFixed(2) ?? '', diff !== null ? diff.toFixed(2) : ''];
+                const diff = r.counted_qty !== null ? r.counted_qty - r.system_qty : null;
+                return [r.product_code, r.product_name, r.lot_number, r.b8_lotefor, r.system_qty.toFixed(2), r.counted_qty?.toFixed(2) ?? '', diff !== null ? diff.toFixed(2) : ''];
               }),
             );
           }}
@@ -538,14 +542,14 @@ function TabLotes({ items, loading, inventoryName }: { items: FinalReportItem[];
               <th className="text-left py-2.5 px-3 font-medium text-slate-600">Descricao</th>
               <th className="text-left py-2.5 px-3 font-medium text-slate-600">Lote</th>
               <th className="text-left py-2.5 px-3 font-medium text-slate-600">Lote Forn.</th>
-              <th className="text-right py-2.5 px-3 font-medium text-slate-600">Qtd Snapshot</th>
+              <th className="text-right py-2.5 px-3 font-medium text-slate-600">Saldo Sistema</th>
               <th className="text-right py-2.5 px-3 font-medium text-slate-600">Qtd Contada</th>
               <th className="text-right py-2.5 px-3 font-medium text-slate-600">Diferenca</th>
             </tr>
           </thead>
           <tbody>
             {flatRows.map((r, i) => {
-              const diff = r.counted_qty !== null ? r.counted_qty - r.snapshot_qty : null;
+              const diff = r.counted_qty !== null ? r.counted_qty - r.system_qty : null;
               const hasDiff = diff !== null && Math.abs(diff) >= 0.01;
               return (
                 <tr key={`${r.product_code}-${r.lot_number}-${i}`} className={`border-b border-slate-100 ${hasDiff ? (diff! < 0 ? 'bg-red-50/30' : 'bg-amber-50/30') : ''}`}>
@@ -553,7 +557,7 @@ function TabLotes({ items, loading, inventoryName }: { items: FinalReportItem[];
                   <td className="py-2 px-3 text-slate-800 truncate max-w-[180px]">{r.product_name}</td>
                   <td className="py-2 px-3 font-mono text-xs text-slate-600">{r.lot_number}</td>
                   <td className="py-2 px-3 text-slate-500 text-xs">{r.b8_lotefor || '—'}</td>
-                  <td className="py-2 px-3 text-right tabular-nums">{r.snapshot_qty.toFixed(2)}</td>
+                  <td className="py-2 px-3 text-right tabular-nums">{r.system_qty.toFixed(2)}</td>
                   <td className="py-2 px-3 text-right tabular-nums">{r.counted_qty !== null ? r.counted_qty.toFixed(2) : '—'}</td>
                   <td className={`py-2 px-3 text-right font-medium tabular-nums ${diff !== null && diff > 0 ? 'text-green-600' : diff !== null && diff < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                     {diff !== null ? `${diff > 0 ? '+' : ''}${diff.toFixed(2)}` : '—'}

@@ -1,7 +1,7 @@
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { countingListService } from '../../../services/counting-list.service';
 import { calcularQuantidadeFinal } from '../../../utils/cycles';
-import { BarChart2, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, Download, Clock } from 'lucide-react';
+import { BarChart2, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, Download, Clock, ChevronRight, ChevronDown, Layers } from 'lucide-react';
 import type { CountingList, CountingListProduct } from '../../../types';
 
 interface Props {
@@ -143,9 +143,124 @@ export function TabAnalise({ inventoryId, listas }: Props) {
   );
 }
 
+// === Lot divergence helper ===
+
+interface LotDetail {
+  lot_number: string;
+  b8_lotefor: string;
+  system_qty: number;
+  counted_qty: number | null;
+  variance: number | null;
+}
+
+function buildLotDetails(product: CountingListProduct, cycleNumber?: number): LotDetail[] {
+  const snapshotLots = product.snapshot_lots ?? [];
+  const countings = (product as any).countings ?? [];
+
+  // Build counted map from countings (highest cycle or specific cycle)
+  const countedMap = new Map<string, number>();
+  for (const c of countings) {
+    if (!c.lot_number) continue;
+    if (cycleNumber != null && c.count_number !== cycleNumber) continue;
+    const existing = countedMap.get(c.lot_number);
+    if (existing === undefined || (cycleNumber == null && c.count_number > 0)) {
+      countedMap.set(c.lot_number, c.quantity ?? 0);
+    }
+  }
+
+  const lots: LotDetail[] = [];
+  // From snapshot (system data)
+  for (const sl of snapshotLots) {
+    const lotNum = sl.lot_number || sl.b8_lotectl;
+    const counted = countedMap.get(lotNum) ?? null;
+    const sysQty = sl.system_qty ?? (sl as any).quantity ?? 0;
+    lots.push({
+      lot_number: lotNum,
+      b8_lotefor: sl.b8_lotefor ?? '',
+      system_qty: sysQty,
+      counted_qty: counted,
+      variance: counted !== null ? counted - sysQty : null,
+    });
+    countedMap.delete(lotNum);
+  }
+  // Lots counted but not in snapshot
+  for (const [lotNum, qty] of countedMap) {
+    lots.push({
+      lot_number: lotNum,
+      b8_lotefor: '',
+      system_qty: 0,
+      counted_qty: qty,
+      variance: qty,
+    });
+  }
+
+  return lots;
+}
+
+// === Lot sub-row component ===
+
+function LotSubRows({ lots }: { lots: LotDetail[] }) {
+  const hasDivergent = lots.some((l) => l.variance !== null && Math.abs(l.variance) >= 0.01);
+  return (
+    <tr>
+      <td colSpan={8} className="p-0">
+        <div className="bg-slate-50/80 border-t border-slate-200 px-6 py-2">
+          <div className="flex items-center gap-2 mb-2">
+            <Layers className="w-3.5 h-3.5 text-slate-400" />
+            <span className="text-xs font-medium text-slate-600">Detalhamento por Lote</span>
+            {hasDivergent && (
+              <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">
+                {lots.filter((l) => l.variance !== null && Math.abs(l.variance) >= 0.01).length} lote(s) divergente(s)
+              </span>
+            )}
+          </div>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-slate-500">
+                <th className="text-left py-1 px-2 font-medium">Lote</th>
+                <th className="text-left py-1 px-2 font-medium">Lote Forn.</th>
+                <th className="text-right py-1 px-2 font-medium">Saldo Sistema</th>
+                <th className="text-right py-1 px-2 font-medium">Qtd Contada</th>
+                <th className="text-right py-1 px-2 font-medium">Diferenca</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lots.map((l, i) => {
+                const isDiv = l.variance !== null && Math.abs(l.variance) >= 0.01;
+                return (
+                  <tr key={`${l.lot_number}-${i}`} className={isDiv ? (l.variance! < 0 ? 'bg-red-50/50' : 'bg-amber-50/50') : ''}>
+                    <td className="py-1 px-2 font-mono text-slate-600">{l.lot_number}</td>
+                    <td className="py-1 px-2 text-slate-500">{l.b8_lotefor || '—'}</td>
+                    <td className="py-1 px-2 text-right tabular-nums">{l.system_qty.toFixed(2)}</td>
+                    <td className="py-1 px-2 text-right tabular-nums">{l.counted_qty !== null ? l.counted_qty.toFixed(2) : '—'}</td>
+                    <td className={`py-1 px-2 text-right font-medium tabular-nums ${l.variance !== null && l.variance > 0 ? 'text-green-600' : l.variance !== null && l.variance < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                      {l.variance !== null ? `${l.variance > 0 ? '+' : ''}${l.variance.toFixed(2)}` : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 // === Cycle Analysis (per cycle) ===
 
 function CycleAnalysis({ products, cycleNumber }: { products: CountingListProduct[]; cycleNumber: number }) {
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (code: string) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  };
+
   const getCycleQty = (p: CountingListProduct): number | null => {
     if (cycleNumber === 1) return p.count_cycle_1;
     if (cycleNumber === 2) return p.count_cycle_2;
@@ -162,6 +277,8 @@ function CycleAnalysis({ products, cycleNumber }: { products: CountingListProduc
         : (counted && cycleQty !== 0 ? 100 : 0);
       const isDivergent = counted && Math.abs(variance) >= 0.01;
       const isOk = counted && !isDivergent;
+      const hasLot = p.has_lot === true || p.requires_lot === true;
+      const lotDetails = hasLot ? buildLotDetails(p, cycleNumber) : [];
 
       return {
         product_code: p.product_code,
@@ -173,6 +290,8 @@ function CycleAnalysis({ products, cycleNumber }: { products: CountingListProduc
         variance_pct: variancePct,
         is_divergent: isDivergent,
         is_ok: isOk,
+        has_lot: hasLot,
+        lot_details: lotDetails,
       };
     }).sort((a, b) => {
       // Not counted first, then divergent, then OK
@@ -303,55 +422,76 @@ function CycleAnalysis({ products, cycleNumber }: { products: CountingListProduc
               </tr>
             </thead>
             <tbody>
-              {analyzed.map((a) => (
-                <tr
-                  key={a.product_code}
-                  className={`border-b border-slate-100 ${
-                    !a.counted ? 'bg-red-50/40' :
-                    a.is_divergent ? (a.variance < 0 ? 'bg-red-50/30' : 'bg-amber-50/30') :
-                    'bg-green-50/20'
-                  }`}
-                >
-                  <td className="py-2.5 px-3 font-mono text-slate-700">{a.product_code}</td>
-                  <td className="py-2.5 px-3 text-slate-800 truncate max-w-[200px]">{a.product_name}</td>
-                  <td className="py-2.5 px-3 text-right text-slate-600">{a.system_qty.toFixed(2)}</td>
-                  <td className={`py-2.5 px-3 text-right font-medium ${a.counted ? 'text-slate-800' : 'text-red-400 italic'}`}>
-                    {a.counted ? a.cycle_qty!.toFixed(2) : 'Nao contado'}
-                  </td>
-                  <td className={`py-2.5 px-3 text-right font-medium ${
-                    !a.counted ? 'text-slate-300' :
-                    a.variance > 0 ? 'text-green-600' : a.variance < 0 ? 'text-red-600' : 'text-slate-400'
-                  }`}>
-                    {a.counted ? `${a.variance > 0 ? '+' : ''}${a.variance.toFixed(2)}` : '—'}
-                  </td>
-                  <td className={`py-2.5 px-3 text-right font-medium ${
-                    !a.counted ? 'text-slate-300' :
-                    Math.abs(a.variance_pct) > 10 ? 'text-red-600' : a.is_divergent ? 'text-amber-600' : 'text-slate-400'
-                  }`}>
-                    {a.counted && a.is_divergent ? (
-                      <div className="flex items-center justify-end gap-1">
-                        {a.variance > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                        {Math.abs(a.variance_pct).toFixed(1)}%
-                      </div>
-                    ) : a.counted ? '0.0%' : '—'}
-                  </td>
-                  <td className="py-2.5 px-3 text-center">
-                    {!a.counted ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-700">
-                        <Clock className="w-3 h-3" /> Nao contado
-                      </span>
-                    ) : a.is_divergent ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700">
-                        <AlertTriangle className="w-3 h-3" /> Divergente
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700">
-                        <CheckCircle2 className="w-3 h-3" /> OK
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {analyzed.map((a) => {
+                const isExpanded = expandedRows.has(a.product_code);
+                const canExpand = a.has_lot && a.lot_details.length > 0;
+                return (
+                  <React.Fragment key={a.product_code}>
+                    <tr
+                      className={`border-b border-slate-100 ${
+                        !a.counted ? 'bg-red-50/40' :
+                        a.is_divergent ? (a.variance < 0 ? 'bg-red-50/30' : 'bg-amber-50/30') :
+                        'bg-green-50/20'
+                      } ${canExpand ? 'cursor-pointer hover:bg-slate-50/80' : ''}`}
+                      onClick={canExpand ? () => toggleExpand(a.product_code) : undefined}
+                    >
+                      <td className="py-2.5 px-3 font-mono text-slate-700">
+                        <div className="flex items-center gap-1.5">
+                          {canExpand && (
+                            isExpanded
+                              ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                              : <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                          )}
+                          {a.product_code}
+                          {canExpand && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-medium">
+                              <Layers className="w-3 h-3" />{a.lot_details.length}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-800 truncate max-w-[200px]">{a.product_name}</td>
+                      <td className="py-2.5 px-3 text-right text-slate-600">{a.system_qty.toFixed(2)}</td>
+                      <td className={`py-2.5 px-3 text-right font-medium ${a.counted ? 'text-slate-800' : 'text-red-400 italic'}`}>
+                        {a.counted ? a.cycle_qty!.toFixed(2) : 'Nao contado'}
+                      </td>
+                      <td className={`py-2.5 px-3 text-right font-medium ${
+                        !a.counted ? 'text-slate-300' :
+                        a.variance > 0 ? 'text-green-600' : a.variance < 0 ? 'text-red-600' : 'text-slate-400'
+                      }`}>
+                        {a.counted ? `${a.variance > 0 ? '+' : ''}${a.variance.toFixed(2)}` : '—'}
+                      </td>
+                      <td className={`py-2.5 px-3 text-right font-medium ${
+                        !a.counted ? 'text-slate-300' :
+                        Math.abs(a.variance_pct) > 10 ? 'text-red-600' : a.is_divergent ? 'text-amber-600' : 'text-slate-400'
+                      }`}>
+                        {a.counted && a.is_divergent ? (
+                          <div className="flex items-center justify-end gap-1">
+                            {a.variance > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                            {Math.abs(a.variance_pct).toFixed(1)}%
+                          </div>
+                        ) : a.counted ? '0.0%' : '—'}
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        {!a.counted ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-700">
+                            <Clock className="w-3 h-3" /> Nao contado
+                          </span>
+                        ) : a.is_divergent ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700">
+                            <AlertTriangle className="w-3 h-3" /> Divergente
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700">
+                            <CheckCircle2 className="w-3 h-3" /> OK
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                    {canExpand && isExpanded && <LotSubRows lots={a.lot_details} />}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -363,6 +503,17 @@ function CycleAnalysis({ products, cycleNumber }: { products: CountingListProduc
 // === Final Analysis (current behavior - all cycles combined) ===
 
 function FinalAnalysis({ products }: { products: CountingListProduct[] }) {
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (code: string) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  };
+
   const stats = useMemo(() => {
     const total = products.length;
     let counted = 0;
@@ -394,6 +545,8 @@ function FinalAnalysis({ products }: { products: CountingListProduct[] }) {
         : 0;
       const variance = hasAnyCount ? finalQty - p.system_qty : 0;
       const variancePct = hasAnyCount && p.system_qty !== 0 ? (variance / p.system_qty) * 100 : (hasAnyCount && finalQty !== 0 ? 100 : 0);
+      const hasLot = p.has_lot === true || p.requires_lot === true;
+      const lotDetails = hasLot ? buildLotDetails(p) : [];
 
       return {
         product_code: p.product_code,
@@ -407,6 +560,8 @@ function FinalAnalysis({ products }: { products: CountingListProduct[] }) {
         variance_pct: variancePct,
         has_count: hasAnyCount,
         is_divergent: hasAnyCount && Math.abs(variance) >= 0.01,
+        has_lot: hasLot,
+        lot_details: lotDetails,
       };
     }).sort((a, b) => {
       if (!a.has_count && b.has_count) return -1;
@@ -525,64 +680,85 @@ function FinalAnalysis({ products }: { products: CountingListProduct[] }) {
               </tr>
             </thead>
             <tbody>
-              {items.map((d) => (
-                <tr
-                  key={d.product_code}
-                  className={`border-b border-slate-100 ${
-                    !d.has_count ? 'bg-red-50/40' :
-                    d.is_divergent ? (d.variance < 0 ? 'bg-red-50/30' : 'bg-amber-50/30') :
-                    'bg-green-50/20'
-                  }`}
-                >
-                  <td className="py-2.5 px-3 font-mono text-slate-700">{d.product_code}</td>
-                  <td className="py-2.5 px-3 text-slate-800 truncate max-w-[180px]">{d.product_name}</td>
-                  <td className="py-2.5 px-3 text-right text-slate-600">{d.system_qty.toFixed(2)}</td>
-                  <td className="py-2.5 px-3 text-right bg-green-50/20">
-                    {d.count_cycle_1 != null ? d.count_cycle_1.toFixed(2) : '—'}
-                  </td>
-                  <td className="py-2.5 px-3 text-right bg-amber-50/20">
-                    {d.count_cycle_2 != null ? d.count_cycle_2.toFixed(2) : '—'}
-                  </td>
-                  <td className="py-2.5 px-3 text-right bg-red-50/20">
-                    {d.count_cycle_3 != null ? d.count_cycle_3.toFixed(2) : '—'}
-                  </td>
-                  <td className={`py-2.5 px-3 text-right font-bold ${d.has_count ? 'text-capul-700' : 'text-red-400 italic'}`}>
-                    {d.has_count ? d.final_qty.toFixed(2) : 'N/C'}
-                  </td>
-                  <td className={`py-2.5 px-3 text-right font-medium ${
-                    !d.has_count ? 'text-slate-300' :
-                    d.variance > 0 ? 'text-green-600' : d.variance < 0 ? 'text-red-600' : 'text-slate-400'
-                  }`}>
-                    {d.has_count ? `${d.variance > 0 ? '+' : ''}${d.variance.toFixed(2)}` : '—'}
-                  </td>
-                  <td className={`py-2.5 px-3 text-right font-medium ${
-                    !d.has_count ? 'text-slate-300' :
-                    Math.abs(d.variance_pct) > 10 ? 'text-red-600' : d.is_divergent ? 'text-amber-600' : 'text-slate-400'
-                  }`}>
-                    {d.has_count && d.is_divergent ? (
-                      <div className="flex items-center justify-end gap-1">
-                        {d.variance > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                        {Math.abs(d.variance_pct).toFixed(1)}%
-                      </div>
-                    ) : d.has_count ? '0.0%' : '—'}
-                  </td>
-                  <td className="py-2.5 px-3 text-center">
-                    {!d.has_count ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-700">
-                        <Clock className="w-3 h-3" /> N/C
-                      </span>
-                    ) : d.is_divergent ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700">
-                        <AlertTriangle className="w-3 h-3" /> Divergente
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700">
-                        <CheckCircle2 className="w-3 h-3" /> OK
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {items.map((d) => {
+                const isExpanded = expandedRows.has(d.product_code);
+                const canExpand = d.has_lot && d.lot_details.length > 0;
+                return (
+                  <React.Fragment key={d.product_code}>
+                    <tr
+                      className={`border-b border-slate-100 ${
+                        !d.has_count ? 'bg-red-50/40' :
+                        d.is_divergent ? (d.variance < 0 ? 'bg-red-50/30' : 'bg-amber-50/30') :
+                        'bg-green-50/20'
+                      } ${canExpand ? 'cursor-pointer hover:bg-slate-50/80' : ''}`}
+                      onClick={canExpand ? () => toggleExpand(d.product_code) : undefined}
+                    >
+                      <td className="py-2.5 px-3 font-mono text-slate-700">
+                        <div className="flex items-center gap-1.5">
+                          {canExpand && (
+                            isExpanded
+                              ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                              : <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                          )}
+                          {d.product_code}
+                          {canExpand && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-medium">
+                              <Layers className="w-3 h-3" />{d.lot_details.length}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-800 truncate max-w-[180px]">{d.product_name}</td>
+                      <td className="py-2.5 px-3 text-right text-slate-600">{d.system_qty.toFixed(2)}</td>
+                      <td className="py-2.5 px-3 text-right bg-green-50/20">
+                        {d.count_cycle_1 != null ? d.count_cycle_1.toFixed(2) : '—'}
+                      </td>
+                      <td className="py-2.5 px-3 text-right bg-amber-50/20">
+                        {d.count_cycle_2 != null ? d.count_cycle_2.toFixed(2) : '—'}
+                      </td>
+                      <td className="py-2.5 px-3 text-right bg-red-50/20">
+                        {d.count_cycle_3 != null ? d.count_cycle_3.toFixed(2) : '—'}
+                      </td>
+                      <td className={`py-2.5 px-3 text-right font-bold ${d.has_count ? 'text-capul-700' : 'text-red-400 italic'}`}>
+                        {d.has_count ? d.final_qty.toFixed(2) : 'N/C'}
+                      </td>
+                      <td className={`py-2.5 px-3 text-right font-medium ${
+                        !d.has_count ? 'text-slate-300' :
+                        d.variance > 0 ? 'text-green-600' : d.variance < 0 ? 'text-red-600' : 'text-slate-400'
+                      }`}>
+                        {d.has_count ? `${d.variance > 0 ? '+' : ''}${d.variance.toFixed(2)}` : '—'}
+                      </td>
+                      <td className={`py-2.5 px-3 text-right font-medium ${
+                        !d.has_count ? 'text-slate-300' :
+                        Math.abs(d.variance_pct) > 10 ? 'text-red-600' : d.is_divergent ? 'text-amber-600' : 'text-slate-400'
+                      }`}>
+                        {d.has_count && d.is_divergent ? (
+                          <div className="flex items-center justify-end gap-1">
+                            {d.variance > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                            {Math.abs(d.variance_pct).toFixed(1)}%
+                          </div>
+                        ) : d.has_count ? '0.0%' : '—'}
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        {!d.has_count ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-700">
+                            <Clock className="w-3 h-3" /> N/C
+                          </span>
+                        ) : d.is_divergent ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700">
+                            <AlertTriangle className="w-3 h-3" /> Divergente
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700">
+                            <CheckCircle2 className="w-3 h-3" /> OK
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                    {canExpand && isExpanded && <LotSubRows lots={d.lot_details} />}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

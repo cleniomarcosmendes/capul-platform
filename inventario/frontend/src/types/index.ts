@@ -455,6 +455,7 @@ export interface FinalReportItem {
   has_snapshot_cost: boolean;
   snapshot_lots: { lot_number: string; b8_lotectl: string; b8_lotefor?: string; quantity: number }[];
   saved_lots: { lot_number: string; quantity: number; counted_qty: number; b8_lotefor?: string }[];
+  counted_lots: { lot_number: string; counted_qty: number; cycle: number }[];
   count_cycle_1: number | null;
   count_cycle_2: number | null;
   count_cycle_3: number | null;
