@@ -1,9 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Header } from '../layouts/Header';
 import { inventoryService } from '../services/inventory.service';
-import { countingListService } from '../services/counting-list.service';
-import { calcularQuantidadeFinal } from '../utils/cycles';
 import {
   BarChart2,
   TrendingDown,
@@ -21,7 +19,7 @@ import { downloadCSV } from '../utils/csv';
 import { downloadExcel, printTable } from '../utils/export';
 import { PageSkeleton, TableSkeleton } from '../components/LoadingSkeleton';
 import { ErrorState } from '../components/ErrorState';
-import type { InventoryList, CountingListProduct, FinalReport, FinalReportItem } from '../types';
+import type { InventoryList, FinalReport, FinalReportItem } from '../types';
 
 type Tab = 'divergencias' | 'final' | 'lotes';
 
@@ -55,15 +53,11 @@ export function RelatoriosPage() {
   const [error, setError] = useState(false);
   const [selectedInv, setSelectedInv] = useState<string>('');
   const [activeTab, setActiveTab] = useState<Tab>('divergencias');
-
-  // Divergencias state
-  const [divergences, setDivergences] = useState<DivergenceRow[]>([]);
-  const [loadingDivergences, setLoadingDivergences] = useState(false);
   const [tolerance, setTolerance] = useState<number>(0);
 
-  // Final report state
+  // Fonte unificada: final-report para todas as tabs
   const [finalReport, setFinalReport] = useState<FinalReport | null>(null);
-  const [loadingFinal, setLoadingFinal] = useState(false);
+  const [loadingReport, setLoadingReport] = useState(false);
 
   function loadInventarios() {
     setLoading(true);
@@ -76,48 +70,49 @@ export function RelatoriosPage() {
 
   useEffect(() => { loadInventarios(); }, []);
 
-  // Load divergences
+  // Carregar final-report quando inventário é selecionado (fonte unificada para todas as tabs)
   useEffect(() => {
-    if (!selectedInv || activeTab !== 'divergencias') { setDivergences([]); return; }
-    setLoadingDivergences(true);
-    const inv = inventarios.find((i) => i.id === selectedInv);
-    if (!inv) return;
-
-    countingListService.listar(selectedInv)
-      .then(async (listas) => {
-        const allProducts: CountingListProduct[] = [];
-        for (const lista of listas) {
-          try {
-            const res = await countingListService.listarItens(lista.id);
-            if (res.data?.products) allProducts.push(...res.data.products);
-          } catch { /* skip */ }
-        }
-        const rows: DivergenceRow[] = [];
-        for (const p of allProducts) {
-          if (p.status === 'PENDING') continue;
-          const finalQty = p.finalQuantity ?? calcularQuantidadeFinal(p.count_cycle_1, p.count_cycle_2, p.count_cycle_3, p.system_qty);
-          const variance = finalQty - p.system_qty;
-          const variancePct = p.system_qty !== 0 ? (variance / p.system_qty) * 100 : (finalQty !== 0 ? 100 : 0);
-          if (Math.abs(variancePct) > tolerance) {
-            rows.push({ inventoryId: selectedInv, inventoryName: inv.name, warehouse: inv.warehouse, product_code: p.product_code, product_name: p.product_description || p.product_name, system_qty: p.system_qty, final_qty: finalQty, variance, variance_pct: variancePct, count_cycle_1: p.count_cycle_1, count_cycle_2: p.count_cycle_2, count_cycle_3: p.count_cycle_3 });
-          }
-        }
-        rows.sort((a, b) => Math.abs(b.variance_pct) - Math.abs(a.variance_pct));
-        setDivergences(rows);
-      })
-      .catch(() => setDivergences([]))
-      .finally(() => setLoadingDivergences(false));
-  }, [selectedInv, tolerance, inventarios, activeTab]);
-
-  // Load final report
-  useEffect(() => {
-    if (!selectedInv || (activeTab !== 'final' && activeTab !== 'lotes')) { setFinalReport(null); return; }
-    setLoadingFinal(true);
+    if (!selectedInv) { setFinalReport(null); return; }
+    setLoadingReport(true);
     inventoryService.gerarRelatorioFinal(selectedInv)
       .then(setFinalReport)
       .catch(() => setFinalReport(null))
-      .finally(() => setLoadingFinal(false));
-  }, [selectedInv, activeTab]);
+      .finally(() => setLoadingReport(false));
+  }, [selectedInv]);
+
+  // Divergências derivadas do final-report (sem N+1 queries, sem dependência de counting lists)
+  const divergences = useMemo<DivergenceRow[]>(() => {
+    if (!finalReport) return [];
+    const inv = inventarios.find((i) => i.id === selectedInv);
+    if (!inv) return [];
+
+    const rows: DivergenceRow[] = [];
+    for (const item of finalReport.items) {
+      if (item.status === 'PENDING' && item.counted_quantity === 0) continue;
+      const variance = item.variance;
+      const variancePct = item.expected_quantity !== 0
+        ? (variance / item.expected_quantity) * 100
+        : (item.counted_quantity !== 0 ? 100 : 0);
+      if (Math.abs(variancePct) > tolerance) {
+        rows.push({
+          inventoryId: selectedInv,
+          inventoryName: inv.name,
+          warehouse: inv.warehouse,
+          product_code: item.product_code,
+          product_name: item.product_name,
+          system_qty: item.expected_quantity,
+          final_qty: item.counted_quantity,
+          variance,
+          variance_pct: variancePct,
+          count_cycle_1: item.count_cycle_1 ?? null,
+          count_cycle_2: item.count_cycle_2 ?? null,
+          count_cycle_3: item.count_cycle_3 ?? null,
+        });
+      }
+    }
+    rows.sort((a, b) => Math.abs(b.variance_pct) - Math.abs(a.variance_pct));
+    return rows;
+  }, [finalReport, tolerance, selectedInv, inventarios]);
 
   // Divergence export
   function handleExportDivCSV() {
@@ -205,16 +200,16 @@ export function RelatoriosPage() {
             ) : activeTab === 'divergencias' ? (
               <TabDivergencias
                 divergences={divergences}
-                loading={loadingDivergences}
+                loading={loadingReport}
                 tolerance={tolerance}
                 totalSobra={totalSobra}
                 totalFalta={totalFalta}
                 onExportCSV={handleExportDivCSV}
               />
             ) : activeTab === 'final' ? (
-              <TabFinal report={finalReport} loading={loadingFinal} />
+              <TabFinal report={finalReport} loading={loadingReport} />
             ) : (
-              <TabLotes items={lotItems} loading={loadingFinal} inventoryName={finalReport?.inventory.name ?? ''} />
+              <TabLotes items={lotItems} loading={loadingReport} inventoryName={finalReport?.inventory.name ?? ''} />
             )}
           </>
         )}

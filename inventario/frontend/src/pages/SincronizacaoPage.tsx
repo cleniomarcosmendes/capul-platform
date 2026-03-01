@@ -224,7 +224,7 @@ function TabEnvio() {
       await integrationService.enviar(confirmSend.integrationId);
       const updated = await integrationService.buscarPorId(confirmSend.integrationId);
       setIntegrations((prev) => new Map(prev).set(confirmSend.inventoryId, updated));
-      toast.success('Enviado ao Protheus com sucesso.');
+      toast.success('Dados salvos como ENVIADO (modo simulado — envio real ao Protheus pendente de configuracao da API).');
     } catch {
       toast.error('Erro ao enviar ao Protheus.');
     } finally {
@@ -257,6 +257,19 @@ function TabEnvio() {
 
   return (
     <div className="space-y-6">
+      {/* Banner modo simulado */}
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+        <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+        <div>
+          <p className="text-sm font-medium text-amber-800">Modo simulado</p>
+          <p className="text-xs text-amber-600 mt-0.5">
+            O preview e a preparacao dos dados funcionam normalmente. O envio ao ERP Protheus esta em modo de teste
+            — os dados sao salvos e marcados como ENVIADO, mas nao sao transmitidos ao Protheus. A integracao real
+            sera ativada quando a API do Protheus estiver configurada.
+          </p>
+        </div>
+      </div>
+
       {/* Mode selection + Preview */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
         <h3 className="font-semibold text-slate-800">Nova Integracao</h3>

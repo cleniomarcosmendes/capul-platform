@@ -7959,12 +7959,12 @@ async def generate_final_inventory_report(
         
         inventory_uuid = uuid.UUID(inventory_id)
         
-        # Verificar se inventário existe
-        inventory = db.query(InventoryList).filter(
-            InventoryList.id == inventory_uuid,
-            InventoryList.store_id == current_user.store_id
-        ).first()
-        
+        # Verificar se inventário existe (ADMIN vê todos, outros filtram por loja)
+        inv_query = db.query(InventoryList).filter(InventoryList.id == inventory_uuid)
+        if current_user.role != 'ADMIN':
+            inv_query = inv_query.filter(InventoryList.store_id == current_user.store_id)
+        inventory = inv_query.first()
+
         if not inventory:
             raise HTTPException(status_code=404, detail="Inventário não encontrado")
         
@@ -7993,22 +7993,37 @@ async def generate_final_inventory_report(
         total_counted_qty = 0
         products_with_zero_cost = 0
 
+        # ✅ Batch-load contagens e divergências (elimina N+1 queries)
+        from collections import defaultdict
+        item_ids = [item.id for item, _, _ in items_query]
+
+        all_countings = db.query(Counting, User).join(
+            User, Counting.counted_by == User.id
+        ).filter(
+            Counting.inventory_item_id.in_(item_ids)
+        ).order_by(Counting.count_number).all()
+        countings_by_item = defaultdict(list)
+        for c, u in all_countings:
+            countings_by_item[c.inventory_item_id].append((c, u))
+
+        all_discrepancies = db.query(Discrepancy).filter(
+            Discrepancy.inventory_item_id.in_(item_ids)
+        ).all()
+        disc_by_item = {d.inventory_item_id: d for d in all_discrepancies}
+
         for item, product, snapshot in items_query:
             total_items += 1
 
-            # Buscar contagens do item
-            countings = db.query(Counting, User).join(
-                User, Counting.counted_by == User.id
-            ).filter(
-                Counting.inventory_item_id == item.id
-            ).order_by(Counting.count_number).all()
+            # Buscar contagens e divergência do batch (O(1) lookup)
+            countings = countings_by_item.get(item.id, [])
+            discrepancy = disc_by_item.get(item.id)
 
-            # Buscar divergência
-            discrepancy = db.query(Discrepancy).filter(
-                Discrepancy.inventory_item_id == item.id
-            ).first()
+            # ✅ Determinar counted_qty usando ciclos (prioridade) com fallback legado
+            c1 = float(item.count_cycle_1) if item.count_cycle_1 is not None else None
+            c2 = float(item.count_cycle_2) if item.count_cycle_2 is not None else None
+            c3 = float(item.count_cycle_3) if item.count_cycle_3 is not None else None
 
-            if countings:
+            if c1 is not None or c2 is not None or c3 is not None:
                 counted_items += 1
 
             if discrepancy and discrepancy.variance_quantity != 0:
@@ -8016,7 +8031,18 @@ async def generate_final_inventory_report(
 
             # 📸 v2.10.0: Usar custo médio do SNAPSHOT (congelado)
             expected_qty = float(item.expected_quantity) if item.expected_quantity else 0
-            counted_qty = float(countings[-1][0].quantity) if countings else 0
+
+            # ✅ Quantidade contada: prioridade ciclo 3 > 2 > 1 > Counting legado
+            if c3 is not None:
+                counted_qty = c3
+            elif c2 is not None:
+                counted_qty = c2
+            elif c1 is not None:
+                counted_qty = c1
+            elif countings:
+                counted_qty = float(countings[-1][0].quantity)
+            else:
+                counted_qty = 0
 
             # Prioridade: 1) Custo do snapshot, 2) Fallback para 0.0
             unit_price = float(snapshot.b2_cm1) if snapshot and snapshot.b2_cm1 else 0.0
@@ -8106,7 +8132,11 @@ async def generate_final_inventory_report(
                 # ✅ v2.15.7.6: Adicionar lotes do snapshot (dados congelados)
                 "snapshot_lots": snapshot_lots,
                 # 🔄 v2.17.1: Adicionar lotes dos drafts (para produtos com saldo=0)
-                "saved_lots": saved_lots_list
+                "saved_lots": saved_lots_list,
+                # ✅ Contagens por ciclo (para relatório de divergências no frontend)
+                "count_cycle_1": c1,
+                "count_cycle_2": c2,
+                "count_cycle_3": c3,
             }
             
             # Adicionar contagens

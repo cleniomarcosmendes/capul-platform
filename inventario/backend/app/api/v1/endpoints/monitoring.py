@@ -14,8 +14,8 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.models import User, UserRole
-from app.services.anomaly_detector import (
 from app.core.exceptions import safe_error_response
+from app.services.anomaly_detector import (
     detect_all_anomalies,
     detect_cycle_desync,
     detect_orphan_products,

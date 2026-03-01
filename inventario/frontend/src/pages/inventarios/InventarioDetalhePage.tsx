@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { inventoryService } from '../../services/inventory.service';
 import { countingListService } from '../../services/counting-list.service';
@@ -28,6 +28,7 @@ import {
   Lock,
   UserCog,
   Loader2,
+  Send,
 } from 'lucide-react';
 import { PageSkeleton } from '../../components/LoadingSkeleton';
 import { ErrorState } from '../../components/ErrorState';
@@ -219,6 +220,15 @@ export function InventarioDetalhePage() {
               )}
             </div>
             <div className="flex gap-2">
+              {(inventario.status === 'COMPLETED' || inventario.status === 'CLOSED') && (
+                <Link
+                  to={`/inventario/sincronizacao`}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
+                >
+                  <Send className="w-4 h-4" />
+                  Integracao Protheus
+                </Link>
+              )}
               {inventario.status === 'DRAFT' && (
                 <button
                   onClick={handleDelete}
