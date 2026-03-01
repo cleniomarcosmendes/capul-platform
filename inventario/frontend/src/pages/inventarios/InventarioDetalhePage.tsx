@@ -19,7 +19,6 @@ import {
   LayoutDashboard,
   ListChecks,
   BarChart2,
-  History,
   Trash2,
   Package,
   Plus,
@@ -58,7 +57,7 @@ const itemStatusConfig: Record<string, { label: string; color: string }> = {
   ZERO_CONFIRMED: { label: 'Zero Confirmado', color: 'bg-purple-100 text-purple-700' },
 };
 
-type Tab = 'visao-geral' | 'itens' | 'listas' | 'analise' | 'historico';
+type Tab = 'visao-geral' | 'itens' | 'listas' | 'analise';
 
 export function InventarioDetalhePage() {
   const { id } = useParams<{ id: string }>();
@@ -190,7 +189,6 @@ export function InventarioDetalhePage() {
     { key: 'itens', label: `Itens (${itemsTotal})`, icon: Package },
     { key: 'listas', label: `Listas (${listas.length})`, icon: ListChecks },
     { key: 'analise', label: 'Analise', icon: BarChart2 },
-    { key: 'historico', label: 'Historico', icon: History },
   ];
 
   return (
@@ -324,7 +322,6 @@ export function InventarioDetalhePage() {
           />
         )}
         {activeTab === 'analise' && <TabAnalise inventoryId={id!} listas={listas} />}
-        {activeTab === 'historico' && <TabPlaceholder icon={History} text="Historico sera implementado em breve." />}
 
         {/* Modal adicionar produtos */}
         {showAddProducts && (
@@ -1055,17 +1052,6 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
         onConfirm={() => { if (confirmDialog?.onConfirm) confirmDialog.onConfirm(); }}
         onCancel={() => setConfirmDialog(null)}
       />
-    </div>
-  );
-}
-
-// === Tab Placeholder ===
-
-function TabPlaceholder({ icon: Icon, text }: { icon: React.ComponentType<{ className?: string }>; text: string }) {
-  return (
-    <div className="text-center py-12">
-      <Icon className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-      <p className="text-slate-500 text-sm">{text}</p>
     </div>
   );
 }
