@@ -124,6 +124,11 @@ export const inventoryService = {
 
   // === Itens para atribuicao a listas de contagem ===
 
+  async gerarRelatorioFinal(inventoryId: string): Promise<import('../types').FinalReport> {
+    const { data } = await inventarioApi.get(`/inventory/lists/${inventoryId}/final-report`);
+    return data;
+  },
+
   async listarItensParaAtribuicao(
     inventoryId: string,
     params: Record<string, string | number | undefined>,

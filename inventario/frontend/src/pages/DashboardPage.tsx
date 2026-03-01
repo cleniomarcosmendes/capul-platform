@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Header } from '../layouts/Header';
 import { dashboardService } from '../services/dashboard.service';
 import { DashboardSkeleton } from '../components/LoadingSkeleton';
@@ -11,6 +11,19 @@ import {
   AlertTriangle,
   TrendingUp,
 } from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from 'recharts';
 import type { DashboardData } from '../types';
 
 function StatCard({ icon: Icon, label, value, color }: {
@@ -32,6 +45,8 @@ function StatCard({ icon: Icon, label, value, color }: {
   );
 }
 
+const PIE_COLORS = ['#22c55e', '#f59e0b', '#ef4444'];
+
 export function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,6 +62,28 @@ export function DashboardPage() {
   }
 
   useEffect(() => { loadData(); }, []);
+
+  // Format history for bar chart
+  const historyData = useMemo(() => {
+    if (!data?.history?.length) return [];
+    return data.history.map((h) => ({
+      date: new Date(h.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+      contagens: h.count,
+    }));
+  }, [data]);
+
+  // Donut data
+  const donutData = useMemo(() => {
+    if (!data) return [];
+    const items = [
+      { name: 'Contados', value: data.counted_items },
+      { name: 'Pendentes', value: data.pending_items },
+      { name: 'Divergencias', value: data.divergences },
+    ];
+    return items.filter((d) => d.value > 0);
+  }, [data]);
+
+  const totalItems = data ? data.counted_items + data.pending_items : 0;
 
   return (
     <>
@@ -123,6 +160,69 @@ export function DashboardPage() {
                 </div>
               </div>
             )}
+
+            {/* Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Bar chart — Contagens últimos dias */}
+              {historyData.length > 0 && (
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                  <h3 className="text-sm font-semibold text-slate-700 mb-4">Contagens por Dia</h3>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={historyData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#64748b' }} />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                      <Tooltip
+                        contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px' }}
+                        labelStyle={{ fontWeight: 600 }}
+                      />
+                      <Bar dataKey="contagens" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {/* Donut — Distribuição de itens */}
+              {donutData.length > 0 && (
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                  <h3 className="text-sm font-semibold text-slate-700 mb-4">Distribuicao dos Itens</h3>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie
+                        data={donutData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={65}
+                        outerRadius={100}
+                        paddingAngle={3}
+                        dataKey="value"
+                        label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                        labelLine={false}
+                      >
+                        {donutData.map((_, i) => (
+                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px' }}
+                      />
+                      <Legend
+                        verticalAlign="bottom"
+                        iconType="circle"
+                        formatter={(value: string) => <span className="text-xs text-slate-600">{value}</span>}
+                      />
+                      {/* Center label */}
+                      <text x="50%" y="47%" textAnchor="middle" className="text-2xl font-bold fill-slate-800">
+                        {totalItems.toLocaleString('pt-BR')}
+                      </text>
+                      <text x="50%" y="55%" textAnchor="middle" className="text-xs fill-slate-500">
+                        itens
+                      </text>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
           </>
         ) : (
           <div className="text-center py-12 text-slate-500">

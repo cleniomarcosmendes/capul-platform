@@ -396,6 +396,84 @@ export interface DashboardData {
   history: { date: string; count: number }[];
 }
 
+// === Final Report ===
+
+export interface FinalReportSummary {
+  total_items: number;
+  counted_items: number;
+  pending_items: number;
+  items_with_discrepancy: number;
+  completion_percentage: number;
+  total_expected_value: number;
+  total_counted_value: number;
+  variance_value: number;
+  variance_percentage: number;
+  total_expected_qty: number;
+  total_counted_qty: number;
+  qty_variance: number;
+  products_with_zero_cost: number;
+}
+
+export interface FinalReportCounting {
+  count_number: number;
+  quantity: number;
+  lot_number: string | null;
+  serial_number: string | null;
+  observation: string | null;
+  counted_by: string;
+  counted_at: string;
+}
+
+export interface FinalReportDiscrepancy {
+  variance_quantity: number;
+  variance_percentage: number;
+  tolerance_exceeded: boolean;
+  status: string;
+  resolution: string | null;
+}
+
+export interface FinalReportItem {
+  sequence: number;
+  product_code: string;
+  product_name: string;
+  unit: string;
+  group: string;
+  category: string;
+  has_lot: boolean;
+  expected_quantity: number;
+  counted_quantity: number;
+  variance: number;
+  b2_xentpos: number;
+  status: string;
+  unit_price: number;
+  expected_value: number;
+  counted_value: number;
+  variance_value: number;
+  countings: FinalReportCounting[];
+  discrepancy: FinalReportDiscrepancy | null;
+  last_counted_at: string | null;
+  has_snapshot_cost: boolean;
+  snapshot_lots: { lot_number: string; b8_lotectl: string; b8_lotefor?: string; quantity: number }[];
+  saved_lots: { lot_number: string; quantity: number; counted_qty: number; b8_lotefor?: string }[];
+}
+
+export interface FinalReport {
+  inventory: {
+    id: string;
+    name: string;
+    description: string;
+    warehouse: string;
+    reference_date: string;
+    count_deadline: string | null;
+    status: string;
+    created_at: string;
+  };
+  summary: FinalReportSummary;
+  items: FinalReportItem[];
+  generated_at: string;
+  generated_by: string;
+}
+
 // === Sync ===
 
 export interface SyncStatus {
