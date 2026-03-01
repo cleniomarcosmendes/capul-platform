@@ -42,13 +42,6 @@ import type {
   ListStatus,
 } from '../../types';
 
-const statusConfig: Record<string, { label: string; color: string }> = {
-  DRAFT: { label: 'Rascunho', color: 'bg-slate-100 text-slate-700' },
-  IN_PROGRESS: { label: 'Em Andamento', color: 'bg-blue-100 text-blue-700' },
-  COMPLETED: { label: 'Concluido', color: 'bg-green-100 text-green-700' },
-  CLOSED: { label: 'Encerrado', color: 'bg-purple-100 text-purple-700' },
-};
-
 const listStatusConfig: Record<string, { label: string; color: string }> = {
   PREPARACAO: { label: 'Preparacao', color: 'bg-slate-100 text-slate-700' },
   ABERTA: { label: 'Aberta', color: 'bg-sky-100 text-sky-700' },
@@ -176,7 +169,21 @@ export function InventarioDetalhePage() {
     );
   }
 
-  const sc = statusConfig[inventario.status] || statusConfig.DRAFT;
+  // Derivar ciclo atual e status real a partir das counting lists (inventory_lists pode estar desatualizado)
+  const realCycle = listas.length > 0
+    ? Math.max(...listas.map((l) => l.current_cycle || 1))
+    : inventario.current_cycle;
+
+  const allListsClosed = listas.length > 0 && listas.every((l) => l.list_status === 'ENCERRADA');
+  const anyListCounting = listas.some((l) => l.list_status === 'EM_CONTAGEM');
+  const derivedListStatus = allListsClosed
+    ? 'ENCERRADA'
+    : anyListCounting
+      ? 'EM_CONTAGEM'
+      : listas.length > 0
+        ? listas[0].list_status
+        : inventario.list_status;
+  const lsc = listStatusConfig[derivedListStatus] || listStatusConfig.PREPARACAO;
 
   const tabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { key: 'visao-geral', label: 'Visao Geral', icon: LayoutDashboard },
@@ -205,8 +212,8 @@ export function InventarioDetalhePage() {
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <h2 className="text-xl font-bold text-slate-800">{inventario.name}</h2>
-                <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${sc.color}`}>
-                  {sc.label}
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${lsc.color}`}>
+                  {lsc.label}
                 </span>
               </div>
               {inventario.description && (
@@ -234,7 +241,7 @@ export function InventarioDetalhePage() {
             </div>
             <div className="text-center p-3 bg-slate-50 rounded-lg">
               <p className="text-xs text-slate-500">Ciclo Atual</p>
-              <p className="text-lg font-bold text-slate-800">{inventario.current_cycle}o</p>
+              <p className="text-lg font-bold text-slate-800">{realCycle}o</p>
             </div>
             <div className="text-center p-3 bg-slate-50 rounded-lg">
               <p className="text-xs text-slate-500">Total Itens</p>
