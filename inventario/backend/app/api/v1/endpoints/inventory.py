@@ -446,33 +446,43 @@ async def delete_inventory_list(
     current_user: UserModel = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """Exclui um inventário e suas dependências"""
-    
+    """
+    Exclui um inventário e todas as suas dependências.
+    - Apenas ADMIN ou SUPERVISOR
+    - Apenas inventários em DRAFT (Em Preparação)
+    - Exclui listas de contagem vinculadas
+    - CASCADE limpa snapshots, CountingListItems, contagens, divergências
+    """
+    # Verificar permissão (ADMIN ou SUPERVISOR)
+    if current_user.role not in ["ADMIN", "SUPERVISOR"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas ADMIN ou SUPERVISOR podem excluir inventários"
+        )
+
     # Buscar inventário
     inventory = db.query(InventoryListModel).filter(
         InventoryListModel.id == inventory_id
     ).first()
-    
+
     if not inventory:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Inventory list not found"
+            detail="Inventário não encontrado"
         )
-    
+
     # Validar se pode ser excluído (apenas DRAFT)
-    if inventory.status != "DRAFT":
+    from app.models.models import InventoryStatus
+    if inventory.status not in [InventoryStatus.DRAFT, "DRAFT"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only DRAFT inventories can be deleted"
+            detail=f"Apenas inventários em preparação (DRAFT) podem ser excluídos. Status atual: '{inventory.status}'"
         )
-    
+
     try:
-        import logging
-        logger = logging.getLogger(__name__)
+        from app.models.models import InventoryItemSnapshot, InventoryLotSnapshot, CountingList, CountingListItem
 
-        # 🔍 Contar snapshots ANTES de deletar (serão deletados automaticamente via CASCADE)
-        from app.models.models import InventoryItemSnapshot, InventoryLotSnapshot
-
+        # 🔍 Contar dependências para log
         item_snapshots_count = db.query(func.count(InventoryItemSnapshot.id)).join(
             InventoryItemModel,
             InventoryItemSnapshot.inventory_item_id == InventoryItemModel.id
@@ -487,20 +497,29 @@ async def delete_inventory_list(
             InventoryItemModel.inventory_list_id == inventory_id
         ).scalar() or 0
 
-        logger.info(f"🗑️ [DELETE] Inventário '{inventory.name}' será excluído")
-        logger.info(f"🗑️ [DELETE] → {item_snapshots_count} snapshots de itens (CASCADE)")
-        logger.info(f"🗑️ [DELETE] → {lot_snapshots_count} snapshots de lotes (CASCADE)")
+        # Excluir listas de contagem vinculadas ao inventário
+        counting_lists = db.query(CountingList).filter(
+            CountingList.inventory_id == inventory_id
+        ).all()
+        lists_deleted = len(counting_lists)
+        for cl in counting_lists:
+            db.delete(cl)  # CASCADE deleta CountingListItems
 
-        # Excluir itens do inventário primeiro
-        # ⚠️ CASCADE DELETE irá automaticamente deletar:
-        # - inventory_items_snapshot (FK: inventory_item_id → inventory_items.id ON DELETE CASCADE)
-        # - inventory_lots_snapshot (FK: inventory_item_id → inventory_items.id ON DELETE CASCADE)
+        logger.info(f"🗑️ [DELETE] Inventário '{inventory.name}' será excluído por {current_user.username}")
+        logger.info(f"🗑️ [DELETE] → {lists_deleted} listas de contagem")
+        logger.info(f"🗑️ [DELETE] → {item_snapshots_count} snapshots de itens")
+        logger.info(f"🗑️ [DELETE] → {lot_snapshots_count} snapshots de lotes")
+
+        # Excluir itens do inventário
+        # CASCADE DELETE irá automaticamente deletar:
+        # - inventory_items_snapshot, inventory_lots_snapshot
+        # - counting_list_items (FK ondelete=CASCADE)
+        # - countings, discrepancies (cascade="all, delete-orphan")
         items_deleted = db.query(InventoryItemModel).filter(
             InventoryItemModel.inventory_list_id == inventory_id
         ).delete(synchronize_session=False)
 
-        logger.info(f"✅ [DELETE] {items_deleted} itens deletados")
-        logger.info(f"✅ [DELETE] Snapshots deletados automaticamente via CASCADE")
+        logger.info(f"✅ [DELETE] {items_deleted} itens deletados (snapshots via CASCADE)")
 
         # Excluir o inventário
         db.delete(inventory)
@@ -508,20 +527,23 @@ async def delete_inventory_list(
 
         return {
             "success": True,
-            "message": f"Inventory '{inventory.name}' deleted successfully",
+            "message": f"Inventário '{inventory.name}' excluído com sucesso",
             "data": {
                 "inventory_id": str(inventory_id),
                 "items_deleted": items_deleted,
+                "lists_deleted": lists_deleted,
                 "item_snapshots_deleted": item_snapshots_count,
                 "lot_snapshots_deleted": lot_snapshots_count
             }
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=safe_error_response(e, "deleting inventory")
+            detail=safe_error_response(e, "ao excluir inventário")
         )
 
 

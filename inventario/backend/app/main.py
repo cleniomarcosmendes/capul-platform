@@ -5388,43 +5388,74 @@ async def delete_inventory_temp(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Excluir inventário - endpoint temporário"""
-    from app.models.models import InventoryList as InventoryListModel, InventoryItem as InventoryItemModel
-    
+    """
+    Excluir inventário e todas as dependências.
+    - Apenas ADMIN ou SUPERVISOR
+    - Apenas inventários em DRAFT (Em Preparação)
+    - Exclui listas de contagem vinculadas
+    """
+    from app.models.models import (
+        InventoryList as InventoryListModel, InventoryItem as InventoryItemModel,
+        InventoryStatus, CountingList, CountingListItem
+    )
+
+    # Verificar permissão (ADMIN ou SUPERVISOR)
+    if current_user.role not in ["ADMIN", "SUPERVISOR"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas ADMIN ou SUPERVISOR podem excluir inventários"
+        )
+
     # Buscar inventário
     inventory = db.query(InventoryListModel).filter(
         InventoryListModel.id == inventory_id
     ).first()
-    
+
     if not inventory:
-        return {"success": False, "message": "Inventory not found"}
-    
+        raise HTTPException(status_code=404, detail="Inventário não encontrado")
+
     # Validar se pode ser excluído (apenas DRAFT)
-    if inventory.status != "DRAFT":
-        return {"success": False, "message": "Only DRAFT inventories can be deleted"}
-    
+    if inventory.status not in [InventoryStatus.DRAFT, "DRAFT"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Apenas inventários em preparação (DRAFT) podem ser excluídos. Status atual: '{inventory.status}'"
+        )
+
     try:
-        # Excluir itens do inventário primeiro
+        # Excluir listas de contagem vinculadas (CASCADE deleta CountingListItems)
+        counting_lists = db.query(CountingList).filter(
+            CountingList.inventory_id == inventory_id
+        ).all()
+        lists_deleted = len(counting_lists)
+        for cl in counting_lists:
+            db.delete(cl)
+
+        # Excluir itens do inventário (CASCADE deleta snapshots, countings, discrepancies)
         items_deleted = db.query(InventoryItemModel).filter(
             InventoryItemModel.inventory_list_id == inventory_id
         ).delete(synchronize_session=False)
-        
+
         # Excluir o inventário
         db.delete(inventory)
         db.commit()
-        
+
+        logger.info(f"✅ Inventário '{inventory.name}' excluído por {current_user.username}: {items_deleted} itens, {lists_deleted} listas")
+
         return {
             "success": True,
-            "message": f"Inventory '{inventory.name}' deleted successfully",
+            "message": f"Inventário '{inventory.name}' excluído com sucesso",
             "data": {
                 "inventory_id": str(inventory_id),
-                "items_deleted": items_deleted
+                "items_deleted": items_deleted,
+                "lists_deleted": lists_deleted
             }
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        return {"success": False, "message": f"Error deleting inventory: {str(e)}"}
+        raise HTTPException(status_code=500, detail=safe_error_response(e, "ao excluir inventário"))
 
 @app.get("/api/v1/inventory/stats", tags=["Inventory"])
 async def get_inventory_stats(

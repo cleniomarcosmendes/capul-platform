@@ -542,8 +542,16 @@ async def remove_item_from_counting_list(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Remover um item de uma lista de contagem
+    Remover um item de uma lista de contagem.
+    Libera o produto para ser atribuído a outra lista.
     """
+    # Verificar permissão (ADMIN ou SUPERVISOR)
+    if current_user.role not in ["ADMIN", "SUPERVISOR"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas ADMIN ou SUPERVISOR podem remover itens de listas"
+        )
+
     # Buscar o item na lista
     list_item = db.query(CountingListItem).filter(
         and_(
@@ -560,17 +568,36 @@ async def remove_item_from_counting_list(
 
     # Verificar se a lista já foi liberada
     counting_list = db.query(CountingList).filter(CountingList.id == list_id).first()
-    if counting_list.list_status != 'PREPARACAO':
+    if counting_list.list_status not in ['PREPARACAO', 'ABERTA']:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Não é possível remover itens de uma lista já liberada"
+            detail=f"Não é possível remover itens de uma lista com status '{counting_list.list_status}'. Apenas listas em preparação ou abertas permitem remoção."
         )
 
+    # Guardar referência ao inventory_item antes de deletar
+    inventory_item_id = list_item.inventory_item_id
+
     db.delete(list_item)
+
+    # ✅ CORREÇÃO: Liberar o produto para reatribuição
+    if inventory_item_id:
+        # Verificar se o item NÃO está em nenhuma outra lista
+        other_assignment = db.query(CountingListItem).filter(
+            and_(
+                CountingListItem.inventory_item_id == inventory_item_id,
+                CountingListItem.counting_list_id != list_id
+            )
+        ).first()
+        if not other_assignment:
+            inv_item = db.query(InventoryItem).filter(InventoryItem.id == inventory_item_id).first()
+            if inv_item:
+                inv_item.is_available_for_assignment = True
+                logger.info(f"✅ Produto {inv_item.product_code} liberado para reatribuição")
+
     db.commit()
 
-    logger.info(f"Item {item_id} removido da lista {list_id}")
-    return {"message": "Item removido com sucesso"}
+    logger.info(f"Item {item_id} removido da lista {list_id} por {current_user.username}")
+    return {"message": "Item removido com sucesso e liberado para reatribuição"}
 
 
 @router.post("/counting-lists/{list_id}/release")
@@ -847,7 +874,8 @@ async def delete_counting_list(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Excluir uma lista de contagem (apenas se estiver em preparação)
+    Excluir uma lista de contagem (apenas se estiver em preparação ou aberta).
+    Libera todos os produtos para reatribuição.
     """
     # Buscar a lista
     counting_list = db.query(CountingList).filter(CountingList.id == list_id).first()
@@ -857,19 +885,42 @@ async def delete_counting_list(
             detail="Lista de contagem não encontrada"
         )
 
-    # Verificar permissões
-    if current_user.role not in ["ADMIN"]:
+    # Verificar permissões (ADMIN ou SUPERVISOR)
+    if current_user.role not in ["ADMIN", "SUPERVISOR"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Apenas ADMIN pode excluir listas de contagem"
+            detail="Apenas ADMIN ou SUPERVISOR podem excluir listas de contagem"
         )
 
     # Verificar se a lista pode ser excluída (PREPARACAO ou ABERTA)
     if counting_list.list_status not in ['PREPARACAO', 'ABERTA']:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Apenas listas em preparação ou abertas podem ser excluídas"
+            detail=f"Apenas listas em preparação ou abertas podem ser excluídas. Status atual: '{counting_list.list_status}'"
         )
+
+    # ✅ CORREÇÃO: Liberar produtos antes do CASCADE delete
+    list_items = db.query(CountingListItem).filter(
+        CountingListItem.counting_list_id == list_id
+    ).all()
+
+    freed_count = 0
+    for li in list_items:
+        if li.inventory_item_id:
+            # Verificar se o item NÃO está em nenhuma outra lista
+            other_assignment = db.query(CountingListItem).filter(
+                and_(
+                    CountingListItem.inventory_item_id == li.inventory_item_id,
+                    CountingListItem.counting_list_id != list_id
+                )
+            ).first()
+            if not other_assignment:
+                inv_item = db.query(InventoryItem).filter(InventoryItem.id == li.inventory_item_id).first()
+                if inv_item:
+                    inv_item.is_available_for_assignment = True
+                    freed_count += 1
+
+    logger.info(f"✅ {freed_count} produtos liberados para reatribuição ao excluir lista {list_id}")
 
     # Atualizar contador do inventário
     inventory = db.query(InventoryList).filter(
@@ -880,12 +931,12 @@ async def delete_counting_list(
         if inventory.total_lists == 0:
             inventory.use_multiple_lists = False
 
-    # Excluir a lista (cascade deletará os itens)
+    # Excluir a lista (cascade deletará os CountingListItems)
     db.delete(counting_list)
     db.commit()
 
-    logger.info(f"Lista de contagem {list_id} excluída")
-    return {"message": "Lista excluída com sucesso"}
+    logger.info(f"Lista de contagem {list_id} excluída por {current_user.username}")
+    return {"message": f"Lista excluída com sucesso. {freed_count} produtos liberados para reatribuição."}
 
 
 # ========== NOVOS ENDPOINTS PARA STATUS INDIVIDUAL ==========

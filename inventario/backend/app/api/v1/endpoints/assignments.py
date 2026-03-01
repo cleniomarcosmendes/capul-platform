@@ -75,26 +75,51 @@ async def health_check():
 async def remove_item_from_list(
     inventory_id: str,
     item_id: str,
+    current_user: UserModel = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
     Remove produto da lista de contagem (torna disponível para nova lista)
+    - Apenas ADMIN/SUPERVISOR
+    - Só permite remoção se listas estão em PREPARACAO/ABERTA
     - Remove atribuições
     - Remove contagens
     - Marca is_available_for_assignment = TRUE
     """
     try:
+        # Verificar permissão (ADMIN ou SUPERVISOR)
+        if current_user.role not in ["ADMIN", "SUPERVISOR"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas ADMIN ou SUPERVISOR podem remover itens de listas"
+            )
+
         # Buscar item do inventário
         item = db.query(InventoryItemModel).filter(
             InventoryItemModel.id == item_id,
             InventoryItemModel.inventory_list_id == inventory_id
         ).first()
-        
+
         if not item:
             raise HTTPException(status_code=404, detail="Item não encontrado")
-        
-        # 🔧 CORREÇÃO: Remover da tabela counting_list_items (NOVA ARQUITETURA)
-        from app.models.models import CountingListItem
+
+        # Verificar se alguma lista que contém este item já avançou status
+        list_items = db.query(CountingListItem).filter(
+            CountingListItem.inventory_item_id == item_id
+        ).all()
+
+        for li in list_items:
+            counting_list = db.query(CountingListModel).filter(
+                CountingListModel.id == li.counting_list_id
+            ).first()
+            if counting_list and counting_list.list_status not in ['PREPARACAO', 'ABERTA']:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Não é possível remover: lista '{counting_list.name}' está em status '{counting_list.list_status}'. "
+                           f"Só é permitido remover itens de listas em PREPARAÇÃO ou ABERTA."
+                )
+
+        # Remover da tabela counting_list_items
         deleted_list_items = db.query(CountingListItem).filter(
             CountingListItem.inventory_item_id == item_id
         ).delete()
@@ -119,15 +144,17 @@ async def remove_item_from_list(
         item.last_counted_at = None
         item.last_counted_by = None
 
-        logger.info(f"✅ Item {item.product_code} ({item_id}) marcado como disponível para nova lista")
-        
+        logger.info(f"✅ Item {item.product_code} ({item_id}) marcado como disponível para nova lista (por {current_user.username})")
+
         db.commit()
-        
+
         return {
             "success": True,
             "message": f"Produto {item.product_code} removido da lista e disponibilizado para nova atribuição"
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=safe_error_response(e, "ao remover produto da lista"))
@@ -136,53 +163,106 @@ async def remove_item_from_list(
 async def remove_item_from_inventory(
     inventory_id: str,
     item_id: str,
+    current_user: UserModel = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
     Remove produto completamente do inventário
-    - Remove atribuições, contagens e divergências
+    - Apenas ADMIN/SUPERVISOR
+    - Não permite remoção se inventário já está IN_PROGRESS/COMPLETED/CLOSED
+    - Remove CountingListItems, atribuições, contagens, divergências e snapshots
     - Remove o item da tabela inventory_items
     """
     try:
+        # Verificar permissão (ADMIN ou SUPERVISOR)
+        if current_user.role not in ["ADMIN", "SUPERVISOR"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas ADMIN ou SUPERVISOR podem remover itens do inventário"
+            )
+
         # Buscar item do inventário
         item = db.query(InventoryItemModel).filter(
             InventoryItemModel.id == item_id,
             InventoryItemModel.inventory_list_id == inventory_id
         ).first()
-        
+
         if not item:
             raise HTTPException(status_code=404, detail="Item não encontrado")
-        
+
+        # Verificar status do inventário
+        inventory = db.query(InventoryListModel).filter(
+            InventoryListModel.id == inventory_id
+        ).first()
+
+        if not inventory:
+            raise HTTPException(status_code=404, detail="Inventário não encontrado")
+
+        from app.models.models import InventoryStatus
+        if inventory.status in [InventoryStatus.IN_PROGRESS, InventoryStatus.COMPLETED, InventoryStatus.CLOSED]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Não é possível remover itens: inventário está em status '{inventory.status.value}'. "
+                       f"Só é permitido remover itens de inventários em DRAFT (Em Preparação)."
+            )
+
         product_code = item.product_code
-        
+
         # Remover todas as dependências em ordem
-        # 1. Divergências
+        # 1. CountingListItems (vínculo com listas de contagem)
+        deleted_list_items = db.query(CountingListItem).filter(
+            CountingListItem.inventory_item_id == item_id
+        ).delete()
+        if deleted_list_items:
+            logger.info(f"✅ Removido {deleted_list_items} registro(s) de counting_list_items para item {item_id}")
+
+        # 2. Divergências
         from app.models.models import Discrepancy
         db.query(Discrepancy).filter(
             Discrepancy.inventory_item_id == item_id
         ).delete()
-        
-        # 2. Contagens
+
+        # 3. Contagens
         from app.models.models import Counting
         db.query(Counting).filter(
             Counting.inventory_item_id == item_id
         ).delete()
-        
-        # 3. Atribuições
+
+        # 4. Atribuições (arquitetura antiga)
         db.query(CountingAssignmentModel).filter(
             CountingAssignmentModel.inventory_item_id == item_id
         ).delete()
-        
-        # 4. Remover o item do inventário
+
+        # 5. Snapshots de lotes
+        from app.models.models import InventoryLotSnapshot
+        deleted_lots = db.query(InventoryLotSnapshot).filter(
+            InventoryLotSnapshot.inventory_item_id == item_id
+        ).delete()
+        if deleted_lots:
+            logger.info(f"✅ Removido {deleted_lots} snapshot(s) de lotes para item {item_id}")
+
+        # 6. Snapshot do item
+        from app.models.models import InventoryItemSnapshot
+        deleted_snapshot = db.query(InventoryItemSnapshot).filter(
+            InventoryItemSnapshot.inventory_item_id == item_id
+        ).delete()
+        if deleted_snapshot:
+            logger.info(f"✅ Removido snapshot do item {item_id}")
+
+        # 7. Remover o item do inventário
         db.delete(item)
-        
+
+        logger.info(f"✅ Item {product_code} ({item_id}) removido completamente do inventário (por {current_user.username})")
+
         db.commit()
-        
+
         return {
             "success": True,
             "message": f"Produto {product_code} removido completamente do inventário"
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=safe_error_response(e, "ao remover produto do inventário"))
