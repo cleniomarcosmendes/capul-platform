@@ -129,6 +129,27 @@ export const inventoryService = {
     return data;
   },
 
+  // === Historico de contagens ===
+
+  async buscarHistoricoContagem(itemId: string): Promise<import('../types').CountingHistoryResponse> {
+    const { data } = await inventarioApi.get(`/counting/item/${itemId}/history`);
+    return data;
+  },
+
+  // === Zero confirmation ===
+
+  async buscarZerosPendentes(inventoryId: string): Promise<import('../types').PendingZeroResponse> {
+    const { data } = await inventarioApi.get(`/inventory/lists/${inventoryId}/pending-zero-expected`);
+    return data;
+  },
+
+  async confirmarZeros(inventoryId: string): Promise<import('../types').ConfirmZeroResponse> {
+    const { data } = await inventarioApi.post(`/inventory/lists/${inventoryId}/confirm-zero-expected`);
+    return data;
+  },
+
+  // === Itens para atribuicao a listas de contagem ===
+
   async listarItensParaAtribuicao(
     inventoryId: string,
     params: Record<string, string | number | undefined>,

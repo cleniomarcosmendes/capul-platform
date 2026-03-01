@@ -579,6 +579,56 @@ export interface ComparisonResult {
   inventory_b: { id: string; name: string; warehouse: string };
 }
 
+// === Counting History ===
+
+export interface CountingHistoryEntry {
+  counting_id: string;
+  count_number: number;
+  quantity: number;
+  lot_number: string | null;
+  serial_number: string | null;
+  observation: string | null;
+  counted_by: string;
+  counted_at: string;
+}
+
+export interface CountingHistoryResponse {
+  item_id: string;
+  product_code: string;
+  counting_history: CountingHistoryEntry[];
+  total_counts: number;
+}
+
+// === Zero Confirmation ===
+
+export interface PendingZeroResponse {
+  success: boolean;
+  message: string;
+  data: {
+    inventory_id: string;
+    pending_count: number;
+    pending_products: {
+      id: string;
+      product_code: string;
+      product_name: string;
+      expected_quantity: number;
+      status: string;
+    }[];
+  };
+}
+
+export interface ConfirmZeroResponse {
+  success: boolean;
+  message: string;
+  confirmed_items: {
+    product_code: string;
+    expected_quantity: number;
+    previous_status: string;
+    had_counts: boolean;
+  }[];
+  total_confirmed: number;
+}
+
 // === Integration Protheus ===
 
 export interface IntegrationAdjustment {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { X, Package, AlertTriangle, CheckCircle2, Clock, Search } from 'lucide-react';
+import { X, Package, AlertTriangle, CheckCircle2, Clock, Search, History } from 'lucide-react';
+import { HistoricoContagemModal } from '../../contagem/components/HistoricoContagemModal';
 import { countingListService } from '../../../services/counting-list.service';
 import { calcularQuantidadeFinal, getExpectedQty, hasAnyEntregasPosterior } from '../../../utils/cycles';
 import type { CountingList, CountingListProduct } from '../../../types';
@@ -38,6 +39,7 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
   const [counterNames, setCounterNames] = useState<Record<string, string>>({});
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [historyProduct, setHistoryProduct] = useState<CountingListProduct | null>(null);
 
   useEffect(() => { requestAnimationFrame(() => setVisible(true)); }, []);
 
@@ -264,6 +266,7 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
                     <th className="text-right py-2 px-3 font-medium text-capul-700">Final</th>
                     <th className="text-right py-2 px-3 font-medium text-slate-600">Diferenca</th>
                     <th className="text-center py-2 px-3 font-medium text-slate-600 w-20">Status</th>
+                    <th className="py-2 px-1 w-8"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -361,6 +364,19 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
                             {displayStatus.label}
                           </span>
                         </td>
+
+                        {/* Historico */}
+                        <td className="py-1.5 px-1 text-center">
+                          {!isPending && (
+                            <button
+                              onClick={() => setHistoryProduct(p)}
+                              className="p-1 rounded text-slate-400 hover:text-capul-600 hover:bg-capul-50"
+                              title="Historico de contagens"
+                            >
+                              <History className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
@@ -393,6 +409,16 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
           </button>
         </div>
       </div>
+
+      {historyProduct && (
+        <HistoricoContagemModal
+          open={!!historyProduct}
+          itemId={historyProduct.id}
+          productCode={historyProduct.product_code}
+          productDescription={historyProduct.product_description || historyProduct.product_name}
+          onClose={() => setHistoryProduct(null)}
+        />
+      )}
     </div>
   );
 }

@@ -28,6 +28,7 @@ import {
   CheckCircle2,
   Lock,
   UserCog,
+  Loader2,
 } from 'lucide-react';
 import { PageSkeleton } from '../../components/LoadingSkeleton';
 import { ErrorState } from '../../components/ErrorState';
@@ -300,9 +301,11 @@ export function InventarioDetalhePage() {
             totalPages={itemsTotalPages}
             statusFilter={itemStatusFilter}
             inventoryStatus={inventario.status}
+            inventoryId={id!}
             onPageChange={setItemsPage}
             onStatusChange={(s) => { setItemStatusFilter(s); setItemsPage(1); }}
             onAddProducts={() => setShowAddProducts(true)}
+            onReloadItens={reloadItens}
           />
         )}
         {activeTab === 'listas' && (
@@ -332,17 +335,45 @@ export function InventarioDetalhePage() {
 
 // === Tab Itens ===
 
-function TabItens({ itens, page, totalPages, statusFilter, inventoryStatus, onPageChange, onStatusChange, onAddProducts }: {
+function TabItens({ itens, page, totalPages, statusFilter, inventoryStatus, inventoryId, onPageChange, onStatusChange, onAddProducts, onReloadItens }: {
   itens: InventoryItem[];
   page: number;
   totalPages: number;
   statusFilter: ItemStatus | '';
   inventoryStatus: string;
+  inventoryId: string;
   onPageChange: (p: number) => void;
   onStatusChange: (s: ItemStatus | '') => void;
   onAddProducts: () => void;
+  onReloadItens: () => void;
 }) {
+  const toast = useToast();
   const canAdd = inventoryStatus === 'DRAFT' || inventoryStatus === 'IN_PROGRESS';
+  const [pendingZeros, setPendingZeros] = useState(0);
+  const [confirmingZeros, setConfirmingZeros] = useState(false);
+  const [showConfirmZeros, setShowConfirmZeros] = useState(false);
+
+  // Check pending zeros
+  useEffect(() => {
+    inventoryService.buscarZerosPendentes(inventoryId)
+      .then((res) => setPendingZeros(res.data?.pending_count ?? 0))
+      .catch(() => {});
+  }, [inventoryId, itens]);
+
+  async function handleConfirmZeros() {
+    setShowConfirmZeros(false);
+    setConfirmingZeros(true);
+    try {
+      const res = await inventoryService.confirmarZeros(inventoryId);
+      toast.success(res.message || `${res.total_confirmed} itens confirmados.`);
+      setPendingZeros(0);
+      onReloadItens();
+    } catch {
+      toast.error('Erro ao confirmar itens com saldo zero.');
+    } finally {
+      setConfirmingZeros(false);
+    }
+  }
 
   return (
     <div className="space-y-3">
@@ -357,6 +388,24 @@ function TabItens({ itens, page, totalPages, statusFilter, inventoryStatus, onPa
           <option value="COUNTED">Contados</option>
           <option value="APPROVED">Aprovados</option>
         </select>
+
+        {pendingZeros > 0 && (
+          <button
+            onClick={() => setShowConfirmZeros(true)}
+            disabled={confirmingZeros}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 disabled:opacity-50"
+          >
+            {confirmingZeros ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <CheckCircle2 className="w-3.5 h-3.5" />
+            )}
+            Confirmar Zeros
+            <span className="px-1.5 py-0.5 rounded-full bg-purple-200 text-purple-800 text-xs font-bold">
+              {pendingZeros}
+            </span>
+          </button>
+        )}
 
         <div className="flex-1" />
 
@@ -507,6 +556,17 @@ function TabItens({ itens, page, totalPages, statusFilter, inventoryStatus, onPa
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={showConfirmZeros}
+        title="Confirmar Itens com Saldo Zero"
+        description={`Confirmar automaticamente ${pendingZeros} produto${pendingZeros !== 1 ? 's' : ''} com quantidade esperada = 0?`}
+        details={['Os itens serao marcados como ZERO_CONFIRMED', 'Contagens zeradas serao registradas automaticamente']}
+        variant="info"
+        confirmLabel="Confirmar Zeros"
+        onConfirm={handleConfirmZeros}
+        onCancel={() => setShowConfirmZeros(false)}
+      />
     </div>
   );
 }

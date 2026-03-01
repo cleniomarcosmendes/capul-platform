@@ -7,9 +7,10 @@ import { CountingProgress } from './components/CountingProgress';
 import { LoteContagemModal } from './components/LoteContagemModal';
 import { useCountingData } from './hooks/useCountingData';
 import type { CountingFilter } from './hooks/useCountingData';
-import { ArrowLeft, RefreshCw, Package, Search, Layers } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Package, Search, Layers, History } from 'lucide-react';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
 import { useToast } from '../../contexts/ToastContext';
+import { HistoricoContagemModal } from './components/HistoricoContagemModal';
 import type { CountingListProduct, LotCount } from '../../types';
 import { getExpectedQty, hasAnyEntregasPosterior } from '../../utils/cycles';
 
@@ -48,6 +49,7 @@ export function ContagemDesktopPage() {
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
   const [lotProduct, setLotProduct] = useState<CountingListProduct | null>(null);
+  const [historyProduct, setHistoryProduct] = useState<CountingListProduct | null>(null);
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
 
   // Filter by search text
@@ -293,6 +295,7 @@ export function ContagemDesktopPage() {
                     </th>
                     <th className="text-right py-2 px-2 font-medium text-slate-600">Diferenca</th>
                     <th className="text-center py-2 px-2 font-medium text-slate-600 w-20">Status</th>
+                    <th className="py-2 px-1 w-8"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -406,6 +409,19 @@ export function ContagemDesktopPage() {
                             {isc.label}
                           </span>
                         </td>
+
+                        {/* Historico */}
+                        <td className="py-1.5 px-1 text-center">
+                          {countedQty !== null && (
+                            <button
+                              onClick={() => setHistoryProduct(p)}
+                              className="p-1 rounded text-slate-400 hover:text-capul-600 hover:bg-capul-50"
+                              title="Historico de contagens"
+                            >
+                              <History className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
@@ -427,6 +443,16 @@ export function ContagemDesktopPage() {
           currentCycle={currentCycle}
           onSave={handleSaveLotCount}
           onClose={() => setLotProduct(null)}
+        />
+      )}
+
+      {historyProduct && (
+        <HistoricoContagemModal
+          open={!!historyProduct}
+          itemId={historyProduct.id}
+          productCode={historyProduct.product_code}
+          productDescription={historyProduct.product_description || historyProduct.product_name}
+          onClose={() => setHistoryProduct(null)}
         />
       )}
     </>
