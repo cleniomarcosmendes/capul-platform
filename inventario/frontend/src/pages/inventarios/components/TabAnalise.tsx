@@ -35,7 +35,7 @@ export function TabAnalise({ inventoryId, listas }: Props) {
     }
 
     setLoading(true);
-    Promise.all(listas.map((l) => countingListService.listarItens(l.id)))
+    Promise.all(listas.map((l) => countingListService.listarItens(l.id, true)))
       .then((responses) => {
         const products: CountingListProduct[] = [];
         for (const res of responses) {
