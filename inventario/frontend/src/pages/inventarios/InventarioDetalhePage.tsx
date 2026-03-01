@@ -900,17 +900,28 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
                           )}
 
                           {(lista.list_status === 'LIBERADA' || lista.list_status === 'EM_CONTAGEM') && (
-                            <button
-                              onClick={() => handleFinalizarCiclo(lista.id)}
-                              title="Finalizar Ciclo"
-                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md hover:bg-amber-100 transition-colors"
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Fin. Ciclo
-                            </button>
+                            lista.current_cycle >= 3 ? (
+                              <button
+                                onClick={() => handleEncerrar(lista.id)}
+                                title="Encerrar Lista (ultimo ciclo)"
+                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors"
+                              >
+                                <Lock className="w-3.5 h-3.5" />
+                                Encerrar
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleFinalizarCiclo(lista.id)}
+                                title="Finalizar Ciclo"
+                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md hover:bg-amber-100 transition-colors"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Fin. Ciclo
+                              </button>
+                            )
                           )}
 
-                          {lista.list_status !== 'ENCERRADA' && lista.list_status !== 'PREPARACAO' && (
+                          {lista.list_status !== 'ENCERRADA' && lista.list_status !== 'PREPARACAO' && lista.current_cycle < 3 && (
                             <button
                               onClick={() => handleEncerrar(lista.id)}
                               title="Encerrar Lista"

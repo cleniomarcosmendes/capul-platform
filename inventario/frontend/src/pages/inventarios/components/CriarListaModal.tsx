@@ -62,13 +62,17 @@ export function CriarListaModal({ inventoryId, onClose, onCreated }: Props) {
     const counter = counters.find((c) => c.user_id === counterCycle1);
     const description = `Lista de contagem do(a) ${counter?.full_name || counter?.username || 'Contador'}`;
 
+    // Fallback: se ciclo 2 vazio, usa o mesmo do ciclo 1; se ciclo 3 vazio, usa o mesmo do ciclo 2
+    const resolvedCycle2 = counterCycle2 || counterCycle1;
+    const resolvedCycle3 = counterCycle3 || resolvedCycle2;
+
     try {
       await countingListService.criar(inventoryId, {
         list_name: listName,
         description,
-        counter_cycle_1: counterCycle1 || undefined,
-        counter_cycle_2: counterCycle2 || undefined,
-        counter_cycle_3: counterCycle3 || undefined,
+        counter_cycle_1: counterCycle1,
+        counter_cycle_2: resolvedCycle2,
+        counter_cycle_3: resolvedCycle3,
       });
       onCreated();
     } catch (err: unknown) {

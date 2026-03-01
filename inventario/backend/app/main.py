@@ -4298,7 +4298,7 @@ async def list_inventories(
                 logger.info(f"👑 ADMIN - Mostrando todos os inventários de todas as lojas")
                 # ADMIN vê todos os inventários de todas as lojas (incluindo encerrados)
                 query = db.query(InventoryList).filter(
-                    InventoryList.status.in_(['DRAFT', 'IN_PROGRESS', 'COMPLETED'])
+                    InventoryList.status.in_(['DRAFT', 'IN_PROGRESS', 'COMPLETED', 'CLOSED'])
                 )
             else:
                 logger.info(f"👑 SUPERVISOR - Mostrando todos os inventários da loja")
@@ -4306,7 +4306,7 @@ async def list_inventories(
                 query = db.query(InventoryList).filter(
                     and_(
                         InventoryList.store_id == current_user.store_id,
-                        InventoryList.status.in_(['DRAFT', 'IN_PROGRESS', 'COMPLETED'])
+                        InventoryList.status.in_(['DRAFT', 'IN_PROGRESS', 'COMPLETED', 'CLOSED'])
                     )
                 )
             

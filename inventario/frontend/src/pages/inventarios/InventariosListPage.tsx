@@ -12,7 +12,7 @@ import { ErrorState } from '../../components/ErrorState';
 import type { InventoryList, InventoryStatus, WarehouseSimple } from '../../types';
 
 const statusConfig: Record<string, { label: string; color: string }> = {
-  DRAFT: { label: 'Rascunho', color: 'bg-slate-100 text-slate-700' },
+  DRAFT: { label: 'Em Preparacao', color: 'bg-slate-100 text-slate-700' },
   IN_PROGRESS: { label: 'Em Andamento', color: 'bg-blue-100 text-blue-700' },
   COMPLETED: { label: 'Concluido', color: 'bg-green-100 text-green-700' },
   CLOSED: { label: 'Encerrado', color: 'bg-purple-100 text-purple-700' },
@@ -78,7 +78,7 @@ export function InventariosListPage() {
             className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500"
           >
             <option value="">Todos os Status</option>
-            <option value="DRAFT">Rascunho</option>
+            <option value="DRAFT">Em Preparacao</option>
             <option value="IN_PROGRESS">Em Andamento</option>
             <option value="COMPLETED">Concluido</option>
             <option value="CLOSED">Encerrado</option>

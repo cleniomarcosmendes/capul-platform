@@ -45,7 +45,7 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
               : '',
           })));
         } else {
-          setError('Produto sem lotes no snapshot.');
+          setError('Produto sem lote valido na data do inventario. Todos os lotes possuem data de vencimento anterior a data de referencia.');
         }
       })
       .catch(() => setError('Erro ao carregar lotes do produto.'))
