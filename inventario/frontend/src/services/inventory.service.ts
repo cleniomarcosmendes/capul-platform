@@ -1,4 +1,5 @@
 import { inventarioApi } from './api';
+import { calcularQuantidadeFinal } from '../utils/cycles';
 import type {
   PaginatedResponse,
   InventoryList,
@@ -43,7 +44,27 @@ export const inventoryService = {
     const { data } = await inventarioApi.get(`/inventory/lists/${inventoryId}/items`, { params });
     // Backend returns { success, data: { items: [...], total_items, ... } }
     const inner = data.data ?? {};
-    const items = Array.isArray(inner) ? inner : inner.items ?? [];
+    const rawItems = Array.isArray(inner) ? inner : inner.items ?? [];
+    // Compute counted_quantity, variance, variance_percentage from cycle data
+    const items: InventoryItem[] = rawItems.map((item: Record<string, unknown>) => {
+      const expected = (item.expected_quantity as number) ?? 0;
+      const c1 = item.count_cycle_1 as number | null;
+      const c2 = item.count_cycle_2 as number | null;
+      const c3 = item.count_cycle_3 as number | null;
+      const status = item.status as string;
+      const counted = status !== 'PENDING' || c1 != null
+        ? calcularQuantidadeFinal(c1, c2, c3, expected)
+        : 0;
+      const variance = counted - expected;
+      const variancePct = expected !== 0 ? (variance / expected) * 100 : (counted !== 0 ? 100 : 0);
+      return {
+        ...item,
+        counted_quantity: counted,
+        variance,
+        variance_percentage: variancePct,
+        count_rounds: (c1 != null ? 1 : 0) + (c2 != null ? 1 : 0) + (c3 != null ? 1 : 0),
+      } as InventoryItem;
+    });
     return { items, total: inner.total_items ?? data.total ?? 0, page: data.page ?? 1, size: data.size ?? 50 };
   },
 
