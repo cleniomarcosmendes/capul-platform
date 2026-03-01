@@ -4284,7 +4284,7 @@ async def list_inventories(
 ):
     """Lista inventários com lógica inteligente: Um usuário = Um inventário ativo"""
     try:
-        from app.models.models import InventoryList, Store, InventoryItem, CountingAssignment, ClosedCountingRound
+        from app.models.models import InventoryList, Store, InventoryItem, CountingAssignment, ClosedCountingRound, CountingList
         from sqlalchemy import or_, func, and_
         
         logger.info(f"🎯 LÓGICA INTELIGENTE: Buscando inventários para usuário {current_user.username} (role: {current_user.role})")
@@ -4312,32 +4312,56 @@ async def list_inventories(
             
         else:  # OPERATOR
             logger.info(f"👤 OPERATOR - Aplicando lógica: Um usuário = Um inventário ativo")
-            
+
             # Subconsulta para inventários já encerrados por este usuário
             closed_inventories = db.query(ClosedCountingRound.inventory_list_id).filter(
                 ClosedCountingRound.user_id == current_user.id
             ).subquery()
-            
-            # Buscar inventários com atribuições ativas para este usuário
-            active_assignments_query = db.query(InventoryList.id).join(
-                InventoryItem, InventoryList.id == InventoryItem.inventory_list_id
-            ).join(
-                CountingAssignment, InventoryItem.id == CountingAssignment.inventory_item_id
+
+            active_inventory_ids = []
+
+            # 1. Buscar inventários via counting_lists onde o user é counter para o ciclo atual
+            counter_list_query = db.query(InventoryList.id).join(
+                CountingList, InventoryList.id == CountingList.inventory_id
             ).filter(
                 and_(
-                    CountingAssignment.assigned_to == current_user.id,
-                    CountingAssignment.status.in_(['PENDING', 'IN_PROGRESS', 'COMPLETED']),  # ✅ Incluir COMPLETED para permitir revisões
                     InventoryList.store_id == current_user.store_id,
                     InventoryList.status.in_(['DRAFT', 'IN_PROGRESS']),
-                    ~InventoryList.id.in_(closed_inventories)  # Excluir encerrados
+                    CountingList.list_status.in_(['EM_CONTAGEM', 'LIBERADA', 'ABERTA']),
+                    ~InventoryList.id.in_(closed_inventories),
+                    or_(
+                        and_(CountingList.current_cycle == 1, CountingList.counter_cycle_1 == current_user.id),
+                        and_(CountingList.current_cycle == 2, CountingList.counter_cycle_2 == current_user.id),
+                        and_(CountingList.current_cycle == 3, CountingList.counter_cycle_3 == current_user.id),
+                    )
                 )
             ).distinct()
-            
-            # Se não há atribuições formais, buscar por contagens diretas não encerradas
-            if not active_assignments_query.first():
+
+            active_inventory_ids = [inv.id for inv in counter_list_query.all()]
+
+            # 2. Se não encontrou via counting_lists, buscar via counting_assignments
+            if not active_inventory_ids:
+                logger.info(f"🔍 Sem listas de contagem atribuídas, buscando counting_assignments")
+                active_assignments_query = db.query(InventoryList.id).join(
+                    InventoryItem, InventoryList.id == InventoryItem.inventory_list_id
+                ).join(
+                    CountingAssignment, InventoryItem.id == CountingAssignment.inventory_item_id
+                ).filter(
+                    and_(
+                        CountingAssignment.assigned_to == current_user.id,
+                        CountingAssignment.status.in_(['PENDING', 'IN_PROGRESS', 'COMPLETED']),
+                        InventoryList.store_id == current_user.store_id,
+                        InventoryList.status.in_(['DRAFT', 'IN_PROGRESS']),
+                        ~InventoryList.id.in_(closed_inventories)
+                    )
+                ).distinct()
+                active_inventory_ids = [inv.id for inv in active_assignments_query.all()]
+
+            # 3. Se não encontrou via assignments, buscar por contagens diretas
+            if not active_inventory_ids:
                 logger.info(f"🔍 Sem atribuições formais, buscando contagens diretas do usuário")
                 from app.models.models import Counting
-                
+
                 direct_countings_query = db.query(InventoryList.id).join(
                     InventoryItem, InventoryList.id == InventoryItem.inventory_list_id
                 ).join(
@@ -4347,21 +4371,18 @@ async def list_inventories(
                         Counting.counted_by == current_user.id,
                         InventoryList.store_id == current_user.store_id,
                         InventoryList.status.in_(['DRAFT', 'IN_PROGRESS']),
-                        ~InventoryList.id.in_(closed_inventories)  # Excluir encerrados
+                        ~InventoryList.id.in_(closed_inventories)
                     )
                 ).distinct()
-                
+
                 active_inventory_ids = [inv.id for inv in direct_countings_query.all()]
-            else:
-                active_inventory_ids = [inv.id for inv in active_assignments_query.all()]
-            
+
             logger.info(f"🎯 Inventários ativos encontrados para usuário: {len(active_inventory_ids)}")
-            
-            # Se não há inventários ativos, buscar inventários encerrados para mostrar status
+
             if not active_inventory_ids:
                 logger.info(f"⚠️ Sem inventários ativos, buscando inventários encerrados do usuário")
-                
-                # Buscar inventários que o usuário participou (mesmo encerrados)
+                from app.models.models import Counting
+
                 participated_inventories = db.query(InventoryList.id).join(
                     InventoryItem, InventoryList.id == InventoryItem.inventory_list_id
                 ).join(
@@ -4372,12 +4393,11 @@ async def list_inventories(
                         InventoryList.store_id == current_user.store_id
                     )
                 ).distinct().all()
-                
+
                 if participated_inventories:
-                    # Mostrar o primeiro inventário que o usuário participou (para demonstração)
                     target_inventory_id = participated_inventories[0].id
                     logger.info(f"🎯 Mostrando inventário encerrado para demonstração: {target_inventory_id}")
-                    
+
                     query = db.query(InventoryList).filter(
                         InventoryList.id == target_inventory_id
                     )
@@ -4391,13 +4411,8 @@ async def list_inventories(
                         "message": "Nenhum inventário encontrado para este usuário"
                     }
             else:
-                # LÓGICA INTELIGENTE: Retornar apenas o primeiro inventário ativo
-                # (Um usuário = Um inventário por vez)
-                target_inventory_id = active_inventory_ids[0]
-                logger.info(f"🎯 Retornando inventário ativo único: {target_inventory_id}")
-                
                 query = db.query(InventoryList).filter(
-                    InventoryList.id == target_inventory_id
+                    InventoryList.id.in_(active_inventory_ids)
                 )
         
         # Aplicar filtros
