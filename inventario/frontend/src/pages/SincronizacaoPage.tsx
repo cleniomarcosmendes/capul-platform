@@ -3,8 +3,12 @@ import { Header } from '../layouts/Header';
 import { syncService } from '../services/sync.service';
 import { integrationService } from '../services/integration.service';
 import { inventoryService } from '../services/inventory.service';
-import type { Integration } from '../services/integration.service';
-import type { InventoryList, SyncStatus } from '../types';
+import type {
+  InventoryList,
+  SyncStatus,
+  Integration,
+  IntegrationPreviewResult,
+} from '../types';
 import {
   Send,
   History,
@@ -14,10 +18,13 @@ import {
   AlertTriangle,
   Clock,
   Loader2,
+  ArrowRightLeft,
+  Eye,
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 import { TableSkeleton } from '../components/LoadingSkeleton';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { IntegracaoPreviewModal } from './inventarios/components/IntegracaoPreviewModal';
 
 type Tab = 'envio' | 'historico';
 
@@ -126,18 +133,32 @@ export function SincronizacaoPage() {
 
 // === Tab Envio ao Protheus ===
 
+type IntegrationMode = 'SIMPLES' | 'COMPARATIVO';
+
 function TabEnvio() {
   const toast = useToast();
   const [inventarios, setInventarios] = useState<InventoryList[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [integrations, setIntegrations] = useState<Map<string, Integration | null>>(new Map());
-  const [confirmAction, setConfirmAction] = useState<{
-    type: 'preview' | 'send';
+
+  // Mode selection
+  const [mode, setMode] = useState<IntegrationMode>('SIMPLES');
+  const [selectedA, setSelectedA] = useState<string>('');
+  const [selectedB, setSelectedB] = useState<string>('');
+
+  // Preview
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewData, setPreviewData] = useState<IntegrationPreviewResult | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
+
+  // Send confirmation
+  const [confirmSend, setConfirmSend] = useState<{
+    integrationId: string;
     inventoryId: string;
-    integrationId?: string;
-    inventoryName?: string;
+    inventoryName: string;
   } | null>(null);
+  const [sendLoading, setSendLoading] = useState<string | null>(null);
 
   useEffect(() => {
     inventoryService.listar({ status: 'COMPLETED', size: '50' })
@@ -154,42 +175,71 @@ function TabEnvio() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function doPreviewAndSave(inventoryId: string) {
-    setActionLoading(inventoryId);
+  async function handlePreview() {
+    if (!selectedA) return;
+    setPreviewLoading(true);
     try {
-      const integration = await integrationService.salvar(inventoryId);
-      setIntegrations((prev) => new Map(prev).set(inventoryId, integration));
-      toast.success('Integracao criada com sucesso.');
+      const result = await integrationService.preview(
+        selectedA,
+        mode === 'COMPARATIVO' ? selectedB || undefined : undefined,
+        true,
+      );
+      setPreviewData(result);
+      setShowPreview(true);
     } catch {
-      toast.error('Erro ao criar integracao.');
+      toast.error('Erro ao gerar preview da integracao.');
     } finally {
-      setActionLoading(null);
+      setPreviewLoading(false);
     }
   }
 
-  async function doSend(integrationId: string, inventoryId: string) {
-    setActionLoading(inventoryId);
+  async function handleSaveFromPreview() {
+    if (!selectedA) return;
+    setSaveLoading(true);
     try {
-      await integrationService.enviar(integrationId);
-      const updated = await integrationService.buscarPorId(integrationId);
-      setIntegrations((prev) => new Map(prev).set(inventoryId, updated));
+      const result = await integrationService.salvar(
+        selectedA,
+        mode === 'COMPARATIVO' ? selectedB || undefined : undefined,
+      );
+      toast.success(`Integracao ${result.action === 'created' ? 'criada' : 'atualizada'} com sucesso.`);
+      setShowPreview(false);
+      setPreviewData(null);
+      setSelectedA('');
+      setSelectedB('');
+      // Refresh integrations
+      const existing = await integrationService.buscarExistente(selectedA);
+      setIntegrations((prev) => new Map(prev).set(selectedA, existing));
+    } catch {
+      toast.error('Erro ao salvar integracao.');
+    } finally {
+      setSaveLoading(false);
+    }
+  }
+
+  async function handleSend() {
+    if (!confirmSend) return;
+    setSendLoading(confirmSend.inventoryId);
+    setConfirmSend(null);
+    try {
+      await integrationService.enviar(confirmSend.integrationId);
+      const updated = await integrationService.buscarPorId(confirmSend.integrationId);
+      setIntegrations((prev) => new Map(prev).set(confirmSend.inventoryId, updated));
       toast.success('Enviado ao Protheus com sucesso.');
     } catch {
       toast.error('Erro ao enviar ao Protheus.');
     } finally {
-      setActionLoading(null);
+      setSendLoading(null);
     }
   }
 
-  function handleConfirm() {
-    if (!confirmAction) return;
-    if (confirmAction.type === 'preview') {
-      doPreviewAndSave(confirmAction.inventoryId);
-    } else if (confirmAction.integrationId) {
-      doSend(confirmAction.integrationId, confirmAction.inventoryId);
-    }
-    setConfirmAction(null);
-  }
+  // Inventarios without integration (available for selection)
+  const availableForSelection = inventarios.filter((inv) => {
+    const integ = integrations.get(inv.id);
+    return !integ || integ.status === 'PENDENTE';
+  });
+
+  // Inventarios with integration (table rows)
+  const withIntegration = inventarios.filter((inv) => integrations.get(inv.id));
 
   if (loading) {
     return <TableSkeleton rows={4} cols={5} />;
@@ -206,85 +256,184 @@ function TabEnvio() {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-slate-50 border-b border-slate-200">
-            <th className="text-left py-2.5 px-4 font-medium text-slate-600">Inventario</th>
-            <th className="text-left py-2.5 px-4 font-medium text-slate-600">Armazem</th>
-            <th className="text-left py-2.5 px-4 font-medium text-slate-600">Itens</th>
-            <th className="text-left py-2.5 px-4 font-medium text-slate-600">Status Integracao</th>
-            <th className="text-right py-2.5 px-4 font-medium text-slate-600">Acao</th>
-          </tr>
-        </thead>
-        <tbody>
-          {inventarios.map((inv) => {
-            const integration = integrations.get(inv.id);
-            const isLoading = actionLoading === inv.id;
+    <div className="space-y-6">
+      {/* Mode selection + Preview */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+        <h3 className="font-semibold text-slate-800">Nova Integracao</h3>
 
-            return (
-              <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
-                <td className="py-2.5 px-4 font-medium text-slate-800">{inv.name}</td>
-                <td className="py-2.5 px-4 font-mono text-slate-600">{inv.warehouse}</td>
-                <td className="py-2.5 px-4 text-slate-600">{inv.total_items}</td>
-                <td className="py-2.5 px-4">
-                  {integration ? (
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      integration.status === 'ENVIADO' || integration.status === 'CONFIRMADO'
-                        ? 'bg-green-100 text-green-700'
-                        : integration.status === 'ERRO'
-                        ? 'bg-red-100 text-red-700'
-                        : 'bg-amber-100 text-amber-700'
-                    }`}>
-                      {integration.status}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-slate-400">Nao criada</span>
-                  )}
-                </td>
-                <td className="py-2.5 px-4 text-right">
-                  {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-slate-400 ml-auto" />
-                  ) : !integration ? (
-                    <button
-                      onClick={() => setConfirmAction({ type: 'preview', inventoryId: inv.id, inventoryName: inv.name })}
-                      className="text-sm text-capul-600 hover:underline"
-                    >
-                      Preparar Envio
-                    </button>
-                  ) : integration.status === 'PENDENTE' ? (
-                    <button
-                      onClick={() => setConfirmAction({ type: 'send', inventoryId: inv.id, integrationId: integration.id, inventoryName: inv.name })}
-                      className="flex items-center gap-1 text-sm text-capul-600 hover:underline ml-auto"
-                    >
-                      <Send className="w-3 h-3" />
-                      Enviar
-                    </button>
-                  ) : (
-                    <span className="text-xs text-slate-400">
-                      {integration.sent_at ? new Date(integration.sent_at).toLocaleString('pt-BR') : ''}
-                    </span>
-                  )}
-                </td>
+        {/* Mode toggle */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-slate-600 mr-2">Modo:</span>
+          <button
+            onClick={() => { setMode('SIMPLES'); setSelectedB(''); }}
+            className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
+              mode === 'SIMPLES'
+                ? 'bg-capul-50 border-capul-300 text-capul-700'
+                : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            Simples
+          </button>
+          <button
+            onClick={() => setMode('COMPARATIVO')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
+              mode === 'COMPARATIVO'
+                ? 'bg-purple-50 border-purple-300 text-purple-700'
+                : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            <ArrowRightLeft className="w-3.5 h-3.5" />
+            Comparativo
+          </button>
+        </div>
+
+        {/* Selectors */}
+        <div className={`grid gap-4 ${mode === 'COMPARATIVO' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 md:grid-cols-2'}`}>
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">
+              {mode === 'COMPARATIVO' ? 'Inventario A' : 'Inventario'}
+            </label>
+            <select
+              value={selectedA}
+              onChange={(e) => setSelectedA(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-capul-500 focus:border-capul-500"
+            >
+              <option value="">Selecione um inventario...</option>
+              {availableForSelection.map((inv) => (
+                <option key={inv.id} value={inv.id}>
+                  {inv.name} ({inv.warehouse}) — {inv.total_items} itens
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {mode === 'COMPARATIVO' && (
+            <div>
+              <label className="block text-sm font-medium text-slate-600 mb-1">
+                Inventario B
+              </label>
+              <select
+                value={selectedB}
+                onChange={(e) => setSelectedB(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-capul-500 focus:border-capul-500"
+              >
+                <option value="">Selecione o segundo inventario...</option>
+                {availableForSelection
+                  .filter((inv) => inv.id !== selectedA)
+                  .map((inv) => (
+                    <option key={inv.id} value={inv.id}>
+                      {inv.name} ({inv.warehouse}) — {inv.total_items} itens
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* Preview button */}
+        <div className="flex justify-end">
+          <button
+            onClick={handlePreview}
+            disabled={!selectedA || (mode === 'COMPARATIVO' && !selectedB) || previewLoading}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-capul-600 rounded-lg hover:bg-capul-700 disabled:opacity-50"
+          >
+            {previewLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Eye className="w-4 h-4" />
+            )}
+            Visualizar Preview
+          </button>
+        </div>
+      </div>
+
+      {/* Existing integrations table */}
+      {withIntegration.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+          <div className="px-5 py-3 border-b border-slate-200">
+            <h3 className="font-semibold text-slate-800">Integracoes Existentes</h3>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="text-left py-2.5 px-4 font-medium text-slate-600">Inventario</th>
+                <th className="text-left py-2.5 px-4 font-medium text-slate-600">Armazem</th>
+                <th className="text-left py-2.5 px-4 font-medium text-slate-600">Itens</th>
+                <th className="text-left py-2.5 px-4 font-medium text-slate-600">Status</th>
+                <th className="text-right py-2.5 px-4 font-medium text-slate-600">Acao</th>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            </thead>
+            <tbody>
+              {withIntegration.map((inv) => {
+                const integration = integrations.get(inv.id)!;
+                const isLoading = sendLoading === inv.id;
 
+                return (
+                  <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-2.5 px-4 font-medium text-slate-800">{inv.name}</td>
+                    <td className="py-2.5 px-4 font-mono text-slate-600">{inv.warehouse}</td>
+                    <td className="py-2.5 px-4 text-slate-600">{inv.total_items}</td>
+                    <td className="py-2.5 px-4">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        integration.status === 'ENVIADO' || integration.status === 'CONFIRMADO'
+                          ? 'bg-green-100 text-green-700'
+                          : integration.status === 'ERRO'
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {integration.status}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-4 text-right">
+                      {isLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-slate-400 ml-auto" />
+                      ) : integration.status === 'PENDENTE' || integration.status === 'DRAFT' ? (
+                        <button
+                          onClick={() => setConfirmSend({
+                            integrationId: integration.id,
+                            inventoryId: inv.id,
+                            inventoryName: inv.name,
+                          })}
+                          className="flex items-center gap-1 text-sm text-capul-600 hover:underline ml-auto"
+                        >
+                          <Send className="w-3 h-3" />
+                          Enviar
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-400">
+                          {integration.sent_at ? new Date(integration.sent_at).toLocaleString('pt-BR') : ''}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Preview modal */}
+      {previewData && (
+        <IntegracaoPreviewModal
+          open={showPreview}
+          preview={previewData}
+          saving={saveLoading}
+          onSave={handleSaveFromPreview}
+          onClose={() => { setShowPreview(false); setPreviewData(null); }}
+        />
+      )}
+
+      {/* Send confirmation */}
       <ConfirmDialog
-        open={!!confirmAction}
-        title={confirmAction?.type === 'preview' ? 'Preparar Envio' : 'Enviar ao Protheus'}
-        description={
-          confirmAction?.type === 'preview'
-            ? 'Gerar preview e salvar a integracao para este inventario?'
-            : 'Enviar o resultado ao Protheus? Esta acao e irreversivel.'
-        }
-        details={confirmAction?.inventoryName ? [`Inventario: ${confirmAction.inventoryName}`] : undefined}
-        variant={confirmAction?.type === 'send' ? 'danger' : 'info'}
-        confirmLabel={confirmAction?.type === 'preview' ? 'Preparar' : 'Enviar'}
-        onConfirm={handleConfirm}
-        onCancel={() => setConfirmAction(null)}
+        open={!!confirmSend}
+        title="Enviar ao Protheus"
+        description="Enviar o resultado ao Protheus? Esta acao e irreversivel."
+        details={confirmSend?.inventoryName ? [`Inventario: ${confirmSend.inventoryName}`] : undefined}
+        variant="danger"
+        confirmLabel="Enviar"
+        onConfirm={handleSend}
+        onCancel={() => setConfirmSend(null)}
       />
     </div>
   );

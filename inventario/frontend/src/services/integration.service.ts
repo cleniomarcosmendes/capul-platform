@@ -1,27 +1,9 @@
 import { inventarioApi } from './api';
-
-export interface IntegrationPreview {
-  inventory_id: string;
-  inventory_name: string;
-  warehouse: string;
-  total_items: number;
-  items: Array<{
-    product_code: string;
-    product_name: string;
-    expected_quantity: number;
-    counted_quantity: number;
-    variance: number;
-  }>;
-}
-
-export interface Integration {
-  id: string;
-  inventory_id: string;
-  status: string;
-  created_at: string;
-  sent_at: string | null;
-  items_count: number;
-}
+import type {
+  Integration,
+  IntegrationPreviewResult,
+  IntegrationSaveResult,
+} from '../types';
 
 export const integrationService = {
   async listarCompativeis(inventoryId: string): Promise<unknown[]> {
@@ -38,13 +20,25 @@ export const integrationService = {
     }
   },
 
-  async preview(inventoryId: string): Promise<IntegrationPreview> {
-    const { data } = await inventarioApi.post('/integration/protheus/preview', { inventory_id: inventoryId });
+  async preview(
+    inventoryAId: string,
+    inventoryBId?: string,
+    viewOnly?: boolean,
+  ): Promise<IntegrationPreviewResult> {
+    const params: Record<string, string> = { inventory_a_id: inventoryAId };
+    if (inventoryBId) params.inventory_b_id = inventoryBId;
+    if (viewOnly) params.view_only = 'true';
+    const { data } = await inventarioApi.post('/integration/protheus/preview', null, { params });
     return data;
   },
 
-  async salvar(inventoryId: string): Promise<Integration> {
-    const { data } = await inventarioApi.post('/integration/protheus/save', { inventory_id: inventoryId });
+  async salvar(
+    inventoryAId: string,
+    inventoryBId?: string,
+  ): Promise<IntegrationSaveResult> {
+    const params: Record<string, string> = { inventory_a_id: inventoryAId };
+    if (inventoryBId) params.inventory_b_id = inventoryBId;
+    const { data } = await inventarioApi.post('/integration/protheus/save', null, { params });
     return data;
   },
 

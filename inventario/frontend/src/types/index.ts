@@ -579,6 +579,79 @@ export interface ComparisonResult {
   inventory_b: { id: string; name: string; warehouse: string };
 }
 
+// === Integration Protheus ===
+
+export interface IntegrationAdjustment {
+  product_code: string;
+  product_description: string;
+  lot_number: string | null;
+  warehouse: string;
+  expected_qty: number;
+  counted_qty: number;
+  adjustment_qty: number;
+  adjusted_qty: number;
+  adjustment_type: string;
+  unit_cost: number;
+  total_value: number;
+}
+
+export interface IntegrationTransfer {
+  product_code: string;
+  product_description: string;
+  lot_number: string | null;
+  source_warehouse: string;
+  target_warehouse: string;
+  quantity: number;
+  unit_cost: number;
+  total_value: number;
+}
+
+export interface IntegrationPreviewResult {
+  integration_type: 'SIMPLE' | 'COMPARATIVE';
+  inventory_a: { id: string; name: string; warehouse: string };
+  inventory_b?: { id: string; name: string; warehouse: string } | null;
+  transfers: IntegrationTransfer[];
+  adjustments: IntegrationAdjustment[];
+  summary: {
+    total_transfers: number;
+    total_adjustments: number;
+    total_transfer_value: number;
+    total_adjustment_value: number;
+    warehouses: string[];
+  };
+  existing_integration?: {
+    id: string;
+    version: number;
+    status: string;
+  } | null;
+}
+
+export interface Integration {
+  id: string;
+  inventory_a_id: string;
+  inventory_b_id?: string | null;
+  integration_type: 'SIMPLE' | 'COMPARATIVE';
+  status: string;
+  version: number;
+  created_at: string;
+  sent_at: string | null;
+  items_count: number;
+}
+
+export interface IntegrationSaveResult {
+  success: boolean;
+  action: string;
+  integration_id: string;
+  version: number;
+  status: string;
+  summary: {
+    total_transfers: number;
+    total_adjustments: number;
+    total_transfer_value: number;
+    total_adjustment_value: number;
+  };
+}
+
 // === Assignable Item (for counting list product assignment) ===
 
 export interface AssignableItem {
