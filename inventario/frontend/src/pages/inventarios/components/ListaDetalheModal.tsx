@@ -3,6 +3,9 @@ import { X, Package, AlertTriangle, CheckCircle2, Clock, Search } from 'lucide-r
 import { countingListService } from '../../../services/counting-list.service';
 import { calcularQuantidadeFinal, getExpectedQty, hasAnyEntregasPosterior } from '../../../utils/cycles';
 import type { CountingList, CountingListProduct } from '../../../types';
+import { ExportDropdown } from '../../../components/ExportDropdown';
+import { downloadCSV } from '../../../utils/csv';
+import { downloadExcel, printTable } from '../../../utils/export';
 
 const listStatusConfig: Record<string, { label: string; color: string }> = {
   PREPARACAO: { label: 'Preparacao', color: 'bg-slate-100 text-slate-700' },
@@ -184,6 +187,45 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
             );
           })}
           <div className="flex-1" />
+          {products.length > 0 && (
+            <ExportDropdown
+              onCSV={() => {
+                const header = 'Seq;Codigo;Descricao;Saldo Sistema;Ent. Post.;Esperado;C1;C2;C3;Final;Diferenca;Status\n';
+                const rows = filteredProducts.map((p, idx) => {
+                  const expectedQty = getExpectedQty(p.system_qty, p.b2_xentpos);
+                  const finalQty = p.finalQuantity ?? calcularQuantidadeFinal(p.count_cycle_1, p.count_cycle_2, p.count_cycle_3, expectedQty);
+                  const isPending = p.status === 'PENDING' || p.status === 'pending';
+                  const diff = !isPending ? finalQty - expectedQty : 0;
+                  return `${p.sequence || idx + 1};${p.product_code};${p.product_description || p.product_name};${p.system_qty.toFixed(2)};${(p.b2_xentpos || 0).toFixed(2)};${expectedQty.toFixed(2)};${p.count_cycle_1?.toFixed(2) ?? ''};${p.count_cycle_2?.toFixed(2) ?? ''};${p.count_cycle_3?.toFixed(2) ?? ''};${!isPending ? finalQty.toFixed(2) : ''};${!isPending ? diff.toFixed(2) : ''};${p.status}`;
+                });
+                downloadCSV(`lista_${lista.list_name}_${new Date().toISOString().slice(0, 10)}.csv`, header, rows);
+              }}
+              onExcel={() => {
+                const headers = ['Seq', 'Codigo', 'Descricao', 'Saldo Sistema', 'Ent. Post.', 'Esperado', 'C1', 'C2', 'C3', 'Final', 'Diferenca', 'Status'];
+                downloadExcel(`lista_${lista.list_name}_${new Date().toISOString().slice(0, 10)}`, 'Lista', headers,
+                  filteredProducts.map((p, idx) => {
+                    const expectedQty = getExpectedQty(p.system_qty, p.b2_xentpos);
+                    const finalQty = p.finalQuantity ?? calcularQuantidadeFinal(p.count_cycle_1, p.count_cycle_2, p.count_cycle_3, expectedQty);
+                    const isPending = p.status === 'PENDING' || p.status === 'pending';
+                    const diff = !isPending ? finalQty - expectedQty : 0;
+                    return [p.sequence || idx + 1, p.product_code, p.product_description || p.product_name, p.system_qty, p.b2_xentpos || 0, expectedQty, p.count_cycle_1, p.count_cycle_2, p.count_cycle_3, !isPending ? finalQty : null, !isPending ? diff : null, p.status];
+                  }),
+                );
+              }}
+              onPrint={() => {
+                const headers = ['Seq', 'Codigo', 'Descricao', 'Saldo Sistema', 'Ent. Post.', 'Esperado', 'C1', 'C2', 'C3', 'Final', 'Diferenca', 'Status'];
+                printTable(`Lista: ${lista.list_name}`, headers,
+                  filteredProducts.map((p, idx) => {
+                    const expectedQty = getExpectedQty(p.system_qty, p.b2_xentpos);
+                    const finalQty = p.finalQuantity ?? calcularQuantidadeFinal(p.count_cycle_1, p.count_cycle_2, p.count_cycle_3, expectedQty);
+                    const isPending = p.status === 'PENDING' || p.status === 'pending';
+                    const diff = !isPending ? finalQty - expectedQty : 0;
+                    return [p.sequence || idx + 1, p.product_code, p.product_description || p.product_name, p.system_qty.toFixed(2), (p.b2_xentpos || 0).toFixed(2), expectedQty.toFixed(2), p.count_cycle_1?.toFixed(2) ?? '', p.count_cycle_2?.toFixed(2) ?? '', p.count_cycle_3?.toFixed(2) ?? '', !isPending ? finalQty.toFixed(2) : '', !isPending ? diff.toFixed(2) : '', p.status];
+                  }),
+                );
+              }}
+            />
+          )}
           <span className="text-xs text-slate-500">
             {filteredProducts.length} de {totalItems} itens
           </span>
@@ -206,6 +248,7 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
                     <th className="text-left py-2 px-3 font-medium text-slate-500 w-8">#</th>
                     <th className="text-left py-2 px-3 font-medium text-slate-600">Codigo</th>
                     <th className="text-left py-2 px-3 font-medium text-slate-600">Descricao</th>
+                    <th className="text-left py-2 px-3 font-medium text-slate-600">Local</th>
                     {showEntregasPost ? (
                       <>
                         <th className="text-right py-2 px-3 font-medium text-slate-600">Saldo Est.</th>
@@ -258,6 +301,7 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
                         <td className="py-1.5 px-3 text-slate-800 truncate max-w-[220px]" title={p.product_description || p.product_name}>
                           {p.product_description || p.product_name}
                         </td>
+                        <td className="py-1.5 px-3 text-slate-500 font-mono text-xs">{p.location || '—'}</td>
                         {showEntregasPost ? (
                           <>
                             <td className="py-1.5 px-3 text-right text-slate-600 tabular-nums">{p.system_qty.toFixed(2)}</td>

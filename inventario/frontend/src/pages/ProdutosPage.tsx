@@ -6,6 +6,9 @@ import { ErrorState } from '../components/ErrorState';
 import { Package, Search, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import type { ProtheusProduct, ProtheusProductResponse } from '../types';
 import { ProdutoDetalheModal } from './ProdutoDetalheModal';
+import { ExportDropdown } from '../components/ExportDropdown';
+import { downloadCSV } from '../utils/csv';
+import { downloadExcel, printTable } from '../utils/export';
 
 export function ProdutosPage() {
   const [data, setData] = useState<ProtheusProductResponse | null>(null);
@@ -67,6 +70,30 @@ export function ProdutosPage() {
           >
             Buscar
           </button>
+
+          {produtos.length > 0 && (
+            <ExportDropdown
+              onCSV={() => {
+                const header = 'Codigo;Descricao;Grupo;Categoria;Subcategoria;Segmento;Estoque\n';
+                const rows = produtos.map((p) =>
+                  `${p.b1_cod};${p.b1_desc};${p.grupo_desc || p.b1_grupo};${p.categoria_desc || p.b1_xcatgor};${p.subcategoria_desc || p.b1_xsubcat};${p.segmento_desc || p.b1_xsegmen};${p.total_stock ?? 0}`,
+                );
+                downloadCSV(`produtos_${new Date().toISOString().slice(0, 10)}.csv`, header, rows);
+              }}
+              onExcel={() => {
+                downloadExcel(`produtos_${new Date().toISOString().slice(0, 10)}`, 'Produtos',
+                  ['Codigo', 'Descricao', 'Grupo', 'Categoria', 'Subcategoria', 'Segmento', 'Estoque'],
+                  produtos.map((p) => [p.b1_cod, p.b1_desc, p.grupo_desc || p.b1_grupo, p.categoria_desc || p.b1_xcatgor, p.subcategoria_desc || p.b1_xsubcat, p.segmento_desc || p.b1_xsegmen, p.total_stock ?? 0]),
+                );
+              }}
+              onPrint={() => {
+                printTable('Produtos',
+                  ['Codigo', 'Descricao', 'Grupo', 'Categoria', 'Subcategoria', 'Segmento', 'Estoque'],
+                  produtos.map((p) => [p.b1_cod, p.b1_desc, p.grupo_desc || p.b1_grupo, p.categoria_desc || p.b1_xcatgor, p.subcategoria_desc || p.b1_xsubcat, p.segmento_desc || p.b1_xsegmen, p.total_stock ?? 0]),
+                );
+              }}
+            />
+          )}
         </div>
 
         {/* Info */}

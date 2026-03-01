@@ -353,6 +353,7 @@ export interface CountingListProduct {
   requires_lot?: boolean;
   has_lot?: boolean;
   snapshot_lots?: SnapshotLot[];
+  location?: string | null;
 }
 
 export interface SnapshotLot {

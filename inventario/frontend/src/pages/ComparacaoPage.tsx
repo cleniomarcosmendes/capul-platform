@@ -6,8 +6,10 @@ import { PageSkeleton } from '../components/LoadingSkeleton';
 import { ErrorState } from '../components/ErrorState';
 import { useToast } from '../contexts/ToastContext';
 import type { ComparisonResult, ComparisonItem } from '../types';
-import { ArrowLeftRight, Download, FileSpreadsheet, FileJson, Warehouse } from 'lucide-react';
+import { ArrowLeftRight, FileSpreadsheet, FileJson, Warehouse } from 'lucide-react';
 import { downloadCSV } from '../utils/csv';
+import { ExportDropdown } from '../components/ExportDropdown';
+import { downloadExcel, printTable } from '../utils/export';
 
 type Mode = 'matches' | 'transfers' | 'manual';
 
@@ -193,9 +195,21 @@ export default function ComparacaoPage() {
 
             {/* Export */}
             <div className="flex gap-2">
-              <button onClick={handleExportCsv} className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-slate-300 rounded-lg hover:bg-slate-50">
-                <Download className="w-4 h-4" /> CSV
-              </button>
+              <ExportDropdown
+                onCSV={handleExportCsv}
+                onExcel={() => {
+                  downloadExcel(`comparacao_${invAId}_${invBId}`, 'Comparacao',
+                    ['Codigo', 'Descricao', 'Rastreio', 'Lote', 'Saldo', 'Contado', 'Diverg.', 'Transf.', 'Estoque Ajust.', 'Dif. Final', 'Economia'],
+                    sortedItems.map((item) => [item.product_code, item.description, item.tracking, item.lot_number ?? '-', item.expected_a, item.counted_a, item.divergence_a, item.transferencia_logica?.quantidade_transferida ?? 0, item.saldo_ajustado_a, item.diferenca_final_a, item.transferencia_logica?.economia_estimada ?? 0]),
+                  );
+                }}
+                onPrint={() => {
+                  printTable('Comparacao de Inventarios',
+                    ['Codigo', 'Descricao', 'Rastreio', 'Lote', 'Saldo', 'Contado', 'Diverg.', 'Transf.', 'Estoque Ajust.', 'Dif. Final', 'Economia'],
+                    sortedItems.map((item) => [item.product_code, item.description, item.tracking, item.lot_number ?? '-', item.expected_a, item.counted_a, item.divergence_a, item.transferencia_logica?.quantidade_transferida ?? 0, item.saldo_ajustado_a, item.diferenca_final_a, formatCurrency(item.transferencia_logica?.economia_estimada ?? 0)]),
+                  );
+                }}
+              />
               <button onClick={handleExportJson} className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-slate-300 rounded-lg hover:bg-slate-50">
                 <FileJson className="w-4 h-4" /> JSON
               </button>

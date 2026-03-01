@@ -6,13 +6,14 @@ import { countingListService } from '../services/counting-list.service';
 import { calcularQuantidadeFinal } from '../utils/cycles';
 import {
   BarChart2,
-  Download,
   TrendingDown,
   TrendingUp,
   AlertTriangle,
   CheckCircle2,
   Filter,
 } from 'lucide-react';
+import { ExportDropdown } from '../components/ExportDropdown';
+import { downloadExcel, printTable } from '../utils/export';
 import { PageSkeleton, TableSkeleton } from '../components/LoadingSkeleton';
 import { ErrorState } from '../components/ErrorState';
 import type { InventoryList, CountingListProduct } from '../types';
@@ -202,13 +203,21 @@ export function RelatoriosPage() {
           <div className="flex-1" />
 
           {divergences.length > 0 && (
-            <button
-              onClick={handleExportCSV}
-              className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 text-slate-600 text-sm rounded-lg hover:bg-slate-50"
-            >
-              <Download className="w-4 h-4" />
-              Exportar CSV
-            </button>
+            <ExportDropdown
+              onCSV={handleExportCSV}
+              onExcel={() => {
+                downloadExcel(`relatorio_divergencias_${new Date().toISOString().slice(0, 10)}`, 'Divergencias',
+                  ['Inventario', 'Armazem', 'Codigo', 'Descricao', 'Saldo Sistema', 'C1', 'C2', 'C3', 'Qtd Final', 'Diferenca', 'Variacao %'],
+                  divergences.map((d) => [d.inventoryName, d.warehouse, d.product_code, d.product_name, d.system_qty, d.count_cycle_1, d.count_cycle_2, d.count_cycle_3, d.final_qty, d.variance, `${d.variance_pct.toFixed(1)}%`]),
+                );
+              }}
+              onPrint={() => {
+                printTable('Relatorio de Divergencias',
+                  ['Inventario', 'Armazem', 'Codigo', 'Descricao', 'Saldo Sistema', 'C1', 'C2', 'C3', 'Qtd Final', 'Diferenca', 'Variacao %'],
+                  divergences.map((d) => [d.inventoryName, d.warehouse, d.product_code, d.product_name, d.system_qty.toFixed(2), d.count_cycle_1?.toFixed(2) ?? '', d.count_cycle_2?.toFixed(2) ?? '', d.count_cycle_3?.toFixed(2) ?? '', d.final_qty.toFixed(2), d.variance.toFixed(2), `${d.variance_pct.toFixed(1)}%`]),
+                );
+              }}
+            />
           )}
         </div>
 

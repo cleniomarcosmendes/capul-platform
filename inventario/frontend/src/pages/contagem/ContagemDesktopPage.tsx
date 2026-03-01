@@ -272,6 +272,7 @@ export function ContagemDesktopPage() {
                     <th className="text-left py-2 px-2 font-medium text-slate-500 w-8">#</th>
                     <th className="text-left py-2 px-2 font-medium text-slate-600">Codigo</th>
                     <th className="text-left py-2 px-2 font-medium text-slate-600">Descricao</th>
+                    <th className="text-left py-2 px-2 font-medium text-slate-600">Local</th>
                     {showEntregasPost ? (
                       <>
                         <th className="text-right py-2 px-2 font-medium text-slate-600">Saldo Est.</th>
@@ -326,6 +327,7 @@ export function ContagemDesktopPage() {
                         <td className="py-1.5 px-2 text-slate-800 truncate max-w-[250px]" title={p.product_description || p.product_name}>
                           {p.product_description || p.product_name}
                         </td>
+                        <td className="py-1.5 px-2 text-slate-500 font-mono text-xs">{p.location || '—'}</td>
                         {showEntregasPost ? (
                           <>
                             <td className="py-1.5 px-2 text-right text-slate-600 tabular-nums">{p.system_qty.toFixed(2)}</td>

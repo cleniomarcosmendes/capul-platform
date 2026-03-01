@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { inventoryService } from '../../services/inventory.service';
 import { warehouseService } from '../../services/warehouse.service';
-import { ClipboardList, Plus, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { ClipboardList, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { downloadCSV } from '../../utils/csv';
+import { ExportDropdown } from '../../components/ExportDropdown';
+import { downloadExcel, printTable } from '../../utils/export';
 import { PageSkeleton } from '../../components/LoadingSkeleton';
 import { ErrorState } from '../../components/ErrorState';
 import type { InventoryList, InventoryStatus, WarehouseSimple } from '../../types';
@@ -102,19 +104,27 @@ export function InventariosListPage() {
           <div className="flex-1" />
 
           {inventarios.length > 0 && (
-            <button
-              onClick={() => {
+            <ExportDropdown
+              onCSV={() => {
                 const header = 'Nome;Armazem;Status;Ciclo;Progresso;Contados;Total;Criado em;Criado por\n';
                 const rows = inventarios.map((inv) =>
                   `${inv.name};${inv.warehouse};${statusConfig[inv.status]?.label || inv.status};${inv.current_cycle}o;${Math.round(inv.progress_percentage)}%;${inv.counted_items};${inv.total_items};${new Date(inv.created_at).toLocaleDateString('pt-BR')};${inv.created_by_name}`,
                 );
                 downloadCSV(`inventarios_${new Date().toISOString().slice(0, 10)}.csv`, header, rows);
               }}
-              className="flex items-center gap-2 border border-slate-300 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors"
-            >
-              <Download className="w-4 h-4" />
-              Exportar CSV
-            </button>
+              onExcel={() => {
+                downloadExcel(`inventarios_${new Date().toISOString().slice(0, 10)}`, 'Inventarios',
+                  ['Nome', 'Armazem', 'Status', 'Ciclo', 'Progresso', 'Contados', 'Total', 'Criado em', 'Criado por'],
+                  inventarios.map((inv) => [inv.name, inv.warehouse, statusConfig[inv.status]?.label || inv.status, `${inv.current_cycle}o`, `${Math.round(inv.progress_percentage)}%`, inv.counted_items, inv.total_items, new Date(inv.created_at).toLocaleDateString('pt-BR'), inv.created_by_name]),
+                );
+              }}
+              onPrint={() => {
+                printTable('Inventarios',
+                  ['Nome', 'Armazem', 'Status', 'Ciclo', 'Progresso', 'Contados', 'Total', 'Criado em', 'Criado por'],
+                  inventarios.map((inv) => [inv.name, inv.warehouse, statusConfig[inv.status]?.label || inv.status, `${inv.current_cycle}o`, `${Math.round(inv.progress_percentage)}%`, inv.counted_items, inv.total_items, new Date(inv.created_at).toLocaleDateString('pt-BR'), inv.created_by_name]),
+                );
+              }}
+            />
           )}
 
           <Link

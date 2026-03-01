@@ -251,6 +251,12 @@ export function ContagemMobilePage() {
                 <p className="text-xs text-slate-400">Armazem</p>
                 <p className="text-sm font-medium text-slate-700">{currentProduct.warehouse}</p>
               </div>
+              {currentProduct.location && (
+                <div>
+                  <p className="text-xs text-slate-400">Local</p>
+                  <p className="text-sm font-medium font-mono text-slate-700">{currentProduct.location}</p>
+                </div>
+              )}
               {/* Contagem cega: NAO mostrar saldo sistema */}
             </div>
 

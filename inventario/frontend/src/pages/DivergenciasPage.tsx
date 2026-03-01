@@ -7,6 +7,9 @@ import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import type { Discrepancy, ClosedRound } from '../types';
 import { CheckCircle, RotateCcw, Edit3, Filter } from 'lucide-react';
+import { ExportDropdown } from '../components/ExportDropdown';
+import { downloadCSV } from '../utils/csv';
+import { downloadExcel, printTable } from '../utils/export';
 
 export default function DivergenciasPage() {
   const [discrepancies, setDiscrepancies] = useState<Discrepancy[]>([]);
@@ -94,6 +97,37 @@ export default function DivergenciasPage() {
               ))}
             </select>
           </div>
+          <div className="flex-1" />
+          {discrepancies.length > 0 && (
+            <ExportDropdown
+              onCSV={() => {
+                const header = 'Codigo;Descricao;Qtd Sistema;Qtd Contada;Diferenca;%;Status\n';
+                const rows = discrepancies.map((d) => {
+                  const counted = d.counted_quantity ?? (d.expected_quantity + d.variance_quantity);
+                  return `${d.product_code};${d.product_description};${d.expected_quantity};${counted};${d.variance_quantity};${d.variance_percentage.toFixed(1)}%;${d.status === 'RESOLVED' ? 'Resolvido' : 'Pendente'}`;
+                });
+                downloadCSV(`divergencias_${new Date().toISOString().slice(0, 10)}.csv`, header, rows);
+              }}
+              onExcel={() => {
+                const headers = ['Codigo', 'Descricao', 'Qtd Sistema', 'Qtd Contada', 'Diferenca', '%', 'Status'];
+                downloadExcel(`divergencias_${new Date().toISOString().slice(0, 10)}`, 'Divergencias', headers,
+                  discrepancies.map((d) => {
+                    const counted = d.counted_quantity ?? (d.expected_quantity + d.variance_quantity);
+                    return [d.product_code, d.product_description, d.expected_quantity, counted, d.variance_quantity, `${d.variance_percentage.toFixed(1)}%`, d.status === 'RESOLVED' ? 'Resolvido' : 'Pendente'];
+                  }),
+                );
+              }}
+              onPrint={() => {
+                const headers = ['Codigo', 'Descricao', 'Qtd Sistema', 'Qtd Contada', 'Diferenca', '%', 'Status'];
+                printTable('Divergencias', headers,
+                  discrepancies.map((d) => {
+                    const counted = d.counted_quantity ?? (d.expected_quantity + d.variance_quantity);
+                    return [d.product_code, d.product_description, d.expected_quantity, counted, d.variance_quantity, `${d.variance_percentage.toFixed(1)}%`, d.status === 'RESOLVED' ? 'Resolvido' : 'Pendente'];
+                  }),
+                );
+              }}
+            />
+          )}
         </div>
 
         {loading ? (

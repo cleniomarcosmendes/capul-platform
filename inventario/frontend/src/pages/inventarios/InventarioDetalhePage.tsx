@@ -12,6 +12,8 @@ import { TabAnalise } from './components/TabAnalise';
 import { TabVisaoGeral } from './components/TabVisaoGeral';
 import { cycleBadgeColor, cycleLabel } from '../../utils/cycles';
 import { downloadCSV } from '../../utils/csv';
+import { ExportDropdown } from '../../components/ExportDropdown';
+import { downloadExcel, printTable } from '../../utils/export';
 import {
   ArrowLeft,
   LayoutDashboard,
@@ -25,7 +27,6 @@ import {
   Unlock,
   CheckCircle2,
   Lock,
-  Download,
   UserCog,
 } from 'lucide-react';
 import { PageSkeleton } from '../../components/LoadingSkeleton';
@@ -360,19 +361,27 @@ function TabItens({ itens, page, totalPages, statusFilter, inventoryStatus, onPa
         <div className="flex-1" />
 
         {itens.length > 0 && (
-          <button
-            onClick={() => {
+          <ExportDropdown
+            onCSV={() => {
               const header = 'Seq;Codigo;Descricao;Local;Saldo Estoque;Entregas Post;Grupo;Grupo Inv;Categoria;Subcategoria;Segmento;Local 1;Local 2;Local 3;Lote;Esperado;Contado;Variacao;Status\n';
               const rows = itens.map((item) =>
                 `${item.sequence};${item.product_code};${item.product_name};${item.warehouse || ''};${(item.product_estoque ?? 0).toFixed(2)};${(item.product_entregas_post ?? 0).toFixed(2)};${item.product_grupo || ''};${item.product_grupo_inv || ''};${item.product_categoria || ''};${item.product_subcategoria || ''};${item.product_segmento || ''};${item.product_local1 || ''};${item.product_local2 || ''};${item.product_local3 || ''};${item.product_lote || ''};${item.expected_quantity.toFixed(2)};${item.counted_quantity > 0 ? item.counted_quantity.toFixed(2) : ''};${item.status !== 'PENDING' ? item.variance.toFixed(2) : ''};${item.status}`,
               );
               downloadCSV(`itens_inventario_${new Date().toISOString().slice(0, 10)}.csv`, header, rows);
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-300 text-slate-600 text-sm rounded-lg hover:bg-slate-50"
-          >
-            <Download className="w-4 h-4" />
-            CSV
-          </button>
+            onExcel={() => {
+              downloadExcel(`itens_inventario_${new Date().toISOString().slice(0, 10)}`, 'Itens',
+                ['Seq', 'Codigo', 'Descricao', 'Local', 'Saldo Estoque', 'Entregas Post', 'Grupo', 'Grupo Inv', 'Categoria', 'Subcategoria', 'Segmento', 'Local 1', 'Local 2', 'Local 3', 'Lote', 'Esperado', 'Contado', 'Variacao', 'Status'],
+                itens.map((item) => [item.sequence, item.product_code, item.product_name, item.warehouse || '', item.product_estoque ?? 0, item.product_entregas_post ?? 0, item.product_grupo || '', item.product_grupo_inv || '', item.product_categoria || '', item.product_subcategoria || '', item.product_segmento || '', item.product_local1 || '', item.product_local2 || '', item.product_local3 || '', item.product_lote || '', item.expected_quantity, item.counted_quantity > 0 ? item.counted_quantity : null, item.status !== 'PENDING' ? item.variance : null, item.status]),
+              );
+            }}
+            onPrint={() => {
+              printTable('Itens do Inventario',
+                ['Seq', 'Codigo', 'Descricao', 'Saldo', 'Esperado', 'Contado', 'Variacao', 'Status'],
+                itens.map((item) => [item.sequence, item.product_code, item.product_name, (item.product_estoque ?? 0).toFixed(2), item.expected_quantity.toFixed(2), item.counted_quantity > 0 ? item.counted_quantity.toFixed(2) : '', item.status !== 'PENDING' ? item.variance.toFixed(2) : '', item.status]),
+              );
+            }}
+          />
         )}
 
         {canAdd && (
