@@ -244,6 +244,55 @@ export function AtribuirProdutosModal({ inventoryId, listId, listName, onClose, 
 
   const allOnPageSelected = selectableItems.length > 0 && selectableItems.every((i) => selected.has(i.id));
 
+  // === Select all from filter (all pages) ===
+  const [loadingAllIds, setLoadingAllIds] = useState(false);
+
+  function buildFilterParams(): Record<string, string | number | undefined> {
+    const params: Record<string, string | number | undefined> = {
+      list_id: listId,
+      assignment_status: statusFilter || 'AVAILABLE',
+    };
+    if (!isAdvancedMode && search) params.search = search;
+    if (isAdvancedMode) {
+      const f = appliedFilters;
+      if (f.grupo.from) params.grupo_de = f.grupo.from;
+      if (f.grupo.to) params.grupo_ate = f.grupo.to;
+      if (f.categoria.from) params.categoria_de = f.categoria.from;
+      if (f.categoria.to) params.categoria_ate = f.categoria.to;
+      if (f.subcategoria.from) params.subcategoria_de = f.subcategoria.from;
+      if (f.subcategoria.to) params.subcategoria_ate = f.subcategoria.to;
+      if (f.segmento.from) params.segmento_de = f.segmento.from;
+      if (f.segmento.to) params.segmento_ate = f.segmento.to;
+      if (f.grupoInv.from) params.grupo_inv_de = f.grupoInv.from;
+      if (f.grupoInv.to) params.grupo_inv_ate = f.grupoInv.to;
+      if (f.local1.from) params.local1_from = f.local1.from;
+      if (f.local1.to) params.local1_to = f.local1.to;
+      if (f.local2.from) params.local2_from = f.local2.from;
+      if (f.local2.to) params.local2_to = f.local2.to;
+      if (f.local3.from) params.local3_from = f.local3.from;
+      if (f.local3.to) params.local3_to = f.local3.to;
+    }
+    return params;
+  }
+
+  async function handleSelectAllFromFilter() {
+    setLoadingAllIds(true);
+    try {
+      const res = await inventoryService.listarIdsParaAtribuicao(inventoryId, buildFilterParams());
+      if (res.ids.length > 0) {
+        setSelected((prev) => {
+          const next = new Set(prev);
+          for (const id of res.ids) next.add(id);
+          return next;
+        });
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setLoadingAllIds(false);
+    }
+  }
+
   // Add products to counting list
   async function handleAdd() {
     if (selected.size === 0) return;
@@ -538,6 +587,7 @@ export function AtribuirProdutosModal({ inventoryId, listId, listName, onClose, 
                           type="checkbox"
                           checked={selected.has(item.id)}
                           onChange={() => toggleSelect(item.id)}
+                          onClick={(e) => e.stopPropagation()}
                           disabled={!isAvailable}
                           className="rounded border-slate-300 disabled:opacity-30"
                         />
@@ -622,11 +672,27 @@ export function AtribuirProdutosModal({ inventoryId, listId, listName, onClose, 
             </div>
           </div>
           <div className="flex gap-2">
+            {selected.size > 0 ? (
+              <button
+                onClick={() => setSelected(new Set())}
+                className="px-3 py-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100"
+              >
+                Desmarcar Todos ({selected.size.toLocaleString('pt-BR')})
+              </button>
+            ) : totalAvailable > 0 ? (
+              <button
+                onClick={handleSelectAllFromFilter}
+                disabled={loadingAllIds || loading}
+                className="px-3 py-2 text-sm text-capul-700 bg-capul-50 border border-capul-200 rounded-lg hover:bg-capul-100 disabled:opacity-50"
+              >
+                {loadingAllIds ? 'Carregando...' : `Selecionar Todos (${totalAvailable.toLocaleString('pt-BR')})`}
+              </button>
+            ) : null}
             <button
               onClick={handleClose}
               className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50"
             >
-              Cancelar
+              Fechar
             </button>
             <button
               onClick={handleAdd}

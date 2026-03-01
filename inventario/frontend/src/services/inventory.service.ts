@@ -111,6 +111,13 @@ export const inventoryService = {
     return data;
   },
 
+  async filtrarProdutosCodigos(
+    filters: Record<string, unknown>,
+  ): Promise<{ codes: string[]; total: number }> {
+    const { data } = await inventarioApi.post('/inventory/filter-products/codes', filters);
+    return data;
+  },
+
   // === Contagem ===
 
   async registrarContagem(itemId: string, payload: {
@@ -181,6 +188,18 @@ export const inventoryService = {
       if (v !== undefined && v !== '') clean[k] = v;
     }
     const { data } = await inventarioApi.get(`/inventories/${inventoryId}/items-for-assignment`, { params: clean });
+    return data;
+  },
+
+  async listarIdsParaAtribuicao(
+    inventoryId: string,
+    params: Record<string, string | number | undefined>,
+  ): Promise<{ ids: string[]; total: number }> {
+    const clean: Record<string, string | number> = {};
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== '') clean[k] = v;
+    }
+    const { data } = await inventarioApi.get(`/inventories/${inventoryId}/items-for-assignment/ids`, { params: clean });
     return data;
   },
 };

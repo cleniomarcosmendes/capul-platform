@@ -1869,9 +1869,39 @@ async def filter_products_for_inventory(
         # ✅ CORREÇÃO: Usar dicionário para rastrear produtos únicos
         produtos_unicos = {}
         
+        # ✅ PERFORMANCE: Coletar códigos de produtos com lote para batch query única
+        lot_product_codes = set()
+        for sb1_produto, sb2_estoque, sbz_localizacao, inventory_status, other_inventory_name in resultados:
+            if sb1_produto.b1_rastro == 'L':
+                lot_product_codes.add(sb1_produto.b1_cod.strip())
+
+        # ✅ PERFORMANCE: Uma única query para TODOS os saldos de lote (substitui N+1 queries)
+        lot_totals = {}
+        if lot_product_codes:
+            lot_codes_list = list(lot_product_codes)
+            # Processar em batches de 500 para evitar limite de parametros SQL
+            for i in range(0, len(lot_codes_list), 500):
+                batch = lot_codes_list[i:i+500]
+                placeholders = ','.join([f':code_{j}' for j in range(len(batch))])
+                params = {f'code_{j}': code for j, code in enumerate(batch)}
+                params['filial'] = store_code_suffix
+                params['warehouse'] = target_warehouse
+                lot_batch_query = text(f"""
+                    SELECT TRIM(b8.b8_produto) as produto, COALESCE(SUM(b8.b8_saldo), 0) as total
+                    FROM inventario.sb8010 b8
+                    WHERE TRIM(b8.b8_produto) IN ({placeholders})
+                      AND b8.b8_filial = :filial
+                      AND b8.b8_local = :warehouse
+                      AND b8.b8_saldo > 0
+                    GROUP BY TRIM(b8.b8_produto)
+                """)
+                for row in db.execute(lot_batch_query, params):
+                    lot_totals[row[0].strip()] = float(row[1])
+            logger.info(f"📊 Batch de lotes: {len(lot_totals)} produtos com saldo calculado em 1 query")
+
         for sb1_produto, sb2_estoque, sbz_localizacao, inventory_status, other_inventory_name in resultados:
             produto_codigo = sb1_produto.b1_cod.strip()
-            
+
             # Se produto já existe e tem status "IN_OTHER_INVENTORY", manter esse status
             if produto_codigo in produtos_unicos:
                 if inventory_status == "IN_OTHER_INVENTORY":
@@ -1884,26 +1914,8 @@ async def filter_products_for_inventory(
             calculated_quantity = 0.0
 
             if has_lot_control:
-                # Produto com controle de lote - somar SB8010.B8_SALDO
-                logger.info(f"🔍 Produto {produto_codigo} tem controle de lote - calculando soma de SB8010.B8_SALDO")
-
-                lot_sum_query = text("""
-                    SELECT COALESCE(SUM(b8.b8_saldo), 0) as total_lot_qty
-                    FROM inventario.sb8010 b8
-                    WHERE b8.b8_produto = :product_code
-                      AND b8.b8_filial = :filial
-                      AND b8.b8_local = :warehouse
-                      AND b8.b8_saldo > 0
-                """)
-
-                lot_sum_result = db.execute(lot_sum_query, {
-                    'product_code': produto_codigo,
-                    'filial': store_code_suffix,
-                    'warehouse': target_warehouse
-                }).fetchone()
-
-                calculated_quantity = float(lot_sum_result[0]) if lot_sum_result else 0.0
-                logger.info(f"📊 Produto {produto_codigo} - Soma de lotes: {calculated_quantity}")
+                # ✅ PERFORMANCE: Lookup no dict pré-calculado (era N+1 queries)
+                calculated_quantity = lot_totals.get(produto_codigo, 0.0)
             else:
                 # Produto SEM controle de lote - usar B2_QATU
                 # ✅ v2.15.2: Com INNER JOIN, sb2_estoque sempre existe
@@ -1977,6 +1989,206 @@ async def filter_products_for_inventory(
     except Exception as e:
         logger.error(f"❌ Erro ao filtrar produtos: {e}")
         raise HTTPException(status_code=500, detail=safe_error_response(e, "ao filtrar produtos"))
+
+@app.post("/api/v1/inventory/filter-products/codes", tags=["Inventory"])
+async def filter_products_codes_only(
+    filters: dict,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna apenas os códigos de produto que correspondem ao filtro.
+    Endpoint leve para funcionalidade 'Adicionar todos do filtro'.
+    """
+    try:
+        from app.models.models import SB1010, SB2010, SBZ010, InventoryItem, InventoryList, Store
+        from sqlalchemy import and_, or_, func, case
+
+        store_code_suffix = '01'
+        if current_user.store_id:
+            store = db.query(Store).filter(Store.id == current_user.store_id).first()
+            if store and store.code:
+                store_code_suffix = store.code[-2:].zfill(2)
+
+        target_warehouse = filters.get("local", "02")
+        current_inventory_id = filters.get("inventory_id")
+
+        # Query leve: apenas códigos distintos de produtos no armazém
+        query = db.query(
+            func.trim(SB1010.b1_cod).label("code")
+        ).distinct().join(
+            SB2010, and_(
+                func.trim(SB1010.b1_cod) == func.trim(SB2010.b2_cod),
+                SB2010.b2_local == target_warehouse,
+                or_(
+                    SB2010.b2_filial == store_code_suffix,
+                    SB2010.b2_filial == '',
+                    SB2010.b2_filial.is_(None)
+                )
+            )
+        )
+
+        # Excluir produtos já no inventário atual
+        if current_inventory_id:
+            query = query.filter(
+                ~SB1010.b1_cod.in_(
+                    db.query(func.trim(InventoryItem.product_code)).filter(
+                        InventoryItem.inventory_list_id == current_inventory_id
+                    )
+                )
+            )
+
+        # Aplicar mesmos filtros de range
+        if filters.get("produto_from") and filters.get("produto_to"):
+            query = query.filter(and_(func.trim(SB1010.b1_cod) >= filters["produto_from"].strip(), func.trim(SB1010.b1_cod) <= filters["produto_to"].strip()))
+        elif filters.get("produto_from"):
+            query = query.filter(func.trim(SB1010.b1_cod) >= filters["produto_from"].strip())
+        elif filters.get("produto_to"):
+            query = query.filter(func.trim(SB1010.b1_cod) <= filters["produto_to"].strip())
+
+        if filters.get("descricao"):
+            query = query.filter(SB1010.b1_desc.ilike(f"%{filters['descricao']}%"))
+
+        if filters.get("grupo_de"):
+            query = query.filter(SB1010.b1_grupo >= filters["grupo_de"])
+        if filters.get("grupo_ate"):
+            query = query.filter(SB1010.b1_grupo <= filters["grupo_ate"])
+        if filters.get("categoria_de"):
+            query = query.filter(SB1010.b1_xcatgor >= filters["categoria_de"])
+        if filters.get("categoria_ate"):
+            query = query.filter(SB1010.b1_xcatgor <= filters["categoria_ate"])
+        if filters.get("subcategoria_de"):
+            query = query.filter(SB1010.b1_xsubcat >= filters["subcategoria_de"])
+        if filters.get("subcategoria_ate"):
+            query = query.filter(SB1010.b1_xsubcat <= filters["subcategoria_ate"])
+        if filters.get("segmento_de"):
+            query = query.filter(SB1010.b1_xsegmen >= filters["segmento_de"])
+        if filters.get("segmento_ate"):
+            query = query.filter(SB1010.b1_xsegmen <= filters["segmento_ate"])
+        if filters.get("grupo_inv_de"):
+            query = query.filter(SB1010.b1_xgrinve >= filters["grupo_inv_de"])
+        if filters.get("grupo_inv_ate"):
+            query = query.filter(SB1010.b1_xgrinve <= filters["grupo_inv_ate"])
+
+        # Localização (requer JOIN com SBZ010)
+        needs_sbz = any(filters.get(k) for k in ['local1_from', 'local1_to', 'local2_from', 'local2_to', 'local3_from', 'local3_to'])
+        if needs_sbz:
+            query = query.outerjoin(SBZ010, and_(SB1010.b1_cod == SBZ010.bz_cod, or_(SBZ010.bz_filial == store_code_suffix, SBZ010.bz_filial == '', SBZ010.bz_filial.is_(None))))
+            if filters.get("local1_from"): query = query.filter(SBZ010.bz_xlocal1 >= filters["local1_from"])
+            if filters.get("local1_to"): query = query.filter(SBZ010.bz_xlocal1 <= filters["local1_to"])
+            if filters.get("local2_from"): query = query.filter(SBZ010.bz_xlocal2 >= filters["local2_from"])
+            if filters.get("local2_to"): query = query.filter(SBZ010.bz_xlocal2 <= filters["local2_to"])
+            if filters.get("local3_from"): query = query.filter(SBZ010.bz_xlocal3 >= filters["local3_from"])
+            if filters.get("local3_to"): query = query.filter(SBZ010.bz_xlocal3 <= filters["local3_to"])
+
+        results = query.order_by(func.trim(SB1010.b1_cod)).all()
+        codes = [row.code.strip() for row in results]
+
+        logger.info(f"✅ filter-products/codes: {len(codes)} códigos retornados")
+        return {"codes": codes, "total": len(codes)}
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar códigos de produtos: {e}")
+        raise HTTPException(status_code=500, detail=safe_error_response(e, "ao buscar códigos de produtos"))
+
+
+@app.get("/api/v1/inventories/{inventory_id}/items-for-assignment/ids", tags=["Counting Lists"])
+async def get_items_for_assignment_ids(
+    inventory_id: str,
+    list_id: str = Query(None),
+    search: str = Query(None),
+    assignment_status: str = Query("AVAILABLE"),
+    grupo_de: str = Query(None), grupo_ate: str = Query(None),
+    categoria_de: str = Query(None), categoria_ate: str = Query(None),
+    subcategoria_de: str = Query(None), subcategoria_ate: str = Query(None),
+    segmento_de: str = Query(None), segmento_ate: str = Query(None),
+    grupo_inv_de: str = Query(None), grupo_inv_ate: str = Query(None),
+    local1_from: str = Query(None), local1_to: str = Query(None),
+    local2_from: str = Query(None), local2_to: str = Query(None),
+    local3_from: str = Query(None), local3_to: str = Query(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Retorna apenas os IDs de itens que correspondem ao filtro.
+    Endpoint leve para funcionalidade 'Adicionar todos do filtro'.
+    """
+    try:
+        from app.models.models import InventoryList, InventoryItem, InventoryItemSnapshot, CountingList, CountingListItem
+        import uuid
+
+        inventory_uuid = uuid.UUID(inventory_id)
+        list_uuid = uuid.UUID(list_id) if list_id else None
+
+        inventory = db.query(InventoryList).filter(InventoryList.id == inventory_uuid).first()
+        if not inventory:
+            raise HTTPException(status_code=404, detail="Inventário não encontrado")
+
+        # Subquery de atribuição
+        cli_subq = db.query(
+            CountingListItem.inventory_item_id,
+            CountingListItem.counting_list_id,
+        ).join(
+            CountingList, CountingList.id == CountingListItem.counting_list_id
+        ).filter(
+            CountingList.inventory_id == inventory_uuid
+        ).subquery()
+
+        # Query: apenas IDs
+        query = db.query(
+            InventoryItem.id
+        ).outerjoin(
+            InventoryItemSnapshot, InventoryItemSnapshot.inventory_item_id == InventoryItem.id
+        ).outerjoin(
+            cli_subq, cli_subq.c.inventory_item_id == InventoryItem.id
+        ).filter(
+            InventoryItem.inventory_list_id == inventory_uuid
+        )
+
+        # Filtro de busca
+        if search:
+            search_term = f"%{search.strip()}%"
+            query = query.filter((InventoryItem.product_code.ilike(search_term)) | (InventoryItemSnapshot.b1_desc.ilike(search_term)))
+
+        # Filtros range
+        def apply_range(col, val_de, val_ate):
+            nonlocal query
+            if val_de: query = query.filter(col >= val_de.strip())
+            if val_ate: query = query.filter(col <= val_ate.strip())
+
+        apply_range(InventoryItemSnapshot.b1_grupo, grupo_de, grupo_ate)
+        apply_range(InventoryItemSnapshot.b1_xcatgor, categoria_de, categoria_ate)
+        apply_range(InventoryItemSnapshot.b1_xsubcat, subcategoria_de, subcategoria_ate)
+        apply_range(InventoryItemSnapshot.b1_xsegmen, segmento_de, segmento_ate)
+        apply_range(InventoryItemSnapshot.b1_xgrinve, grupo_inv_de, grupo_inv_ate)
+        apply_range(InventoryItemSnapshot.bz_xlocal1, local1_from, local1_to)
+        apply_range(InventoryItemSnapshot.bz_xlocal2, local2_from, local2_to)
+        apply_range(InventoryItemSnapshot.bz_xlocal3, local3_from, local3_to)
+
+        # Filtro assignment_status no SQL
+        if assignment_status == "AVAILABLE":
+            query = query.filter(cli_subq.c.counting_list_id == None)
+        elif assignment_status == "IN_LIST" and list_uuid:
+            query = query.filter(cli_subq.c.counting_list_id == list_uuid)
+        elif assignment_status == "IN_OTHER_LIST":
+            if list_uuid:
+                query = query.filter(cli_subq.c.counting_list_id != None, cli_subq.c.counting_list_id != list_uuid)
+            else:
+                query = query.filter(cli_subq.c.counting_list_id != None)
+
+        results = query.order_by(InventoryItem.sequence).all()
+        ids = [str(row.id) for row in results]
+
+        logger.info(f"✅ items-for-assignment/ids: {len(ids)} IDs retornados")
+        return {"ids": ids, "total": len(ids)}
+
+    except ValueError:
+        raise HTTPException(status_code=400, detail="ID inválido")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar IDs de itens: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+
 
 @app.post("/api/v1/inventory/lists/{inventory_id}/add-products", tags=["Inventory"])
 async def add_products_to_inventory(
@@ -9086,12 +9298,35 @@ async def get_items_for_assignment(
         # Ordenar por sequência
         query = query.order_by(InventoryItem.sequence)
 
-        # Executar query completa para filtrar por assignment_status
-        all_rows = query.all()
+        # ✅ PERFORMANCE: Contadores por status calculados no SQL (sem carregar todos os itens)
+        base_query = query  # query antes de filtro de status
+        from sqlalchemy import func as sql_func
+        total_available = base_query.filter(cli_subq.c.counting_list_id == None).count()
+        total_in_list = base_query.filter(cli_subq.c.counting_list_id == list_uuid).count() if list_uuid else 0
+        total_in_other = base_query.filter(cli_subq.c.counting_list_id != None).count() - total_in_list if list_uuid else base_query.filter(cli_subq.c.counting_list_id != None).count()
 
-        # Classificar cada item
-        items_classified = []
-        for row in all_rows:
+        # ✅ PERFORMANCE: Filtro assignment_status no SQL (era feito em Python)
+        if assignment_status == "AVAILABLE":
+            query = query.filter(cli_subq.c.counting_list_id == None)
+        elif assignment_status == "IN_LIST" and list_uuid:
+            query = query.filter(cli_subq.c.counting_list_id == list_uuid)
+        elif assignment_status == "IN_OTHER_LIST":
+            if list_uuid:
+                query = query.filter(
+                    cli_subq.c.counting_list_id != None,
+                    cli_subq.c.counting_list_id != list_uuid
+                )
+            else:
+                query = query.filter(cli_subq.c.counting_list_id != None)
+
+        # ✅ PERFORMANCE: Contar e paginar no SQL (era feito em Python com .all())
+        total = query.count()
+        offset = (page - 1) * size
+        paginated_rows = query.offset(offset).limit(size).all()
+
+        # Classificar apenas os itens paginados
+        items_result = []
+        for row in paginated_rows:
             if row.assigned_list_id is None:
                 item_status = "AVAILABLE"
             elif list_uuid and str(row.assigned_list_id) == str(list_uuid):
@@ -9099,10 +9334,7 @@ async def get_items_for_assignment(
             else:
                 item_status = "IN_OTHER_LIST"
 
-            if assignment_status and item_status != assignment_status:
-                continue
-
-            items_classified.append({
+            items_result.append({
                 "id": str(row.id),
                 "product_code": row.product_code or "",
                 "product_name": row.product_name or row.product_code or "",
@@ -9122,18 +9354,8 @@ async def get_items_for_assignment(
                 "assigned_list_name": row.assigned_list_name if item_status == "IN_OTHER_LIST" else None,
             })
 
-        # Contadores
-        total = len(items_classified)
-        total_available = sum(1 for i in items_classified if i["assignment_status"] == "AVAILABLE")
-        total_in_list = sum(1 for i in items_classified if i["assignment_status"] == "IN_LIST")
-        total_in_other = sum(1 for i in items_classified if i["assignment_status"] == "IN_OTHER_LIST")
-
-        # Paginação
-        offset = (page - 1) * size
-        paginated_items = items_classified[offset:offset + size]
-
         return {
-            "items": paginated_items,
+            "items": items_result,
             "total": total,
             "page": page,
             "size": size,

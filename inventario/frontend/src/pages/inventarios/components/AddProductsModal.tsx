@@ -284,6 +284,53 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
 
   const allOnPageSelected = selectableProducts.length > 0 && selectableProducts.every((p) => selected.has(p.code));
 
+  // === Select all from filter (all pages) ===
+  const [loadingAllCodes, setLoadingAllCodes] = useState(false);
+
+  function buildFilterBody(): Record<string, unknown> {
+    const body: Record<string, unknown> = { inventory_id: inventoryId };
+    if (warehouse) body.local = warehouse;
+    if (!isAdvancedMode && search) body.descricao = search;
+    if (isAdvancedMode) {
+      const f = appliedFilters;
+      if (f.grupo.from) body.grupo_de = f.grupo.from;
+      if (f.grupo.to) body.grupo_ate = f.grupo.to;
+      if (f.categoria.from) body.categoria_de = f.categoria.from;
+      if (f.categoria.to) body.categoria_ate = f.categoria.to;
+      if (f.subcategoria.from) body.subcategoria_de = f.subcategoria.from;
+      if (f.subcategoria.to) body.subcategoria_ate = f.subcategoria.to;
+      if (f.segmento.from) body.segmento_de = f.segmento.from;
+      if (f.segmento.to) body.segmento_ate = f.segmento.to;
+      if (f.grupoInv.from) body.grupo_inv_de = f.grupoInv.from;
+      if (f.grupoInv.to) body.grupo_inv_ate = f.grupoInv.to;
+      if (f.local1.from) body.local1_from = f.local1.from;
+      if (f.local1.to) body.local1_to = f.local1.to;
+      if (f.local2.from) body.local2_from = f.local2.from;
+      if (f.local2.to) body.local2_to = f.local2.to;
+      if (f.local3.from) body.local3_from = f.local3.from;
+      if (f.local3.to) body.local3_to = f.local3.to;
+    }
+    return body;
+  }
+
+  async function handleSelectAllFromFilter() {
+    setLoadingAllCodes(true);
+    try {
+      const res = await inventoryService.filtrarProdutosCodigos(buildFilterBody());
+      if (res.codes.length > 0) {
+        setSelected((prev) => {
+          const next = new Set(prev);
+          for (const code of res.codes) next.add(code.trim());
+          return next;
+        });
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setLoadingAllCodes(false);
+    }
+  }
+
   // === Add products ===
   async function handleAdd() {
     if (selected.size === 0) return;
@@ -600,6 +647,7 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
                           type="checkbox"
                           checked={selected.has(p.code)}
                           onChange={() => toggleSelect(p.code)}
+                          onClick={(e) => e.stopPropagation()}
                           disabled={isCurrent}
                           className="rounded border-slate-300 disabled:opacity-30"
                         />
@@ -677,6 +725,22 @@ export function AddProductsModal({ inventoryId, warehouse, onClose, onAdded }: P
             </div>
           </div>
           <div className="flex gap-2">
+            {selected.size > 0 ? (
+              <button
+                onClick={() => setSelected(new Set())}
+                className="px-3 py-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100"
+              >
+                Desmarcar Todos ({selected.size.toLocaleString('pt-BR')})
+              </button>
+            ) : totalCount > 0 ? (
+              <button
+                onClick={handleSelectAllFromFilter}
+                disabled={loadingAllCodes || loading}
+                className="px-3 py-2 text-sm text-capul-700 bg-capul-50 border border-capul-200 rounded-lg hover:bg-capul-100 disabled:opacity-50"
+              >
+                {loadingAllCodes ? 'Carregando...' : `Selecionar Todos (${totalCount.toLocaleString('pt-BR')})`}
+              </button>
+            ) : null}
             <button
               onClick={handleClose}
               className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50"
