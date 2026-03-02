@@ -6,7 +6,7 @@ from typing import List, Optional, Dict, Any
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func
+from sqlalchemy import and_, func
 import logging
 from app.core.exceptions import safe_error_response
 
@@ -24,6 +24,15 @@ from app.schemas.counting_list_schemas import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _check_not_closed(inventory):
+    """Bloqueia operações em inventário efetivado (CLOSED)."""
+    if inventory and inventory.status in [InventoryStatus.CLOSED, "CLOSED"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Inventário efetivado. Não é possível realizar alterações após a integração com o Protheus."
+        )
 
 
 @router.get("/inventories/{inventory_id}/lists/{list_id}/products")
@@ -231,6 +240,7 @@ async def create_counting_list(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Inventário não encontrado"
         )
+    _check_not_closed(inventory)
 
     # Verificar permissões
     if current_user.role not in ["ADMIN", "SUPERVISOR"]:
@@ -376,6 +386,10 @@ async def update_counting_list(
             detail="Lista de contagem não encontrada"
         )
 
+    # Bloquear inventário efetivado
+    inventory = db.query(InventoryList).filter(InventoryList.id == counting_list.inventory_id).first()
+    _check_not_closed(inventory)
+
     # Verificar permissões
     if current_user.role not in ["ADMIN", "SUPERVISOR"]:
         raise HTTPException(
@@ -418,6 +432,10 @@ async def update_counting_list_status(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lista de contagem não encontrada"
         )
+
+    # Bloquear inventário efetivado
+    inventory = db.query(InventoryList).filter(InventoryList.id == counting_list.inventory_id).first()
+    _check_not_closed(inventory)
 
     # Verificar permissões
     if current_user.role not in ["ADMIN", "SUPERVISOR"]:
@@ -482,6 +500,10 @@ async def add_items_to_counting_list(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lista de contagem não encontrada"
         )
+
+    # Bloquear inventário efetivado
+    inventory = db.query(InventoryList).filter(InventoryList.id == counting_list.inventory_id).first()
+    _check_not_closed(inventory)
 
     # Verificar se a lista já foi liberada
     if counting_list.list_status != 'PREPARACAO':
@@ -568,6 +590,10 @@ async def remove_item_from_counting_list(
 
     # Verificar se a lista já foi liberada
     counting_list = db.query(CountingList).filter(CountingList.id == list_id).first()
+
+    # Bloquear inventário efetivado
+    inventory = db.query(InventoryList).filter(InventoryList.id == counting_list.inventory_id).first()
+    _check_not_closed(inventory)
     if counting_list.list_status not in ['PREPARACAO', 'ABERTA']:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -616,6 +642,10 @@ async def release_counting_list(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lista de contagem não encontrada"
         )
+
+    # Bloquear inventário efetivado
+    inventory_check = db.query(InventoryList).filter(InventoryList.id == counting_list.inventory_id).first()
+    _check_not_closed(inventory_check)
 
     # Verificar se a lista tem itens
     items_count = db.query(func.count(CountingListItem.id)).filter(
@@ -681,6 +711,10 @@ async def force_finalize_counting_list(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lista de contagem não encontrada"
         )
+
+    # Bloquear inventário efetivado
+    inventory = db.query(InventoryList).filter(InventoryList.id == counting_list.inventory_id).first()
+    _check_not_closed(inventory)
 
     # Finalizar imediatamente independente do status atual
     old_status = counting_list.list_status
@@ -884,6 +918,10 @@ async def delete_counting_list(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lista de contagem não encontrada"
         )
+
+    # Bloquear inventário efetivado
+    inventory = db.query(InventoryList).filter(InventoryList.id == counting_list.inventory_id).first()
+    _check_not_closed(inventory)
 
     # Verificar permissões (ADMIN ou SUPERVISOR)
     if current_user.role not in ["ADMIN", "SUPERVISOR"]:

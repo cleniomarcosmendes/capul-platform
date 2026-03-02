@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Header } from '../layouts/Header';
 import { syncService } from '../services/sync.service';
 import { integrationService } from '../services/integration.service';
@@ -137,14 +138,18 @@ type IntegrationMode = 'SIMPLES' | 'COMPARATIVO';
 
 function TabEnvio() {
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [inventarios, setInventarios] = useState<InventoryList[]>([]);
   const [loading, setLoading] = useState(true);
   const [integrations, setIntegrations] = useState<Map<string, Integration | null>>(new Map());
 
-  // Mode selection
-  const [mode, setMode] = useState<IntegrationMode>('SIMPLES');
-  const [selectedA, setSelectedA] = useState<string>('');
-  const [selectedB, setSelectedB] = useState<string>('');
+  // Mode selection — pre-fill from query params
+  const qMode = searchParams.get('mode')?.toUpperCase() as IntegrationMode | undefined;
+  const qInvA = searchParams.get('inv_a') ?? '';
+  const qInvB = searchParams.get('inv_b') ?? '';
+  const [mode, setMode] = useState<IntegrationMode>(qMode === 'COMPARATIVO' ? 'COMPARATIVO' : 'SIMPLES');
+  const [selectedA, setSelectedA] = useState<string>(qInvA);
+  const [selectedB, setSelectedB] = useState<string>(qInvB);
 
   // Preview
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -161,11 +166,18 @@ function TabEnvio() {
   const [sendLoading, setSendLoading] = useState<string | null>(null);
 
   useEffect(() => {
-    inventoryService.listar({ status: 'COMPLETED', size: '50' })
-      .then(async (res) => {
-        setInventarios(res.items);
+    // Buscar inventários COMPLETED e CLOSED (efetivados) em paralelo
+    Promise.all([
+      inventoryService.listar({ status: 'COMPLETED', size: '50' }),
+      inventoryService.listar({ status: 'CLOSED', size: '50' }),
+    ])
+      .then(async ([completedRes, closedRes]) => {
+        // Mesclar sem duplicados
+        const allItems = [...completedRes.items, ...closedRes.items];
+        const unique = Array.from(new Map(allItems.map((i) => [i.id, i])).values());
+        setInventarios(unique);
         const map = new Map<string, Integration | null>();
-        for (const inv of res.items) {
+        for (const inv of unique) {
           const existing = await integrationService.buscarExistente(inv.id);
           map.set(inv.id, existing);
         }
@@ -173,6 +185,11 @@ function TabEnvio() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    // Clean query params after reading
+    if (searchParams.has('mode') || searchParams.has('inv_a') || searchParams.has('inv_b')) {
+      const cleanParams = new URLSearchParams();
+      setSearchParams(cleanParams, { replace: true });
+    }
   }, []);
 
   async function handlePreview() {
@@ -186,8 +203,9 @@ function TabEnvio() {
       );
       setPreviewData(result);
       setShowPreview(true);
-    } catch {
-      toast.error('Erro ao gerar preview da integracao.');
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Erro ao gerar preview da integracao.');
     } finally {
       setPreviewLoading(false);
     }
@@ -209,8 +227,9 @@ function TabEnvio() {
       // Refresh integrations
       const existing = await integrationService.buscarExistente(selectedA);
       setIntegrations((prev) => new Map(prev).set(selectedA, existing));
-    } catch {
-      toast.error('Erro ao salvar integracao.');
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Erro ao salvar integracao.');
     } finally {
       setSaveLoading(false);
     }
@@ -224,7 +243,7 @@ function TabEnvio() {
       await integrationService.enviar(confirmSend.integrationId);
       const updated = await integrationService.buscarPorId(confirmSend.integrationId);
       setIntegrations((prev) => new Map(prev).set(confirmSend.inventoryId, updated));
-      toast.success('Dados salvos como ENVIADO (modo simulado — envio real ao Protheus pendente de configuracao da API).');
+      toast.success('Integracao enviada e inventario(s) efetivado(s) com sucesso.');
     } catch {
       toast.error('Erro ao enviar ao Protheus.');
     } finally {
@@ -232,8 +251,9 @@ function TabEnvio() {
     }
   }
 
-  // Inventarios without integration (available for selection)
+  // Inventarios without integration (available for selection) — only COMPLETED, not CLOSED
   const availableForSelection = inventarios.filter((inv) => {
+    if (inv.status === 'CLOSED') return false; // Efetivados nao podem gerar nova integracao
     const integ = integrations.get(inv.id);
     return !integ || integ.status === 'PENDENTE';
   });
@@ -383,7 +403,12 @@ function TabEnvio() {
 
                 return (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-2.5 px-4 font-medium text-slate-800">{inv.name}</td>
+                    <td className="py-2.5 px-4">
+                      <span className="font-medium text-slate-800">{inv.name}</span>
+                      {inv.status === 'CLOSED' && (
+                        <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">Efetivado</span>
+                      )}
+                    </td>
                     <td className="py-2.5 px-4 font-mono text-slate-600">{inv.warehouse}</td>
                     <td className="py-2.5 px-4 text-slate-600">{inv.total_items}</td>
                     <td className="py-2.5 px-4">

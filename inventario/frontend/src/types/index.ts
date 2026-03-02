@@ -148,26 +148,6 @@ export interface CountingListCreate {
   counter_cycle_3?: string;
 }
 
-// === Counting List Item (detail view) ===
-
-export interface CountingListItem {
-  id: string;
-  product_code: string;
-  product_description: string;
-  expected_quantity: number;
-  system_qty: number;
-  counted_qty: number | null;
-  status: string;
-  count_cycle_1: number | null;
-  count_cycle_2: number | null;
-  count_cycle_3: number | null;
-  needs_recount_cycle_1: boolean;
-  needs_recount_cycle_2: boolean;
-  needs_recount_cycle_3: boolean;
-  last_counted_at: string | null;
-  last_counted_by: string | null;
-}
-
 // === Counting (registro de contagem) ===
 
 export interface Counting {
@@ -181,14 +161,6 @@ export interface Counting {
   count_number: number;
   created_at: string;
   updated_at: string | null;
-}
-
-export interface CountingCreate {
-  quantity: number;
-  lot_number?: string;
-  serial_number?: string;
-  observation?: string;
-  location?: string;
 }
 
 // === Warehouse ===
@@ -221,17 +193,6 @@ export interface Product {
   category: string | null;
   warehouse_id: string | null;
   store_id: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-// === Store ===
-
-export interface Store {
-  id: string;
-  code: string;
-  name: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -682,14 +643,14 @@ export interface IntegrationPreviewResult {
 
 export interface Integration {
   id: string;
-  inventory_a_id: string;
+  inventory_a_id?: string;
   inventory_b_id?: string | null;
-  integration_type: 'SIMPLE' | 'COMPARATIVE';
+  integration_type?: 'SIMPLE' | 'COMPARATIVE';
   status: string;
-  version: number;
-  created_at: string;
-  sent_at: string | null;
-  items_count: number;
+  version?: number;
+  created_at?: string;
+  sent_at?: string | null;
+  items_count?: number;
 }
 
 export interface IntegrationSaveResult {

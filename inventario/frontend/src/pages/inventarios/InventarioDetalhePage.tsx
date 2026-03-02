@@ -29,6 +29,8 @@ import {
   UserCog,
   Loader2,
   Send,
+  ArrowLeftRight,
+  ShieldCheck,
 } from 'lucide-react';
 import { PageSkeleton } from '../../components/LoadingSkeleton';
 import { ErrorState } from '../../components/ErrorState';
@@ -185,6 +187,16 @@ export function InventarioDetalhePage() {
         : inventario.list_status;
   const lsc = listStatusConfig[derivedListStatus] || listStatusConfig.PREPARACAO;
 
+  const isEfetivado = inventario.status === 'CLOSED';
+
+  // Labels amigáveis para o status do inventário
+  const statusLabel: Record<string, string> = {
+    DRAFT: 'Em Preparacao',
+    IN_PROGRESS: 'Em Andamento',
+    COMPLETED: 'Encerrado',
+    CLOSED: 'Efetivado',
+  };
+
   const tabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { key: 'visao-geral', label: 'Visao Geral', icon: LayoutDashboard },
     { key: 'itens', label: `Itens (${itemsTotal})`, icon: Package },
@@ -205,14 +217,37 @@ export function InventarioDetalhePage() {
           Voltar para lista
         </button>
 
+        {/* Banner Efetivado */}
+        {isEfetivado && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
+            <ShieldCheck className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-emerald-800">Inventario Efetivado</p>
+              <p className="text-xs text-emerald-600 mt-0.5">
+                Este inventario foi efetivado e integrado ao Protheus. Nao e possivel realizar alteracoes.
+                Voce pode visualizar relatorios, comparar com outros inventarios e exportar dados normalmente.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Cabecalho info */}
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <div className="flex items-start justify-between mb-4">
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <h2 className="text-xl font-bold text-slate-800">{inventario.name}</h2>
-                <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${lsc.color}`}>
-                  {lsc.label}
+                {isEfetivado ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                    Efetivado
+                  </span>
+                ) : (
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${lsc.color}`}>
+                    {lsc.label}
+                  </span>
+                )}
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+                  {statusLabel[inventario.status] ?? inventario.status}
                 </span>
               </div>
               {inventario.description && (
@@ -220,7 +255,16 @@ export function InventarioDetalhePage() {
               )}
             </div>
             <div className="flex gap-2">
-              {(inventario.status === 'COMPLETED' || inventario.status === 'CLOSED') && (
+              {(inventario.status === 'COMPLETED' || isEfetivado) && (
+                <Link
+                  to={`/inventario/comparacao?inv_a=${id}`}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-purple-300 text-purple-600 text-sm rounded-lg hover:bg-purple-50"
+                >
+                  <ArrowLeftRight className="w-4 h-4" />
+                  Comparar
+                </Link>
+              )}
+              {(inventario.status === 'COMPLETED' || isEfetivado) && (
                 <Link
                   to={`/inventario/sincronizacao`}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"

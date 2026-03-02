@@ -1199,6 +1199,16 @@ async def save_integration(
     Salva/atualiza a integração no banco (status DRAFT).
     Não envia para o Protheus ainda.
     """
+    # Bloquear se inventário já está efetivado (CLOSED)
+    inv_a_check = db.execute(text("""
+        SELECT status FROM inventario.inventory_lists WHERE id = :id
+    """), {"id": str(inventory_a_id)}).fetchone()
+    if inv_a_check and inv_a_check[0] == 'CLOSED':
+        raise HTTPException(
+            status_code=400,
+            detail="Inventário já efetivado. Não é possível criar nova integração."
+        )
+
     # Gerar preview primeiro
     # ✅ v2.19.49: Corrigir chamada com parâmetro view_only
     preview = await preview_integration(
@@ -1349,9 +1359,10 @@ async def send_to_protheus(
     Por enquanto, apenas atualiza o status para SENT.
     A integração real com API Protheus será implementada posteriormente.
     """
-    # Buscar integração
+    # Buscar integração com IDs dos inventários
     query = text("""
-        SELECT id, status, integration_data, integration_type
+        SELECT id, status, integration_data, integration_type,
+               inventory_a_id, inventory_b_id
         FROM inventario.protheus_integrations
         WHERE id = :id
     """)
@@ -1361,6 +1372,8 @@ async def send_to_protheus(
         raise HTTPException(status_code=404, detail="Integração não encontrada")
 
     current_status = result[1]
+    inventory_a_id = result[4]
+    inventory_b_id = result[5]
 
     if current_status not in ["DRAFT", "ERROR"]:
         raise HTTPException(
@@ -1380,7 +1393,7 @@ async def send_to_protheus(
             "note": "SIMULACAO - Integração real será implementada após definição com analista Protheus"
         }
 
-        # Atualizar status
+        # Atualizar status da integração
         db.execute(text("""
             UPDATE inventario.protheus_integrations
             SET status = 'SENT',
@@ -1393,16 +1406,36 @@ async def send_to_protheus(
             "response": json.dumps(protheus_response)
         })
 
+        # EFETIVAR: Transicionar inventário(s) para CLOSED
+        db.execute(text("""
+            UPDATE inventario.inventory_lists
+            SET status = 'CLOSED',
+                list_status = 'EFETIVADA',
+                updated_at = NOW()
+            WHERE id = :inv_id
+              AND status = 'COMPLETED'
+        """), {"inv_id": str(inventory_a_id)})
+
+        if inventory_b_id:
+            db.execute(text("""
+                UPDATE inventario.inventory_lists
+                SET status = 'CLOSED',
+                    list_status = 'EFETIVADA',
+                    updated_at = NOW()
+                WHERE id = :inv_id
+                  AND status = 'COMPLETED'
+            """), {"inv_id": str(inventory_b_id)})
+
         db.commit()
 
-        logger.info(f"Integração enviada: id={integration_id}")
+        logger.info(f"Integração enviada e inventário(s) efetivado(s): id={integration_id}")
 
         return {
             "success": True,
             "integration_id": str(integration_id),
             "status": "SENT",
             "protheus_response": protheus_response,
-            "message": "Integração enviada com sucesso (modo simulação)"
+            "message": "Integração enviada e inventário(s) efetivado(s) com sucesso"
         }
 
     except Exception as e:

@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Header } from '../layouts/Header';
 import { comparisonService } from '../services/comparison.service';
+import { inventoryService } from '../services/inventory.service';
 import { PageSkeleton } from '../components/LoadingSkeleton';
 import { ErrorState } from '../components/ErrorState';
 import { useToast } from '../contexts/ToastContext';
-import type { ComparisonResult, ComparisonItem } from '../types';
-import { ArrowLeftRight, FileSpreadsheet, FileJson, Warehouse } from 'lucide-react';
+import type { ComparisonResult, ComparisonItem, InventoryList } from '../types';
+import { ArrowLeftRight, FileSpreadsheet, FileJson, Warehouse, Send } from 'lucide-react';
 import { downloadCSV } from '../utils/csv';
 import { ExportDropdown } from '../components/ExportDropdown';
 import { downloadExcel, printTable } from '../utils/export';
@@ -30,17 +31,41 @@ function cellColor(divergence: number, difFinal: number): string {
 
 export default function ComparacaoPage() {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const invAId = params.get('inv_a') ?? '';
   const invBId = params.get('inv_b') ?? '';
   const mode = (params.get('mode') as Mode) || 'manual';
 
   const [result, setResult] = useState<ComparisonResult | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const toast = useToast();
 
+  // For inventory selector when only inv_a is provided
+  const [availableInventarios, setAvailableInventarios] = useState<InventoryList[]>([]);
+  const [selectorLoading, setSelectorLoading] = useState(false);
+
+  // Load available inventories for selector when only inv_a
+  useEffect(() => {
+    if (invAId && !invBId) {
+      setSelectorLoading(true);
+      inventoryService.listar({ status: 'COMPLETED', size: '50' })
+        .then((res) => {
+          // Also include CLOSED inventories
+          inventoryService.listar({ status: 'CLOSED', size: '50' })
+            .then((res2) => {
+              const all = [...res.items, ...res2.items].filter((inv) => inv.id !== invAId);
+              setAvailableInventarios(all);
+            })
+            .catch(() => setAvailableInventarios(res.items.filter((inv) => inv.id !== invAId)));
+        })
+        .catch(() => {})
+        .finally(() => setSelectorLoading(false));
+    }
+  }, [invAId, invBId]);
+
   const loadData = useCallback(async () => {
-    if (!invAId || !invBId) { setError(true); setLoading(false); return; }
+    if (!invAId || !invBId) { setLoading(false); return; }
     setLoading(true);
     setError(false);
     try {
@@ -53,7 +78,7 @@ export default function ComparacaoPage() {
     }
   }, [invAId, invBId]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { if (invAId && invBId) loadData(); }, [loadData]);
 
   const items = useMemo(() => {
     if (!result) return [];
@@ -115,12 +140,53 @@ export default function ComparacaoPage() {
     setParams(next);
   };
 
-  if (!invAId || !invBId) {
+  if (!invAId) {
     return (
       <>
         <Header title="Comparacao de Inventarios" />
         <div className="p-4 md:p-6">
-          <ErrorState message="Parametros inv_a e inv_b sao obrigatorios na URL." />
+          <ErrorState message="Parametro inv_a e obrigatorio na URL." />
+        </div>
+      </>
+    );
+  }
+
+  if (!invBId) {
+    return (
+      <>
+        <Header title="Comparacao de Inventarios" />
+        <div className="p-4 md:p-6 space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+            <h3 className="font-semibold text-slate-800">Selecione o inventario para comparar</h3>
+            <p className="text-sm text-slate-500">
+              Escolha um segundo inventario (preferencialmente de armazem diferente) para realizar a comparacao.
+            </p>
+            {selectorLoading ? (
+              <p className="text-sm text-slate-400">Carregando inventarios...</p>
+            ) : availableInventarios.length === 0 ? (
+              <p className="text-sm text-amber-600">Nenhum outro inventario encerrado disponivel para comparacao.</p>
+            ) : (
+              <div className="space-y-3">
+                <select
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      const next = new URLSearchParams(params);
+                      next.set('inv_b', e.target.value);
+                      setParams(next);
+                    }
+                  }}
+                  className="w-full max-w-md px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-capul-500 focus:border-capul-500"
+                >
+                  <option value="">Selecione um inventario...</option>
+                  {availableInventarios.map((inv) => (
+                    <option key={inv.id} value={inv.id}>
+                      {inv.name} (Armazem {inv.warehouse}) — {inv.total_items} itens
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
         </div>
       </>
     );
@@ -228,6 +294,30 @@ export default function ComparacaoPage() {
             ) : (
               <ManualTable items={sortedItems} invA={result.inventory_a} invB={result.inventory_b} />
             )}
+
+            {/* Gerar Integração Protheus */}
+            <div className="bg-white rounded-xl border-2 border-green-200 p-5">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
+                    <Send className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-800">Gerar Integracao Protheus</h4>
+                    <p className="text-xs text-slate-500">
+                      Envie os dados comparativos para o Protheus no modo COMPARATIVO (transferencias + ajustes).
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigate(`/inventario/sincronizacao?mode=comparativo&inv_a=${invAId}&inv_b=${invBId}`)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm rounded-lg font-medium hover:bg-green-700 transition-colors"
+                >
+                  <Send className="w-4 h-4" />
+                  Ir para Integracao
+                </button>
+              </div>
+            </div>
           </>
         ) : null}
       </div>

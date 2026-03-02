@@ -8,12 +8,11 @@ Autor: Sistema de Inventário
 Data: 2025-01-17
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from uuid import UUID
 import logging
 from app.core.exceptions import safe_error_response
 

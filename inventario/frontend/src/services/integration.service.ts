@@ -14,7 +14,16 @@ export const integrationService = {
   async buscarExistente(inventoryId: string): Promise<Integration | null> {
     try {
       const { data } = await inventarioApi.get(`/integration/protheus/existing-integration/${inventoryId}`);
-      return data;
+      // Backend retorna { has_integration: bool, integration_info?: { id, status, ... } }
+      if (!data?.has_integration || !data?.integration_info) return null;
+      return {
+        id: data.integration_info.id,
+        status: data.integration_info.status,
+        integration_type: data.integration_info.integration_type,
+        created_at: data.integration_info.created_at,
+        sent_at: data.integration_info.sent_at,
+        confirmed_at: data.integration_info.confirmed_at,
+      } as Integration;
     } catch {
       return null;
     }

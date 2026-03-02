@@ -3,7 +3,6 @@ Endpoints para Atribuição de Contadores - Versão Simplificada
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func, case
 from datetime import datetime
@@ -36,18 +35,6 @@ from sqlalchemy import text  # ✅ v2.17.4: Para queries SQL raw
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-security = HTTPBearer()
-
-# =================================
-# AUTENTICAÇÃO LOCAL
-# =================================
-
-# ✅ CORREÇÃO: Função get_current_user duplicada REMOVIDA
-# A função correta está importada de app.core.security (linha 15)
-# Esta função estava causando erro pois usava payload["sub"] como username (ERRADO - é user_id)
-#
-# def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
-#     # FUNÇÃO DUPLICADA REMOVIDA - NÃO USAR
 
 # =================================
 # ENDPOINTS DE ATRIBUIÇÃO SIMPLIFICADA

@@ -60,6 +60,20 @@ def check_inventory_access(db, inventory_id, current_user):
             InventoryList.store_id == current_user.store_id
         ).first()
 
+
+def check_inventory_not_closed(inventory):
+    """
+    Verifica se o inventário NÃO está efetivado (CLOSED).
+    Inventários efetivados são somente leitura.
+    Lança HTTPException 400 se estiver CLOSED.
+    """
+    from app.models.models import InventoryStatus
+    if inventory and inventory.status in [InventoryStatus.CLOSED, "CLOSED"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Inventário efetivado. Não é possível realizar alterações após a integração com o Protheus."
+        )
+
 # =================================
 # IMPORTS SEGUROS
 # =================================
@@ -2226,9 +2240,12 @@ async def add_products_to_inventory(
             }, success=False)
         
         # Buscar inventário de forma resiliente
+        inventory_for_check = check_inventory_access(db, inventory_uuid, current_user)
+        check_inventory_not_closed(inventory_for_check)
+
         inventory = safe_query(
             db,
-            lambda: check_inventory_access(db, inventory_uuid, current_user),
+            lambda: inventory_for_check,
             fallback=None,
             log_prefix=f"check_inventory_{inventory_id}"
         )
@@ -3332,7 +3349,10 @@ async def finalize_inventory(
         
         if not inventory:
             return {"success": False, "message": "Inventário não encontrado"}
-        
+
+        # Bloquear inventário efetivado
+        check_inventory_not_closed(inventory)
+
         # 🔧 FIX v2.19.19: Verificar list_status (campo correto), não status
         if inventory.list_status == 'ENCERRADA':
             return {"success": False, "message": "Inventário já foi finalizado"}
@@ -3437,6 +3457,8 @@ async def finalize_inventory(
             }
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         print(f"Erro ao finalizar inventário: {e}")
@@ -3649,10 +3671,13 @@ async def close_counting_round(
             InventoryList.id == inventory_uuid,
             InventoryList.store_id == current_user.store_id
         ).first()
-        
+
         if not inventory:
             return {"success": False, "message": "Inventário não encontrado"}
-        
+
+        # Bloquear inventário efetivado
+        check_inventory_not_closed(inventory)
+
         # Extrair user_id e round do parâmetro count_round (formato: user_id_round)
         try:
             # O formato é algo como: 0f3ed81e-2098-47b9-b60a-4a4e46fdcd6e_1
@@ -3772,6 +3797,8 @@ async def close_counting_round(
             }
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         print(f"Erro ao encerrar rodada: {e}")
@@ -6212,7 +6239,10 @@ async def release_items_for_recount(
         
         if not inventory_list:
             raise HTTPException(status_code=404, detail="Lista de inventário não encontrada")
-        
+
+        # Bloquear inventário efetivado
+        check_inventory_not_closed(inventory_list)
+
         # Atualizar status para EM_CONTAGEM se não estiver já em contagem
         old_status = inventory_list.list_status
         if inventory_list.list_status in ["DRAFT", "ABERTA"]:
@@ -6289,6 +6319,8 @@ async def release_items_for_recount(
             "list_status": inventory_list.list_status
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"❌ Erro ao liberar itens para recontagem: {str(e)}")
         raise HTTPException(status_code=500, detail=safe_error_response(e, "interno do servidor"))
@@ -6742,10 +6774,13 @@ async def register_count(
         inventory = db.query(InventoryList).filter(
             InventoryList.id == inventory_uuid
         ).first()
-        
+
         if not inventory:
             raise HTTPException(status_code=404, detail="Inventário não encontrado")
-        
+
+        # Bloquear inventário efetivado
+        check_inventory_not_closed(inventory)
+
         # ✅ CORREÇÃO MULTI-LISTAS: Verificar status da COUNTING_LIST, não inventory_list
         from app.models.models import CountingAssignment as CountingAssignmentModel, CountingList
 
@@ -9685,6 +9720,9 @@ async def update_inventory_status(
         if not inventory:
             raise HTTPException(status_code=404, detail="Inventário não encontrado")
 
+        # Bloquear inventário efetivado
+        check_inventory_not_closed(inventory)
+
         # Atualizar apenas o status do inventário principal
         inventory.list_status = status
         db.commit()
@@ -9697,6 +9735,8 @@ async def update_inventory_status(
             "new_status": status
         }
 
+    except HTTPException:
+        raise
     except ValueError:
         raise HTTPException(status_code=400, detail="ID inválido")
     except Exception as e:
@@ -11890,6 +11930,11 @@ async def save_count_multilista_direct(
                 status_code=404,
                 detail="Lista de contagem não encontrada"
             )
+
+        # Bloquear inventário efetivado
+        from app.models.models import InventoryList as InvListModel
+        inv_for_check = db.query(InvListModel).filter(InvListModel.id == counting_list.inventory_id).first()
+        check_inventory_not_closed(inv_for_check)
 
         # 2. Verificar status da LISTA (não do inventário)
         if counting_list.list_status != 'EM_CONTAGEM':

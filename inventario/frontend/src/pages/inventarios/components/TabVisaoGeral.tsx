@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Package,
   ListChecks,
@@ -10,6 +11,9 @@ import {
   ArrowRight,
   AlertTriangle,
   Clock,
+  ArrowLeftRight,
+  Send,
+  ShieldCheck,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/inventory.service';
 import { useToast } from '../../../contexts/ToastContext';
@@ -130,10 +134,10 @@ function StatusBanner({ status }: { status: string }) {
       bg: 'bg-green-50 border-green-200',
     },
     CLOSED: {
-      title: 'Inventario Encerrado',
-      desc: 'Este inventario foi encerrado e nao pode mais ser alterado.',
-      color: 'text-purple-700',
-      bg: 'bg-purple-50 border-purple-200',
+      title: 'Inventario Efetivado',
+      desc: 'Este inventario foi efetivado e integrado ao Protheus. Nao e possivel realizar alteracoes.',
+      color: 'text-emerald-700',
+      bg: 'bg-emerald-50 border-emerald-200',
     },
   };
 
@@ -567,6 +571,7 @@ function CompletedSummary({
   onEncerrar: () => void;
   actionLoading: string | null;
 }) {
+  const navigate = useNavigate();
   const accuracy =
     inventario.total_items > 0
       ? Math.round((inventario.counted_items / inventario.total_items) * 100)
@@ -604,9 +609,42 @@ function CompletedSummary({
           actionLabel="Ver Itens"
           onClick={() => onNavigateTab('itens')}
         />
+        <ActionCard
+          icon={ArrowLeftRight}
+          iconColor="bg-violet-100 text-violet-600"
+          title="Comparar Inventarios"
+          description="Compare com outro inventario para identificar transferencias logicas."
+          actionLabel="Comparar"
+          onClick={() => navigate(`/inventario/comparacao?inv_a=${inventario.id}`)}
+        />
+        <ActionCard
+          icon={Send}
+          iconColor="bg-green-100 text-green-600"
+          title={status === 'CLOSED' ? 'Ver Integracao' : 'Integracao Protheus'}
+          description={status === 'CLOSED' ? 'Visualize os dados da integracao enviada ao Protheus.' : 'Envie os resultados do inventario para o ERP Protheus.'}
+          actionLabel={status === 'CLOSED' ? 'Ver Detalhes' : 'Ir para Integracao'}
+          onClick={() => navigate('/inventario/sincronizacao')}
+        />
       </div>
 
-      {/* Encerrar — apenas COMPLETED */}
+      {/* Efetivado — apenas CLOSED */}
+      {status === 'CLOSED' && (
+        <div className="bg-white rounded-xl border-2 border-emerald-200 p-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-slate-800">Inventario Efetivado</h4>
+              <p className="text-xs text-slate-500">
+                Integracao enviada ao Protheus. Este inventario esta bloqueado para alteracoes.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Encerrar — apenas COMPLETED (nao-efetivado) */}
       {status === 'COMPLETED' && (
         <div className="bg-white rounded-xl border-2 border-green-200 p-5">
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -673,7 +711,7 @@ function Timeline({
       date: null,
     },
     {
-      label: 'Inventario encerrado',
+      label: 'Inventario efetivado (integrado ao Protheus)',
       completed: inventario.status === 'CLOSED',
       date: null,
     },

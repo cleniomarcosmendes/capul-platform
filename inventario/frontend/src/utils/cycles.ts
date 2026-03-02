@@ -44,21 +44,6 @@ export function hasAnyEntregasPosterior(products: { b2_xentpos?: number }[]): bo
 }
 
 /**
- * Verificar se o item precisa de próximo ciclo (recontagem).
- */
-export function precisaProximoCiclo(
-  count1: number | null,
-  count2: number | null,
-  cycleNumber: number,
-): boolean {
-  if (cycleNumber === 1 && count1 !== null) return true;
-  if (cycleNumber === 2 && count1 !== null && count2 !== null) {
-    return Math.abs(count1 - count2) >= 0.01;
-  }
-  return false;
-}
-
-/**
  * Cor do badge de ciclo.
  */
 export function cycleBadgeColor(cycle: number): string {
