@@ -193,7 +193,7 @@ export function InventarioDetalhePage() {
   const statusLabel: Record<string, string> = {
     DRAFT: 'Em Preparacao',
     IN_PROGRESS: 'Em Andamento',
-    COMPLETED: 'Encerrado',
+    COMPLETED: 'Concluido',
     CLOSED: 'Efetivado',
   };
 
