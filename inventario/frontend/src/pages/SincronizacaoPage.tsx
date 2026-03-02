@@ -419,7 +419,7 @@ function TabEnvio() {
                           ? 'bg-red-100 text-red-700'
                           : 'bg-amber-100 text-amber-700'
                       }`}>
-                        {integration.status}
+                        {{ DRAFT: 'Rascunho', PENDENTE: 'Pendente', ENVIADO: 'Enviado', CONFIRMADO: 'Confirmado', ERRO: 'Erro', CANCELADO: 'Cancelado' }[integration.status] ?? integration.status}
                       </span>
                     </td>
                     <td className="py-2.5 px-4 text-right">

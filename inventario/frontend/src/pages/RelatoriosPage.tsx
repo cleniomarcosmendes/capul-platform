@@ -172,7 +172,7 @@ export function RelatoriosPage() {
                 <option value="">Selecione um inventario</option>
                 {inventarios.map((inv) => (
                   <option key={inv.id} value={inv.id}>
-                    {inv.name} ({inv.warehouse}) — {inv.status === 'COMPLETED' ? 'Concluido' : inv.status === 'IN_PROGRESS' ? 'Em Andamento' : inv.status}
+                    {inv.name} ({inv.warehouse}) — {{ DRAFT: 'Em Preparacao', IN_PROGRESS: 'Em Andamento', COMPLETED: 'Concluido', CLOSED: 'Efetivado' }[inv.status] ?? inv.status}
                   </option>
                 ))}
               </select>
