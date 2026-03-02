@@ -256,13 +256,21 @@ async def health_check(
     try:
         from app.models.models import InventoryList, CountingList, InventoryStatus
 
-        # Verificar conexão com banco
+        # Total de inventários
+        total_inventories = db.query(InventoryList).count()
+
+        # Em andamento (DRAFT + IN_PROGRESS)
         active_inventories = db.query(InventoryList).filter(
-            InventoryList.status == InventoryStatus.IN_PROGRESS
+            InventoryList.status.in_([InventoryStatus.DRAFT, InventoryStatus.IN_PROGRESS])
+        ).count()
+
+        # Concluídos (COMPLETED + CLOSED)
+        completed_inventories = db.query(InventoryList).filter(
+            InventoryList.status.in_([InventoryStatus.COMPLETED, InventoryStatus.CLOSED])
         ).count()
 
         active_lists = db.query(CountingList).filter(
-            CountingList.list_status == "ABERTA"
+            CountingList.list_status.in_(["ABERTA", "EM_CONTAGEM"])
         ).count()
 
         # Executar detector crítico (cycle_desync)
@@ -272,7 +280,9 @@ async def health_check(
             "status": "healthy" if len(critical_anomalies) == 0 else "warning",
             "timestamp": datetime.utcnow().isoformat(),
             "database": "connected",
+            "total_inventories": total_inventories,
             "active_inventories": active_inventories,
+            "completed_inventories": completed_inventories,
             "active_lists": active_lists,
             "critical_anomalies": len(critical_anomalies),
             "message": "Sistema operacional" if len(critical_anomalies) == 0 else f"⚠️ {len(critical_anomalies)} anomalias críticas detectadas"

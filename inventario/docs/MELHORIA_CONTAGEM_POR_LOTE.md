@@ -1,83 +1,56 @@
-# Melhoria Futura: Contagem por Lote Individual
+# Melhoria: Pre-fill Inteligente de Lotes em Recontagem
 
-**Data**: 01/03/2026
-**Status**: Planejado (futuro)
+**Data**: 01/03/2026 (planejado) → 02/03/2026 (implementado)
+**Status**: IMPLEMENTADO
 **Prioridade**: Media
 
 ---
 
 ## Contexto
 
-Atualmente, quando um produto com controle por lote apresenta divergencia em um ou mais lotes, o sistema obriga a recontagem de TODOS os lotes do produto no proximo ciclo. Isso gera retrabalho desnecessario quando apenas 1 de N lotes esta divergente.
+Quando um produto com controle por lote apresenta divergencia em um ou mais lotes, o sistema marca o produto inteiro para recontagem no proximo ciclo. Anteriormente, o operador precisava recontar TODOS os lotes, mesmo que apenas 1 de N estivesse divergente.
 
-## Situacao Atual
+## Solucao Implementada (02/03/2026)
 
-- Produto com lote tem N lotes (ex: 5 lotes diferentes)
-- Se 1 lote diverge no 1o ciclo, o sistema marca o PRODUTO inteiro para recontagem no 2o ciclo
-- O operador precisa recontar todos os 5 lotes, mesmo que 4 estejam corretos
-- Desperdicio de tempo e recursos
+### Abordagem: Pre-fill Inteligente (Frontend-only)
 
-## Melhoria Proposta
+Em vez de criar campos JSONB, tabelas extras ou novos endpoints, a solucao usa os dados que o backend **ja retorna** (array `countings` com `lot_number`, `quantity`, `count_number`) para pre-preencher lotes no modal de contagem.
 
-### Fase 1: Controle Granular de Recontagem por Lote
+**Logica:**
+- **Lotes que CONFERIRAM** no ciclo anterior (contagem == saldo sistema, tolerancia 0.01):
+  - Pre-preenchidos com o valor do ciclo anterior
+  - Visual verde (borda + badge "Conf. C1")
+  - Editaveis, mas com dialog de confirmacao ao alterar
+- **Lotes que DIVERGIRAM** no ciclo anterior:
+  - Carregados como vazio (zero), forcando recontagem
+  - Visual normal
+  - Edicao livre
 
-1. **Novo campo**: `needs_recount_by_lot` (JSONB) no `InventoryItem` ou `CountingListItem`
-   - Formato: `{"000000000022629": true, "000000000022631": false}`
-   - Indica quais lotes especificos precisam de recontagem
+### Arquivos Alterados
 
-2. **Logica de ciclos por lote**:
-   - Ao encerrar um ciclo, verificar divergencia por lote (nao apenas por produto)
-   - Marcar apenas os lotes divergentes para recontagem
-   - Lotes que conferem ficam "travados" (nao editaveis no proximo ciclo)
+1. **`frontend/src/types/index.ts`** — Adicionado campo `countings` ao `CountingListProduct`
+2. **`frontend/src/pages/contagem/components/LoteContagemModal.tsx`** — Logica de pre-fill, visual diferenciado, ConfirmDialog
+3. **`frontend/src/pages/inventarios/components/TabAnalise.tsx`** — Removido cast `(product as any).countings`
 
-3. **Endpoints backend**:
-   - `POST /api/v1/inventory/items/{item_id}/lot-recount` — marcar lotes para recontagem
-   - Alterar logica de `advance-cycle` para considerar lotes individuais
-   - Alterar calculo de `needs_count_cycle_2/3` para ser por lote
+### Comportamento
 
-### Fase 2: Interface de Contagem por Lote
+| Cenario | Lote A (bateu C1) | Lote B (divergiu C1) |
+|---------|-------------------|----------------------|
+| Ciclo 1 | Vazio (normal) | Vazio (normal) |
+| Ciclo 2 | Pre-preenchido, borda verde, badge "Conf. C1" | Vazio (forcar recontagem) |
+| Operador altera Lote A | ConfirmDialog: "Deseja alterar?" | Edicao livre |
 
-1. **Mobile/Desktop**: Na tela de contagem de lotes, indicar visualmente:
-   - Lotes que precisam recontagem (editaveis, destacados)
-   - Lotes que conferem (somente leitura, esmaecidos)
+### Beneficios
 
-2. **Analise**: Na tab de analise, mostrar status por lote (OK / Divergente / Recontagem)
-
-3. **Relatorios**: No relatorio por lote, adicionar coluna "Ciclo" indicando em qual ciclo cada lote foi confirmado
-
-### Fase 3: Otimizacao de Performance
-
-- Contagem parcial: operador so precisa escanear/contar os lotes marcados
-- Reducao estimada de retrabalho: 60-80% para produtos com multiplos lotes
-- Melhoria na velocidade de encerramento de ciclos
-
-## Impacto Tecnico
-
-### Banco de Dados
-- Novo campo JSONB em `counting_list_items` ou `inventory_items`
-- Possivel nova tabela `lot_recount_status` (inventory_item_id, lot_number, cycle, status)
-
-### Backend
-- Alterar `counting_lists.py` — logica de avancar ciclo
-- Alterar `main.py` — endpoint de encerrar ciclo
-- Novo endpoint de contagem por lote individual
-
-### Frontend
-- `ContagemMobilePage.tsx` / `ContagemDesktopPage.tsx` — modo contagem parcial de lotes
-- `LoteContagemModal.tsx` — indicador visual de lotes obrigatorios vs opcionais
-- `TabAnalise.tsx` — ja preparado com expansao por lote (implementado em 01/03/2026)
+- Reducao estimada de 60-80% no retrabalho de recontagem
+- Zero alteracoes no backend (dados ja disponiveis)
+- Zero alteracoes no banco de dados (sem migrations)
+- Experiencia do operador: foco apenas nos lotes divergentes
+- Seguranca: confirmacao ao alterar lote ja conferido
 
 ## Pre-requisitos Ja Implementados (01/03/2026)
 
-1. **Visualizacao de divergencia por lote na analise** — TabAnalise com linhas expandiveis mostrando lotes com divergencia (Saldo Sistema vs Qtd Contada vs Diferenca)
-2. **Relatorio por lote** — RelatoriosPage tab "Relatorio por Lote" com dados reais de `counted_lots`
-3. **Backend `counted_lots`** — Endpoint final-report retorna contagem por lote extraida de countings
+1. **Visualizacao de divergencia por lote na analise** — TabAnalise com linhas expandiveis
+2. **Relatorio por lote** — RelatoriosPage tab "Relatorio por Lote" com dados reais
+3. **Backend `countings`** — Array com `lot_number`, `quantity`, `count_number` retornado por produto
 4. **`snapshot_lots`** — Saldo do sistema congelado por lote no snapshot
-
-## Estimativa
-
-- Fase 1 (Backend): 2-3 dias
-- Fase 2 (Frontend): 2-3 dias
-- Fase 3 (Otimizacao): 1-2 dias
-- Testes: 1-2 dias
-- **Total estimado**: 6-10 dias

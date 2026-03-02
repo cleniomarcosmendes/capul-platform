@@ -4,7 +4,7 @@ import { monitoringService } from '../services/monitoring.service';
 import { DashboardSkeleton } from '../components/LoadingSkeleton';
 import { ErrorState } from '../components/ErrorState';
 import type { MonitoringHealth, MonitoringAnomaly, MonitoringAnomaliesResponse, AnomalySeverity } from '../types';
-import { Activity, RefreshCw, ShieldCheck, ShieldAlert, AlertTriangle, Package, DollarSign } from 'lucide-react';
+import { Activity, RefreshCw, ShieldCheck, ShieldAlert, AlertTriangle, Package, CheckCircle2, ClipboardList } from 'lucide-react';
 
 const REFRESH_INTERVAL = 30_000;
 
@@ -17,9 +17,6 @@ function formatRelativeTime(isoDate: string): string {
   if (hours < 24) return `${hours}h atrás`;
   return new Date(isoDate).toLocaleDateString('pt-BR');
 }
-
-const formatCurrency = (v: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
 const severityConfig: Record<AnomalySeverity, { label: string; bg: string; text: string; border: string }> = {
   CRITICAL: { label: 'Critico', bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
@@ -91,7 +88,7 @@ export default function MonitoramentoPage() {
             </div>
 
             {/* Stat cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <div className={`rounded-lg border p-4 ${isHealthy ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
                 <div className="flex items-center gap-3">
                   {isHealthy ? <ShieldCheck className="w-8 h-8 text-green-600" /> : <ShieldAlert className="w-8 h-8 text-red-600" />}
@@ -107,8 +104,26 @@ export default function MonitoramentoPage() {
                 <div className="flex items-center gap-3">
                   <Package className="w-8 h-8 text-blue-500" />
                   <div>
-                    <p className="text-xs text-slate-500">Inventarios Ativos</p>
+                    <p className="text-xs text-slate-500">Total Inventarios</p>
+                    <p className="text-lg font-bold text-slate-800">{health?.total_inventories ?? 0}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white p-4">
+                <div className="flex items-center gap-3">
+                  <ClipboardList className="w-8 h-8 text-amber-500" />
+                  <div>
+                    <p className="text-xs text-slate-500">Em Andamento</p>
                     <p className="text-lg font-bold text-slate-800">{health?.active_inventories ?? 0}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white p-4">
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="w-8 h-8 text-green-500" />
+                  <div>
+                    <p className="text-xs text-slate-500">Concluidos</p>
+                    <p className="text-lg font-bold text-slate-800">{health?.completed_inventories ?? 0}</p>
                   </div>
                 </div>
               </div>
@@ -116,17 +131,8 @@ export default function MonitoramentoPage() {
                 <div className="flex items-center gap-3">
                   <AlertTriangle className="w-8 h-8 text-orange-500" />
                   <div>
-                    <p className="text-xs text-slate-500">Anomalias Detectadas</p>
+                    <p className="text-xs text-slate-500">Anomalias</p>
                     <p className="text-lg font-bold text-slate-800">{summary?.total_anomalies ?? 0}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-white p-4">
-                <div className="flex items-center gap-3">
-                  <DollarSign className="w-8 h-8 text-red-500" />
-                  <div>
-                    <p className="text-xs text-slate-500">Risco Financeiro</p>
-                    <p className="text-lg font-bold text-slate-800">{formatCurrency(summary?.estimated_financial_risk ?? 0)}</p>
                   </div>
                 </div>
               </div>

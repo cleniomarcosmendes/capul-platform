@@ -417,9 +417,11 @@ function TabEnvio() {
                           ? 'bg-green-100 text-green-700'
                           : integration.status === 'ERRO'
                           ? 'bg-red-100 text-red-700'
-                          : 'bg-amber-100 text-amber-700'
+                          : integration.status === 'CANCELADO'
+                          ? 'bg-slate-100 text-slate-600'
+                          : 'bg-blue-100 text-blue-700'
                       }`}>
-                        {{ DRAFT: 'Rascunho', PENDENTE: 'Pendente', ENVIADO: 'Enviado', CONFIRMADO: 'Confirmado', ERRO: 'Erro', CANCELADO: 'Cancelado' }[integration.status] ?? integration.status}
+                        {{ DRAFT: 'Pendente', PENDENTE: 'Pendente', ENVIADO: 'Enviado', CONFIRMADO: 'Confirmado', ERRO: 'Erro', CANCELADO: 'Cancelado' }[integration.status] ?? integration.status}
                       </span>
                     </td>
                     <td className="py-2.5 px-4 text-right">

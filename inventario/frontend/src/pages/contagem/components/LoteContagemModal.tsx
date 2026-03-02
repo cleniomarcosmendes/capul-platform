@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Loader2, Package, Save } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { X, Loader2, Package, Save, CheckCircle2, Info } from 'lucide-react';
 import { inventoryService } from '../../../services/inventory.service';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import type { CountingListProduct, LotCount } from '../../../types';
 
 interface LotRow {
@@ -8,6 +9,8 @@ interface LotRow {
   b8_lotefor: string;
   system_qty: number;
   counted_qty: string; // string for input control
+  prefilled: boolean;
+  prefilledValue: number;
 }
 
 interface Props {
@@ -23,7 +26,21 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [observation, setObservation] = useState('');
+  const [confirmEdit, setConfirmEdit] = useState<{ lotIndex: number; newValue: string } | null>(null);
   const firstInputRef = useRef<HTMLInputElement>(null);
+
+  // Mapa de contagens do ciclo anterior (para pre-fill em ciclo 2+)
+  const previousCycleCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    if (currentCycle <= 1) return map;
+    const prevCycle = currentCycle - 1;
+    for (const c of product.countings ?? []) {
+      if (c.count_number === prevCycle && c.lot_number) {
+        map.set(c.lot_number, c.quantity);
+      }
+    }
+    return map;
+  }, [currentCycle, product.countings]);
 
   // Load lot snapshot
   useEffect(() => {
@@ -32,36 +49,111 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
     inventoryService.buscarLotesSnapshot(product.id)
       .then((res) => {
         if (res.has_lots && res.lots.length > 0) {
-          // Check if product already has saved lot data (from snapshot_lots)
+          // Contagens salvas NESTE ciclo (snapshot_lots com counted_qty)
           const savedLots = product.snapshot_lots || [];
           const savedMap = new Map(savedLots.map((l) => [l.lot_number, l.counted_qty]));
 
-          setLots(res.lots.map((l) => ({
-            lot_number: l.lot_number,
-            b8_lotefor: l.b8_lotefor || '',
-            system_qty: l.system_qty,
-            counted_qty: savedMap.get(l.lot_number) !== null && savedMap.get(l.lot_number) !== undefined
-              ? String(savedMap.get(l.lot_number))
-              : '',
-          })));
+          setLots(res.lots.map((l) => {
+            // 1. Se ja tem contagem salva NESTE ciclo, usa ela (prioridade maxima)
+            const savedQty = savedMap.get(l.lot_number);
+            if (savedQty !== null && savedQty !== undefined) {
+              return {
+                lot_number: l.lot_number,
+                b8_lotefor: l.b8_lotefor || '',
+                system_qty: l.system_qty,
+                counted_qty: String(savedQty),
+                prefilled: false,
+                prefilledValue: 0,
+              };
+            }
+
+            // 2. Se ciclo 2+ e lote tem contagem do ciclo anterior
+            if (currentCycle > 1 && previousCycleCounts.has(l.lot_number)) {
+              const prevQty = previousCycleCounts.get(l.lot_number)!;
+              const matched = Math.abs(prevQty - l.system_qty) <= 0.01;
+
+              if (matched) {
+                // Lote CONFERIU no ciclo anterior: pre-preenche
+                return {
+                  lot_number: l.lot_number,
+                  b8_lotefor: l.b8_lotefor || '',
+                  system_qty: l.system_qty,
+                  counted_qty: String(prevQty),
+                  prefilled: true,
+                  prefilledValue: prevQty,
+                };
+              }
+              // Lote DIVERGIU: vazio para recontagem
+              return {
+                lot_number: l.lot_number,
+                b8_lotefor: l.b8_lotefor || '',
+                system_qty: l.system_qty,
+                counted_qty: '',
+                prefilled: false,
+                prefilledValue: 0,
+              };
+            }
+
+            // 3. Ciclo 1 ou lote sem contagem anterior: vazio
+            return {
+              lot_number: l.lot_number,
+              b8_lotefor: l.b8_lotefor || '',
+              system_qty: l.system_qty,
+              counted_qty: '',
+              prefilled: false,
+              prefilledValue: 0,
+            };
+          }));
         } else {
           setError('Produto sem lote valido na data do inventario. Todos os lotes possuem data de vencimento anterior a data de referencia.');
         }
       })
       .catch(() => setError('Erro ao carregar lotes do produto.'))
       .finally(() => setLoading(false));
-  }, [product.id, product.snapshot_lots]);
+  }, [product.id, product.snapshot_lots, currentCycle, previousCycleCounts]);
 
-  // Focus first input when loaded
+  // Focus first empty input when loaded (skip prefilled)
   useEffect(() => {
-    if (!loading && lots.length > 0 && firstInputRef.current) {
-      firstInputRef.current.focus();
+    if (!loading && lots.length > 0) {
+      const firstEmptyIdx = lots.findIndex((l) => !l.prefilled && l.counted_qty === '');
+      if (firstEmptyIdx >= 0) {
+        const el = document.querySelector<HTMLInputElement>(`[data-lot-index="${firstEmptyIdx}"]`);
+        el?.focus();
+      } else if (firstInputRef.current) {
+        firstInputRef.current.focus();
+      }
     }
   }, [loading, lots.length]);
 
   const updateLotQty = useCallback((index: number, value: string) => {
-    setLots((prev) => prev.map((l, i) => i === index ? { ...l, counted_qty: value } : l));
+    setLots((prev) => {
+      const lot = prev[index];
+      // Se o lote foi pre-preenchido e o valor esta mudando
+      if (lot.prefilled && value !== String(lot.prefilledValue)) {
+        setConfirmEdit({ lotIndex: index, newValue: value });
+        return prev; // nao atualiza ainda, espera confirmacao
+      }
+      return prev.map((l, i) => i === index ? { ...l, counted_qty: value } : l);
+    });
   }, []);
+
+  function handleConfirmEdit() {
+    if (!confirmEdit) return;
+    const { lotIndex, newValue } = confirmEdit;
+    setLots((prev) => prev.map((l, i) =>
+      i === lotIndex ? { ...l, counted_qty: newValue, prefilled: false } : l
+    ));
+    setConfirmEdit(null);
+    // Re-focus the input
+    setTimeout(() => {
+      const el = document.querySelector<HTMLInputElement>(`[data-lot-index="${lotIndex}"]`);
+      el?.focus();
+    }, 50);
+  }
+
+  function handleCancelEdit() {
+    setConfirmEdit(null);
+  }
 
   const totalContado = lots.reduce((sum, l) => {
     const v = parseFloat(l.counted_qty);
@@ -71,6 +163,7 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
   const totalSistema = lots.reduce((sum, l) => sum + l.system_qty, 0);
   const diff = totalContado - totalSistema;
   const allFilled = lots.every((l) => l.counted_qty.trim() !== '' && !isNaN(parseFloat(l.counted_qty)));
+  const prefilledCount = lots.filter((l) => l.prefilled).length;
 
   async function handleSave() {
     if (!allFilled) return;
@@ -115,6 +208,13 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
               {' — '}
               <span className="font-medium">{currentCycle}o Ciclo</span>
             </p>
+            {currentCycle > 1 && prefilledCount > 0 && (
+              <p className="flex items-center gap-1 text-[11px] text-blue-600 mt-1">
+                <Info className="w-3 h-3" />
+                {prefilledCount} lote(s) conferido(s) no {currentCycle - 1}o ciclo foram pre-preenchidos.
+                Apenas lotes divergentes precisam ser recontados.
+              </p>
+            )}
           </div>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600">
             <X className="w-5 h-5" />
@@ -150,8 +250,16 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
                     const counted = parseFloat(lot.counted_qty);
                     const lotDiff = !isNaN(counted) ? counted - lot.system_qty : null;
                     return (
-                      <tr key={lot.lot_number} className="border-b border-slate-100">
-                        <td className="py-2 px-3 font-mono text-xs text-slate-700">{lot.lot_number}</td>
+                      <tr key={lot.lot_number} className={`border-b border-slate-100 ${lot.prefilled ? 'bg-green-50/50' : ''}`}>
+                        <td className="py-2 px-3 font-mono text-xs text-slate-700">
+                          <span>{lot.lot_number}</span>
+                          {lot.prefilled && (
+                            <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
+                              <CheckCircle2 className="w-2.5 h-2.5" />
+                              Conf. C{currentCycle - 1}
+                            </span>
+                          )}
+                        </td>
                         <td className="py-2 px-3 text-xs text-slate-400">{lot.b8_lotefor || '—'}</td>
                         <td className="py-2 px-3 text-right tabular-nums text-slate-600">{lot.system_qty.toFixed(2)}</td>
                         <td className="py-2 px-3 text-right">
@@ -166,7 +274,11 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
                             onChange={(e) => updateLotQty(idx, e.target.value)}
                             onKeyDown={(e) => handleKeyDown(e, idx)}
                             placeholder="0"
-                            className="w-28 text-right border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-capul-500"
+                            className={`w-28 text-right border rounded-lg px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 ${
+                              lot.prefilled
+                                ? 'border-green-400 bg-green-50 focus:ring-green-500'
+                                : 'border-slate-300 focus:ring-capul-500'
+                            }`}
                           />
                         </td>
                         <td className={`py-2 px-3 text-right text-xs font-medium tabular-nums ${
@@ -242,6 +354,18 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
           </div>
         </div>
       </div>
+
+      {/* Confirm dialog ao alterar lote pre-preenchido */}
+      <ConfirmDialog
+        open={confirmEdit !== null}
+        title="Alterar lote ja conferido"
+        description={`Este lote ja foi conferido e bateu com o sistema no ${currentCycle - 1}o ciclo. Deseja realmente alterar a quantidade?`}
+        variant="warning"
+        confirmLabel="Sim, alterar"
+        cancelLabel="Manter valor"
+        onConfirm={handleConfirmEdit}
+        onCancel={handleCancelEdit}
+      />
     </div>
   );
 }

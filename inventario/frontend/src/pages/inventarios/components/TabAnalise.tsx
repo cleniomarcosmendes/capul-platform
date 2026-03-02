@@ -155,7 +155,7 @@ interface LotDetail {
 
 function buildLotDetails(product: CountingListProduct, cycleNumber?: number): LotDetail[] {
   const snapshotLots = product.snapshot_lots ?? [];
-  const countings = (product as any).countings ?? [];
+  const countings = product.countings ?? [];
 
   // Build counted map from countings (highest cycle or specific cycle)
   const countedMap = new Map<string, number>();

@@ -7519,44 +7519,32 @@ async def get_my_closed_rounds_simple(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Listar rodadas encerradas simples para seleção de divergências"""
+    """Listar inventários disponíveis para filtro de divergências"""
     try:
-        from app.models.models import ClosedCountingRound, InventoryList
-        
-        # Buscar rodadas encerradas do usuário
-        closed_rounds = db.query(
-            ClosedCountingRound,
-            InventoryList.name.label('inventory_name')
-        ).join(
-            InventoryList, ClosedCountingRound.inventory_list_id == InventoryList.id
-        ).filter(
-            ClosedCountingRound.user_id == current_user.id
-        ).order_by(
-            ClosedCountingRound.closed_at.desc()
-        ).all()
-        
+        # Buscar inventários que têm listas de contagem com dados
+        query = text("""
+            SELECT DISTINCT il.id, il.name, il.warehouse, il.status
+            FROM inventario.inventory_lists il
+            JOIN inventario.counting_lists cl ON cl.inventory_id = il.id
+            WHERE il.store_id = :store_id
+              AND il.status IN ('IN_PROGRESS', 'COMPLETED', 'CLOSED')
+            ORDER BY il.name
+        """)
+        results = db.execute(query, {"store_id": str(current_user.store_id)}).fetchall()
+
         rounds = []
-        for closed_round, inventory_name in closed_rounds:
-            round_key = f"{current_user.id}_{closed_round.round_number}_{closed_round.inventory_list_id}"
-            round_display = f"{inventory_name} - Rodada {closed_round.round_number}"
+        for row in results:
+            status_label = {'IN_PROGRESS': 'Em Andamento', 'COMPLETED': 'Concluido', 'CLOSED': 'Efetivado'}.get(row.status, row.status)
             rounds.append({
-                "round_key": round_key,
-                "inventory_id": str(closed_round.inventory_list_id),
-                "inventory_name": inventory_name,
-                "round_number": closed_round.round_number,
-                "display_text": round_display,
-                "closed_at": closed_round.closed_at.isoformat()
+                "round_key": str(row.id),
+                "display_text": f"{row.name} ({row.warehouse}) — {status_label}",
             })
-        
-        return {
-            "success": True,
-            "closed_rounds": rounds,
-            "total_rounds": len(rounds)
-        }
-        
+
+        return rounds
+
     except Exception as e:
-        print(f"Erro ao buscar rodadas encerradas: {e}")
-        return {"success": False, "message": f"Erro interno: {str(e)}"}
+        print(f"Erro ao buscar inventarios para divergencias: {e}")
+        return []
 
 @app.get("/api/v1/discrepancies", tags=["Discrepancies"])
 async def get_all_discrepancies(
@@ -7564,76 +7552,177 @@ async def get_all_discrepancies(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Listar todas as divergências do usuário ou da loja (opcionalmente filtradas por rodada)"""
+    """Listar divergências a partir das listas de contagem (counting_list_items)"""
     try:
-        from app.models.models import Discrepancy, InventoryItem, InventoryList, Product, SB1010
-        
-        # Buscar divergências da loja do usuário
-        query = db.query(
-            Discrepancy,
-            InventoryItem,
-            InventoryList,
-            SB1010
-        ).join(
-            InventoryItem, Discrepancy.inventory_item_id == InventoryItem.id
-        ).join(
-            InventoryList, InventoryItem.inventory_list_id == InventoryList.id
-        ).outerjoin(
-            SB1010, InventoryItem.product_code == SB1010.b1_cod
-        ).filter(
-            InventoryList.store_id == current_user.store_id
-        )
-        
-        # Filtrar por rodada específica se round_key fornecido
+        # Buscar itens contados com divergência em relação ao saldo do sistema
+        inv_filter = ""
+        params = {"store_id": str(current_user.store_id)}
         if round_key:
-            # round_key formato: "user_id_round_number_inventory_id"
-            try:
-                parts = round_key.split('_')
-                if len(parts) >= 4:  # user_id pode ter hífens
-                    inventory_id = parts[-1]  # último elemento é inventory_id
-                    round_number = parts[-2]  # penúltimo é round_number
-                    # Reconstruir user_id (pode ter hífens no meio)
-                    user_id = '_'.join(parts[:-2])
-                    
-                    print(f"🔍 DEBUG: Filtrando divergências - inventory_id: {inventory_id}, round: {round_number}, user_id: {user_id}")
-                    
-                    # Filtrar por inventário específico E por usuário que criou a divergência
-                    query = query.filter(
-                        InventoryList.id == inventory_id,
-                        Discrepancy.created_by == user_id
-                    )
-            except Exception as e:
-                print(f"Erro ao parsear round_key: {e}")
-        
-        query = query.order_by(Discrepancy.created_at.desc())
-        
-        results = query.all()
-        
+            inv_filter = "AND il.id = :inv_id"
+            params["inv_id"] = round_key
+
+        query = text(f"""
+            SELECT
+                cli.id,
+                ii.product_code,
+                COALESCE(sb1.b1_desc, iis.b1_desc, 'Produto') as product_description,
+                COALESCE(iis.b2_qatu, ii.expected_quantity, 0) + COALESCE(iis.b2_xentpos, 0) as expected_quantity,
+                COALESCE(cli.count_cycle_3, cli.count_cycle_2, cli.count_cycle_1) as counted_quantity,
+                (COALESCE(cli.count_cycle_3, cli.count_cycle_2, cli.count_cycle_1)
+                 - (COALESCE(iis.b2_qatu, ii.expected_quantity, 0) + COALESCE(iis.b2_xentpos, 0))) as variance_quantity,
+                CASE
+                    WHEN (COALESCE(iis.b2_qatu, ii.expected_quantity, 0) + COALESCE(iis.b2_xentpos, 0)) > 0
+                    THEN ROUND(((COALESCE(cli.count_cycle_3, cli.count_cycle_2, cli.count_cycle_1)
+                          - (COALESCE(iis.b2_qatu, ii.expected_quantity, 0) + COALESCE(iis.b2_xentpos, 0)))
+                         / (COALESCE(iis.b2_qatu, ii.expected_quantity, 0) + COALESCE(iis.b2_xentpos, 0))) * 100, 2)
+                    WHEN COALESCE(cli.count_cycle_3, cli.count_cycle_2, cli.count_cycle_1) > 0
+                    THEN 100.0
+                    ELSE 0.0
+                END as variance_percentage,
+                il.name as inventory_name,
+                il.id as inventory_id,
+                CASE WHEN cl.list_status = 'ENCERRADA' THEN 'RESOLVED' ELSE 'PENDING' END as status,
+                cli.updated_at as created_at
+            FROM inventario.counting_list_items cli
+            JOIN inventario.counting_lists cl ON cli.counting_list_id = cl.id
+            JOIN inventario.inventory_lists il ON cl.inventory_id = il.id
+            JOIN inventario.inventory_items ii ON cli.inventory_item_id = ii.id
+            LEFT JOIN inventario.inventory_items_snapshot iis ON iis.inventory_item_id = ii.id
+            LEFT JOIN inventario.sb1010 sb1 ON ii.product_code = sb1.b1_cod
+            WHERE il.store_id = :store_id
+              AND (cli.count_cycle_1 IS NOT NULL OR cli.count_cycle_2 IS NOT NULL OR cli.count_cycle_3 IS NOT NULL)
+              AND ABS(COALESCE(cli.count_cycle_3, cli.count_cycle_2, cli.count_cycle_1)
+                      - (COALESCE(iis.b2_qatu, ii.expected_quantity, 0) + COALESCE(iis.b2_xentpos, 0))) > 0.01
+              {inv_filter}
+            ORDER BY ABS(COALESCE(cli.count_cycle_3, cli.count_cycle_2, cli.count_cycle_1)
+                         - (COALESCE(iis.b2_qatu, ii.expected_quantity, 0) + COALESCE(iis.b2_xentpos, 0))) DESC
+            LIMIT 500
+        """)
+
+        results = db.execute(query, params).fetchall()
+
         discrepancies = []
-        for discrepancy, item, inventory, product in results:
+        for row in results:
             discrepancies.append({
-                "id": str(discrepancy.id),
-                "inventory_id": str(inventory.id),
-                "inventory_name": inventory.name,
-                "product_code": item.product_code,
-                "product_description": product.b1_desc if product else "Produto não encontrado",
-                "variance_quantity": float(discrepancy.variance_quantity),
-                "variance_percentage": float(discrepancy.variance_percentage),
-                "tolerance_exceeded": discrepancy.tolerance_exceeded,
-                "status": discrepancy.status,
-                "created_at": discrepancy.created_at.isoformat(),
-                "observation": discrepancy.observation
+                "id": str(row.id),
+                "inventory_id": str(row.inventory_id),
+                "inventory_name": row.inventory_name,
+                "product_code": row.product_code,
+                "product_description": row.product_description,
+                "expected_quantity": float(row.expected_quantity) if row.expected_quantity else 0,
+                "counted_quantity": float(row.counted_quantity) if row.counted_quantity else 0,
+                "variance_quantity": float(row.variance_quantity) if row.variance_quantity else 0,
+                "variance_percentage": float(row.variance_percentage) if row.variance_percentage else 0,
+                "tolerance_exceeded": abs(float(row.variance_percentage or 0)) > 5.0,
+                "status": row.status,
+                "created_at": row.created_at.isoformat() if row.created_at else datetime.utcnow().isoformat(),
+                "observation": None
             })
-        
+
         return {
-            "success": True,
             "discrepancies": discrepancies,
             "total": len(discrepancies)
         }
-        
+
     except Exception as e:
-        print(f"Erro ao buscar divergências: {e}")
-        return {"success": False, "message": f"Erro interno: {str(e)}"}
+        print(f"Erro ao buscar divergencias: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"discrepancies": [], "total": 0}
+
+
+@app.get("/api/v1/discrepancies/adjustments", tags=["Discrepancies"])
+async def get_discrepancy_adjustments(
+    inventory_id: str = None,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Listar ajustes e transferências gerados nas integrações Protheus"""
+    try:
+        inv_filter = ""
+        params = {"store_id": str(current_user.store_id)}
+        if inventory_id:
+            inv_filter = "AND pi.inventory_a_id = :inv_id"
+            params["inv_id"] = inventory_id
+
+        query = text(f"""
+            SELECT
+                pii.id,
+                pii.item_type,
+                pii.product_code,
+                pii.product_description,
+                pii.lot_number,
+                pii.source_warehouse,
+                pii.target_warehouse,
+                pii.quantity,
+                pii.expected_qty,
+                pii.counted_qty,
+                pii.adjusted_qty,
+                pii.unit_cost,
+                pii.total_value,
+                pii.adjustment_type,
+                pii.item_status,
+                pi.status as integration_status,
+                pi.integration_type,
+                ila.name as inventory_name,
+                pi.sent_at,
+                pii.created_at
+            FROM inventario.protheus_integration_items pii
+            JOIN inventario.protheus_integrations pi ON pii.integration_id = pi.id
+            JOIN inventario.inventory_lists ila ON ila.id = pi.inventory_a_id
+            WHERE ila.store_id = :store_id
+              {inv_filter}
+            ORDER BY pii.product_code, pii.lot_number NULLS LAST
+        """)
+
+        results = db.execute(query, params).fetchall()
+
+        items = []
+        for row in results:
+            items.append({
+                "id": str(row.id),
+                "item_type": row.item_type,
+                "product_code": row.product_code,
+                "product_description": row.product_description,
+                "lot_number": row.lot_number,
+                "source_warehouse": row.source_warehouse,
+                "target_warehouse": row.target_warehouse,
+                "quantity": float(row.quantity) if row.quantity else 0,
+                "expected_qty": float(row.expected_qty) if row.expected_qty else 0,
+                "counted_qty": float(row.counted_qty) if row.counted_qty else 0,
+                "adjusted_qty": float(row.adjusted_qty) if row.adjusted_qty else 0,
+                "unit_cost": float(row.unit_cost) if row.unit_cost else 0,
+                "total_value": float(row.total_value) if row.total_value else 0,
+                "adjustment_type": row.adjustment_type,
+                "item_status": row.item_status,
+                "integration_status": row.integration_status,
+                "integration_type": row.integration_type,
+                "inventory_name": row.inventory_name,
+                "sent_at": row.sent_at.isoformat() if row.sent_at else None,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            })
+
+        # Summary
+        total_adjustments = len([i for i in items if i["item_type"] == "ADJUSTMENT"])
+        total_transfers = len([i for i in items if i["item_type"] == "TRANSFER"])
+        total_value = sum(abs(i["total_value"]) for i in items)
+
+        return {
+            "items": items,
+            "total": len(items),
+            "summary": {
+                "adjustments": total_adjustments,
+                "transfers": total_transfers,
+                "total_value": round(total_value, 2),
+            }
+        }
+
+    except Exception as e:
+        print(f"Erro ao buscar ajustes/transferencias: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"items": [], "total": 0, "summary": {"adjustments": 0, "transfers": 0, "total_value": 0}}
+
 
 @app.get("/api/v1/counting-round/{round_key}/discrepancies", tags=["Inventory"])
 async def get_round_discrepancies(
@@ -11650,15 +11739,33 @@ async def finalize_counting_cycle(
             inventory_list_id=str(counting_list.inventory_id)
         )
 
-        # Avançar ciclo
-        new_cycle = old_cycle + 1
-        counting_list.current_cycle = new_cycle
-        counting_list.list_status = "ABERTA"  # Pronto para trocar contador e liberar
-        counting_list.updated_at = datetime.utcnow()
+        products_needing_recount = discrepancy_result.get("products_needing_recount", 0) if discrepancy_result.get("success") else 0
+
+        if products_needing_recount == 0:
+            # Sem divergências: encerrar lista automaticamente
+            counting_list.list_status = "ENCERRADA"
+            counting_list.finalization_type = "automatic"
+            counting_list.updated_at = datetime.utcnow()
+            new_cycle = old_cycle  # Mantém ciclo atual
+            message = f"Lista finalizada automaticamente no {old_cycle}o ciclo (sem divergencias)."
+        else:
+            # Com divergências: avançar para próximo ciclo
+            new_cycle = old_cycle + 1
+            counting_list.current_cycle = new_cycle
+            counting_list.list_status = "ABERTA"  # Pronto para trocar contador e liberar
+            counting_list.updated_at = datetime.utcnow()
+            message = f"Ciclo {old_cycle}o finalizado. Avancado para {new_cycle}o ciclo com {products_needing_recount} produtos para recontagem."
+
+        # Sincronizar current_cycle no inventário pai (para exibição correta na tela de contagem)
+        from app.models.models import InventoryList as InventoryListModel
+        parent_inventory = db.query(InventoryListModel).filter(
+            InventoryListModel.id == counting_list.inventory_id
+        ).first()
+        if parent_inventory:
+            parent_inventory.current_cycle = new_cycle
+            parent_inventory.updated_at = datetime.utcnow()
 
         db.commit()
-
-        products_needing_recount = discrepancy_result.get("products_needing_recount", 0) if discrepancy_result.get("success") else 0
 
         logger.info(f"✅ Ciclo {old_cycle} finalizado para lista {list_id}. Novo ciclo: {new_cycle}. Produtos para recontagem: {products_needing_recount}")
 
@@ -11668,7 +11775,8 @@ async def finalize_counting_cycle(
             "old_cycle": old_cycle,
             "new_cycle": new_cycle,
             "products_needing_recount": products_needing_recount,
-            "message": f"Ciclo {old_cycle}o finalizado. Avançado para {new_cycle}o ciclo com {products_needing_recount} produtos para recontagem."
+            "auto_closed": products_needing_recount == 0,
+            "message": message
         }
 
     except HTTPException:

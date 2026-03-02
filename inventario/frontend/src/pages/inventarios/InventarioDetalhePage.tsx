@@ -132,9 +132,11 @@ export function InventarioDetalhePage() {
       .catch(() => {});
   }, [id, itemsPage, itemStatusFilter, activeTab]);
 
-  async function handleDelete() {
-    if (!id || !inventario) return;
-    if (!confirm(`Excluir inventario "${inventario.name}"? Esta acao nao pode ser desfeita.`)) return;
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  async function handleDeleteConfirmed() {
+    if (!id) return;
+    setShowDeleteConfirm(false);
     try {
       await inventoryService.excluir(id);
       toast.success('Inventario excluido.');
@@ -275,7 +277,7 @@ export function InventarioDetalhePage() {
               )}
               {inventario.status === 'DRAFT' && (
                 <button
-                  onClick={handleDelete}
+                  onClick={() => setShowDeleteConfirm(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 border border-red-300 text-red-600 text-sm rounded-lg hover:bg-red-50"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -386,6 +388,18 @@ export function InventarioDetalhePage() {
             onAdded={() => { reloadItens(); reloadInventario(); }}
           />
         )}
+
+        {/* Confirm dialog exclusao inventario */}
+        <ConfirmDialog
+          open={showDeleteConfirm}
+          title="Excluir Inventario"
+          description={`O inventario "${inventario.name}" sera removido permanentemente. Esta acao nao pode ser desfeita.`}
+          details={[`Armazem: ${inventario.warehouse}`]}
+          variant="danger"
+          confirmLabel="Excluir"
+          onConfirm={handleDeleteConfirmed}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
       </div>
     </>
   );
@@ -716,9 +730,13 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
         setConfirmDialog(null);
         setActionLoading(listId);
         try {
-          await countingListService.finalizarCiclo(listId);
+          const result = await countingListService.finalizarCiclo(listId) as { auto_closed?: boolean; message?: string };
           onReload();
-          toast.success('Ciclo finalizado com sucesso.');
+          if (result?.auto_closed) {
+            toast.success(result.message || 'Lista encerrada automaticamente (sem divergencias).');
+          } else {
+            toast.success(result?.message || 'Ciclo finalizado com sucesso.');
+          }
         } catch (err: unknown) {
           const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
           toast.error(detail || 'Erro ao finalizar ciclo.');
@@ -1106,7 +1124,7 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
         </div>
       )}
 
-      {/* Confirm dialog */}
+      {/* Confirm dialog generico (listas) */}
       <ConfirmDialog
         open={confirmDialog !== null}
         title={confirmDialog?.title ?? ''}

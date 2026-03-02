@@ -314,6 +314,15 @@ export interface CountingListProduct {
   requires_lot?: boolean;
   has_lot?: boolean;
   snapshot_lots?: SnapshotLot[];
+  countings?: {
+    count_number: number;
+    quantity: number;
+    lot_number: string | null;
+    serial_number: string | null;
+    observation: string | null;
+    counted_by: string | null;
+    counted_at: string | null;
+  }[];
   location?: string | null;
 }
 
@@ -454,7 +463,10 @@ export type AnomalySeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM';
 
 export interface MonitoringHealth {
   status: string;
+  total_inventories: number;
   active_inventories: number;
+  completed_inventories: number;
+  active_lists: number;
 }
 
 export interface MonitoringAnomaly {
@@ -496,6 +508,35 @@ export interface Discrepancy {
 export interface ClosedRound {
   round_key: string;
   display_text: string;
+}
+
+export interface IntegrationAdjustment {
+  id: string;
+  item_type: 'ADJUSTMENT' | 'TRANSFER';
+  product_code: string;
+  product_description: string;
+  lot_number: string | null;
+  source_warehouse: string | null;
+  target_warehouse: string | null;
+  quantity: number;
+  expected_qty: number;
+  counted_qty: number;
+  adjusted_qty: number;
+  unit_cost: number;
+  total_value: number;
+  adjustment_type: string;
+  item_status: string;
+  integration_status: string;
+  integration_type: string;
+  inventory_name: string;
+  sent_at: string | null;
+  created_at: string | null;
+}
+
+export interface AdjustmentsSummary {
+  adjustments: number;
+  transfers: number;
+  total_value: number;
 }
 
 // === Comparison ===
