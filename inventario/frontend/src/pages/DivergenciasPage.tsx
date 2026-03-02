@@ -1,17 +1,19 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Header } from '../layouts/Header';
 import { discrepancyService } from '../services/discrepancy.service';
+import { inventoryService } from '../services/inventory.service';
+import { integrationService } from '../services/integration.service';
 import { TableSkeleton } from '../components/LoadingSkeleton';
 import { ErrorState } from '../components/ErrorState';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
-import type { Discrepancy, ClosedRound, IntegrationAdjustment, AdjustmentsSummary } from '../types';
-import { CheckCircle, RotateCcw, Edit3, Filter, ArrowRightLeft, TrendingUp, TrendingDown, Minus, Send } from 'lucide-react';
+import type { Discrepancy, ClosedRound, InventoryList, IntegrationPreviewResult, IntegrationAdjustment, IntegrationTransfer } from '../types';
+import { CheckCircle, RotateCcw, Edit3, Filter, ArrowRightLeft, TrendingDown, Search, AlertCircle, BarChart3, ArrowRight } from 'lucide-react';
 import { ExportDropdown } from '../components/ExportDropdown';
 import { downloadCSV } from '../utils/csv';
 import { downloadExcel, printTable } from '../utils/export';
 
-type Tab = 'divergencias' | 'ajustes';
+type Tab = 'divergencias' | 'simulacao';
 
 export default function DivergenciasPage() {
   const [activeTab, setActiveTab] = useState<Tab>('divergencias');
@@ -21,37 +23,19 @@ export default function DivergenciasPage() {
   const { inventarioRole } = useAuth();
   const isStaff = inventarioRole === 'ADMIN' || inventarioRole === 'SUPERVISOR';
 
-  // Load rounds once
   useEffect(() => {
     discrepancyService.listarRodadas().then(setRounds).catch(() => {});
   }, []);
 
   const tabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { key: 'divergencias', label: 'Divergencias', icon: TrendingDown },
-    { key: 'ajustes', label: 'Ajustes e Transferencias', icon: ArrowRightLeft },
+    { key: 'simulacao', label: 'Simulacao de Comparacao', icon: BarChart3 },
   ];
 
   return (
     <>
-      <Header title="Divergencias" />
+      <Header title="Analise e Divergencias" />
       <div className="p-4 md:p-6 space-y-6">
-        {/* Filter + Tabs */}
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <select
-              value={selectedRound}
-              onChange={(e) => setSelectedRound(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500"
-            >
-              <option value="">Todos os Inventarios</option>
-              {rounds.map((r) => (
-                <option key={r.round_key} value={r.round_key}>{r.display_text}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
         {/* Tabs */}
         <div className="border-b border-slate-200">
           <div className="flex gap-1">
@@ -77,22 +61,32 @@ export default function DivergenciasPage() {
         </div>
 
         {activeTab === 'divergencias' && (
-          <TabDivergencias
-            selectedRound={selectedRound}
-            isStaff={isStaff}
-            toast={toast}
-          />
+          <>
+            {/* Filter */}
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-slate-400" />
+              <select
+                value={selectedRound}
+                onChange={(e) => setSelectedRound(e.target.value)}
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500"
+              >
+                <option value="">Todos os Inventarios</option>
+                {rounds.map((r) => (
+                  <option key={r.round_key} value={r.round_key}>{r.display_text}</option>
+                ))}
+              </select>
+            </div>
+            <TabDivergencias selectedRound={selectedRound} isStaff={isStaff} toast={toast} />
+          </>
         )}
-        {activeTab === 'ajustes' && (
-          <TabAjustes selectedRound={selectedRound} />
-        )}
+        {activeTab === 'simulacao' && <TabSimulacao />}
       </div>
     </>
   );
 }
 
 // =============================================
-// Tab Divergencias (existing functionality)
+// Tab Divergencias
 // =============================================
 
 function TabDivergencias({
@@ -165,7 +159,6 @@ function TabDivergencias({
 
   return (
     <>
-      {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total" value={total} color="text-slate-800" />
         <StatCard label="Pendentes" value={pending} color="text-yellow-600" />
@@ -173,7 +166,6 @@ function TabDivergencias({
         <StatCard label="Diverg. Media" value={`${avgVariance}%`} color="text-red-600" />
       </div>
 
-      {/* Export */}
       {discrepancies.length > 0 && (
         <div className="flex justify-end">
           <ExportDropdown
@@ -207,7 +199,6 @@ function TabDivergencias({
         </div>
       )}
 
-      {/* Table */}
       {discrepancies.length === 0 ? (
         <div className="text-center py-12 text-slate-400">
           <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-400" />
@@ -273,188 +264,466 @@ function TabDivergencias({
 }
 
 // =============================================
-// Tab Ajustes e Transferencias
+// Tab Simulacao de Comparacao
 // =============================================
 
-const ADJ_TYPE_LABELS: Record<string, { label: string; color: string; Icon: React.ComponentType<{ className?: string }> }> = {
-  INCREASE: { label: 'Entrada', color: 'text-blue-600', Icon: TrendingUp },
-  DECREASE: { label: 'Saida', color: 'text-red-600', Icon: TrendingDown },
-  TRANSFER: { label: 'Transferencia', color: 'text-purple-600', Icon: ArrowRightLeft },
-  NO_CHANGE: { label: 'Sem alteracao', color: 'text-slate-400', Icon: Minus },
-};
+interface SimulationRow {
+  product_code: string;
+  product_description: string;
+  lot_number: string | null;
+  system_a: number;
+  counted_a: number;
+  diff_a: number;
+  transfer_a: number;
+  adjusted_a: number;
+  final_diff_a: number;
+  system_b: number;
+  counted_b: number;
+  diff_b: number;
+  transfer_b: number;
+  adjusted_b: number;
+  final_diff_b: number;
+  transfer_qty: number;
+  transfer_direction: string;
+  unit_cost: number;
+  transfer_value: number;
+}
 
-const INTEG_STATUS_LABELS: Record<string, { label: string; className: string }> = {
-  DRAFT: { label: 'Pendente', className: 'bg-blue-100 text-blue-700' },
-  PENDENTE: { label: 'Pendente', className: 'bg-blue-100 text-blue-700' },
-  ENVIADO: { label: 'Enviado', className: 'bg-green-100 text-green-700' },
-  CONFIRMADO: { label: 'Confirmado', className: 'bg-green-100 text-green-700' },
-  ERRO: { label: 'Erro', className: 'bg-red-100 text-red-700' },
-  CANCELADO: { label: 'Cancelado', className: 'bg-slate-100 text-slate-600' },
-};
+function buildSimulationRows(preview: IntegrationPreviewResult): SimulationRow[] {
+  const adjA = preview.adjustments_a ?? [];
+  const adjB = preview.adjustments_b ?? [];
+  const transfers = preview.transfers ?? [];
 
-const formatCurrency = (v: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+  // Index adjustments by product_code+lot_number
+  const keyFn = (code: string, lot: string | null) => `${code}|${lot ?? ''}`;
+  const adjAMap = new Map<string, IntegrationAdjustment>();
+  const adjBMap = new Map<string, IntegrationAdjustment>();
+  const transferMap = new Map<string, IntegrationTransfer>();
 
-function TabAjustes({ selectedRound }: { selectedRound: string }) {
-  const [items, setItems] = useState<IntegrationAdjustment[]>([]);
-  const [summary, setSummary] = useState<AdjustmentsSummary>({ adjustments: 0, transfers: 0, total_value: 0 });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  for (const a of adjA) {
+    if (a.row_type === 'AGGREGATE' || !a.row_type) {
+      adjAMap.set(keyFn(a.product_code, a.lot_number), a);
+    }
+  }
+  for (const b of adjB) {
+    if (b.row_type === 'AGGREGATE' || !b.row_type) {
+      adjBMap.set(keyFn(b.product_code, b.lot_number), b);
+    }
+  }
+  for (const t of transfers) {
+    if (t.row_type === 'AGGREGATE' || !t.row_type) {
+      transferMap.set(keyFn(t.product_code, t.lot_number), t);
+    }
+  }
 
-  const loadData = useCallback(async () => {
+  // All unique product keys
+  const allKeys = new Set<string>();
+  adjAMap.forEach((_, k) => allKeys.add(k));
+  adjBMap.forEach((_, k) => allKeys.add(k));
+  transferMap.forEach((_, k) => allKeys.add(k));
+
+  const rows: SimulationRow[] = [];
+
+  for (const key of allKeys) {
+    const a = adjAMap.get(key);
+    const b = adjBMap.get(key);
+    const t = transferMap.get(key);
+    const [code, lot] = key.split('|');
+
+    const systemA = a?.expected_qty ?? 0;
+    const countedA = a?.counted_qty ?? 0;
+    const diffA = countedA - systemA;
+    const transferQtyA = a?.transfer_qty ?? 0;
+    const adjustedA = a?.adjusted_qty ?? systemA;
+    const finalDiffA = a?.adjustment_qty ?? (countedA - adjustedA);
+
+    const systemB = b?.expected_qty ?? 0;
+    const countedB = b?.counted_qty ?? 0;
+    const diffB = countedB - systemB;
+    const transferQtyB = b?.transfer_qty ?? 0;
+    const adjustedB = b?.adjusted_qty ?? systemB;
+    const finalDiffB = b?.adjustment_qty ?? (countedB - adjustedB);
+
+    const transferQty = t?.quantity ?? 0;
+    let transferDir = '';
+    if (t && transferQty > 0) {
+      transferDir = `${t.source_warehouse} → ${t.target_warehouse}`;
+    }
+
+    rows.push({
+      product_code: code,
+      product_description: a?.product_description ?? b?.product_description ?? t?.product_description ?? '',
+      lot_number: lot || null,
+      system_a: systemA,
+      counted_a: countedA,
+      diff_a: diffA,
+      transfer_a: transferQtyA,
+      adjusted_a: adjustedA,
+      final_diff_a: finalDiffA,
+      system_b: systemB,
+      counted_b: countedB,
+      diff_b: diffB,
+      transfer_b: transferQtyB,
+      adjusted_b: adjustedB,
+      final_diff_b: finalDiffB,
+      transfer_qty: transferQty,
+      transfer_direction: transferDir,
+      unit_cost: a?.unit_cost ?? b?.unit_cost ?? t?.unit_cost ?? 0,
+      transfer_value: transferQty * (t?.unit_cost ?? 0),
+    });
+  }
+
+  rows.sort((x, y) => x.product_code.localeCompare(y.product_code));
+  return rows;
+}
+
+function TabSimulacao() {
+  const toast = useToast();
+  const [inventories, setInventories] = useState<InventoryList[]>([]);
+  const [loadingInv, setLoadingInv] = useState(true);
+  const [invAId, setInvAId] = useState('');
+  const [invBId, setInvBId] = useState('');
+  const [preview, setPreview] = useState<IntegrationPreviewResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // Load completed/closed inventories
+  useEffect(() => {
+    (async () => {
+      try {
+        const [completed, closed] = await Promise.all([
+          inventoryService.listar({ status: 'COMPLETED', size: '100' }),
+          inventoryService.listar({ status: 'CLOSED', size: '100' }),
+        ]);
+        const all = [...completed.items, ...closed.items];
+        all.sort((a, b) => a.name.localeCompare(b.name));
+        setInventories(all);
+      } catch {
+        toast.error('Erro ao carregar inventarios.');
+      } finally {
+        setLoadingInv(false);
+      }
+    })();
+  }, [toast]);
+
+  const handleSimulate = useCallback(async () => {
+    if (!invAId || !invBId) {
+      toast.error('Selecione os dois inventarios para comparar.');
+      return;
+    }
+    if (invAId === invBId) {
+      toast.error('Selecione inventarios diferentes.');
+      return;
+    }
     setLoading(true);
-    setError(false);
+    setError('');
+    setPreview(null);
     try {
-      const result = await discrepancyService.listarAjustes(selectedRound || undefined);
-      setItems(result.items);
-      setSummary(result.summary);
-    } catch {
-      setError(true);
+      const result = await integrationService.preview(invAId, invBId, true);
+      setPreview(result);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao simular comparacao.';
+      // Extract backend detail from axios error
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(detail || msg);
     } finally {
       setLoading(false);
     }
-  }, [selectedRound]);
+  }, [invAId, invBId, toast]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  const rows = useMemo(() => {
+    if (!preview) return [];
+    return buildSimulationRows(preview);
+  }, [preview]);
 
-  if (loading) return <TableSkeleton rows={6} cols={8} />;
-  if (error) return <ErrorState message="Erro ao carregar ajustes." onRetry={loadData} />;
+  const whA = preview?.inventory_a?.warehouse ?? 'A';
+  const whB = preview?.inventory_b?.warehouse ?? 'B';
 
-  // Stats
-  const increases = items.filter((i) => i.adjustment_type === 'INCREASE').length;
-  const decreases = items.filter((i) => i.adjustment_type === 'DECREASE').length;
+  const fmt = (v: number) => v % 1 === 0 ? v.toString() : v.toFixed(2);
+  const fmtCurrency = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+  const totalTransferValue = rows.reduce((s, r) => s + r.transfer_value, 0);
+  const totalTransfers = rows.filter(r => r.transfer_qty > 0).length;
+  const totalAdjA = rows.filter(r => Math.abs(r.final_diff_a) > 0.01).length;
+  const totalAdjB = rows.filter(r => Math.abs(r.final_diff_b) > 0.01).length;
 
   return (
     <>
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Itens" value={items.length} color="text-slate-800" />
-        <StatCard label="Ajustes" value={summary.adjustments} color="text-blue-600" />
-        <StatCard label="Transferencias" value={summary.transfers} color="text-purple-600" />
-        <StatCard label="Valor Total" value={formatCurrency(summary.total_value)} color="text-red-600" />
+      {/* Info banner */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+        <AlertCircle className="w-5 h-5 text-blue-500 mt-0.5 shrink-0" />
+        <div className="text-sm text-blue-700">
+          <p className="font-medium mb-1">Simulacao para analise</p>
+          <p>
+            Compare dois inventarios para visualizar transferencias e ajustes <strong>sem gravar</strong> nenhuma informacao.
+            Para gerar a integracao oficial, utilize a opcao <strong>Envio ao Protheus</strong>.
+          </p>
+        </div>
       </div>
 
-      {/* Sub-stats */}
-      {(increases > 0 || decreases > 0) && (
-        <div className="flex gap-4 text-xs text-slate-500">
-          {increases > 0 && <span className="flex items-center gap-1"><TrendingUp className="w-3 h-3 text-blue-500" /> {increases} entrada(s)</span>}
-          {decreases > 0 && <span className="flex items-center gap-1"><TrendingDown className="w-3 h-3 text-red-500" /> {decreases} saida(s)</span>}
+      {/* Inventory selectors */}
+      <div className="bg-white rounded-lg border border-slate-200 p-5">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto] gap-4 items-end">
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1.5">Inventario A</label>
+            <select
+              value={invAId}
+              onChange={(e) => { setInvAId(e.target.value); setPreview(null); }}
+              disabled={loadingInv}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500"
+            >
+              <option value="">Selecione...</option>
+              {inventories.filter(i => i.id !== invBId).map((inv) => (
+                <option key={inv.id} value={inv.id}>
+                  {inv.name} (ARM.{inv.warehouse})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center justify-center pb-1">
+            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
+              <ArrowRightLeft className="w-4 h-4 text-slate-400" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1.5">Inventario B</label>
+            <select
+              value={invBId}
+              onChange={(e) => { setInvBId(e.target.value); setPreview(null); }}
+              disabled={loadingInv}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500"
+            >
+              <option value="">Selecione...</option>
+              {inventories.filter(i => i.id !== invAId).map((inv) => (
+                <option key={inv.id} value={inv.id}>
+                  {inv.name} (ARM.{inv.warehouse})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={handleSimulate}
+            disabled={loading || !invAId || !invBId}
+            className="flex items-center gap-2 bg-capul-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {loading ? (
+              <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Search className="w-4 h-4" />
+            )}
+            Simular
+          </button>
+        </div>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+          <p className="font-medium">Erro na simulacao</p>
+          <p>{error}</p>
         </div>
       )}
 
-      {/* Export */}
-      {items.length > 0 && (
-        <div className="flex justify-end">
-          <ExportDropdown
-            onCSV={() => {
-              const header = 'Tipo;Codigo;Descricao;Lote;Origem;Destino;Quantidade;Esperado;Contado;Custo Unit;Valor;Status Integracao\n';
-              const rows = items.map((i) => {
-                const typeLabel = ADJ_TYPE_LABELS[i.adjustment_type]?.label ?? i.adjustment_type;
-                const statusLabel = INTEG_STATUS_LABELS[i.integration_status]?.label ?? i.integration_status;
-                return `${typeLabel};${i.product_code};${i.product_description};${i.lot_number || ''};${i.source_warehouse || ''};${i.target_warehouse || ''};${i.quantity};${i.expected_qty};${i.counted_qty};${i.unit_cost.toFixed(2)};${i.total_value.toFixed(2)};${statusLabel}`;
-              });
-              downloadCSV(`ajustes_transferencias_${new Date().toISOString().slice(0, 10)}.csv`, header, rows);
-            }}
-            onExcel={() => {
-              const headers = ['Tipo', 'Codigo', 'Descricao', 'Lote', 'Origem', 'Destino', 'Quantidade', 'Esperado', 'Contado', 'Custo Unit', 'Valor', 'Status'];
-              downloadExcel(`ajustes_transferencias_${new Date().toISOString().slice(0, 10)}`, 'Ajustes', headers,
-                items.map((i) => [
-                  ADJ_TYPE_LABELS[i.adjustment_type]?.label ?? i.adjustment_type,
-                  i.product_code, i.product_description, i.lot_number || '', i.source_warehouse || '', i.target_warehouse || '',
-                  i.quantity, i.expected_qty, i.counted_qty, i.unit_cost.toFixed(2), i.total_value.toFixed(2),
-                  INTEG_STATUS_LABELS[i.integration_status]?.label ?? i.integration_status,
-                ]),
-              );
-            }}
-            onPrint={() => {
-              const headers = ['Tipo', 'Codigo', 'Descricao', 'Qtd', 'Esperado', 'Contado', 'Valor', 'Status'];
-              printTable('Ajustes e Transferencias', headers,
-                items.map((i) => [
-                  ADJ_TYPE_LABELS[i.adjustment_type]?.label ?? i.adjustment_type,
-                  i.product_code, i.product_description, i.quantity, i.expected_qty, i.counted_qty,
-                  formatCurrency(i.total_value), INTEG_STATUS_LABELS[i.integration_status]?.label ?? i.integration_status,
-                ]),
-              );
-            }}
-          />
-        </div>
-      )}
+      {/* Loading */}
+      {loading && <TableSkeleton rows={8} cols={10} />}
 
-      {/* Table */}
-      {items.length === 0 ? (
-        <div className="text-center py-12 text-slate-400">
-          <Send className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-          <p className="text-sm">Nenhum ajuste ou transferencia encontrado.</p>
-          <p className="text-xs mt-1">Gere uma integracao na pagina de Envio ao Protheus para visualizar os ajustes.</p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-lg border border-slate-200 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 text-left">
-                <th className="py-3 px-4 font-medium text-slate-600">Tipo</th>
-                <th className="py-3 px-4 font-medium text-slate-600">Codigo</th>
-                <th className="py-3 px-4 font-medium text-slate-600">Descricao</th>
-                <th className="py-3 px-4 font-medium text-slate-600">Lote</th>
-                <th className="py-3 px-4 font-medium text-slate-600">Armazem</th>
-                <th className="py-3 px-4 font-medium text-slate-600 text-right">Esperado</th>
-                <th className="py-3 px-4 font-medium text-slate-600 text-right">Contado</th>
-                <th className="py-3 px-4 font-medium text-slate-600 text-right">Quantidade</th>
-                <th className="py-3 px-4 font-medium text-slate-600 text-right">Valor</th>
-                <th className="py-3 px-4 font-medium text-slate-600">Integracao</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {items.map((item) => {
-                const adjConfig = ADJ_TYPE_LABELS[item.adjustment_type] ?? ADJ_TYPE_LABELS.NO_CHANGE;
-                const AdjIcon = adjConfig.Icon;
-                const integStatus = INTEG_STATUS_LABELS[item.integration_status] ?? { label: item.integration_status, className: 'bg-slate-100 text-slate-600' };
+      {/* Results */}
+      {preview && !loading && (
+        <>
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <StatCard label="Produtos" value={rows.length} color="text-slate-800" />
+            <StatCard label="Transferencias" value={totalTransfers} color="text-purple-600" />
+            <StatCard label={`Ajustes ${whA}`} value={totalAdjA} color="text-blue-600" />
+            <StatCard label={`Ajustes ${whB}`} value={totalAdjB} color="text-orange-600" />
+            <StatCard label="Valor Transf." value={fmtCurrency(totalTransferValue)} color="text-green-600" />
+          </div>
 
-                return (
-                  <tr key={item.id} className="hover:bg-slate-50">
-                    <td className="py-2.5 px-4">
-                      <span className={`flex items-center gap-1.5 text-xs font-medium ${adjConfig.color}`}>
-                        <AdjIcon className="w-3.5 h-3.5" />
-                        {adjConfig.label}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-4 font-mono text-xs">{item.product_code}</td>
-                    <td className="py-2.5 px-4 max-w-[180px] truncate">{item.product_description}</td>
-                    <td className="py-2.5 px-4 font-mono text-xs text-slate-500">{item.lot_number || '—'}</td>
-                    <td className="py-2.5 px-4 text-xs text-slate-500">
-                      {item.item_type === 'TRANSFER' ? (
-                        <span className="flex items-center gap-1">
-                          <span className="font-mono">{item.source_warehouse}</span>
-                          <ArrowRightLeft className="w-3 h-3 text-slate-400" />
-                          <span className="font-mono">{item.target_warehouse}</span>
-                        </span>
-                      ) : (
-                        <span className="font-mono">{item.target_warehouse || item.source_warehouse || '—'}</span>
-                      )}
-                    </td>
-                    <td className="py-2.5 px-4 text-right tabular-nums">{item.expected_qty.toFixed(2)}</td>
-                    <td className="py-2.5 px-4 text-right tabular-nums">{item.counted_qty.toFixed(2)}</td>
-                    <td className={`py-2.5 px-4 text-right tabular-nums font-medium ${
-                      item.quantity > 0 && item.adjustment_type === 'INCREASE' ? 'text-blue-600'
-                      : item.quantity > 0 && item.adjustment_type === 'DECREASE' ? 'text-red-600'
-                      : item.quantity > 0 && item.adjustment_type === 'TRANSFER' ? 'text-purple-600'
-                      : 'text-slate-400'
-                    }`}>
-                      {item.quantity > 0 ? item.quantity.toFixed(2) : '—'}
-                    </td>
-                    <td className="py-2.5 px-4 text-right tabular-nums text-slate-600">
-                      {item.total_value !== 0 ? formatCurrency(item.total_value) : '—'}
-                    </td>
-                    <td className="py-2.5 px-4">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${integStatus.className}`}>
-                        {integStatus.label}
-                      </span>
-                    </td>
+          {/* Inventory info */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+              <span className="text-xs font-medium text-blue-500">ARM. {whA}</span>
+              <p className="text-sm font-medium text-blue-800 mt-0.5">{preview.inventory_a.name}</p>
+            </div>
+            {preview.inventory_b && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg px-4 py-3">
+                <span className="text-xs font-medium text-orange-500">ARM. {whB}</span>
+                <p className="text-sm font-medium text-orange-800 mt-0.5">{preview.inventory_b.name}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Export */}
+          {rows.length > 0 && (
+            <div className="flex justify-end">
+              <ExportDropdown
+                onCSV={() => {
+                  const header = `Codigo;Descricao;Lote;Sist ${whA};Cont ${whA};Dif ${whA};Transf ${whA};Ajust ${whA};Dif Final ${whA};Sist ${whB};Cont ${whB};Dif ${whB};Transf ${whB};Ajust ${whB};Dif Final ${whB};Transf Qtd;Direcao;Custo Unit;Valor Transf\n`;
+                  const csvRows = rows.map(r =>
+                    `${r.product_code};${r.product_description};${r.lot_number || ''};${fmt(r.system_a)};${fmt(r.counted_a)};${fmt(r.diff_a)};${fmt(r.transfer_a)};${fmt(r.adjusted_a)};${fmt(r.final_diff_a)};${fmt(r.system_b)};${fmt(r.counted_b)};${fmt(r.diff_b)};${fmt(r.transfer_b)};${fmt(r.adjusted_b)};${fmt(r.final_diff_b)};${fmt(r.transfer_qty)};${r.transfer_direction};${r.unit_cost.toFixed(2)};${r.transfer_value.toFixed(2)}`
+                  );
+                  downloadCSV(`simulacao_${new Date().toISOString().slice(0, 10)}.csv`, header, csvRows);
+                }}
+                onExcel={() => {
+                  const headers = ['Codigo', 'Descricao', 'Lote', `Sist ${whA}`, `Cont ${whA}`, `Dif ${whA}`, `Transf ${whA}`, `Ajust ${whA}`, `Dif Final ${whA}`, `Sist ${whB}`, `Cont ${whB}`, `Dif ${whB}`, `Transf ${whB}`, `Ajust ${whB}`, `Dif Final ${whB}`, 'Transf Qtd', 'Direcao', 'Custo Unit', 'Valor Transf'];
+                  downloadExcel(`simulacao_${new Date().toISOString().slice(0, 10)}`, 'Simulacao', headers,
+                    rows.map(r => [r.product_code, r.product_description, r.lot_number || '', r.system_a, r.counted_a, r.diff_a, r.transfer_a, r.adjusted_a, r.final_diff_a, r.system_b, r.counted_b, r.diff_b, r.transfer_b, r.adjusted_b, r.final_diff_b, r.transfer_qty, r.transfer_direction, r.unit_cost, r.transfer_value]),
+                  );
+                }}
+                onPrint={() => {
+                  const headers = ['Codigo', 'Descricao', `Sist ${whA}`, `Cont ${whA}`, `Dif ${whA}`, 'Transf', `Sist ${whB}`, `Cont ${whB}`, `Dif ${whB}`, `Ajust ${whA}`, `Ajust ${whB}`, 'Valor'];
+                  printTable(`Simulacao - ${preview.inventory_a.name} x ${preview.inventory_b?.name ?? ''}`, headers,
+                    rows.map(r => [r.product_code, r.product_description, r.system_a, r.counted_a, r.diff_a, r.transfer_qty, r.system_b, r.counted_b, r.diff_b, r.adjusted_a, r.adjusted_b, fmtCurrency(r.transfer_value)]),
+                  );
+                }}
+              />
+            </div>
+          )}
+
+          {/* Comparison table */}
+          {rows.length === 0 ? (
+            <div className="text-center py-12 text-slate-400">
+              <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-400" />
+              <p className="text-sm">Nenhuma divergencia encontrada entre os inventarios.</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg border border-slate-200 overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50">
+                    <th colSpan={2} className="py-2 px-3 font-medium text-slate-700 text-left border-b border-slate-200">Produto</th>
+                    <th colSpan={4} className="py-2 px-3 font-medium text-blue-700 text-center border-b border-slate-200 bg-blue-50/50">ARM. {whA}</th>
+                    <th colSpan={1} className="py-2 px-3 font-medium text-purple-700 text-center border-b border-slate-200 bg-purple-50/50">Transf.</th>
+                    <th colSpan={4} className="py-2 px-3 font-medium text-orange-700 text-center border-b border-slate-200 bg-orange-50/50">ARM. {whB}</th>
+                    <th colSpan={2} className="py-2 px-3 font-medium text-green-700 text-center border-b border-slate-200 bg-green-50/50">Resultado</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                  <tr className="bg-slate-50 text-slate-500 font-medium">
+                    <th className="py-2 px-3 text-left">Codigo</th>
+                    <th className="py-2 px-3 text-left">Descricao</th>
+                    {/* ARM A */}
+                    <th className="py-2 px-3 text-right bg-blue-50/30">Sistema</th>
+                    <th className="py-2 px-3 text-right bg-blue-50/30">Contado</th>
+                    <th className="py-2 px-3 text-right bg-blue-50/30">Diferenca</th>
+                    <th className="py-2 px-3 text-right bg-blue-50/30">Ajustado</th>
+                    {/* Transfer */}
+                    <th className="py-2 px-3 text-right bg-purple-50/30">Qtd</th>
+                    {/* ARM B */}
+                    <th className="py-2 px-3 text-right bg-orange-50/30">Sistema</th>
+                    <th className="py-2 px-3 text-right bg-orange-50/30">Contado</th>
+                    <th className="py-2 px-3 text-right bg-orange-50/30">Diferenca</th>
+                    <th className="py-2 px-3 text-right bg-orange-50/30">Ajustado</th>
+                    {/* Result */}
+                    <th className="py-2 px-3 text-right bg-green-50/30">Dif Final A</th>
+                    <th className="py-2 px-3 text-right bg-green-50/30">Dif Final B</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {rows.map((r, idx) => {
+                    const hasTransfer = r.transfer_qty > 0;
+                    return (
+                      <tr key={idx} className={`hover:bg-slate-50 ${hasTransfer ? 'bg-purple-50/20' : ''}`}>
+                        <td className="py-2 px-3 font-mono whitespace-nowrap">{r.product_code}</td>
+                        <td className="py-2 px-3 max-w-[160px] truncate" title={r.product_description}>
+                          {r.product_description}
+                          {r.lot_number && <span className="text-slate-400 ml-1">[{r.lot_number}]</span>}
+                        </td>
+                        {/* ARM A */}
+                        <td className="py-2 px-3 text-right tabular-nums bg-blue-50/10">{fmt(r.system_a)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums bg-blue-50/10">{fmt(r.counted_a)}</td>
+                        <td className={`py-2 px-3 text-right tabular-nums font-medium bg-blue-50/10 ${r.diff_a > 0 ? 'text-blue-600' : r.diff_a < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                          {r.diff_a > 0 ? '+' : ''}{fmt(r.diff_a)}
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums bg-blue-50/10 font-medium">{fmt(r.adjusted_a)}</td>
+                        {/* Transfer */}
+                        <td className="py-2 px-3 text-right tabular-nums bg-purple-50/10">
+                          {hasTransfer ? (
+                            <span className="inline-flex items-center gap-1 text-purple-700 font-medium">
+                              {fmt(r.transfer_qty)}
+                              <ArrowRight className="w-3 h-3 inline" />
+                            </span>
+                          ) : (
+                            <span className="text-slate-300">-</span>
+                          )}
+                        </td>
+                        {/* ARM B */}
+                        <td className="py-2 px-3 text-right tabular-nums bg-orange-50/10">{fmt(r.system_b)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums bg-orange-50/10">{fmt(r.counted_b)}</td>
+                        <td className={`py-2 px-3 text-right tabular-nums font-medium bg-orange-50/10 ${r.diff_b > 0 ? 'text-blue-600' : r.diff_b < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                          {r.diff_b > 0 ? '+' : ''}{fmt(r.diff_b)}
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums bg-orange-50/10 font-medium">{fmt(r.adjusted_b)}</td>
+                        {/* Result */}
+                        <td className={`py-2 px-3 text-right tabular-nums font-medium bg-green-50/10 ${Math.abs(r.final_diff_a) < 0.01 ? 'text-green-600' : r.final_diff_a > 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                          {Math.abs(r.final_diff_a) < 0.01 ? '0' : (r.final_diff_a > 0 ? '+' : '') + fmt(r.final_diff_a)}
+                        </td>
+                        <td className={`py-2 px-3 text-right tabular-nums font-medium bg-green-50/10 ${Math.abs(r.final_diff_b) < 0.01 ? 'text-green-600' : r.final_diff_b > 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                          {Math.abs(r.final_diff_b) < 0.01 ? '0' : (r.final_diff_b > 0 ? '+' : '') + fmt(r.final_diff_b)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Transfer detail */}
+          {totalTransfers > 0 && (
+            <div className="bg-white rounded-lg border border-slate-200 p-4">
+              <h3 className="text-sm font-medium text-slate-700 mb-3 flex items-center gap-2">
+                <ArrowRightLeft className="w-4 h-4 text-purple-500" />
+                Detalhe das Transferencias
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 font-medium">
+                      <th className="py-2 px-3 text-left">Codigo</th>
+                      <th className="py-2 px-3 text-left">Descricao</th>
+                      <th className="py-2 px-3 text-center">Direcao</th>
+                      <th className="py-2 px-3 text-right">Quantidade</th>
+                      <th className="py-2 px-3 text-right">Custo Unit.</th>
+                      <th className="py-2 px-3 text-right">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {rows.filter(r => r.transfer_qty > 0).map((r, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50">
+                        <td className="py-2 px-3 font-mono">{r.product_code}</td>
+                        <td className="py-2 px-3 max-w-[200px] truncate">{r.product_description}</td>
+                        <td className="py-2 px-3 text-center">
+                          <span className="inline-flex items-center gap-1 text-purple-600 font-medium">
+                            {r.transfer_direction}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums font-medium text-purple-700">{fmt(r.transfer_qty)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums text-slate-600">{fmtCurrency(r.unit_cost)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums font-medium text-green-700">{fmtCurrency(r.transfer_value)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-slate-50 font-medium text-sm">
+                      <td colSpan={3} className="py-2 px-3 text-right">Total</td>
+                      <td className="py-2 px-3 text-right tabular-nums text-purple-700">{totalTransfers} itens</td>
+                      <td className="py-2 px-3" />
+                      <td className="py-2 px-3 text-right tabular-nums text-green-700">{fmtCurrency(totalTransferValue)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Empty state when no simulation yet */}
+      {!preview && !loading && !error && (
+        <div className="text-center py-16 text-slate-400">
+          <BarChart3 className="w-16 h-16 mx-auto mb-4 text-slate-300" />
+          <p className="text-sm font-medium text-slate-500">Selecione dois inventarios e clique em Simular</p>
+          <p className="text-xs mt-1">O sistema calculara as transferencias e ajustes entre os armazens</p>
         </div>
       )}
     </>

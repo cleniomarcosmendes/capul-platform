@@ -1,5 +1,5 @@
 import { inventarioApi } from './api';
-import type { Discrepancy, ClosedRound, IntegrationAdjustment, AdjustmentsSummary } from '../types';
+import type { Discrepancy, ClosedRound, SavedAdjustmentItem } from '../types';
 
 export const discrepancyService = {
   async listar(roundKey?: string): Promise<Discrepancy[]> {
@@ -14,7 +14,7 @@ export const discrepancyService = {
     return Array.isArray(data) ? data : [];
   },
 
-  async listarAjustes(inventoryId?: string): Promise<{ items: IntegrationAdjustment[]; summary: AdjustmentsSummary }> {
+  async listarAjustes(inventoryId?: string): Promise<{ items: SavedAdjustmentItem[]; summary: { adjustments: number; transfers: number; total_value: number } }> {
     const params: Record<string, string> = {};
     if (inventoryId) params.inventory_id = inventoryId;
     const { data } = await inventarioApi.get('/discrepancies/adjustments', { params });

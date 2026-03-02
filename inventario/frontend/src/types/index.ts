@@ -510,7 +510,7 @@ export interface ClosedRound {
   display_text: string;
 }
 
-export interface IntegrationAdjustment {
+export interface SavedAdjustmentItem {
   id: string;
   item_type: 'ADJUSTMENT' | 'TRANSFER';
   product_code: string;
@@ -531,12 +531,6 @@ export interface IntegrationAdjustment {
   inventory_name: string;
   sent_at: string | null;
   created_at: string | null;
-}
-
-export interface AdjustmentsSummary {
-  adjustments: number;
-  transfers: number;
-  total_value: number;
 }
 
 // === Comparison ===
@@ -649,6 +643,10 @@ export interface IntegrationAdjustment {
   adjustment_type: string;
   unit_cost: number;
   total_value: number;
+  row_type?: string;
+  tracking?: string;
+  transfer_qty?: number;
+  transfer_applied?: number;
 }
 
 export interface IntegrationTransfer {
@@ -660,6 +658,16 @@ export interface IntegrationTransfer {
   quantity: number;
   unit_cost: number;
   total_value: number;
+  row_type?: string;
+  tracking?: string;
+  source_balance_before?: number;
+  source_balance_after?: number;
+  source_counted?: number;
+  target_balance_before?: number;
+  target_balance_after?: number;
+  target_counted?: number;
+  divergence_source?: number;
+  divergence_target?: number;
 }
 
 export interface IntegrationPreviewResult {
@@ -668,6 +676,8 @@ export interface IntegrationPreviewResult {
   inventory_b?: { id: string; name: string; warehouse: string } | null;
   transfers: IntegrationTransfer[];
   adjustments: IntegrationAdjustment[];
+  adjustments_a?: IntegrationAdjustment[];
+  adjustments_b?: IntegrationAdjustment[];
   summary: {
     total_transfers: number;
     total_adjustments: number;

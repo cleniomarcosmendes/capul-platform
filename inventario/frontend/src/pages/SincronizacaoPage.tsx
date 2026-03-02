@@ -222,11 +222,25 @@ function TabEnvio() {
       toast.success(`Integracao ${result.action === 'created' ? 'criada' : 'atualizada'} com sucesso.`);
       setShowPreview(false);
       setPreviewData(null);
+      const savedA = selectedA;
+      const savedB = mode === 'COMPARATIVO' ? selectedB : '';
       setSelectedA('');
       setSelectedB('');
-      // Refresh integrations
-      const existing = await integrationService.buscarExistente(selectedA);
-      setIntegrations((prev) => new Map(prev).set(selectedA, existing));
+      // Refresh integrations for both A and B
+      const existingA = await integrationService.buscarExistente(savedA);
+      setIntegrations((prev) => {
+        const next = new Map(prev);
+        next.set(savedA, existingA);
+        return next;
+      });
+      if (savedB) {
+        const existingB = await integrationService.buscarExistente(savedB);
+        setIntegrations((prev) => {
+          const next = new Map(prev);
+          next.set(savedB, existingB);
+          return next;
+        });
+      }
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
       toast.error(detail || 'Erro ao salvar integracao.');
@@ -241,8 +255,13 @@ function TabEnvio() {
     setConfirmSend(null);
     try {
       await integrationService.enviar(confirmSend.integrationId);
-      const updated = await integrationService.buscarPorId(confirmSend.integrationId);
-      setIntegrations((prev) => new Map(prev).set(confirmSend.inventoryId, updated));
+      // Refresh all inventories' integration status (handles COMPARATIVE with 2 inventories)
+      const refreshMap = new Map(integrations);
+      for (const inv of inventarios) {
+        const existing = await integrationService.buscarExistente(inv.id);
+        refreshMap.set(inv.id, existing);
+      }
+      setIntegrations(refreshMap);
       toast.success('Integracao enviada e inventario(s) efetivado(s) com sucesso.');
     } catch {
       toast.error('Erro ao enviar ao Protheus.');
@@ -255,7 +274,7 @@ function TabEnvio() {
   const availableForSelection = inventarios.filter((inv) => {
     if (inv.status === 'CLOSED') return false; // Efetivados nao podem gerar nova integracao
     const integ = integrations.get(inv.id);
-    return !integ || integ.status === 'PENDENTE';
+    return !integ || integ.status === 'CANCELLED' || integ.status === 'DRAFT';
   });
 
   // Inventarios with integration (table rows)
@@ -413,21 +432,23 @@ function TabEnvio() {
                     <td className="py-2.5 px-4 text-slate-600">{inv.total_items}</td>
                     <td className="py-2.5 px-4">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        integration.status === 'ENVIADO' || integration.status === 'CONFIRMADO'
+                        integration.status === 'SENT' || integration.status === 'CONFIRMED'
                           ? 'bg-green-100 text-green-700'
-                          : integration.status === 'ERRO'
+                          : integration.status === 'ERROR'
                           ? 'bg-red-100 text-red-700'
-                          : integration.status === 'CANCELADO'
+                          : integration.status === 'CANCELLED'
                           ? 'bg-slate-100 text-slate-600'
+                          : integration.status === 'PROCESSING'
+                          ? 'bg-amber-100 text-amber-700'
                           : 'bg-blue-100 text-blue-700'
                       }`}>
-                        {{ DRAFT: 'Pendente', PENDENTE: 'Pendente', ENVIADO: 'Enviado', CONFIRMADO: 'Confirmado', ERRO: 'Erro', CANCELADO: 'Cancelado' }[integration.status] ?? integration.status}
+                        {{ DRAFT: 'Pendente', PENDING: 'Pendente', SENT: 'Enviado', PROCESSING: 'Processando', CONFIRMED: 'Confirmado', PARTIAL: 'Parcial', ERROR: 'Erro', CANCELLED: 'Cancelado' }[integration.status] ?? integration.status}
                       </span>
                     </td>
                     <td className="py-2.5 px-4 text-right">
                       {isLoading ? (
                         <Loader2 className="w-4 h-4 animate-spin text-slate-400 ml-auto" />
-                      ) : integration.status === 'PENDENTE' || integration.status === 'DRAFT' ? (
+                      ) : integration.status === 'PENDING' || integration.status === 'DRAFT' ? (
                         <button
                           onClick={() => setConfirmSend({
                             integrationId: integration.id,

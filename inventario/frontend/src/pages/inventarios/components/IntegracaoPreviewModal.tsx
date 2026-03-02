@@ -124,11 +124,16 @@ function groupAdjustments(adjustments: IntegrationAdjustment[]): GroupedAdjustme
   const groups: GroupedAdjustment[] = [];
   for (const items of map.values()) {
     const first = items[0];
-    const totalExpected = items.reduce((s, i) => s + i.expected_qty, 0);
-    const totalCounted = items.reduce((s, i) => s + i.counted_qty, 0);
-    const totalAdj = items.reduce((s, i) => s + i.adjustment_qty, 0);
-    const totalVal = items.reduce((s, i) => s + i.total_value, 0);
-    const hasLots = items.length > 1 || (items.length === 1 && items[0].lot_number != null);
+    // Separate AGGREGATE (totals) from LOT_DETAIL (expansion rows)
+    const aggRow = items.find((i) => i.row_type === 'AGGREGATE');
+    const lotDetails = items.filter((i) => i.row_type === 'LOT_DETAIL');
+    const hasLots = lotDetails.length > 0;
+
+    // Use AGGREGATE row values if present (avoids double-counting)
+    const totalExpected = aggRow ? aggRow.expected_qty : items.reduce((s, i) => s + i.expected_qty, 0);
+    const totalCounted = aggRow ? aggRow.counted_qty : items.reduce((s, i) => s + i.counted_qty, 0);
+    const totalAdj = aggRow ? aggRow.adjustment_qty : items.reduce((s, i) => s + i.adjustment_qty, 0);
+    const totalVal = aggRow ? aggRow.total_value : items.reduce((s, i) => s + i.total_value, 0);
 
     groups.push({
       product_code: first.product_code,
@@ -138,8 +143,8 @@ function groupAdjustments(adjustments: IntegrationAdjustment[]): GroupedAdjustme
       total_counted: totalCounted,
       total_adjustment: totalAdj,
       total_value: totalVal,
-      group_type: resolveGroupType(items),
-      lots: items,
+      group_type: resolveGroupType(hasLots ? lotDetails : items),
+      lots: hasLots ? lotDetails : items,
       has_lots: hasLots,
     });
   }
@@ -157,15 +162,23 @@ function groupTransfers(transfers: IntegrationTransfer[]): GroupedTransfer[] {
   const groups: GroupedTransfer[] = [];
   for (const items of map.values()) {
     const first = items[0];
-    const hasLots = items.length > 1 || (items.length === 1 && items[0].lot_number != null);
+    // Separate AGGREGATE (totals) from LOT_DETAIL (expansion rows)
+    const aggRow = items.find((i) => i.row_type === 'AGGREGATE');
+    const lotDetails = items.filter((i) => i.row_type === 'LOT_DETAIL');
+    const hasLots = lotDetails.length > 0;
+
+    // Use AGGREGATE row values if present (avoids double-counting)
+    const totalQty = aggRow ? aggRow.quantity : items.reduce((s, i) => s + i.quantity, 0);
+    const totalVal = aggRow ? aggRow.total_value : items.reduce((s, i) => s + i.total_value, 0);
+
     groups.push({
       product_code: first.product_code,
       product_description: first.product_description,
       source_warehouse: first.source_warehouse,
       target_warehouse: first.target_warehouse,
-      total_quantity: items.reduce((s, i) => s + i.quantity, 0),
-      total_value: items.reduce((s, i) => s + i.total_value, 0),
-      lots: items,
+      total_quantity: totalQty,
+      total_value: totalVal,
+      lots: hasLots ? lotDetails : items,
       has_lots: hasLots,
     });
   }
@@ -219,13 +232,18 @@ export function IntegracaoPreviewModal({
     [preview.adjustments],
   );
 
-  // Stats for header cards
+  // Stats for header cards - only count AGGREGATE rows (avoid double-counting with LOT_DETAIL)
   const adjStats = useMemo(() => {
-    const increases = preview.adjustments.filter((a) => a.adjustment_type === 'INCREASE');
-    const decreases = preview.adjustments.filter((a) => a.adjustment_type === 'DECREASE');
+    const aggregates = preview.adjustments.filter((a) => {
+      const rt = a.row_type;
+      return rt === 'AGGREGATE' || !rt;
+    });
+    const increases = aggregates.filter((a) => a.adjustment_type === 'INCREASE');
+    const decreases = aggregates.filter((a) => a.adjustment_type === 'DECREASE');
     return {
       entradas: increases.length,
       saidas: decreases.length,
+      total: aggregates.length,
     };
   }, [preview.adjustments]);
 
@@ -248,11 +266,12 @@ export function IntegracaoPreviewModal({
 
   if (!open) return null;
 
+  const transferAggCount = preview.transfers.filter((t) => { const rt = t.row_type; return rt === 'AGGREGATE' || !rt; }).length;
   const tabs: { key: Tab; label: string; icon: typeof ArrowRightLeft; count: number }[] = [];
   if (preview.transfers.length > 0 || isComparative) {
-    tabs.push({ key: 'transfers', label: 'Transferencias', icon: ArrowRightLeft, count: preview.transfers.length });
+    tabs.push({ key: 'transfers', label: 'Transferencias', icon: ArrowRightLeft, count: transferAggCount });
   }
-  tabs.push({ key: 'adjustments', label: 'Ajustes', icon: ClipboardList, count: preview.adjustments.length });
+  tabs.push({ key: 'adjustments', label: 'Ajustes', icon: ClipboardList, count: adjStats.total });
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
@@ -293,7 +312,7 @@ export function IntegracaoPreviewModal({
           </div>
           <div>
             <p className="text-xs text-slate-500">Transferencias</p>
-            <p className="text-xl font-bold text-slate-800">{preview.summary.total_transfers}</p>
+            <p className="text-xl font-bold text-slate-800">{preview.transfers.filter((t) => { const rt = t.row_type; return rt === 'AGGREGATE' || !rt; }).length}</p>
           </div>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3">
@@ -302,7 +321,7 @@ export function IntegracaoPreviewModal({
           </div>
           <div>
             <p className="text-xs text-slate-500">Ajustes</p>
-            <p className="text-xl font-bold text-slate-800">{preview.summary.total_adjustments}</p>
+            <p className="text-xl font-bold text-slate-800">{adjStats.total}</p>
             <div className="flex gap-2 text-[10px] mt-0.5">
               <span className="text-green-600">+{adjStats.entradas} entrada</span>
               <span className="text-red-600">-{adjStats.saidas} saida</span>
@@ -726,7 +745,7 @@ function TransfersTable({ transfers }: { transfers: IntegrationTransfer[] }) {
             <p className="text-xs text-slate-500">Qtd Total</p>
           </div>
           <p className="text-2xl font-bold text-purple-600">
-            {fmtQty(transfers.reduce((s, t) => s + t.quantity, 0))}
+            {fmtQty(grouped.reduce((s, g) => s + g.total_quantity, 0))}
           </p>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -735,7 +754,7 @@ function TransfersTable({ transfers }: { transfers: IntegrationTransfer[] }) {
             <p className="text-xs text-slate-500">Valor Total</p>
           </div>
           <p className="text-2xl font-bold text-green-600">
-            {fmtMoney(transfers.reduce((s, t) => s + t.total_value, 0))}
+            {fmtMoney(grouped.reduce((s, g) => s + g.total_value, 0))}
           </p>
         </div>
       </div>
