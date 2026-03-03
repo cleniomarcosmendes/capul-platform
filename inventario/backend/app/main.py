@@ -7523,12 +7523,12 @@ async def get_my_closed_rounds_simple(
     try:
         # Buscar inventários que têm listas de contagem com dados
         query = text("""
-            SELECT DISTINCT il.id, il.name, il.warehouse, il.status
+            SELECT DISTINCT il.id, il.name, il.warehouse, il.status, il.created_at
             FROM inventario.inventory_lists il
             JOIN inventario.counting_lists cl ON cl.inventory_id = il.id
             WHERE il.store_id = :store_id
               AND il.status IN ('IN_PROGRESS', 'COMPLETED', 'CLOSED')
-            ORDER BY il.name
+            ORDER BY il.created_at DESC
         """)
         results = db.execute(query, {"store_id": str(current_user.store_id)}).fetchall()
 

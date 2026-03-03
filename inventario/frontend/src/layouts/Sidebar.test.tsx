@@ -44,7 +44,7 @@ describe('Sidebar', () => {
     expect(screen.getByText('Sincronizacao')).toBeInTheDocument();
     expect(screen.getByText('Relatorios')).toBeInTheDocument();
     expect(screen.getByText('Monitoramento')).toBeInTheDocument();
-    expect(screen.getByText('Divergencias')).toBeInTheDocument();
+    expect(screen.getByText('Analise')).toBeInTheDocument();
     expect(screen.getByText('Armazens')).toBeInTheDocument();
   });
 

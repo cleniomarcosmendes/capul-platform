@@ -15,6 +15,7 @@ import {
   Layers,
   AlertTriangle,
   CheckCircle2,
+  Info,
 } from 'lucide-react';
 import { ExportDropdown } from '../../../components/ExportDropdown';
 import { downloadCSV } from '../../../utils/csv';
@@ -91,6 +92,7 @@ interface GroupedAdjustment {
   group_type: AdjType;
   lots: IntegrationAdjustment[];
   has_lots: boolean;
+  b2_xentpos: number;
 }
 
 interface GroupedTransfer {
@@ -146,6 +148,7 @@ function groupAdjustments(adjustments: IntegrationAdjustment[]): GroupedAdjustme
       group_type: resolveGroupType(hasLots ? lotDetails : items),
       lots: hasLots ? lotDetails : items,
       has_lots: hasLots,
+      b2_xentpos: aggRow?.b2_xentpos ?? first.b2_xentpos ?? 0,
     });
   }
   return groups;
@@ -200,7 +203,7 @@ export function IntegracaoPreviewModal({
 
   // Export helpers (flat — each lot as a row)
   const transferHeaders = ['Codigo', 'Descricao', 'Lote', 'Origem', 'Destino', 'Quantidade', 'Custo Unit.', 'Valor Total'];
-  const adjustmentHeaders = ['Codigo', 'Descricao', 'Lote', 'Armazem', 'Esperado', 'Contado', 'Ajuste', 'Tipo', 'Custo Unit.', 'Valor Total'];
+  const adjustmentHeaders = ['Codigo', 'Descricao', 'Lote', 'Armazem', 'Saldo Sistema', 'Contagem Ajust.', 'Ajuste', 'Tipo', 'Custo Unit.', 'Valor Total', 'Entrega Posterior'];
 
   const transferRows = useMemo(() =>
     preview.transfers.map((t) => [
@@ -228,6 +231,7 @@ export function IntegracaoPreviewModal({
       adjTypeLabel(a.adjustment_type),
       fmtMoney(a.unit_cost),
       fmtMoney(a.total_value),
+      fmtQty(a.b2_xentpos ?? 0),
     ]),
     [preview.adjustments],
   );
@@ -645,8 +649,8 @@ function AdjustmentsTable({ adjustments }: { adjustments: IntegrationAdjustment[
               <th className="text-left py-2.5 px-3 font-medium text-slate-600">Codigo</th>
               <th className="text-left py-2.5 px-3 font-medium text-slate-600">Descricao</th>
               <th className="text-left py-2.5 px-3 font-medium text-slate-600">Armazem</th>
-              <th className="text-right py-2.5 px-3 font-medium text-slate-600">Esperado</th>
-              <th className="text-right py-2.5 px-3 font-medium text-slate-600">Contado</th>
+              <th className="text-right py-2.5 px-3 font-medium text-slate-600" title="Saldo do sistema (b2_qatu) sem entrega posterior">Saldo Sistema</th>
+              <th className="text-right py-2.5 px-3 font-medium text-slate-600" title="Contagem fisica descontando entrega posterior">Contagem Ajust.</th>
               <th className="text-right py-2.5 px-3 font-medium text-slate-600">Ajuste</th>
               <th className="text-center py-2.5 px-3 font-medium text-slate-600">Situacao</th>
               <th className="text-right py-2.5 px-3 font-medium text-slate-600">Valor Total</th>
@@ -679,7 +683,19 @@ function AdjustmentsTable({ adjustments }: { adjustments: IntegrationAdjustment[
                         )}
                       </div>
                     </td>
-                    <td className="py-2.5 px-3 text-slate-800 truncate max-w-[200px]">{g.product_description}</td>
+                    <td className="py-2.5 px-3 text-slate-800 max-w-[250px]">
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate">{g.product_description}</span>
+                        {g.b2_xentpos > 0 && (
+                          <span
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-orange-50 text-orange-600 rounded text-[10px] font-medium whitespace-nowrap flex-shrink-0"
+                            title={`Entrega posterior: ${fmtQty(g.b2_xentpos)} (descontado da contagem para Protheus)`}
+                          >
+                            <Info className="w-3 h-3" />EP: {fmtQty(g.b2_xentpos)}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="py-2.5 px-3 font-mono text-slate-600">{g.warehouse}</td>
                     <td className="py-2.5 px-3 text-right text-slate-600">{fmtQty(g.total_expected)}</td>
                     <td className="py-2.5 px-3 text-right text-slate-600">{fmtQty(g.total_counted)}</td>

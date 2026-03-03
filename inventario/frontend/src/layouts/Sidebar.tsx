@@ -12,7 +12,7 @@ import {
   BarChart2,
   ScanLine,
   Activity,
-  AlertTriangle,
+  BarChart3,
 } from 'lucide-react';
 
 type MenuItem =
@@ -34,7 +34,7 @@ const menuItems: MenuItem[] = [
   { label: 'Envio Protheus', icon: Send, path: '/inventario/sincronizacao', roles: STAFF },
   { label: 'Relatorios', icon: BarChart2, path: '/inventario/relatorios', roles: STAFF },
   { label: 'Monitoramento', icon: Activity, path: '/inventario/monitoramento', roles: STAFF },
-  { label: 'Divergencias', icon: AlertTriangle, path: '/inventario/divergencias', roles: STAFF },
+  { label: 'Analise', icon: BarChart3, path: '/inventario/divergencias', roles: STAFF },
 ];
 
 function filterMenuByRole(items: MenuItem[], role: string | null): MenuItem[] {

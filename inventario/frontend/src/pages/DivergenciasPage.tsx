@@ -19,12 +19,21 @@ export default function DivergenciasPage() {
   const [activeTab, setActiveTab] = useState<Tab>('divergencias');
   const [rounds, setRounds] = useState<ClosedRound[]>([]);
   const [selectedRound, setSelectedRound] = useState('');
+  const [roundsLoaded, setRoundsLoaded] = useState(false);
   const toast = useToast();
   const { inventarioRole } = useAuth();
   const isStaff = inventarioRole === 'ADMIN' || inventarioRole === 'SUPERVISOR';
 
   useEffect(() => {
-    discrepancyService.listarRodadas().then(setRounds).catch(() => {});
+    discrepancyService.listarRodadas().then((data) => {
+      setRounds(data);
+      if (data.length > 0) {
+        setSelectedRound(data[0].round_key);
+      }
+      setRoundsLoaded(true);
+    }).catch(() => {
+      setRoundsLoaded(true);
+    });
   }, []);
 
   const tabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -34,7 +43,7 @@ export default function DivergenciasPage() {
 
   return (
     <>
-      <Header title="Analise e Divergencias" />
+      <Header title="Analise" />
       <div className="p-4 md:p-6 space-y-6">
         {/* Tabs */}
         <div className="border-b border-slate-200">
@@ -61,23 +70,31 @@ export default function DivergenciasPage() {
         </div>
 
         {activeTab === 'divergencias' && (
-          <>
-            {/* Filter */}
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-slate-400" />
-              <select
-                value={selectedRound}
-                onChange={(e) => setSelectedRound(e.target.value)}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500"
-              >
-                <option value="">Todos os Inventarios</option>
-                {rounds.map((r) => (
-                  <option key={r.round_key} value={r.round_key}>{r.display_text}</option>
-                ))}
-              </select>
+          !roundsLoaded ? (
+            <TableSkeleton rows={6} cols={8} />
+          ) : rounds.length === 0 ? (
+            <div className="text-center py-12 text-slate-400">
+              <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-400" />
+              <p className="text-sm">Nenhum inventario com contagens encontrado.</p>
             </div>
-            <TabDivergencias selectedRound={selectedRound} isStaff={isStaff} toast={toast} />
-          </>
+          ) : (
+            <>
+              {/* Filter */}
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-slate-400" />
+                <select
+                  value={selectedRound}
+                  onChange={(e) => setSelectedRound(e.target.value)}
+                  className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500 min-w-[280px]"
+                >
+                  {rounds.map((r) => (
+                    <option key={r.round_key} value={r.round_key}>{r.display_text}</option>
+                  ))}
+                </select>
+              </div>
+              <TabDivergencias selectedRound={selectedRound} isStaff={isStaff} toast={toast} />
+            </>
+          )
         )}
         {activeTab === 'simulacao' && <TabSimulacao />}
       </div>

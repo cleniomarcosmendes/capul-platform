@@ -647,6 +647,7 @@ export interface IntegrationAdjustment {
   tracking?: string;
   transfer_qty?: number;
   transfer_applied?: number;
+  b2_xentpos?: number;
 }
 
 export interface IntegrationTransfer {

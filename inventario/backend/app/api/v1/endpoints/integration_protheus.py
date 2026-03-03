@@ -239,12 +239,20 @@ def calculate_simple_adjustments(inventory: Dict, items: List[Dict]) -> List[Dic
 
     🔧 v2.19.19: Inclui TODOS os produtos (com e sem divergência)
     para envio completo ao Protheus.
+
+    🔧 v2.19.55: Para integração Protheus, usa saldo do sistema (b2_qatu)
+    SEM somar entrega posterior, e subtrai b2_xentpos da contagem.
+    Isso evita gerar entrada de estoque de produto já faturado.
     """
     adjustments = []
 
     for item in items:
-        expected = item["expected_qty"]
-        counted = item["counted_qty"]
+        b2_xentpos = item.get("b2_xentpos", 0) or 0
+
+        # ✅ v2.19.55: Para Protheus, expected = saldo sistema (sem entrega posterior)
+        # e counted = contagem física - entrega posterior
+        expected = item["b2_qatu"]
+        counted = item["counted_qty"] - b2_xentpos
         diff = counted - expected
 
         # 🔧 v2.19.19: Removido filtro - mostrar TODOS os produtos
@@ -272,7 +280,8 @@ def calculate_simple_adjustments(inventory: Dict, items: List[Dict]) -> List[Dic
             "adjustment_type": adj_type,
             "unit_cost": item["b2_cm1"],
             "total_value": abs(diff) * item["b2_cm1"],
-            "tracking": item["tracking"]
+            "tracking": item["tracking"],
+            "b2_xentpos": b2_xentpos
         }
 
         adjustments.append(adjustment)
@@ -344,11 +353,15 @@ def calculate_comparative_integration(
         item_a = items_a_dict.get(product_code)
         item_b = items_b_dict.get(product_code)
 
-        # Valores padrão
-        expected_a = item_a["expected_qty"] if item_a else 0
-        counted_a = item_a["counted_qty"] if item_a else 0
-        expected_b = item_b["expected_qty"] if item_b else 0
-        counted_b = item_b["counted_qty"] if item_b else 0
+        # ✅ v2.19.55: Para Protheus, expected = b2_qatu (sem entrega posterior)
+        # e counted = contagem física - b2_xentpos
+        b2_xentpos_a = (item_a.get("b2_xentpos", 0) or 0) if item_a else 0
+        b2_xentpos_b = (item_b.get("b2_xentpos", 0) or 0) if item_b else 0
+
+        expected_a = item_a["b2_qatu"] if item_a else 0
+        counted_a = (item_a["counted_qty"] - b2_xentpos_a) if item_a else 0
+        expected_b = item_b["b2_qatu"] if item_b else 0
+        counted_b = (item_b["counted_qty"] - b2_xentpos_b) if item_b else 0
 
         # Divergências
         div_a = counted_a - expected_a  # Positivo = SOBRA, Negativo = FALTA
@@ -593,7 +606,8 @@ def calculate_comparative_integration(
                 "total_value": abs(diff_a_final) * unit_cost,
                 "tracking": tracking,
                 "transfer_qty": transfer_qty_a,
-                "transfer_applied": abs(transfer_qty_a)
+                "transfer_applied": abs(transfer_qty_a),
+                "b2_xentpos": b2_xentpos_a
             })
 
             # Linhas por lote (se produto tem rastreio de lote)
@@ -673,7 +687,8 @@ def calculate_comparative_integration(
                 "total_value": abs(diff_b_final) * unit_cost,
                 "tracking": tracking,
                 "transfer_qty": transfer_qty_b,
-                "transfer_applied": abs(transfer_qty_b)
+                "transfer_applied": abs(transfer_qty_b),
+                "b2_xentpos": b2_xentpos_b
             })
 
             # Linhas por lote (se produto tem rastreio de lote)
