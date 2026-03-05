@@ -7640,9 +7640,14 @@ async def get_discrepancy_adjustments(
     """Listar ajustes e transferências gerados nas integrações Protheus"""
     try:
         inv_filter = ""
+        inv_wh_filter = ""
         params = {"store_id": str(current_user.store_id)}
         if inventory_id:
-            inv_filter = "AND pi.inventory_a_id = :inv_id"
+            inv_filter = "AND (pi.inventory_a_id = :inv_id OR pi.inventory_b_id = :inv_id)"
+            inv_wh_filter = """AND (
+                pii.target_warehouse = (SELECT warehouse FROM inventario.inventory_lists WHERE id = :inv_id)
+                OR pii.source_warehouse = (SELECT warehouse FROM inventario.inventory_lists WHERE id = :inv_id)
+            )"""
             params["inv_id"] = inventory_id
 
         query = text(f"""
@@ -7672,6 +7677,18 @@ async def get_discrepancy_adjustments(
             JOIN inventario.inventory_lists ila ON ila.id = pi.inventory_a_id
             WHERE ila.store_id = :store_id
               {inv_filter}
+              {inv_wh_filter}
+              AND NOT (
+                pii.lot_number IS NULL
+                AND EXISTS (
+                  SELECT 1 FROM inventario.protheus_integration_items dup
+                  WHERE dup.integration_id = pii.integration_id
+                    AND dup.product_code = pii.product_code
+                    AND dup.item_type = pii.item_type
+                    AND COALESCE(dup.target_warehouse, dup.source_warehouse) = COALESCE(pii.target_warehouse, pii.source_warehouse)
+                    AND dup.lot_number IS NOT NULL
+                )
+              )
             ORDER BY pii.product_code, pii.lot_number NULLS LAST
         """)
 

@@ -1294,14 +1294,19 @@ async def save_integration(
 
         # Inserir transferências
         for transfer in preview.get("transfers", []):
+            # Para transferências, expected_qty = saldo origem, counted_qty = contagem origem
+            src_balance = transfer.get("source_balance_before", 0)
+            src_counted = transfer.get("source_counted", 0)
             db.execute(text("""
                 INSERT INTO inventario.protheus_integration_items (
                     integration_id, item_type, product_code, product_description,
                     lot_number, source_warehouse, target_warehouse, quantity,
+                    expected_qty, counted_qty,
                     unit_cost, total_value
                 ) VALUES (
                     :int_id, 'TRANSFER', :code, :desc,
                     :lot, :source, :target, :qty,
+                    :expected, :counted,
                     :cost, :value
                 )
             """), {
@@ -1312,6 +1317,8 @@ async def save_integration(
                 "source": transfer["source_warehouse"],
                 "target": transfer["target_warehouse"],
                 "qty": transfer["quantity"],
+                "expected": src_balance,
+                "counted": src_counted,
                 "cost": transfer["unit_cost"],
                 "value": transfer["total_value"]
             })

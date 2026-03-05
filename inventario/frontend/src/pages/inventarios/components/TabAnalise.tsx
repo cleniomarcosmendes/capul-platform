@@ -197,53 +197,175 @@ function buildLotDetails(product: CountingListProduct, cycleNumber?: number): Lo
   return lots;
 }
 
-// === Lot sub-row component ===
+// === Final analysis lot detail (per-cycle) ===
 
-function LotSubRows({ lots }: { lots: LotDetail[] }) {
-  const hasDivergent = lots.some((l) => l.variance !== null && Math.abs(l.variance) >= 0.01);
+interface LotDetailFinal {
+  lot_number: string;
+  b8_lotefor: string;
+  system_qty: number;
+  counted_c1: number | null;
+  counted_c2: number | null;
+  counted_c3: number | null;
+  final_qty: number;
+  variance: number;
+  variance_pct: number;
+  has_count: boolean;
+  is_divergent: boolean;
+}
+
+function buildLotDetailsFinal(product: CountingListProduct): LotDetailFinal[] {
+  const snapshotLots = product.snapshot_lots ?? [];
+  const countings = product.countings ?? [];
+
+  const countedMapC1 = new Map<string, number>();
+  const countedMapC2 = new Map<string, number>();
+  const countedMapC3 = new Map<string, number>();
+
+  for (const c of countings) {
+    if (!c.lot_number) continue;
+    if (c.count_number === 1) countedMapC1.set(c.lot_number, c.quantity ?? 0);
+    else if (c.count_number === 2) countedMapC2.set(c.lot_number, c.quantity ?? 0);
+    else if (c.count_number === 3) countedMapC3.set(c.lot_number, c.quantity ?? 0);
+  }
+
+  const snapshotMap = new Map<string, { system_qty: number; b8_lotefor: string }>();
+  const allLotNumbers = new Set<string>();
+  for (const sl of snapshotLots) {
+    const lotNum = sl.lot_number || sl.b8_lotectl;
+    allLotNumbers.add(lotNum);
+    snapshotMap.set(lotNum, {
+      system_qty: sl.system_qty ?? (sl as any).quantity ?? 0,
+      b8_lotefor: sl.b8_lotefor ?? '',
+    });
+  }
+  for (const c of countings) {
+    if (c.lot_number) allLotNumbers.add(c.lot_number);
+  }
+
+  const lots: LotDetailFinal[] = [];
+  for (const lotNum of allLotNumbers) {
+    const snap = snapshotMap.get(lotNum);
+    const sysQty = snap?.system_qty ?? 0;
+    const c1 = countedMapC1.get(lotNum) ?? null;
+    const c2 = countedMapC2.get(lotNum) ?? null;
+    const c3 = countedMapC3.get(lotNum) ?? null;
+    const hasCount = c1 != null || c2 != null || c3 != null;
+    const finalQty = hasCount ? calcularQuantidadeFinal(c1, c2, c3, sysQty) : 0;
+    const variance = hasCount ? finalQty - sysQty : 0;
+    const variancePct = hasCount && sysQty !== 0 ? (variance / sysQty) * 100 : (hasCount && finalQty !== 0 ? 100 : 0);
+
+    lots.push({
+      lot_number: lotNum,
+      b8_lotefor: snap?.b8_lotefor ?? '',
+      system_qty: sysQty,
+      counted_c1: c1,
+      counted_c2: c2,
+      counted_c3: c3,
+      final_qty: finalQty,
+      variance,
+      variance_pct: variancePct,
+      has_count: hasCount,
+      is_divergent: hasCount && Math.abs(variance) >= 0.01,
+    });
+  }
+
+  return lots;
+}
+
+// === Cycle lot sub-rows (inline, matching cycle table columns) ===
+
+function CycleLotSubRows({ lots }: { lots: LotDetail[] }) {
   return (
-    <tr>
-      <td colSpan={8} className="p-0">
-        <div className="bg-slate-50/80 border-t border-slate-200 px-6 py-2">
-          <div className="flex items-center gap-2 mb-2">
-            <Layers className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-xs font-medium text-slate-600">Detalhamento por Lote</span>
-            {hasDivergent && (
-              <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">
-                {lots.filter((l) => l.variance !== null && Math.abs(l.variance) >= 0.01).length} lote(s) divergente(s)
-              </span>
+    <>
+      {lots.map((l, i) => {
+        const isDiv = l.variance !== null && Math.abs(l.variance) >= 0.01;
+        const variancePct = l.variance !== null && l.system_qty !== 0
+          ? (l.variance / l.system_qty) * 100
+          : (l.counted_qty !== null && l.counted_qty !== 0 ? 100 : 0);
+        return (
+          <tr key={`lot-${l.lot_number}-${i}`} className="border-b border-slate-100 bg-blue-50/30">
+            <td className="py-1.5 px-3 pl-10">
+              <span className="font-mono text-xs text-slate-500">{l.lot_number}</span>
+              {l.b8_lotefor && <span className="ml-1.5 text-[10px] text-slate-400">({l.b8_lotefor})</span>}
+            </td>
+            <td className="py-1.5 px-3 text-xs text-slate-400 italic">Lote</td>
+            <td className="py-1.5 px-3 text-right text-xs tabular-nums text-slate-500">{l.system_qty.toFixed(2)}</td>
+            <td className="py-1.5 px-3 text-right text-xs tabular-nums">
+              {l.counted_qty !== null ? l.counted_qty.toFixed(2) : '—'}
+            </td>
+            <td className={`py-1.5 px-3 text-right text-xs font-medium tabular-nums ${
+              !isDiv ? 'text-slate-400' : l.variance! > 0 ? 'text-green-600' : 'text-red-600'
+            }`}>
+              {l.variance !== null ? `${l.variance > 0 ? '+' : ''}${l.variance.toFixed(2)}` : '—'}
+            </td>
+            <td className={`py-1.5 px-3 text-right text-xs font-medium ${
+              !isDiv ? 'text-slate-400' : Math.abs(variancePct) > 10 ? 'text-red-600' : 'text-amber-600'
+            }`}>
+              {l.counted_qty !== null && isDiv ? `${Math.abs(variancePct).toFixed(1)}%` : l.counted_qty !== null ? '0.0%' : '—'}
+            </td>
+            <td className="py-1.5 px-3 text-center">
+              {l.counted_qty === null ? (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">N/C</span>
+              ) : isDiv ? (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Divergente</span>
+              ) : (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">OK</span>
+              )}
+            </td>
+          </tr>
+        );
+      })}
+    </>
+  );
+}
+
+// === Final lot sub-rows (inline, matching final table 10 columns) ===
+
+function FinalLotSubRows({ lots }: { lots: LotDetailFinal[] }) {
+  return (
+    <>
+      {lots.map((l, i) => (
+        <tr key={`lot-${l.lot_number}-${i}`} className="border-b border-slate-100 bg-blue-50/30">
+          <td className="py-1.5 px-3 pl-10">
+            <span className="font-mono text-xs text-slate-500">{l.lot_number}</span>
+            {l.b8_lotefor && <span className="ml-1.5 text-[10px] text-slate-400">({l.b8_lotefor})</span>}
+          </td>
+          <td className="py-1.5 px-3 text-xs text-slate-400 italic">Lote</td>
+          <td className="py-1.5 px-3 text-right text-xs tabular-nums text-slate-500">{l.system_qty.toFixed(2)}</td>
+          <td className="py-1.5 px-3 text-right text-xs tabular-nums bg-green-50/20">
+            {l.counted_c1 != null ? l.counted_c1.toFixed(2) : '—'}
+          </td>
+          <td className="py-1.5 px-3 text-right text-xs tabular-nums bg-amber-50/20">
+            {l.counted_c2 != null ? l.counted_c2.toFixed(2) : '—'}
+          </td>
+          <td className="py-1.5 px-3 text-right text-xs tabular-nums bg-red-50/20">
+            {l.counted_c3 != null ? l.counted_c3.toFixed(2) : '—'}
+          </td>
+          <td className={`py-1.5 px-3 text-right text-xs font-bold ${l.has_count ? 'text-capul-700' : 'text-red-400'}`}>
+            {l.has_count ? l.final_qty.toFixed(2) : 'N/C'}
+          </td>
+          <td className={`py-1.5 px-3 text-right text-xs font-medium ${
+            !l.has_count ? 'text-slate-300' : l.variance > 0 ? 'text-green-600' : l.variance < 0 ? 'text-red-600' : 'text-slate-400'
+          }`}>
+            {l.has_count ? `${l.variance > 0 ? '+' : ''}${l.variance.toFixed(2)}` : '—'}
+          </td>
+          <td className={`py-1.5 px-3 text-right text-xs font-medium ${
+            !l.has_count ? 'text-slate-300' : Math.abs(l.variance_pct) > 10 ? 'text-red-600' : l.is_divergent ? 'text-amber-600' : 'text-slate-400'
+          }`}>
+            {l.has_count && l.is_divergent ? `${Math.abs(l.variance_pct).toFixed(1)}%` : l.has_count ? '0.0%' : '—'}
+          </td>
+          <td className="py-1.5 px-3 text-center">
+            {!l.has_count ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">N/C</span>
+            ) : l.is_divergent ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Divergente</span>
+            ) : (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">OK</span>
             )}
-          </div>
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-slate-500">
-                <th className="text-left py-1 px-2 font-medium">Lote</th>
-                <th className="text-left py-1 px-2 font-medium">Lote Forn.</th>
-                <th className="text-right py-1 px-2 font-medium">Saldo Sistema</th>
-                <th className="text-right py-1 px-2 font-medium">Qtd Contada</th>
-                <th className="text-right py-1 px-2 font-medium">Diferenca</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lots.map((l, i) => {
-                const isDiv = l.variance !== null && Math.abs(l.variance) >= 0.01;
-                return (
-                  <tr key={`${l.lot_number}-${i}`} className={isDiv ? (l.variance! < 0 ? 'bg-red-50/50' : 'bg-amber-50/50') : ''}>
-                    <td className="py-1 px-2 font-mono text-slate-600">{l.lot_number}</td>
-                    <td className="py-1 px-2 text-slate-500">{l.b8_lotefor || '—'}</td>
-                    <td className="py-1 px-2 text-right tabular-nums">{l.system_qty.toFixed(2)}</td>
-                    <td className="py-1 px-2 text-right tabular-nums">{l.counted_qty !== null ? l.counted_qty.toFixed(2) : '—'}</td>
-                    <td className={`py-1 px-2 text-right font-medium tabular-nums ${l.variance !== null && l.variance > 0 ? 'text-green-600' : l.variance !== null && l.variance < 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                      {l.variance !== null ? `${l.variance > 0 ? '+' : ''}${l.variance.toFixed(2)}` : '—'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </td>
-    </tr>
+          </td>
+        </tr>
+      ))}
+    </>
   );
 }
 
@@ -488,7 +610,7 @@ function CycleAnalysis({ products, cycleNumber }: { products: CountingListProduc
                         )}
                       </td>
                     </tr>
-                    {canExpand && isExpanded && <LotSubRows lots={a.lot_details} />}
+                    {canExpand && isExpanded && <CycleLotSubRows lots={a.lot_details} />}
                   </React.Fragment>
                 );
               })}
@@ -546,7 +668,7 @@ function FinalAnalysis({ products }: { products: CountingListProduct[] }) {
       const variance = hasAnyCount ? finalQty - p.system_qty : 0;
       const variancePct = hasAnyCount && p.system_qty !== 0 ? (variance / p.system_qty) * 100 : (hasAnyCount && finalQty !== 0 ? 100 : 0);
       const hasLot = p.has_lot === true || p.requires_lot === true;
-      const lotDetails = hasLot ? buildLotDetails(p) : [];
+      const lotDetails = hasLot ? buildLotDetailsFinal(p) : [];
 
       return {
         product_code: p.product_code,
@@ -755,7 +877,7 @@ function FinalAnalysis({ products }: { products: CountingListProduct[] }) {
                         )}
                       </td>
                     </tr>
-                    {canExpand && isExpanded && <LotSubRows lots={d.lot_details} />}
+                    {canExpand && isExpanded && <FinalLotSubRows lots={d.lot_details} />}
                   </React.Fragment>
                 );
               })}
