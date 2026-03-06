@@ -38,6 +38,8 @@ import { DashboardExecutivoPage } from './pages/DashboardExecutivoPage';
 import { DashboardCsatPage } from './pages/DashboardCsatPage';
 import { NotificacoesPage } from './pages/notificacoes/NotificacoesPage';
 import { ImportPage } from './pages/import/ImportPage';
+import { NaturezasPage } from './pages/cadastros/NaturezasPage';
+import { TiposContratoPage } from './pages/cadastros/TiposContratoPage';
 import type { ReactNode } from 'react';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -126,6 +128,8 @@ function AppRoutes() {
         <Route path="sla" element={<SlaPage />} />
         <Route path="departamentos" element={<DepartamentosPage />} />
         <Route path="centros-custo" element={<CentrosCustoPage />} />
+        <Route path="naturezas" element={<NaturezasPage />} />
+        <Route path="tipos-contrato" element={<TiposContratoPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/gestao-ti" replace />} />
     </Routes>

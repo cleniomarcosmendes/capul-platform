@@ -3,19 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { contratoService } from '../../services/contrato.service';
 import { softwareService } from '../../services/software.service';
+import { coreService } from '../../services/core.service';
 import { ArrowLeft } from 'lucide-react';
-import type { Software, TipoContrato } from '../../types';
-
-const tipoOptions: { value: TipoContrato; label: string }[] = [
-  { value: 'LICENCIAMENTO', label: 'Licenciamento' },
-  { value: 'MANUTENCAO', label: 'Manutencao' },
-  { value: 'SUPORTE', label: 'Suporte' },
-  { value: 'CONSULTORIA', label: 'Consultoria' },
-  { value: 'DESENVOLVIMENTO', label: 'Desenvolvimento' },
-  { value: 'CLOUD_SAAS', label: 'Cloud/SaaS' },
-  { value: 'OUTSOURCING', label: 'Outsourcing' },
-  { value: 'OUTRO', label: 'Outro' },
-];
+import type { Software, TipoContratoConfig } from '../../types';
 
 export function ContratoFormPage() {
   const { id } = useParams();
@@ -23,43 +13,57 @@ export function ContratoFormPage() {
   const navigate = useNavigate();
 
   const [softwares, setSoftwares] = useState<Software[]>([]);
+  const [filiais, setFiliais] = useState<{ id: string; codigo: string; nomeFantasia: string }[]>([]);
+  const [tiposContrato, setTiposContrato] = useState<TipoContratoConfig[]>([]);
   const [saving, setSaving] = useState(false);
   const [loadingData, setLoadingData] = useState(isEdit);
   const [error, setError] = useState('');
 
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
-  const [tipo, setTipo] = useState<TipoContrato>('LICENCIAMENTO');
+  const [tipoContratoId, setTipoContratoId] = useState('');
   const [fornecedor, setFornecedor] = useState('');
-  const [cnpjFornecedor, setCnpjFornecedor] = useState('');
+  const [codigoFornecedor, setCodigoFornecedor] = useState('');
+  const [lojaFornecedor, setLojaFornecedor] = useState('');
+  const [numeroContrato, setNumeroContrato] = useState('');
+  const [filialId, setFilialId] = useState('');
+  const [modalidadeValor, setModalidadeValor] = useState('FIXO');
   const [valorTotal, setValorTotal] = useState('');
   const [valorMensal, setValorMensal] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [dataAssinatura, setDataAssinatura] = useState('');
-  const [indiceReajuste, setIndiceReajuste] = useState('');
-  const [percentualReajuste, setPercentualReajuste] = useState('');
   const [renovacaoAutomatica, setRenovacaoAutomatica] = useState(false);
   const [diasAlertaVencimento, setDiasAlertaVencimento] = useState('30');
   const [softwareId, setSoftwareId] = useState('');
   const [observacoes, setObservacoes] = useState('');
+  const [gerarParcelas, setGerarParcelas] = useState(false);
+  const [quantidadeParcelas, setQuantidadeParcelas] = useState('12');
+  const [primeiroVencimento, setPrimeiroVencimento] = useState('');
 
   useEffect(() => {
-    softwareService.listar({ status: 'ATIVO' }).then(setSoftwares).catch(() => {});
+    Promise.all([
+      softwareService.listar({ status: 'ATIVO' }).then(setSoftwares).catch(() => {}),
+      coreService.listarFiliais().then(setFiliais).catch(() => {}),
+      contratoService.listarTiposContrato().then(setTiposContrato).catch(() => {}),
+    ]);
+
     if (isEdit && id) {
       contratoService.buscar(id).then((c) => {
         setTitulo(c.titulo);
         setDescricao(c.descricao || '');
-        setTipo(c.tipo);
+        setTipoContratoId(c.tipoContratoId || '');
         setFornecedor(c.fornecedor);
-        setCnpjFornecedor(c.cnpjFornecedor || '');
+        setCodigoFornecedor(c.codigoFornecedor || '');
+        setLojaFornecedor(c.lojaFornecedor || '');
+        setNumeroContrato(c.numeroContrato || '');
+        setFilialId(c.filialId || '');
+        setModalidadeValor(c.modalidadeValor || 'FIXO');
         setValorTotal(String(c.valorTotal));
         setValorMensal(c.valorMensal ? String(c.valorMensal) : '');
         setDataInicio(c.dataInicio.slice(0, 10));
         setDataFim(c.dataFim.slice(0, 10));
         setDataAssinatura(c.dataAssinatura ? c.dataAssinatura.slice(0, 10) : '');
-        setIndiceReajuste(c.indiceReajuste || '');
-        setPercentualReajuste(c.percentualReajuste ? String(c.percentualReajuste) : '');
         setRenovacaoAutomatica(c.renovacaoAutomatica);
         setDiasAlertaVencimento(String(c.diasAlertaVencimento));
         setSoftwareId(c.softwareId || '');
@@ -77,20 +81,25 @@ export function ContratoFormPage() {
     const payload = {
       titulo,
       descricao: descricao || undefined,
-      tipo,
+      tipoContratoId,
       fornecedor,
-      cnpjFornecedor: cnpjFornecedor || undefined,
+      filialId,
+      modalidadeValor,
+      codigoFornecedor: codigoFornecedor || undefined,
+      lojaFornecedor: lojaFornecedor || undefined,
+      numeroContrato: numeroContrato || undefined,
       valorTotal: parseFloat(valorTotal),
       valorMensal: valorMensal ? parseFloat(valorMensal) : undefined,
       dataInicio,
       dataFim,
       dataAssinatura: dataAssinatura || undefined,
-      indiceReajuste: indiceReajuste || undefined,
-      percentualReajuste: percentualReajuste ? parseFloat(percentualReajuste) : undefined,
       renovacaoAutomatica,
       diasAlertaVencimento: parseInt(diasAlertaVencimento, 10),
       softwareId: softwareId || undefined,
       observacoes: observacoes || undefined,
+      gerarParcelas: !isEdit ? gerarParcelas : undefined,
+      quantidadeParcelas: !isEdit && gerarParcelas ? parseInt(quantidadeParcelas, 10) : undefined,
+      primeiroVencimento: !isEdit && gerarParcelas && primeiroVencimento ? primeiroVencimento : undefined,
     };
 
     try {
@@ -136,24 +145,31 @@ export function ContratoFormPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Tipo *</label>
-              <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoContrato)} required
+              <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Contrato *</label>
+              <select value={tipoContratoId} onChange={(e) => setTipoContratoId(e.target.value)} required
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-                {tipoOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                <option value="">Selecione...</option>
+                {tiposContrato.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Fornecedor *</label>
-              <input value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} required maxLength={200}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Nome do fornecedor" />
+              <label className="block text-sm font-medium text-slate-700 mb-1">Modalidade de Valor *</label>
+              <select value={modalidadeValor} onChange={(e) => setModalidadeValor(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                <option value="FIXO">Fixo</option>
+                <option value="VARIAVEL">Variavel (ex: locacao impressora)</option>
+              </select>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">CNPJ Fornecedor</label>
-              <input value={cnpjFornecedor} onChange={(e) => setCnpjFornecedor(e.target.value)} maxLength={18}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="00.000.000/0000-00" />
+              <label className="block text-sm font-medium text-slate-700 mb-1">Filial *</label>
+              <select value={filialId} onChange={(e) => setFilialId(e.target.value)} required
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                <option value="">Selecione...</option>
+                {filiais.map((f) => <option key={f.id} value={f.id}>{f.codigo} - {f.nomeFantasia}</option>)}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Software (opcional)</label>
@@ -162,6 +178,37 @@ export function ContratoFormPage() {
                 <option value="">Nenhum</option>
                 {softwares.map((s) => <option key={s.id} value={s.id}>{s.nome}{s.fabricante ? ` (${s.fabricante})` : ''}</option>)}
               </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Fornecedor *</label>
+              <input value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} required maxLength={200}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Nome do fornecedor" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Codigo Fornecedor</label>
+              <input value={codigoFornecedor} onChange={(e) => setCodigoFornecedor(e.target.value)} maxLength={20}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="F00051" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Loja</label>
+              <input value={lojaFornecedor} onChange={(e) => setLojaFornecedor(e.target.value)} maxLength={10}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="0001" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Numero do Contrato</label>
+              <input value={numeroContrato} onChange={(e) => setNumeroContrato(e.target.value)} maxLength={50}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="CTR-2026-001" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Dias Alerta Vencimento</label>
+              <input type="number" min="1" value={diasAlertaVencimento} onChange={(e) => setDiasAlertaVencimento(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
             </div>
           </div>
 
@@ -196,29 +243,35 @@ export function ContratoFormPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Indice Reajuste</label>
-              <input value={indiceReajuste} onChange={(e) => setIndiceReajuste(e.target.value)} maxLength={50}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Ex: IPCA, IGP-M" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">% Reajuste</label>
-              <input type="number" step="0.01" min="0" value={percentualReajuste} onChange={(e) => setPercentualReajuste(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Dias Alerta Vencimento</label>
-              <input type="number" min="1" value={diasAlertaVencimento} onChange={(e) => setDiasAlertaVencimento(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-            </div>
-          </div>
-
           <div className="flex items-center gap-2">
             <input type="checkbox" id="renovacaoAuto" checked={renovacaoAutomatica} onChange={(e) => setRenovacaoAutomatica(e.target.checked)}
               className="rounded border-slate-300" />
             <label htmlFor="renovacaoAuto" className="text-sm text-slate-700">Renovacao automatica</label>
           </div>
+
+          {!isEdit && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <input type="checkbox" id="gerarParcelas" checked={gerarParcelas} onChange={(e) => setGerarParcelas(e.target.checked)}
+                  className="rounded border-slate-300" />
+                <label htmlFor="gerarParcelas" className="text-sm font-medium text-slate-700">Gerar parcelas automaticamente</label>
+              </div>
+              {gerarParcelas && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Quantidade de Parcelas</label>
+                    <input type="number" min="1" max="120" value={quantidadeParcelas} onChange={(e) => setQuantidadeParcelas(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Primeiro Vencimento</label>
+                    <input type="date" value={primeiroVencimento} onChange={(e) => setPrimeiroVencimento(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Descricao</label>

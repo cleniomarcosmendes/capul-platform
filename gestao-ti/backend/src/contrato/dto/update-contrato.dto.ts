@@ -6,10 +6,11 @@ import {
   IsBoolean,
   IsDateString,
   IsInt,
+  IsIn,
   MaxLength,
   Min,
 } from 'class-validator';
-import { TipoContrato, StatusContrato } from '@prisma/client';
+import { StatusContrato } from '@prisma/client';
 
 export class UpdateContratoDto {
   @IsOptional()
@@ -22,8 +23,17 @@ export class UpdateContratoDto {
   descricao?: string;
 
   @IsOptional()
-  @IsEnum(TipoContrato)
-  tipo?: TipoContrato;
+  @IsString()
+  tipoContratoId?: string;
+
+  @IsOptional()
+  @IsString()
+  filialId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  numeroContrato?: string;
 
   @IsOptional()
   @IsString()
@@ -32,8 +42,13 @@ export class UpdateContratoDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(18)
-  cnpjFornecedor?: string;
+  @MaxLength(20)
+  codigoFornecedor?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(10)
+  lojaFornecedor?: string;
 
   @IsOptional()
   @IsNumber()
@@ -58,16 +73,6 @@ export class UpdateContratoDto {
   dataAssinatura?: string;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  indiceReajuste?: string;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  percentualReajuste?: number;
-
-  @IsOptional()
   @IsBoolean()
   renovacaoAutomatica?: boolean;
 
@@ -83,6 +88,11 @@ export class UpdateContratoDto {
   @IsOptional()
   @IsString()
   observacoes?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['FIXO', 'VARIAVEL'])
+  modalidadeValor?: string;
 }
 
 export class UpdateStatusContratoDto {

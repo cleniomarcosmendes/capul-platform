@@ -550,7 +550,7 @@ export class DashboardService {
       rateioItens,
     ] = await Promise.all([
       this.prisma.contrato.groupBy({
-        by: ['tipo'],
+        by: ['tipoContratoId'],
         where: { status: { in: ['ATIVO', 'SUSPENSO'] } },
         _count: true,
         _sum: { valorTotal: true },
@@ -579,9 +579,9 @@ export class DashboardService {
         },
         orderBy: { dataVencimento: 'asc' },
       }),
-      this.prisma.contratoRateioItem.findMany({
+      this.prisma.parcelaRateioItem.findMany({
         where: {
-          config: { contrato: { status: { in: ['ATIVO', 'SUSPENSO'] } } },
+          parcela: { contrato: { status: { in: ['ATIVO', 'SUSPENSO'] } } },
         },
         include: {
           centroCusto: { select: { id: true, codigo: true, nome: true } },
@@ -606,10 +606,23 @@ export class DashboardService {
       ? this.resolvePeriodo(filters)
       : { inicio: new Date(), fim: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) };
 
+    // Lookup nomes dos tipos de contrato
+    const tipoIds = contratosPorTipo
+      .map((g) => g.tipoContratoId)
+      .filter(Boolean) as string[];
+    const tiposContrato = tipoIds.length > 0
+      ? await this.prisma.tipoContratoConfig.findMany({
+          where: { id: { in: tipoIds } },
+          select: { id: true, codigo: true, nome: true },
+        })
+      : [];
+    const tipoMap = Object.fromEntries(tiposContrato.map((t) => [t.id, t]));
+
     return {
       periodo: { inicio: inicio.toISOString(), fim: fim.toISOString() },
       contratosPorTipo: contratosPorTipo.map((g) => ({
-        tipo: g.tipo,
+        tipoContratoId: g.tipoContratoId,
+        tipoNome: g.tipoContratoId ? (tipoMap[g.tipoContratoId]?.nome || 'Desconhecido') : 'Sem tipo',
         total: g._count,
         valorTotal: Number(g._sum.valorTotal ?? 0),
       })),

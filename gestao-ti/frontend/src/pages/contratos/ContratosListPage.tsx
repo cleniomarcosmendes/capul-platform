@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { contratoService } from '../../services/contrato.service';
 import { FileText, Plus, Search, AlertTriangle, Download } from 'lucide-react';
 import { exportService } from '../../services/export.service';
-import type { Contrato, TipoContrato, StatusContrato } from '../../types';
+import type { Contrato, StatusContrato, TipoContratoConfig } from '../../types';
 
 const statusCores: Record<string, string> = {
   RASCUNHO: 'bg-slate-100 text-slate-700',
@@ -14,17 +14,6 @@ const statusCores: Record<string, string> = {
   VENCIDO: 'bg-red-100 text-red-700',
   RENOVADO: 'bg-blue-100 text-blue-700',
   CANCELADO: 'bg-slate-200 text-slate-500',
-};
-
-const tipoLabels: Record<string, string> = {
-  LICENCIAMENTO: 'Licenciamento',
-  MANUTENCAO: 'Manutencao',
-  SUPORTE: 'Suporte',
-  CONSULTORIA: 'Consultoria',
-  DESENVOLVIMENTO: 'Desenvolvimento',
-  CLOUD_SAAS: 'Cloud/SaaS',
-  OUTSOURCING: 'Outsourcing',
-  OUTRO: 'Outro',
 };
 
 const statusLabels: Record<string, string> = {
@@ -41,21 +30,26 @@ export function ContratosListPage() {
   const canManage = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
 
   const [contratos, setContratos] = useState<Contrato[]>([]);
+  const [tiposContrato, setTiposContrato] = useState<TipoContratoConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterTipo, setFilterTipo] = useState('');
+  const [filterTipoContratoId, setFilterTipoContratoId] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterVencendo, setFilterVencendo] = useState('');
 
   useEffect(() => {
+    contratoService.listarTiposContrato().then(setTiposContrato).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     loadContratos();
-  }, [filterTipo, filterStatus, filterVencendo]);
+  }, [filterTipoContratoId, filterStatus, filterVencendo]);
 
   async function loadContratos() {
     setLoading(true);
     try {
       const data = await contratoService.listar({
-        tipo: (filterTipo as TipoContrato) || undefined,
+        tipoContratoId: filterTipoContratoId || undefined,
         status: (filterStatus as StatusContrato) || undefined,
         vencendoEm: filterVencendo ? parseInt(filterVencendo, 10) : undefined,
       });
@@ -73,7 +67,9 @@ export function ContratosListPage() {
     return (
       c.titulo.toLowerCase().includes(s) ||
       c.fornecedor.toLowerCase().includes(s) ||
-      String(c.numero).includes(s)
+      String(c.numero).includes(s) ||
+      (c.numeroContrato && c.numeroContrato.toLowerCase().includes(s)) ||
+      (c.codigoFornecedor && c.codigoFornecedor.toLowerCase().includes(s))
     );
   });
 
@@ -129,13 +125,13 @@ export function ContratosListPage() {
             />
           </div>
           <select
-            value={filterTipo}
-            onChange={(e) => setFilterTipo(e.target.value)}
+            value={filterTipoContratoId}
+            onChange={(e) => setFilterTipoContratoId(e.target.value)}
             className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
           >
             <option value="">Todos os Tipos</option>
-            {Object.entries(tipoLabels).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
+            {tiposContrato.map((t) => (
+              <option key={t.id} value={t.id}>{t.nome}</option>
             ))}
           </select>
           <select
@@ -176,6 +172,8 @@ export function ContratosListPage() {
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Titulo</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Tipo</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Fornecedor</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">Filial</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">Nro Contrato</th>
                   <th className="text-right px-4 py-3 font-medium text-slate-600">Valor</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Vigencia</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Software</th>
@@ -196,8 +194,10 @@ export function ContratosListPage() {
                           {c.titulo}
                         </Link>
                       </td>
-                      <td className="px-4 py-3 text-slate-600">{tipoLabels[c.tipo] || c.tipo}</td>
+                      <td className="px-4 py-3 text-slate-600">{c.tipoContrato?.nome || '-'}</td>
                       <td className="px-4 py-3 text-slate-600">{c.fornecedor}</td>
+                      <td className="px-4 py-3 text-slate-600">{c.filial ? `${c.filial.codigo}` : '-'}</td>
+                      <td className="px-4 py-3 text-slate-600">{c.numeroContrato || '-'}</td>
                       <td className="px-4 py-3 text-right text-slate-700 font-medium">
                         R$ {Number(c.valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>

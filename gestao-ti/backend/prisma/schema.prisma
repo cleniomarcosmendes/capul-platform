@@ -26,6 +26,7 @@ model Filial {
   paradasAfetadas ParadaFilialAfetada[]
   departamentos   Departamento[]
   ativos          Ativo[]
+  contratos       Contrato[]        @relation("ContratoFilial")
 
   @@map("filiais")
   @@schema("core")
@@ -66,7 +67,8 @@ model CentroCusto {
   codigo String
   nome   String
 
-  rateioItens ContratoRateioItem[]
+  rateioTemplateItens RateioTemplateItem[]
+  parcelaRateioItens  ParcelaRateioItem[]
 
   @@map("centros_custo")
   @@schema("core")
@@ -446,16 +448,32 @@ enum StatusLicenca {
 // MODELOS DO GESTAO_TI — Fase 3 (Contratos)
 // ============================================================
 
-enum TipoContrato {
-  LICENCIAMENTO
-  MANUTENCAO
-  SUPORTE
-  CONSULTORIA
-  DESENVOLVIMENTO
-  CLOUD_SAAS
-  OUTSOURCING
-  OUTRO
+model NaturezaContrato {
+  id        String      @id @default(uuid())
+  codigo    String      @unique
+  nome      String
+  status    StatusGeral @default(ATIVO)
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
 
+  rateioTemplateItens RateioTemplateItem[]
+  parcelaRateioItens  ParcelaRateioItem[]
+
+  @@map("naturezas_contrato")
+  @@schema("gestao_ti")
+}
+
+model TipoContratoConfig {
+  id        String      @id @default(uuid())
+  codigo    String      @unique
+  nome      String
+  status    StatusGeral @default(ATIVO)
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  contratos Contrato[]
+
+  @@map("tipos_contrato")
   @@schema("gestao_ti")
 }
 
@@ -466,6 +484,13 @@ enum StatusContrato {
   VENCIDO
   RENOVADO
   CANCELADO
+
+  @@schema("gestao_ti")
+}
+
+enum ModalidadeValor {
+  FIXO
+  VARIAVEL
 
   @@schema("gestao_ti")
 }
@@ -820,36 +845,49 @@ model SoftwareLicenca {
 // ============================================================
 
 model Contrato {
-  id                    String         @id @default(uuid())
-  numero                Int            @unique @default(autoincrement())
+  id                    String          @id @default(uuid())
+  numero                Int             @unique @default(autoincrement())
+  numeroContrato        String?         @map("numero_contrato")
   titulo                String
   descricao             String?
-  tipo                  TipoContrato
-  status                StatusContrato @default(RASCUNHO)
+  status                StatusContrato  @default(RASCUNHO)
+  modalidadeValor       ModalidadeValor @default(FIXO) @map("modalidade_valor")
   fornecedor            String
-  cnpjFornecedor        String?        @map("cnpj_fornecedor")
-  valorTotal            Decimal        @map("valor_total") @db.Decimal(12, 2)
-  valorMensal           Decimal?       @map("valor_mensal") @db.Decimal(12, 2)
-  dataInicio            DateTime       @map("data_inicio")
-  dataFim               DateTime       @map("data_fim")
-  dataAssinatura        DateTime?      @map("data_assinatura")
-  dataRenovacao         DateTime?      @map("data_renovacao")
-  indiceReajuste        String?        @map("indice_reajuste")
-  percentualReajuste    Decimal?       @map("percentual_reajuste") @db.Decimal(5, 2)
-  renovacaoAutomatica   Boolean        @default(false) @map("renovacao_automatica")
-  diasAlertaVencimento  Int            @default(30) @map("dias_alerta_vencimento")
+  codigoFornecedor      String?         @map("codigo_fornecedor")
+  lojaFornecedor        String?         @map("loja_fornecedor")
+  valorTotal            Decimal         @map("valor_total") @db.Decimal(12, 2)
+  valorMensal           Decimal?        @map("valor_mensal") @db.Decimal(12, 2)
+  dataInicio            DateTime        @map("data_inicio")
+  dataFim               DateTime        @map("data_fim")
+  dataAssinatura        DateTime?       @map("data_assinatura")
+  dataRenovacao         DateTime?       @map("data_renovacao")
+  renovacaoAutomatica   Boolean         @default(false) @map("renovacao_automatica")
+  diasAlertaVencimento  Int             @default(30) @map("dias_alerta_vencimento")
   observacoes           String?
-  createdAt             DateTime       @default(now()) @map("created_at")
-  updatedAt             DateTime       @updatedAt @map("updated_at")
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  tipoContratoId String?              @map("tipo_contrato_id")
+  tipoContrato   TipoContratoConfig?  @relation(fields: [tipoContratoId], references: [id])
+
+  filialId String? @map("filial_id")
+  filial   Filial? @relation("ContratoFilial", fields: [filialId], references: [id])
 
   softwareId String?   @map("software_id")
   software   Software? @relation(fields: [softwareId], references: [id])
 
-  parcelas     ParcelaContrato[]
-  rateioConfig ContratoRateioConfig?
-  historicos   ContratoHistorico[]
-  licencas     SoftwareLicenca[]
-  projetos     Projeto[]
+  contratoOriginalId String?   @map("contrato_original_id")
+  contratoOriginal   Contrato? @relation("ContratoRenovacao", fields: [contratoOriginalId], references: [id])
+  contratosRenovados Contrato[] @relation("ContratoRenovacao")
+
+  parcelas                ParcelaContrato[]
+  rateioTemplate          RateioTemplate?
+  historicos              ContratoHistorico[]
+  licencas                SoftwareLicenca[]
+  projetos                Projeto[]
+  anexos                  AnexoContrato[]
+  renovacoesComoAnterior  ContratoRenovacaoReg[] @relation("RenovacaoAnterior")
+  renovacoesComoNovo      ContratoRenovacaoReg[] @relation("RenovacaoNovo")
 
   @@index([status])
   @@index([dataFim])
@@ -874,6 +912,8 @@ model ParcelaContrato {
   contratoId String   @map("contrato_id")
   contrato   Contrato @relation(fields: [contratoId], references: [id])
 
+  rateioItens ParcelaRateioItem[]
+
   @@unique([contratoId, numero])
   @@index([dataVencimento])
   @@index([status])
@@ -881,7 +921,7 @@ model ParcelaContrato {
   @@schema("gestao_ti")
 }
 
-model ContratoRateioConfig {
+model RateioTemplate {
   id          String           @id @default(uuid())
   modalidade  ModalidadeRateio
   criterio    String?
@@ -891,28 +931,84 @@ model ContratoRateioConfig {
   contratoId String   @unique @map("contrato_id")
   contrato   Contrato @relation(fields: [contratoId], references: [id])
 
-  itens ContratoRateioItem[]
+  itens RateioTemplateItem[]
 
-  @@map("contrato_rateio_configs")
+  @@map("rateio_templates")
   @@schema("gestao_ti")
 }
 
-model ContratoRateioItem {
-  id              String   @id @default(uuid())
-  percentual      Decimal? @db.Decimal(7, 4)
-  valorFixo       Decimal? @map("valor_fixo") @db.Decimal(12, 2)
-  parametro       Decimal? @db.Decimal(12, 2)
-  valorCalculado  Decimal? @map("valor_calculado") @db.Decimal(12, 2)
-  createdAt       DateTime @default(now()) @map("created_at")
+model RateioTemplateItem {
+  id         String   @id @default(uuid())
+  percentual Decimal? @db.Decimal(7, 4)
+  valorFixo  Decimal? @map("valor_fixo") @db.Decimal(12, 2)
+  parametro  Decimal? @db.Decimal(12, 2)
+  createdAt  DateTime @default(now()) @map("created_at")
 
-  configId      String               @map("config_id")
-  config        ContratoRateioConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  templateId    String          @map("template_id")
+  template      RateioTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   centroCustoId String      @map("centro_custo_id")
   centroCusto   CentroCusto @relation(fields: [centroCustoId], references: [id])
 
-  @@unique([configId, centroCustoId])
-  @@map("contrato_rateio_itens")
+  naturezaId    String?           @map("natureza_id")
+  natureza      NaturezaContrato? @relation(fields: [naturezaId], references: [id])
+
+  @@unique([templateId, centroCustoId])
+  @@map("rateio_template_itens")
+  @@schema("gestao_ti")
+}
+
+model ParcelaRateioItem {
+  id             String   @id @default(uuid())
+  percentual     Decimal? @db.Decimal(7, 4)
+  valorCalculado Decimal  @map("valor_calculado") @db.Decimal(12, 2)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  parcelaId     String          @map("parcela_id")
+  parcela       ParcelaContrato @relation(fields: [parcelaId], references: [id], onDelete: Cascade)
+
+  centroCustoId String      @map("centro_custo_id")
+  centroCusto   CentroCusto @relation(fields: [centroCustoId], references: [id])
+
+  naturezaId    String?           @map("natureza_id")
+  natureza      NaturezaContrato? @relation(fields: [naturezaId], references: [id])
+
+  @@unique([parcelaId, centroCustoId])
+  @@map("parcela_rateio_itens")
+  @@schema("gestao_ti")
+}
+
+model AnexoContrato {
+  id           String   @id @default(uuid())
+  nomeOriginal String   @map("nome_original")
+  nomeArquivo  String   @map("nome_arquivo")
+  mimeType     String   @map("mime_type")
+  tamanho      Int
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  contratoId String   @map("contrato_id")
+  contrato   Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+
+  @@index([contratoId])
+  @@map("anexos_contrato")
+  @@schema("gestao_ti")
+}
+
+model ContratoRenovacaoReg {
+  id                  String   @id @default(uuid())
+  indiceReajuste      String?  @map("indice_reajuste")
+  percentualReajuste  Decimal? @map("percentual_reajuste") @db.Decimal(5, 2)
+  valorAnterior       Decimal  @map("valor_anterior") @db.Decimal(12, 2)
+  valorNovo           Decimal  @map("valor_novo") @db.Decimal(12, 2)
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  contratoAnteriorId String   @map("contrato_anterior_id")
+  contratoAnterior   Contrato @relation("RenovacaoAnterior", fields: [contratoAnteriorId], references: [id])
+
+  contratoNovoId     String   @map("contrato_novo_id")
+  contratoNovo       Contrato @relation("RenovacaoNovo", fields: [contratoNovoId], references: [id])
+
+  @@map("contrato_renovacoes")
   @@schema("gestao_ti")
 }
 

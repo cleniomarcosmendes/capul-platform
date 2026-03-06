@@ -7,8 +7,17 @@ import {
   Body,
   Param,
   Query,
+  Res,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import * as express from 'express';
+import { randomUUID } from 'crypto';
+import * as path from 'path';
 import { ContratoService } from './contrato.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { GestaoTiGuard } from '../common/guards/gestao-ti.guard';
@@ -20,23 +29,68 @@ import { CreateContratoDto } from './dto/create-contrato.dto';
 import { UpdateContratoDto, UpdateStatusContratoDto } from './dto/update-contrato.dto';
 import { CreateParcelaDto } from './dto/create-parcela.dto';
 import { UpdateParcelaDto, PagarParcelaDto } from './dto/update-parcela.dto';
-import { ConfigurarRateioDto, SimularRateioDto } from './dto/rateio.dto';
+import { ConfigurarRateioTemplateDto, SimularRateioDto, ConfigurarRateioDto, GerarRateioParcelaDto } from './dto/rateio.dto';
+import { RenovarContratoDto } from './dto/renovar-contrato.dto';
+import { CreateNaturezaDto, UpdateNaturezaDto } from './dto/create-natureza.dto';
+import { CreateTipoContratoDto, UpdateTipoContratoDto } from './dto/create-tipo-contrato.dto';
+
+const UPLOADS_DIR = path.resolve('./uploads/contratos');
 
 @Controller('contratos')
 @UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
 export class ContratoController {
   constructor(private readonly service: ContratoService) {}
 
+  // --- Naturezas ---
+
+  @Get('naturezas')
+  findAllNaturezas(@Query('status') status?: string) {
+    return this.service.findAllNaturezas(status);
+  }
+
+  @Post('naturezas')
+  @Roles('ADMIN', 'GESTOR_TI')
+  createNatureza(@Body() dto: CreateNaturezaDto) {
+    return this.service.createNatureza(dto);
+  }
+
+  @Patch('naturezas/:id')
+  @Roles('ADMIN', 'GESTOR_TI')
+  updateNatureza(@Param('id') id: string, @Body() dto: UpdateNaturezaDto) {
+    return this.service.updateNatureza(id, dto);
+  }
+
+  // --- Tipos de Contrato ---
+
+  @Get('tipos-contrato')
+  findAllTiposContrato(@Query('status') status?: string) {
+    return this.service.findAllTiposContrato(status);
+  }
+
+  @Post('tipos-contrato')
+  @Roles('ADMIN', 'GESTOR_TI')
+  createTipoContrato(@Body() dto: CreateTipoContratoDto) {
+    return this.service.createTipoContrato(dto);
+  }
+
+  @Patch('tipos-contrato/:id')
+  @Roles('ADMIN', 'GESTOR_TI')
+  updateTipoContrato(@Param('id') id: string, @Body() dto: UpdateTipoContratoDto) {
+    return this.service.updateTipoContrato(id, dto);
+  }
+
+  // --- Contratos ---
+
   @Get()
   findAll(
-    @Query('tipo') tipo?: string,
+    @Query('tipoContratoId') tipoContratoId?: string,
     @Query('status') status?: string,
     @Query('softwareId') softwareId?: string,
     @Query('fornecedor') fornecedor?: string,
     @Query('vencendoEm') vencendoEm?: string,
   ) {
     return this.service.findAll({
-      tipo,
+      tipoContratoId,
       status,
       softwareId,
       fornecedor,
@@ -77,8 +131,12 @@ export class ContratoController {
 
   @Post(':id/renovar')
   @Roles('ADMIN', 'GESTOR_TI')
-  renovar(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.service.renovar(id, user.sub);
+  renovar(
+    @Param('id') id: string,
+    @Body() dto: RenovarContratoDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.service.renovar(id, dto, user.sub);
   }
 
   // --- Parcelas ---
@@ -129,27 +187,125 @@ export class ContratoController {
     return this.service.cancelarParcela(id, pid, user.sub);
   }
 
-  // --- Rateio ---
+  // --- Rateio Template ---
 
-  @Get(':id/rateio')
-  obterRateio(@Param('id') id: string) {
-    return this.service.obterRateio(id);
+  @Get(':id/rateio-template')
+  obterRateioTemplate(@Param('id') id: string) {
+    return this.service.obterRateioTemplate(id);
   }
 
-  @Post(':id/rateio/simular')
+  @Post(':id/rateio-template')
   @Roles('ADMIN', 'GESTOR_TI')
-  simularRateio(@Param('id') id: string, @Body() dto: SimularRateioDto) {
-    return this.service.simularRateio(id, dto);
-  }
-
-  @Post(':id/rateio')
-  @Roles('ADMIN', 'GESTOR_TI')
-  configurarRateio(
+  configurarRateioTemplate(
     @Param('id') id: string,
+    @Body() dto: ConfigurarRateioTemplateDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.service.configurarRateioTemplate(id, dto, user.sub);
+  }
+
+  @Post(':id/rateio-template/simular')
+  @Roles('ADMIN', 'GESTOR_TI')
+  simularRateioTemplate(@Param('id') id: string, @Body() dto: SimularRateioDto) {
+    return this.service.simularRateioTemplate(id, dto);
+  }
+
+  // --- Rateio por Parcela ---
+
+  @Get(':id/parcelas/:pid/rateio')
+  obterRateioParcela(@Param('id') id: string, @Param('pid') pid: string) {
+    return this.service.obterRateioParcela(id, pid);
+  }
+
+  @Post(':id/parcelas/:pid/rateio')
+  @Roles('ADMIN', 'GESTOR_TI')
+  configurarRateioParcela(
+    @Param('id') id: string,
+    @Param('pid') pid: string,
     @Body() dto: ConfigurarRateioDto,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.service.configurarRateio(id, dto, user.sub);
+    return this.service.configurarRateioParcela(id, pid, dto, user.sub);
+  }
+
+  @Post(':id/parcelas/:pid/rateio/gerar')
+  @Roles('ADMIN', 'GESTOR_TI')
+  gerarRateioParcela(
+    @Param('id') id: string,
+    @Param('pid') pid: string,
+    @Body() dto: GerarRateioParcelaDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.service.gerarRateioParcela(id, pid, dto, user.sub);
+  }
+
+  @Post(':id/parcelas/:pid/rateio/copiar-pendentes')
+  @Roles('ADMIN', 'GESTOR_TI')
+  copiarRateioParaPendentes(
+    @Param('id') id: string,
+    @Param('pid') pid: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.service.copiarRateioParaPendentes(id, pid, user.sub);
+  }
+
+  // --- Anexos ---
+
+  @Get(':id/anexos')
+  listarAnexos(@Param('id') id: string) {
+    return this.service.listarAnexos(id);
+  }
+
+  @Post(':id/anexos')
+  @Roles('ADMIN', 'GESTOR_TI')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: UPLOADS_DIR,
+      filename: (_req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        cb(null, `${randomUUID()}${ext}`);
+      },
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      cb(null, true);
+    },
+  }))
+  uploadAnexo(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('Arquivo obrigatorio');
+    return this.service.uploadAnexo(id, file);
+  }
+
+  @Get(':id/anexos/:aid/download')
+  async downloadAnexo(
+    @Param('id') id: string,
+    @Param('aid') aid: string,
+    @Res() res: express.Response,
+  ) {
+    const { anexo, filePath } = await this.service.downloadAnexo(id, aid);
+    res.setHeader('Content-Type', anexo.mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(anexo.nomeOriginal)}"`);
+    res.sendFile(filePath);
+  }
+
+  @Delete(':id/anexos/:aid')
+  @Roles('ADMIN', 'GESTOR_TI')
+  excluirAnexo(
+    @Param('id') id: string,
+    @Param('aid') aid: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.service.excluirAnexo(id, aid, user.sub);
+  }
+
+  // --- Renovacoes ---
+
+  @Get(':id/renovacoes')
+  listarRenovacoes(@Param('id') id: string) {
+    return this.service.listarRenovacoes(id);
   }
 
   // --- Licencas ---

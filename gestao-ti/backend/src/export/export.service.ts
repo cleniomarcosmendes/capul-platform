@@ -131,11 +131,14 @@ export class ExportService {
       { header: 'Software', key: 'software' },
     ];
     const dados = await this.prisma.contrato.findMany({
-      include: { software: { select: { nome: true } } },
+      include: {
+        software: { select: { nome: true } },
+        tipoContrato: { select: { nome: true } },
+      },
       orderBy: { numero: 'desc' },
     });
     dados.forEach((d) => sheet.addRow({
-      numero: d.numero, titulo: d.titulo, tipo: d.tipo, status: d.status,
+      numero: d.numero, titulo: d.titulo, tipo: (d as any).tipoContrato?.nome || '', status: d.status,
       fornecedor: d.fornecedor, valorTotal: Number(d.valorTotal),
       dataInicio: new Date(d.dataInicio).toLocaleDateString('pt-BR'),
       dataFim: new Date(d.dataFim).toLocaleDateString('pt-BR'),

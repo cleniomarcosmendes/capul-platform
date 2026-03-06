@@ -1,16 +1,20 @@
 import { gestaoApi } from './api';
 import type {
   Contrato,
-  TipoContrato,
   StatusContrato,
   ParcelaContrato,
-  ContratoRateioConfig,
+  RateioTemplate,
   ModalidadeRateio,
   SoftwareLicenca,
+  NaturezaContrato,
+  TipoContratoConfig,
+  ParcelaRateioItem,
+  AnexoContrato,
+  ContratoRenovacaoReg,
 } from '../types';
 
 interface ListFilters {
-  tipo?: TipoContrato;
+  tipoContratoId?: string;
   status?: StatusContrato;
   softwareId?: string;
   fornecedor?: string;
@@ -19,21 +23,26 @@ interface ListFilters {
 
 interface CreateContratoPayload {
   titulo: string;
-  tipo: TipoContrato;
+  tipoContratoId: string;
   fornecedor: string;
-  cnpjFornecedor?: string;
+  filialId: string;
+  modalidadeValor?: string;
+  numeroContrato?: string;
+  codigoFornecedor?: string;
+  lojaFornecedor?: string;
   valorTotal: number;
   valorMensal?: number;
   dataInicio: string;
   dataFim: string;
   dataAssinatura?: string;
-  indiceReajuste?: string;
-  percentualReajuste?: number;
   renovacaoAutomatica?: boolean;
   diasAlertaVencimento?: number;
   softwareId?: string;
   descricao?: string;
   observacoes?: string;
+  gerarParcelas?: boolean;
+  quantidadeParcelas?: number;
+  primeiroVencimento?: string;
 }
 
 interface RateioItemPayload {
@@ -41,6 +50,7 @@ interface RateioItemPayload {
   percentual?: number;
   valorFixo?: number;
   parametro?: number;
+  naturezaId?: string;
 }
 
 interface RateioPayload {
@@ -49,10 +59,21 @@ interface RateioPayload {
   itens: RateioItemPayload[];
 }
 
+interface RenovarPayload {
+  indiceReajuste?: string;
+  percentualReajuste?: number;
+  novoValorTotal?: number;
+  novaDataInicio?: string;
+  novaDataFim?: string;
+  gerarParcelas?: boolean;
+  quantidadeParcelas?: number;
+  primeiroVencimento?: string;
+}
+
 export const contratoService = {
   async listar(filters: ListFilters = {}): Promise<Contrato[]> {
     const params: Record<string, string> = {};
-    if (filters.tipo) params.tipo = filters.tipo;
+    if (filters.tipoContratoId) params.tipoContratoId = filters.tipoContratoId;
     if (filters.status) params.status = filters.status;
     if (filters.softwareId) params.softwareId = filters.softwareId;
     if (filters.fornecedor) params.fornecedor = filters.fornecedor;
@@ -81,8 +102,8 @@ export const contratoService = {
     return data;
   },
 
-  async renovar(id: string): Promise<Contrato> {
-    const { data } = await gestaoApi.post(`/contratos/${id}/renovar`);
+  async renovar(id: string, payload: RenovarPayload): Promise<Contrato> {
+    const { data } = await gestaoApi.post(`/contratos/${id}/renovar`, payload);
     return data;
   },
 
@@ -112,19 +133,72 @@ export const contratoService = {
     return data;
   },
 
-  // Rateio
-  async obterRateio(contratoId: string): Promise<ContratoRateioConfig | null> {
-    const { data } = await gestaoApi.get(`/contratos/${contratoId}/rateio`);
+  // Rateio Template
+  async obterRateioTemplate(contratoId: string): Promise<RateioTemplate | null> {
+    const { data } = await gestaoApi.get(`/contratos/${contratoId}/rateio-template`);
     return data;
   },
 
-  async simularRateio(contratoId: string, payload: RateioPayload): Promise<RateioItemPayload[]> {
-    const { data } = await gestaoApi.post(`/contratos/${contratoId}/rateio/simular`, payload);
+  async simularRateioTemplate(contratoId: string, payload: RateioPayload): Promise<RateioItemPayload[]> {
+    const { data } = await gestaoApi.post(`/contratos/${contratoId}/rateio-template/simular`, payload);
     return data;
   },
 
-  async configurarRateio(contratoId: string, payload: RateioPayload): Promise<ContratoRateioConfig> {
-    const { data } = await gestaoApi.post(`/contratos/${contratoId}/rateio`, payload);
+  async configurarRateioTemplate(contratoId: string, payload: RateioPayload): Promise<RateioTemplate> {
+    const { data } = await gestaoApi.post(`/contratos/${contratoId}/rateio-template`, payload);
+    return data;
+  },
+
+  // Rateio por Parcela
+  async obterRateioParcela(contratoId: string, parcelaId: string): Promise<ParcelaRateioItem[]> {
+    const { data } = await gestaoApi.get(`/contratos/${contratoId}/parcelas/${parcelaId}/rateio`);
+    return data;
+  },
+
+  async configurarRateioParcela(contratoId: string, parcelaId: string, payload: RateioPayload): Promise<ParcelaRateioItem[]> {
+    const { data } = await gestaoApi.post(`/contratos/${contratoId}/parcelas/${parcelaId}/rateio`, payload);
+    return data;
+  },
+
+  async gerarRateioParcela(contratoId: string, parcelaId: string, usarTemplate: boolean): Promise<ParcelaRateioItem[]> {
+    const { data } = await gestaoApi.post(`/contratos/${contratoId}/parcelas/${parcelaId}/rateio/gerar`, { usarTemplate });
+    return data;
+  },
+
+  async copiarRateioParaPendentes(contratoId: string, parcelaId: string): Promise<{ parcelasCopied: number }> {
+    const { data } = await gestaoApi.post(`/contratos/${contratoId}/parcelas/${parcelaId}/rateio/copiar-pendentes`);
+    return data;
+  },
+
+  // Anexos
+  async listarAnexos(contratoId: string): Promise<AnexoContrato[]> {
+    const { data } = await gestaoApi.get(`/contratos/${contratoId}/anexos`);
+    return data;
+  },
+
+  async uploadAnexo(contratoId: string, file: File): Promise<AnexoContrato> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const { data } = await gestaoApi.post(`/contratos/${contratoId}/anexos`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
+
+  async downloadAnexo(contratoId: string, anexoId: string): Promise<Blob> {
+    const { data } = await gestaoApi.get(`/contratos/${contratoId}/anexos/${anexoId}/download`, {
+      responseType: 'blob',
+    });
+    return data;
+  },
+
+  async excluirAnexo(contratoId: string, anexoId: string): Promise<void> {
+    await gestaoApi.delete(`/contratos/${contratoId}/anexos/${anexoId}`);
+  },
+
+  // Renovacoes
+  async listarRenovacoes(contratoId: string): Promise<ContratoRenovacaoReg[]> {
+    const { data } = await gestaoApi.get(`/contratos/${contratoId}/renovacoes`);
     return data;
   },
 
@@ -136,5 +210,41 @@ export const contratoService = {
 
   async desvincularLicenca(contratoId: string, licencaId: string): Promise<void> {
     await gestaoApi.delete(`/contratos/${contratoId}/licencas/${licencaId}`);
+  },
+
+  // Naturezas
+  async listarNaturezas(): Promise<NaturezaContrato[]> {
+    const { data } = await gestaoApi.get('/contratos/naturezas', { params: { status: 'ATIVO' } });
+    return data;
+  },
+  async listarTodasNaturezas(): Promise<NaturezaContrato[]> {
+    const { data } = await gestaoApi.get('/contratos/naturezas');
+    return data;
+  },
+  async criarNatureza(payload: { codigo: string; nome: string }): Promise<NaturezaContrato> {
+    const { data } = await gestaoApi.post('/contratos/naturezas', payload);
+    return data;
+  },
+  async atualizarNatureza(id: string, payload: Record<string, unknown>): Promise<NaturezaContrato> {
+    const { data } = await gestaoApi.patch(`/contratos/naturezas/${id}`, payload);
+    return data;
+  },
+
+  // Tipos Contrato
+  async listarTiposContrato(): Promise<TipoContratoConfig[]> {
+    const { data } = await gestaoApi.get('/contratos/tipos-contrato', { params: { status: 'ATIVO' } });
+    return data;
+  },
+  async listarTodosTiposContrato(): Promise<TipoContratoConfig[]> {
+    const { data } = await gestaoApi.get('/contratos/tipos-contrato');
+    return data;
+  },
+  async criarTipoContrato(payload: { codigo: string; nome: string }): Promise<TipoContratoConfig> {
+    const { data } = await gestaoApi.post('/contratos/tipos-contrato', payload);
+    return data;
+  },
+  async atualizarTipoContrato(id: string, payload: Record<string, unknown>): Promise<TipoContratoConfig> {
+    const { data } = await gestaoApi.patch(`/contratos/tipos-contrato/${id}`, payload);
+    return data;
   },
 };

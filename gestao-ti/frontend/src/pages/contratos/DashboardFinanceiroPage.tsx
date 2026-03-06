@@ -6,11 +6,6 @@ import { BarChart3, AlertTriangle, Receipt, PieChart } from 'lucide-react';
 import { PeriodFilter } from '../../components/PeriodFilter';
 import type { DashboardFinanceiro } from '../../types';
 
-const tipoLabels: Record<string, string> = {
-  LICENCIAMENTO: 'Licenciamento', MANUTENCAO: 'Manutencao', SUPORTE: 'Suporte', CONSULTORIA: 'Consultoria',
-  DESENVOLVIMENTO: 'Desenvolvimento', CLOUD_SAAS: 'Cloud/SaaS', OUTSOURCING: 'Outsourcing', OUTRO: 'Outro',
-};
-
 const statusCores: Record<string, string> = {
   RASCUNHO: 'bg-slate-100 text-slate-700', ATIVO: 'bg-green-100 text-green-700', SUSPENSO: 'bg-yellow-100 text-yellow-700',
   VENCIDO: 'bg-red-100 text-red-700', RENOVADO: 'bg-blue-100 text-blue-700', CANCELADO: 'bg-slate-200 text-slate-500',
@@ -61,12 +56,12 @@ export function DashboardFinanceiroPage() {
                 <p className="text-sm text-slate-400">Nenhum contrato ativo</p>
               ) : (
                 <div className="space-y-3">
-                  {data.contratosPorTipo.map((item) => {
+                  {data.contratosPorTipo.map((item, idx) => {
                     const pct = totalGeral > 0 ? (item.valorTotal / totalGeral) * 100 : 0;
                     return (
-                      <div key={item.tipo}>
+                      <div key={item.tipoContratoId || idx}>
                         <div className="flex items-center justify-between text-sm mb-1">
-                          <span className="text-slate-700">{tipoLabels[item.tipo] || item.tipo} ({item.total})</span>
+                          <span className="text-slate-700">{item.tipoNome || 'Sem tipo'} ({item.total})</span>
                           <span className="font-medium text-slate-800">R$ {item.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div className="w-full bg-slate-100 rounded-full h-2">

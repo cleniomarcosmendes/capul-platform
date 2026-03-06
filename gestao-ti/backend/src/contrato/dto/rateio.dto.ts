@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsEnum,
   IsNumber,
+  IsBoolean,
   IsArray,
   ValidateNested,
   Min,
@@ -28,6 +29,10 @@ export class RateioItemDto {
   @IsNumber()
   @Min(0)
   parametro?: number;
+
+  @IsOptional()
+  @IsString()
+  naturezaId?: string;
 }
 
 export class ConfigurarRateioDto {
@@ -56,4 +61,24 @@ export class SimularRateioDto {
   @ValidateNested({ each: true })
   @Type(() => RateioItemDto)
   itens: RateioItemDto[];
+}
+
+export class ConfigurarRateioTemplateDto {
+  @IsEnum(ModalidadeRateio, { message: 'Modalidade de rateio invalida' })
+  modalidade: ModalidadeRateio;
+
+  @IsOptional()
+  @IsString()
+  criterio?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RateioItemDto)
+  itens: RateioItemDto[];
+}
+
+export class GerarRateioParcelaDto {
+  @IsOptional()
+  @IsBoolean()
+  usarTemplate?: boolean;
 }

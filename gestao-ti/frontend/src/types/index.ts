@@ -101,9 +101,23 @@ export type StatusLicenca = 'ATIVA' | 'INATIVA' | 'VENCIDA';
 
 // === Fase 3 — Contratos types ===
 
-export type TipoContrato = 'LICENCIAMENTO' | 'MANUTENCAO' | 'SUPORTE' | 'CONSULTORIA' | 'DESENVOLVIMENTO' | 'CLOUD_SAAS' | 'OUTSOURCING' | 'OUTRO';
+export interface NaturezaContrato {
+  id: string;
+  codigo: string;
+  nome: string;
+  status: string;
+}
+
+export interface TipoContratoConfig {
+  id: string;
+  codigo: string;
+  nome: string;
+  status: string;
+}
+
 export type StatusContrato = 'RASCUNHO' | 'ATIVO' | 'SUSPENSO' | 'VENCIDO' | 'RENOVADO' | 'CANCELADO';
 export type ModalidadeRateio = 'PERCENTUAL_CUSTOMIZADO' | 'VALOR_FIXO' | 'PROPORCIONAL_CRITERIO' | 'IGUALITARIO' | 'SEM_RATEIO';
+export type ModalidadeValor = 'FIXO' | 'VARIAVEL';
 export type StatusParcela = 'PENDENTE' | 'PAGA' | 'ATRASADA' | 'CANCELADA';
 export type TipoHistoricoContrato = 'CRIACAO' | 'ATIVACAO' | 'ALTERACAO' | 'SUSPENSAO' | 'RENOVACAO' | 'CANCELAMENTO' | 'VENCIMENTO' | 'RATEIO_ALTERADO' | 'PARCELA_PAGA' | 'OBSERVACAO';
 
@@ -355,30 +369,38 @@ export interface Contrato {
   numero: number;
   titulo: string;
   descricao: string | null;
-  tipo: TipoContrato;
   status: StatusContrato;
+  modalidadeValor: ModalidadeValor;
   fornecedor: string;
-  cnpjFornecedor: string | null;
+  numeroContrato: string | null;
+  codigoFornecedor: string | null;
+  lojaFornecedor: string | null;
+  tipoContratoId: string | null;
+  tipoContrato: { id: string; codigo: string; nome: string } | null;
+  filialId: string | null;
+  filial: { id: string; codigo: string; nomeFantasia: string } | null;
   valorTotal: number;
   valorMensal: number | null;
   dataInicio: string;
   dataFim: string;
   dataAssinatura: string | null;
   dataRenovacao: string | null;
-  indiceReajuste: string | null;
-  percentualReajuste: number | null;
   renovacaoAutomatica: boolean;
   diasAlertaVencimento: number;
   softwareId: string | null;
   software: { id: string; nome: string; fabricante: string | null; tipo?: TipoSoftware } | null;
+  contratoOriginalId: string | null;
+  contratoOriginal: { id: string; numero: number; titulo: string } | null;
+  contratosRenovados: { id: string; numero: number; titulo: string; valorTotal: number; dataInicio: string; dataFim: string; status: StatusContrato }[];
   observacoes: string | null;
   createdAt: string;
   updatedAt: string;
-  _count: { parcelas: number; licencas: number };
+  _count: { parcelas: number; licencas: number; anexos: number };
   parcelas?: ParcelaContrato[];
-  rateioConfig?: ContratoRateioConfig | null;
+  rateioTemplate?: RateioTemplate | null;
   historicos?: ContratoHistorico[];
   licencas?: SoftwareLicenca[];
+  anexos?: AnexoContrato[];
 }
 
 export interface ParcelaContrato {
@@ -392,28 +414,65 @@ export interface ParcelaContrato {
   notaFiscal: string | null;
   observacoes: string | null;
   contratoId: string;
+  rateioItens?: ParcelaRateioItem[];
   createdAt: string;
   updatedAt: string;
 }
 
-export interface ContratoRateioConfig {
+export interface RateioTemplate {
   id: string;
   modalidade: ModalidadeRateio;
   criterio: string | null;
   contratoId: string;
   createdAt: string;
   updatedAt: string;
-  itens: ContratoRateioItem[];
+  itens: RateioTemplateItem[];
 }
 
-export interface ContratoRateioItem {
+export interface RateioTemplateItem {
   id: string;
   percentual: number | null;
   valorFixo: number | null;
   parametro: number | null;
-  valorCalculado: number | null;
   centroCustoId: string;
   centroCusto: { id: string; codigo: string; nome: string };
+  naturezaId: string | null;
+  natureza: { id: string; codigo: string; nome: string } | null;
+  createdAt: string;
+}
+
+export interface ParcelaRateioItem {
+  id: string;
+  percentual: number | null;
+  valorCalculado: number;
+  centroCustoId: string;
+  centroCusto: { id: string; codigo: string; nome: string };
+  naturezaId: string | null;
+  natureza: { id: string; codigo: string; nome: string } | null;
+  parcelaId: string;
+  createdAt: string;
+}
+
+export interface AnexoContrato {
+  id: string;
+  nomeOriginal: string;
+  nomeArquivo: string;
+  mimeType: string;
+  tamanho: number;
+  contratoId: string;
+  createdAt: string;
+}
+
+export interface ContratoRenovacaoReg {
+  id: string;
+  indiceReajuste: string | null;
+  percentualReajuste: number | null;
+  valorAnterior: number;
+  valorNovo: number;
+  contratoAnteriorId: string;
+  contratoAnterior: { id: string; numero: number; titulo: string; valorTotal: number; status: StatusContrato };
+  contratoNovoId: string;
+  contratoNovo: { id: string; numero: number; titulo: string; valorTotal: number; status: StatusContrato };
   createdAt: string;
 }
 
@@ -833,7 +892,7 @@ export interface AnexoChamado {
 
 export interface DashboardFinanceiro {
   periodo?: { inicio: string; fim: string };
-  contratosPorTipo: { tipo: TipoContrato; total: number; valorTotal: number }[];
+  contratosPorTipo: { tipoContratoId: string | null; tipoNome: string | null; total: number; valorTotal: number }[];
   contratosPorStatus: { status: StatusContrato; total: number }[];
   despesasPorCentroCusto: { centroCusto: { id: string; codigo: string; nome: string }; valorTotal: number }[];
   contratosVencendo: { id: string; numero: number; titulo: string; fornecedor: string; valorTotal: number; dataFim: string; software: { id: string; nome: string } | null }[];

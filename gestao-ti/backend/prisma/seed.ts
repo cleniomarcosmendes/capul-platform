@@ -264,15 +264,46 @@ async function main() {
 
   console.log('Licencas: 3 (SAP, Kaspersky, M365)');
 
-  // ── 10. Contratos + Parcelas ──────────────────────────────────────
+  // ── 10. Cadastros: Naturezas e Tipos de Contrato ─────────────────
+
+  const natSoftware = await prisma.naturezaContrato.upsert({
+    where: { codigo: '232035' },
+    update: {},
+    create: { codigo: '232035', nome: 'Software e Licenciamento' },
+  });
+
+  const natServicos = await prisma.naturezaContrato.upsert({
+    where: { codigo: '232040' },
+    update: {},
+    create: { codigo: '232040', nome: 'Servicos de TI' },
+  });
+
+  const tipoSuporte = await prisma.tipoContratoConfig.upsert({
+    where: { codigo: 'C05' },
+    update: {},
+    create: { codigo: 'C05', nome: 'Suporte e Manutencao' },
+  });
+
+  const tipoLicenc = await prisma.tipoContratoConfig.upsert({
+    where: { codigo: 'C01' },
+    update: {},
+    create: { codigo: 'C01', nome: 'Licenciamento' },
+  });
+
+  console.log('Cadastros: 2 naturezas + 2 tipos contrato');
+
+  // ── 11. Contratos + Parcelas ────────────────────────────────────────
+
+  const ccTI = await prisma.centroCusto.findFirst({ where: { codigo: { contains: '010224' } } });
 
   const contratoSAP = await prisma.contrato.create({
     data: {
       titulo: 'Suporte SAP Business One - Anual',
-      tipo: 'SUPORTE',
+      numeroContrato: '000672',
       status: 'ATIVO',
       fornecedor: 'SAP Brasil Ltda',
-      cnpjFornecedor: '03.638.901/0001-34',
+      codigoFornecedor: 'F00300',
+      lojaFornecedor: '0001',
       valorTotal: 60000,
       valorMensal: 5000,
       dataInicio: new Date(now.getFullYear(), 0, 1),
@@ -280,16 +311,19 @@ async function main() {
       dataAssinatura: new Date(now.getFullYear() - 1, 11, 15),
       renovacaoAutomatica: true,
       softwareId: sap.id,
+      tipoContratoId: tipoSuporte.id,
+      filialId,
     },
   });
 
   const contratoM365 = await prisma.contrato.create({
     data: {
       titulo: 'Licenciamento Microsoft 365 Business',
-      tipo: 'LICENCIAMENTO',
+      numeroContrato: '000680',
       status: 'ATIVO',
       fornecedor: 'Microsoft Corporation',
-      cnpjFornecedor: '60.316.817/0001-03',
+      codigoFornecedor: 'F00150',
+      lojaFornecedor: '0001',
       valorTotal: 48000,
       valorMensal: 4000,
       dataInicio: new Date(now.getFullYear(), 0, 1),
@@ -297,6 +331,8 @@ async function main() {
       dataAssinatura: new Date(now.getFullYear() - 1, 11, 20),
       renovacaoAutomatica: true,
       softwareId: m365.id,
+      tipoContratoId: tipoLicenc.id,
+      filialId,
     },
   });
 

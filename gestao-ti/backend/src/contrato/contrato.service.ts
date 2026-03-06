@@ -7,25 +7,50 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { StatusContrato, ModalidadeRateio } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
+import * as fs from 'fs';
+import * as path from 'path';
 import { CreateContratoDto } from './dto/create-contrato.dto';
 import { UpdateContratoDto } from './dto/update-contrato.dto';
 import { CreateParcelaDto } from './dto/create-parcela.dto';
 import { UpdateParcelaDto } from './dto/update-parcela.dto';
 import { PagarParcelaDto } from './dto/update-parcela.dto';
-import { ConfigurarRateioDto, SimularRateioDto, RateioItemDto } from './dto/rateio.dto';
+import { ConfigurarRateioTemplateDto, SimularRateioDto, RateioItemDto, GerarRateioParcelaDto, ConfigurarRateioDto } from './dto/rateio.dto';
+import { RenovarContratoDto } from './dto/renovar-contrato.dto';
+import { CreateNaturezaDto, UpdateNaturezaDto } from './dto/create-natureza.dto';
+import { CreateTipoContratoDto, UpdateTipoContratoDto } from './dto/create-tipo-contrato.dto';
+
+const UPLOADS_DIR = path.resolve('./uploads/contratos');
 
 const contratoListInclude = {
   software: { select: { id: true, nome: true, fabricante: true } },
-  _count: { select: { parcelas: true, licencas: true } },
+  tipoContrato: { select: { id: true, codigo: true, nome: true } },
+  filial: { select: { id: true, codigo: true, nomeFantasia: true } },
+  rateioTemplate: { select: { id: true, modalidade: true } },
+  _count: { select: { parcelas: true, licencas: true, anexos: true } },
 };
 
 const contratoDetailInclude = {
   software: { select: { id: true, nome: true, fabricante: true, tipo: true } },
-  parcelas: { orderBy: { numero: 'asc' as const } },
-  rateioConfig: {
+  tipoContrato: { select: { id: true, codigo: true, nome: true } },
+  filial: { select: { id: true, codigo: true, nomeFantasia: true } },
+  parcelas: {
+    include: {
+      rateioItens: {
+        include: {
+          centroCusto: { select: { id: true, codigo: true, nome: true } },
+          natureza: { select: { id: true, codigo: true, nome: true } },
+        },
+      },
+    },
+    orderBy: { numero: 'asc' as const },
+  },
+  rateioTemplate: {
     include: {
       itens: {
-        include: { centroCusto: { select: { id: true, codigo: true, nome: true } } },
+        include: {
+          centroCusto: { select: { id: true, codigo: true, nome: true } },
+          natureza: { select: { id: true, codigo: true, nome: true } },
+        },
         orderBy: { centroCusto: { nome: 'asc' as const } },
       },
     },
@@ -39,7 +64,14 @@ const contratoDetailInclude = {
     include: { software: { select: { id: true, nome: true } } },
     orderBy: { createdAt: 'desc' as const },
   },
-  _count: { select: { parcelas: true, licencas: true } },
+  anexos: { orderBy: { createdAt: 'desc' as const } },
+  contratosRenovados: {
+    select: { id: true, numero: true, titulo: true, valorTotal: true, dataInicio: true, dataFim: true, status: true },
+  },
+  contratoOriginal: {
+    select: { id: true, numero: true, titulo: true },
+  },
+  _count: { select: { parcelas: true, licencas: true, anexos: true } },
 };
 
 const TRANSICOES_VALIDAS: Record<StatusContrato, StatusContrato[]> = {
@@ -53,10 +85,14 @@ const TRANSICOES_VALIDAS: Record<StatusContrato, StatusContrato[]> = {
 
 @Injectable()
 export class ContratoService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {
+    if (!fs.existsSync(UPLOADS_DIR)) {
+      fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    }
+  }
 
   async findAll(filters: {
-    tipo?: string;
+    tipoContratoId?: string;
     status?: string;
     softwareId?: string;
     fornecedor?: string;
@@ -64,7 +100,7 @@ export class ContratoService {
   }) {
     const where: Record<string, unknown> = {};
 
-    if (filters.tipo) where.tipo = filters.tipo;
+    if (filters.tipoContratoId) where.tipoContratoId = filters.tipoContratoId;
     if (filters.status) where.status = filters.status;
     if (filters.softwareId) where.softwareId = filters.softwareId;
     if (filters.fornecedor) {
@@ -107,16 +143,18 @@ export class ContratoService {
       data: {
         titulo: dto.titulo,
         descricao: dto.descricao,
-        tipo: dto.tipo,
+        tipoContratoId: dto.tipoContratoId,
+        filialId: dto.filialId,
+        numeroContrato: dto.numeroContrato,
         fornecedor: dto.fornecedor,
-        cnpjFornecedor: dto.cnpjFornecedor,
+        codigoFornecedor: dto.codigoFornecedor,
+        lojaFornecedor: dto.lojaFornecedor,
         valorTotal: dto.valorTotal,
         valorMensal: dto.valorMensal,
         dataInicio: new Date(dto.dataInicio),
         dataFim: new Date(dto.dataFim),
         dataAssinatura: dto.dataAssinatura ? new Date(dto.dataAssinatura) : undefined,
-        indiceReajuste: dto.indiceReajuste,
-        percentualReajuste: dto.percentualReajuste,
+        modalidadeValor: (dto.modalidadeValor as 'FIXO' | 'VARIAVEL') || 'FIXO',
         renovacaoAutomatica: dto.renovacaoAutomatica,
         diasAlertaVencimento: dto.diasAlertaVencimento,
         softwareId: dto.softwareId,
@@ -126,6 +164,11 @@ export class ContratoService {
     });
 
     await this.criarHistorico(contrato.id, 'CRIACAO', 'Contrato criado', usuarioId);
+
+    // Auto-generate parcelas if requested
+    if (dto.gerarParcelas && dto.quantidadeParcelas && dto.quantidadeParcelas > 0) {
+      await this.gerarParcelasAuto(contrato.id, dto.valorTotal, dto.quantidadeParcelas, dto.primeiroVencimento);
+    }
 
     return contrato;
   }
@@ -145,16 +188,18 @@ export class ContratoService {
     const data: Record<string, unknown> = {};
     if (dto.titulo !== undefined) data.titulo = dto.titulo;
     if (dto.descricao !== undefined) data.descricao = dto.descricao;
-    if (dto.tipo !== undefined) data.tipo = dto.tipo;
+    if (dto.tipoContratoId !== undefined) data.tipoContratoId = dto.tipoContratoId;
+    if (dto.filialId !== undefined) data.filialId = dto.filialId;
+    if (dto.numeroContrato !== undefined) data.numeroContrato = dto.numeroContrato;
     if (dto.fornecedor !== undefined) data.fornecedor = dto.fornecedor;
-    if (dto.cnpjFornecedor !== undefined) data.cnpjFornecedor = dto.cnpjFornecedor;
+    if (dto.codigoFornecedor !== undefined) data.codigoFornecedor = dto.codigoFornecedor;
+    if (dto.lojaFornecedor !== undefined) data.lojaFornecedor = dto.lojaFornecedor;
     if (dto.valorTotal !== undefined) data.valorTotal = dto.valorTotal;
     if (dto.valorMensal !== undefined) data.valorMensal = dto.valorMensal;
     if (dto.dataInicio !== undefined) data.dataInicio = new Date(dto.dataInicio);
     if (dto.dataFim !== undefined) data.dataFim = new Date(dto.dataFim);
     if (dto.dataAssinatura !== undefined) data.dataAssinatura = dto.dataAssinatura ? new Date(dto.dataAssinatura) : null;
-    if (dto.indiceReajuste !== undefined) data.indiceReajuste = dto.indiceReajuste;
-    if (dto.percentualReajuste !== undefined) data.percentualReajuste = dto.percentualReajuste;
+    if (dto.modalidadeValor !== undefined) data.modalidadeValor = dto.modalidadeValor;
     if (dto.renovacaoAutomatica !== undefined) data.renovacaoAutomatica = dto.renovacaoAutomatica;
     if (dto.diasAlertaVencimento !== undefined) data.diasAlertaVencimento = dto.diasAlertaVencimento;
     if (dto.softwareId !== undefined) data.softwareId = dto.softwareId || null;
@@ -200,16 +245,28 @@ export class ContratoService {
     return updated;
   }
 
-  async renovar(id: string, usuarioId: string) {
+  async renovar(id: string, dto: RenovarContratoDto, usuarioId: string) {
     const contrato = await this.findOne(id);
 
     if (!['ATIVO', 'VENCIDO'].includes(contrato.status)) {
       throw new BadRequestException('Somente contratos ativos ou vencidos podem ser renovados');
     }
 
+    // Calculate new value
+    const valorAnterior = Number(contrato.valorTotal);
+    let novoValor: number;
+    if (dto.novoValorTotal !== undefined) {
+      novoValor = dto.novoValorTotal;
+    } else if (dto.percentualReajuste !== undefined) {
+      novoValor = valorAnterior * (1 + dto.percentualReajuste / 100);
+    } else {
+      novoValor = valorAnterior;
+    }
+
+    // Calculate dates
     const duracaoMs = new Date(contrato.dataFim).getTime() - new Date(contrato.dataInicio).getTime();
-    const novaDataInicio = new Date(contrato.dataFim);
-    const novaDataFim = new Date(novaDataInicio.getTime() + duracaoMs);
+    const novaDataInicio = dto.novaDataInicio ? new Date(dto.novaDataInicio) : new Date(contrato.dataFim);
+    const novaDataFim = dto.novaDataFim ? new Date(dto.novaDataFim) : new Date(novaDataInicio.getTime() + duracaoMs);
 
     const [, novoContrato] = await this.prisma.$transaction([
       this.prisma.contrato.update({
@@ -220,30 +277,94 @@ export class ContratoService {
         data: {
           titulo: contrato.titulo,
           descricao: contrato.descricao,
-          tipo: contrato.tipo,
+          tipoContratoId: contrato.tipoContratoId,
+          filialId: contrato.filialId,
+          numeroContrato: contrato.numeroContrato,
           fornecedor: contrato.fornecedor,
-          cnpjFornecedor: contrato.cnpjFornecedor,
-          valorTotal: contrato.valorTotal,
+          codigoFornecedor: contrato.codigoFornecedor,
+          lojaFornecedor: contrato.lojaFornecedor,
+          valorTotal: novoValor,
           valorMensal: contrato.valorMensal,
           dataInicio: novaDataInicio,
           dataFim: novaDataFim,
-          indiceReajuste: contrato.indiceReajuste,
-          percentualReajuste: contrato.percentualReajuste,
+          modalidadeValor: contrato.modalidadeValor,
           renovacaoAutomatica: contrato.renovacaoAutomatica,
           diasAlertaVencimento: contrato.diasAlertaVencimento,
           softwareId: contrato.softwareId,
           observacoes: contrato.observacoes,
           dataRenovacao: new Date(),
           status: 'ATIVO',
+          contratoOriginalId: contrato.id,
         },
         include: contratoListInclude,
       }),
     ]);
 
+    // Create renovation record
+    await this.prisma.contratoRenovacaoReg.create({
+      data: {
+        contratoAnteriorId: contrato.id,
+        contratoNovoId: novoContrato.id,
+        indiceReajuste: dto.indiceReajuste,
+        percentualReajuste: dto.percentualReajuste,
+        valorAnterior: valorAnterior,
+        valorNovo: novoValor,
+      },
+    });
+
     await this.criarHistorico(id, 'RENOVACAO', `Renovado. Novo contrato #${novoContrato.numero}`, usuarioId);
     await this.criarHistorico(novoContrato.id, 'CRIACAO', `Renovacao do contrato #${contrato.numero}`, usuarioId);
 
+    // Auto-generate parcelas if requested
+    if (dto.gerarParcelas && dto.quantidadeParcelas && dto.quantidadeParcelas > 0) {
+      await this.gerarParcelasAuto(novoContrato.id, novoValor, dto.quantidadeParcelas, dto.primeiroVencimento);
+    }
+
+    // Copy rateio template from old contract
+    if (contrato.rateioTemplate) {
+      await this.prisma.rateioTemplate.create({
+        data: {
+          contratoId: novoContrato.id,
+          modalidade: contrato.rateioTemplate.modalidade,
+          criterio: contrato.rateioTemplate.criterio,
+          itens: {
+            create: contrato.rateioTemplate.itens.map((item) => ({
+              centroCustoId: item.centroCustoId,
+              percentual: item.percentual,
+              valorFixo: item.valorFixo,
+              parametro: item.parametro,
+              naturezaId: item.naturezaId,
+            })),
+          },
+        },
+      });
+    }
+
     return novoContrato;
+  }
+
+  // --- Auto-generate parcelas helper ---
+
+  private async gerarParcelasAuto(contratoId: string, valorTotal: number, quantidade: number, primeiroVencimento?: string) {
+    const valorParcela = +(valorTotal / quantidade).toFixed(2);
+    const baseDate = primeiroVencimento ? new Date(primeiroVencimento) : new Date();
+
+    for (let i = 0; i < quantidade; i++) {
+      const dataVenc = new Date(baseDate);
+      dataVenc.setMonth(dataVenc.getMonth() + i);
+      const valor = i === quantidade - 1
+        ? +(valorTotal - valorParcela * (quantidade - 1)).toFixed(2)
+        : valorParcela;
+
+      await this.prisma.parcelaContrato.create({
+        data: {
+          numero: i + 1,
+          valor,
+          dataVencimento: dataVenc,
+          contrato: { connect: { id: contratoId } },
+        },
+      });
+    }
   }
 
   // --- Parcelas ---
@@ -252,6 +373,14 @@ export class ContratoService {
     await this.findOne(contratoId);
     return this.prisma.parcelaContrato.findMany({
       where: { contratoId },
+      include: {
+        rateioItens: {
+          include: {
+            centroCusto: { select: { id: true, codigo: true, nome: true } },
+            natureza: { select: { id: true, codigo: true, nome: true } },
+          },
+        },
+      },
       orderBy: { numero: 'asc' },
     });
   }
@@ -371,51 +500,56 @@ export class ContratoService {
     return updated;
   }
 
-  // --- Rateio ---
+  // --- Rateio Template ---
 
-  async obterRateio(contratoId: string) {
+  async obterRateioTemplate(contratoId: string) {
     await this.findOne(contratoId);
-    return this.prisma.contratoRateioConfig.findUnique({
+    return this.prisma.rateioTemplate.findUnique({
       where: { contratoId },
       include: {
         itens: {
-          include: { centroCusto: { select: { id: true, codigo: true, nome: true } } },
+          include: {
+            centroCusto: { select: { id: true, codigo: true, nome: true } },
+            natureza: { select: { id: true, codigo: true, nome: true } },
+          },
           orderBy: { centroCusto: { nome: 'asc' as const } },
         },
       },
     });
   }
 
-  async simularRateio(contratoId: string, dto: SimularRateioDto) {
+  async simularRateioTemplate(contratoId: string, dto: SimularRateioDto) {
     const contrato = await this.findOne(contratoId);
     return this.computeRateio(dto.modalidade, dto.itens, new Decimal(contrato.valorTotal.toString()));
   }
 
-  async configurarRateio(contratoId: string, dto: ConfigurarRateioDto, usuarioId: string) {
+  async configurarRateioTemplate(contratoId: string, dto: ConfigurarRateioTemplateDto, usuarioId: string) {
     const contrato = await this.findOne(contratoId);
 
     if (['RENOVADO', 'CANCELADO'].includes(contrato.status)) {
       throw new BadRequestException('Contrato finalizado nao permite alteracao de rateio');
     }
 
-    const valorTotal = new Decimal(contrato.valorTotal.toString());
-    const itensCalculados = this.computeRateio(dto.modalidade, dto.itens, valorTotal);
+    // Validate items (don't need to compute values for template, just store config)
+    if (dto.itens.length === 0) {
+      throw new BadRequestException('Rateio deve ter pelo menos 1 item');
+    }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.contratoRateioConfig.deleteMany({ where: { contratoId } });
+      await tx.rateioTemplate.deleteMany({ where: { contratoId } });
 
-      await tx.contratoRateioConfig.create({
+      await tx.rateioTemplate.create({
         data: {
           contratoId,
           modalidade: dto.modalidade,
           criterio: dto.criterio,
           itens: {
-            create: itensCalculados.map((item) => ({
+            create: dto.itens.map((item) => ({
               centroCustoId: item.centroCustoId,
               percentual: item.percentual,
               valorFixo: item.valorFixo,
               parametro: item.parametro,
-              valorCalculado: item.valorCalculado,
+              naturezaId: item.naturezaId,
             })),
           },
         },
@@ -425,11 +559,161 @@ export class ContratoService {
     await this.criarHistorico(
       contratoId,
       'RATEIO_ALTERADO',
-      `Rateio configurado: ${dto.modalidade}`,
+      `Rateio template configurado: ${dto.modalidade}`,
       usuarioId,
     );
 
-    return this.obterRateio(contratoId);
+    return this.obterRateioTemplate(contratoId);
+  }
+
+  // --- Rateio per Parcela ---
+
+  async obterRateioParcela(contratoId: string, parcelaId: string) {
+    const parcela = await this.prisma.parcelaContrato.findFirst({
+      where: { id: parcelaId, contratoId },
+    });
+    if (!parcela) {
+      throw new NotFoundException('Parcela nao encontrada neste contrato');
+    }
+
+    return this.prisma.parcelaRateioItem.findMany({
+      where: { parcelaId },
+      include: {
+        centroCusto: { select: { id: true, codigo: true, nome: true } },
+        natureza: { select: { id: true, codigo: true, nome: true } },
+      },
+    });
+  }
+
+  async gerarRateioParcela(contratoId: string, parcelaId: string, dto: GerarRateioParcelaDto, usuarioId: string) {
+    const parcela = await this.prisma.parcelaContrato.findFirst({
+      where: { id: parcelaId, contratoId },
+    });
+    if (!parcela) {
+      throw new NotFoundException('Parcela nao encontrada neste contrato');
+    }
+
+    if (dto.usarTemplate) {
+      const template = await this.prisma.rateioTemplate.findUnique({
+        where: { contratoId },
+        include: { itens: true },
+      });
+      if (!template) {
+        throw new BadRequestException('Contrato nao possui rateio template configurado');
+      }
+
+      const valorParcela = new Decimal(parcela.valor.toString());
+      const itensTemplate = template.itens.map((item) => ({
+        centroCustoId: item.centroCustoId,
+        percentual: item.percentual ? Number(item.percentual) : undefined,
+        valorFixo: item.valorFixo ? Number(item.valorFixo) : undefined,
+        parametro: item.parametro ? Number(item.parametro) : undefined,
+        naturezaId: item.naturezaId || undefined,
+      }));
+
+      const itensCalculados = this.computeRateio(template.modalidade, itensTemplate, valorParcela);
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.parcelaRateioItem.deleteMany({ where: { parcelaId } });
+
+        for (const item of itensCalculados) {
+          await tx.parcelaRateioItem.create({
+            data: {
+              parcelaId,
+              centroCustoId: item.centroCustoId,
+              percentual: item.percentual,
+              valorCalculado: item.valorCalculado,
+              naturezaId: item.naturezaId,
+            },
+          });
+        }
+      });
+
+      await this.criarHistorico(contratoId, 'RATEIO_ALTERADO', `Rateio gerado para parcela #${parcela.numero} via template`, usuarioId);
+    }
+
+    return this.obterRateioParcela(contratoId, parcelaId);
+  }
+
+  async configurarRateioParcela(contratoId: string, parcelaId: string, dto: ConfigurarRateioDto, usuarioId: string) {
+    const parcela = await this.prisma.parcelaContrato.findFirst({
+      where: { id: parcelaId, contratoId },
+    });
+    if (!parcela) {
+      throw new NotFoundException('Parcela nao encontrada neste contrato');
+    }
+
+    const valorParcela = new Decimal(parcela.valor.toString());
+    const itensCalculados = this.computeRateio(dto.modalidade, dto.itens, valorParcela);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.parcelaRateioItem.deleteMany({ where: { parcelaId } });
+
+      for (const item of itensCalculados) {
+        await tx.parcelaRateioItem.create({
+          data: {
+            parcelaId,
+            centroCustoId: item.centroCustoId,
+            percentual: item.percentual,
+            valorCalculado: item.valorCalculado,
+            naturezaId: item.naturezaId,
+          },
+        });
+      }
+    });
+
+    await this.criarHistorico(contratoId, 'RATEIO_ALTERADO', `Rateio manual configurado para parcela #${parcela.numero}`, usuarioId);
+
+    return this.obterRateioParcela(contratoId, parcelaId);
+  }
+
+  async copiarRateioParaPendentes(contratoId: string, parcelaId: string, usuarioId: string) {
+    const parcelaOrigem = await this.prisma.parcelaContrato.findFirst({
+      where: { id: parcelaId, contratoId },
+    });
+    if (!parcelaOrigem) {
+      throw new NotFoundException('Parcela nao encontrada neste contrato');
+    }
+
+    const itensOrigem = await this.prisma.parcelaRateioItem.findMany({
+      where: { parcelaId },
+    });
+    if (itensOrigem.length === 0) {
+      throw new BadRequestException('Parcela de origem nao possui rateio configurado');
+    }
+
+    const parcelasPendentes = await this.prisma.parcelaContrato.findMany({
+      where: { contratoId, status: 'PENDENTE', id: { not: parcelaId } },
+    });
+
+    for (const parcela of parcelasPendentes) {
+      const valorParcela = Number(parcela.valor);
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.parcelaRateioItem.deleteMany({ where: { parcelaId: parcela.id } });
+
+        for (const item of itensOrigem) {
+          const percentual = item.percentual ? Number(item.percentual) : null;
+          const valorCalculado = percentual !== null
+            ? valorParcela * percentual / 100
+            : Number(item.valorCalculado);
+
+          await tx.parcelaRateioItem.create({
+            data: {
+              parcelaId: parcela.id,
+              centroCustoId: item.centroCustoId,
+              percentual: item.percentual,
+              valorCalculado,
+              naturezaId: item.naturezaId,
+            },
+          });
+        }
+      });
+    }
+
+    await this.criarHistorico(contratoId, 'RATEIO_ALTERADO', `Rateio da parcela #${parcelaOrigem.numero} copiado para ${parcelasPendentes.length} parcelas pendentes`, usuarioId);
+
+    return { parcelasCopied: parcelasPendentes.length };
   }
 
   private computeRateio(
@@ -453,6 +737,7 @@ export class ContratoService {
           valorFixo: null as number | null,
           parametro: null as number | null,
           valorCalculado: Number(valorTotal) * (item.percentual || 0) / 100,
+          naturezaId: item.naturezaId || null,
         }));
       }
 
@@ -469,6 +754,7 @@ export class ContratoService {
           valorFixo: item.valorFixo,
           parametro: null as number | null,
           valorCalculado: item.valorFixo || 0,
+          naturezaId: item.naturezaId || null,
         }));
       }
 
@@ -483,6 +769,7 @@ export class ContratoService {
           valorFixo: null as number | null,
           parametro: item.parametro,
           valorCalculado: ((item.parametro || 0) / somaParametros) * Number(valorTotal),
+          naturezaId: item.naturezaId || null,
         }));
       }
 
@@ -494,6 +781,7 @@ export class ContratoService {
           valorFixo: null as number | null,
           parametro: null as number | null,
           valorCalculado: valorPorItem,
+          naturezaId: item.naturezaId || null,
         }));
       }
 
@@ -507,6 +795,7 @@ export class ContratoService {
           valorFixo: null as number | null,
           parametro: null as number | null,
           valorCalculado: Number(valorTotal),
+          naturezaId: item.naturezaId || null,
         }));
       }
     }
@@ -553,6 +842,158 @@ export class ContratoService {
     await this.criarHistorico(contratoId, 'OBSERVACAO', `Licenca desvinculada: ${licenca.software.nome}`, usuarioId);
 
     return updated;
+  }
+
+  // --- Anexos ---
+
+  async listarAnexos(contratoId: string) {
+    await this.findOne(contratoId);
+    return this.prisma.anexoContrato.findMany({
+      where: { contratoId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async uploadAnexo(contratoId: string, file: Express.Multer.File) {
+    await this.findOne(contratoId);
+
+    return this.prisma.anexoContrato.create({
+      data: {
+        contratoId,
+        nomeOriginal: file.originalname,
+        nomeArquivo: file.filename,
+        mimeType: file.mimetype,
+        tamanho: file.size,
+      },
+    });
+  }
+
+  async downloadAnexo(contratoId: string, anexoId: string) {
+    const anexo = await this.prisma.anexoContrato.findFirst({
+      where: { id: anexoId, contratoId },
+    });
+    if (!anexo) {
+      throw new NotFoundException('Anexo nao encontrado neste contrato');
+    }
+
+    const filePath = path.join(UPLOADS_DIR, anexo.nomeArquivo);
+    if (!fs.existsSync(filePath)) {
+      throw new NotFoundException('Arquivo nao encontrado no disco');
+    }
+
+    return { anexo, filePath };
+  }
+
+  async excluirAnexo(contratoId: string, anexoId: string, usuarioId: string) {
+    const anexo = await this.prisma.anexoContrato.findFirst({
+      where: { id: anexoId, contratoId },
+    });
+    if (!anexo) {
+      throw new NotFoundException('Anexo nao encontrado neste contrato');
+    }
+
+    const filePath = path.join(UPLOADS_DIR, anexo.nomeArquivo);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    await this.prisma.anexoContrato.delete({ where: { id: anexoId } });
+
+    await this.criarHistorico(contratoId, 'OBSERVACAO', `Anexo removido: ${anexo.nomeOriginal}`, usuarioId);
+
+    return { deleted: true };
+  }
+
+  // --- Renovacoes ---
+
+  async listarRenovacoes(contratoId: string) {
+    await this.findOne(contratoId);
+
+    const renovacoes = await this.prisma.contratoRenovacaoReg.findMany({
+      where: {
+        OR: [
+          { contratoAnteriorId: contratoId },
+          { contratoNovoId: contratoId },
+        ],
+      },
+      include: {
+        contratoAnterior: { select: { id: true, numero: true, titulo: true, valorTotal: true, status: true } },
+        contratoNovo: { select: { id: true, numero: true, titulo: true, valorTotal: true, status: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return renovacoes;
+  }
+
+  // --- Naturezas ---
+
+  async findAllNaturezas(status?: string) {
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
+    return this.prisma.naturezaContrato.findMany({
+      where,
+      orderBy: { nome: 'asc' },
+    });
+  }
+
+  async createNatureza(dto: CreateNaturezaDto) {
+    return this.prisma.naturezaContrato.create({
+      data: {
+        codigo: dto.codigo,
+        nome: dto.nome,
+      },
+    });
+  }
+
+  async updateNatureza(id: string, dto: UpdateNaturezaDto) {
+    const existing = await this.prisma.naturezaContrato.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Natureza nao encontrada');
+
+    const data: Record<string, unknown> = {};
+    if (dto.codigo !== undefined) data.codigo = dto.codigo;
+    if (dto.nome !== undefined) data.nome = dto.nome;
+    if (dto.status !== undefined) data.status = dto.status;
+
+    return this.prisma.naturezaContrato.update({
+      where: { id },
+      data,
+    });
+  }
+
+  // --- Tipos de Contrato ---
+
+  async findAllTiposContrato(status?: string) {
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
+    return this.prisma.tipoContratoConfig.findMany({
+      where,
+      orderBy: { nome: 'asc' },
+    });
+  }
+
+  async createTipoContrato(dto: CreateTipoContratoDto) {
+    return this.prisma.tipoContratoConfig.create({
+      data: {
+        codigo: dto.codigo,
+        nome: dto.nome,
+      },
+    });
+  }
+
+  async updateTipoContrato(id: string, dto: UpdateTipoContratoDto) {
+    const existing = await this.prisma.tipoContratoConfig.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Tipo de contrato nao encontrado');
+
+    const data: Record<string, unknown> = {};
+    if (dto.codigo !== undefined) data.codigo = dto.codigo;
+    if (dto.nome !== undefined) data.nome = dto.nome;
+    if (dto.status !== undefined) data.status = dto.status;
+
+    return this.prisma.tipoContratoConfig.update({
+      where: { id },
+      data,
+    });
   }
 
   // --- Historico ---
