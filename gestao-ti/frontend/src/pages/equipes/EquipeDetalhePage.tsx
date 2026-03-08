@@ -6,6 +6,7 @@ import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
 import { ArrowLeft, Pencil, UserPlus, Trash2, Star, StarOff } from 'lucide-react';
 import type { EquipeTI, UsuarioCore } from '../../types';
+import { useToast } from '../../components/Toast';
 
 export function EquipeDetalhePage() {
   const { id } = useParams();
@@ -13,6 +14,7 @@ export function EquipeDetalhePage() {
   const { gestaoTiRole } = useAuth();
 
   const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const { toast, confirm } = useToast();
 
   const [equipe, setEquipe] = useState<EquipeTI | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,7 +47,7 @@ export function EquipeDetalhePage() {
       const membrosIds = equipe?.membros.map((m) => m.usuarioId) || [];
       setUsuarios(data.filter((u: UsuarioCore) => !membrosIds.includes(u.id)));
     } catch {
-      alert('Erro ao carregar usuarios');
+      toast('error', 'Erro ao carregar usuarios');
     }
   }
 
@@ -61,7 +63,7 @@ export function EquipeDetalhePage() {
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      alert(message || 'Erro ao adicionar membro');
+      toast('error', message || 'Erro ao adicionar membro');
     } finally {
       setAdding(false);
     }
@@ -72,17 +74,17 @@ export function EquipeDetalhePage() {
       await equipeService.atualizarMembro(id!, membroId, { isLider: !currentIsLider });
       carregarEquipe();
     } catch {
-      alert('Erro ao atualizar membro');
+      toast('error', 'Erro ao atualizar membro');
     }
   }
 
   async function removerMembro(membroId: string, nome: string) {
-    if (!confirm(`Remover ${nome} da equipe?`)) return;
+    if (!await confirm('Remover Membro', `Deseja remover ${nome} da equipe?`, { variant: 'danger' })) return;
     try {
       await equipeService.removerMembro(id!, membroId);
       carregarEquipe();
     } catch {
-      alert('Erro ao remover membro');
+      toast('error', 'Erro ao remover membro');
     }
   }
 

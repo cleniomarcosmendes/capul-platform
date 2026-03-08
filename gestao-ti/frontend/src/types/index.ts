@@ -198,6 +198,7 @@ export interface Chamado {
   dataFechamento: string | null;
   notaSatisfacao: number | null;
   comentarioSatisfacao: string | null;
+  ipMaquina: string | null;
   createdAt: string;
   updatedAt: string;
   historicos?: HistoricoChamado[];
@@ -206,6 +207,29 @@ export interface Chamado {
   projeto: { id: string; numero: number; nome: string } | null;
   departamentoId: string | null;
   departamento: { id: string; nome: string } | null;
+  colaboradores?: ChamadoColaborador[];
+  registrosTempo?: { id: string; usuarioId: string; horaInicio: string }[];
+}
+
+export interface ChamadoColaborador {
+  id: string;
+  chamadoId: string;
+  usuarioId: string;
+  usuario: { id: string; nome: string; username: string };
+  createdAt: string;
+}
+
+export interface RegistroTempoChamado {
+  id: string;
+  horaInicio: string;
+  horaFim: string | null;
+  duracaoMinutos: number | null;
+  observacoes: string | null;
+  chamadoId: string;
+  usuarioId: string;
+  usuario: { id: string; nome: string };
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface HistoricoChamado {
@@ -280,6 +304,11 @@ export interface DashboardResumo {
     custoRealizadoTotal: number;
     totalHorasApontadas: number;
     riscosAbertos: number;
+    atividades?: {
+      pendentes: number;
+      emAndamento: number;
+      concluidas: number;
+    };
   };
   ativos?: {
     totalAtivos: number;
@@ -721,17 +750,36 @@ export interface FaseProjeto {
   updatedAt: string;
 }
 
+export type StatusAtividade = 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA';
+
 export interface AtividadeProjeto {
   id: string;
   titulo: string;
   descricao: string | null;
   dataAtividade: string;
+  status: StatusAtividade;
   projetoId: string;
   usuarioId: string;
   usuario: { id: string; nome: string };
   faseId: string | null;
   fase: { id: string; nome: string } | null;
+  _count?: { registrosTempo: number };
+  registrosTempo?: { id: string; usuarioId: string; horaInicio: string }[];
   createdAt: string;
+}
+
+export interface RegistroTempo {
+  id: string;
+  horaInicio: string;
+  horaFim: string | null;
+  duracaoMinutos: number | null;
+  observacoes: string | null;
+  atividadeId: string;
+  atividade?: { id: string; titulo: string };
+  usuarioId: string;
+  usuario: { id: string; nome: string };
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CustosConsolidados {
@@ -844,6 +892,11 @@ export interface DashboardExecutivo {
     custoPrevistoTotal: number;
     custoRealizadoTotal: number;
     riscosAbertos: number;
+    atividades?: {
+      pendentes: number;
+      emAndamento: number;
+      concluidas: number;
+    };
   };
   portfolio: {
     totalSoftwares: number;

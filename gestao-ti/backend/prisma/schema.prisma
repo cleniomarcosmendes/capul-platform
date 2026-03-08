@@ -50,6 +50,7 @@ model Usuario {
   projetosResponsavel  Projeto[]          @relation("ProjetoResponsavel")
   membrosProjeto       MembroProjeto[]
   atividadesProjeto    AtividadeProjeto[] @relation("AtividadeProjetoUsuario")
+  registrosTempo       RegistroTempo[]    @relation("RegistroTempoUsuario")
   riscosResponsavel    RiscoProjeto[]     @relation("RiscoResponsavel")
   anexosProjeto        AnexoProjeto[]     @relation("AnexoProjetoUsuario")
   anexosChamado        AnexoChamado[]     @relation("AnexoChamadoUsuario")
@@ -57,6 +58,8 @@ model Usuario {
   ativosResponsavel    Ativo[]            @relation("AtivoResponsavel")
   artigosAutor         ArtigoConhecimento[] @relation("ArtigoAutor")
   notificacoes         Notificacao[]
+  chamadoColaboracoes  ChamadoColaborador[]    @relation("ChamadoColaborador")
+  registrosTempoChm    RegistroTempoChamado[]  @relation("RegistroTempoChamado")
 
   @@map("usuarios")
   @@schema("core")
@@ -254,6 +257,7 @@ model Chamado {
   dataFechamento     DateTime?     @map("data_fechamento")
   notaSatisfacao     Int?          @map("nota_satisfacao")
   comentarioSatisfacao String?     @map("comentario_satisfacao")
+  ipMaquina          String?       @map("ip_maquina")
   createdAt          DateTime      @default(now()) @map("created_at")
   updatedAt          DateTime      @updatedAt @map("updated_at")
 
@@ -287,10 +291,12 @@ model Chamado {
   departamentoId String?       @map("departamento_id")
   departamento   Departamento? @relation(fields: [departamentoId], references: [id])
 
-  historicos    HistoricoChamado[]
-  ordensServico OrdemServico[]
-  paradas       RegistroParada[]
-  anexos        AnexoChamado[]
+  historicos      HistoricoChamado[]
+  ordensServico   OrdemServico[]
+  paradas         RegistroParada[]
+  anexos          AnexoChamado[]
+  colaboradores   ChamadoColaborador[]
+  registrosTempo  RegistroTempoChamado[]
 
   @@index([status])
   @@index([equipeAtualId, status])
@@ -341,6 +347,42 @@ model AnexoChamado {
 
   @@index([chamadoId])
   @@map("anexos_chamado")
+  @@schema("gestao_ti")
+}
+
+model ChamadoColaborador {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  chamadoId String  @map("chamado_id")
+  chamado   Chamado @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("ChamadoColaborador", fields: [usuarioId], references: [id])
+
+  @@unique([chamadoId, usuarioId])
+  @@map("chamado_colaboradores")
+  @@schema("gestao_ti")
+}
+
+model RegistroTempoChamado {
+  id              String    @id @default(uuid())
+  horaInicio      DateTime  @map("hora_inicio")
+  horaFim         DateTime? @map("hora_fim")
+  duracaoMinutos  Int?      @map("duracao_minutos")
+  observacoes     String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  chamadoId String  @map("chamado_id")
+  chamado   Chamado @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("RegistroTempoChamado", fields: [usuarioId], references: [id])
+
+  @@index([chamadoId])
+  @@index([usuarioId, horaInicio])
+  @@map("registros_tempo_chamado")
   @@schema("gestao_ti")
 }
 
@@ -596,6 +638,15 @@ enum StatusFase {
   EM_ANDAMENTO
   APROVADA
   REJEITADA
+
+  @@schema("gestao_ti")
+}
+
+enum StatusAtividade {
+  PENDENTE
+  EM_ANDAMENTO
+  CONCLUIDA
+  CANCELADA
 
   @@schema("gestao_ti")
 }
@@ -1180,11 +1231,12 @@ model FaseProjeto {
 }
 
 model AtividadeProjeto {
-  id             String   @id @default(uuid())
+  id             String          @id @default(uuid())
   titulo         String
   descricao      String?
-  dataAtividade  DateTime @default(now()) @map("data_atividade")
-  createdAt      DateTime @default(now()) @map("created_at")
+  status         StatusAtividade @default(PENDENTE)
+  dataAtividade  DateTime        @default(now()) @map("data_atividade")
+  createdAt      DateTime        @default(now()) @map("created_at")
 
   projetoId String  @map("projeto_id")
   projeto   Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
@@ -1195,8 +1247,31 @@ model AtividadeProjeto {
   faseId String?       @map("fase_id")
   fase   FaseProjeto?  @relation(fields: [faseId], references: [id])
 
+  registrosTempo RegistroTempo[]
+
   @@index([projetoId, dataAtividade])
   @@map("atividades_projeto")
+  @@schema("gestao_ti")
+}
+
+model RegistroTempo {
+  id              String    @id @default(uuid())
+  horaInicio      DateTime  @map("hora_inicio")
+  horaFim         DateTime? @map("hora_fim")
+  duracaoMinutos  Int?      @map("duracao_minutos")
+  observacoes     String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  atividadeId String            @map("atividade_id")
+  atividade   AtividadeProjeto  @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("RegistroTempoUsuario", fields: [usuarioId], references: [id])
+
+  @@index([atividadeId])
+  @@index([usuarioId, horaInicio])
+  @@map("registros_tempo")
   @@schema("gestao_ti")
 }
 

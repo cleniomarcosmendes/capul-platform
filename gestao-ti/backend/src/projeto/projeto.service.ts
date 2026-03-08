@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjetoDto } from './dto/create-projeto.dto';
 import { UpdateProjetoDto } from './dto/update-projeto.dto';
 import { CreateFaseDto } from './dto/create-fase.dto';
+import { UpdateFaseDto } from './dto/update-fase.dto';
 import { CreateMembroDto } from './dto/create-membro.dto';
 import { CreateCotacaoDto } from './dto/create-cotacao.dto';
 import { CreateCustoDto } from './dto/create-custo.dto';
@@ -14,6 +15,7 @@ import { CreateRiscoDto } from './dto/create-risco.dto';
 import { CreateDependenciaDto } from './dto/create-dependencia.dto';
 import { CreateAnexoDto } from './dto/create-anexo.dto';
 import { CreateApontamentoDto } from './dto/create-apontamento.dto';
+import { UpdateRegistroTempoDto } from './dto/update-registro-tempo.dto';
 
 const projetoListInclude = {
   software: { select: { id: true, nome: true, tipo: true } },
@@ -216,8 +218,33 @@ export class ProjetoService {
 
     if (dto.status !== undefined) {
       data.status = dto.status;
-      if (dto.status === 'CONCLUIDO' && !projeto.dataFimReal) {
-        data.dataFimReal = new Date();
+
+      // Validar dependencias antes de concluir
+      if (dto.status === 'CONCLUIDO') {
+        const dependenciasBloqueantes = await this.prisma.dependenciaProjeto.findMany({
+          where: {
+            projetoOrigemId: id,
+            tipo: { in: ['BLOQUEIO', 'PREDECESSOR'] },
+          },
+          include: {
+            projetoDestino: { select: { id: true, nome: true, numero: true, status: true } },
+          },
+        });
+
+        const pendentes = dependenciasBloqueantes.filter(
+          (d) => d.projetoDestino.status !== 'CONCLUIDO' && d.projetoDestino.status !== 'CANCELADO',
+        );
+
+        if (pendentes.length > 0) {
+          const nomes = pendentes.map((d) => `#${d.projetoDestino.numero} ${d.projetoDestino.nome}`).join(', ');
+          throw new BadRequestException(
+            `Nao e possivel concluir projeto com dependencias pendentes: ${nomes}`,
+          );
+        }
+
+        if (!projeto.dataFimReal) {
+          data.dataFimReal = new Date();
+        }
       }
     }
 
@@ -231,13 +258,36 @@ export class ProjetoService {
   async remove(id: string) {
     const projeto = await this.prisma.projeto.findUnique({
       where: { id },
-      include: { _count: { select: { subProjetos: true } } },
+      include: {
+        _count: {
+          select: {
+            subProjetos: true,
+            chamados: true,
+          },
+        },
+      },
     });
     if (!projeto) throw new NotFoundException('Projeto nao encontrado');
 
     if (projeto._count.subProjetos > 0) {
       throw new BadRequestException(
-        'Nao e possivel excluir projeto que possui sub-projetos',
+        'Nao e possivel excluir projeto que possui sub-projetos.',
+      );
+    }
+
+    if (projeto._count.chamados > 0) {
+      throw new BadRequestException(
+        `Nao e possivel excluir projeto com ${projeto._count.chamados} chamado(s) vinculado(s).`,
+      );
+    }
+
+    // Verifica registros de tempo em atividades
+    const registrosTempo = await this.prisma.registroTempo.count({
+      where: { atividade: { projetoId: id } },
+    });
+    if (registrosTempo > 0) {
+      throw new BadRequestException(
+        `Nao e possivel excluir projeto com ${registrosTempo} registro(s) de tempo em atividades.`,
       );
     }
 
@@ -290,6 +340,16 @@ export class ProjetoService {
     });
     if (!membro) throw new NotFoundException('Membro nao encontrado neste projeto');
 
+    // Verifica se o membro tem registros de tempo no projeto
+    const registros = await this.prisma.registroTempo.count({
+      where: { usuarioId: membro.usuarioId, atividade: { projetoId } },
+    });
+    if (registros > 0) {
+      throw new BadRequestException(
+        `Nao e possivel remover membro com ${registros} registro(s) de tempo no projeto.`,
+      );
+    }
+
     await this.prisma.membroProjeto.delete({ where: { id: membroId } });
     return { deleted: true };
   }
@@ -327,7 +387,7 @@ export class ProjetoService {
     });
   }
 
-  async updateFase(projetoId: string, faseId: string, dto: CreateFaseDto) {
+  async updateFase(projetoId: string, faseId: string, dto: UpdateFaseDto) {
     const fase = await this.prisma.faseProjeto.findFirst({
       where: { id: faseId, projetoId },
     });
@@ -360,6 +420,22 @@ export class ProjetoService {
     });
     if (!fase) throw new NotFoundException('Fase nao encontrada neste projeto');
 
+    // Verifica se ha atividades com registros de tempo
+    const atividadesComRegistros = await this.prisma.atividadeProjeto.count({
+      where: { faseId, registrosTempo: { some: {} } },
+    });
+    if (atividadesComRegistros > 0) {
+      throw new BadRequestException(
+        `Nao e possivel excluir fase com atividades que possuem registros de tempo (${atividadesComRegistros} atividade(s) com apontamentos).`,
+      );
+    }
+
+    // Desvincula atividades da fase (move para "sem fase") em vez de deletar
+    await this.prisma.atividadeProjeto.updateMany({
+      where: { faseId },
+      data: { faseId: null },
+    });
+
     await this.prisma.faseProjeto.delete({ where: { id: faseId } });
     return { deleted: true };
   }
@@ -373,6 +449,11 @@ export class ProjetoService {
       include: {
         usuario: { select: { id: true, nome: true } },
         fase: { select: { id: true, nome: true } },
+        _count: { select: { registrosTempo: true } },
+        registrosTempo: {
+          where: { horaFim: null },
+          select: { id: true, usuarioId: true, horaInicio: true },
+        },
       },
       orderBy: { dataAtividade: 'desc' },
     });
@@ -404,6 +485,201 @@ export class ProjetoService {
         usuario: { select: { id: true, nome: true } },
         fase: { select: { id: true, nome: true } },
       },
+    });
+  }
+
+  async updateAtividade(
+    projetoId: string,
+    atividadeId: string,
+    dto: { titulo?: string; descricao?: string; faseId?: string; status?: string },
+  ) {
+    const atividade = await this.prisma.atividadeProjeto.findFirst({
+      where: { id: atividadeId, projetoId },
+    });
+    if (!atividade) throw new NotFoundException('Atividade nao encontrada neste projeto');
+
+    if (dto.faseId) {
+      const fase = await this.prisma.faseProjeto.findFirst({
+        where: { id: dto.faseId, projetoId },
+      });
+      if (!fase) throw new NotFoundException('Fase nao encontrada neste projeto');
+    }
+
+    const data: Record<string, unknown> = {};
+    if (dto.titulo !== undefined) data.titulo = dto.titulo;
+    if (dto.descricao !== undefined) data.descricao = dto.descricao;
+    if (dto.faseId !== undefined) data.faseId = dto.faseId || null;
+    if (dto.status !== undefined) data.status = dto.status;
+
+    return this.prisma.atividadeProjeto.update({
+      where: { id: atividadeId },
+      data,
+      include: {
+        usuario: { select: { id: true, nome: true } },
+        fase: { select: { id: true, nome: true } },
+      },
+    });
+  }
+
+  async removeAtividade(projetoId: string, atividadeId: string) {
+    const atividade = await this.prisma.atividadeProjeto.findFirst({
+      where: { id: atividadeId, projetoId },
+      include: { _count: { select: { registrosTempo: true } } },
+    });
+    if (!atividade) throw new NotFoundException('Atividade nao encontrada neste projeto');
+
+    if (atividade._count.registrosTempo > 0) {
+      throw new BadRequestException(
+        `Nao e possivel excluir atividade com ${atividade._count.registrosTempo} registro(s) de tempo. Remova os registros antes.`,
+      );
+    }
+
+    await this.prisma.atividadeProjeto.delete({ where: { id: atividadeId } });
+    return { deleted: true };
+  }
+
+  // --- Registro de Tempo ---
+
+  async listarRegistrosTempo(projetoId: string, atividadeId: string) {
+    await this.ensureProjetoExists(projetoId);
+    return this.prisma.registroTempo.findMany({
+      where: { atividadeId, atividade: { projetoId } },
+      include: { usuario: { select: { id: true, nome: true } } },
+      orderBy: { horaInicio: 'desc' },
+    });
+  }
+
+  async iniciarRegistroTempo(projetoId: string, atividadeId: string, userId: string) {
+    await this.ensureProjetoExists(projetoId);
+    const atividade = await this.prisma.atividadeProjeto.findFirst({
+      where: { id: atividadeId, projetoId },
+    });
+    if (!atividade) throw new NotFoundException('Atividade nao encontrada neste projeto');
+
+    // Encerra qualquer registro aberto do usuario (em qualquer atividade do projeto)
+    const abertos = await this.prisma.registroTempo.findMany({
+      where: {
+        usuarioId: userId,
+        horaFim: null,
+        atividade: { projetoId },
+      },
+    });
+    for (const reg of abertos) {
+      const duracao = Math.round((Date.now() - new Date(reg.horaInicio).getTime()) / 60000);
+      await this.prisma.registroTempo.update({
+        where: { id: reg.id },
+        data: { horaFim: new Date(), duracaoMinutos: duracao },
+      });
+    }
+
+    return this.prisma.registroTempo.create({
+      data: {
+        horaInicio: new Date(),
+        atividadeId,
+        usuarioId: userId,
+      },
+      include: { usuario: { select: { id: true, nome: true } } },
+    });
+  }
+
+  async encerrarRegistroTempo(projetoId: string, atividadeId: string, userId: string) {
+    await this.ensureProjetoExists(projetoId);
+    const registro = await this.prisma.registroTempo.findFirst({
+      where: {
+        atividadeId,
+        usuarioId: userId,
+        horaFim: null,
+        atividade: { projetoId },
+      },
+    });
+    if (!registro) throw new NotFoundException('Nenhum registro ativo para esta atividade');
+
+    const duracao = Math.round((Date.now() - new Date(registro.horaInicio).getTime()) / 60000);
+    return this.prisma.registroTempo.update({
+      where: { id: registro.id },
+      data: { horaFim: new Date(), duracaoMinutos: duracao },
+      include: { usuario: { select: { id: true, nome: true } } },
+    });
+  }
+
+  async ajustarRegistroTempo(projetoId: string, registroId: string, dto: UpdateRegistroTempoDto) {
+    await this.ensureProjetoExists(projetoId);
+    const registro = await this.prisma.registroTempo.findFirst({
+      where: { id: registroId, atividade: { projetoId } },
+    });
+    if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
+
+    const data: Record<string, unknown> = {};
+    if (dto.horaInicio) data.horaInicio = new Date(dto.horaInicio);
+    if (dto.horaFim) data.horaFim = new Date(dto.horaFim);
+    if (dto.observacoes !== undefined) data.observacoes = dto.observacoes;
+
+    // Recalculate duration if both times are present
+    const inicio = dto.horaInicio ? new Date(dto.horaInicio) : new Date(registro.horaInicio);
+    const fim = dto.horaFim ? new Date(dto.horaFim) : registro.horaFim ? new Date(registro.horaFim) : null;
+    if (fim) {
+      data.duracaoMinutos = Math.round((fim.getTime() - inicio.getTime()) / 60000);
+    }
+
+    return this.prisma.registroTempo.update({
+      where: { id: registroId },
+      data,
+      include: { usuario: { select: { id: true, nome: true } } },
+    });
+  }
+
+  async removerRegistroTempo(projetoId: string, registroId: string) {
+    await this.ensureProjetoExists(projetoId);
+    const registro = await this.prisma.registroTempo.findFirst({
+      where: { id: registroId, atividade: { projetoId } },
+    });
+    if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
+    return this.prisma.registroTempo.delete({ where: { id: registroId } });
+  }
+
+  async obterRegistroAtivo(projetoId: string, userId: string) {
+    return this.prisma.registroTempo.findFirst({
+      where: {
+        usuarioId: userId,
+        horaFim: null,
+        atividade: { projetoId },
+      },
+      include: {
+        atividade: { select: { id: true, titulo: true } },
+        usuario: { select: { id: true, nome: true } },
+      },
+    });
+  }
+
+  // --- Chamados (vincular/desvincular) ---
+
+  async vincularChamado(projetoId: string, chamadoId: string) {
+    await this.ensureProjetoExists(projetoId);
+
+    const chamado = await this.prisma.chamado.findUnique({ where: { id: chamadoId } });
+    if (!chamado) throw new NotFoundException('Chamado nao encontrado');
+
+    if (chamado.projetoId) {
+      throw new BadRequestException('Chamado ja esta vinculado a um projeto');
+    }
+
+    return this.prisma.chamado.update({
+      where: { id: chamadoId },
+      data: { projetoId },
+      select: { id: true, numero: true, titulo: true, status: true, prioridade: true },
+    });
+  }
+
+  async desvincularChamado(projetoId: string, chamadoId: string) {
+    const chamado = await this.prisma.chamado.findFirst({
+      where: { id: chamadoId, projetoId },
+    });
+    if (!chamado) throw new NotFoundException('Chamado nao encontrado neste projeto');
+
+    return this.prisma.chamado.update({
+      where: { id: chamadoId },
+      data: { projetoId: null },
+      select: { id: true, numero: true, titulo: true, status: true },
     });
   }
 

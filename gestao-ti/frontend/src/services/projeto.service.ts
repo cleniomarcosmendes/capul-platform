@@ -11,6 +11,7 @@ import type {
   DependenciaProjeto,
   AnexoProjeto,
   ApontamentoHoras,
+  RegistroTempo,
   Chamado,
   TipoProjeto,
   ModoProjeto,
@@ -139,6 +140,45 @@ export const projetoService = {
     return data;
   },
 
+  async atualizarAtividade(id: string, atividadeId: string, payload: { titulo?: string; descricao?: string; faseId?: string; status?: string }): Promise<AtividadeProjeto> {
+    const { data } = await gestaoApi.patch(`/projetos/${id}/atividades/${atividadeId}`, payload);
+    return data;
+  },
+
+  async removerAtividade(id: string, atividadeId: string): Promise<void> {
+    await gestaoApi.delete(`/projetos/${id}/atividades/${atividadeId}`);
+  },
+
+  // Registro de Tempo
+  async listarRegistrosTempo(id: string, atividadeId: string): Promise<RegistroTempo[]> {
+    const { data } = await gestaoApi.get(`/projetos/${id}/atividades/${atividadeId}/registros-tempo`);
+    return data;
+  },
+
+  async iniciarTempo(id: string, atividadeId: string): Promise<RegistroTempo> {
+    const { data } = await gestaoApi.post(`/projetos/${id}/atividades/${atividadeId}/iniciar`);
+    return data;
+  },
+
+  async encerrarTempo(id: string, atividadeId: string): Promise<RegistroTempo> {
+    const { data } = await gestaoApi.post(`/projetos/${id}/atividades/${atividadeId}/encerrar`);
+    return data;
+  },
+
+  async obterRegistroAtivo(id: string): Promise<RegistroTempo | null> {
+    const { data } = await gestaoApi.get(`/projetos/${id}/registro-ativo`);
+    return data;
+  },
+
+  async ajustarRegistroTempo(id: string, registroId: string, payload: { horaInicio?: string; horaFim?: string; observacoes?: string }): Promise<RegistroTempo> {
+    const { data } = await gestaoApi.patch(`/projetos/${id}/registros-tempo/${registroId}`, payload);
+    return data;
+  },
+
+  async removerRegistroTempo(id: string, registroId: string): Promise<void> {
+    await gestaoApi.delete(`/projetos/${id}/registros-tempo/${registroId}`);
+  },
+
   // Custos consolidados
   async getCustos(id: string): Promise<CustosConsolidados> {
     const { data } = await gestaoApi.get(`/projetos/${id}/custos`);
@@ -254,5 +294,13 @@ export const projetoService = {
   async listarChamadosProjeto(id: string): Promise<Chamado[]> {
     const { data } = await gestaoApi.get(`/projetos/${id}/chamados`);
     return data;
+  },
+
+  async vincularChamado(id: string, chamadoId: string): Promise<void> {
+    await gestaoApi.post(`/projetos/${id}/chamados/${chamadoId}`);
+  },
+
+  async desvincularChamado(id: string, chamadoId: string): Promise<void> {
+    await gestaoApi.delete(`/projetos/${id}/chamados/${chamadoId}`);
   },
 };

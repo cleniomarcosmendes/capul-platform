@@ -43,6 +43,9 @@ export function ChamadoCreatePage() {
   const [filialId, setFilialId] = useState('');
   const [departamentoId, setDepartamentoId] = useState('');
 
+  // IP da maquina
+  const [ipMaquina, setIpMaquina] = useState('');
+
   // Anexos
   const [arquivos, setArquivos] = useState<File[]>([]);
 
@@ -138,6 +141,7 @@ export function ChamadoCreatePage() {
         projetoId: projetoIdParam || undefined,
         filialId: (!isUsuarioFinal && filialId && filialId !== usuario?.filialAtual.id) ? filialId : undefined,
         departamentoId: (!isUsuarioFinal && departamentoId && departamentoId !== usuario?.departamento.id) ? departamentoId : undefined,
+        ipMaquina: ipMaquina || undefined,
       });
 
       // Upload dos anexos
@@ -287,6 +291,17 @@ export function ChamadoCreatePage() {
               </div>
             </div>
           )}
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">IP da Maquina (acesso remoto)</label>
+            <input
+              value={ipMaquina}
+              onChange={(e) => setIpMaquina(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              placeholder="Ex: 192.168.1.100"
+            />
+            <p className="text-xs text-slate-400 mt-1">Informe o IP para acesso remoto. Se nao preencher, o IP da conexao sera registrado automaticamente.</p>
+          </div>
 
           {catalogos.length > 0 && (
             <div>

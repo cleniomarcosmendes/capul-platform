@@ -176,7 +176,7 @@ export class ContratoService {
   async update(id: string, dto: UpdateContratoDto, usuarioId: string) {
     const contrato = await this.findOne(id);
 
-    if (['RENOVADO', 'CANCELADO'].includes(contrato.status)) {
+    if (['RENOVADO', 'CANCELADO', 'ENCERRADO'].includes(contrato.status)) {
       throw new BadRequestException('Contrato finalizado nao pode ser alterado');
     }
 
@@ -224,6 +224,17 @@ export class ContratoService {
       throw new BadRequestException(
         `Transicao de ${contrato.status} para ${novoStatus} nao e permitida`,
       );
+    }
+
+    if (novoStatus === 'CANCELADO') {
+      const parcelasPagas = await this.prisma.parcelaContrato.count({
+        where: { contratoId: id, status: 'PAGA' },
+      });
+      if (parcelasPagas > 0) {
+        throw new BadRequestException(
+          `Nao e possivel cancelar contrato com ${parcelasPagas} parcela(s) paga(s).`,
+        );
+      }
     }
 
     const tipoHistorico = {
@@ -359,6 +370,7 @@ export class ContratoService {
       await this.prisma.parcelaContrato.create({
         data: {
           numero: i + 1,
+          descricao: `Parcela ${i + 1}/${quantidade}`,
           valor,
           dataVencimento: dataVenc,
           contrato: { connect: { id: contratoId } },
@@ -388,7 +400,7 @@ export class ContratoService {
   async criarParcela(contratoId: string, dto: CreateParcelaDto, usuarioId: string) {
     const contrato = await this.findOne(contratoId);
 
-    if (['RENOVADO', 'CANCELADO'].includes(contrato.status)) {
+    if (['RENOVADO', 'CANCELADO', 'ENCERRADO'].includes(contrato.status)) {
       throw new BadRequestException('Contrato finalizado nao permite novas parcelas');
     }
 
@@ -483,6 +495,9 @@ export class ContratoService {
     }
     if (parcela.status === 'PAGA') {
       throw new BadRequestException('Parcela ja paga nao pode ser cancelada');
+    }
+    if (parcela.status === 'CANCELADA') {
+      throw new BadRequestException('Parcela ja esta cancelada');
     }
 
     const updated = await this.prisma.parcelaContrato.update({
@@ -592,6 +607,9 @@ export class ContratoService {
     if (!parcela) {
       throw new NotFoundException('Parcela nao encontrada neste contrato');
     }
+    if (['PAGA', 'CANCELADA'].includes(parcela.status)) {
+      throw new BadRequestException(`Nao e possivel alterar rateio de parcela ${parcela.status.toLowerCase()}`);
+    }
 
     if (dto.usarTemplate) {
       const template = await this.prisma.rateioTemplate.findUnique({
@@ -641,6 +659,9 @@ export class ContratoService {
     });
     if (!parcela) {
       throw new NotFoundException('Parcela nao encontrada neste contrato');
+    }
+    if (['PAGA', 'CANCELADA'].includes(parcela.status)) {
+      throw new BadRequestException(`Nao e possivel alterar rateio de parcela ${parcela.status.toLowerCase()}`);
     }
 
     const valorParcela = new Decimal(parcela.valor.toString());
@@ -804,7 +825,10 @@ export class ContratoService {
   // --- Licencas ---
 
   async vincularLicenca(contratoId: string, licencaId: string, usuarioId: string) {
-    await this.findOne(contratoId);
+    const contrato = await this.findOne(contratoId);
+    if (['RENOVADO', 'CANCELADO', 'ENCERRADO'].includes(contrato.status)) {
+      throw new BadRequestException('Nao e possivel vincular licencas a contrato finalizado');
+    }
 
     const licenca = await this.prisma.softwareLicenca.findUnique({ where: { id: licencaId } });
     if (!licenca) {
@@ -826,6 +850,11 @@ export class ContratoService {
   }
 
   async desvincularLicenca(contratoId: string, licencaId: string, usuarioId: string) {
+    const contrato = await this.findOne(contratoId);
+    if (['RENOVADO', 'CANCELADO', 'ENCERRADO'].includes(contrato.status)) {
+      throw new BadRequestException('Nao e possivel desvincular licencas de contrato finalizado');
+    }
+
     const licenca = await this.prisma.softwareLicenca.findFirst({
       where: { id: licencaId, contratoId },
       include: { software: { select: { id: true, nome: true } } },

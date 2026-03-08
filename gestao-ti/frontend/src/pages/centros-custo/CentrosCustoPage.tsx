@@ -4,10 +4,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { coreService } from '../../services/core.service';
 import { Plus, Wallet } from 'lucide-react';
 import type { CentroCusto } from '../../types';
+import { useToast } from '../../components/Toast';
 
 export function CentrosCustoPage() {
   const { usuario, gestaoTiRole } = useAuth();
   const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const { toast } = useToast();
 
   const [centrosCusto, setCentrosCusto] = useState<CentroCusto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,7 +48,7 @@ export function CentrosCustoPage() {
       setShowForm(false);
       carregar();
     } catch {
-      alert('Erro ao criar centro de custo');
+      toast('error', 'Erro ao criar centro de custo');
     } finally {
       setSaving(false);
     }

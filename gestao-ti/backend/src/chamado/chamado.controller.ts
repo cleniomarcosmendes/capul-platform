@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Delete, Body, Param, Query, Res, UseGuards, UseInterceptors, UploadedFile, BadRequestException,
+  Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, Res, UseGuards, UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -18,6 +18,7 @@ import { CreateChamadoDto } from './dto/create-chamado.dto.js';
 import { TransferirEquipeDto, TransferirTecnicoDto } from './dto/transferir-chamado.dto.js';
 import { ComentarioChamadoDto } from './dto/comentario-chamado.dto.js';
 import { ResolverChamadoDto, ReabrirChamadoDto, CsatDto } from './dto/resolver-chamado.dto.js';
+import { UpdateRegistroTempoChamadoDto } from './dto/update-registro-tempo-chamado.dto.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { StatusChamado, Visibilidade } from '@prisma/client';
 
@@ -79,7 +80,13 @@ export class ChamadoController {
     @Body() dto: CreateChamadoDto,
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
+    @Req() req: express.Request,
   ) {
+    if (!dto.ipMaquina) {
+      const forwarded = req.headers['x-forwarded-for'];
+      const ip = typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : req.socket.remoteAddress;
+      if (ip) dto.ipMaquina = ip.replace('::ffff:', '');
+    }
     return this.service.create(dto, user, role);
   }
 
@@ -209,5 +216,51 @@ export class ChamadoController {
   @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
   removeAnexo(@Param('id') id: string, @Param('anexoId') anexoId: string) {
     return this.service.removeAnexo(id, anexoId);
+  }
+
+  // === Colaboradores ===
+
+  @Get(':id/colaboradores')
+  listarColaboradores(@Param('id') id: string) {
+    return this.service.listarColaboradores(id);
+  }
+
+  @Post(':id/colaboradores')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  adicionarColaborador(@Param('id') id: string, @Body('usuarioId') usuarioId: string) {
+    return this.service.adicionarColaborador(id, usuarioId);
+  }
+
+  @Delete(':id/colaboradores/:colaboradorId')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  removerColaborador(@Param('id') id: string, @Param('colaboradorId') colaboradorId: string) {
+    return this.service.removerColaborador(id, colaboradorId);
+  }
+
+  // === Registro de Tempo ===
+
+  @Get(':id/registros-tempo')
+  listarRegistrosTempo(@Param('id') id: string) {
+    return this.service.listarRegistrosTempo(id);
+  }
+
+  @Post(':id/registros-tempo/iniciar')
+  iniciarTempo(@Param('id') id: string, @CurrentUser() user: JwtPayload, @Body('usuarioId') usuarioId?: string) {
+    return this.service.iniciarTempoChamado(id, usuarioId || user.sub);
+  }
+
+  @Post(':id/registros-tempo/encerrar')
+  encerrarTempo(@Param('id') id: string, @CurrentUser() user: JwtPayload, @Body('usuarioId') usuarioId?: string) {
+    return this.service.encerrarTempoChamado(id, usuarioId || user.sub);
+  }
+
+  @Patch(':id/registros-tempo/:registroId')
+  ajustarRegistroTempo(@Param('id') id: string, @Param('registroId') registroId: string, @Body() dto: UpdateRegistroTempoChamadoDto) {
+    return this.service.ajustarRegistroTempoChamado(id, registroId, dto);
+  }
+
+  @Delete(':id/registros-tempo/:registroId')
+  removerRegistroTempo(@Param('id') id: string, @Param('registroId') registroId: string) {
+    return this.service.removerRegistroTempoChamado(id, registroId);
   }
 }

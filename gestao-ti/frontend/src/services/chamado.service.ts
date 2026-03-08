@@ -1,5 +1,5 @@
 import { gestaoApi } from './api';
-import type { Chamado, HistoricoChamado, AnexoChamado, StatusChamado, Visibilidade } from '../types';
+import type { Chamado, HistoricoChamado, AnexoChamado, StatusChamado, Visibilidade, ChamadoColaborador, RegistroTempoChamado } from '../types';
 
 interface ListFilters {
   status?: StatusChamado;
@@ -25,6 +25,7 @@ interface CreateChamadoPayload {
   projetoId?: string;
   filialId?: string;
   departamentoId?: string;
+  ipMaquina?: string;
 }
 
 export const chamadoService = {
@@ -125,5 +126,45 @@ export const chamadoService = {
 
   async removerAnexo(id: string, anexoId: string): Promise<void> {
     await gestaoApi.delete(`/chamados/${id}/anexos/${anexoId}`);
+  },
+
+  // Colaboradores
+  async listarColaboradores(id: string): Promise<ChamadoColaborador[]> {
+    const { data } = await gestaoApi.get(`/chamados/${id}/colaboradores`);
+    return data;
+  },
+
+  async adicionarColaborador(id: string, usuarioId: string): Promise<ChamadoColaborador> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/colaboradores`, { usuarioId });
+    return data;
+  },
+
+  async removerColaborador(id: string, colaboradorId: string): Promise<void> {
+    await gestaoApi.delete(`/chamados/${id}/colaboradores/${colaboradorId}`);
+  },
+
+  // Registro de Tempo
+  async listarRegistrosTempo(id: string): Promise<RegistroTempoChamado[]> {
+    const { data } = await gestaoApi.get(`/chamados/${id}/registros-tempo`);
+    return data;
+  },
+
+  async iniciarTempo(id: string, usuarioId?: string): Promise<RegistroTempoChamado> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/registros-tempo/iniciar`, { usuarioId });
+    return data;
+  },
+
+  async encerrarTempo(id: string, usuarioId?: string): Promise<RegistroTempoChamado> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/registros-tempo/encerrar`, { usuarioId });
+    return data;
+  },
+
+  async ajustarRegistroTempo(id: string, registroId: string, payload: { horaInicio?: string; horaFim?: string; observacoes?: string }): Promise<RegistroTempoChamado> {
+    const { data } = await gestaoApi.patch(`/chamados/${id}/registros-tempo/${registroId}`, payload);
+    return data;
+  },
+
+  async removerRegistroTempo(id: string, registroId: string): Promise<void> {
+    await gestaoApi.delete(`/chamados/${id}/registros-tempo/${registroId}`);
   },
 };

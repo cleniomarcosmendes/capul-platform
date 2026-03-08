@@ -4,10 +4,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { coreService } from '../../services/core.service';
 import { Plus, Building2 } from 'lucide-react';
 import type { Departamento } from '../../types';
+import { useToast } from '../../components/Toast';
 
 export function DepartamentosPage() {
   const { usuario, gestaoTiRole } = useAuth();
   const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const { toast } = useToast();
 
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,7 +48,7 @@ export function DepartamentosPage() {
       setShowForm(false);
       carregar();
     } catch {
-      alert('Erro ao criar departamento');
+      toast('error', 'Erro ao criar departamento');
     } finally {
       setSaving(false);
     }

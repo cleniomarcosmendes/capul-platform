@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { dashboardService } from '../services/dashboard.service';
 import { chamadoService } from '../services/chamado.service';
 import { coreService } from '../services/core.service';
-import { Ticket, Clock, CheckCircle, AlertTriangle, Wrench, Users, AppWindow, KeyRound, DollarSign, FileText, Receipt, Activity, FolderKanban, Timer, Server, BookMarked, Star, MessageSquare } from 'lucide-react';
+import { Ticket, Clock, CheckCircle, AlertTriangle, Wrench, Users, AppWindow, KeyRound, DollarSign, FileText, Receipt, Activity, FolderKanban, Timer, Server, BookMarked, Star, MessageSquare, ListChecks, CircleDot } from 'lucide-react';
 import { PeriodFilter } from '../components/PeriodFilter';
 import type { DashboardResumo, Chamado, Departamento } from '../types';
 import type { LucideIcon } from 'lucide-react';
@@ -464,13 +464,26 @@ export function DashboardPage() {
                   <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Projetos</h4>
                   <Link to="/gestao-ti/projetos" className="text-xs text-capul-600 hover:underline">Ver projetos</Link>
                 </div>
-                <CardGrid cols="grid-cols-2 md:grid-cols-3 lg:grid-cols-6" cards={[
+                <CardGrid cols="grid-cols-2 md:grid-cols-3 lg:grid-cols-3" cards={[
                   { label: 'Projetos Ativos', value: resumo.projetos.totalAtivos, icon: FolderKanban, color: 'bg-capul-100 text-capul-600' },
                   { label: 'Em Andamento', value: resumo.projetos.emAndamento, icon: Clock, color: 'bg-yellow-100 text-yellow-600' },
+                  { label: 'Riscos Abertos', value: resumo.projetos.riscosAbertos, icon: AlertTriangle, color: 'bg-red-100 text-red-600' },
+                ]} />
+                {resumo.projetos.atividades && (
+                  <>
+                    <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-6 mb-4">Atividades dos Projetos</h4>
+                    <CardGrid cols="grid-cols-2 md:grid-cols-3 lg:grid-cols-3" cards={[
+                      { label: 'Pendentes', value: resumo.projetos.atividades.pendentes, icon: ListChecks, color: 'bg-slate-100 text-slate-600' },
+                      { label: 'Em Andamento', value: resumo.projetos.atividades.emAndamento, icon: CircleDot, color: 'bg-blue-100 text-blue-600' },
+                      { label: 'Concluidas', value: resumo.projetos.atividades.concluidas, icon: CheckCircle, color: 'bg-green-100 text-green-600' },
+                    ]} />
+                  </>
+                )}
+                <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-6 mb-4">Financeiro</h4>
+                <CardGrid cols="grid-cols-2 md:grid-cols-3 lg:grid-cols-3" cards={[
                   { label: 'Custo Previsto', value: `R$ ${resumo.projetos.custoPrevistoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'bg-cyan-100 text-cyan-600' },
                   { label: 'Custo Realizado', value: `R$ ${resumo.projetos.custoRealizadoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'bg-emerald-100 text-emerald-600' },
                   { label: 'Horas Apontadas', value: resumo.projetos.totalHorasApontadas, icon: Timer, color: 'bg-blue-100 text-blue-600' },
-                  { label: 'Riscos Abertos', value: resumo.projetos.riscosAbertos, icon: AlertTriangle, color: 'bg-red-100 text-red-600' },
                 ]} />
               </div>
             )}

@@ -113,6 +113,14 @@ except Exception as e:
     logger.error(f"❌ Erro ao importar router de integração Protheus: {e}")
     integration_protheus_router = None
 
+# ✅ NOVO: Import do router de envio para Protheus (transferencia, digitacao, historico)
+try:
+    from app.api.v1.endpoints.send_protheus import router as send_protheus_router
+    logger.info("✅ Router de envio Protheus importado")
+except Exception as e:
+    logger.error(f"❌ Erro ao importar router de envio Protheus: {e}")
+    send_protheus_router = None
+
 # ✅ NOVO v2.16.0: Import do serviço de auditoria de ciclos
 try:
     from app.services import audit_service
@@ -8482,6 +8490,16 @@ if integration_protheus_router:
         logger.error(f"❌ Erro ao registrar router de integração Protheus: {e}")
 else:
     logger.warning("⚠️ Router de integração Protheus não disponível")
+
+# ✅ NOVO: Router de envio para Protheus
+if send_protheus_router:
+    try:
+        app.include_router(send_protheus_router, prefix="/api/v1/integration/protheus", tags=["send-protheus"])
+        logger.info("✅ Router de envio Protheus registrado")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar router de envio Protheus: {e}")
+else:
+    logger.warning("⚠️ Router de envio Protheus não disponível")
 
 # ✅ NOVO v2.16.0: Router de monitoramento e alertas
 if monitoring_router:

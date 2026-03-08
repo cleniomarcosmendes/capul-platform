@@ -719,6 +719,54 @@ export interface IntegrationSaveResult {
   };
 }
 
+// === Send Protheus (envio para ERP) ===
+
+export interface SendResult {
+  success: boolean;
+  message: string;
+  total: number;
+  enviados: number;
+  erros: number;
+  protheus_response?: unknown;
+  grupos?: number;
+  detalhes?: unknown[];
+}
+
+export interface SendAllResult {
+  success: boolean;
+  status: string;
+  integration_id: string;
+  total_enviados: number;
+  total_erros: number;
+  resultados: {
+    transferencias?: SendResult;
+    digitacao?: SendResult;
+    historico?: SendResult;
+  };
+  message: string;
+}
+
+export interface SendLog {
+  id: string;
+  endpoint: string;
+  item_type: string;
+  product_code: string | null;
+  request_payload: unknown;
+  response_payload: unknown;
+  status: string;
+  error_message: string | null;
+  duration_ms: number;
+  created_at: string;
+}
+
+export interface SendLogsResult {
+  integration_id: string;
+  total: number;
+  ok: number;
+  errors: number;
+  logs: SendLog[];
+}
+
 // === Assignable Item (for counting list product assignment) ===
 
 export interface AssignableItem {

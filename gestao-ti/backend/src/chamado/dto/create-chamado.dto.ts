@@ -55,4 +55,8 @@ export class CreateChamadoDto {
   @IsString()
   departamentoId?: string;
 
+  @IsOptional()
+  @IsString()
+  ipMaquina?: string;
+
 }

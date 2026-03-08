@@ -3,6 +3,9 @@ import type {
   Integration,
   IntegrationPreviewResult,
   IntegrationSaveResult,
+  SendResult,
+  SendAllResult,
+  SendLogsResult,
 } from '../types';
 
 export const integrationService = {
@@ -63,6 +66,36 @@ export const integrationService = {
 
   async cancelar(integrationId: string): Promise<unknown> {
     const { data } = await inventarioApi.patch(`/integration/protheus/${integrationId}/cancel`);
+    return data;
+  },
+
+  // === Envio para Protheus ===
+
+  async enviarTransferencias(integrationId: string): Promise<SendResult> {
+    const { data } = await inventarioApi.post(`/integration/protheus/send/${integrationId}/transferencias`);
+    return data;
+  },
+
+  async enviarDigitacao(integrationId: string): Promise<SendResult> {
+    const { data } = await inventarioApi.post(`/integration/protheus/send/${integrationId}/digitacao`);
+    return data;
+  },
+
+  async enviarHistorico(integrationId: string): Promise<SendResult> {
+    const { data } = await inventarioApi.post(`/integration/protheus/send/${integrationId}/historico`);
+    return data;
+  },
+
+  async enviarTudo(integrationId: string): Promise<SendAllResult> {
+    const { data } = await inventarioApi.post(`/integration/protheus/send/${integrationId}/enviar-tudo`);
+    return data;
+  },
+
+  async buscarLogs(integrationId: string, endpoint?: string, status?: string): Promise<SendLogsResult> {
+    const params: Record<string, string> = {};
+    if (endpoint) params.endpoint = endpoint;
+    if (status) params.status = status;
+    const { data } = await inventarioApi.get(`/integration/protheus/send/${integrationId}/logs`, { params });
     return data;
   },
 };

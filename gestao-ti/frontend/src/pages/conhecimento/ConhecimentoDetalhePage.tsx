@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { conhecimentoService } from '../../services/conhecimento.service';
 import { ArrowLeft, BookMarked, Edit, Trash2, Send, Archive } from 'lucide-react';
 import type { ArtigoConhecimento, CategoriaArtigo, StatusArtigo } from '../../types';
+import { useToast } from '../../components/Toast';
 
 const categoriaLabel: Record<CategoriaArtigo, string> = {
   PROCEDIMENTO: 'Procedimento', SOLUCAO: 'Solucao', FAQ: 'FAQ', CONFIGURACAO: 'Configuracao', OUTRO: 'Outro',
@@ -25,6 +26,7 @@ export function ConhecimentoDetalhePage() {
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
   const canEdit = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR'].includes(gestaoTiRole || '');
+  const { confirm } = useToast();
   const canDelete = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
 
   const [artigo, setArtigo] = useState<ArtigoConhecimento | null>(null);
@@ -47,7 +49,7 @@ export function ConhecimentoDetalhePage() {
   }
 
   async function handleDelete() {
-    if (!id || !confirm('Tem certeza que deseja excluir este artigo?')) return;
+    if (!id || !await confirm('Excluir Artigo', 'Tem certeza que deseja excluir este artigo?', { variant: 'danger', confirmLabel: 'Sim, excluir' })) return;
     try {
       await conhecimentoService.excluir(id);
       navigate('/gestao-ti/conhecimento');

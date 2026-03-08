@@ -8,7 +8,7 @@ import { licencaService } from '../../services/licenca.service';
 import {
   ArrowLeft, Edit3, RefreshCw, Receipt, PieChart, KeyRound, Clock,
   X, FileText, Upload, Download, Trash2,
-  ChevronDown, ChevronRight, Copy, Zap,
+  ChevronDown, ChevronRight, Copy, Zap, Pencil, Check,
 } from 'lucide-react';
 import type {
   Contrato,
@@ -616,6 +616,20 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
   const [notaFiscal, setNotaFiscal] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Editing parcela
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  async function handleSaveEdit(p: ParcelaContrato, campos: { descricao?: string; notaFiscal?: string; observacoes?: string; valor?: number; dataVencimento?: string }) {
+    try {
+      await contratoService.atualizarParcela(contrato.id, p.id, campos);
+      toast.show('success', `Parcela #${p.numero} atualizada`);
+      setEditingId(null);
+      onReload();
+    } catch (err) {
+      toast.show('error', extractErrorMsg(err, 'Erro ao atualizar parcela'));
+    }
+  }
+
   // Expanded parcela for rateio
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [parcelaRateio, setParcelaRateio] = useState<ParcelaRateioItem[]>([]);
@@ -778,9 +792,13 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
                 rateioItens={expandedId === p.id ? parcelaRateio : []}
                 loadingRateio={loadingRateio && expandedId === p.id}
                 canManage={canManage}
+                editing={editingId === p.id}
                 onToggle={() => toggleExpand(p.id)}
                 onPagar={() => handlePagar(p)}
                 onCancelar={() => handleCancelar(p)}
+                onEdit={() => setEditingId(p.id)}
+                onCancelEdit={() => setEditingId(null)}
+                onSaveEdit={(campos) => handleSaveEdit(p, campos)}
                 onGerarTemplate={() => handleGerarRateioTemplate(p.id)}
                 onCopiarPendentes={() => handleCopiarPendentes(p.id)}
               />
@@ -792,18 +810,95 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
   );
 }
 
-function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManage, onToggle, onPagar, onCancelar, onGerarTemplate, onCopiarPendentes }: {
+function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManage, editing, onToggle, onPagar, onCancelar, onEdit, onCancelEdit, onSaveEdit, onGerarTemplate, onCopiarPendentes }: {
   parcela: ParcelaContrato;
   expanded: boolean;
   rateioItens: ParcelaRateioItem[];
   loadingRateio: boolean;
   canManage: boolean;
+  editing: boolean;
   onToggle: () => void;
   onPagar: () => void;
   onCancelar: () => void;
+  onEdit: () => void;
+  onCancelEdit: () => void;
+  onSaveEdit: (campos: { descricao?: string; notaFiscal?: string; observacoes?: string; valor?: number; dataVencimento?: string }) => void;
   onGerarTemplate: () => void;
   onCopiarPendentes: () => void;
 }) {
+  const [editDesc, setEditDesc] = useState(p.descricao || '');
+  const [editNF, setEditNF] = useState(p.notaFiscal || '');
+  const [editValor, setEditValor] = useState(String(p.valor));
+  const [editVenc, setEditVenc] = useState(p.dataVencimento ? p.dataVencimento.substring(0, 10) : '');
+  const [editObs, setEditObs] = useState(p.observacoes || '');
+
+  useEffect(() => {
+    if (editing) {
+      setEditDesc(p.descricao || '');
+      setEditNF(p.notaFiscal || '');
+      setEditValor(String(p.valor));
+      setEditVenc(p.dataVencimento ? p.dataVencimento.substring(0, 10) : '');
+      setEditObs(p.observacoes || '');
+    }
+  }, [editing, p]);
+
+  if (editing) {
+    return (
+      <>
+        <tr className="bg-amber-50">
+          <td className="px-4 py-2.5 text-slate-400">
+            <Pencil className="w-4 h-4 text-amber-500" />
+          </td>
+          <td className="px-4 py-2.5 text-slate-500">{p.numero}</td>
+          <td className="px-4 py-2.5">
+            <input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} placeholder="Descricao"
+              className="w-full border border-slate-300 rounded px-2 py-1 text-sm" />
+          </td>
+          <td className="px-4 py-2.5">
+            <input type="number" step="0.01" value={editValor} onChange={(e) => setEditValor(e.target.value)}
+              className="w-28 border border-slate-300 rounded px-2 py-1 text-sm text-right" />
+          </td>
+          <td className="px-4 py-2.5">
+            <input type="date" value={editVenc} onChange={(e) => setEditVenc(e.target.value)}
+              className="border border-slate-300 rounded px-2 py-1 text-sm" />
+          </td>
+          <td className="px-4 py-2.5 text-center">
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${parcelaStatusCores[p.status]}`}>{p.status}</span>
+          </td>
+          <td className="px-4 py-2.5">
+            <input value={editNF} onChange={(e) => setEditNF(e.target.value)} placeholder="Nota Fiscal"
+              className="w-full border border-slate-300 rounded px-2 py-1 text-sm" />
+          </td>
+          {canManage && (
+            <td className="px-4 py-2.5 text-center">
+              <div className="flex items-center justify-center gap-2">
+                <button onClick={() => onSaveEdit({
+                  descricao: editDesc || undefined,
+                  notaFiscal: editNF || undefined,
+                  valor: parseFloat(editValor),
+                  dataVencimento: editVenc || undefined,
+                  observacoes: editObs || undefined,
+                })} className="text-xs text-green-600 hover:underline flex items-center gap-0.5">
+                  <Check className="w-3 h-3" /> Salvar
+                </button>
+                <button onClick={onCancelEdit} className="text-xs text-slate-500 hover:underline flex items-center gap-0.5">
+                  <X className="w-3 h-3" /> Cancelar
+                </button>
+              </div>
+            </td>
+          )}
+        </tr>
+        <tr className="bg-amber-50">
+          <td colSpan={canManage ? 8 : 7} className="px-8 pb-3">
+            <label className="block text-xs text-slate-500 mb-1">Observacoes</label>
+            <input value={editObs} onChange={(e) => setEditObs(e.target.value)} placeholder="Observacoes da parcela"
+              className="w-full border border-slate-300 rounded px-2 py-1 text-sm" />
+          </td>
+        </tr>
+      </>
+    );
+  }
+
   return (
     <>
       <tr className="hover:bg-slate-50 cursor-pointer" onClick={onToggle}>
@@ -822,6 +917,9 @@ function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManag
           <td className="px-4 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
             {p.status === 'PENDENTE' && (
               <div className="flex items-center justify-center gap-2">
+                <button onClick={onEdit} className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
+                  <Pencil className="w-3 h-3" /> Editar
+                </button>
                 <button onClick={onPagar} className="text-xs text-green-600 hover:underline">Pagar</button>
                 <button onClick={onCancelar} className="text-xs text-red-500 hover:underline">Cancelar</button>
               </div>
@@ -1073,12 +1171,12 @@ function TabRateioTemplate({ contrato, canManage, onReload, toast }: TabProps) {
             {itens.map((item, idx) => (
               <div key={idx} className="flex items-center gap-2 flex-wrap">
                 <select value={item.centroCustoId} onChange={(e) => updateItem(idx, 'centroCustoId', e.target.value)}
-                  className="flex-1 min-w-[180px] border border-slate-300 rounded px-2 py-1.5 text-sm bg-white">
+                  className="flex-[3] min-w-[180px] border border-slate-300 rounded px-2 py-1.5 text-sm bg-white">
                   <option value="">Selecione CC...</option>
                   {centrosCusto.map((cc) => <option key={cc.id} value={cc.id}>{cc.codigo} - {cc.nome}</option>)}
                 </select>
                 <select value={item.naturezaId} onChange={(e) => updateItem(idx, 'naturezaId', e.target.value)}
-                  className="w-40 border border-slate-300 rounded px-2 py-1.5 text-sm bg-white">
+                  className="flex-[2] min-w-[200px] border border-slate-300 rounded px-2 py-1.5 text-sm bg-white">
                   <option value="">Natureza...</option>
                   {naturezas.map((n) => <option key={n.id} value={n.id}>{n.codigo} - {n.nome}</option>)}
                 </select>

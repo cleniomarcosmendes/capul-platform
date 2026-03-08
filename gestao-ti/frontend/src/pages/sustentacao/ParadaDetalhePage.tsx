@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { paradaService } from '../../services/parada.service';
 import { Activity, ArrowLeft, Clock, AlertTriangle, Building2, User, Wrench } from 'lucide-react';
 import type { RegistroParada } from '../../types';
+import { useToast } from '../../components/Toast';
 
 const tipoLabel: Record<string, string> = {
   PARADA_PROGRAMADA: 'Programada',
@@ -54,6 +55,7 @@ export function ParadaDetalhePage() {
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
   const canManage = ['ADMIN', 'GESTOR_TI', 'TECNICO'].includes(gestaoTiRole || '');
+  const { confirm } = useToast();
   const canCancel = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
 
   const [parada, setParada] = useState<RegistroParada | null>(null);
@@ -84,7 +86,7 @@ export function ParadaDetalhePage() {
   }
 
   async function handleCancelar() {
-    if (!id || !confirm('Confirma o cancelamento desta parada?')) return;
+    if (!id || !await confirm('Cancelar Parada', 'Confirma o cancelamento desta parada?', { variant: 'danger', confirmLabel: 'Sim, cancelar' })) return;
     setActionLoading(true);
     try {
       const updated = await paradaService.cancelar(id);

@@ -6,6 +6,7 @@ import { ativoService } from '../../services/ativo.service';
 import { softwareService } from '../../services/software.service';
 import { ArrowLeft, Server, Edit, Trash2, Plus, X, Cpu, HardDrive, Monitor, Wifi } from 'lucide-react';
 import type { Ativo, AtivoSoftwareItem, StatusAtivo, TipoAtivo, Software } from '../../types';
+import { useToast } from '../../components/Toast';
 
 const tipoLabel: Record<TipoAtivo, string> = {
   SERVIDOR: 'Servidor', ESTACAO_TRABALHO: 'Estacao de Trabalho', NOTEBOOK: 'Notebook',
@@ -27,6 +28,7 @@ export function AtivoDetalhePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
+  const { confirm } = useToast();
   const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
 
   const [ativo, setAtivo] = useState<Ativo | null>(null);
@@ -65,7 +67,7 @@ export function AtivoDetalhePage() {
   }
 
   async function handleDelete() {
-    if (!id || !confirm('Tem certeza que deseja excluir este ativo?')) return;
+    if (!id || !await confirm('Excluir Ativo', 'Tem certeza que deseja excluir este ativo?', { variant: 'danger', confirmLabel: 'Sim, excluir' })) return;
     try {
       await ativoService.excluir(id);
       navigate('/gestao-ti/ativos');
@@ -87,7 +89,7 @@ export function AtivoDetalhePage() {
   }
 
   async function handleRemoveSoftware(softwareId: string) {
-    if (!id || !confirm('Remover software deste ativo?')) return;
+    if (!id || !await confirm('Remover Software', 'Deseja remover este software do ativo?')) return;
     try {
       await ativoService.removerSoftware(id, softwareId);
       setSoftwares(softwares.filter((s) => s.softwareId !== softwareId));

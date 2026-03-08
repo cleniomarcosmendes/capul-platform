@@ -9,6 +9,8 @@ import type {
   SyncStatus,
   Integration,
   IntegrationPreviewResult,
+  SendAllResult,
+  SendLogsResult,
 } from '../types';
 import {
   Send,
@@ -164,6 +166,9 @@ function TabEnvio() {
     inventoryName: string;
   } | null>(null);
   const [sendLoading, setSendLoading] = useState<string | null>(null);
+  const [sendResult, setSendResult] = useState<SendAllResult | null>(null);
+  const [logsData, setLogsData] = useState<SendLogsResult | null>(null);
+  const [logsLoading, setLogsLoading] = useState<string | null>(null);
 
   useEffect(() => {
     // Buscar inventários COMPLETED e CLOSED (efetivados) em paralelo
@@ -249,24 +254,85 @@ function TabEnvio() {
     }
   }
 
-  async function handleSend() {
-    if (!confirmSend) return;
-    setSendLoading(confirmSend.inventoryId);
-    setConfirmSend(null);
+  async function handleSaveAndSend() {
+    if (!selectedA) return;
+    setSaveLoading(true);
+    setSendResult(null);
     try {
-      await integrationService.enviar(confirmSend.integrationId);
-      // Refresh all inventories' integration status (handles COMPARATIVE with 2 inventories)
+      // 1. Salvar
+      const result = await integrationService.salvar(
+        selectedA,
+        mode === 'COMPARATIVO' ? selectedB || undefined : undefined,
+      );
+      toast.success(`Integracao ${result.action === 'created' ? 'criada' : 'atualizada'}. Enviando ao Protheus...`);
+
+      // 2. Enviar
+      const sendRes = await integrationService.enviarTudo(result.integration_id);
+      setSendResult(sendRes);
+
+      setShowPreview(false);
+      setPreviewData(null);
+      setSelectedA('');
+      setSelectedB('');
+
+      // Refresh integrations
       const refreshMap = new Map(integrations);
       for (const inv of inventarios) {
         const existing = await integrationService.buscarExistente(inv.id);
         refreshMap.set(inv.id, existing);
       }
       setIntegrations(refreshMap);
-      toast.success('Integracao enviada e inventario(s) efetivado(s) com sucesso.');
+
+      if (sendRes.success) {
+        toast.success(`Envio completo: ${sendRes.total_enviados} itens enviados com sucesso.`);
+      } else {
+        toast.warning(`Envio parcial: ${sendRes.total_enviados} OK, ${sendRes.total_erros} erros.`);
+      }
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Erro ao salvar/enviar integracao.');
+    } finally {
+      setSaveLoading(false);
+    }
+  }
+
+  async function handleSend() {
+    if (!confirmSend) return;
+    const { integrationId, inventoryId } = confirmSend;
+    setSendLoading(inventoryId);
+    setSendResult(null);
+    setConfirmSend(null);
+    try {
+      const result = await integrationService.enviarTudo(integrationId);
+      setSendResult(result);
+      // Refresh all inventories' integration status
+      const refreshMap = new Map(integrations);
+      for (const inv of inventarios) {
+        const existing = await integrationService.buscarExistente(inv.id);
+        refreshMap.set(inv.id, existing);
+      }
+      setIntegrations(refreshMap);
+      if (result.success) {
+        toast.success(`Envio completo: ${result.total_enviados} itens enviados com sucesso.`);
+      } else {
+        toast.warning(`Envio parcial: ${result.total_enviados} OK, ${result.total_erros} erros.`);
+      }
     } catch {
       toast.error('Erro ao enviar ao Protheus.');
     } finally {
       setSendLoading(null);
+    }
+  }
+
+  async function handleViewLogs(integrationId: string) {
+    setLogsLoading(integrationId);
+    try {
+      const logs = await integrationService.buscarLogs(integrationId);
+      setLogsData(logs);
+    } catch {
+      toast.error('Erro ao carregar logs de envio.');
+    } finally {
+      setLogsLoading(null);
     }
   }
 
@@ -296,18 +362,93 @@ function TabEnvio() {
 
   return (
     <div className="space-y-6">
-      {/* Banner modo simulado */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-        <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
-        <div>
-          <p className="text-sm font-medium text-amber-800">Modo simulado</p>
-          <p className="text-xs text-amber-600 mt-0.5">
-            O preview e a preparacao dos dados funcionam normalmente. O envio ao ERP Protheus esta em modo de teste
-            — os dados sao salvos e marcados como ENVIADO, mas nao sao transmitidos ao Protheus. A integracao real
-            sera ativada quando a API do Protheus estiver configurada.
-          </p>
-        </div>
-      </div>
+      {/* Send result banner */}
+      {sendResult && (() => {
+        const r = sendResult.resultados;
+        const totalProdutos = r?.digitacao?.total || r?.historico?.total || 0;
+        const transfOk = r?.transferencias?.enviados ?? 0;
+        const transfTotal = r?.transferencias?.total ?? 0;
+        const transfErros = r?.transferencias?.erros ?? 0;
+        const digitOk = r?.digitacao?.enviados ?? 0;
+        const digitTotal = r?.digitacao?.total ?? 0;
+        const digitErros = r?.digitacao?.erros ?? 0;
+        const histOk = r?.historico?.enviados ?? 0;
+        const histTotal = r?.historico?.total ?? 0;
+        const histErros = r?.historico?.erros ?? 0;
+        const hasTransf = transfTotal > 0;
+
+        return (
+          <div className={`rounded-xl border overflow-hidden ${
+            sendResult.success ? 'border-green-200' : 'border-amber-200'
+          }`}>
+            {/* Header */}
+            <div className={`px-4 py-3 flex items-center justify-between ${
+              sendResult.success ? 'bg-green-50' : 'bg-amber-50'
+            }`}>
+              <div className="flex items-center gap-2">
+                {sendResult.success ? (
+                  <CheckCircle2 className="w-5 h-5 text-green-500" />
+                ) : (
+                  <AlertTriangle className="w-5 h-5 text-amber-500" />
+                )}
+                <span className={`text-sm font-semibold ${sendResult.success ? 'text-green-800' : 'text-amber-800'}`}>
+                  {sendResult.success ? 'Envio concluido com sucesso' : 'Envio concluido com erros'}
+                </span>
+              </div>
+              <button onClick={() => setSendResult(null)} className="text-slate-400 hover:text-slate-600 text-lg leading-none">&times;</button>
+            </div>
+
+            {/* Body — cards por etapa */}
+            <div className="bg-white px-4 py-4">
+              <div className={`grid gap-3 ${hasTransf ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'}`}>
+                {/* Total de Produtos */}
+                <div className="rounded-lg border border-slate-200 p-3 text-center">
+                  <p className="text-[11px] text-slate-500 uppercase tracking-wide">Total Produtos</p>
+                  <p className="text-2xl font-bold text-slate-800 mt-1">{totalProdutos}</p>
+                </div>
+
+                {/* Transferencias (se houver) */}
+                {hasTransf && (
+                  <div className={`rounded-lg border p-3 text-center ${
+                    transfErros > 0 ? 'border-red-200 bg-red-50/50' : 'border-green-200 bg-green-50/50'
+                  }`}>
+                    <p className="text-[11px] text-slate-500 uppercase tracking-wide">Transferencias</p>
+                    <p className="text-2xl font-bold mt-1">
+                      <span className={transfErros > 0 ? 'text-amber-700' : 'text-green-700'}>{transfOk}</span>
+                      <span className="text-slate-400 text-base font-normal">/{transfTotal}</span>
+                    </p>
+                    {transfErros > 0 && <p className="text-[10px] text-red-500 mt-0.5">{transfErros} erro(s)</p>}
+                  </div>
+                )}
+
+                {/* Inventario SB7 (Digitacao) */}
+                <div className={`rounded-lg border p-3 text-center ${
+                  digitErros > 0 ? 'border-red-200 bg-red-50/50' : 'border-green-200 bg-green-50/50'
+                }`}>
+                  <p className="text-[11px] text-slate-500 uppercase tracking-wide">Inventario SB7</p>
+                  <p className="text-2xl font-bold mt-1">
+                    <span className={digitErros > 0 ? 'text-amber-700' : 'text-green-700'}>{digitOk}</span>
+                    <span className="text-slate-400 text-base font-normal">/{digitTotal}</span>
+                  </p>
+                  {digitErros > 0 && <p className="text-[10px] text-red-500 mt-0.5">{digitErros} erro(s)</p>}
+                </div>
+
+                {/* Historico */}
+                <div className={`rounded-lg border p-3 text-center ${
+                  histErros > 0 ? 'border-red-200 bg-red-50/50' : 'border-green-200 bg-green-50/50'
+                }`}>
+                  <p className="text-[11px] text-slate-500 uppercase tracking-wide">Historico</p>
+                  <p className="text-2xl font-bold mt-1">
+                    <span className={histErros > 0 ? 'text-amber-700' : 'text-green-700'}>{histOk}</span>
+                    <span className="text-slate-400 text-base font-normal">/{histTotal}</span>
+                  </p>
+                  {histErros > 0 && <p className="text-[10px] text-red-500 mt-0.5">{histErros} erro(s)</p>}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Mode selection + Preview */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
@@ -436,6 +577,8 @@ function TabEnvio() {
                           ? 'bg-green-100 text-green-700'
                           : integration.status === 'ERROR'
                           ? 'bg-red-100 text-red-700'
+                          : integration.status === 'PARTIAL'
+                          ? 'bg-orange-100 text-orange-700'
                           : integration.status === 'CANCELLED'
                           ? 'bg-slate-100 text-slate-600'
                           : integration.status === 'PROCESSING'
@@ -446,25 +589,41 @@ function TabEnvio() {
                       </span>
                     </td>
                     <td className="py-2.5 px-4 text-right">
-                      {isLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin text-slate-400 ml-auto" />
-                      ) : integration.status === 'PENDING' || integration.status === 'DRAFT' ? (
-                        <button
-                          onClick={() => setConfirmSend({
-                            integrationId: integration.id,
-                            inventoryId: inv.id,
-                            inventoryName: inv.name,
-                          })}
-                          className="flex items-center gap-1 text-sm text-capul-600 hover:underline ml-auto"
-                        >
-                          <Send className="w-3 h-3" />
-                          Enviar
-                        </button>
-                      ) : (
-                        <span className="text-xs text-slate-400">
-                          {integration.sent_at ? new Date(integration.sent_at).toLocaleString('pt-BR') : ''}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2 justify-end">
+                        {isLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                        ) : ['PENDING', 'DRAFT', 'ERROR', 'PARTIAL'].includes(integration.status) ? (
+                          <button
+                            onClick={() => setConfirmSend({
+                              integrationId: integration.id,
+                              inventoryId: inv.id,
+                              inventoryName: inv.name,
+                            })}
+                            className="flex items-center gap-1 text-sm text-capul-600 hover:underline"
+                          >
+                            <Send className="w-3 h-3" />
+                            {['ERROR', 'PARTIAL'].includes(integration.status) ? 'Reenviar' : 'Enviar'}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-slate-400">
+                            {integration.sent_at ? new Date(integration.sent_at).toLocaleString('pt-BR') : ''}
+                          </span>
+                        )}
+                        {['SENT', 'ERROR', 'PARTIAL', 'CONFIRMED'].includes(integration.status) && (
+                          <button
+                            onClick={() => handleViewLogs(integration.id)}
+                            disabled={logsLoading === integration.id}
+                            className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
+                          >
+                            {logsLoading === integration.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <History className="w-3 h-3" />
+                            )}
+                            Logs
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -481,6 +640,7 @@ function TabEnvio() {
           preview={previewData}
           saving={saveLoading}
           onSave={handleSaveFromPreview}
+          onSaveAndSend={handleSaveAndSend}
           onClose={() => { setShowPreview(false); setPreviewData(null); }}
         />
       )}
@@ -489,13 +649,75 @@ function TabEnvio() {
       <ConfirmDialog
         open={!!confirmSend}
         title="Enviar ao Protheus"
-        description="Enviar o resultado ao Protheus? Esta acao e irreversivel."
-        details={confirmSend?.inventoryName ? [`Inventario: ${confirmSend.inventoryName}`] : undefined}
+        description="Enviar transferencias, digitacao e historico ao Protheus?"
+        details={confirmSend?.inventoryName ? [`Inventario: ${confirmSend.inventoryName}`, 'Serao enviados: transferencias, digitacao de balanco e historico de contagem.'] : undefined}
         variant="danger"
-        confirmLabel="Enviar"
+        confirmLabel="Enviar ao Protheus"
         onConfirm={handleSend}
         onCancel={() => setConfirmSend(null)}
       />
+
+      {/* Logs modal */}
+      {logsData && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
+              <div>
+                <h3 className="font-semibold text-slate-800">Logs de Envio</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {logsData.ok} OK, {logsData.errors} erros — {logsData.total} total
+                </p>
+              </div>
+              <button onClick={() => setLogsData(null)} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
+            </div>
+            <div className="overflow-auto flex-1 p-4">
+              {logsData.logs.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-4">Nenhum log de envio encontrado.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-left py-2 px-3 font-medium text-slate-600">Endpoint</th>
+                      <th className="text-left py-2 px-3 font-medium text-slate-600">Tipo</th>
+                      <th className="text-left py-2 px-3 font-medium text-slate-600">Produto</th>
+                      <th className="text-left py-2 px-3 font-medium text-slate-600">Status</th>
+                      <th className="text-right py-2 px-3 font-medium text-slate-600">Tempo</th>
+                      <th className="text-left py-2 px-3 font-medium text-slate-600">Data</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logsData.logs.map((log) => (
+                      <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="py-2 px-3 font-mono text-xs">{log.endpoint}</td>
+                        <td className="py-2 px-3 text-xs">{log.item_type}</td>
+                        <td className="py-2 px-3 font-mono text-xs">{log.product_code || '—'}</td>
+                        <td className="py-2 px-3">
+                          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                            log.status === 'OK' ? 'bg-green-100 text-green-700'
+                              : log.status === 'ERROR' ? 'bg-red-100 text-red-700'
+                              : 'bg-amber-100 text-amber-700'
+                          }`}>
+                            {log.status}
+                          </span>
+                          {log.error_message && (
+                            <p className="text-[10px] text-red-500 mt-0.5 max-w-[200px] truncate" title={log.error_message}>
+                              {log.error_message}
+                            </p>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-right text-xs text-slate-500">{log.duration_ms}ms</td>
+                        <td className="py-2 px-3 text-xs text-slate-500">
+                          {new Date(log.created_at).toLocaleString('pt-BR')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

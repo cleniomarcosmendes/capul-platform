@@ -9,6 +9,7 @@ import { CreateChamadoDto } from './dto/create-chamado.dto.js';
 import { TransferirEquipeDto, TransferirTecnicoDto } from './dto/transferir-chamado.dto.js';
 import { ComentarioChamadoDto } from './dto/comentario-chamado.dto.js';
 import { ResolverChamadoDto, ReabrirChamadoDto, CsatDto } from './dto/resolver-chamado.dto.js';
+import { UpdateRegistroTempoChamadoDto } from './dto/update-registro-tempo-chamado.dto.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { NotificacaoService } from '../notificacao/notificacao.service.js';
 import { StatusChamado, Visibilidade } from '@prisma/client';
@@ -93,6 +94,13 @@ export class ChamadoService {
             equipeDestino: { select: { id: true, nome: true, sigla: true } },
           },
           orderBy: { createdAt: 'asc' },
+        },
+        colaboradores: {
+          include: { usuario: { select: { id: true, nome: true, username: true } } },
+        },
+        registrosTempo: {
+          where: { horaFim: null },
+          select: { id: true, usuarioId: true, horaInicio: true },
         },
       },
     });
@@ -185,6 +193,7 @@ export class ChamadoService {
         softwareModuloId: dto.softwareModuloId,
         catalogoServicoId: dto.catalogoServicoId,
         projetoId: dto.projetoId,
+        ipMaquina: dto.ipMaquina,
         slaDefinicaoId: sla?.id,
         dataLimiteSla,
       },
@@ -298,6 +307,10 @@ export class ChamadoService {
       throw new BadRequestException('Chamado encerrado nao pode ser transferido');
     }
 
+    if (!chamado.tecnicoId) {
+      throw new BadRequestException('E necessario assumir o chamado antes de transferir para outro tecnico');
+    }
+
     const tecnico = await this.prisma.usuario.findUnique({ where: { id: dto.tecnicoId } });
     if (!tecnico) throw new BadRequestException('Tecnico nao encontrado');
 
@@ -330,6 +343,10 @@ export class ChamadoService {
 
   async comentar(id: string, dto: ComentarioChamadoDto, user: JwtPayload) {
     const chamado = await this.getChamadoOrFail(id);
+
+    if (['FECHADO', 'CANCELADO'].includes(chamado.status)) {
+      throw new BadRequestException('Nao e possivel comentar em chamado encerrado');
+    }
 
     const historico = await this.prisma.historicoChamado.create({
       data: {
@@ -367,6 +384,23 @@ export class ChamadoService {
       throw new BadRequestException('Chamado ja encerrado');
     }
 
+    if (!chamado.tecnicoId) {
+      throw new BadRequestException('E necessario assumir o chamado antes de finaliza-lo');
+    }
+
+    // Encerrar todos os cronômetros ativos
+    const timersAtivos = await this.prisma.registroTempoChamado.findMany({
+      where: { chamadoId: id, horaFim: null },
+    });
+    const agora = new Date();
+    for (const timer of timersAtivos) {
+      const duracao = Math.round((agora.getTime() - new Date(timer.horaInicio).getTime()) / 60000);
+      await this.prisma.registroTempoChamado.update({
+        where: { id: timer.id },
+        data: { horaFim: agora, duracaoMinutos: duracao },
+      });
+    }
+
     const updated = await this.prisma.chamado.update({
       where: { id },
       data: { status: 'RESOLVIDO', dataResolucao: new Date() },
@@ -376,7 +410,7 @@ export class ChamadoService {
     await this.prisma.historicoChamado.create({
       data: {
         tipo: 'RESOLVIDO',
-        descricao: dto.descricao || 'Chamado resolvido',
+        descricao: dto.descricao || 'Chamado finalizado',
         publico: true,
         chamadoId: id,
         usuarioId: user.sub,
@@ -386,8 +420,8 @@ export class ChamadoService {
     // Notificar solicitante
     this.notificacaoService.criarParaUsuario(
       chamado.solicitanteId, 'CHAMADO_ATUALIZADO',
-      `Chamado #${chamado.numero} resolvido`,
-      `Seu chamado "${chamado.titulo}" foi resolvido.`,
+      `Chamado #${chamado.numero} finalizado`,
+      `Seu chamado "${chamado.titulo}" foi finalizado.`,
       { chamadoId: id },
     ).catch(() => {});
 
@@ -431,6 +465,9 @@ export class ChamadoService {
   async reabrir(id: string, dto: ReabrirChamadoDto, user: JwtPayload) {
     const chamado = await this.getChamadoOrFail(id);
 
+    if (chamado.status === 'CANCELADO') {
+      throw new BadRequestException('Chamado cancelado nao pode ser reaberto');
+    }
     if (chamado.status !== 'RESOLVIDO' && chamado.status !== 'FECHADO') {
       throw new BadRequestException('Apenas chamados resolvidos ou fechados podem ser reabertos');
     }
@@ -566,6 +603,11 @@ export class ChamadoService {
   }
 
   async removeAnexo(chamadoId: string, anexoId: string) {
+    const chamado = await this.getChamadoOrFail(chamadoId);
+    if (['FECHADO', 'CANCELADO'].includes(chamado.status)) {
+      throw new BadRequestException('Nao e possivel remover anexo de chamado encerrado');
+    }
+
     const anexo = await this.prisma.anexoChamado.findFirst({
       where: { id: anexoId, chamadoId },
     });
@@ -585,5 +627,148 @@ export class ChamadoService {
     const chamado = await this.prisma.chamado.findUnique({ where: { id } });
     if (!chamado) throw new NotFoundException('Chamado nao encontrado');
     return chamado;
+  }
+
+  // --- Colaboradores ---
+
+  async listarColaboradores(chamadoId: string) {
+    return this.prisma.chamadoColaborador.findMany({
+      where: { chamadoId },
+      include: { usuario: { select: { id: true, nome: true, username: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async adicionarColaborador(chamadoId: string, usuarioId: string) {
+    const chamado = await this.getChamadoOrFail(chamadoId);
+    if (!chamado.tecnicoId) {
+      throw new BadRequestException('E necessario que um tecnico assuma o chamado antes de adicionar colaboradores');
+    }
+    if (chamado.tecnicoId === usuarioId) {
+      throw new BadRequestException('O tecnico responsavel pelo chamado nao pode ser adicionado como colaborador');
+    }
+    if (chamado.solicitanteId === usuarioId) {
+      throw new BadRequestException('O solicitante do chamado nao pode ser adicionado como colaborador');
+    }
+    const jaExiste = await this.prisma.chamadoColaborador.findFirst({
+      where: { chamadoId, usuarioId },
+    });
+    if (jaExiste) {
+      throw new BadRequestException('Usuario ja e colaborador deste chamado');
+    }
+    return this.prisma.chamadoColaborador.create({
+      data: { chamadoId, usuarioId },
+      include: { usuario: { select: { id: true, nome: true, username: true } } },
+    });
+  }
+
+  async removerColaborador(chamadoId: string, colaboradorId: string) {
+    const chamado = await this.getChamadoOrFail(chamadoId);
+    if (['FECHADO', 'CANCELADO'].includes(chamado.status)) {
+      throw new BadRequestException('Nao e possivel remover colaborador de chamado encerrado');
+    }
+
+    const reg = await this.prisma.chamadoColaborador.findFirst({
+      where: { id: colaboradorId, chamadoId },
+    });
+    if (!reg) throw new NotFoundException('Colaborador nao encontrado neste chamado');
+    const temRegistros = await this.prisma.registroTempoChamado.count({
+      where: { chamadoId, usuarioId: reg.usuarioId },
+    });
+    if (temRegistros > 0) {
+      throw new BadRequestException('Colaborador possui registros de tempo neste chamado e nao pode ser removido');
+    }
+    return this.prisma.chamadoColaborador.delete({ where: { id: colaboradorId } });
+  }
+
+  // --- Registro de Tempo (Chamado) ---
+
+  async listarRegistrosTempo(chamadoId: string) {
+    return this.prisma.registroTempoChamado.findMany({
+      where: { chamadoId },
+      include: { usuario: { select: { id: true, nome: true } } },
+      orderBy: { horaInicio: 'desc' },
+    });
+  }
+
+  async iniciarTempoChamado(chamadoId: string, userId: string) {
+    const chamado = await this.getChamadoOrFail(chamadoId);
+
+    if (['FECHADO', 'CANCELADO'].includes(chamado.status)) {
+      throw new BadRequestException('Nao e possivel registrar tempo em chamado encerrado');
+    }
+
+    // Encerra qualquer registro aberto do usuario neste chamado
+    const abertos = await this.prisma.registroTempoChamado.findMany({
+      where: { usuarioId: userId, horaFim: null, chamadoId },
+    });
+    for (const reg of abertos) {
+      const duracao = Math.round((Date.now() - new Date(reg.horaInicio).getTime()) / 60000);
+      await this.prisma.registroTempoChamado.update({
+        where: { id: reg.id },
+        data: { horaFim: new Date(), duracaoMinutos: duracao },
+      });
+    }
+
+    return this.prisma.registroTempoChamado.create({
+      data: { horaInicio: new Date(), chamadoId, usuarioId: userId },
+      include: { usuario: { select: { id: true, nome: true } } },
+    });
+  }
+
+  async encerrarTempoChamado(chamadoId: string, userId: string) {
+    const registro = await this.prisma.registroTempoChamado.findFirst({
+      where: { chamadoId, usuarioId: userId, horaFim: null },
+    });
+    if (!registro) throw new NotFoundException('Nenhum registro ativo para este chamado');
+
+    const duracao = Math.round((Date.now() - new Date(registro.horaInicio).getTime()) / 60000);
+    return this.prisma.registroTempoChamado.update({
+      where: { id: registro.id },
+      data: { horaFim: new Date(), duracaoMinutos: duracao },
+      include: { usuario: { select: { id: true, nome: true } } },
+    });
+  }
+
+  async ajustarRegistroTempoChamado(chamadoId: string, registroId: string, dto: UpdateRegistroTempoChamadoDto) {
+    const chamado = await this.getChamadoOrFail(chamadoId);
+    if (['FECHADO', 'CANCELADO'].includes(chamado.status)) {
+      throw new BadRequestException('Nao e possivel ajustar registro de tempo em chamado encerrado');
+    }
+
+    const registro = await this.prisma.registroTempoChamado.findFirst({
+      where: { id: registroId, chamadoId },
+    });
+    if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
+
+    const data: Record<string, unknown> = {};
+    if (dto.horaInicio) data.horaInicio = new Date(dto.horaInicio);
+    if (dto.horaFim) data.horaFim = new Date(dto.horaFim);
+    if (dto.observacoes !== undefined) data.observacoes = dto.observacoes;
+
+    const inicio = dto.horaInicio ? new Date(dto.horaInicio) : new Date(registro.horaInicio);
+    const fim = dto.horaFim ? new Date(dto.horaFim) : registro.horaFim ? new Date(registro.horaFim) : null;
+    if (fim) {
+      data.duracaoMinutos = Math.round((fim.getTime() - inicio.getTime()) / 60000);
+    }
+
+    return this.prisma.registroTempoChamado.update({
+      where: { id: registroId },
+      data,
+      include: { usuario: { select: { id: true, nome: true } } },
+    });
+  }
+
+  async removerRegistroTempoChamado(chamadoId: string, registroId: string) {
+    const chamado = await this.getChamadoOrFail(chamadoId);
+    if (['FECHADO', 'CANCELADO'].includes(chamado.status)) {
+      throw new BadRequestException('Nao e possivel remover registro de tempo de chamado encerrado');
+    }
+
+    const registro = await this.prisma.registroTempoChamado.findFirst({
+      where: { id: registroId, chamadoId },
+    });
+    if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
+    return this.prisma.registroTempoChamado.delete({ where: { id: registroId } });
   }
 }

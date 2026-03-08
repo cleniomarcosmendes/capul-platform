@@ -8,8 +8,11 @@ import {
   ArrowLeft, UserPlus, ArrowRightLeft, Send, CheckCircle,
   XCircle, RotateCcw, Lock, Star, Users, MessageSquare,
   Paperclip, Download, Trash2, FileText, Image, FileSpreadsheet, File,
+  Play, Square, Edit3, Check, X, Clock,
 } from 'lucide-react';
-import type { Chamado, EquipeTI, AnexoChamado, StatusChamado, TipoHistorico } from '../../types';
+import { coreService } from '../../services/core.service';
+import { useToast } from '../../components/Toast';
+import type { Chamado, EquipeTI, AnexoChamado, StatusChamado, TipoHistorico, ChamadoColaborador, RegistroTempoChamado, UsuarioCore } from '../../types';
 
 const statusLabels: Record<StatusChamado, string> = {
   ABERTO: 'Aberto', EM_ATENDIMENTO: 'Em Atendimento', PENDENTE: 'Pendente',
@@ -55,6 +58,7 @@ export function ChamadoDetalhePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { usuario, gestaoTiRole } = useAuth();
+  const { toast, confirm } = useToast();
 
   const [chamado, setChamado] = useState<Chamado | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,6 +94,20 @@ export function ChamadoDetalhePage() {
   const [uploadingAnexo, setUploadingAnexo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Colaboradores
+  const [colaboradores, setColaboradores] = useState<ChamadoColaborador[]>([]);
+  const [showAddColab, setShowAddColab] = useState(false);
+  const [usuariosDisponiveis, setUsuariosDisponiveis] = useState<UsuarioCore[]>([]);
+  const [colabSelecionado, setColabSelecionado] = useState('');
+
+  // Registro de Tempo
+  const [registrosTempo, setRegistrosTempo] = useState<RegistroTempoChamado[]>([]);
+  const [showRegistros, setShowRegistros] = useState(false);
+  const [editingReg, setEditingReg] = useState<string | null>(null);
+  const [editRegInicio, setEditRegInicio] = useState('');
+  const [editRegFim, setEditRegFim] = useState('');
+  const [editRegObs, setEditRegObs] = useState('');
+
   const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
   const isTecnico = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR'].includes(gestaoTiRole || '');
   const isSolicitante = chamado?.solicitanteId === usuario?.id;
@@ -100,7 +118,9 @@ export function ChamadoDetalhePage() {
     chamadoService.buscar(id).then((data) => {
       setChamado(data);
       if (data.anexos) setAnexos(data.anexos);
+      if (data.colaboradores) setColaboradores(data.colaboradores);
     }).catch(() => setError('Chamado nao encontrado')).finally(() => setLoading(false));
+    chamadoService.listarRegistrosTempo(id).then(setRegistrosTempo).catch(() => {});
   }, [id]);
 
   useEffect(() => {
@@ -163,7 +183,7 @@ export function ChamadoDetalhePage() {
   }
 
   async function handleRemoveAnexo(anexoId: string) {
-    if (!chamado || !confirm('Remover este anexo?')) return;
+    if (!chamado || !(await confirm('Remover Anexo', 'Deseja remover este anexo?'))) return;
     try {
       await chamadoService.removerAnexo(chamado.id, anexoId);
       setAnexos((prev) => prev.filter((a) => a.id !== anexoId));
@@ -175,15 +195,18 @@ export function ChamadoDetalhePage() {
   if (loading) return <><Header title="Chamado" /><div className="p-6 text-slate-500">Carregando...</div></>;
   if (!chamado) return <><Header title="Chamado" /><div className="p-6 text-red-500">{error || 'Nao encontrado'}</div></>;
 
-  const canAssumir = isTecnico && (chamado.status === 'ABERTO' || chamado.status === 'PENDENTE');
-  const canTransferir = isTecnico && !['FECHADO', 'CANCELADO'].includes(chamado.status);
-  const canResolver = isTecnico && !['FECHADO', 'CANCELADO'].includes(chamado.status);
+  const temTecnico = !!chamado.tecnicoId;
+  const aberto = !['FECHADO', 'CANCELADO'].includes(chamado.status);
+  const canAssumir = isTecnico && (chamado.status === 'ABERTO' || chamado.status === 'PENDENTE' || chamado.status === 'REABERTO');
+  const canTransferirEquipe = isTecnico && aberto;
+  const canTransferirTecnico = isTecnico && aberto && temTecnico;
+  const canResolver = isTecnico && aberto && temTecnico;
   const canFechar = isTecnico && chamado.status === 'RESOLVIDO';
   const canReabrir = (chamado.status === 'RESOLVIDO' || chamado.status === 'FECHADO');
-  const canCancelar = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '') && !['FECHADO', 'CANCELADO'].includes(chamado.status);
+  const canCancelar = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '') && aberto;
   const canAvaliar = isSolicitante && (chamado.status === 'RESOLVIDO' || chamado.status === 'FECHADO') && !chamado.notaSatisfacao;
-  const canComentar = !['FECHADO', 'CANCELADO'].includes(chamado.status);
-  const canAnexar = !['FECHADO', 'CANCELADO'].includes(chamado.status);
+  const canComentar = aberto && (isSolicitante || temTecnico);
+  const canAnexar = aberto;
 
   return (
     <>
@@ -195,9 +218,9 @@ export function ChamadoDetalhePage() {
 
         {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Main content */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-3 space-y-6">
             {/* Header info */}
             <div className="bg-white rounded-xl border border-slate-200 p-6">
               <div className="flex items-start justify-between gap-4 mb-4">
@@ -302,8 +325,8 @@ export function ChamadoDetalhePage() {
                   <MessageSquare className="w-4 h-4" /> Comentar
                 </button>
               )}
-              {canTransferir && (
-                <button onClick={() => { closeAllPanels(); setShowTransferir(true); setTransferirTab('equipe'); }}
+              {(canTransferirEquipe || canTransferirTecnico) && (
+                <button onClick={() => { closeAllPanels(); setShowTransferir(true); setTransferirTab(canTransferirEquipe ? 'equipe' : 'tecnico'); }}
                   className="flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm hover:bg-slate-200">
                   <ArrowRightLeft className="w-4 h-4" /> Transferir
                 </button>
@@ -311,7 +334,7 @@ export function ChamadoDetalhePage() {
               {canResolver && (
                 <button onClick={() => { closeAllPanels(); setShowResolver(true); }}
                   className="flex items-center gap-1.5 bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700">
-                  <CheckCircle className="w-4 h-4" /> Resolver
+                  <CheckCircle className="w-4 h-4" /> Finalizar Chamado
                 </button>
               )}
               {canFechar && (
@@ -327,7 +350,7 @@ export function ChamadoDetalhePage() {
                 </button>
               )}
               {canCancelar && (
-                <button onClick={() => { if (confirm('Cancelar este chamado?')) runAction(() => chamadoService.cancelar(chamado.id)); }} disabled={actionLoading}
+                <button onClick={async () => { if (await confirm('Cancelar Chamado', 'Tem certeza que deseja cancelar este chamado?', { variant: 'danger', confirmLabel: 'Sim, cancelar' })) runAction(() => chamadoService.cancelar(chamado.id)); }} disabled={actionLoading}
                   className="flex items-center gap-1.5 bg-red-100 text-red-700 px-3 py-2 rounded-lg text-sm hover:bg-red-200 disabled:opacity-50">
                   <XCircle className="w-4 h-4" /> Cancelar
                 </button>
@@ -356,7 +379,7 @@ export function ChamadoDetalhePage() {
                   <button onClick={() => runAction(async () => { await chamadoService.comentar(chamado.id, comentarioTexto, comentarioPublico); return chamadoService.buscar(chamado.id); })}
                     disabled={actionLoading || !comentarioTexto.trim()}
                     className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
-                    Enviar
+                    Salvar Comentario
                   </button>
                   <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
                 </div>
@@ -376,16 +399,18 @@ export function ChamadoDetalhePage() {
                   >
                     <span className="flex items-center gap-1.5"><ArrowRightLeft className="w-3.5 h-3.5" /> Para Equipe</span>
                   </button>
-                  <button
-                    onClick={() => setTransferirTab('tecnico')}
-                    className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                      transferirTab === 'tecnico'
-                        ? 'border-capul-600 text-capul-600'
-                        : 'border-transparent text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> Para Tecnico</span>
-                  </button>
+                  {canTransferirTecnico && (
+                    <button
+                      onClick={() => setTransferirTab('tecnico')}
+                      className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                        transferirTab === 'tecnico'
+                          ? 'border-capul-600 text-capul-600'
+                          : 'border-transparent text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> Para Tecnico</span>
+                    </button>
+                  )}
                 </div>
 
                 {transferirTab === 'equipe' && (
@@ -441,14 +466,14 @@ export function ChamadoDetalhePage() {
 
             {showResolver && (
               <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-                <h4 className="font-medium text-sm text-slate-700">Resolver Chamado</h4>
+                <h4 className="font-medium text-sm text-slate-700">Finalizar Chamado</h4>
                 <textarea value={resolverDescricao} onChange={(e) => setResolverDescricao(e.target.value)} rows={3}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Descricao da resolucao (opcional)" />
                 <div className="flex gap-2">
                   <button onClick={() => runAction(() => chamadoService.resolver(chamado.id, resolverDescricao || undefined))}
                     disabled={actionLoading}
                     className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700 disabled:opacity-50">
-                    Confirmar Resolucao
+                    Confirmar Finalizacao
                   </button>
                   <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
                 </div>
@@ -490,7 +515,7 @@ export function ChamadoDetalhePage() {
                   <button onClick={() => runAction(() => chamadoService.avaliar(chamado.id, csatNota, csatComentario || undefined))}
                     disabled={actionLoading}
                     className="bg-amber-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-amber-600 disabled:opacity-50">
-                    Enviar Avaliacao
+                    Salvar Avaliacao
                   </button>
                   <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
                 </div>
@@ -509,14 +534,22 @@ export function ChamadoDetalhePage() {
                   <div className="space-y-4">
                     {chamado.historicos.map((h) => {
                       const Icon = tipoIcons[h.tipo] || MessageSquare;
+                      const papel = h.usuarioId === chamado.solicitanteId
+                        ? { label: 'Solicitante', cls: 'bg-blue-100 text-blue-600' }
+                        : h.usuarioId === chamado.tecnicoId
+                          ? { label: 'Responsavel', cls: 'bg-capul-100 text-capul-700' }
+                          : colaboradores.some((c) => c.usuarioId === h.usuarioId)
+                            ? { label: 'Colaborador', cls: 'bg-amber-100 text-amber-700' }
+                            : null;
                       return (
                         <div key={h.id} className="flex gap-3">
                           <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
                             <Icon className="w-4 h-4 text-slate-500" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-baseline gap-2">
+                            <div className="flex items-baseline gap-2 flex-wrap">
                               <span className="text-sm font-medium text-slate-700">{h.usuario.nome}</span>
+                              {papel && <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${papel.cls}`}>{papel.label}</span>}
                               <span className="text-xs text-slate-400">{new Date(h.createdAt).toLocaleString('pt-BR')}</span>
                               {!h.publico && <span className="text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">INTERNO</span>}
                             </div>
@@ -537,7 +570,7 @@ export function ChamadoDetalhePage() {
           </div>
 
           {/* Sidebar info */}
-          <div className="space-y-4">
+          <div className="lg:col-span-2 space-y-4">
             <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
               <h4 className="font-semibold text-slate-700 text-sm">Detalhes</h4>
 
@@ -586,6 +619,12 @@ export function ChamadoDetalhePage() {
                 <span className="text-xs text-slate-600">{new Date(chamado.createdAt).toLocaleString('pt-BR')}</span>
               </InfoRow>
 
+              <InfoRow label="IP Maquina">
+                <span className={`text-xs font-mono ${chamado.ipMaquina ? 'text-slate-600' : 'text-slate-400'}`}>
+                  {chamado.ipMaquina || 'Nao informado'}
+                </span>
+              </InfoRow>
+
               {chamado.dataLimiteSla && (
                 <InfoRow label="SLA Limite">
                   <span className={`text-xs font-medium ${new Date(chamado.dataLimiteSla) < new Date() ? 'text-red-600' : 'text-slate-600'}`}>
@@ -618,6 +657,276 @@ export function ChamadoDetalhePage() {
                 </div>
                 {chamado.comentarioSatisfacao && (
                   <p className="text-xs text-slate-500 mt-1">"{chamado.comentarioSatisfacao}"</p>
+                )}
+              </div>
+            )}
+
+            {/* Colaboradores */}
+            {isTecnico && (
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                    <Users className="w-4 h-4" /> Colaboradores ({colaboradores.length})
+                  </h4>
+                  {!['FECHADO', 'CANCELADO'].includes(chamado.status) && chamado.tecnicoId && (
+                    <button onClick={() => {
+                      setShowAddColab(!showAddColab);
+                      if (!showAddColab && usuariosDisponiveis.length === 0) {
+                        coreService.listarUsuarios().then(setUsuariosDisponiveis).catch(() => {});
+                      }
+                    }} className="text-sm text-capul-600 hover:underline font-medium">
+                      {showAddColab ? 'Cancelar' : '+ Adicionar'}
+                    </button>
+                  )}
+                </div>
+
+                {showAddColab && (
+                  <div className="flex gap-2 mb-4">
+                    <select value={colabSelecionado} onChange={(e) => setColabSelecionado(e.target.value)}
+                      className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                      <option value="">Selecione um tecnico...</option>
+                      {usuariosDisponiveis
+                        .filter((u) => u.id !== chamado.tecnicoId && u.id !== chamado.solicitanteId && !colaboradores.find((c) => c.usuarioId === u.id))
+                        .map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+                    </select>
+                    <button disabled={!colabSelecionado} onClick={async () => {
+                      try {
+                        const novo = await chamadoService.adicionarColaborador(chamado.id, colabSelecionado);
+                        setColaboradores([...colaboradores, novo]);
+                        setColabSelecionado('');
+                        setShowAddColab(false);
+                      } catch (err: unknown) {
+                        const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+                        toast('error', msg || 'Erro ao adicionar colaborador');
+                      }
+                    }} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
+                      OK
+                    </button>
+                  </div>
+                )}
+
+                {colaboradores.length === 0 ? (
+                  <p className="text-sm text-slate-400">{!chamado.tecnicoId ? 'Aguardando tecnico assumir o chamado' : 'Nenhum colaborador adicionado'}</p>
+                ) : (
+                  <div className="space-y-3">
+                    {colaboradores.map((c) => (
+                      <div key={c.id} className="flex items-center justify-between py-1">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-capul-100 text-capul-700 flex items-center justify-center text-xs font-bold">
+                            {c.usuario.nome.charAt(0)}
+                          </div>
+                          <span className="text-sm text-slate-700">{c.usuario.nome}</span>
+                        </div>
+                        {!['FECHADO', 'CANCELADO'].includes(chamado.status) && (() => {
+                          const temTempo = registrosTempo.some((r) => r.usuarioId === c.usuarioId);
+                          return temTempo ? (
+                            <span className="text-[10px] text-slate-400" title="Possui registros de tempo">com apontamento</span>
+                          ) : (
+                            <button onClick={async () => {
+                              try {
+                                await chamadoService.removerColaborador(chamado.id, c.id);
+                                setColaboradores(colaboradores.filter((x) => x.id !== c.id));
+                              } catch (err: unknown) {
+                                const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+                                toast('error', msg || 'Erro ao remover colaborador');
+                              }
+                            }} className="text-slate-400 hover:text-red-500">
+                              <X className="w-4 h-4" />
+                            </button>
+                          );
+                        })()}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Registro de Tempo */}
+            {isTecnico && temTecnico && (
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                    <Clock className="w-4 h-4" /> Tempo Dedicado
+                  </h4>
+                </div>
+
+                {/* Cronometros ativos */}
+                {chamado.registrosTempo && chamado.registrosTempo.length > 0 && (
+                  <div className="mb-4 space-y-2">
+                    {chamado.registrosTempo.map((r) => {
+                      const nome = r.usuarioId === usuario?.id ? 'Voce' : (colaboradores.find((c) => c.usuarioId === r.usuarioId)?.usuario.nome || chamado.tecnico?.nome || 'Tecnico');
+                      return (
+                        <div key={r.id} className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <span className="text-sm text-green-700 font-medium animate-pulse flex items-center gap-1.5">
+                            <Play className="w-4 h-4" /> {nome}
+                          </span>
+                          {!['FECHADO', 'CANCELADO'].includes(chamado.status) && (
+                            <button onClick={async () => {
+                              try {
+                                await chamadoService.encerrarTempo(chamado.id, r.usuarioId);
+                                const updated = await chamadoService.buscar(chamado.id);
+                                setChamado(updated);
+                                setRegistrosTempo(await chamadoService.listarRegistrosTempo(chamado.id));
+                              } catch { /* empty */ }
+                            }} className="flex items-center gap-1 text-sm font-medium text-red-600 bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-lg transition-colors">
+                              <Square className="w-3.5 h-3.5" /> Encerrar
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Iniciar para quem */}
+                {!['FECHADO', 'CANCELADO'].includes(chamado.status) && (
+                  <div className="mb-4">
+                    <label className="block text-xs text-slate-500 mb-1.5">Iniciar cronometro para:</label>
+                    <div className="space-y-2">
+                      {/* Técnico responsável (eu ou outro) */}
+                      {chamado.tecnico && !chamado.registrosTempo?.find((r) => r.usuarioId === chamado.tecnicoId) && (
+                        <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-full bg-capul-100 text-capul-700 flex items-center justify-center text-xs font-bold">
+                              {chamado.tecnico.nome.charAt(0)}
+                            </div>
+                            <span className="text-sm text-slate-700">{chamado.tecnico.nome} <span className="text-xs text-slate-400">(responsavel)</span></span>
+                          </div>
+                          <button onClick={async () => {
+                            try {
+                              await chamadoService.iniciarTempo(chamado.id, chamado.tecnicoId || undefined);
+                              const updated = await chamadoService.buscar(chamado.id);
+                              setChamado(updated);
+                              setRegistrosTempo(await chamadoService.listarRegistrosTempo(chamado.id));
+                            } catch { /* empty */ }
+                          }} className="flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors">
+                            <Play className="w-3.5 h-3.5" /> Iniciar
+                          </button>
+                        </div>
+                      )}
+                      {/* Colaboradores */}
+                      {colaboradores
+                        .filter((c) => !chamado.registrosTempo?.find((r) => r.usuarioId === c.usuarioId))
+                        .map((c) => (
+                        <div key={c.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
+                              {c.usuario.nome.charAt(0)}
+                            </div>
+                            <span className="text-sm text-slate-700">{c.usuario.nome} <span className="text-xs text-slate-400">(colaborador)</span></span>
+                          </div>
+                          <button onClick={async () => {
+                            try {
+                              await chamadoService.iniciarTempo(chamado.id, c.usuarioId);
+                              const updated = await chamadoService.buscar(chamado.id);
+                              setChamado(updated);
+                              setRegistrosTempo(await chamadoService.listarRegistrosTempo(chamado.id));
+                            } catch { /* empty */ }
+                          }} className="flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors">
+                            <Play className="w-3.5 h-3.5" /> Iniciar
+                          </button>
+                        </div>
+                      ))}
+                      {/* Mensagem se todos já estão ativos */}
+                      {!chamado.tecnico && colaboradores.length === 0 && (
+                        <p className="text-sm text-slate-400">Atribua um tecnico ou adicione colaboradores</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm text-slate-500">
+                    Total: <strong className="text-slate-700 text-base">
+                      {(() => {
+                        const total = registrosTempo.reduce((sum, r) => sum + (r.duracaoMinutos ?? 0), 0);
+                        const h = Math.floor(total / 60);
+                        const m = total % 60;
+                        return total > 0 ? (h > 0 ? `${h}h${m > 0 ? ` ${m}min` : ''}` : `${m}min`) : '0min';
+                      })()}
+                    </strong>
+                  </span>
+                  <button onClick={() => setShowRegistros(!showRegistros)} className="text-sm text-capul-600 hover:underline">
+                    {showRegistros ? 'Ocultar' : `Ver registros (${registrosTempo.length})`}
+                  </button>
+                </div>
+
+                {showRegistros && registrosTempo.length > 0 && (
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {registrosTempo.map((r) => (
+                      editingReg === r.id ? (
+                        <div key={r.id} className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs text-slate-500 mb-1">Inicio</label>
+                              <input type="datetime-local" value={editRegInicio} onChange={(e) => setEditRegInicio(e.target.value)}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-500 mb-1">Fim</label>
+                              <input type="datetime-local" value={editRegFim} onChange={(e) => setEditRegFim(e.target.value)}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
+                            </div>
+                          </div>
+                          <input value={editRegObs} onChange={(e) => setEditRegObs(e.target.value)} placeholder="Observacao..."
+                            className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
+                          <div className="flex gap-3">
+                            <button onClick={async () => {
+                              try {
+                                await chamadoService.ajustarRegistroTempo(chamado.id, r.id, {
+                                  horaInicio: editRegInicio ? new Date(editRegInicio).toISOString() : undefined,
+                                  horaFim: editRegFim ? new Date(editRegFim).toISOString() : undefined,
+                                  observacoes: editRegObs || undefined,
+                                });
+                                setEditingReg(null);
+                                setRegistrosTempo(await chamadoService.listarRegistrosTempo(chamado.id));
+                              } catch { /* empty */ }
+                            }} className="text-sm text-green-600 hover:underline flex items-center gap-1">
+                              <Check className="w-4 h-4" /> Salvar
+                            </button>
+                            <button onClick={() => setEditingReg(null)} className="text-sm text-slate-500 hover:underline flex items-center gap-1">
+                              <X className="w-4 h-4" /> Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div key={r.id} className={`p-3 rounded-lg ${!r.horaFim ? 'bg-green-50 border border-green-200' : 'bg-slate-50 border border-slate-200'}`}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm text-slate-700 font-medium">
+                              {new Date(r.horaInicio).toLocaleDateString('pt-BR')}
+                            </span>
+                            <div className="flex gap-2">
+                              <button onClick={() => {
+                                setEditingReg(r.id);
+                                setEditRegInicio(r.horaInicio.substring(0, 16));
+                                setEditRegFim(r.horaFim ? r.horaFim.substring(0, 16) : '');
+                                setEditRegObs(r.observacoes || '');
+                              }} className="text-blue-500 hover:text-blue-700"><Edit3 className="w-4 h-4" /></button>
+                              <button onClick={async () => {
+                                if (!(await confirm('Remover Registro', 'Deseja remover este registro de tempo?'))) return;
+                                try {
+                                  await chamadoService.removerRegistroTempo(chamado.id, r.id);
+                                  setRegistrosTempo(await chamadoService.listarRegistrosTempo(chamado.id));
+                                } catch { /* empty */ }
+                              }} className="text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                            </div>
+                          </div>
+                          <div className="text-sm text-slate-600">
+                            {new Date(r.horaInicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            {' - '}
+                            {r.horaFim ? new Date(r.horaFim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : <span className="text-green-600 font-medium">ativo</span>}
+                            {r.duracaoMinutos != null && (
+                              <span className="text-capul-600 font-semibold ml-2">
+                                {r.duracaoMinutos >= 60 ? `${Math.floor(r.duracaoMinutos / 60)}h${r.duracaoMinutos % 60 > 0 ? ` ${r.duracaoMinutos % 60}min` : ''}` : `${r.duracaoMinutos}min`}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-400 mt-1">{r.usuario.nome}{r.observacoes ? ` — ${r.observacoes}` : ''}</div>
+                        </div>
+                      )
+                    ))}
+                  </div>
                 )}
               </div>
             )}

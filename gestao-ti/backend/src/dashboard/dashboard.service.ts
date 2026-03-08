@@ -50,6 +50,9 @@ export class DashboardService {
       custoProjetosRealizado,
       totalHorasApontadas,
       riscosAbertos,
+      atividadesPendentes,
+      atividadesEmAndamento,
+      atividadesConcluidas,
       totalAtivosAtivos,
       totalArtigosPublicados,
     ] = await Promise.all([
@@ -134,6 +137,15 @@ export class DashboardService {
       this.prisma.riscoProjeto.count({
         where: { status: { in: ['IDENTIFICADO', 'EM_ANALISE', 'MITIGANDO'] } },
       }),
+      this.prisma.atividadeProjeto.count({
+        where: { status: 'PENDENTE', projeto: { status: { in: ['PLANEJAMENTO', 'EM_ANDAMENTO', 'PAUSADO'] } } },
+      }),
+      this.prisma.atividadeProjeto.count({
+        where: { status: 'EM_ANDAMENTO', projeto: { status: { in: ['PLANEJAMENTO', 'EM_ANDAMENTO', 'PAUSADO'] } } },
+      }),
+      this.prisma.atividadeProjeto.count({
+        where: { status: 'CONCLUIDA', projeto: { status: { in: ['PLANEJAMENTO', 'EM_ANDAMENTO', 'PAUSADO'] } } },
+      }),
       this.prisma.ativo.count({ where: { status: 'ATIVO' } }),
       this.prisma.artigoConhecimento.count({ where: { status: 'PUBLICADO' } }),
     ]);
@@ -182,6 +194,11 @@ export class DashboardService {
         custoRealizadoTotal: Number(custoProjetosRealizado._sum.custoRealizado ?? 0),
         totalHorasApontadas: Number(totalHorasApontadas._sum.horas ?? 0),
         riscosAbertos,
+        atividades: {
+          pendentes: atividadesPendentes,
+          emAndamento: atividadesEmAndamento,
+          concluidas: atividadesConcluidas,
+        },
       },
       ativos: {
         totalAtivos: totalAtivosAtivos,
@@ -219,6 +236,9 @@ export class DashboardService {
       custoPrevisto,
       custoRealizado,
       riscosAbertos,
+      atividadesPendentes,
+      atividadesEmAndamento,
+      atividadesConcluidas,
       totalSoftwares,
       licencasAtivas,
       licencasVencendo30d,
@@ -299,6 +319,15 @@ export class DashboardService {
       this.prisma.riscoProjeto.count({
         where: { status: { in: ['IDENTIFICADO', 'EM_ANALISE', 'MITIGANDO'] } },
       }),
+      this.prisma.atividadeProjeto.count({
+        where: { status: 'PENDENTE', projeto: { status: { in: ['PLANEJAMENTO', 'EM_ANDAMENTO', 'PAUSADO'] } } },
+      }),
+      this.prisma.atividadeProjeto.count({
+        where: { status: 'EM_ANDAMENTO', projeto: { status: { in: ['PLANEJAMENTO', 'EM_ANDAMENTO', 'PAUSADO'] } } },
+      }),
+      this.prisma.atividadeProjeto.count({
+        where: { status: 'CONCLUIDA', projeto: { status: { in: ['PLANEJAMENTO', 'EM_ANDAMENTO', 'PAUSADO'] } } },
+      }),
       // Portfolio — snapshot
       this.prisma.software.count({ where: { status: 'ATIVO' } }),
       this.prisma.softwareLicenca.count({ where: { status: 'ATIVA' } }),
@@ -371,6 +400,11 @@ export class DashboardService {
         custoPrevistoTotal: Number(custoPrevisto._sum.custoPrevisto ?? 0),
         custoRealizadoTotal: Number(custoRealizado._sum.custoRealizado ?? 0),
         riscosAbertos,
+        atividades: {
+          pendentes: atividadesPendentes,
+          emAndamento: atividadesEmAndamento,
+          concluidas: atividadesConcluidas,
+        },
       },
       portfolio: {
         totalSoftwares,

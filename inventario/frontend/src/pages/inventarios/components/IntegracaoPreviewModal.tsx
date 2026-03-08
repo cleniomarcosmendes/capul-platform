@@ -31,6 +31,7 @@ interface IntegracaoPreviewModalProps {
   preview: IntegrationPreviewResult;
   saving: boolean;
   onSave: () => void;
+  onSaveAndSend?: () => void;
   onClose: () => void;
 }
 
@@ -193,6 +194,7 @@ export function IntegracaoPreviewModal({
   preview,
   saving,
   onSave,
+  onSaveAndSend,
   onClose,
 }: IntegracaoPreviewModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>(
@@ -413,15 +415,29 @@ export function IntegracaoPreviewModal({
           <button
             onClick={onSave}
             disabled={saving}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-capul-600 rounded-lg hover:bg-capul-700 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-capul-700 bg-capul-50 border border-capul-200 rounded-lg hover:bg-capul-100 disabled:opacity-50"
           >
             {saving ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <Send className="w-4 h-4" />
+              <ClipboardList className="w-4 h-4" />
             )}
-            Salvar e Enviar
+            Apenas Salvar
           </button>
+          {onSaveAndSend && (
+            <button
+              onClick={onSaveAndSend}
+              disabled={saving}
+              className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-capul-600 rounded-lg hover:bg-capul-700 disabled:opacity-50"
+            >
+              {saving ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+              Salvar e Enviar
+            </button>
+          )}
         </div>
       </div>
     </div>,

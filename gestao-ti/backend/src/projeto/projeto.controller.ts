@@ -19,6 +19,7 @@ import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 import { CreateProjetoDto } from './dto/create-projeto.dto';
 import { UpdateProjetoDto } from './dto/update-projeto.dto';
 import { CreateFaseDto } from './dto/create-fase.dto';
+import { UpdateFaseDto } from './dto/update-fase.dto';
 import { CreateMembroDto } from './dto/create-membro.dto';
 import { CreateCotacaoDto } from './dto/create-cotacao.dto';
 import { CreateCustoDto } from './dto/create-custo.dto';
@@ -26,6 +27,7 @@ import { CreateRiscoDto } from './dto/create-risco.dto';
 import { CreateDependenciaDto } from './dto/create-dependencia.dto';
 import { CreateAnexoDto } from './dto/create-anexo.dto';
 import { CreateApontamentoDto } from './dto/create-apontamento.dto';
+import { UpdateRegistroTempoDto } from './dto/update-registro-tempo.dto';
 
 @Controller('projetos')
 @UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
@@ -113,7 +115,7 @@ export class ProjetoController {
   updateFase(
     @Param('id') id: string,
     @Param('faseId') faseId: string,
-    @Body() dto: CreateFaseDto,
+    @Body() dto: UpdateFaseDto,
   ) {
     return this.service.updateFase(id, faseId, dto);
   }
@@ -139,6 +141,68 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.service.addAtividade(id, dto, user.sub);
+  }
+
+  @Patch(':id/atividades/:atividadeId')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  updateAtividade(
+    @Param('id') id: string,
+    @Param('atividadeId') atividadeId: string,
+    @Body() dto: { titulo?: string; descricao?: string; faseId?: string; status?: string },
+  ) {
+    return this.service.updateAtividade(id, atividadeId, dto);
+  }
+
+  @Delete(':id/atividades/:atividadeId')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  removeAtividade(@Param('id') id: string, @Param('atividadeId') atividadeId: string) {
+    return this.service.removeAtividade(id, atividadeId);
+  }
+
+  // --- Registro de Tempo ---
+
+  @Get(':id/atividades/:atividadeId/registros-tempo')
+  listRegistrosTempo(@Param('id') id: string, @Param('atividadeId') atividadeId: string) {
+    return this.service.listarRegistrosTempo(id, atividadeId);
+  }
+
+  @Post(':id/atividades/:atividadeId/iniciar')
+  iniciarTempo(@Param('id') id: string, @Param('atividadeId') atividadeId: string, @CurrentUser() user: JwtPayload) {
+    return this.service.iniciarRegistroTempo(id, atividadeId, user.sub);
+  }
+
+  @Post(':id/atividades/:atividadeId/encerrar')
+  encerrarTempo(@Param('id') id: string, @Param('atividadeId') atividadeId: string, @CurrentUser() user: JwtPayload) {
+    return this.service.encerrarRegistroTempo(id, atividadeId, user.sub);
+  }
+
+  @Get(':id/registro-ativo')
+  registroAtivo(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.service.obterRegistroAtivo(id, user.sub);
+  }
+
+  @Patch(':id/registros-tempo/:registroId')
+  ajustarRegistroTempo(@Param('id') id: string, @Param('registroId') registroId: string, @Body() dto: UpdateRegistroTempoDto) {
+    return this.service.ajustarRegistroTempo(id, registroId, dto);
+  }
+
+  @Delete(':id/registros-tempo/:registroId')
+  removerRegistroTempo(@Param('id') id: string, @Param('registroId') registroId: string) {
+    return this.service.removerRegistroTempo(id, registroId);
+  }
+
+  // --- Chamados (vincular/desvincular) ---
+
+  @Post(':id/chamados/:chamadoId')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  vincularChamado(@Param('id') id: string, @Param('chamadoId') chamadoId: string) {
+    return this.service.vincularChamado(id, chamadoId);
+  }
+
+  @Delete(':id/chamados/:chamadoId')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  desvincularChamado(@Param('id') id: string, @Param('chamadoId') chamadoId: string) {
+    return this.service.desvincularChamado(id, chamadoId);
   }
 
   // --- Cotacoes ---

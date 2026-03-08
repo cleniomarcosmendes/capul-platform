@@ -40,6 +40,7 @@ import { NotificacoesPage } from './pages/notificacoes/NotificacoesPage';
 import { ImportPage } from './pages/import/ImportPage';
 import { NaturezasPage } from './pages/cadastros/NaturezasPage';
 import { TiposContratoPage } from './pages/cadastros/TiposContratoPage';
+import { ToastProvider } from './components/Toast';
 import type { ReactNode } from 'react';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -140,7 +141,9 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <ToastProvider>
+          <AppRoutes />
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );

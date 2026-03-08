@@ -4,10 +4,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { contratoService } from '../../services/contrato.service';
 import { Plus, Layers } from 'lucide-react';
 import type { TipoContratoConfig } from '../../types';
+import { useToast } from '../../components/Toast';
 
 export function TiposContratoPage() {
   const { gestaoTiRole } = useAuth();
   const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const { toast } = useToast();
 
   const [tipos, setTipos] = useState<TipoContratoConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +44,7 @@ export function TiposContratoPage() {
       setShowForm(false);
       carregar();
     } catch {
-      alert('Erro ao criar tipo de contrato');
+      toast('error', 'Erro ao criar tipo de contrato');
     } finally {
       setSaving(false);
     }
@@ -54,7 +56,7 @@ export function TiposContratoPage() {
       await contratoService.atualizarTipoContrato(tipo.id, { status: novoStatus });
       carregar();
     } catch {
-      alert('Erro ao atualizar status');
+      toast('error', 'Erro ao atualizar status');
     }
   }
 

@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { equipeService } from '../../services/equipe.service';
 import { Plus, Pencil, Users, ToggleLeft, ToggleRight } from 'lucide-react';
 import type { EquipeTI } from '../../types';
+import { useToast } from '../../components/Toast';
 
 export function EquipesListPage() {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ export function EquipesListPage() {
   const [filtroStatus, setFiltroStatus] = useState<string>('');
 
   const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const { toast } = useToast();
 
   useEffect(() => {
     carregarEquipes();
@@ -37,7 +39,7 @@ export function EquipesListPage() {
       await equipeService.atualizarStatus(equipe.id, novoStatus);
       carregarEquipes();
     } catch {
-      alert('Erro ao alterar status');
+      toast('error', 'Erro ao alterar status');
     }
   }
 
