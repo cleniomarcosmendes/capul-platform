@@ -43,6 +43,8 @@ export class ProjetoController {
     @Query('contratoId') contratoId?: string,
     @Query('search') search?: string,
     @Query('apenasRaiz') apenasRaiz?: string,
+    @Query('meusProjetos') meusProjetos?: string,
+    @CurrentUser() user?: JwtPayload,
   ) {
     return this.service.findAll({
       status,
@@ -52,6 +54,8 @@ export class ProjetoController {
       contratoId,
       search,
       apenasRaiz,
+      meusProjetos,
+      usuarioId: user?.sub,
     });
   }
 

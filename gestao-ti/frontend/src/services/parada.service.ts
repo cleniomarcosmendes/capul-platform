@@ -20,7 +20,6 @@ interface CreateParadaPayload {
   fim?: string;
   softwareId: string;
   softwareModuloId?: string;
-  chamadoId?: string;
   filialIds: string[];
   descricao?: string;
   observacoes?: string;
@@ -33,7 +32,6 @@ interface UpdateParadaPayload {
   inicio?: string;
   softwareId?: string;
   softwareModuloId?: string;
-  chamadoId?: string;
   filialIds?: string[];
   descricao?: string;
   observacoes?: string;
@@ -76,6 +74,16 @@ export const paradaService = {
 
   async cancelar(id: string): Promise<RegistroParada> {
     const { data } = await gestaoApi.post(`/paradas/${id}/cancelar`);
+    return data;
+  },
+
+  async vincularChamado(paradaId: string, chamadoId: string): Promise<RegistroParada> {
+    const { data } = await gestaoApi.post(`/paradas/${paradaId}/chamados`, { chamadoId });
+    return data;
+  },
+
+  async desvincularChamado(paradaId: string, chamadoId: string): Promise<RegistroParada> {
+    const { data } = await gestaoApi.delete(`/paradas/${paradaId}/chamados/${chamadoId}`);
     return data;
   },
 };

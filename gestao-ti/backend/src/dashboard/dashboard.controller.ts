@@ -43,6 +43,15 @@ export class DashboardController {
     return this.service.getFinanceiro({ dataInicio, dataFim });
   }
 
+  @Get('ordens-servico')
+  getOrdensServico(
+    @Query('dataInicio') dataInicio?: string,
+    @Query('dataFim') dataFim?: string,
+    @Query('filialId') filialId?: string,
+  ) {
+    return this.service.getOrdensServico({ dataInicio, dataFim, filialId });
+  }
+
   @Get('csat')
   getCsat(
     @Query('dataInicio') dataInicio?: string,

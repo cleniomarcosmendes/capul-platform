@@ -38,6 +38,7 @@ interface CreateContratoPayload {
   renovacaoAutomatica?: boolean;
   diasAlertaVencimento?: number;
   softwareId?: string;
+  equipeId?: string;
   descricao?: string;
   observacoes?: string;
   gerarParcelas?: boolean;

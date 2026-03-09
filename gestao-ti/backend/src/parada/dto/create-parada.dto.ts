@@ -33,10 +33,6 @@ export class CreateParadaDto {
   @IsUUID()
   softwareModuloId?: string;
 
-  @IsOptional()
-  @IsUUID()
-  chamadoId?: string;
-
   @IsArray()
   @ArrayMinSize(1)
   @IsUUID('4', { each: true })

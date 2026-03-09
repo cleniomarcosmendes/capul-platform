@@ -196,17 +196,18 @@ export function ChamadoDetalhePage() {
   if (!chamado) return <><Header title="Chamado" /><div className="p-6 text-red-500">{error || 'Nao encontrado'}</div></>;
 
   const temTecnico = !!chamado.tecnicoId;
-  const aberto = !['FECHADO', 'CANCELADO'].includes(chamado.status);
-  const canAssumir = isTecnico && (chamado.status === 'ABERTO' || chamado.status === 'PENDENTE' || chamado.status === 'REABERTO');
-  const canTransferirEquipe = isTecnico && aberto;
-  const canTransferirTecnico = isTecnico && aberto && temTecnico;
-  const canResolver = isTecnico && aberto && temTecnico;
+  const encerrado = ['FECHADO', 'CANCELADO'].includes(chamado.status);
+  const emAndamento = !encerrado && chamado.status !== 'RESOLVIDO';
+  const canAssumir = isTecnico && ['ABERTO', 'PENDENTE', 'REABERTO'].includes(chamado.status);
+  const canTransferirEquipe = isTecnico && emAndamento;
+  const canTransferirTecnico = isTecnico && emAndamento && temTecnico;
+  const canResolver = isTecnico && emAndamento && temTecnico;
   const canFechar = isTecnico && chamado.status === 'RESOLVIDO';
   const canReabrir = (chamado.status === 'RESOLVIDO' || chamado.status === 'FECHADO');
-  const canCancelar = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '') && aberto;
+  const canCancelar = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '') && emAndamento;
   const canAvaliar = isSolicitante && (chamado.status === 'RESOLVIDO' || chamado.status === 'FECHADO') && !chamado.notaSatisfacao;
-  const canComentar = aberto && (isSolicitante || temTecnico);
-  const canAnexar = aberto;
+  const canComentar = !encerrado && (isSolicitante || temTecnico);
+  const canAnexar = !encerrado;
 
   return (
     <>
@@ -606,6 +607,14 @@ export function ChamadoDetalhePage() {
               {chamado.departamento && (
                 <InfoRow label="Departamento">
                   <span className="text-xs text-slate-600">{chamado.departamento.nome}</span>
+                </InfoRow>
+              )}
+
+              {chamado.ativo && (
+                <InfoRow label="Ativo">
+                  <button onClick={() => navigate(`/gestao-ti/ativos/${chamado.ativo!.id}`)} className="text-xs text-teal-600 hover:text-teal-700 hover:underline">
+                    [{chamado.ativo.tag}] {chamado.ativo.nome}
+                  </button>
                 </InfoRow>
               )}
 

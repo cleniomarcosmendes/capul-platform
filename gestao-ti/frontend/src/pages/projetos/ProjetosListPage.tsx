@@ -6,7 +6,7 @@ import { projetoService } from '../../services/projeto.service';
 import { softwareService } from '../../services/software.service';
 import { FolderKanban, Plus, Search, Download } from 'lucide-react';
 import { exportService } from '../../services/export.service';
-import type { Projeto, Software, TipoProjeto, ModoProjeto, StatusProjeto } from '../../types';
+import type { Projeto, Software, TipoProjeto, ModoProjeto } from '../../types';
 
 const tipoLabel: Record<string, string> = {
   DESENVOLVIMENTO_INTERNO: 'Desenv. Interno',
@@ -51,9 +51,10 @@ export function ProjetosListPage() {
   const [search, setSearch] = useState('');
   const [filtroTipo, setFiltroTipo] = useState<TipoProjeto | ''>('');
   const [filtroModo, setFiltroModo] = useState<ModoProjeto | ''>('');
-  const [filtroStatus, setFiltroStatus] = useState<StatusProjeto | ''>('');
+  const [filtroStatus, setFiltroStatus] = useState<string>('EM_ANDAMENTO,PLANEJAMENTO');
   const [filtroSoftware, setFiltroSoftware] = useState('');
-  const [apenasRaiz, setApenasRaiz] = useState(true);
+  const [apenasRaiz, setApenasRaiz] = useState(false);
+  const [meusProjetos, setMeusProjetos] = useState(true);
 
   useEffect(() => {
     softwareService.listar().then(setSoftwares).catch(() => {});
@@ -61,7 +62,7 @@ export function ProjetosListPage() {
 
   useEffect(() => {
     loadData();
-  }, [filtroTipo, filtroModo, filtroStatus, filtroSoftware, apenasRaiz]);
+  }, [filtroTipo, filtroModo, filtroStatus, filtroSoftware, apenasRaiz, meusProjetos]);
 
   async function loadData() {
     setLoading(true);
@@ -73,6 +74,7 @@ export function ProjetosListPage() {
         softwareId: filtroSoftware || undefined,
         search: search || undefined,
         apenasRaiz: apenasRaiz || undefined,
+        meusProjetos: meusProjetos || undefined,
       });
       setProjetos(data);
     } catch { /* empty */ }
@@ -162,14 +164,24 @@ export function ProjetosListPage() {
             <option value="">Todos Modos</option>
             {Object.entries(modoLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
-          <select value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value as StatusProjeto | '')} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+          <select value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
             <option value="">Todos Status</option>
+            <option value="EM_ANDAMENTO,PLANEJAMENTO">Ativos (Andamento + Planejamento)</option>
             {Object.entries(statusLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
           <select value={filtroSoftware} onChange={(e) => setFiltroSoftware(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
             <option value="">Todos Softwares</option>
             {softwares.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
           </select>
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={meusProjetos}
+              onChange={(e) => setMeusProjetos(e.target.checked)}
+              className="rounded"
+            />
+            Meus Projetos
+          </label>
           <label className="flex items-center gap-2 text-sm text-slate-600">
             <input
               type="checkbox"

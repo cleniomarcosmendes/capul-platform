@@ -11,7 +11,8 @@ const ativoListInclude = {
   filial: { select: { id: true, codigo: true, nomeFantasia: true } },
   responsavel: { select: { id: true, nome: true, username: true } },
   departamento: { select: { id: true, nome: true } },
-  _count: { select: { softwares: true } },
+  ativoPai: { select: { id: true, tag: true, nome: true, tipo: true } },
+  _count: { select: { softwares: true, componentes: true, chamados: true } },
 };
 
 const ativoDetailInclude = {
@@ -21,6 +22,13 @@ const ativoDetailInclude = {
       software: { select: { id: true, nome: true, tipo: true, versaoAtual: true } },
     },
     orderBy: { createdAt: 'desc' as const },
+  },
+  componentes: {
+    select: {
+      id: true, tag: true, nome: true, tipo: true, status: true,
+      fabricante: true, modelo: true, ip: true, hostname: true,
+    },
+    orderBy: { tag: 'asc' as const },
   },
 };
 
@@ -88,6 +96,8 @@ export class AtivoService {
         ip: dto.ip,
         hostname: dto.hostname,
         observacoes: dto.observacoes,
+        glpiId: dto.glpiId,
+        ativoPaiId: dto.ativoPaiId,
       },
       include: ativoListInclude,
     });

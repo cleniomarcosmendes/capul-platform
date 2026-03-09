@@ -11,6 +11,12 @@ import type { Response } from 'express';
 export class ExportController {
   constructor(private readonly service: ExportService) {}
 
+  @Get('ordem-servico/:id/relatorio')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  async relatorioOs(@Param('id') id: string, @Res() res: Response) {
+    return this.service.exportRelatorioOs(id, res);
+  }
+
   @Get(':entidade')
   @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
   async exportar(@Param('entidade') entidade: string, @Res() res: Response) {

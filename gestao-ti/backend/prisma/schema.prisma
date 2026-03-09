@@ -42,8 +42,8 @@ model Usuario {
   chamadosSolicitados  Chamado[]        @relation("ChamadoSolicitante")
   chamadosTecnico      Chamado[]        @relation("ChamadoTecnico")
   historicosChamado    HistoricoChamado[]
-  ordensServicoTecnico OrdemServico[]   @relation("OsTecnico")
   ordensServicoSolicit OrdemServico[]   @relation("OsSolicitante")
+  osTecnicos           OsTecnico[]      @relation("OsTecnicoMembro")
   historicosContrato   ContratoHistorico[]
   paradasRegistradas   RegistroParada[]  @relation("ParadaRegistradoPor")
   paradasFinalizadas   RegistroParada[]  @relation("ParadaFinalizadoPor")
@@ -124,17 +124,19 @@ model EquipeTI {
   historicosDestino    HistoricoChamado[] @relation("HistoricoEquipeDestino")
   softwaresResponsavel Software[]
   artigos              ArtigoConhecimento[]
+  contratos            Contrato[]
 
   @@map("equipes_ti")
   @@schema("gestao_ti")
 }
 
 model MembroEquipe {
-  id        String      @id @default(uuid())
-  isLider   Boolean     @default(false) @map("is_lider")
-  status    StatusGeral @default(ATIVO)
-  createdAt DateTime    @default(now()) @map("created_at")
-  updatedAt DateTime    @updatedAt @map("updated_at")
+  id                  String      @id @default(uuid())
+  isLider             Boolean     @default(false) @map("is_lider")
+  podeGerirContratos  Boolean     @default(false) @map("pode_gerir_contratos")
+  status              StatusGeral @default(ATIVO)
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
 
   usuarioId String   @map("usuario_id")
   usuario   Usuario  @relation(fields: [usuarioId], references: [id])
@@ -288,12 +290,15 @@ model Chamado {
   projetoId String?  @map("projeto_id")
   projeto   Projeto? @relation(fields: [projetoId], references: [id])
 
+  ativoId String? @map("ativo_id")
+  ativo   Ativo?  @relation(fields: [ativoId], references: [id])
+
   departamentoId String?       @map("departamento_id")
   departamento   Departamento? @relation(fields: [departamentoId], references: [id])
 
   historicos      HistoricoChamado[]
-  ordensServico   OrdemServico[]
-  paradas         RegistroParada[]
+  osChamados      OsChamado[]
+  paradas         ParadaChamado[]
   anexos          AnexoChamado[]
   colaboradores   ChamadoColaborador[]
   registrosTempo  RegistroTempoChamado[]
@@ -393,7 +398,8 @@ model OrdemServico {
   descricao       String?
   status          StatusOS @default(ABERTA)
   dataAgendamento DateTime? @map("data_agendamento")
-  dataExecucao    DateTime? @map("data_execucao")
+  dataInicio      DateTime? @map("data_inicio")
+  dataFim         DateTime? @map("data_fim")
   observacoes     String?
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
@@ -401,17 +407,44 @@ model OrdemServico {
   filialId String @map("filial_id")
   filial   Filial @relation(fields: [filialId], references: [id])
 
-  tecnicoId String  @map("tecnico_id")
-  tecnico   Usuario @relation("OsTecnico", fields: [tecnicoId], references: [id])
-
   solicitanteId String  @map("solicitante_id")
   solicitante   Usuario @relation("OsSolicitante", fields: [solicitanteId], references: [id])
 
-  chamadoId String?  @map("chamado_id")
-  chamado   Chamado? @relation(fields: [chamadoId], references: [id])
+  chamados  OsChamado[]
+  tecnicos  OsTecnico[]
 
   @@index([status])
   @@map("ordens_servico")
+  @@schema("gestao_ti")
+}
+
+model OsChamado {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  osId      String        @map("os_id")
+  os        OrdemServico  @relation(fields: [osId], references: [id], onDelete: Cascade)
+
+  chamadoId String  @map("chamado_id")
+  chamado   Chamado @relation(fields: [chamadoId], references: [id])
+
+  @@unique([osId, chamadoId])
+  @@map("os_chamados")
+  @@schema("gestao_ti")
+}
+
+model OsTecnico {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  osId      String        @map("os_id")
+  os        OrdemServico  @relation(fields: [osId], references: [id], onDelete: Cascade)
+
+  tecnicoId String  @map("tecnico_id")
+  tecnico   Usuario @relation("OsTecnicoMembro", fields: [tecnicoId], references: [id])
+
+  @@unique([osId, tecnicoId])
+  @@map("os_tecnicos")
   @@schema("gestao_ti")
 }
 
@@ -927,6 +960,9 @@ model Contrato {
   softwareId String?   @map("software_id")
   software   Software? @relation(fields: [softwareId], references: [id])
 
+  equipeId String?   @map("equipe_id")
+  equipe   EquipeTI? @relation(fields: [equipeId], references: [id])
+
   contratoOriginalId String?   @map("contrato_original_id")
   contratoOriginal   Contrato? @relation("ContratoRenovacao", fields: [contratoOriginalId], references: [id])
   contratosRenovados Contrato[] @relation("ContratoRenovacao")
@@ -1103,9 +1139,6 @@ model RegistroParada {
   softwareModuloId String?         @map("software_modulo_id")
   softwareModulo   SoftwareModulo? @relation(fields: [softwareModuloId], references: [id])
 
-  chamadoId String?  @map("chamado_id")
-  chamado   Chamado? @relation(fields: [chamadoId], references: [id])
-
   registradoPorId String  @map("registrado_por_id")
   registradoPor   Usuario @relation("ParadaRegistradoPor", fields: [registradoPorId], references: [id])
 
@@ -1113,6 +1146,7 @@ model RegistroParada {
   finalizadoPor   Usuario? @relation("ParadaFinalizadoPor", fields: [finalizadoPorId], references: [id])
 
   filiaisAfetadas ParadaFilialAfetada[]
+  chamados        ParadaChamado[]
 
   @@index([softwareId, status])
   @@index([status])
@@ -1133,6 +1167,21 @@ model ParadaFilialAfetada {
 
   @@unique([paradaId, filialId])
   @@map("parada_filiais_afetadas")
+  @@schema("gestao_ti")
+}
+
+model ParadaChamado {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  paradaId String         @map("parada_id")
+  parada   RegistroParada @relation(fields: [paradaId], references: [id], onDelete: Cascade)
+
+  chamadoId String  @map("chamado_id")
+  chamado   Chamado @relation(fields: [chamadoId], references: [id])
+
+  @@unique([paradaId, chamadoId])
+  @@map("parada_chamados")
   @@schema("gestao_ti")
 }
 
@@ -1426,6 +1475,7 @@ model Ativo {
   ip                 String?
   hostname           String?
   observacoes        String?
+  glpiId             String?     @unique @map("glpi_id")
   createdAt          DateTime    @default(now()) @map("created_at")
   updatedAt          DateTime    @updatedAt @map("updated_at")
 
@@ -1438,11 +1488,17 @@ model Ativo {
   departamentoId  String?       @map("departamento_id")
   departamento    Departamento? @relation(fields: [departamentoId], references: [id])
 
+  ativoPaiId      String?       @map("ativo_pai_id")
+  ativoPai        Ativo?        @relation("AtivoHierarquia", fields: [ativoPaiId], references: [id])
+  componentes     Ativo[]       @relation("AtivoHierarquia")
+
   softwares AtivoSoftware[]
+  chamados  Chamado[]
 
   @@index([tipo])
   @@index([status])
   @@index([filialId])
+  @@index([ativoPaiId])
   @@map("ativos")
   @@schema("gestao_ti")
 }

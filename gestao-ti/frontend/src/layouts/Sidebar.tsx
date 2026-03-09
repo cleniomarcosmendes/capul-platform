@@ -39,6 +39,7 @@ const menuItems: MenuItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/gestao-ti/' },
   { label: 'Executivo', icon: PieChart, path: '/gestao-ti/executivo', roles: MANAGERS },
   { label: 'Satisfacao (CSAT)', icon: Star, path: '/gestao-ti/csat', roles: MANAGERS },
+  { label: 'Metricas OS', icon: BarChart3, path: '/gestao-ti/ordens-servico/dashboard', roles: MANAGERS },
   { section: 'SUPORTE' },
   { label: 'Chamados', icon: Ticket, path: '/gestao-ti/chamados' },
   { label: 'Ordens de Servico', icon: ClipboardList, path: '/gestao-ti/ordens-servico', roles: STAFF },

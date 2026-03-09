@@ -59,4 +59,8 @@ export class CreateChamadoDto {
   @IsString()
   ipMaquina?: string;
 
+  @IsOptional()
+  @IsString()
+  ativoId?: string;
+
 }

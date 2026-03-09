@@ -87,6 +87,10 @@ export class UpdateContratoDto {
 
   @IsOptional()
   @IsString()
+  equipeId?: string;
+
+  @IsOptional()
+  @IsString()
   observacoes?: string;
 
   @IsOptional()

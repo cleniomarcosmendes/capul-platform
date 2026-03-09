@@ -11,12 +11,15 @@ import { FinalizarParadaDto } from './dto/finalizar-parada.dto';
 const paradaListInclude = {
   software: { select: { id: true, nome: true, tipo: true, criticidade: true } },
   softwareModulo: { select: { id: true, nome: true } },
-  chamado: { select: { id: true, numero: true, titulo: true } },
+  chamados: {
+    include: { chamado: { select: { id: true, numero: true, titulo: true, status: true } } },
+    orderBy: { createdAt: 'desc' as const },
+  },
   registradoPor: { select: { id: true, nome: true, username: true } },
   filiaisAfetadas: {
     include: { filial: { select: { id: true, codigo: true, nomeFantasia: true } } },
   },
-  _count: { select: { filiaisAfetadas: true } },
+  _count: { select: { filiaisAfetadas: true, chamados: true } },
 };
 
 const paradaDetailInclude = {
@@ -84,11 +87,6 @@ export class ParadaService {
       if (!modulo) throw new BadRequestException('Modulo nao pertence ao software informado');
     }
 
-    if (dto.chamadoId) {
-      const chamado = await this.prisma.chamado.findUnique({ where: { id: dto.chamadoId } });
-      if (!chamado) throw new NotFoundException('Chamado nao encontrado');
-    }
-
     const inicio = new Date(dto.inicio);
     let status: 'EM_ANDAMENTO' | 'FINALIZADA' = 'EM_ANDAMENTO';
     let fim: Date | undefined;
@@ -114,7 +112,6 @@ export class ParadaService {
         observacoes: dto.observacoes,
         softwareId: dto.softwareId,
         softwareModuloId: dto.softwareModuloId,
-        chamadoId: dto.chamadoId,
         registradoPorId: userId,
         finalizadoPorId: status === 'FINALIZADA' ? userId : undefined,
         filiaisAfetadas: {
@@ -211,5 +208,40 @@ export class ParadaService {
       data: { status: 'CANCELADA' },
       include: paradaDetailInclude,
     });
+  }
+
+  async vincularChamado(paradaId: string, chamadoId: string) {
+    const parada = await this.prisma.registroParada.findUnique({ where: { id: paradaId } });
+    if (!parada) throw new NotFoundException('Parada nao encontrada');
+
+    const chamado = await this.prisma.chamado.findUnique({ where: { id: chamadoId } });
+    if (!chamado) throw new NotFoundException('Chamado nao encontrado');
+
+    const existing = await this.prisma.paradaChamado.findUnique({
+      where: { paradaId_chamadoId: { paradaId, chamadoId } },
+    });
+    if (existing) throw new BadRequestException('Chamado ja vinculado a esta parada');
+
+    await this.prisma.paradaChamado.create({
+      data: { paradaId, chamadoId },
+    });
+
+    return this.findOne(paradaId);
+  }
+
+  async desvincularChamado(paradaId: string, chamadoId: string) {
+    const parada = await this.prisma.registroParada.findUnique({ where: { id: paradaId } });
+    if (!parada) throw new NotFoundException('Parada nao encontrada');
+
+    const vinculo = await this.prisma.paradaChamado.findUnique({
+      where: { paradaId_chamadoId: { paradaId, chamadoId } },
+    });
+    if (!vinculo) throw new NotFoundException('Vinculo nao encontrado');
+
+    await this.prisma.paradaChamado.delete({
+      where: { id: vinculo.id },
+    });
+
+    return this.findOne(paradaId);
   }
 }

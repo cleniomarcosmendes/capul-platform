@@ -27,6 +27,7 @@ const chamadoInclude = {
   software: { select: { id: true, nome: true, tipo: true } },
   softwareModulo: { select: { id: true, nome: true } },
   projeto: { select: { id: true, numero: true, nome: true } },
+  ativo: { select: { id: true, tag: true, nome: true, tipo: true } },
   anexos: {
     select: { id: true, nomeOriginal: true, mimeType: true, tamanho: true, descricao: true, createdAt: true, usuarioId: true, usuario: { select: { id: true, nome: true } } },
     orderBy: { createdAt: 'desc' as const },
@@ -51,6 +52,7 @@ export class ChamadoService {
     filialId?: string;
     departamentoId?: string;
     pendentesAvaliacao?: boolean;
+    search?: string;
   }) {
     const where: Record<string, unknown> = {};
 
@@ -70,7 +72,26 @@ export class ChamadoService {
         where.solicitanteId = user.sub;
         where.visibilidade = 'PUBLICO';
       } else if (filters.meusChamados) {
-        where.tecnicoId = user.sub;
+        where.OR = [
+          { solicitanteId: user.sub },
+          { tecnicoId: user.sub },
+          { colaboradores: { some: { usuarioId: user.sub } } },
+        ];
+      }
+    }
+
+    if (filters.search) {
+      const term = filters.search.trim();
+      const numero = parseInt(term, 10);
+      const searchCondition = numero
+        ? { OR: [{ numero }, { titulo: { contains: term, mode: 'insensitive' } }] }
+        : { titulo: { contains: term, mode: 'insensitive' } };
+
+      if (where.OR) {
+        where.AND = [{ OR: where.OR }, searchCondition];
+        delete where.OR;
+      } else {
+        Object.assign(where, searchCondition);
       }
     }
 
@@ -177,13 +198,18 @@ export class ChamadoService {
       }
     }
 
+    // Se tecnico/gestor/admin, auto-assumir o chamado
+    const autoAssumir = role !== 'USUARIO_FINAL';
+
     const chamado = await this.prisma.chamado.create({
       data: {
         titulo: dto.titulo,
         descricao: dto.descricao,
         visibilidade,
         prioridade: dto.prioridade ?? 'MEDIA',
+        status: autoAssumir ? 'EM_ATENDIMENTO' : 'ABERTO',
         solicitanteId: user.sub,
+        tecnicoId: autoAssumir ? user.sub : undefined,
         equipeAtualId: dto.equipeAtualId,
         filialId,
         departamentoId,
@@ -193,6 +219,7 @@ export class ChamadoService {
         softwareModuloId: dto.softwareModuloId,
         catalogoServicoId: dto.catalogoServicoId,
         projetoId: dto.projetoId,
+        ativoId: dto.ativoId,
         ipMaquina: dto.ipMaquina,
         slaDefinicaoId: sla?.id,
         dataLimiteSla,

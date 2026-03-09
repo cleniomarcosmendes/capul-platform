@@ -3,8 +3,10 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { paradaService } from '../../services/parada.service';
-import { Activity, ArrowLeft, Clock, AlertTriangle, Building2, User, Wrench } from 'lucide-react';
-import type { RegistroParada } from '../../types';
+import { chamadoService } from '../../services/chamado.service';
+import { equipeService } from '../../services/equipe.service';
+import { Activity, ArrowLeft, Clock, AlertTriangle, Building2, User, Wrench, Unlink, Plus, Ticket, X, Filter, CheckSquare } from 'lucide-react';
+import type { RegistroParada, Chamado, EquipeTI } from '../../types';
 import { useToast } from '../../components/Toast';
 
 const tipoLabel: Record<string, string> = {
@@ -260,14 +262,10 @@ export function ParadaDetalhePage() {
                 <span className="text-slate-500">Duracao</span>
                 <span className="text-slate-700 font-medium">{formatDuracao(parada.duracaoMinutos)}</span>
               </div>
-              {parada.chamado && (
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Chamado</span>
-                  <Link to={`/gestao-ti/chamados/${parada.chamado.id}`} className="text-capul-600 hover:underline">
-                    #{parada.chamado.numero} - {parada.chamado.titulo}
-                  </Link>
-                </div>
-              )}
+              <div className="flex justify-between">
+                <span className="text-slate-500">Chamados</span>
+                <span className="text-slate-700">{parada.chamados.length} vinculado(s)</span>
+              </div>
             </div>
           </div>
 
@@ -301,6 +299,11 @@ export function ParadaDetalhePage() {
           </div>
         </div>
 
+        {/* Chamados Vinculados */}
+        <div className="mb-6">
+          <TabChamados parada={parada} canManage={canManage} onUpdate={setParada} />
+        </div>
+
         {/* Filiais Afetadas */}
         <div className="bg-white rounded-xl border border-slate-200">
           <div className="px-6 py-4 border-b border-slate-200">
@@ -325,5 +328,310 @@ export function ParadaDetalhePage() {
         </div>
       </div>
     </>
+  );
+}
+
+const statusChamadoCores: Record<string, string> = {
+  ABERTO: 'bg-blue-100 text-blue-700',
+  EM_ATENDIMENTO: 'bg-amber-100 text-amber-700',
+  AGUARDANDO_USUARIO: 'bg-purple-100 text-purple-700',
+  RESOLVIDO: 'bg-green-100 text-green-700',
+  REABERTO: 'bg-orange-100 text-orange-700',
+  FECHADO: 'bg-slate-100 text-slate-600',
+  CANCELADO: 'bg-red-100 text-red-700',
+};
+
+const statusChamadoLabel: Record<string, string> = {
+  ABERTO: 'Aberto',
+  EM_ATENDIMENTO: 'Em Atendimento',
+  AGUARDANDO_USUARIO: 'Aguardando',
+  RESOLVIDO: 'Resolvido',
+  REABERTO: 'Reaberto',
+  FECHADO: 'Fechado',
+  CANCELADO: 'Cancelado',
+};
+
+function TabChamados({ parada, canManage, onUpdate }: { parada: RegistroParada; canManage: boolean; onUpdate: (p: RegistroParada) => void }) {
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const [showModal, setShowModal] = useState(false);
+
+  async function handleDesvincular(chamadoId: string) {
+    try {
+      const updated = await paradaService.desvincularChamado(parada.id, chamadoId);
+      onUpdate(updated);
+      toast('success', 'Chamado desvinculado');
+    } catch {
+      toast('error', 'Erro ao desvincular chamado');
+    }
+  }
+
+  return (
+    <>
+      <div className="bg-white rounded-xl border border-slate-200">
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+          <h4 className="font-medium text-slate-700 flex items-center gap-2">
+            <Ticket className="w-4 h-4" /> Chamados Vinculados ({parada.chamados.length})
+          </h4>
+          {canManage && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowModal(true)}
+                className="flex items-center gap-1 text-xs text-capul-600 hover:text-capul-700 font-medium"
+              >
+                <CheckSquare className="w-3.5 h-3.5" /> Vincular Existentes
+              </button>
+              <button
+                onClick={() => navigate(`/gestao-ti/chamados/novo?paradaId=${parada.id}`)}
+                className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+              >
+                <Plus className="w-3.5 h-3.5" /> Novo Chamado
+              </button>
+            </div>
+          )}
+        </div>
+
+        {parada.chamados.length === 0 ? (
+          <p className="px-6 py-6 text-sm text-slate-400 text-center">Nenhum chamado vinculado a esta parada</p>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {parada.chamados.map((pc) => (
+              <div key={pc.id} className="px-6 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Ticket className="w-4 h-4 text-slate-400" />
+                  <Link to={`/gestao-ti/chamados/${pc.chamado.id}`} className="text-sm text-capul-600 hover:underline font-medium">
+                    #{pc.chamado.numero}
+                  </Link>
+                  <span className="text-sm text-slate-600">{pc.chamado.titulo}</span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded ${statusChamadoCores[pc.chamado.status] || 'bg-slate-100 text-slate-600'}`}>
+                    {pc.chamado.status.replace(/_/g, ' ')}
+                  </span>
+                </div>
+                {canManage && (
+                  <button
+                    onClick={() => handleDesvincular(pc.chamadoId)}
+                    className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                    title="Desvincular"
+                  >
+                    <Unlink className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {showModal && (
+        <ModalVincularChamados
+          parada={parada}
+          onUpdate={onUpdate}
+          onClose={() => setShowModal(false)}
+        />
+      )}
+    </>
+  );
+}
+
+function ModalVincularChamados({ parada, onUpdate, onClose }: { parada: RegistroParada; onUpdate: (p: RegistroParada) => void; onClose: () => void }) {
+  const { toast } = useToast();
+  const [chamados, setChamados] = useState<Chamado[]>([]);
+  const [equipes, setEquipes] = useState<EquipeTI[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [vinculando, setVinculando] = useState(false);
+
+  // Filtros
+  const [filtroTexto, setFiltroTexto] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState<string>('');
+  const [filtroEquipe, setFiltroEquipe] = useState<string>('');
+
+  const idsVinculados = parada.chamados.map((c) => c.chamadoId);
+
+  useEffect(() => {
+    Promise.all([
+      chamadoService.listar(),
+      equipeService.listar('ATIVO'),
+    ]).then(([ch, eq]) => {
+      setChamados(ch.filter((c) => !idsVinculados.includes(c.id)));
+      setEquipes(eq);
+    }).catch(() => {
+      toast('error', 'Erro ao carregar chamados');
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const filtrados = chamados.filter((c) => {
+    if (filtroStatus && c.status !== filtroStatus) return false;
+    if (filtroEquipe && c.equipeAtual?.id !== filtroEquipe) return false;
+    if (filtroTexto) {
+      const termo = filtroTexto.toLowerCase();
+      const matchNumero = String(c.numero).includes(termo);
+      const matchTitulo = c.titulo.toLowerCase().includes(termo);
+      if (!matchNumero && !matchTitulo) return false;
+    }
+    return true;
+  });
+
+  function toggleSelecionado(id: string) {
+    setSelecionados((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleTodos() {
+    if (selecionados.size === filtrados.length) {
+      setSelecionados(new Set());
+    } else {
+      setSelecionados(new Set(filtrados.map((c) => c.id)));
+    }
+  }
+
+  async function handleVincular() {
+    if (selecionados.size === 0) return;
+    setVinculando(true);
+    let lastUpdated: RegistroParada | null = null;
+    let count = 0;
+    for (const chamadoId of selecionados) {
+      try {
+        lastUpdated = await paradaService.vincularChamado(parada.id, chamadoId);
+        count++;
+      } catch { /* continue with next */ }
+    }
+    if (lastUpdated) onUpdate(lastUpdated);
+    toast('success', `${count} chamado(s) vinculado(s)`);
+    setVinculando(false);
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+          <h3 className="font-semibold text-slate-800">Vincular Chamados</h3>
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Filtros */}
+        <div className="px-6 py-3 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Filter className="w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              value={filtroTexto}
+              onChange={(e) => setFiltroTexto(e.target.value)}
+              placeholder="Buscar por numero ou titulo..."
+              className="flex-1 min-w-[200px] border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
+            />
+            <select
+              value={filtroStatus}
+              onChange={(e) => setFiltroStatus(e.target.value)}
+              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+            >
+              <option value="">Todos os Status</option>
+              {Object.entries(statusChamadoLabel).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+            <select
+              value={filtroEquipe}
+              onChange={(e) => setFiltroEquipe(e.target.value)}
+              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+            >
+              <option value="">Todas as Equipes</option>
+              {equipes.map((eq) => (
+                <option key={eq.id} value={eq.id}>{eq.sigla} - {eq.nome}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Grid */}
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="p-8 text-center text-slate-400">Carregando chamados...</div>
+          ) : filtrados.length === 0 ? (
+            <div className="p-8 text-center text-slate-400">Nenhum chamado encontrado</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-2.5 text-left w-10">
+                    <input
+                      type="checkbox"
+                      checked={selecionados.size > 0 && selecionados.size === filtrados.length}
+                      onChange={toggleTodos}
+                      className="rounded border-slate-300"
+                    />
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">#</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Titulo</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Equipe</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Data</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtrados.map((c) => (
+                  <tr
+                    key={c.id}
+                    onClick={() => toggleSelecionado(c.id)}
+                    className={`cursor-pointer transition-colors ${selecionados.has(c.id) ? 'bg-capul-50' : 'hover:bg-slate-50'}`}
+                  >
+                    <td className="px-4 py-2.5">
+                      <input
+                        type="checkbox"
+                        checked={selecionados.has(c.id)}
+                        onChange={() => toggleSelecionado(c.id)}
+                        className="rounded border-slate-300"
+                      />
+                    </td>
+                    <td className="px-4 py-2.5 font-medium text-slate-700">{c.numero}</td>
+                    <td className="px-4 py-2.5 text-slate-600 max-w-[250px] truncate">{c.titulo}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${statusChamadoCores[c.status] || 'bg-slate-100 text-slate-600'}`}>
+                        {statusChamadoLabel[c.status] || c.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-500">{c.equipeAtual?.sigla || '-'}</td>
+                    <td className="px-4 py-2.5 text-slate-500">{new Date(c.createdAt).toLocaleDateString('pt-BR')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-3 border-t border-slate-200 flex items-center justify-between bg-slate-50">
+          <span className="text-sm text-slate-500">
+            {filtrados.length} chamado(s) encontrado(s)
+            {selecionados.size > 0 && (
+              <span className="ml-2 font-medium text-capul-600">{selecionados.size} selecionado(s)</span>
+            )}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="border border-slate-300 text-slate-600 px-4 py-2 rounded-lg text-sm hover:bg-slate-100"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleVincular}
+              disabled={selecionados.size === 0 || vinculando}
+              className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50"
+            >
+              {vinculando ? 'Vinculando...' : `Vincular ${selecionados.size > 0 ? `(${selecionados.size})` : ''}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -34,10 +34,6 @@ export class UpdateParadaDto {
   softwareModuloId?: string;
 
   @IsOptional()
-  @IsUUID()
-  chamadoId?: string;
-
-  @IsOptional()
   @IsArray()
   @IsUUID('4', { each: true })
   filialIds?: string[];

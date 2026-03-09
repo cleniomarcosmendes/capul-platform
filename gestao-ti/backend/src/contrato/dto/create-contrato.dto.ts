@@ -83,6 +83,10 @@ export class CreateContratoDto {
 
   @IsOptional()
   @IsString()
+  equipeId?: string;
+
+  @IsOptional()
+  @IsString()
   observacoes?: string;
 
   @IsOptional()

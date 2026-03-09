@@ -53,6 +53,7 @@ export class ChamadoController {
     @Query('filialId') filialId?: string,
     @Query('departamentoId') departamentoId?: string,
     @Query('pendentesAvaliacao') pendentesAvaliacao?: string,
+    @Query('search') search?: string,
   ) {
     return this.service.findAll(user, role, {
       status,
@@ -63,6 +64,7 @@ export class ChamadoController {
       filialId,
       departamentoId,
       pendentesAvaliacao: pendentesAvaliacao === 'true',
+      search,
     });
   }
 

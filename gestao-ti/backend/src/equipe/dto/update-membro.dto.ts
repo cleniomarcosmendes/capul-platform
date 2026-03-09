@@ -7,6 +7,10 @@ export class UpdateMembroDto {
   isLider?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  podeGerirContratos?: boolean;
+
+  @IsOptional()
   @IsEnum(StatusGeral, { message: 'Status deve ser ATIVO ou INATIVO' })
   status?: StatusGeral;
 }

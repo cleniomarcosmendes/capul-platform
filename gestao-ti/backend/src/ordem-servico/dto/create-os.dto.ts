@@ -14,17 +14,13 @@ export class CreateOsDto {
   @IsNotEmpty()
   filialId: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  tecnicoId: string;
+  tecnicoId?: string;
 
   @IsOptional()
   @IsDateString()
   dataAgendamento?: string;
-
-  @IsOptional()
-  @IsString()
-  chamadoId?: string;
 
   @IsOptional()
   @IsString()

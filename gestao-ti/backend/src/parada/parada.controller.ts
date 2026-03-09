@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -78,5 +79,23 @@ export class ParadaController {
   @Roles('ADMIN', 'GESTOR_TI')
   cancelar(@Param('id') id: string) {
     return this.service.cancelar(id);
+  }
+
+  @Post(':id/chamados')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  vincularChamado(
+    @Param('id') id: string,
+    @Body() body: { chamadoId: string },
+  ) {
+    return this.service.vincularChamado(id, body.chamadoId);
+  }
+
+  @Delete(':id/chamados/:chamadoId')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  desvincularChamado(
+    @Param('id') id: string,
+    @Param('chamadoId') chamadoId: string,
+  ) {
+    return this.service.desvincularChamado(id, chamadoId);
   }
 }

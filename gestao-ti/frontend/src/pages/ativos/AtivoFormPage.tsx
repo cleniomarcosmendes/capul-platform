@@ -7,6 +7,8 @@ import { coreApi } from '../../services/api';
 import { ArrowLeft } from 'lucide-react';
 import type { Ativo, TipoAtivo, FilialResumo, Departamento, UsuarioCore } from '../../types';
 
+interface AtivoResumo { id: string; tag: string; nome: string; tipo: TipoAtivo }
+
 const tipoOptions: { value: TipoAtivo; label: string }[] = [
   { value: 'SERVIDOR', label: 'Servidor' },
   { value: 'ESTACAO_TRABALHO', label: 'Estacao de Trabalho' },
@@ -26,6 +28,7 @@ export function AtivoFormPage() {
   const [filiais, setFiliais] = useState<FilialResumo[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioCore[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
+  const [ativosPai, setAtivosPai] = useState<AtivoResumo[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [erro, setErro] = useState('');
@@ -50,12 +53,15 @@ export function AtivoFormPage() {
     ip: '',
     hostname: '',
     observacoes: '',
+    glpiId: '',
+    ativoPaiId: '',
   });
 
   useEffect(() => {
     coreApi.get('/filiais').then(({ data }) => setFiliais(data)).catch(() => {});
     coreService.listarUsuarios().then(setUsuarios).catch(() => {});
     coreService.listarDepartamentos().then(setDepartamentos).catch(() => {});
+    ativoService.listar({}).then((list) => setAtivosPai(list.map((a: Ativo) => ({ id: a.id, tag: a.tag, nome: a.nome, tipo: a.tipo })))).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -82,6 +88,8 @@ export function AtivoFormPage() {
         ip: a.ip || '',
         hostname: a.hostname || '',
         observacoes: a.observacoes || '',
+        glpiId: a.glpiId || '',
+        ativoPaiId: a.ativoPaiId || '',
       });
     }).catch(() => navigate('/gestao-ti/ativos'))
       .finally(() => setLoading(false));
@@ -116,6 +124,8 @@ export function AtivoFormPage() {
       ip: form.ip || undefined,
       hostname: form.hostname || undefined,
       observacoes: form.observacoes || undefined,
+      glpiId: form.glpiId || undefined,
+      ativoPaiId: form.ativoPaiId || undefined,
     };
 
     try {
@@ -174,6 +184,19 @@ export function AtivoFormPage() {
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Modelo</label>
                 <input name="modelo" value={form.modelo} onChange={handleChange} maxLength={150} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">GLPI ID</label>
+                <input name="glpiId" value={form.glpiId} onChange={handleChange} placeholder="ID no GLPI (opcional)" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-slate-600 mb-1">Ativo Pai (Estacao de Trabalho)</label>
+                <select name="ativoPaiId" value={form.ativoPaiId} onChange={handleChange} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                  <option value="">Nenhum (ativo independente)</option>
+                  {ativosPai.filter((a) => a.id !== id).map((a) => <option key={a.id} value={a.id}>[{a.tag}] {a.nome}</option>)}
+                </select>
               </div>
             </div>
             <div>

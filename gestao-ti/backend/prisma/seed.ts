@@ -564,9 +564,9 @@ async function main() {
       descricao: 'Limpeza e verificacao de firmware dos switchs do rack principal',
       status: 'ABERTA',
       filialId,
-      tecnicoId: adminId,
       solicitanteId: adminId,
       dataAgendamento: new Date(now.getTime() + 3 * 86400000),
+      tecnicos: { create: { tecnicoId: adminId } },
     },
   });
 
@@ -576,11 +576,12 @@ async function main() {
       descricao: 'Substituicao do disco 3 do RAID que apresentou falha SMART',
       status: 'CONCLUIDA',
       filialId,
-      tecnicoId: adminId,
       solicitanteId: adminId,
       dataAgendamento: new Date(now.getTime() - 7 * 86400000),
-      dataExecucao: new Date(now.getTime() - 6 * 86400000),
+      dataInicio: new Date(now.getTime() - 7 * 86400000),
+      dataFim: new Date(now.getTime() - 6 * 86400000),
       observacoes: 'HD substituido, RAID reconstruido com sucesso.',
+      tecnicos: { create: { tecnicoId: adminId } },
     },
   });
 

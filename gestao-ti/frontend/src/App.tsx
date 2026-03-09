@@ -11,6 +11,7 @@ import { ChamadosListPage } from './pages/chamados/ChamadosListPage';
 import { ChamadoCreatePage } from './pages/chamados/ChamadoCreatePage';
 import { ChamadoDetalhePage } from './pages/chamados/ChamadoDetalhePage';
 import { OrdensServicoPage } from './pages/ordens-servico/OrdensServicoPage';
+import { DashboardOsPage } from './pages/ordens-servico/DashboardOsPage';
 import { CatalogoServicosPage } from './pages/catalogo/CatalogoServicosPage';
 import { SlaPage } from './pages/sla/SlaPage';
 import { SoftwaresListPage } from './pages/portfolio/SoftwaresListPage';
@@ -90,6 +91,7 @@ function AppRoutes() {
         <Route path="chamados/novo" element={<ChamadoCreatePage />} />
         <Route path="chamados/:id" element={<ChamadoDetalhePage />} />
         <Route path="ordens-servico" element={<OrdensServicoPage />} />
+        <Route path="ordens-servico/dashboard" element={<DashboardOsPage />} />
         <Route path="equipes" element={<EquipesListPage />} />
         <Route path="equipes/nova" element={<EquipeFormPage />} />
         <Route path="equipes/:id" element={<EquipeDetalhePage />} />

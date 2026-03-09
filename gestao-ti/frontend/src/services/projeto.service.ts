@@ -21,13 +21,14 @@ import type {
 } from '../types';
 
 interface ProjetoFilters {
-  status?: StatusProjeto;
+  status?: string;
   tipo?: TipoProjeto;
   modo?: ModoProjeto;
   softwareId?: string;
   contratoId?: string;
   search?: string;
   apenasRaiz?: boolean;
+  meusProjetos?: boolean;
 }
 
 interface CreateProjetoPayload {
@@ -71,6 +72,7 @@ export const projetoService = {
     if (filters.contratoId) params.contratoId = filters.contratoId;
     if (filters.search) params.search = filters.search;
     if (filters.apenasRaiz) params.apenasRaiz = 'true';
+    if (filters.meusProjetos) params.meusProjetos = 'true';
     const { data } = await gestaoApi.get('/projetos', { params });
     return data;
   },

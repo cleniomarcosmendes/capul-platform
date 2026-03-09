@@ -7,14 +7,19 @@ import { equipeService } from '../../services/equipe.service';
 import { catalogoService } from '../../services/catalogo.service';
 import { softwareService } from '../../services/software.service';
 import { projetoService } from '../../services/projeto.service';
+import { paradaService } from '../../services/parada.service';
+import { ordemServicoService } from '../../services/ordem-servico.service';
+import { ativoService } from '../../services/ativo.service';
 import { coreService } from '../../services/core.service';
 import { ArrowLeft, FolderKanban, Paperclip, X } from 'lucide-react';
-import type { EquipeTI, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento } from '../../types';
+import type { EquipeTI, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento, Ativo } from '../../types';
 
 export function ChamadoCreatePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const projetoIdParam = searchParams.get('projetoId');
+  const paradaIdParam = searchParams.get('paradaId');
+  const osIdParam = searchParams.get('osId');
   const { usuario, gestaoTiRole } = useAuth();
   const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
   const [projetoVinculado, setProjetoVinculado] = useState<Projeto | null>(null);
@@ -43,6 +48,10 @@ export function ChamadoCreatePage() {
   const [filialId, setFilialId] = useState('');
   const [departamentoId, setDepartamentoId] = useState('');
 
+  // Ativo vinculado
+  const [ativosList, setAtivosList] = useState<Ativo[]>([]);
+  const [ativoId, setAtivoId] = useState('');
+
   // IP da maquina
   const [ipMaquina, setIpMaquina] = useState('');
 
@@ -58,9 +67,10 @@ export function ChamadoCreatePage() {
     if (projetoIdParam) {
       projetoService.buscar(projetoIdParam).then(setProjetoVinculado).catch(() => {});
     }
-    // Carregar filiais para tecnicos
+    // Carregar filiais e ativos para tecnicos
     if (!isUsuarioFinal) {
       coreService.listarFiliais().then(setFiliais).catch(() => {});
+      ativoService.listar({ status: 'ATIVO' }).then(setAtivosList).catch(() => {});
     }
   }, [isUsuarioFinal]);
 
@@ -142,6 +152,7 @@ export function ChamadoCreatePage() {
         filialId: (!isUsuarioFinal && filialId && filialId !== usuario?.filialAtual.id) ? filialId : undefined,
         departamentoId: (!isUsuarioFinal && departamentoId && departamentoId !== usuario?.departamento.id) ? departamentoId : undefined,
         ipMaquina: ipMaquina || undefined,
+        ativoId: ativoId || undefined,
       });
 
       // Upload dos anexos
@@ -149,7 +160,15 @@ export function ChamadoCreatePage() {
         await Promise.all(arquivos.map((file) => chamadoService.uploadAnexo(chamado.id, file)));
       }
 
-      navigate(`/gestao-ti/chamados/${chamado.id}`);
+      // Vincular a parada ou OS se veio do contexto
+      if (paradaIdParam) {
+        await paradaService.vincularChamado(paradaIdParam, chamado.id).catch(() => {});
+      }
+      if (osIdParam) {
+        await ordemServicoService.vincularChamado(osIdParam, chamado.id).catch(() => {});
+      }
+
+      navigate(paradaIdParam ? `/gestao-ti/paradas/${paradaIdParam}` : osIdParam ? `/gestao-ti/ordens-servico` : `/gestao-ti/chamados/${chamado.id}`);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(msg || 'Erro ao criar chamado');
@@ -185,26 +204,26 @@ export function ChamadoCreatePage() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Titulo *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Assunto *</label>
             <input
               value={titulo}
               onChange={(e) => setTitulo(e.target.value)}
               required
               maxLength={200}
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-              placeholder="Descreva brevemente o problema"
+              placeholder="Resuma em poucas palavras sua solicitacao. Ex: Impressora nao imprime, Liberar acesso ao sistema..."
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Descricao *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Detalhe sua necessidade *</label>
             <textarea
               value={descricao}
               onChange={(e) => setDescricao(e.target.value)}
               required
               rows={5}
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-              placeholder="Descreva o problema em detalhes..."
+              placeholder="Explique o que esta acontecendo, o que voce precisa e qual o impacto no seu trabalho..."
             />
           </div>
 
@@ -289,6 +308,25 @@ export function ChamadoCreatePage() {
                   </select>
                 </div>
               </div>
+            </div>
+          )}
+
+          {!isUsuarioFinal && ativosList.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Ativo / Equipamento</label>
+              <select
+                value={ativoId}
+                onChange={(e) => setAtivoId(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+              >
+                <option value="">Nenhum</option>
+                {ativosList.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    [{a.tag}] {a.nome} {a.tipo !== 'OUTRO' ? `(${a.tipo.replace(/_/g, ' ')})` : ''} {a.ip ? `- ${a.ip}` : ''}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-400 mt-1">Vincular o equipamento relacionado ao chamado</p>
             </div>
           )}
 

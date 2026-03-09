@@ -8,4 +8,8 @@ export class AddMembroDto {
   @IsOptional()
   @IsBoolean()
   isLider?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  podeGerirContratos?: boolean;
 }

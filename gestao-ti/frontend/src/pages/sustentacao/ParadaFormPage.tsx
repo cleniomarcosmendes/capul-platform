@@ -43,7 +43,6 @@ export function ParadaFormPage() {
   const [fim, setFim] = useState('');
   const [softwareId, setSoftwareId] = useState('');
   const [softwareModuloId, setSoftwareModuloId] = useState('');
-  const [chamadoId, setChamadoId] = useState('');
   const [filialIds, setFilialIds] = useState<string[]>([]);
   const [descricao, setDescricao] = useState('');
   const [observacoes, setObservacoes] = useState('');
@@ -61,7 +60,6 @@ export function ParadaFormPage() {
         setFim(p.fim ? p.fim.slice(0, 16) : '');
         setSoftwareId(p.softwareId);
         setSoftwareModuloId(p.softwareModuloId || '');
-        setChamadoId(p.chamadoId || '');
         setFilialIds(p.filiaisAfetadas.map((f) => f.filialId));
         setDescricao(p.descricao || '');
         setObservacoes(p.observacoes || '');
@@ -105,7 +103,6 @@ export function ParadaFormPage() {
         fim: fim ? new Date(fim).toISOString() : undefined,
         softwareId,
         softwareModuloId: softwareModuloId || undefined,
-        chamadoId: chamadoId || undefined,
         filialIds,
         descricao: descricao || undefined,
         observacoes: observacoes || undefined,
@@ -240,18 +237,18 @@ export function ParadaFormPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Chamado vinculado</label>
-            <input
-              type="text"
-              value={chamadoId}
-              onChange={(e) => setChamadoId(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-              placeholder="ID do chamado (opcional)"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Filiais Afetadas *</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-slate-700">Filiais Afetadas *</label>
+              {filiais.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFilialIds(filialIds.length === filiais.length ? [] : filiais.map((f) => f.id))}
+                  className="text-xs text-capul-600 hover:text-capul-700 font-medium"
+                >
+                  {filialIds.length === filiais.length ? 'Desmarcar Todas' : 'Selecionar Todas'}
+                </button>
+              )}
+            </div>
             <div className="border border-slate-200 rounded-lg p-3 max-h-48 overflow-y-auto space-y-1">
               {filiais.length === 0 ? (
                 <p className="text-sm text-slate-400">Carregando filiais...</p>

@@ -4,7 +4,7 @@ import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
-import { ArrowLeft, Pencil, UserPlus, Trash2, Star, StarOff } from 'lucide-react';
+import { ArrowLeft, Pencil, UserPlus, Trash2, Star, StarOff, FileText } from 'lucide-react';
 import type { EquipeTI, UsuarioCore } from '../../types';
 import { useToast } from '../../components/Toast';
 
@@ -22,6 +22,7 @@ export function EquipeDetalhePage() {
   const [usuarios, setUsuarios] = useState<UsuarioCore[]>([]);
   const [selectedUsuarioId, setSelectedUsuarioId] = useState('');
   const [isLider, setIsLider] = useState(false);
+  const [podeGerirContratos, setPodeGerirContratos] = useState(false);
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
@@ -55,10 +56,11 @@ export function EquipeDetalhePage() {
     if (!selectedUsuarioId) return;
     setAdding(true);
     try {
-      await equipeService.adicionarMembro(id!, { usuarioId: selectedUsuarioId, isLider });
+      await equipeService.adicionarMembro(id!, { usuarioId: selectedUsuarioId, isLider, podeGerirContratos });
       setShowAddMembro(false);
       setSelectedUsuarioId('');
       setIsLider(false);
+      setPodeGerirContratos(false);
       carregarEquipe();
     } catch (err: unknown) {
       const message =
@@ -75,6 +77,15 @@ export function EquipeDetalhePage() {
       carregarEquipe();
     } catch {
       toast('error', 'Erro ao atualizar membro');
+    }
+  }
+
+  async function toggleContratos(membroId: string, current: boolean) {
+    try {
+      await equipeService.atualizarMembro(id!, membroId, { podeGerirContratos: !current });
+      carregarEquipe();
+    } catch {
+      toast('error', 'Erro ao atualizar permissao');
     }
   }
 
@@ -214,6 +225,15 @@ export function EquipeDetalhePage() {
                     />
                     Lider
                   </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-600 pb-2">
+                    <input
+                      type="checkbox"
+                      checked={podeGerirContratos}
+                      onChange={(e) => setPodeGerirContratos(e.target.checked)}
+                      className="rounded border-slate-300"
+                    />
+                    Contratos
+                  </label>
                   <button
                     onClick={handleAddMembro}
                     disabled={!selectedUsuarioId || adding}
@@ -255,6 +275,11 @@ export function EquipeDetalhePage() {
                             Lider
                           </span>
                         )}
+                        {membro.podeGerirContratos && (
+                          <span className="ml-1 text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">
+                            Contratos
+                          </span>
+                        )}
                       </div>
                     </div>
                     {isAdmin && (
@@ -269,6 +294,13 @@ export function EquipeDetalhePage() {
                           ) : (
                             <StarOff className="w-4 h-4" />
                           )}
+                        </button>
+                        <button
+                          onClick={() => toggleContratos(membro.id, membro.podeGerirContratos)}
+                          className={`p-1.5 transition-colors ${membro.podeGerirContratos ? 'text-emerald-500 hover:text-emerald-700' : 'text-slate-400 hover:text-emerald-500'}`}
+                          title={membro.podeGerirContratos ? 'Remover permissao de contratos' : 'Permitir gerir contratos'}
+                        >
+                          <FileText className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => removerMembro(membro.id, membro.usuario.nome)}

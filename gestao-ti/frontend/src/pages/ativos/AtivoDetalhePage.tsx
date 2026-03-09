@@ -4,7 +4,7 @@ import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { ativoService } from '../../services/ativo.service';
 import { softwareService } from '../../services/software.service';
-import { ArrowLeft, Server, Edit, Trash2, Plus, X, Cpu, HardDrive, Monitor, Wifi } from 'lucide-react';
+import { ArrowLeft, Server, Edit, Trash2, Plus, X, Cpu, HardDrive, Monitor, Wifi, AlertCircle } from 'lucide-react';
 import type { Ativo, AtivoSoftwareItem, StatusAtivo, TipoAtivo, Software } from '../../types';
 import { useToast } from '../../components/Toast';
 
@@ -22,7 +22,7 @@ const statusCores: Record<StatusAtivo, string> = {
   EM_MANUTENCAO: 'bg-yellow-100 text-yellow-700', DESCARTADO: 'bg-red-100 text-red-700',
 };
 
-type Tab = 'softwares' | 'tecnico';
+type Tab = 'softwares' | 'componentes' | 'chamados' | 'tecnico';
 
 export function AtivoDetalhePage() {
   const { id } = useParams<{ id: string }>();
@@ -100,6 +100,8 @@ export function AtivoDetalhePage() {
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'softwares', label: `Softwares (${softwares.length})` },
+    { key: 'componentes', label: `Componentes (${ativo.componentes?.length || 0})` },
+    { key: 'chamados', label: `Chamados (${ativo._count?.chamados || 0})` },
     { key: 'tecnico', label: 'Info Tecnica' },
   ];
 
@@ -129,6 +131,10 @@ export function AtivoDetalhePage() {
                   {ativo.departamento && <span>Departamento: <strong>{ativo.departamento.nome}</strong></span>}
                   {ativo.fabricante && <span>Fabricante: <strong>{ativo.fabricante}</strong></span>}
                   {ativo.modelo && <span>Modelo: <strong>{ativo.modelo}</strong></span>}
+                  {ativo.glpiId && <span>GLPI ID: <strong className="font-mono">{ativo.glpiId}</strong></span>}
+                  {ativo.ativoPai && (
+                    <span>Ativo Pai: <Link to={`/gestao-ti/ativos/${ativo.ativoPai.id}`} className="text-teal-600 hover:underline"><strong>[{ativo.ativoPai.tag}] {ativo.ativoPai.nome}</strong></Link></span>
+                  )}
                 </div>
               </div>
             </div>
@@ -232,6 +238,52 @@ export function AtivoDetalhePage() {
                   ))}
                 </tbody>
               </table>
+            )}
+          </div>
+        )}
+
+        {tab === 'componentes' && (
+          <div className="bg-white rounded-lg border border-slate-200 p-5">
+            {(!ativo.componentes || ativo.componentes.length === 0) ? (
+              <p className="text-sm text-slate-400 text-center py-8">Nenhum componente vinculado</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-slate-500 uppercase bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-2">Tag</th>
+                    <th className="px-4 py-2">Nome</th>
+                    <th className="px-4 py-2">Tipo</th>
+                    <th className="px-4 py-2">Status</th>
+                    <th className="px-4 py-2">IP</th>
+                    <th className="px-4 py-2">Hostname</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {ativo.componentes.map((c) => (
+                    <tr key={c.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => navigate(`/gestao-ti/ativos/${c.id}`)}>
+                      <td className="px-4 py-2 font-mono text-teal-600">{c.tag}</td>
+                      <td className="px-4 py-2 font-medium text-slate-700">{c.nome}</td>
+                      <td className="px-4 py-2 text-slate-500">{tipoLabel[c.tipo]}</td>
+                      <td className="px-4 py-2"><span className={`text-xs px-2 py-0.5 rounded ${statusCores[c.status as StatusAtivo]}`}>{statusLabel[c.status as StatusAtivo]}</span></td>
+                      <td className="px-4 py-2 text-slate-500 font-mono">{c.ip || '—'}</td>
+                      <td className="px-4 py-2 text-slate-500">{c.hostname || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {tab === 'chamados' && (
+          <div className="bg-white rounded-lg border border-slate-200 p-5">
+            {(ativo._count?.chamados || 0) === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-8">Nenhum chamado vinculado a este ativo</p>
+            ) : (
+              <p className="text-sm text-slate-500 text-center py-8">
+                <AlertCircle className="w-4 h-4 inline mr-1" />
+                {ativo._count?.chamados} chamado(s) vinculado(s). <Link to={`/gestao-ti/chamados`} className="text-teal-600 hover:underline">Ver chamados</Link>
+              </p>
             )}
           </div>
         )}

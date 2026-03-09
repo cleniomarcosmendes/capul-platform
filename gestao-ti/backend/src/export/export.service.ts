@@ -1,9 +1,10 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import ExcelJS from 'exceljs';
+import PDFDocument from 'pdfkit';
 import type { Response } from 'express';
 
-const ENTIDADES_VALIDAS = ['ativos', 'chamados', 'contratos', 'softwares', 'licencas', 'paradas', 'projetos'] as const;
+const ENTIDADES_VALIDAS = ['ativos', 'chamados', 'contratos', 'softwares', 'licencas', 'paradas', 'projetos', 'ordens-servico'] as const;
 type Entidade = (typeof ENTIDADES_VALIDAS)[number];
 
 @Injectable()
@@ -26,6 +27,7 @@ export class ExportService {
       case 'licencas': await this.exportLicencas(sheet); break;
       case 'paradas': await this.exportParadas(sheet); break;
       case 'projetos': await this.exportProjetos(sheet); break;
+      case 'ordens-servico': await this.exportOrdensServico(sheet); break;
     }
 
     // Estilizar header
@@ -215,6 +217,291 @@ export class ExportService {
       fim: d.fim ? new Date(d.fim).toLocaleDateString('pt-BR') : '',
       duracao: d.duracaoMinutos ?? '',
     }));
+  }
+
+  private async exportOrdensServico(sheet: ExcelJS.Worksheet) {
+    sheet.columns = [
+      { header: 'Numero', key: 'numero' },
+      { header: 'Titulo', key: 'titulo' },
+      { header: 'Status', key: 'status' },
+      { header: 'Filial', key: 'filial' },
+      { header: 'Solicitante', key: 'solicitante' },
+      { header: 'Tecnicos', key: 'tecnicos' },
+      { header: 'Chamados', key: 'chamados' },
+      { header: 'Agendamento', key: 'agendamento' },
+      { header: 'Inicio', key: 'inicio' },
+      { header: 'Fim', key: 'fim' },
+      { header: 'Duracao', key: 'duracao' },
+      { header: 'Observacoes', key: 'observacoes' },
+      { header: 'Criado Em', key: 'createdAt' },
+    ];
+    const dados = await this.prisma.ordemServico.findMany({
+      include: {
+        filial: { select: { codigo: true, nomeFantasia: true } },
+        solicitante: { select: { nome: true } },
+        tecnicos: { include: { tecnico: { select: { nome: true } } } },
+        _count: { select: { chamados: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const statusLabel: Record<string, string> = {
+      ABERTA: 'Aberta', EM_EXECUCAO: 'Em Execucao', CONCLUIDA: 'Concluida', CANCELADA: 'Cancelada',
+    };
+    dados.forEach((d) => {
+      let duracao = '';
+      if (d.dataInicio) {
+        const fim = d.dataFim || new Date();
+        const ms = new Date(fim).getTime() - new Date(d.dataInicio).getTime();
+        const h = Math.floor(ms / 3600000);
+        const m = Math.floor((ms % 3600000) / 60000);
+        duracao = h > 0 ? `${h}h ${m}min` : `${m}min`;
+      }
+      sheet.addRow({
+        numero: d.numero,
+        titulo: d.titulo,
+        status: statusLabel[d.status] || d.status,
+        filial: `${d.filial.codigo} - ${d.filial.nomeFantasia}`,
+        solicitante: d.solicitante.nome,
+        tecnicos: d.tecnicos.map((t) => t.tecnico.nome).join(', ') || '-',
+        chamados: d._count.chamados,
+        agendamento: d.dataAgendamento ? new Date(d.dataAgendamento).toLocaleString('pt-BR') : '',
+        inicio: d.dataInicio ? new Date(d.dataInicio).toLocaleString('pt-BR') : '',
+        fim: d.dataFim ? new Date(d.dataFim).toLocaleString('pt-BR') : '',
+        duracao,
+        observacoes: d.observacoes || '',
+        createdAt: new Date(d.createdAt).toLocaleDateString('pt-BR'),
+      });
+    });
+  }
+
+  async exportRelatorioOs(osId: string, res: Response) {
+    const os: any = await this.prisma.ordemServico.findUnique({
+      where: { id: osId },
+      include: {
+        filial: { select: { codigo: true, nomeFantasia: true } },
+        solicitante: { select: { nome: true, username: true } },
+        tecnicos: {
+          include: { tecnico: { select: { nome: true, username: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
+        chamados: {
+          include: {
+            chamado: {
+              select: {
+                numero: true, titulo: true, status: true, prioridade: true,
+                createdAt: true, dataResolucao: true, dataFechamento: true,
+                solicitante: { select: { nome: true } },
+                tecnico: { select: { nome: true } },
+                equipeAtual: { select: { sigla: true, nome: true } },
+                software: { select: { nome: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!os) throw new BadRequestException('Ordem de servico nao encontrada');
+
+    const statusLabel: Record<string, string> = {
+      ABERTA: 'Aberta', EM_EXECUCAO: 'Em Execucao', CONCLUIDA: 'Concluida', CANCELADA: 'Cancelada',
+    };
+    const statusChamadoLabel: Record<string, string> = {
+      ABERTO: 'Aberto', EM_ATENDIMENTO: 'Em Atendimento', PENDENTE: 'Pendente',
+      RESOLVIDO: 'Resolvido', FECHADO: 'Fechado', CANCELADO: 'Cancelado', REABERTO: 'Reaberto',
+    };
+    const fmtDate = (d: Date | null | undefined) => d ? new Date(d).toLocaleString('pt-BR') : '—';
+
+    let duracao = '—';
+    if (os.dataInicio) {
+      const fim = os.dataFim || new Date();
+      const ms = new Date(fim).getTime() - new Date(os.dataInicio).getTime();
+      const h = Math.floor(ms / 3600000);
+      const m = Math.floor((ms % 3600000) / 60000);
+      duracao = h > 0 ? `${h}h ${m}min` : `${m}min`;
+    }
+
+    // Colors
+    const PRIMARY = '#4F46E5';
+    const DARK = '#1E293B';
+    const MUTED = '#64748B';
+    const LIGHT_BG = '#F1F5F9';
+    const WHITE = '#FFFFFF';
+
+    const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
+
+    const nomeArquivo = `OS_${os.numero}_relatorio_${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=${nomeArquivo}`);
+    doc.pipe(res);
+
+    const pageW = doc.page.width - 80; // margins
+
+    // ===== HEADER BAR =====
+    doc.rect(40, 40, pageW, 50).fill(PRIMARY);
+    doc.fontSize(18).fillColor(WHITE).text(`Relatorio — Ordem de Servico #${os.numero}`, 55, 53, { width: pageW - 30 });
+    doc.fontSize(8).fillColor('#C7D2FE').text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 55, 73, { width: pageW - 30, align: 'right' });
+
+    let y = 105;
+
+    // ===== DADOS DA OS =====
+    doc.rect(40, y, pageW, 22).fill(LIGHT_BG);
+    doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold').text('DADOS DA ORDEM DE SERVICO', 50, y + 6);
+    y += 30;
+
+    const campos: [string, string][] = [
+      ['Titulo', os.titulo],
+      ['Status', statusLabel[os.status] || os.status],
+      ['Filial', `${os.filial.codigo} — ${os.filial.nomeFantasia}`],
+      ['Solicitante', os.solicitante.nome],
+      ['Descricao', os.descricao || '—'],
+      ['Agendamento', fmtDate(os.dataAgendamento)],
+      ['Inicio', fmtDate(os.dataInicio)],
+      ['Encerramento', fmtDate(os.dataFim)],
+      ['Duracao', duracao],
+      ['Observacoes', os.observacoes || '—'],
+    ];
+
+    campos.forEach(([label, value]) => {
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(MUTED).text(label, 50, y, { width: 100 });
+      doc.font('Helvetica').fontSize(9).fillColor(DARK).text(value, 155, y, { width: pageW - 125 });
+      y += 16;
+    });
+
+    // ===== TECNICOS =====
+    y += 10;
+    doc.rect(40, y, pageW, 22).fill(LIGHT_BG);
+    doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold').text(`TECNICOS PARTICIPANTES (${os.tecnicos.length})`, 50, y + 6);
+    y += 30;
+
+    if (os.tecnicos.length === 0) {
+      doc.font('Helvetica-Oblique').fontSize(9).fillColor(MUTED).text('Nenhum tecnico vinculado', 50, y);
+      y += 16;
+    } else {
+      os.tecnicos.forEach((t: any, i: number) => {
+        doc.font('Helvetica').fontSize(9).fillColor(DARK)
+          .text(`${i + 1}. ${t.tecnico.nome}`, 50, y, { width: 200 });
+        doc.fillColor(MUTED).text(t.tecnico.username, 260, y);
+        y += 15;
+      });
+    }
+
+    // ===== CHAMADOS =====
+    y += 10;
+    if (y > 650) { doc.addPage(); y = 50; }
+
+    doc.rect(40, y, pageW, 22).fill(LIGHT_BG);
+    doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold').text(`CHAMADOS VINCULADOS (${os.chamados.length})`, 50, y + 6);
+    y += 30;
+
+    if (os.chamados.length === 0) {
+      doc.font('Helvetica-Oblique').fontSize(9).fillColor(MUTED).text('Nenhum chamado vinculado', 50, y);
+      y += 16;
+    } else {
+      // Table header
+      const colX = [50, 85, 290, 370, 450];
+      const colW = [35, 205, 80, 80, pageW - 410 - 50];
+      doc.rect(40, y, pageW, 18).fill(PRIMARY);
+      doc.font('Helvetica-Bold').fontSize(8).fillColor(WHITE);
+      doc.text('#', colX[0], y + 5);
+      doc.text('Titulo', colX[1], y + 5);
+      doc.text('Status', colX[2], y + 5);
+      doc.text('Prioridade', colX[3], y + 5);
+      doc.text('Tecnico', colX[4], y + 5);
+      y += 22;
+
+      os.chamados.forEach((oc: any, i: number) => {
+        if (y > 750) { doc.addPage(); y = 50; }
+        const c = oc.chamado;
+        const bg = i % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+        doc.rect(40, y, pageW, 16).fill(bg);
+        doc.font('Helvetica').fontSize(8).fillColor(DARK);
+        doc.text(`#${c.numero}`, colX[0], y + 4);
+        doc.text(c.titulo.length > 40 ? c.titulo.substring(0, 40) + '...' : c.titulo, colX[1], y + 4, { width: colW[1] });
+        doc.text(statusChamadoLabel[c.status] || c.status, colX[2], y + 4);
+        doc.text(c.prioridade, colX[3], y + 4);
+        doc.text(c.tecnico?.nome || '—', colX[4], y + 4, { width: colW[4] });
+        y += 16;
+      });
+
+      // Detalhes de cada chamado
+      y += 10;
+      if (y > 680) { doc.addPage(); y = 50; }
+      doc.rect(40, y, pageW, 22).fill(LIGHT_BG);
+      doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold').text('DETALHES DOS CHAMADOS', 50, y + 6);
+      y += 28;
+
+      os.chamados.forEach((oc: any) => {
+        if (y > 680) { doc.addPage(); y = 50; }
+        const c = oc.chamado;
+        doc.rect(40, y, pageW, 1).fill('#E2E8F0');
+        y += 6;
+        doc.font('Helvetica-Bold').fontSize(9).fillColor(PRIMARY).text(`#${c.numero} — ${c.titulo}`, 50, y, { width: pageW - 20 });
+        y += 14;
+        const detalhes: [string, string][] = [
+          ['Status', statusChamadoLabel[c.status] || c.status],
+          ['Prioridade', c.prioridade],
+          ['Equipe', `${c.equipeAtual.sigla} — ${c.equipeAtual.nome}`],
+          ['Tecnico', c.tecnico?.nome || '—'],
+          ['Solicitante', c.solicitante.nome],
+          ['Software', c.software?.nome || '—'],
+          ['Aberto em', new Date(c.createdAt).toLocaleString('pt-BR')],
+          ['Resolvido em', c.dataResolucao ? new Date(c.dataResolucao).toLocaleString('pt-BR') : '—'],
+          ['Fechado em', c.dataFechamento ? new Date(c.dataFechamento).toLocaleString('pt-BR') : '—'],
+        ];
+
+        // 2 columns layout
+        for (let i = 0; i < detalhes.length; i += 2) {
+          const [l1, v1] = detalhes[i];
+          doc.font('Helvetica-Bold').fontSize(8).fillColor(MUTED).text(l1, 60, y, { width: 75 });
+          doc.font('Helvetica').fontSize(8).fillColor(DARK).text(v1, 138, y, { width: 140 });
+          if (detalhes[i + 1]) {
+            const [l2, v2] = detalhes[i + 1];
+            doc.font('Helvetica-Bold').fontSize(8).fillColor(MUTED).text(l2, 300, y, { width: 75 });
+            doc.font('Helvetica').fontSize(8).fillColor(DARK).text(v2, 378, y, { width: 150 });
+          }
+          y += 13;
+        }
+        y += 6;
+      });
+    }
+
+    // ===== RESUMO FINAL =====
+    y += 10;
+    if (y > 700) { doc.addPage(); y = 50; }
+
+    const totalChamados = os.chamados.length;
+    const concluidos = os.chamados.filter((oc: any) => ['FECHADO', 'RESOLVIDO'].includes(oc.chamado.status)).length;
+    const abertos = os.chamados.filter((oc: any) => !['FECHADO', 'CANCELADO', 'RESOLVIDO'].includes(oc.chamado.status)).length;
+    const cancelados = os.chamados.filter((oc: any) => oc.chamado.status === 'CANCELADO').length;
+
+    doc.rect(40, y, pageW, 50).fill(PRIMARY);
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(WHITE).text('RESUMO', 55, y + 8);
+    doc.font('Helvetica').fontSize(9).fillColor('#C7D2FE');
+
+    const col1 = 55; const col2 = 185; const col3 = 315; const col4 = 420;
+    const ry = y + 26;
+    doc.font('Helvetica-Bold').fillColor(WHITE);
+    doc.text(`${totalChamados}`, col1, ry); doc.font('Helvetica').fillColor('#C7D2FE').text('Total Chamados', col1, ry + 11);
+    doc.font('Helvetica-Bold').fillColor(WHITE);
+    doc.text(`${concluidos}`, col2, ry); doc.font('Helvetica').fillColor('#C7D2FE').text('Concluidos', col2, ry + 11);
+    doc.font('Helvetica-Bold').fillColor(WHITE);
+    doc.text(`${abertos}`, col3, ry); doc.font('Helvetica').fillColor('#C7D2FE').text('Em aberto', col3, ry + 11);
+    doc.font('Helvetica-Bold').fillColor(WHITE);
+    doc.text(`${cancelados}`, col4, ry); doc.font('Helvetica').fillColor('#C7D2FE').text('Cancelados', col4, ry + 11);
+
+    // Footer on all pages
+    const pages = doc.bufferedPageRange();
+    for (let i = 0; i < pages.count; i++) {
+      doc.switchToPage(i);
+      doc.fontSize(7).fillColor(MUTED)
+        .text(`Gestao de T.I. — OS #${os.numero} — Pagina ${i + 1} de ${pages.count}`, 40, doc.page.height - 30, {
+          width: pageW, align: 'center',
+        });
+    }
+
+    doc.end();
   }
 
   private async exportProjetos(sheet: ExcelJS.Worksheet) {

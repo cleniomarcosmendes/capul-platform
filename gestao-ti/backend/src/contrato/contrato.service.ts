@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StatusContrato, ModalidadeRateio } from '@prisma/client';
@@ -25,6 +26,7 @@ const contratoListInclude = {
   software: { select: { id: true, nome: true, fabricante: true } },
   tipoContrato: { select: { id: true, codigo: true, nome: true } },
   filial: { select: { id: true, codigo: true, nomeFantasia: true } },
+  equipe: { select: { id: true, nome: true, sigla: true } },
   rateioTemplate: { select: { id: true, modalidade: true } },
   _count: { select: { parcelas: true, licencas: true, anexos: true } },
 };
@@ -33,6 +35,7 @@ const contratoDetailInclude = {
   software: { select: { id: true, nome: true, fabricante: true, tipo: true } },
   tipoContrato: { select: { id: true, codigo: true, nome: true } },
   filial: { select: { id: true, codigo: true, nomeFantasia: true } },
+  equipe: { select: { id: true, nome: true, sigla: true } },
   parcelas: {
     include: {
       rateioItens: {
@@ -91,6 +94,23 @@ export class ContratoService {
     }
   }
 
+  /**
+   * Verifica se o usuario tem permissao para gerenciar contratos de uma equipe.
+   * ADMIN e GESTOR_TI sempre tem acesso. TECNICO precisa ser membro da equipe com podeGerirContratos.
+   */
+  private async ensureContratoPermission(equipeId: string | null | undefined, usuarioId: string, role: string) {
+    if (role === 'ADMIN' || role === 'GESTOR_TI') return;
+    if (!equipeId) {
+      throw new ForbiddenException('Contrato sem equipe associada. Apenas ADMIN ou GESTOR_TI podem gerenciar.');
+    }
+    const membro = await this.prisma.membroEquipe.findUnique({
+      where: { usuarioId_equipeId: { usuarioId, equipeId } },
+    });
+    if (!membro || membro.status !== 'ATIVO' || !membro.podeGerirContratos) {
+      throw new ForbiddenException('Voce nao tem permissao para gerenciar contratos desta equipe.');
+    }
+  }
+
   async findAll(filters: {
     tipoContratoId?: string;
     status?: string;
@@ -133,7 +153,9 @@ export class ContratoService {
     return contrato;
   }
 
-  async create(dto: CreateContratoDto, usuarioId: string) {
+  async create(dto: CreateContratoDto, usuarioId: string, role: string = 'ADMIN') {
+    await this.ensureContratoPermission(dto.equipeId, usuarioId, role);
+
     if (dto.softwareId) {
       const sw = await this.prisma.software.findUnique({ where: { id: dto.softwareId } });
       if (!sw) throw new BadRequestException('Software nao encontrado');
@@ -158,6 +180,7 @@ export class ContratoService {
         renovacaoAutomatica: dto.renovacaoAutomatica,
         diasAlertaVencimento: dto.diasAlertaVencimento,
         softwareId: dto.softwareId,
+        equipeId: dto.equipeId,
         observacoes: dto.observacoes,
       },
       include: contratoListInclude,
@@ -173,8 +196,9 @@ export class ContratoService {
     return contrato;
   }
 
-  async update(id: string, dto: UpdateContratoDto, usuarioId: string) {
+  async update(id: string, dto: UpdateContratoDto, usuarioId: string, role: string = 'ADMIN') {
     const contrato = await this.findOne(id);
+    await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
 
     if (['RENOVADO', 'CANCELADO', 'ENCERRADO'].includes(contrato.status)) {
       throw new BadRequestException('Contrato finalizado nao pode ser alterado');
@@ -203,6 +227,7 @@ export class ContratoService {
     if (dto.renovacaoAutomatica !== undefined) data.renovacaoAutomatica = dto.renovacaoAutomatica;
     if (dto.diasAlertaVencimento !== undefined) data.diasAlertaVencimento = dto.diasAlertaVencimento;
     if (dto.softwareId !== undefined) data.softwareId = dto.softwareId || null;
+    if (dto.equipeId !== undefined) data.equipeId = dto.equipeId || null;
     if (dto.observacoes !== undefined) data.observacoes = dto.observacoes;
 
     const updated = await this.prisma.contrato.update({
@@ -216,8 +241,9 @@ export class ContratoService {
     return updated;
   }
 
-  async alterarStatus(id: string, novoStatus: StatusContrato, usuarioId: string) {
+  async alterarStatus(id: string, novoStatus: StatusContrato, usuarioId: string, role: string = 'ADMIN') {
     const contrato = await this.findOne(id);
+    await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
 
     const permitidos = TRANSICOES_VALIDAS[contrato.status];
     if (!permitidos.includes(novoStatus)) {
@@ -256,8 +282,9 @@ export class ContratoService {
     return updated;
   }
 
-  async renovar(id: string, dto: RenovarContratoDto, usuarioId: string) {
+  async renovar(id: string, dto: RenovarContratoDto, usuarioId: string, role: string = 'ADMIN') {
     const contrato = await this.findOne(id);
+    await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
 
     if (!['ATIVO', 'VENCIDO'].includes(contrato.status)) {
       throw new BadRequestException('Somente contratos ativos ou vencidos podem ser renovados');
@@ -397,8 +424,9 @@ export class ContratoService {
     });
   }
 
-  async criarParcela(contratoId: string, dto: CreateParcelaDto, usuarioId: string) {
+  async criarParcela(contratoId: string, dto: CreateParcelaDto, usuarioId: string, role: string = 'ADMIN') {
     const contrato = await this.findOne(contratoId);
+    await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
 
     if (['RENOVADO', 'CANCELADO', 'ENCERRADO'].includes(contrato.status)) {
       throw new BadRequestException('Contrato finalizado nao permite novas parcelas');
@@ -453,7 +481,10 @@ export class ContratoService {
     });
   }
 
-  async pagarParcela(contratoId: string, parcelaId: string, dto: PagarParcelaDto, usuarioId: string) {
+  async pagarParcela(contratoId: string, parcelaId: string, dto: PagarParcelaDto, usuarioId: string, role: string = 'ADMIN') {
+    const contrato = await this.findOne(contratoId);
+    await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+
     const parcela = await this.prisma.parcelaContrato.findFirst({
       where: { id: parcelaId, contratoId },
     });
@@ -486,7 +517,10 @@ export class ContratoService {
     return updated;
   }
 
-  async cancelarParcela(contratoId: string, parcelaId: string, usuarioId: string) {
+  async cancelarParcela(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN') {
+    const contrato = await this.findOne(contratoId);
+    await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+
     const parcela = await this.prisma.parcelaContrato.findFirst({
       where: { id: parcelaId, contratoId },
     });
@@ -538,8 +572,9 @@ export class ContratoService {
     return this.computeRateio(dto.modalidade, dto.itens, new Decimal(contrato.valorTotal.toString()));
   }
 
-  async configurarRateioTemplate(contratoId: string, dto: ConfigurarRateioTemplateDto, usuarioId: string) {
+  async configurarRateioTemplate(contratoId: string, dto: ConfigurarRateioTemplateDto, usuarioId: string, role: string = 'ADMIN') {
     const contrato = await this.findOne(contratoId);
+    await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
 
     if (['RENOVADO', 'CANCELADO'].includes(contrato.status)) {
       throw new BadRequestException('Contrato finalizado nao permite alteracao de rateio');
@@ -600,7 +635,10 @@ export class ContratoService {
     });
   }
 
-  async gerarRateioParcela(contratoId: string, parcelaId: string, dto: GerarRateioParcelaDto, usuarioId: string) {
+  async gerarRateioParcela(contratoId: string, parcelaId: string, dto: GerarRateioParcelaDto, usuarioId: string, role: string = 'ADMIN') {
+    const contrato = await this.findOne(contratoId);
+    await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+
     const parcela = await this.prisma.parcelaContrato.findFirst({
       where: { id: parcelaId, contratoId },
     });
@@ -653,7 +691,10 @@ export class ContratoService {
     return this.obterRateioParcela(contratoId, parcelaId);
   }
 
-  async configurarRateioParcela(contratoId: string, parcelaId: string, dto: ConfigurarRateioDto, usuarioId: string) {
+  async configurarRateioParcela(contratoId: string, parcelaId: string, dto: ConfigurarRateioDto, usuarioId: string, role: string = 'ADMIN') {
+    const contrato = await this.findOne(contratoId);
+    await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+
     const parcela = await this.prisma.parcelaContrato.findFirst({
       where: { id: parcelaId, contratoId },
     });
@@ -824,8 +865,9 @@ export class ContratoService {
 
   // --- Licencas ---
 
-  async vincularLicenca(contratoId: string, licencaId: string, usuarioId: string) {
+  async vincularLicenca(contratoId: string, licencaId: string, usuarioId: string, role: string = 'ADMIN') {
     const contrato = await this.findOne(contratoId);
+    await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
     if (['RENOVADO', 'CANCELADO', 'ENCERRADO'].includes(contrato.status)) {
       throw new BadRequestException('Nao e possivel vincular licencas a contrato finalizado');
     }
@@ -849,8 +891,9 @@ export class ContratoService {
     return updated;
   }
 
-  async desvincularLicenca(contratoId: string, licencaId: string, usuarioId: string) {
+  async desvincularLicenca(contratoId: string, licencaId: string, usuarioId: string, role: string = 'ADMIN') {
     const contrato = await this.findOne(contratoId);
+    await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
     if (['RENOVADO', 'CANCELADO', 'ENCERRADO'].includes(contrato.status)) {
       throw new BadRequestException('Nao e possivel desvincular licencas de contrato finalizado');
     }

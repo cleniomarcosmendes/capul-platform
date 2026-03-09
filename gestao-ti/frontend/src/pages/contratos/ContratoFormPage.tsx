@@ -3,9 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { contratoService } from '../../services/contrato.service';
 import { softwareService } from '../../services/software.service';
+import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
 import { ArrowLeft } from 'lucide-react';
-import type { Software, TipoContratoConfig } from '../../types';
+import type { Software, TipoContratoConfig, EquipeTI } from '../../types';
 
 export function ContratoFormPage() {
   const { id } = useParams();
@@ -13,6 +14,7 @@ export function ContratoFormPage() {
   const navigate = useNavigate();
 
   const [softwares, setSoftwares] = useState<Software[]>([]);
+  const [equipes, setEquipes] = useState<EquipeTI[]>([]);
   const [filiais, setFiliais] = useState<{ id: string; codigo: string; nomeFantasia: string }[]>([]);
   const [tiposContrato, setTiposContrato] = useState<TipoContratoConfig[]>([]);
   const [saving, setSaving] = useState(false);
@@ -36,6 +38,7 @@ export function ContratoFormPage() {
   const [renovacaoAutomatica, setRenovacaoAutomatica] = useState(false);
   const [diasAlertaVencimento, setDiasAlertaVencimento] = useState('30');
   const [softwareId, setSoftwareId] = useState('');
+  const [equipeId, setEquipeId] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [gerarParcelas, setGerarParcelas] = useState(false);
   const [quantidadeParcelas, setQuantidadeParcelas] = useState('12');
@@ -46,6 +49,7 @@ export function ContratoFormPage() {
       softwareService.listar({ status: 'ATIVO' }).then(setSoftwares).catch(() => {}),
       coreService.listarFiliais().then(setFiliais).catch(() => {}),
       contratoService.listarTiposContrato().then(setTiposContrato).catch(() => {}),
+      equipeService.listar('ATIVO').then(setEquipes).catch(() => {}),
     ]);
 
     if (isEdit && id) {
@@ -67,6 +71,7 @@ export function ContratoFormPage() {
         setRenovacaoAutomatica(c.renovacaoAutomatica);
         setDiasAlertaVencimento(String(c.diasAlertaVencimento));
         setSoftwareId(c.softwareId || '');
+        setEquipeId(c.equipeId || '');
         setObservacoes(c.observacoes || '');
       }).catch(() => setError('Erro ao carregar contrato'))
         .finally(() => setLoadingData(false));
@@ -96,6 +101,7 @@ export function ContratoFormPage() {
       renovacaoAutomatica,
       diasAlertaVencimento: parseInt(diasAlertaVencimento, 10),
       softwareId: softwareId || undefined,
+      equipeId: equipeId || undefined,
       observacoes: observacoes || undefined,
       gerarParcelas: !isEdit ? gerarParcelas : undefined,
       quantidadeParcelas: !isEdit && gerarParcelas ? parseInt(quantidadeParcelas, 10) : undefined,
@@ -179,6 +185,16 @@ export function ContratoFormPage() {
                 {softwares.map((s) => <option key={s.id} value={s.id}>{s.nome}{s.fabricante ? ` (${s.fabricante})` : ''}</option>)}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Equipe Responsavel</label>
+            <select value={equipeId} onChange={(e) => setEquipeId(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+              <option value="">Nenhuma (somente ADMIN/Gestor)</option>
+              {equipes.map((eq) => <option key={eq.id} value={eq.id}>{eq.sigla} - {eq.nome}</option>)}
+            </select>
+            <p className="text-xs text-slate-400 mt-1">Membros da equipe com permissao poderao gerenciar este contrato</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

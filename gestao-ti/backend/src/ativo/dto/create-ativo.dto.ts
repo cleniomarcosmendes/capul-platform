@@ -60,4 +60,10 @@ export class CreateAtivoDto {
 
   @IsOptional() @IsString()
   observacoes?: string;
+
+  @IsOptional() @IsString()
+  glpiId?: string;
+
+  @IsOptional() @IsUUID()
+  ativoPaiId?: string;
 }

@@ -53,7 +53,7 @@ export function ChamadosListPage() {
   const [filterStatus, setFilterStatus] = useState<StatusChamado | ''>('');
   const [filterEquipe, setFilterEquipe] = useState('');
   const [filterVisibilidade, setFilterVisibilidade] = useState<Visibilidade | ''>('');
-  const [meusChamados, setMeusChamados] = useState(false);
+  const [meusChamados, setMeusChamados] = useState(gestaoTiRole !== 'USUARIO_FINAL');
   // 'atual' = filial do usuario, '' = todas, uuid = filial especifica
   const [filterFilial, setFilterFilial] = useState<string>('atual');
   const [filterDepartamento, setFilterDepartamento] = useState('');

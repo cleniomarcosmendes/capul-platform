@@ -60,6 +60,12 @@ export class UpdateAtivoDto {
 
   @IsOptional() @IsString()
   observacoes?: string;
+
+  @IsOptional() @IsString()
+  glpiId?: string;
+
+  @IsOptional() @IsUUID()
+  ativoPaiId?: string;
 }
 
 export class UpdateStatusAtivoDto {

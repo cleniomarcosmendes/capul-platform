@@ -43,6 +43,7 @@ export interface EquipeTI {
 export interface MembroEquipe {
   id: string;
   isLider: boolean;
+  podeGerirContratos: boolean;
   status: 'ATIVO' | 'INATIVO';
   usuarioId: string;
   equipeId: string;
@@ -205,6 +206,8 @@ export interface Chamado {
   anexos?: AnexoChamado[];
   projetoId: string | null;
   projeto: { id: string; numero: number; nome: string } | null;
+  ativoId: string | null;
+  ativo: { id: string; tag: string; nome: string; tipo: TipoAtivo } | null;
   departamentoId: string | null;
   departamento: { id: string; nome: string } | null;
   colaboradores?: ChamadoColaborador[];
@@ -255,15 +258,15 @@ export interface OrdemServico {
   status: StatusOS;
   filialId: string;
   filial: FilialResumo;
-  tecnicoId: string;
-  tecnico: { id: string; nome: string; username: string };
   solicitanteId: string;
   solicitante: { id: string; nome: string; username: string };
-  chamadoId: string | null;
-  chamado: { id: string; numero: number; titulo: string } | null;
+  tecnicos: { id: string; tecnicoId: string; tecnico: { id: string; nome: string; username: string } }[];
+  chamados: { id: string; chamadoId: string; chamado: { id: string; numero: number; titulo: string; status: string } }[];
   dataAgendamento: string | null;
-  dataExecucao: string | null;
+  dataInicio: string | null;
+  dataFim: string | null;
   observacoes: string | null;
+  _count: { chamados: number; tecnicos: number };
   createdAt: string;
   updatedAt: string;
 }
@@ -418,6 +421,8 @@ export interface Contrato {
   diasAlertaVencimento: number;
   softwareId: string | null;
   software: { id: string; nome: string; fabricante: string | null; tipo?: TipoSoftware } | null;
+  equipeId: string | null;
+  equipe: { id: string; nome: string; sigla: string } | null;
   contratoOriginalId: string | null;
   contratoOriginal: { id: string; numero: number; titulo: string } | null;
   contratosRenovados: { id: string; numero: number; titulo: string; valorTotal: number; dataInicio: string; dataFim: string; status: StatusContrato }[];
@@ -540,14 +545,13 @@ export interface RegistroParada {
   software: { id: string; nome: string; tipo: string; criticidade: string | null };
   softwareModuloId: string | null;
   softwareModulo: { id: string; nome: string } | null;
-  chamadoId: string | null;
-  chamado: { id: string; numero: number; titulo: string } | null;
+  chamados: { id: string; chamadoId: string; chamado: { id: string; numero: number; titulo: string; status: string } }[];
   registradoPorId: string;
   registradoPor: { id: string; nome: string; username: string };
   finalizadoPorId: string | null;
   finalizadoPor: { id: string; nome: string; username: string } | null;
   filiaisAfetadas: ParadaFilialAfetada[];
-  _count: { filiaisAfetadas: number };
+  _count: { filiaisAfetadas: number; chamados: number };
   createdAt: string;
   updatedAt: string;
 }
@@ -817,14 +821,18 @@ export interface Ativo {
   ip: string | null;
   hostname: string | null;
   observacoes: string | null;
+  glpiId: string | null;
   filialId: string;
   filial: FilialResumo;
   responsavelId: string | null;
   responsavel: { id: string; nome: string; username: string } | null;
   departamentoId: string | null;
   departamento: { id: string; nome: string } | null;
+  ativoPaiId: string | null;
+  ativoPai: { id: string; tag: string; nome: string; tipo: TipoAtivo } | null;
   softwares?: AtivoSoftwareItem[];
-  _count: { softwares: number };
+  componentes?: { id: string; tag: string; nome: string; tipo: TipoAtivo; status: string; fabricante: string | null; modelo: string | null; ip: string | null; hostname: string | null }[];
+  _count: { softwares: number; componentes: number; chamados: number };
   createdAt: string;
   updatedAt: string;
 }

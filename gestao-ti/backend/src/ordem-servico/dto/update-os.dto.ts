@@ -1,9 +1,9 @@
-import { IsString, IsOptional, IsEnum, IsDateString } from 'class-validator';
-import { StatusOS } from '@prisma/client';
+import { IsString, IsOptional, IsDateString, MaxLength } from 'class-validator';
 
 export class UpdateOsDto {
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   titulo?: string;
 
   @IsOptional()
@@ -11,16 +11,8 @@ export class UpdateOsDto {
   descricao?: string;
 
   @IsOptional()
-  @IsEnum(StatusOS)
-  status?: StatusOS;
-
-  @IsOptional()
   @IsDateString()
   dataAgendamento?: string;
-
-  @IsOptional()
-  @IsDateString()
-  dataExecucao?: string;
 
   @IsOptional()
   @IsString()

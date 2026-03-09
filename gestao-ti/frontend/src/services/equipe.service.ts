@@ -28,12 +28,12 @@ export const equipeService = {
     return data;
   },
 
-  async adicionarMembro(equipeId: string, membro: { usuarioId: string; isLider?: boolean }): Promise<MembroEquipe> {
+  async adicionarMembro(equipeId: string, membro: { usuarioId: string; isLider?: boolean; podeGerirContratos?: boolean }): Promise<MembroEquipe> {
     const { data } = await gestaoApi.post(`/equipes/${equipeId}/membros`, membro);
     return data;
   },
 
-  async atualizarMembro(equipeId: string, membroId: string, dados: { isLider?: boolean; status?: string }): Promise<MembroEquipe> {
+  async atualizarMembro(equipeId: string, membroId: string, dados: { isLider?: boolean; podeGerirContratos?: boolean; status?: string }): Promise<MembroEquipe> {
     const { data } = await gestaoApi.patch(`/equipes/${equipeId}/membros/${membroId}`, dados);
     return data;
   },

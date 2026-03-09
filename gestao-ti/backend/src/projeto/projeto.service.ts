@@ -102,10 +102,15 @@ export class ProjetoService {
     contratoId?: string;
     search?: string;
     apenasRaiz?: string;
+    meusProjetos?: string;
+    usuarioId?: string;
   }) {
     const where: Record<string, unknown> = {};
 
-    if (filters.status) where.status = filters.status;
+    if (filters.status) {
+      const statuses = filters.status.split(',');
+      where.status = statuses.length > 1 ? { in: statuses } : filters.status;
+    }
     if (filters.tipo) where.tipo = filters.tipo;
     if (filters.modo) where.modo = filters.modo;
     if (filters.softwareId) where.softwareId = filters.softwareId;
@@ -115,11 +120,24 @@ export class ProjetoService {
       where.nivel = 1;
     }
 
-    if (filters.search) {
+    if (filters.meusProjetos === 'true' && filters.usuarioId) {
       where.OR = [
+        { responsavelId: filters.usuarioId },
+        { membros: { some: { usuarioId: filters.usuarioId } } },
+      ];
+    }
+
+    if (filters.search) {
+      const searchCondition = [
         { nome: { contains: filters.search, mode: 'insensitive' } },
         { descricao: { contains: filters.search, mode: 'insensitive' } },
       ];
+      if (where.OR) {
+        where.AND = [{ OR: where.OR }, { OR: searchCondition }];
+        delete where.OR;
+      } else {
+        where.OR = searchCondition;
+      }
     }
 
     return this.prisma.projeto.findMany({
@@ -239,6 +257,21 @@ export class ProjetoService {
           const nomes = pendentes.map((d) => `#${d.projetoDestino.numero} ${d.projetoDestino.nome}`).join(', ');
           throw new BadRequestException(
             `Nao e possivel concluir projeto com dependencias pendentes: ${nomes}`,
+          );
+        }
+
+        // Validar sub-projetos antes de concluir
+        const subProjetos = await this.prisma.projeto.findMany({
+          where: { projetoPaiId: id },
+          select: { id: true, nome: true, numero: true, status: true },
+        });
+        const subPendentes = subProjetos.filter(
+          (sp) => sp.status !== 'CONCLUIDO' && sp.status !== 'CANCELADO',
+        );
+        if (subPendentes.length > 0) {
+          const nomes = subPendentes.map((sp) => `#${sp.numero} ${sp.nome}`).join(', ');
+          throw new BadRequestException(
+            `Nao e possivel concluir projeto com sub-projetos pendentes: ${nomes}`,
           );
         }
 

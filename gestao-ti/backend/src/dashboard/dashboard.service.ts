@@ -827,4 +827,132 @@ export class DashboardService {
       chamadosNotaBaixa,
     };
   }
+
+  async getOrdensServico(filters?: { dataInicio?: string; dataFim?: string; filialId?: string }) {
+    const { inicio, fim } = this.resolvePeriodo(filters);
+    const periodoFilter = { gte: inicio, lte: fim };
+    const filialFilter = filters?.filialId ? { filialId: filters.filialId } : {};
+
+    // Período anterior (mesmo intervalo antes)
+    const diffMs = fim.getTime() - inicio.getTime();
+    const inicioAnterior = new Date(inicio.getTime() - diffMs);
+    const fimAnterior = new Date(inicio.getTime() - 1);
+
+    const [
+      totalPeriodo, totalAnterior,
+      porStatus, porFilial,
+      porTecnico, totalChamadosVinculados,
+      concluidas, todasOs,
+    ] = await Promise.all([
+      // Total OS no período
+      this.prisma.ordemServico.count({ where: { createdAt: periodoFilter, ...filialFilter } }),
+      // Total OS no período anterior
+      this.prisma.ordemServico.count({ where: { createdAt: { gte: inicioAnterior, lte: fimAnterior }, ...filialFilter } }),
+      // Por status
+      this.prisma.ordemServico.groupBy({
+        by: ['status'], _count: true,
+        where: { createdAt: periodoFilter, ...filialFilter },
+      }),
+      // Por filial (ranking)
+      this.prisma.ordemServico.groupBy({
+        by: ['filialId'], _count: true,
+        where: { createdAt: periodoFilter },
+        orderBy: { filialId: 'asc' },
+      }),
+      // Por tecnico (via join table)
+      this.prisma.osTecnico.groupBy({
+        by: ['tecnicoId'], _count: true,
+        where: { os: { createdAt: periodoFilter, ...filialFilter } },
+        orderBy: { tecnicoId: 'asc' },
+      }),
+      // Total chamados vinculados
+      this.prisma.osChamado.count({ where: { os: { createdAt: periodoFilter, ...filialFilter } } }),
+      // Concluidas (para calculo de tempo)
+      this.prisma.ordemServico.findMany({
+        where: { status: 'CONCLUIDA', dataInicio: { not: null }, dataFim: { not: null }, createdAt: periodoFilter, ...filialFilter },
+        select: { dataInicio: true, dataFim: true },
+      }),
+      // Todas OS do período para média de chamados
+      this.prisma.ordemServico.findMany({
+        where: { createdAt: periodoFilter, ...filialFilter },
+        select: { id: true, _count: { select: { chamados: true } } },
+      }),
+    ]);
+
+    // Enrich filial names
+    const filialIds = porFilial.map((f) => f.filialId);
+    const filiaisData = filialIds.length > 0
+      ? await this.prisma.filial.findMany({ where: { id: { in: filialIds } }, select: { id: true, codigo: true, nomeFantasia: true } })
+      : [];
+    const filialMap: Record<string, string> = {};
+    for (const f of filiaisData) filialMap[f.id] = `${f.codigo} — ${f.nomeFantasia}`;
+
+    // Enrich tecnico names
+    const tecnicoIds = porTecnico.map((t) => t.tecnicoId);
+    const tecnicosData = tecnicoIds.length > 0
+      ? await this.prisma.usuario.findMany({ where: { id: { in: tecnicoIds } }, select: { id: true, nome: true } })
+      : [];
+    const tecnicoMap: Record<string, string> = {};
+    for (const t of tecnicosData) tecnicoMap[t.id] = t.nome;
+
+    // Calculos de tempo (em minutos)
+    const temposMin = concluidas.map((os) => {
+      const diff = new Date(os.dataFim!).getTime() - new Date(os.dataInicio!).getTime();
+      return diff / 60000;
+    });
+    const tempoTotalMin = temposMin.reduce((a, b) => a + b, 0);
+    const tempoMedioMin = temposMin.length > 0 ? tempoTotalMin / temposMin.length : 0;
+
+    // Media chamados por OS
+    const totalChamadosArr = todasOs.map((os) => os._count.chamados);
+    const mediaChamadosPorOs = totalChamadosArr.length > 0
+      ? totalChamadosArr.reduce((a, b) => a + b, 0) / totalChamadosArr.length : 0;
+
+    // Evolucao mensal (ultimos 6 meses)
+    const evolucao: { mes: string; total: number; concluidas: number; chamados: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      const mesInicio = new Date(d.getFullYear(), d.getMonth(), 1);
+      const mesFim = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+      const [total, conc, cham] = await Promise.all([
+        this.prisma.ordemServico.count({ where: { createdAt: { gte: mesInicio, lte: mesFim }, ...filialFilter } }),
+        this.prisma.ordemServico.count({ where: { status: 'CONCLUIDA', createdAt: { gte: mesInicio, lte: mesFim }, ...filialFilter } }),
+        this.prisma.osChamado.count({ where: { os: { createdAt: { gte: mesInicio, lte: mesFim }, ...filialFilter } } }),
+      ]);
+      evolucao.push({
+        mes: mesInicio.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+        total, concluidas: conc, chamados: cham,
+      });
+    }
+
+    // Variacao percentual vs período anterior
+    const variacao = totalAnterior > 0 ? Math.round(((totalPeriodo - totalAnterior) / totalAnterior) * 100) : null;
+
+    return {
+      periodo: { inicio, fim },
+      resumo: {
+        totalOs: totalPeriodo,
+        totalAnterior,
+        variacao,
+        totalChamadosVinculados,
+        mediaChamadosPorOs: +mediaChamadosPorOs.toFixed(1),
+        concluidas: concluidas.length,
+        tempoMedioMinutos: Math.round(tempoMedioMin),
+        tempoTotalHoras: +(tempoTotalMin / 60).toFixed(1),
+      },
+      porStatus: porStatus.map((s) => ({ status: s.status, total: s._count })),
+      porFilial: porFilial.map((f) => ({
+        filialId: f.filialId,
+        filialNome: filialMap[f.filialId] || f.filialId,
+        total: f._count,
+      })),
+      porTecnico: porTecnico.map((t) => ({
+        tecnicoId: t.tecnicoId,
+        tecnicoNome: tecnicoMap[t.tecnicoId] || t.tecnicoId,
+        totalOs: t._count,
+      })),
+      evolucaoMensal: evolucao,
+    };
+  }
 }
