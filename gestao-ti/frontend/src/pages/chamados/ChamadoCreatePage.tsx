@@ -55,12 +55,6 @@ export function ChamadoCreatePage() {
   // IP da maquina
   const [ipMaquina, setIpMaquina] = useState('');
 
-  // Auto-detectar IP do cliente via backend
-  useEffect(() => {
-    chamadoService.getClientIp().then((ip) => {
-      if (ip) setIpMaquina(ip);
-    });
-  }, []);
 
   // Anexos
   const [arquivos, setArquivos] = useState<File[]>([]);
@@ -345,7 +339,7 @@ export function ChamadoCreatePage() {
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
               placeholder="Ex: 192.168.1.100"
             />
-            <p className="text-xs text-slate-400 mt-1">Informe o IP para acesso remoto. Se nao preencher, o IP da conexao sera registrado automaticamente.</p>
+            <p className="text-xs text-slate-400 mt-1">Informe o IP da sua maquina para acesso remoto (ex: 192.168.1.100)</p>
           </div>
 
           {catalogos.length > 0 && (
