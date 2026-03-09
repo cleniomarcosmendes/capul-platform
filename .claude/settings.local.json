@@ -1032,7 +1032,28 @@
       "Bash(cd /mnt/c/meus_projetos/capul-platform && docker compose build --no-cache gestao-ti-frontend 2>&1 | tail -10)",
       "Bash(docker compose build --no-cache gestao-ti-frontend 2>&1 | tail -15)",
       "Bash(cd /mnt/c/meus_projetos/capul-platform && docker compose build --no-cache gestao-ti-frontend 2>&1 | tail -5)",
-      "Bash(cd /mnt/c/meus_projetos/capul-platform && docker compose build --no-cache gestao-ti-frontend 2>&1 | tail -5 && docker compose up -d gestao-ti-frontend 2>&1)"
+      "Bash(cd /mnt/c/meus_projetos/capul-platform && docker compose build --no-cache gestao-ti-frontend 2>&1 | tail -5 && docker compose up -d gestao-ti-frontend 2>&1)",
+      "Bash(docker compose ps 2>&1)",
+      "Bash(docker compose logs --tail=20 capul-gestao-ti-api 2>&1)",
+      "Bash(docker compose logs --tail=20 gestao-ti-backend 2>&1)",
+      "Bash(docker compose logs --tail=20 gestao-ti-frontend 2>&1)",
+      "Bash(docker compose logs --tail=20 nginx 2>&1)",
+      "Bash(docker system df 2>&1)",
+      "Bash(docker compose logs --tail=10 nginx 2>&1)",
+      "Bash(for service in api ativo catalogo chamado conhecimento contrato core dashboard equipe export import licenca notificacao ordem-servico parada projeto sla software; do\n  echo \"=== $service ===\"\n  grep -r \"$service\\\\.service\\\\|services/$service\" /mnt/c/meus_projetos/capul-platform/gestao-ti/frontend/src --include=\"*.tsx\" --include=\"*.ts\" | grep -v \"^Binary\" | wc -l\ndone)",
+      "Bash(for dir in equipe catalogo-servico sla software licenca ativo notificacao conhecimento import contrato ordem-servico dashboard export chamado parada projeto prisma)",
+      "Bash(do echo \"=== $dir ===\")",
+      "Read(//mnt/c/meus_projetos/capul-platform/$dir/**)",
+      "Bash(done)",
+      "Bash(find /mnt/c/meus_projetos/capul-platform/gestao-ti/frontend/src/components -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" \\\\\\) | xargs basename -a)",
+      "Bash(grep \"^import.*from ''''./pages\" /mnt/c/meus_projetos/capul-platform/gestao-ti/frontend/src/App.tsx)",
+      "Read(//tmp/**)",
+      "Bash(cd /mnt/c/meus_projetos/capul-platform/gestao-ti/frontend/src && \\\\\ngrep \"^import.*from './pages\" App.tsx | sed \"s/^import {[^}]*} from ['\\\\\"]\\\\.\\\\/pages\\\\/\\\\\\([^'\\\\\"]*\\\\\\)['\\\\\"];$/\\\\1/\" | sort > /tmp/imported.txt && \\\\\nfind pages -name \"*.tsx\" | sed 's/^pages\\\\///' | sort > /tmp/existing.txt && \\\\\necho \"=== FILES IMPORTED IN APP.TSX ===\" && cat /tmp/imported.txt && \\\\\necho \"\" && echo \"=== ALL .TSX FILES IN pages/ ===\" && cat /tmp/existing.txt && \\\\\necho \"\" && echo \"=== ORPHANED FILES \\(exist but not imported\\) ===\" && \\\\\ncomm -23 /tmp/existing.txt /tmp/imported.txt)",
+      "Bash(grep -r \"DashboardCsatPage\" /mnt/c/meus_projetos/capul-platform --include=\"*.tsx\" --include=\"*.ts\" 2>/dev/null | wc -l)",
+      "Bash(grep -l \"DashboardCsatPage\\\\|DashboardExecutivoPage\" /mnt/c/meus_projetos/capul-platform/gestao-ti/frontend/src/**/*.tsx 2>/dev/null | head -20)",
+      "Bash(grep -l \"DashboardFinanceiroPage\\\\|DashboardDisponibilidadePage\\\\|DashboardOsPage\" /mnt/c/meus_projetos/capul-platform/gestao-ti/frontend/src/**/*.tsx 2>/dev/null)",
+      "Bash(docker builder prune --all -f 2>&1)",
+      "Bash(docker image prune -a -f --filter \"until=24h\" 2>&1)"
     ]
   }
 }
