@@ -530,6 +530,23 @@ export interface ParadaFilialAfetada {
   createdAt: string;
 }
 
+export interface ParadaColaborador {
+  id: string;
+  paradaId: string;
+  usuarioId: string;
+  usuario: { id: string; nome: string; username: string };
+  createdAt: string;
+}
+
+export interface MotivoParada {
+  id: string;
+  nome: string;
+  descricao: string | null;
+  ativo: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface RegistroParada {
   id: string;
   titulo: string;
@@ -541,6 +558,8 @@ export interface RegistroParada {
   fim: string | null;
   duracaoMinutos: number | null;
   observacoes: string | null;
+  motivoParadaId: string | null;
+  motivoParada: { id: string; nome: string } | null;
   softwareId: string;
   software: { id: string; nome: string; tipo: string; criticidade: string | null };
   softwareModuloId: string | null;
@@ -551,7 +570,8 @@ export interface RegistroParada {
   finalizadoPorId: string | null;
   finalizadoPor: { id: string; nome: string; username: string } | null;
   filiaisAfetadas: ParadaFilialAfetada[];
-  _count: { filiaisAfetadas: number; chamados: number };
+  colaboradores: ParadaColaborador[];
+  _count: { filiaisAfetadas: number; chamados: number; colaboradores: number };
   createdAt: string;
   updatedAt: string;
 }
@@ -760,6 +780,8 @@ export interface AtividadeProjeto {
   id: string;
   titulo: string;
   descricao: string | null;
+  dataInicio: string | null;
+  dataFimPrevista: string | null;
   dataAtividade: string;
   status: StatusAtividade;
   projetoId: string;
@@ -767,9 +789,26 @@ export interface AtividadeProjeto {
   usuario: { id: string; nome: string };
   faseId: string | null;
   fase: { id: string; nome: string } | null;
-  _count?: { registrosTempo: number };
+  _count?: { registrosTempo: number; comentarios: number };
   registrosTempo?: { id: string; usuarioId: string; horaInicio: string }[];
   createdAt: string;
+}
+
+export interface ComentarioTarefa {
+  id: string;
+  texto: string;
+  atividadeId: string;
+  usuarioId: string;
+  usuario: { id: string; nome: string };
+  atividade?: {
+    id: string;
+    titulo: string;
+    projetoId: string;
+    projeto: { id: string; numero: number; nome: string };
+    fase: { id: string; nome: string } | null;
+  };
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RegistroTempo {

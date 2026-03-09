@@ -13,6 +13,7 @@ import type {
   ApontamentoHoras,
   RegistroTempo,
   Chamado,
+  ComentarioTarefa,
   TipoProjeto,
   ModoProjeto,
   StatusProjeto,
@@ -137,12 +138,12 @@ export const projetoService = {
     return data;
   },
 
-  async adicionarAtividade(id: string, payload: { titulo: string; descricao?: string; faseId?: string }): Promise<AtividadeProjeto> {
+  async adicionarAtividade(id: string, payload: { titulo: string; descricao?: string; faseId?: string; dataInicio?: string; dataFimPrevista?: string }): Promise<AtividadeProjeto> {
     const { data } = await gestaoApi.post(`/projetos/${id}/atividades`, payload);
     return data;
   },
 
-  async atualizarAtividade(id: string, atividadeId: string, payload: { titulo?: string; descricao?: string; faseId?: string; status?: string }): Promise<AtividadeProjeto> {
+  async atualizarAtividade(id: string, atividadeId: string, payload: { titulo?: string; descricao?: string; faseId?: string; status?: string; dataInicio?: string; dataFimPrevista?: string }): Promise<AtividadeProjeto> {
     const { data } = await gestaoApi.patch(`/projetos/${id}/atividades/${atividadeId}`, payload);
     return data;
   },
@@ -304,5 +305,25 @@ export const projetoService = {
 
   async desvincularChamado(id: string, chamadoId: string): Promise<void> {
     await gestaoApi.delete(`/projetos/${id}/chamados/${chamadoId}`);
+  },
+
+  // Comentarios de Tarefa
+  async listarComentarios(id: string, atividadeId: string): Promise<ComentarioTarefa[]> {
+    const { data } = await gestaoApi.get(`/projetos/${id}/atividades/${atividadeId}/comentarios`);
+    return data;
+  },
+
+  async adicionarComentario(id: string, atividadeId: string, texto: string): Promise<ComentarioTarefa> {
+    const { data } = await gestaoApi.post(`/projetos/${id}/atividades/${atividadeId}/comentarios`, { texto });
+    return data;
+  },
+
+  async removerComentario(id: string, comentarioId: string): Promise<void> {
+    await gestaoApi.delete(`/projetos/${id}/comentarios/${comentarioId}`);
+  },
+
+  async buscarComentarios(query: string): Promise<ComentarioTarefa[]> {
+    const { data } = await gestaoApi.get('/projetos/busca-comentarios', { params: { q: query } });
+    return data;
   },
 };

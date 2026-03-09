@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { paradaService } from '../../services/parada.service';
 import { chamadoService } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
-import { Activity, ArrowLeft, Clock, AlertTriangle, Building2, User, Wrench, Unlink, Plus, Ticket, X, Filter, CheckSquare } from 'lucide-react';
+import { Activity, ArrowLeft, Clock, AlertTriangle, Building2, User, Wrench, Unlink, Plus, Ticket, X, Filter, CheckSquare, Users, Trash2, Search } from 'lucide-react';
 import type { RegistroParada, Chamado, EquipeTI } from '../../types';
 import { useToast } from '../../components/Toast';
 
@@ -244,6 +244,12 @@ export function ParadaDetalhePage() {
                   <span className="text-slate-700">{parada.softwareModulo.nome}</span>
                 </div>
               )}
+              {parada.motivoParada && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Motivo</span>
+                  <span className="text-slate-700 font-medium">{parada.motivoParada.nome}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-slate-500">Inicio</span>
                 <span className="text-slate-700">{formatDateTime(parada.inicio)}</span>
@@ -302,6 +308,11 @@ export function ParadaDetalhePage() {
         {/* Chamados Vinculados */}
         <div className="mb-6">
           <TabChamados parada={parada} canManage={canManage} onUpdate={setParada} />
+        </div>
+
+        {/* Tecnicos Colaboradores */}
+        <div className="mb-6">
+          <TabColaboradores parada={parada} canManage={canManage} onUpdate={setParada} />
         </div>
 
         {/* Filiais Afetadas */}
@@ -453,7 +464,8 @@ function ModalVincularChamados({ parada, onUpdate, onClose }: { parada: Registro
       chamadoService.listar(),
       equipeService.listar('ATIVO'),
     ]).then(([ch, eq]) => {
-      setChamados(ch.filter((c) => !idsVinculados.includes(c.id)));
+      const statusTerminais = ['RESOLVIDO', 'FECHADO', 'CANCELADO'];
+      setChamados(ch.filter((c) => !idsVinculados.includes(c.id) && !statusTerminais.includes(c.status)));
       setEquipes(eq);
     }).catch(() => {
       toast('error', 'Erro ao carregar chamados');
@@ -632,6 +644,148 @@ function ModalVincularChamados({ parada, onUpdate, onClose }: { parada: Registro
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function TabColaboradores({ parada, canManage, onUpdate }: { parada: RegistroParada; canManage: boolean; onUpdate: (p: RegistroParada) => void }) {
+  const { toast } = useToast();
+  const [showAdd, setShowAdd] = useState(false);
+  const [membros, setMembros] = useState<{ id: string; nome: string; username: string }[]>([]);
+  const [loadingMembros, setLoadingMembros] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  async function loadMembros() {
+    setLoadingMembros(true);
+    try {
+      const equipes = await equipeService.listar('ATIVO');
+      const todosSet = new Map<string, { id: string; nome: string; username: string }>();
+      for (const eq of equipes) {
+        if (eq.membros) {
+          for (const m of eq.membros) {
+            todosSet.set(m.usuario.id, m.usuario);
+          }
+        }
+      }
+      // Excluir quem ja e colaborador e quem registrou a parada
+      const idsColabs = new Set(parada.colaboradores.map((c) => c.usuarioId));
+      idsColabs.add(parada.registradoPorId);
+      setMembros(Array.from(todosSet.values()).filter((u) => !idsColabs.has(u.id)));
+    } catch { setMembros([]); }
+    setLoadingMembros(false);
+  }
+
+  function handleOpenAdd() {
+    setShowAdd(true);
+    setSearchTerm('');
+    loadMembros();
+  }
+
+  async function handleAdd(usuarioId: string) {
+    try {
+      const updated = await paradaService.adicionarColaborador(parada.id, usuarioId);
+      onUpdate(updated);
+      setMembros((prev) => prev.filter((m) => m.id !== usuarioId));
+      toast('success', 'Colaborador adicionado');
+    } catch {
+      toast('error', 'Erro ao adicionar colaborador');
+    }
+  }
+
+  async function handleRemove(colaboradorId: string) {
+    try {
+      const updated = await paradaService.removerColaborador(parada.id, colaboradorId);
+      onUpdate(updated);
+      toast('success', 'Colaborador removido');
+    } catch {
+      toast('error', 'Erro ao remover colaborador');
+    }
+  }
+
+  const filteredMembros = searchTerm
+    ? membros.filter((m) => m.nome.toLowerCase().includes(searchTerm.toLowerCase()) || m.username.toLowerCase().includes(searchTerm.toLowerCase()))
+    : membros;
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200">
+      <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+        <h4 className="font-medium text-slate-700 flex items-center gap-2">
+          <Users className="w-4 h-4" /> Tecnicos Colaboradores ({parada.colaboradores.length})
+        </h4>
+        {canManage && (
+          <button
+            onClick={handleOpenAdd}
+            className="flex items-center gap-1 text-xs text-capul-600 hover:text-capul-700 font-medium"
+          >
+            <Plus className="w-3.5 h-3.5" /> Adicionar
+          </button>
+        )}
+      </div>
+
+      {showAdd && (
+        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center gap-2 mb-3">
+            <Search className="w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar tecnico por nome ou username..."
+              className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
+            />
+            <button onClick={() => setShowAdd(false)} className="text-slate-400 hover:text-slate-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          {loadingMembros ? (
+            <p className="text-sm text-slate-400">Carregando...</p>
+          ) : filteredMembros.length === 0 ? (
+            <p className="text-sm text-slate-400">Nenhum tecnico disponivel</p>
+          ) : (
+            <div className="divide-y divide-slate-200 border border-slate-200 rounded-lg bg-white max-h-48 overflow-y-auto">
+              {filteredMembros.map((m) => (
+                <div key={m.id} className="px-4 py-2 flex items-center justify-between hover:bg-slate-50">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-700">{m.nome}</span>
+                    <span className="text-xs text-slate-400">({m.username})</span>
+                  </div>
+                  <button
+                    onClick={() => handleAdd(m.id)}
+                    className="text-xs px-3 py-1 bg-capul-600 text-white rounded hover:bg-capul-700"
+                  >
+                    Adicionar
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {parada.colaboradores.length === 0 ? (
+        <p className="px-6 py-4 text-sm text-slate-400 text-center">Nenhum tecnico colaborador</p>
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {parada.colaboradores.map((c) => (
+            <div key={c.id} className="px-6 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <User className="w-4 h-4 text-slate-400" />
+                <span className="text-sm text-slate-700">{c.usuario.nome}</span>
+                <span className="text-xs text-slate-400">({c.usuario.username})</span>
+              </div>
+              {canManage && (
+                <button
+                  onClick={() => handleRemove(c.id)}
+                  className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                  title="Remover colaborador"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

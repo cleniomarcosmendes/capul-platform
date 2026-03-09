@@ -482,7 +482,7 @@ export class ProjetoService {
       include: {
         usuario: { select: { id: true, nome: true } },
         fase: { select: { id: true, nome: true } },
-        _count: { select: { registrosTempo: true } },
+        _count: { select: { registrosTempo: true, comentarios: true } },
         registrosTempo: {
           where: { horaFim: null },
           select: { id: true, usuarioId: true, horaInicio: true },
@@ -494,7 +494,7 @@ export class ProjetoService {
 
   async addAtividade(
     projetoId: string,
-    dto: { titulo: string; descricao?: string; faseId?: string },
+    dto: { titulo: string; descricao?: string; faseId?: string; dataInicio?: string; dataFimPrevista?: string },
     userId: string,
   ) {
     await this.ensureProjetoExists(projetoId);
@@ -513,6 +513,8 @@ export class ProjetoService {
         projetoId,
         usuarioId: userId,
         faseId: dto.faseId,
+        dataInicio: dto.dataInicio ? new Date(dto.dataInicio) : undefined,
+        dataFimPrevista: dto.dataFimPrevista ? new Date(dto.dataFimPrevista) : undefined,
       },
       include: {
         usuario: { select: { id: true, nome: true } },
@@ -524,7 +526,7 @@ export class ProjetoService {
   async updateAtividade(
     projetoId: string,
     atividadeId: string,
-    dto: { titulo?: string; descricao?: string; faseId?: string; status?: string },
+    dto: { titulo?: string; descricao?: string; faseId?: string; status?: string; dataInicio?: string; dataFimPrevista?: string },
   ) {
     const atividade = await this.prisma.atividadeProjeto.findFirst({
       where: { id: atividadeId, projetoId },
@@ -543,6 +545,8 @@ export class ProjetoService {
     if (dto.descricao !== undefined) data.descricao = dto.descricao;
     if (dto.faseId !== undefined) data.faseId = dto.faseId || null;
     if (dto.status !== undefined) data.status = dto.status;
+    if (dto.dataInicio !== undefined) data.dataInicio = dto.dataInicio ? new Date(dto.dataInicio) : null;
+    if (dto.dataFimPrevista !== undefined) data.dataFimPrevista = dto.dataFimPrevista ? new Date(dto.dataFimPrevista) : null;
 
     return this.prisma.atividadeProjeto.update({
       where: { id: atividadeId },
@@ -1137,6 +1141,76 @@ export class ProjetoService {
       totalHoras: Number(totalHoras._sum.horas || 0),
       totalApontamentos: totalHoras._count,
     };
+  }
+
+  // --- Comentarios de Tarefa ---
+
+  async listComentarios(projetoId: string, atividadeId: string) {
+    await this.ensureProjetoExists(projetoId);
+    const atividade = await this.prisma.atividadeProjeto.findFirst({
+      where: { id: atividadeId, projetoId },
+    });
+    if (!atividade) throw new NotFoundException('Tarefa nao encontrada neste projeto');
+
+    return this.prisma.comentarioTarefa.findMany({
+      where: { atividadeId },
+      include: { usuario: { select: { id: true, nome: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async addComentario(projetoId: string, atividadeId: string, texto: string, userId: string) {
+    await this.ensureProjetoExists(projetoId);
+    const atividade = await this.prisma.atividadeProjeto.findFirst({
+      where: { id: atividadeId, projetoId },
+    });
+    if (!atividade) throw new NotFoundException('Tarefa nao encontrada neste projeto');
+
+    return this.prisma.comentarioTarefa.create({
+      data: {
+        texto,
+        atividadeId,
+        usuarioId: userId,
+      },
+      include: { usuario: { select: { id: true, nome: true } } },
+    });
+  }
+
+  async removeComentario(projetoId: string, comentarioId: string) {
+    await this.ensureProjetoExists(projetoId);
+    const comentario = await this.prisma.comentarioTarefa.findFirst({
+      where: { id: comentarioId, atividade: { projetoId } },
+    });
+    if (!comentario) throw new NotFoundException('Comentario nao encontrado');
+    await this.prisma.comentarioTarefa.delete({ where: { id: comentarioId } });
+    return { deleted: true };
+  }
+
+  async buscarComentarios(query: string) {
+    if (!query || query.trim().length < 2) return [];
+
+    const termo = query.trim();
+    const comentarios = await this.prisma.comentarioTarefa.findMany({
+      where: {
+        texto: { contains: termo, mode: 'insensitive' },
+      },
+      include: {
+        usuario: { select: { id: true, nome: true } },
+        atividade: {
+          select: {
+            id: true,
+            titulo: true,
+            projetoId: true,
+            projeto: { select: { id: true, numero: true, nome: true } },
+            fase: { select: { id: true, nome: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    return comentarios;
   }
 
   // --- Helpers ---

@@ -11,7 +11,7 @@ import { ChamadosListPage } from './pages/chamados/ChamadosListPage';
 import { ChamadoCreatePage } from './pages/chamados/ChamadoCreatePage';
 import { ChamadoDetalhePage } from './pages/chamados/ChamadoDetalhePage';
 import { OrdensServicoPage } from './pages/ordens-servico/OrdensServicoPage';
-import { DashboardOsPage } from './pages/ordens-servico/DashboardOsPage';
+
 import { CatalogoServicosPage } from './pages/catalogo/CatalogoServicosPage';
 import { SlaPage } from './pages/sla/SlaPage';
 import { SoftwaresListPage } from './pages/portfolio/SoftwaresListPage';
@@ -21,11 +21,10 @@ import { LicencasPage } from './pages/portfolio/LicencasPage';
 import { ContratosListPage } from './pages/contratos/ContratosListPage';
 import { ContratoFormPage } from './pages/contratos/ContratoFormPage';
 import { ContratoDetalhePage } from './pages/contratos/ContratoDetalhePage';
-import { DashboardFinanceiroPage } from './pages/contratos/DashboardFinanceiroPage';
 import { ParadasListPage } from './pages/sustentacao/ParadasListPage';
 import { ParadaFormPage } from './pages/sustentacao/ParadaFormPage';
 import { ParadaDetalhePage } from './pages/sustentacao/ParadaDetalhePage';
-import { DashboardDisponibilidadePage } from './pages/sustentacao/DashboardDisponibilidadePage';
+import { MotivosParadaPage } from './pages/sustentacao/MotivosParadaPage';
 import { ProjetosListPage } from './pages/projetos/ProjetosListPage';
 import { ProjetoFormPage } from './pages/projetos/ProjetoFormPage';
 import { ProjetoDetalhePage } from './pages/projetos/ProjetoDetalhePage';
@@ -35,8 +34,7 @@ import { AtivoDetalhePage } from './pages/ativos/AtivoDetalhePage';
 import { ConhecimentoListPage } from './pages/conhecimento/ConhecimentoListPage';
 import { ConhecimentoFormPage } from './pages/conhecimento/ConhecimentoFormPage';
 import { ConhecimentoDetalhePage } from './pages/conhecimento/ConhecimentoDetalhePage';
-import { DashboardExecutivoPage } from './pages/DashboardExecutivoPage';
-import { DashboardCsatPage } from './pages/DashboardCsatPage';
+
 import { NotificacoesPage } from './pages/notificacoes/NotificacoesPage';
 import { ImportPage } from './pages/import/ImportPage';
 import { NaturezasPage } from './pages/cadastros/NaturezasPage';
@@ -91,7 +89,7 @@ function AppRoutes() {
         <Route path="chamados/novo" element={<ChamadoCreatePage />} />
         <Route path="chamados/:id" element={<ChamadoDetalhePage />} />
         <Route path="ordens-servico" element={<OrdensServicoPage />} />
-        <Route path="ordens-servico/dashboard" element={<DashboardOsPage />} />
+
         <Route path="equipes" element={<EquipesListPage />} />
         <Route path="equipes/nova" element={<EquipeFormPage />} />
         <Route path="equipes/:id" element={<EquipeDetalhePage />} />
@@ -105,12 +103,11 @@ function AppRoutes() {
         <Route path="contratos/novo" element={<ContratoFormPage />} />
         <Route path="contratos/:id" element={<ContratoDetalhePage />} />
         <Route path="contratos/:id/editar" element={<ContratoFormPage />} />
-        <Route path="financeiro" element={<DashboardFinanceiroPage />} />
         <Route path="paradas" element={<ParadasListPage />} />
         <Route path="paradas/nova" element={<ParadaFormPage />} />
         <Route path="paradas/:id" element={<ParadaDetalhePage />} />
         <Route path="paradas/:id/editar" element={<ParadaFormPage />} />
-        <Route path="disponibilidade" element={<DashboardDisponibilidadePage />} />
+        <Route path="motivos-parada" element={<MotivosParadaPage />} />
         <Route path="projetos" element={<ProjetosListPage />} />
         <Route path="projetos/novo" element={<ProjetoFormPage />} />
         <Route path="projetos/:id" element={<ProjetoDetalhePage />} />
@@ -123,8 +120,7 @@ function AppRoutes() {
         <Route path="conhecimento/novo" element={<ConhecimentoFormPage />} />
         <Route path="conhecimento/:id" element={<ConhecimentoDetalhePage />} />
         <Route path="conhecimento/:id/editar" element={<ConhecimentoFormPage />} />
-        <Route path="executivo" element={<DashboardExecutivoPage />} />
-        <Route path="csat" element={<DashboardCsatPage />} />
+
         <Route path="notificacoes" element={<NotificacoesPage />} />
         <Route path="importar" element={<ImportPage />} />
         <Route path="catalogo" element={<CatalogoServicosPage />} />

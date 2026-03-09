@@ -7,8 +7,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateParadaDto } from './dto/create-parada.dto';
 import { UpdateParadaDto } from './dto/update-parada.dto';
 import { FinalizarParadaDto } from './dto/finalizar-parada.dto';
+import { CreateMotivoParadaDto } from './dto/create-motivo-parada.dto';
+import { UpdateMotivoParadaDto } from './dto/update-motivo-parada.dto';
 
 const paradaListInclude = {
+  motivoParada: { select: { id: true, nome: true } },
   software: { select: { id: true, nome: true, tipo: true, criticidade: true } },
   softwareModulo: { select: { id: true, nome: true } },
   chamados: {
@@ -19,7 +22,11 @@ const paradaListInclude = {
   filiaisAfetadas: {
     include: { filial: { select: { id: true, codigo: true, nomeFantasia: true } } },
   },
-  _count: { select: { filiaisAfetadas: true, chamados: true } },
+  colaboradores: {
+    include: { usuario: { select: { id: true, nome: true, username: true } } },
+    orderBy: { createdAt: 'asc' as const },
+  },
+  _count: { select: { filiaisAfetadas: true, chamados: true, colaboradores: true } },
 };
 
 const paradaDetailInclude = {
@@ -38,6 +45,7 @@ export class ParadaService {
     tipo?: string;
     impacto?: string;
     status?: string;
+    motivoParadaId?: string;
     dataInicio?: string;
     dataFim?: string;
   }) {
@@ -48,6 +56,7 @@ export class ParadaService {
     if (filters.tipo) where.tipo = filters.tipo;
     if (filters.impacto) where.impacto = filters.impacto;
     if (filters.status) where.status = filters.status;
+    if (filters.motivoParadaId) where.motivoParadaId = filters.motivoParadaId;
 
     if (filters.filialId) {
       where.filiaisAfetadas = { some: { filialId: filters.filialId } };
@@ -110,6 +119,7 @@ export class ParadaService {
         fim,
         duracaoMinutos,
         observacoes: dto.observacoes,
+        motivoParadaId: dto.motivoParadaId,
         softwareId: dto.softwareId,
         softwareModuloId: dto.softwareModuloId,
         registradoPorId: userId,
@@ -226,6 +236,61 @@ export class ParadaService {
       data: { paradaId, chamadoId },
     });
 
+    return this.findOne(paradaId);
+  }
+
+  // === Motivos de Parada ===
+
+  async findAllMotivos() {
+    return this.prisma.motivoParada.findMany({
+      orderBy: { nome: 'asc' },
+    });
+  }
+
+  async createMotivo(dto: CreateMotivoParadaDto) {
+    return this.prisma.motivoParada.create({ data: dto });
+  }
+
+  async updateMotivo(id: string, dto: UpdateMotivoParadaDto) {
+    const motivo = await this.prisma.motivoParada.findUnique({ where: { id } });
+    if (!motivo) throw new NotFoundException('Motivo de parada nao encontrado');
+    return this.prisma.motivoParada.update({ where: { id }, data: dto });
+  }
+
+  async listarColaboradores(paradaId: string) {
+    return this.prisma.paradaColaborador.findMany({
+      where: { paradaId },
+      include: { usuario: { select: { id: true, nome: true, username: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async adicionarColaborador(paradaId: string, usuarioId: string) {
+    const parada = await this.prisma.registroParada.findUnique({ where: { id: paradaId } });
+    if (!parada) throw new NotFoundException('Parada nao encontrada');
+    if (parada.registradoPorId === usuarioId) {
+      throw new BadRequestException('O usuario que registrou a parada nao pode ser adicionado como colaborador');
+    }
+    const jaExiste = await this.prisma.paradaColaborador.findFirst({
+      where: { paradaId, usuarioId },
+    });
+    if (jaExiste) {
+      throw new BadRequestException('Usuario ja e colaborador desta parada');
+    }
+    await this.prisma.paradaColaborador.create({
+      data: { paradaId, usuarioId },
+    });
+    return this.findOne(paradaId);
+  }
+
+  async removerColaborador(paradaId: string, colaboradorId: string) {
+    const parada = await this.prisma.registroParada.findUnique({ where: { id: paradaId } });
+    if (!parada) throw new NotFoundException('Parada nao encontrada');
+    const reg = await this.prisma.paradaColaborador.findFirst({
+      where: { id: colaboradorId, paradaId },
+    });
+    if (!reg) throw new NotFoundException('Colaborador nao encontrado nesta parada');
+    await this.prisma.paradaColaborador.delete({ where: { id: colaboradorId } });
     return this.findOne(paradaId);
   }
 

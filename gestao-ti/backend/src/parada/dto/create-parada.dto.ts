@@ -39,6 +39,10 @@ export class CreateParadaDto {
   filialIds: string[];
 
   @IsOptional()
+  @IsUUID()
+  motivoParadaId?: string;
+
+  @IsOptional()
   @IsString()
   descricao?: string;
 

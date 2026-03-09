@@ -55,6 +55,13 @@ export function ChamadoCreatePage() {
   // IP da maquina
   const [ipMaquina, setIpMaquina] = useState('');
 
+  // Auto-detectar IP do cliente via backend
+  useEffect(() => {
+    chamadoService.getClientIp().then((ip) => {
+      if (ip) setIpMaquina(ip);
+    });
+  }, []);
+
   // Anexos
   const [arquivos, setArquivos] = useState<File[]>([]);
 

@@ -15,17 +15,14 @@ import {
   AppWindow,
   KeyRound,
   FileText,
-  BarChart3,
   Activity,
-  BarChart2,
   FolderKanban,
-  PieChart,
   Server,
   BookMarked,
   Upload,
-  Star,
   Tag,
   Layers,
+  AlertTriangle,
 } from 'lucide-react';
 
 type MenuItem =
@@ -37,9 +34,6 @@ const MANAGERS = ['ADMIN', 'GESTOR_TI'];
 
 const menuItems: MenuItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/gestao-ti/' },
-  { label: 'Executivo', icon: PieChart, path: '/gestao-ti/executivo', roles: MANAGERS },
-  { label: 'Satisfacao (CSAT)', icon: Star, path: '/gestao-ti/csat', roles: MANAGERS },
-  { label: 'Metricas OS', icon: BarChart3, path: '/gestao-ti/ordens-servico/dashboard', roles: MANAGERS },
   { section: 'SUPORTE' },
   { label: 'Chamados', icon: Ticket, path: '/gestao-ti/chamados' },
   { label: 'Ordens de Servico', icon: ClipboardList, path: '/gestao-ti/ordens-servico', roles: STAFF },
@@ -48,10 +42,9 @@ const menuItems: MenuItem[] = [
   { label: 'Softwares', icon: AppWindow, path: '/gestao-ti/softwares', roles: [...STAFF, 'FINANCEIRO'] },
   { label: 'Licencas', icon: KeyRound, path: '/gestao-ti/licencas', roles: [...STAFF, 'FINANCEIRO'] },
   { label: 'Contratos', icon: FileText, path: '/gestao-ti/contratos', roles: [...STAFF, 'FINANCEIRO'] },
-  { label: 'Financeiro', icon: BarChart3, path: '/gestao-ti/financeiro', roles: [...MANAGERS, 'FINANCEIRO'] },
   { section: 'SUSTENTACAO', roles: STAFF },
   { label: 'Paradas', icon: Activity, path: '/gestao-ti/paradas', roles: STAFF },
-  { label: 'Disponibilidade', icon: BarChart2, path: '/gestao-ti/disponibilidade', roles: STAFF },
+  { label: 'Motivos de Parada', icon: AlertTriangle, path: '/gestao-ti/motivos-parada', roles: MANAGERS },
   { section: 'PROJETOS', roles: [...STAFF, 'GERENTE_PROJETO'] },
   { label: 'Projetos', icon: FolderKanban, path: '/gestao-ti/projetos', roles: [...STAFF, 'GERENTE_PROJETO'] },
   { section: 'INFRAESTRUTURA', roles: STAFF },
@@ -89,7 +82,7 @@ export function Sidebar() {
   const visibleItems = filterMenuByRole(menuItems, gestaoTiRole);
 
   return (
-    <aside className="w-64 min-h-screen flex flex-col" style={{ backgroundColor: 'var(--bg-sidebar)' }}>
+    <aside className="w-64 h-screen flex flex-col flex-shrink-0" style={{ backgroundColor: 'var(--bg-sidebar)' }}>
       <div className="p-4 border-b border-slate-700">
         <div className="flex items-center gap-2">
           <Monitor className="w-6 h-6 text-capul-400" />
@@ -102,7 +95,7 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 py-4 overflow-y-auto">
+      <nav className="flex-1 py-4 overflow-y-auto scrollbar-thin" style={{ scrollbarWidth: 'thin', scrollbarColor: '#475569 transparent' }}>
         {visibleItems.map((item, idx) => {
           if ('section' in item) {
             return (

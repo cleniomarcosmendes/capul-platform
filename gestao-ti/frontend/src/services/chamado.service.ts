@@ -31,6 +31,15 @@ interface CreateChamadoPayload {
 }
 
 export const chamadoService = {
+  async getClientIp(): Promise<string | null> {
+    try {
+      const { data } = await gestaoApi.get('/chamados/client-ip');
+      return data.ip || null;
+    } catch {
+      return null;
+    }
+  },
+
   async listar(filters: ListFilters = {}): Promise<Chamado[]> {
     const params: Record<string, string> = {};
     if (filters.status) params.status = filters.status;

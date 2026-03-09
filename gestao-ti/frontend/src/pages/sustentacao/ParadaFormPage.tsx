@@ -5,7 +5,7 @@ import { paradaService } from '../../services/parada.service';
 import { softwareService } from '../../services/software.service';
 import { coreApi } from '../../services/api';
 import { ArrowLeft } from 'lucide-react';
-import type { Software, SoftwareModulo, TipoParada, ImpactoParada } from '../../types';
+import type { Software, SoftwareModulo, MotivoParada, TipoParada, ImpactoParada } from '../../types';
 
 const tipoOptions: { value: TipoParada; label: string }[] = [
   { value: 'PARADA_PROGRAMADA', label: 'Parada Programada' },
@@ -31,6 +31,7 @@ export function ParadaFormPage() {
 
   const [softwares, setSoftwares] = useState<Software[]>([]);
   const [modulos, setModulos] = useState<SoftwareModulo[]>([]);
+  const [motivos, setMotivos] = useState<MotivoParada[]>([]);
   const [filiais, setFiliais] = useState<FilialOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [loadingData, setLoadingData] = useState(isEdit);
@@ -44,11 +45,13 @@ export function ParadaFormPage() {
   const [softwareId, setSoftwareId] = useState('');
   const [softwareModuloId, setSoftwareModuloId] = useState('');
   const [filialIds, setFilialIds] = useState<string[]>([]);
+  const [motivoParadaId, setMotivoParadaId] = useState('');
   const [descricao, setDescricao] = useState('');
   const [observacoes, setObservacoes] = useState('');
 
   useEffect(() => {
     softwareService.listar({ status: 'ATIVO' }).then(setSoftwares).catch(() => {});
+    paradaService.listarMotivos().then((data) => setMotivos(data.filter((m) => m.ativo))).catch(() => {});
     coreApi.get('/filiais').then(({ data }) => setFiliais(data)).catch(() => {});
 
     if (isEdit && id) {
@@ -60,6 +63,7 @@ export function ParadaFormPage() {
         setFim(p.fim ? p.fim.slice(0, 16) : '');
         setSoftwareId(p.softwareId);
         setSoftwareModuloId(p.softwareModuloId || '');
+        setMotivoParadaId(p.motivoParadaId || '');
         setFilialIds(p.filiaisAfetadas.map((f) => f.filialId));
         setDescricao(p.descricao || '');
         setObservacoes(p.observacoes || '');
@@ -103,6 +107,7 @@ export function ParadaFormPage() {
         fim: fim ? new Date(fim).toISOString() : undefined,
         softwareId,
         softwareModuloId: softwareModuloId || undefined,
+        motivoParadaId: motivoParadaId || undefined,
         filialIds,
         descricao: descricao || undefined,
         observacoes: observacoes || undefined,
@@ -234,6 +239,20 @@ export function ParadaFormPage() {
                 ))}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Motivo da Parada</label>
+            <select
+              value={motivoParadaId}
+              onChange={(e) => setMotivoParadaId(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+            >
+              <option value="">Selecione um motivo...</option>
+              {motivos.map((m) => (
+                <option key={m.id} value={m.id}>{m.nome}</option>
+              ))}
+            </select>
           </div>
 
           <div>

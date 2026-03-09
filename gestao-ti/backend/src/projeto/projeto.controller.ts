@@ -59,19 +59,24 @@ export class ProjetoController {
     });
   }
 
+  @Get('busca-comentarios')
+  buscarComentarios(@Query('q') q: string) {
+    return this.service.buscarComentarios(q);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.service.findOne(id);
   }
 
   @Post()
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO')
   create(@Body() dto: CreateProjetoDto) {
     return this.service.create(dto);
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO')
   update(@Param('id') id: string, @Body() dto: UpdateProjetoDto) {
     return this.service.update(id, dto);
   }
@@ -141,7 +146,7 @@ export class ProjetoController {
   @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
   addAtividade(
     @Param('id') id: string,
-    @Body() dto: { titulo: string; descricao?: string; faseId?: string },
+    @Body() dto: { titulo: string; descricao?: string; faseId?: string; dataInicio?: string; dataFimPrevista?: string },
     @CurrentUser() user: JwtPayload,
   ) {
     return this.service.addAtividade(id, dto, user.sub);
@@ -152,7 +157,7 @@ export class ProjetoController {
   updateAtividade(
     @Param('id') id: string,
     @Param('atividadeId') atividadeId: string,
-    @Body() dto: { titulo?: string; descricao?: string; faseId?: string; status?: string },
+    @Body() dto: { titulo?: string; descricao?: string; faseId?: string; status?: string; dataInicio?: string; dataFimPrevista?: string },
   ) {
     return this.service.updateAtividade(id, atividadeId, dto);
   }
@@ -161,6 +166,30 @@ export class ProjetoController {
   @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
   removeAtividade(@Param('id') id: string, @Param('atividadeId') atividadeId: string) {
     return this.service.removeAtividade(id, atividadeId);
+  }
+
+  // --- Comentarios de Tarefa ---
+
+  @Get(':id/atividades/:atividadeId/comentarios')
+  listComentarios(@Param('id') id: string, @Param('atividadeId') atividadeId: string) {
+    return this.service.listComentarios(id, atividadeId);
+  }
+
+  @Post(':id/atividades/:atividadeId/comentarios')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  addComentario(
+    @Param('id') id: string,
+    @Param('atividadeId') atividadeId: string,
+    @Body() body: { texto: string },
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.service.addComentario(id, atividadeId, body.texto, user.sub);
+  }
+
+  @Delete(':id/comentarios/:comentarioId')
+  @Roles('ADMIN', 'GESTOR_TI')
+  removeComentario(@Param('id') id: string, @Param('comentarioId') comentarioId: string) {
+    return this.service.removeComentario(id, comentarioId);
   }
 
   // --- Registro de Tempo ---

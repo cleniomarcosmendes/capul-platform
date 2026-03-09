@@ -59,7 +59,9 @@ model Usuario {
   artigosAutor         ArtigoConhecimento[] @relation("ArtigoAutor")
   notificacoes         Notificacao[]
   chamadoColaboracoes  ChamadoColaborador[]    @relation("ChamadoColaborador")
+  paradaColaboracoes   ParadaColaborador[]     @relation("ParadaColaborador")
   registrosTempoChm    RegistroTempoChamado[]  @relation("RegistroTempoChamado")
+  comentariosTarefa    ComentarioTarefa[]      @relation("ComentarioTarefaUsuario")
 
   @@map("usuarios")
   @@schema("core")
@@ -1119,6 +1121,20 @@ model ContratoHistorico {
 
 // ── Fase 4: Sustentacao ERP — Models ──
 
+model MotivoParada {
+  id        String   @id @default(uuid())
+  nome      String
+  descricao String?
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  paradas RegistroParada[]
+
+  @@map("motivos_parada")
+  @@schema("gestao_ti")
+}
+
 model RegistroParada {
   id             String        @id @default(uuid())
   titulo         String
@@ -1132,6 +1148,9 @@ model RegistroParada {
   observacoes    String?
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  motivoParadaId   String?         @map("motivo_parada_id")
+  motivoParada     MotivoParada?   @relation(fields: [motivoParadaId], references: [id])
 
   softwareId       String          @map("software_id")
   software         Software        @relation(fields: [softwareId], references: [id])
@@ -1147,6 +1166,7 @@ model RegistroParada {
 
   filiaisAfetadas ParadaFilialAfetada[]
   chamados        ParadaChamado[]
+  colaboradores   ParadaColaborador[]
 
   @@index([softwareId, status])
   @@index([status])
@@ -1182,6 +1202,21 @@ model ParadaChamado {
 
   @@unique([paradaId, chamadoId])
   @@map("parada_chamados")
+  @@schema("gestao_ti")
+}
+
+model ParadaColaborador {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  paradaId String          @map("parada_id")
+  parada   RegistroParada  @relation(fields: [paradaId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("ParadaColaborador", fields: [usuarioId], references: [id])
+
+  @@unique([paradaId, usuarioId])
+  @@map("parada_colaboradores")
   @@schema("gestao_ti")
 }
 
@@ -1296,7 +1331,11 @@ model AtividadeProjeto {
   faseId String?       @map("fase_id")
   fase   FaseProjeto?  @relation(fields: [faseId], references: [id])
 
+  dataInicio     DateTime?       @map("data_inicio")
+  dataFimPrevista DateTime?      @map("data_fim_prevista")
+
   registrosTempo RegistroTempo[]
+  comentarios    ComentarioTarefa[]
 
   @@index([projetoId, dataAtividade])
   @@map("atividades_projeto")
@@ -1321,6 +1360,23 @@ model RegistroTempo {
   @@index([atividadeId])
   @@index([usuarioId, horaInicio])
   @@map("registros_tempo")
+  @@schema("gestao_ti")
+}
+
+model ComentarioTarefa {
+  id        String   @id @default(uuid())
+  texto     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  atividadeId String            @map("atividade_id")
+  atividade   AtividadeProjeto  @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("ComentarioTarefaUsuario", fields: [usuarioId], references: [id])
+
+  @@index([atividadeId])
+  @@map("comentarios_tarefa")
   @@schema("gestao_ti")
 }
 

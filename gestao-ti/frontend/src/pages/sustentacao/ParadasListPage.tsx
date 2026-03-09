@@ -6,7 +6,7 @@ import { paradaService } from '../../services/parada.service';
 import { softwareService } from '../../services/software.service';
 import { Activity, Plus, AlertTriangle, Search, Download } from 'lucide-react';
 import { exportService } from '../../services/export.service';
-import type { RegistroParada, Software, TipoParada, ImpactoParada, StatusParada } from '../../types';
+import type { RegistroParada, Software, MotivoParada, TipoParada, ImpactoParada, StatusParada } from '../../types';
 
 const tipoLabel: Record<string, string> = {
   PARADA_PROGRAMADA: 'Programada',
@@ -52,6 +52,7 @@ export function ParadasListPage() {
 
   const [paradas, setParadas] = useState<RegistroParada[]>([]);
   const [softwares, setSoftwares] = useState<Software[]>([]);
+  const [motivos, setMotivos] = useState<MotivoParada[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState('');
@@ -59,14 +60,16 @@ export function ParadasListPage() {
   const [filtroTipo, setFiltroTipo] = useState('');
   const [filtroImpacto, setFiltroImpacto] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('');
+  const [filtroMotivo, setFiltroMotivo] = useState('');
 
   useEffect(() => {
     softwareService.listar().then(setSoftwares).catch(() => {});
+    paradaService.listarMotivos().then(setMotivos).catch(() => {});
   }, []);
 
   useEffect(() => {
     loadParadas();
-  }, [filtroSoftware, filtroTipo, filtroImpacto, filtroStatus]);
+  }, [filtroSoftware, filtroTipo, filtroImpacto, filtroStatus, filtroMotivo]);
 
   async function loadParadas() {
     setLoading(true);
@@ -76,6 +79,7 @@ export function ParadasListPage() {
         tipo: (filtroTipo as TipoParada) || undefined,
         impacto: (filtroImpacto as ImpactoParada) || undefined,
         status: (filtroStatus as StatusParada) || undefined,
+        motivoParadaId: filtroMotivo || undefined,
       });
       setParadas(data);
     } catch { /* empty */ }
@@ -195,6 +199,16 @@ export function ParadasListPage() {
               <option key={k} value={k}>{v}</option>
             ))}
           </select>
+          <select
+            value={filtroMotivo}
+            onChange={(e) => setFiltroMotivo(e.target.value)}
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+          >
+            <option value="">Todos Motivos</option>
+            {motivos.map((m) => (
+              <option key={m.id} value={m.id}>{m.nome}</option>
+            ))}
+          </select>
         </div>
 
         {loading ? (
@@ -213,6 +227,7 @@ export function ParadasListPage() {
                     <th className="px-4 py-3 font-medium text-slate-600">Titulo</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Software</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Modulo</th>
+                    <th className="px-4 py-3 font-medium text-slate-600">Motivo</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Tipo</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Impacto</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Status</th>
@@ -235,6 +250,7 @@ export function ParadasListPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-600">{p.software.nome}</td>
                       <td className="px-4 py-3 text-slate-500 text-xs">{p.softwareModulo?.nome || '-'}</td>
+                      <td className="px-4 py-3 text-slate-500 text-xs">{p.motivoParada?.nome || '-'}</td>
                       <td className="px-4 py-3 text-slate-600 text-xs">{tipoLabel[p.tipo] || p.tipo}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${impactoCores[p.impacto] || ''}`}>

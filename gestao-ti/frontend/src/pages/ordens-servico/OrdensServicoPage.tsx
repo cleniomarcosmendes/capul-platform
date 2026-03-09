@@ -189,7 +189,8 @@ export function OrdensServicoPage() {
     try {
       const all = await chamadoService.listar({ filialId: osDetalhe?.filialId });
       const jaVinculados = new Set(osDetalhe?.chamados.map((c) => c.chamadoId) || []);
-      setChamadosDisponiveis(all.filter((c) => !jaVinculados.has(c.id)));
+      const statusTerminais = ['RESOLVIDO', 'FECHADO', 'CANCELADO'];
+      setChamadosDisponiveis(all.filter((c) => !jaVinculados.has(c.id) && !statusTerminais.includes(c.status)));
     } catch { setChamadosDisponiveis([]); }
     finally { setLoadingChamados(false); }
   }

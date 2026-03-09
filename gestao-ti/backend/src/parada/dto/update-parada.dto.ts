@@ -6,6 +6,7 @@ import {
   IsArray,
   IsUUID,
 } from 'class-validator';
+
 import { TipoParada, ImpactoParada } from '@prisma/client';
 
 export class UpdateParadaDto {
@@ -37,6 +38,10 @@ export class UpdateParadaDto {
   @IsArray()
   @IsUUID('4', { each: true })
   filialIds?: string[];
+
+  @IsOptional()
+  @IsUUID()
+  motivoParadaId?: string;
 
   @IsOptional()
   @IsString()

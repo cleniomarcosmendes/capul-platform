@@ -19,11 +19,34 @@ import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 import { CreateParadaDto } from './dto/create-parada.dto';
 import { UpdateParadaDto } from './dto/update-parada.dto';
 import { FinalizarParadaDto } from './dto/finalizar-parada.dto';
+import { CreateMotivoParadaDto } from './dto/create-motivo-parada.dto';
+import { UpdateMotivoParadaDto } from './dto/update-motivo-parada.dto';
 
 @Controller('paradas')
 @UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
 export class ParadaController {
   constructor(private readonly service: ParadaService) {}
+
+  // === Motivos de Parada ===
+
+  @Get('motivos')
+  findAllMotivos() {
+    return this.service.findAllMotivos();
+  }
+
+  @Post('motivos')
+  @Roles('ADMIN', 'GESTOR_TI')
+  createMotivo(@Body() dto: CreateMotivoParadaDto) {
+    return this.service.createMotivo(dto);
+  }
+
+  @Patch('motivos/:motivoId')
+  @Roles('ADMIN', 'GESTOR_TI')
+  updateMotivo(@Param('motivoId') id: string, @Body() dto: UpdateMotivoParadaDto) {
+    return this.service.updateMotivo(id, dto);
+  }
+
+  // === Paradas ===
 
   @Get()
   findAll(
@@ -33,6 +56,7 @@ export class ParadaController {
     @Query('tipo') tipo?: string,
     @Query('impacto') impacto?: string,
     @Query('status') status?: string,
+    @Query('motivoParadaId') motivoParadaId?: string,
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
   ) {
@@ -43,6 +67,7 @@ export class ParadaController {
       tipo,
       impacto,
       status,
+      motivoParadaId,
       dataInicio,
       dataFim,
     });
@@ -97,5 +122,28 @@ export class ParadaController {
     @Param('chamadoId') chamadoId: string,
   ) {
     return this.service.desvincularChamado(id, chamadoId);
+  }
+
+  @Get(':id/colaboradores')
+  listarColaboradores(@Param('id') id: string) {
+    return this.service.listarColaboradores(id);
+  }
+
+  @Post(':id/colaboradores')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  adicionarColaborador(
+    @Param('id') id: string,
+    @Body('usuarioId') usuarioId: string,
+  ) {
+    return this.service.adicionarColaborador(id, usuarioId);
+  }
+
+  @Delete(':id/colaboradores/:colaboradorId')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  removerColaborador(
+    @Param('id') id: string,
+    @Param('colaboradorId') colaboradorId: string,
+  ) {
+    return this.service.removerColaborador(id, colaboradorId);
   }
 }

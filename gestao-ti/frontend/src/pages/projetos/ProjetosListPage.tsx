@@ -43,7 +43,7 @@ const modoCores: Record<string, string> = {
 
 export function ProjetosListPage() {
   const { gestaoTiRole } = useAuth();
-  const canManage = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
+  const canManage = gestaoTiRole !== 'USUARIO_FINAL' && Boolean(gestaoTiRole);
 
   const [projetos, setProjetos] = useState<Projeto[]>([]);
   const [softwares, setSoftwares] = useState<Software[]>([]);

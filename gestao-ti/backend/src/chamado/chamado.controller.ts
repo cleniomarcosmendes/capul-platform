@@ -41,6 +41,13 @@ const ALLOWED_MIMES = [
 export class ChamadoController {
   constructor(private readonly service: ChamadoService) {}
 
+  @Get('client-ip')
+  getClientIp(@Req() req: express.Request) {
+    const forwarded = req.headers['x-forwarded-for'];
+    const ip = typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : req.socket.remoteAddress;
+    return { ip: ip ? ip.replace('::ffff:', '') : null };
+  }
+
   @Get()
   findAll(
     @CurrentUser() user: JwtPayload,

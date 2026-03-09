@@ -5,8 +5,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/Toast';
 import { projetoService } from '../../services/projeto.service';
 import { chamadoService } from '../../services/chamado.service';
+import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
-import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink } from 'lucide-react';
+import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare } from 'lucide-react';
 import type {
   Projeto,
   MembroProjeto,
@@ -31,6 +32,8 @@ import type {
   StatusFase,
   UsuarioCore,
   RegistroTempo,
+  ComentarioTarefa,
+  EquipeTI,
 } from '../../types';
 
 const statusLabel: Record<string, string> = {
@@ -152,8 +155,8 @@ export function ProjetoDetalhePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { gestaoTiRole, usuario } = useAuth();
-  const canManage = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
-  const canAddAtividade = ['ADMIN', 'GESTOR_TI', 'TECNICO'].includes(gestaoTiRole || '');
+  const canManage = gestaoTiRole !== 'USUARIO_FINAL' && Boolean(gestaoTiRole);
+  const canAddAtividade = gestaoTiRole !== 'USUARIO_FINAL' && Boolean(gestaoTiRole);
 
   const [projeto, setProjeto] = useState<Projeto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -517,10 +520,14 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
   const [showFaseForm, setShowFaseForm] = useState(false);
   const [novoNomeFase, setNovoNomeFase] = useState('');
   const [novaOrdemFase, setNovaOrdemFase] = useState('');
+  const [novaFaseDataInicio, setNovaFaseDataInicio] = useState('');
+  const [novaFaseDataFimPrevista, setNovaFaseDataFimPrevista] = useState('');
   // Atividade form
   const [novoTitulo, setNovoTitulo] = useState('');
   const [novaDescricao, setNovaDescricao] = useState('');
   const [novaFaseId, setNovaFaseId] = useState('');
+  const [novaDataInicio, setNovaDataInicio] = useState('');
+  const [novaDataFimPrevista, setNovaDataFimPrevista] = useState('');
   const [saving, setSaving] = useState(false);
   // Expanded atividade
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -530,6 +537,11 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
   const [editInicio, setEditInicio] = useState('');
   const [editFim, setEditFim] = useState('');
   const [editObs, setEditObs] = useState('');
+  // Comentarios
+  const [comentarios, setComentarios] = useState<ComentarioTarefa[]>([]);
+  const [loadingComentarios, setLoadingComentarios] = useState(false);
+  const [novoComentario, setNovoComentario] = useState('');
+  const [savingComentario, setSavingComentario] = useState(false);
   // Fases colapsadas
   const [collapsedFases, setCollapsedFases] = useState<Set<string>>(new Set());
 
@@ -553,8 +565,14 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
     if (!novoNomeFase || saving) return;
     setSaving(true);
     try {
-      await projetoService.adicionarFase(projetoId, { nome: novoNomeFase, ordem: Number(novaOrdemFase) || fases.length + 1 });
+      await projetoService.adicionarFase(projetoId, {
+        nome: novoNomeFase,
+        ordem: Number(novaOrdemFase) || fases.length + 1,
+        dataInicio: novaFaseDataInicio ? new Date(novaFaseDataInicio).toISOString() : undefined,
+        dataFimPrevista: novaFaseDataFimPrevista ? new Date(novaFaseDataFimPrevista).toISOString() : undefined,
+      });
       setShowFaseForm(false); setNovoNomeFase(''); setNovaOrdemFase('');
+      setNovaFaseDataInicio(''); setNovaFaseDataFimPrevista('');
       loadAll();
     } catch { /* empty */ }
     setSaving(false);
@@ -575,8 +593,15 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
     if (!novoTitulo || saving) return;
     setSaving(true);
     try {
-      await projetoService.adicionarAtividade(projetoId, { titulo: novoTitulo, descricao: novaDescricao || undefined, faseId: novaFaseId || undefined });
+      await projetoService.adicionarAtividade(projetoId, {
+        titulo: novoTitulo,
+        descricao: novaDescricao || undefined,
+        faseId: novaFaseId || undefined,
+        dataInicio: novaDataInicio ? new Date(novaDataInicio).toISOString() : undefined,
+        dataFimPrevista: novaDataFimPrevista ? new Date(novaDataFimPrevista).toISOString() : undefined,
+      });
       setNovoTitulo(''); setNovaDescricao(''); setNovaFaseId('');
+      setNovaDataInicio(''); setNovaDataFimPrevista('');
       loadAll();
     } catch { /* empty */ }
     setSaving(false);
@@ -592,9 +617,14 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
     try { setRegistros(await projetoService.listarRegistrosTempo(projetoId, atividadeId)); } catch { setRegistros([]); }
     setLoadingRegistros(false);
   }
+  async function loadComentarios(atividadeId: string) {
+    setLoadingComentarios(true);
+    try { setComentarios(await projetoService.listarComentarios(projetoId, atividadeId)); } catch { setComentarios([]); }
+    setLoadingComentarios(false);
+  }
   function toggleExpand(atividadeId: string) {
     if (expandedId === atividadeId) { setExpandedId(null); return; }
-    setExpandedId(atividadeId); setEditingRegistro(null); loadRegistros(atividadeId);
+    setExpandedId(atividadeId); setEditingRegistro(null); loadRegistros(atividadeId); loadComentarios(atividadeId);
   }
   function startEdit(r: RegistroTempo) {
     setEditingRegistro(r.id); setEditInicio(r.horaInicio ? r.horaInicio.substring(0, 16) : ''); setEditFim(r.horaFim ? r.horaFim.substring(0, 16) : ''); setEditObs(r.observacoes || '');
@@ -616,8 +646,29 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
     try { await projetoService.atualizarAtividade(projetoId, atividadeId, { faseId }); loadAll(); } catch { /* empty */ }
   }
   async function handleRemoveAtividade(atividadeId: string) {
-    if (!await confirm('Remover Atividade', 'Deseja remover esta atividade e todos os seus registros de tempo?', { variant: 'danger', confirmLabel: 'Remover' })) return;
+    if (!await confirm('Remover Tarefa', 'Deseja remover esta tarefa e todos os seus registros de tempo?', { variant: 'danger', confirmLabel: 'Remover' })) return;
     try { await projetoService.removerAtividade(projetoId, atividadeId); loadAll(); } catch { /* empty */ }
+  }
+
+  async function handleAddComentario() {
+    if (!novoComentario.trim() || !expandedId || savingComentario) return;
+    setSavingComentario(true);
+    try {
+      await projetoService.adicionarComentario(projetoId, expandedId, novoComentario.trim());
+      setNovoComentario('');
+      loadComentarios(expandedId);
+      loadAll();
+    } catch { /* empty */ }
+    setSavingComentario(false);
+  }
+
+  async function handleRemoveComentario(comentarioId: string) {
+    if (!await confirm('Remover Nota', 'Deseja remover esta nota?')) return;
+    try {
+      await projetoService.removerComentario(projetoId, comentarioId);
+      if (expandedId) loadComentarios(expandedId);
+      loadAll();
+    } catch { /* empty */ }
   }
 
   const totalMinutos = registros.reduce((sum, r) => sum + (r.duracaoMinutos ?? 0), 0);
@@ -649,41 +700,57 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
     const cfg = statusAtividadeConfig[a.status] || statusAtividadeConfig.PENDENTE;
 
     return (
-      <div key={a.id} className={`${meuRegistroAtivo ? 'border-l-3 border-green-500 bg-green-50/30' : ''}`}>
+      <div key={a.id} className="mx-3 my-2">
+        <div className={`rounded-lg border ${meuRegistroAtivo ? 'border-green-300 bg-green-50/50 shadow-sm shadow-green-100' : isExpanded ? 'border-capul-300 bg-white shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'} transition-all`}>
         {/* Linha principal */}
-        <div className="px-5 py-3 cursor-pointer hover:bg-slate-50/80 transition-colors" onClick={() => toggleExpand(a.id)}>
+        <div className="px-4 py-3 cursor-pointer" onClick={() => toggleExpand(a.id)}>
           <div className="flex items-start gap-3">
-            {/* Indicador de status (dot) */}
-            <div className="pt-1.5 flex-shrink-0">
-              <div className={`w-2.5 h-2.5 rounded-full ${cfg.dot}`} title={cfg.label} />
+            {/* Indicador de status (barra lateral) */}
+            <div className="pt-0.5 flex-shrink-0">
+              <div className={`w-1.5 h-12 rounded-full ${cfg.dot}`} />
             </div>
 
             {/* Conteudo principal */}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm text-slate-800 font-medium">{a.titulo}</span>
+              {/* Titulo + badges */}
+              <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                <span className="text-[13px] text-slate-900 font-bold leading-tight">{a.titulo}</span>
                 {meuRegistroAtivo && (
-                  <span className="inline-flex items-center gap-1 text-[11px] text-green-700 font-semibold bg-green-100 px-2 py-0.5 rounded-full animate-pulse">
-                    <Play className="w-3 h-3" /> Cronometro ativo
+                  <span className="inline-flex items-center gap-1 text-[10px] text-green-700 font-bold bg-green-100 border border-green-200 px-2 py-0.5 rounded-full animate-pulse">
+                    <Play className="w-3 h-3" /> ATIVO
+                  </span>
+                )}
+              </div>
+              {/* Meta info */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 ${cfg.color}`}>{cfg.label}</span>
+                <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                  <Users className="w-3 h-3" /> {a.usuario.nome}
+                </span>
+                <span className="text-[11px] text-slate-400">{new Date(a.dataAtividade).toLocaleDateString('pt-BR')}</span>
+                {(a.dataInicio || a.dataFimPrevista) && (
+                  <span className="text-[11px] text-slate-500 flex items-center gap-1 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5">
+                    <Clock className="w-3 h-3 text-slate-400" />
+                    {a.dataInicio ? new Date(a.dataInicio).toLocaleDateString('pt-BR') : '?'}
+                    {' → '}
+                    {a.dataFimPrevista ? new Date(a.dataFimPrevista).toLocaleDateString('pt-BR') : '?'}
                   </span>
                 )}
                 {temRegistros && !meuRegistroAtivo && (
-                  <span className="text-[11px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                    <Clock className="w-3 h-3 inline -mt-px mr-0.5" />{a._count?.registrosTempo}
+                  <span className="text-[11px] text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                    <Clock className="w-3 h-3" />{a._count?.registrosTempo}
+                  </span>
+                )}
+                {(a._count?.comentarios ?? 0) > 0 && (
+                  <span className="text-[11px] text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                    <MessageSquare className="w-3 h-3" />{a._count?.comentarios}
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-                <span>{a.usuario.nome}</span>
-                <span className="text-slate-300">|</span>
-                <span>{new Date(a.dataAtividade).toLocaleDateString('pt-BR')}</span>
-                {a.descricao && (
-                  <>
-                    <span className="text-slate-300">|</span>
-                    <span className="truncate max-w-xs">{a.descricao}</span>
-                  </>
-                )}
-              </div>
+              {/* Descricao */}
+              {a.descricao && (
+                <p className="mt-2 text-xs text-slate-500 leading-relaxed line-clamp-2 border-t border-slate-100 pt-2">{a.descricao}</p>
+              )}
             </div>
 
             {/* Acoes compactas (direita) */}
@@ -731,7 +798,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
 
               {/* Remover */}
               {canAdd && (
-                <button onClick={() => handleRemoveAtividade(a.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1" title="Remover atividade">
+                <button onClick={() => handleRemoveAtividade(a.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1" title="Remover tarefa">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               )}
@@ -744,7 +811,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
 
         {/* Registros de Tempo (expandido) */}
         {isExpanded && (
-          <div className="bg-slate-50/80 px-5 py-4 border-t border-slate-100 ml-5">
+          <div className="bg-slate-50/80 px-5 py-4 border-t border-slate-200 rounded-b-lg">
             <div className="flex items-center justify-between mb-3">
               <h5 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
                 Registros de Tempo
@@ -799,8 +866,59 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
                 </table>
               </div>
             )}
+
+            {/* Comentarios */}
+            <div className="mt-4 pt-4 border-t border-slate-200">
+              <h5 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                <MessageSquare className="w-3.5 h-3.5" /> Notas ({comentarios.length})
+              </h5>
+
+              {/* Form novo comentario */}
+              <div className="flex gap-2 mb-3">
+                <textarea
+                  value={novoComentario}
+                  onChange={(e) => setNovoComentario(e.target.value)}
+                  placeholder="Adicionar nota (documentar parametros, configuracoes, procedimentos...)..."
+                  rows={2}
+                  className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-xs resize-none"
+                />
+                <button
+                  onClick={handleAddComentario}
+                  disabled={!novoComentario.trim() || savingComentario}
+                  className="self-end bg-capul-600 text-white px-3 py-2 rounded-lg text-xs hover:bg-capul-700 disabled:opacity-50"
+                >
+                  {savingComentario ? '...' : 'Enviar'}
+                </button>
+              </div>
+
+              {loadingComentarios ? (
+                <p className="text-xs text-slate-400">Carregando...</p>
+              ) : comentarios.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">Nenhuma nota</p>
+              ) : (
+                <div className="space-y-2">
+                  {comentarios.map((c) => (
+                    <div key={c.id} className="bg-white rounded-lg border border-slate-200 px-3 py-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="font-medium text-slate-700">{c.usuario.nome}</span>
+                          <span className="text-slate-400">{new Date(c.createdAt).toLocaleDateString('pt-BR')} {new Date(c.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        {canManage && (
+                          <button onClick={() => handleRemoveComentario(c.id)} className="text-slate-300 hover:text-red-500 transition-colors" title="Remover">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-600 whitespace-pre-wrap">{c.texto}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
+        </div>
       </div>
     );
   }
@@ -812,17 +930,29 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
       {/* Nova Atividade */}
       {canAdd && (
         <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <h4 className="text-sm font-semibold text-slate-700 mb-3">Nova Atividade</h4>
-          <div className="flex gap-3 items-end flex-wrap">
-            <input type="text" placeholder="Titulo da atividade" value={novoTitulo} onChange={(e) => setNovoTitulo(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-48" />
-            <input type="text" placeholder="Descricao (opcional)" value={novaDescricao} onChange={(e) => setNovaDescricao(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-48" />
-            {fases.length > 0 && (
-              <select value={novaFaseId} onChange={(e) => setNovaFaseId(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-                <option value="">Sem fase</option>
-                {fases.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
-              </select>
-            )}
-            <button onClick={handleAddAtividade} disabled={!novoTitulo || saving} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">Adicionar</button>
+          <h4 className="text-sm font-semibold text-slate-700 mb-3">Nova Tarefa</h4>
+          <div className="space-y-3">
+            <div className="flex gap-3 items-end flex-wrap">
+              <input type="text" placeholder="Titulo da tarefa" value={novoTitulo} onChange={(e) => setNovoTitulo(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-48" />
+              <input type="date" placeholder="Inicio" value={novaDataInicio} onChange={(e) => setNovaDataInicio(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-36" title="Data inicio" />
+              <input type="date" placeholder="Fim previsto" value={novaDataFimPrevista} onChange={(e) => setNovaDataFimPrevista(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-36" title="Data fim prevista" />
+              {fases.length > 0 && (
+                <select value={novaFaseId} onChange={(e) => setNovaFaseId(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                  <option value="">Sem fase</option>
+                  {fases.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                </select>
+              )}
+            </div>
+            <textarea
+              placeholder="Descricao da tarefa (opcional) — detalhe o que precisa ser feito, parametros, configuracoes..."
+              value={novaDescricao}
+              onChange={(e) => setNovaDescricao(e.target.value)}
+              rows={4}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-y"
+            />
+            <div className="flex justify-end">
+              <button onClick={handleAddAtividade} disabled={!novoTitulo || saving} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">Adicionar</button>
+            </div>
           </div>
         </div>
       )}
@@ -837,9 +967,11 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
             )}
           </div>
           {showFaseForm && (
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex gap-3 items-end">
-              <input type="text" placeholder="Nome da fase" value={novoNomeFase} onChange={(e) => setNovoNomeFase(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm flex-1" />
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex gap-3 items-end flex-wrap">
+              <input type="text" placeholder="Nome da fase" value={novoNomeFase} onChange={(e) => setNovoNomeFase(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-48" />
               <input type="number" placeholder="Ordem" value={novaOrdemFase} onChange={(e) => setNovaOrdemFase(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-20" />
+              <input type="date" value={novaFaseDataInicio} onChange={(e) => setNovaFaseDataInicio(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" title="Data inicio" />
+              <input type="date" value={novaFaseDataFimPrevista} onChange={(e) => setNovaFaseDataFimPrevista(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" title="Data fim prevista" />
               <button onClick={handleAddFase} disabled={!novoNomeFase || saving} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">Adicionar</button>
               <button onClick={() => setShowFaseForm(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
             </div>
@@ -854,12 +986,23 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
                 return (
                   <div key={f.id}>
                     {/* Cabeçalho da Fase — destacado */}
-                    <div className="px-5 py-3.5 flex items-center justify-between bg-slate-100/80 cursor-pointer hover:bg-slate-100 border-b border-slate-200" onClick={() => toggleFase(f.id)}>
+                    <div className="px-5 py-4 flex items-center justify-between bg-gradient-to-r from-capul-50 to-slate-50 cursor-pointer hover:from-capul-100 hover:to-slate-100 border-b border-slate-200 border-l-4 border-l-capul-500" onClick={() => toggleFase(f.id)}>
                       <div className="flex items-center gap-3">
-                        {isCollapsed ? <ChevronRight className="w-5 h-5 text-slate-500" /> : <ChevronDown className="w-5 h-5 text-slate-500" />}
-                        <span className="text-xs text-slate-400 font-mono bg-white border border-slate-200 rounded px-1.5 py-0.5">{f.ordem}</span>
-                        <span className="text-base text-slate-800 font-bold">{f.nome}</span>
-                        <span className="text-xs text-slate-400 ml-1">{faseAtividades.length} atividade(s)</span>
+                        {isCollapsed ? <ChevronRight className="w-5 h-5 text-capul-600" /> : <ChevronDown className="w-5 h-5 text-capul-600" />}
+                        <div className="flex items-center gap-2 bg-capul-600 text-white rounded-lg px-2.5 py-1">
+                          <FolderKanban className="w-4 h-4" />
+                          <span className="text-xs font-bold">FASE {f.ordem}</span>
+                        </div>
+                        <span className="text-base text-slate-900 font-bold tracking-tight">{f.nome}</span>
+                        <span className="text-xs text-slate-500 bg-white border border-slate-200 rounded-full px-2 py-0.5 font-medium">{faseAtividades.length} tarefa(s)</span>
+                        {(f.dataInicio || f.dataFimPrevista) && (
+                          <span className="flex items-center gap-1 text-xs text-slate-500 bg-white border border-slate-200 rounded-full px-2 py-0.5">
+                            <Clock className="w-3 h-3" />
+                            {f.dataInicio ? new Date(f.dataInicio).toLocaleDateString('pt-BR') : '?'}
+                            {' → '}
+                            {f.dataFimPrevista ? new Date(f.dataFimPrevista).toLocaleDateString('pt-BR') : '?'}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                         {canManage ? (
@@ -878,11 +1021,11 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
                     </div>
                     {/* Atividades da Fase — com indentação */}
                     {!isCollapsed && (
-                      <div className="ml-8 border-l-2 border-capul-200">
+                      <div className="ml-6">
                         {faseAtividades.length === 0 ? (
-                          <p className="px-5 py-3 text-xs text-slate-400 italic">Nenhuma atividade nesta fase</p>
+                          <p className="px-5 py-3 text-xs text-slate-400 italic">Nenhuma tarefa nesta fase</p>
                         ) : (
-                          <div className="divide-y divide-slate-100">
+                          <div className="py-1">
                             {faseAtividades.map(renderAtividade)}
                           </div>
                         )}
@@ -901,13 +1044,13 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
         <div className="bg-white rounded-xl border border-slate-200">
           <div className="px-6 py-4 border-b border-slate-200">
             <h4 className="font-semibold text-slate-700">
-              {isCompleto ? `Atividades sem fase (${atividadesSemFase.length})` : `Atividades (${atividades.length})`}
+              {isCompleto ? `Tarefas sem fase (${atividadesSemFase.length})` : `Tarefas (${atividades.length})`}
             </h4>
           </div>
           {(isCompleto ? atividadesSemFase : atividades).length === 0 ? (
-            <p className="px-6 py-4 text-sm text-slate-400">Nenhuma atividade registrada</p>
+            <p className="px-6 py-4 text-sm text-slate-400">Nenhuma tarefa registrada</p>
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="py-1">
               {(isCompleto ? atividadesSemFase : atividades).map(renderAtividade)}
             </div>
           )}
@@ -1582,10 +1725,7 @@ function TabChamados({ projetoId, canManage }: { projetoId: string; canManage: b
   const { toast } = useToast();
   const [itens, setItens] = useState<Chamado[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showVincular, setShowVincular] = useState(false);
-  const [buscaTermo, setBuscaTermo] = useState('');
-  const [resultadosBusca, setResultadosBusca] = useState<Chamado[]>([]);
-  const [buscando, setBuscando] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => { load(); }, [projetoId]);
 
@@ -1593,32 +1733,6 @@ function TabChamados({ projetoId, canManage }: { projetoId: string; canManage: b
     setLoading(true);
     try { setItens(await projetoService.listarChamadosProjeto(projetoId)); } catch { /* empty */ }
     setLoading(false);
-  }
-
-  async function buscarChamados() {
-    if (!buscaTermo.trim()) return;
-    setBuscando(true);
-    try {
-      const todos = await chamadoService.listar();
-      const vinculadosIds = new Set(itens.map((i) => i.id));
-      const filtrados = todos.filter(
-        (c) => !c.projetoId && !vinculadosIds.has(c.id) &&
-          (c.numero.toString().includes(buscaTermo) || c.titulo.toLowerCase().includes(buscaTermo.toLowerCase())),
-      );
-      setResultadosBusca(filtrados);
-    } catch { /* empty */ }
-    setBuscando(false);
-  }
-
-  async function handleVincular(chamadoId: string) {
-    try {
-      await projetoService.vincularChamado(projetoId, chamadoId);
-      toast('success', 'Chamado vinculado com sucesso');
-      setResultadosBusca((prev) => prev.filter((c) => c.id !== chamadoId));
-      load();
-    } catch {
-      toast('error', 'Erro ao vincular chamado');
-    }
   }
 
   async function handleDesvincular(chamadoId: string) {
@@ -1633,94 +1747,263 @@ function TabChamados({ projetoId, canManage }: { projetoId: string; canManage: b
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200">
-      <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-        <h4 className="font-semibold text-slate-700">Chamados Vinculados ({itens.length})</h4>
-        <div className="flex items-center gap-3">
-          {canManage && (
-            <button onClick={() => setShowVincular(!showVincular)} className="flex items-center gap-1 text-sm text-capul-600 hover:underline">
-              <Link2 className="w-4 h-4" />
-              Vincular Existente
-            </button>
-          )}
-          <Link
-            to={`/gestao-ti/chamados/novo?projetoId=${projetoId}`}
-            className="flex items-center gap-1 text-sm text-capul-600 hover:underline"
-          >
-            <Plus className="w-4 h-4" />
-            Novo Chamado
-          </Link>
+    <>
+      <div className="bg-white rounded-xl border border-slate-200">
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+          <h4 className="font-semibold text-slate-700">Chamados Vinculados ({itens.length})</h4>
+          <div className="flex items-center gap-3">
+            {canManage && (
+              <button onClick={() => setShowModal(true)} className="flex items-center gap-1 text-sm text-capul-600 hover:underline">
+                <Link2 className="w-4 h-4" />
+                Vincular Existente
+              </button>
+            )}
+            <Link
+              to={`/gestao-ti/chamados/novo?projetoId=${projetoId}`}
+              className="flex items-center gap-1 text-sm text-capul-600 hover:underline"
+            >
+              <Plus className="w-4 h-4" />
+              Novo Chamado
+            </Link>
+          </div>
         </div>
+
+        {loading ? (
+          <p className="px-6 py-4 text-sm text-slate-400">Carregando...</p>
+        ) : itens.length === 0 ? (
+          <p className="px-6 py-4 text-sm text-slate-400">Nenhum chamado vinculado</p>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {itens.map((c) => (
+              <div key={c.id} className="px-6 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Link to={`/gestao-ti/chamados/${c.id}`} className="text-sm text-capul-600 hover:underline font-medium">
+                    #{c.numero}
+                  </Link>
+                  <span className="text-sm text-slate-700">{c.titulo}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${chamadoStatusCores[c.status]}`}>{chamadoStatusLabel[c.status]}</span>
+                  <span className="text-xs text-slate-400">{prioridadeLabel[c.prioridade]}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  {c.tecnico && <span className="text-xs text-slate-400">{c.tecnico.nome}</span>}
+                  <span className="text-xs text-slate-400">{new Date(c.createdAt).toLocaleDateString('pt-BR')}</span>
+                  {canManage && (
+                    <button onClick={() => handleDesvincular(c.id)} className="text-slate-400 hover:text-red-500" title="Desvincular chamado">
+                      <Unlink className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {showVincular && (
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
-          <div className="flex items-center gap-2 mb-3">
+      {showModal && (
+        <ModalVincularChamadosProjeto
+          projetoId={projetoId}
+          itensVinculados={itens}
+          onDone={() => { setShowModal(false); load(); }}
+          onClose={() => setShowModal(false)}
+        />
+      )}
+    </>
+  );
+}
+
+function ModalVincularChamadosProjeto({ projetoId, itensVinculados, onDone, onClose }: { projetoId: string; itensVinculados: Chamado[]; onDone: () => void; onClose: () => void }) {
+  const { toast } = useToast();
+  const [chamados, setChamados] = useState<Chamado[]>([]);
+  const [equipes, setEquipes] = useState<EquipeTI[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [vinculando, setVinculando] = useState(false);
+
+  const [filtroTexto, setFiltroTexto] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState('');
+  const [filtroEquipe, setFiltroEquipe] = useState('');
+
+  const idsVinculados = new Set(itensVinculados.map((c) => c.id));
+
+  useEffect(() => {
+    Promise.all([
+      chamadoService.listar(),
+      equipeService.listar('ATIVO'),
+    ]).then(([ch, eq]) => {
+      const statusTerminais = ['RESOLVIDO', 'FECHADO', 'CANCELADO'];
+      setChamados(ch.filter((c) => !c.projetoId && !idsVinculados.has(c.id) && !statusTerminais.includes(c.status)));
+      setEquipes(eq);
+    }).catch(() => {
+      toast('error', 'Erro ao carregar chamados');
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const filtrados = chamados.filter((c) => {
+    if (filtroStatus && c.status !== filtroStatus) return false;
+    if (filtroEquipe && c.equipeAtual?.id !== filtroEquipe) return false;
+    if (filtroTexto) {
+      const termo = filtroTexto.toLowerCase();
+      const matchNumero = String(c.numero).includes(termo);
+      const matchTitulo = c.titulo.toLowerCase().includes(termo);
+      if (!matchNumero && !matchTitulo) return false;
+    }
+    return true;
+  });
+
+  function toggleSelecionado(id: string) {
+    setSelecionados((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleTodos() {
+    if (selecionados.size === filtrados.length) {
+      setSelecionados(new Set());
+    } else {
+      setSelecionados(new Set(filtrados.map((c) => c.id)));
+    }
+  }
+
+  async function handleVincular() {
+    if (selecionados.size === 0) return;
+    setVinculando(true);
+    let count = 0;
+    for (const chamadoId of selecionados) {
+      try {
+        await projetoService.vincularChamado(projetoId, chamadoId);
+        count++;
+      } catch { /* continue with next */ }
+    }
+    toast('success', `${count} chamado(s) vinculado(s)`);
+    setVinculando(false);
+    onDone();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+          <h3 className="font-semibold text-slate-800">Vincular Chamados ao Projeto</h3>
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="px-6 py-3 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Search className="w-4 h-4 text-slate-400" />
             <input
               type="text"
-              value={buscaTermo}
-              onChange={(e) => setBuscaTermo(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && buscarChamados()}
-              placeholder="Buscar por numero ou titulo do chamado..."
-              className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500"
+              value={filtroTexto}
+              onChange={(e) => setFiltroTexto(e.target.value)}
+              placeholder="Buscar por numero ou titulo..."
+              className="flex-1 min-w-[200px] border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
             />
-            <button onClick={buscarChamados} disabled={buscando} className="px-3 py-2 bg-capul-600 text-white rounded-lg text-sm hover:bg-capul-700 flex items-center gap-1">
-              <Search className="w-4 h-4" />
-              Buscar
+            <select
+              value={filtroStatus}
+              onChange={(e) => setFiltroStatus(e.target.value)}
+              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+            >
+              <option value="">Todos os Status</option>
+              {Object.entries(chamadoStatusLabel).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+            <select
+              value={filtroEquipe}
+              onChange={(e) => setFiltroEquipe(e.target.value)}
+              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+            >
+              <option value="">Todas as Equipes</option>
+              {equipes.map((eq) => (
+                <option key={eq.id} value={eq.id}>{eq.sigla} - {eq.nome}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="p-8 text-center text-slate-400">Carregando chamados...</div>
+          ) : filtrados.length === 0 ? (
+            <div className="p-8 text-center text-slate-400">Nenhum chamado encontrado</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-2.5 text-left w-10">
+                    <input
+                      type="checkbox"
+                      checked={selecionados.size > 0 && selecionados.size === filtrados.length}
+                      onChange={toggleTodos}
+                      className="rounded border-slate-300"
+                    />
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">#</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Titulo</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Equipe</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Data</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtrados.map((c) => (
+                  <tr
+                    key={c.id}
+                    onClick={() => toggleSelecionado(c.id)}
+                    className={`cursor-pointer transition-colors ${selecionados.has(c.id) ? 'bg-capul-50' : 'hover:bg-slate-50'}`}
+                  >
+                    <td className="px-4 py-2.5">
+                      <input
+                        type="checkbox"
+                        checked={selecionados.has(c.id)}
+                        onChange={() => toggleSelecionado(c.id)}
+                        className="rounded border-slate-300"
+                      />
+                    </td>
+                    <td className="px-4 py-2.5 font-medium text-slate-700">{c.numero}</td>
+                    <td className="px-4 py-2.5 text-slate-600 max-w-[250px] truncate">{c.titulo}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${chamadoStatusCores[c.status] || 'bg-slate-100 text-slate-600'}`}>
+                        {chamadoStatusLabel[c.status] || c.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-500">{c.equipeAtual?.sigla || '-'}</td>
+                    <td className="px-4 py-2.5 text-slate-500">{new Date(c.createdAt).toLocaleDateString('pt-BR')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="px-6 py-3 border-t border-slate-200 flex items-center justify-between bg-slate-50">
+          <span className="text-sm text-slate-500">
+            {filtrados.length} chamado(s) encontrado(s)
+            {selecionados.size > 0 && (
+              <span className="ml-2 font-medium text-capul-600">{selecionados.size} selecionado(s)</span>
+            )}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="border border-slate-300 text-slate-600 px-4 py-2 rounded-lg text-sm hover:bg-slate-100"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleVincular}
+              disabled={selecionados.size === 0 || vinculando}
+              className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50"
+            >
+              {vinculando ? 'Vinculando...' : `Vincular ${selecionados.size > 0 ? `(${selecionados.size})` : ''}`}
             </button>
           </div>
-          {buscando ? (
-            <p className="text-sm text-slate-400">Buscando...</p>
-          ) : resultadosBusca.length > 0 ? (
-            <div className="divide-y divide-slate-200 border border-slate-200 rounded-lg bg-white max-h-48 overflow-y-auto">
-              {resultadosBusca.map((c) => (
-                <div key={c.id} className="px-4 py-2 flex items-center justify-between hover:bg-slate-50">
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-slate-700">#{c.numero}</span>
-                    <span className="text-sm text-slate-600">{c.titulo}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${chamadoStatusCores[c.status]}`}>{chamadoStatusLabel[c.status]}</span>
-                  </div>
-                  <button onClick={() => handleVincular(c.id)} className="text-xs px-3 py-1 bg-capul-600 text-white rounded hover:bg-capul-700">
-                    Vincular
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : buscaTermo.trim() ? (
-            <p className="text-sm text-slate-400">Nenhum chamado disponivel encontrado</p>
-          ) : null}
         </div>
-      )}
-
-      {loading ? (
-        <p className="px-6 py-4 text-sm text-slate-400">Carregando...</p>
-      ) : itens.length === 0 ? (
-        <p className="px-6 py-4 text-sm text-slate-400">Nenhum chamado vinculado</p>
-      ) : (
-        <div className="divide-y divide-slate-100">
-          {itens.map((c) => (
-            <div key={c.id} className="px-6 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Link to={`/gestao-ti/chamados/${c.id}`} className="text-sm text-capul-600 hover:underline font-medium">
-                  #{c.numero}
-                </Link>
-                <span className="text-sm text-slate-700">{c.titulo}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${chamadoStatusCores[c.status]}`}>{chamadoStatusLabel[c.status]}</span>
-                <span className="text-xs text-slate-400">{prioridadeLabel[c.prioridade]}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                {c.tecnico && <span className="text-xs text-slate-400">{c.tecnico.nome}</span>}
-                <span className="text-xs text-slate-400">{new Date(c.createdAt).toLocaleDateString('pt-BR')}</span>
-                {canManage && (
-                  <button onClick={() => handleDesvincular(c.id)} className="text-slate-400 hover:text-red-500" title="Desvincular chamado">
-                    <Unlink className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
