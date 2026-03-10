@@ -63,6 +63,7 @@ model Usuario {
   registrosTempoChm    RegistroTempoChamado[]  @relation("RegistroTempoChamado")
   comentariosTarefa    ComentarioTarefa[]      @relation("ComentarioTarefaUsuario")
   usuarioChaveProjetos   UsuarioChaveProjeto[]   @relation("UsuarioChaveProjeto")
+  terceirizadoProjetos   TerceirizadoProjeto[]   @relation("TerceirizadoProjeto")
   pendenciasResponsavel  PendenciaProjeto[]      @relation("PendenciaResponsavel")
   pendenciasCriador      PendenciaProjeto[]      @relation("PendenciaCriador")
   interacoesPendencia    InteracaoPendencia[]    @relation("InteracaoPendenciaUsuario")
@@ -1271,6 +1272,7 @@ model Projeto {
   dependenciasDestino DependenciaProjeto[] @relation("DependenciaDestino")
   chamados            Chamado[]
   usuariosChave       UsuarioChaveProjeto[]
+  terceirizados       TerceirizadoProjeto[]
   pendencias          PendenciaProjeto[]
 
   @@index([status])
@@ -1759,5 +1761,34 @@ model AnexoPendencia {
 
   @@index([pendenciaId])
   @@map("anexos_pendencia")
+  @@schema("gestao_ti")
+}
+
+// ============================================================
+// MODELOS DO GESTAO_TI — Terceirizados em Projetos
+// ============================================================
+
+model TerceirizadoProjeto {
+  id            String   @id @default(uuid())
+  empresa       String?                        // Empresa do terceirizado
+  funcao        String                         // Funcao no projeto (ex: Analista, Consultor)
+  especialidade String?                        // Area de atuacao (ex: SAP, Salesforce)
+  dataInicio    DateTime? @map("data_inicio")  // Inicio da atuacao no projeto
+  dataFim       DateTime? @map("data_fim")     // Fim previsto da atuacao
+  ativo         Boolean  @default(true)
+  observacoes   String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  projetoId String  @map("projeto_id")
+  projeto   Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("TerceirizadoProjeto", fields: [usuarioId], references: [id])
+
+  @@unique([projetoId, usuarioId])
+  @@index([usuarioId])
+  @@index([projetoId, ativo])
+  @@map("terceirizados_projeto")
   @@schema("gestao_ti")
 }

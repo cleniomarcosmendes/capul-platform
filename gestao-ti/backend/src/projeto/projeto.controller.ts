@@ -39,6 +39,7 @@ import { CreateAnexoDto } from './dto/create-anexo.dto';
 import { CreateApontamentoDto } from './dto/create-apontamento.dto';
 import { UpdateRegistroTempoDto } from './dto/update-registro-tempo.dto';
 import { CreateUsuarioChaveDto } from './dto/create-usuario-chave.dto';
+import { CreateTerceirizadoDto, UpdateTerceirizadoDto } from './dto/create-terceirizado.dto';
 import { CreatePendenciaDto } from './dto/create-pendencia.dto';
 import { UpdatePendenciaDto } from './dto/update-pendencia.dto';
 import { CreateInteracaoPendenciaDto } from './dto/create-interacao-pendencia.dto';
@@ -84,6 +85,12 @@ export class ProjetoController {
   @Roles('USUARIO_CHAVE')
   meusProjetosChave(@CurrentUser() user: JwtPayload) {
     return this.service.meusProjetosChave(user.sub);
+  }
+
+  @Get('meus-projetos-terceirizado')
+  @Roles('TERCEIRIZADO')
+  meusProjetosTerceirizado(@CurrentUser() user: JwtPayload) {
+    return this.service.meusProjetosTerceirizado(user.sub);
   }
 
   @Get(':id')
@@ -449,10 +456,48 @@ export class ProjetoController {
     return this.service.removeUsuarioChave(id, ucId);
   }
 
+  // --- Terceirizados ---
+
+  @Get(':id/terceirizados')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO')
+  listTerceirizados(@Param('id') id: string) {
+    return this.service.listTerceirizados(id);
+  }
+
+  @Post(':id/terceirizados')
+  @Roles('ADMIN', 'GESTOR_TI', 'GERENTE_PROJETO')
+  addTerceirizado(@Param('id') id: string, @Body() dto: CreateTerceirizadoDto) {
+    return this.service.addTerceirizado(id, {
+      ...dto,
+      dataInicio: dto.dataInicio ? new Date(dto.dataInicio) : undefined,
+      dataFim: dto.dataFim ? new Date(dto.dataFim) : undefined,
+    });
+  }
+
+  @Patch(':id/terceirizados/:tercId')
+  @Roles('ADMIN', 'GESTOR_TI', 'GERENTE_PROJETO')
+  updateTerceirizado(
+    @Param('id') id: string,
+    @Param('tercId') tercId: string,
+    @Body() dto: UpdateTerceirizadoDto,
+  ) {
+    return this.service.updateTerceirizado(id, tercId, {
+      ...dto,
+      dataInicio: dto.dataInicio ? new Date(dto.dataInicio) : undefined,
+      dataFim: dto.dataFim ? new Date(dto.dataFim) : undefined,
+    });
+  }
+
+  @Delete(':id/terceirizados/:tercId')
+  @Roles('ADMIN', 'GESTOR_TI', 'GERENTE_PROJETO')
+  removeTerceirizado(@Param('id') id: string, @Param('tercId') tercId: string) {
+    return this.service.removeTerceirizado(id, tercId);
+  }
+
   // --- Pendencias ---
 
   @Get(':id/pendencias')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   listPendencias(
     @Param('id') id: string,
     @Query('status') status?: string,
@@ -466,7 +511,7 @@ export class ProjetoController {
   }
 
   @Post(':id/pendencias')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   createPendencia(
     @Param('id') id: string,
     @Body() dto: CreatePendenciaDto,
@@ -477,7 +522,7 @@ export class ProjetoController {
   }
 
   @Get(':id/pendencias/:pid')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   getPendencia(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -488,7 +533,7 @@ export class ProjetoController {
   }
 
   @Patch(':id/pendencias/:pid')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   updatePendencia(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -502,7 +547,7 @@ export class ProjetoController {
   // --- Interacoes Pendencia ---
 
   @Post(':id/pendencias/:pid/interacoes')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   addInteracao(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -516,7 +561,7 @@ export class ProjetoController {
   // --- Anexos Pendencia ---
 
   @Post(':id/pendencias/:pid/anexos')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
       destination: PENDENCIA_UPLOADS_DIR,
@@ -539,7 +584,7 @@ export class ProjetoController {
   }
 
   @Get(':id/pendencias/:pid/anexos/:anexoId/download')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async downloadAnexoPendencia(
     @Param('id') id: string,
     @Param('pid') pid: string,

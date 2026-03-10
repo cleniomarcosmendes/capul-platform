@@ -79,7 +79,7 @@ A **Capul Platform** e uma plataforma corporativa modular que centraliza a gesta
 
 ## 3. Estrutura de Modulos (Gestao TI Backend)
 
-O backend possui **16 controllers** com **~145 endpoints** organizados em modulos NestJS:
+O backend possui **16 controllers** com **~150 endpoints** organizados em modulos NestJS:
 
 | Modulo | Controller | Endpoints | Funcionalidade |
 |--------|-----------|-----------|----------------|
@@ -92,7 +92,7 @@ O backend possui **16 controllers** com **~145 endpoints** organizados em modulo
 | **LicencaModule** | `/licencas` | 6 | CRUD licencas, renovar, inativar |
 | **ContratoModule** | `/contratos` | 16 | CRUD contratos, parcelas, rateio, licencas vinculadas |
 | **ParadaModule** | `/paradas` | 6 | CRUD paradas, finalizar, cancelar |
-| **ProjetoModule** | `/projetos` | 36 | CRUD projetos hierarquicos (3 niveis), fases, atividades, membros RACI, cotacoes, custos, riscos, dependencias, anexos, apontamentos |
+| **ProjetoModule** | `/projetos` | 41 | CRUD projetos hierarquicos (3 niveis), fases, atividades, membros RACI, terceirizados, cotacoes, custos, riscos, dependencias, anexos, apontamentos |
 | **AtivoModule** | `/ativos` | 9 | CRUD ativos (CMDB), softwares instalados |
 | **ConhecimentoModule** | `/conhecimento` | 6 | CRUD artigos base de conhecimento |
 | **NotificacaoModule** | `/notificacoes` | 5 | Listar, contar, marcar lida, excluir |
@@ -107,7 +107,7 @@ O backend possui **16 controllers** com **~145 endpoints** organizados em modulo
 ### Schemas
 
 - **`core`** (somente leitura no Gestao TI): 4 modelos — `Filial`, `Usuario`, `CentroCusto`, `Departamento`
-- **`gestao_ti`**: 34 modelos + 38 enums
+- **`gestao_ti`**: 35 modelos + 38 enums
 
 ### Modelos por Fase
 
@@ -118,7 +118,7 @@ O backend possui **16 controllers** com **~145 endpoints** organizados em modulo
 | 2B | `Software`, `SoftwareModulo`, `SoftwareFilial`, `ModuloFilial`, `SoftwareLicenca` | Portfolio de softwares e licencas |
 | 3 | `Contrato`, `ParcelaContrato`, `ContratoRateioConfig`, `ContratoRateioItem`, `ContratoHistorico` | Contratos e financeiro |
 | 4 | `RegistroParada`, `ParadaFilialAfetada` | Sustentacao e disponibilidade |
-| 5 | `Projeto`, `MembroProjeto`, `FaseProjeto`, `AtividadeProjeto`, `CotacaoProjeto`, `CustoProjeto`, `RiscoProjeto`, `DependenciaProjeto`, `AnexoProjeto`, `ApontamentoHoras` | Projetos de TI |
+| 5 | `Projeto`, `MembroProjeto`, `TerceirizadoProjeto`, `FaseProjeto`, `AtividadeProjeto`, `CotacaoProjeto`, `CustoProjeto`, `RiscoProjeto`, `DependenciaProjeto`, `AnexoProjeto`, `ApontamentoHoras` | Projetos de TI |
 | 6A | `Ativo`, `AtivoSoftware`, `ArtigoConhecimento` | CMDB e base de conhecimento |
 | 6B | `Notificacao` | Notificacoes in-app |
 
@@ -255,6 +255,11 @@ Autenticacao via header `Authorization: Bearer <jwt_token>`.
 | POST/GET/DELETE | `/projetos/:id/apontamentos` | Todos | Apontamento de horas |
 | GET | `/projetos/:id/chamados` | Todos | Chamados vinculados |
 | GET | `/projetos/:id/custos` | ADMIN, GESTOR_TI | Resumo financeiro |
+| GET | `/projetos/:id/terceirizados` | ADMIN, GESTOR_TI | Listar terceirizados |
+| POST | `/projetos/:id/terceirizados` | ADMIN, GESTOR_TI | Adicionar terceirizado |
+| PATCH | `/projetos/:id/terceirizados/:tid` | ADMIN, GESTOR_TI | Atualizar terceirizado |
+| DELETE | `/projetos/:id/terceirizados/:tid` | ADMIN, GESTOR_TI | Remover terceirizado |
+| GET | `/projetos/meus-projetos-terceirizado` | TERCEIRIZADO | Projetos do terceirizado logado |
 
 ### Ativos (`/ativos`)
 
@@ -352,7 +357,13 @@ Request → JwtAuthGuard → GestaoTiGuard → RolesGuard → Controller
 | `GESTOR_TI` | Gestor de TI | Gestao completa |
 | `TECNICO` | Tecnico de suporte | Operacoes tecnicas |
 | `DESENVOLVEDOR` | Desenvolvedor | Acesso a projetos e chamados |
+| `MANUTENCAO` | Manutencao | Operacoes de manutencao |
+| `INFRAESTRUTURA` | Infraestrutura | Operacoes de infraestrutura |
 | `USUARIO_FINAL` | Usuario comum | Apenas seus chamados |
+| `USUARIO_CHAVE` | Usuario-chave de projetos | Acesso limitado a pendencias |
+| `TERCEIRIZADO` | Analista externo | Acesso restrito a projetos vinculados |
+
+> **Nota**: Para detalhamento completo das permissoes por role, consulte `roles-permissoes.md`
 
 ### Decorators Customizados
 

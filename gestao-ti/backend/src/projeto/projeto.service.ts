@@ -1253,14 +1253,26 @@ export class ProjetoService {
 
   private static TI_ROLES = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO'];
 
+  /**
+   * Verifica se usuario tem acesso ao projeto (USUARIO_CHAVE ou TERCEIRIZADO)
+   */
   async checkProjetoAccessChave(projetoId: string, userId: string, role: string) {
     if (ProjetoService.TI_ROLES.includes(role)) return;
+
     if (role === 'USUARIO_CHAVE') {
       const uc = await this.prisma.usuarioChaveProjeto.findUnique({
         where: { projetoId_usuarioId: { projetoId, usuarioId: userId } },
       });
       if (uc && uc.ativo) return;
     }
+
+    if (role === 'TERCEIRIZADO') {
+      const terc = await this.prisma.terceirizadoProjeto.findUnique({
+        where: { projetoId_usuarioId: { projetoId, usuarioId: userId } },
+      });
+      if (terc && terc.ativo) return;
+    }
+
     throw new ForbiddenException('Sem acesso a este projeto');
   }
 
@@ -1365,8 +1377,8 @@ export class ProjetoService {
     });
     if (!pendencia) throw new NotFoundException('Pendencia nao encontrada neste projeto');
 
-    // USUARIO_CHAVE: filter internal interactions
-    if (role === 'USUARIO_CHAVE') {
+    // USUARIO_CHAVE e TERCEIRIZADO: filter internal interactions
+    if (role === 'USUARIO_CHAVE' || role === 'TERCEIRIZADO') {
       pendencia.interacoes = pendencia.interacoes.filter((i) => i.publica);
     }
 
@@ -1441,11 +1453,11 @@ export class ProjetoService {
       throw new BadRequestException('Pendencia finalizada nao pode ser alterada');
     }
 
-    // USUARIO_CHAVE: restricted status transitions
-    if (role === 'USUARIO_CHAVE' && dto.status) {
+    // USUARIO_CHAVE e TERCEIRIZADO: restricted status transitions
+    if ((role === 'USUARIO_CHAVE' || role === 'TERCEIRIZADO') && dto.status) {
       const permitidos = ['AGUARDANDO_VALIDACAO', 'CONCLUIDA', 'EM_ANDAMENTO'];
       if (!permitidos.includes(dto.status)) {
-        throw new ForbiddenException('Usuario-chave so pode alterar status para Em Andamento, Aguardando Validacao ou Concluida');
+        throw new ForbiddenException('Usuario externo so pode alterar status para Em Andamento, Aguardando Validacao ou Concluida');
       }
     }
 
@@ -1506,8 +1518,8 @@ export class ProjetoService {
       throw new BadRequestException('Nao e possivel comentar em pendencia finalizada');
     }
 
-    // USUARIO_CHAVE: always public
-    const publica = role === 'USUARIO_CHAVE' ? true : (dto.publica ?? true);
+    // USUARIO_CHAVE e TERCEIRIZADO: always public
+    const publica = (role === 'USUARIO_CHAVE' || role === 'TERCEIRIZADO') ? true : (dto.publica ?? true);
 
     return this.prisma.interacaoPendencia.create({
       data: {
@@ -1611,5 +1623,152 @@ export class ProjetoService {
       ...v.projeto,
       funcao: v.funcao,
     }));
+  }
+
+  // ============================================================
+  // TERCEIRIZADOS
+  // ============================================================
+
+  /**
+   * Retorna projetos onde o usuario terceirizado esta vinculado
+   */
+  async meusProjetosTerceirizado(usuarioId: string) {
+    const vinculos = await this.prisma.terceirizadoProjeto.findMany({
+      where: { usuarioId, ativo: true },
+      include: {
+        projeto: {
+          select: {
+            id: true, numero: true, nome: true, status: true, tipo: true, modo: true,
+            dataInicio: true, dataFimPrevista: true,
+            software: { select: { id: true, nome: true } },
+            responsavel: { select: { id: true, nome: true } },
+            _count: { select: { pendencias: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return vinculos.map((v) => ({
+      ...v.projeto,
+      funcao: v.funcao,
+      empresa: v.empresa,
+      especialidade: v.especialidade,
+      dataInicio: v.dataInicio,
+      dataFim: v.dataFim,
+    }));
+  }
+
+  /**
+   * Lista terceirizados vinculados a um projeto
+   */
+  async listTerceirizados(projetoId: string) {
+    await this.findOne(projetoId);
+    return this.prisma.terceirizadoProjeto.findMany({
+      where: { projetoId },
+      include: {
+        usuario: { select: { id: true, nome: true, username: true, email: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  /**
+   * Adiciona terceirizado a um projeto
+   */
+  async addTerceirizado(projetoId: string, dto: {
+    usuarioId: string;
+    funcao: string;
+    empresa?: string;
+    especialidade?: string;
+    dataInicio?: Date;
+    dataFim?: Date;
+    observacoes?: string;
+  }) {
+    await this.findOne(projetoId);
+    const usuario = await this.prisma.usuario.findUnique({ where: { id: dto.usuarioId } });
+    if (!usuario) throw new BadRequestException('Usuario nao encontrado');
+
+    const existente = await this.prisma.terceirizadoProjeto.findUnique({
+      where: { projetoId_usuarioId: { projetoId, usuarioId: dto.usuarioId } },
+    });
+
+    if (existente) {
+      if (existente.ativo) throw new BadRequestException('Usuario ja e terceirizado deste projeto');
+      // Reativar vinculo existente
+      return this.prisma.terceirizadoProjeto.update({
+        where: { id: existente.id },
+        data: {
+          ativo: true,
+          funcao: dto.funcao,
+          empresa: dto.empresa,
+          especialidade: dto.especialidade,
+          dataInicio: dto.dataInicio,
+          dataFim: dto.dataFim,
+          observacoes: dto.observacoes,
+        },
+        include: { usuario: { select: { id: true, nome: true, username: true, email: true } } },
+      });
+    }
+
+    return this.prisma.terceirizadoProjeto.create({
+      data: {
+        projetoId,
+        usuarioId: dto.usuarioId,
+        funcao: dto.funcao,
+        empresa: dto.empresa,
+        especialidade: dto.especialidade,
+        dataInicio: dto.dataInicio,
+        dataFim: dto.dataFim,
+        observacoes: dto.observacoes,
+      },
+      include: { usuario: { select: { id: true, nome: true, username: true, email: true } } },
+    });
+  }
+
+  /**
+   * Atualiza terceirizado em um projeto
+   */
+  async updateTerceirizado(projetoId: string, terceirizadoId: string, dto: {
+    funcao?: string;
+    empresa?: string;
+    especialidade?: string;
+    dataInicio?: Date;
+    dataFim?: Date;
+    observacoes?: string;
+    ativo?: boolean;
+  }) {
+    await this.findOne(projetoId);
+    const terceirizado = await this.prisma.terceirizadoProjeto.findUnique({
+      where: { id: terceirizadoId },
+    });
+    if (!terceirizado || terceirizado.projetoId !== projetoId) {
+      throw new NotFoundException('Terceirizado nao encontrado neste projeto');
+    }
+
+    return this.prisma.terceirizadoProjeto.update({
+      where: { id: terceirizadoId },
+      data: dto,
+      include: { usuario: { select: { id: true, nome: true, username: true, email: true } } },
+    });
+  }
+
+  /**
+   * Remove (desativa) terceirizado de um projeto
+   */
+  async removeTerceirizado(projetoId: string, terceirizadoId: string) {
+    await this.findOne(projetoId);
+    const terceirizado = await this.prisma.terceirizadoProjeto.findUnique({
+      where: { id: terceirizadoId },
+    });
+    if (!terceirizado || terceirizado.projetoId !== projetoId) {
+      throw new NotFoundException('Terceirizado nao encontrado neste projeto');
+    }
+
+    // Soft delete - apenas desativa
+    return this.prisma.terceirizadoProjeto.update({
+      where: { id: terceirizadoId },
+      data: { ativo: false },
+    });
   }
 }

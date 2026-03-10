@@ -1,98 +1,166 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Auth Gateway
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Gateway de autenticacao centralizada da Capul Platform.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Stack
 
-## Description
+- **Runtime**: Node.js 22
+- **Framework**: NestJS 11
+- **ORM**: Prisma 6
+- **Auth**: Passport + JWT
+- **Banco**: PostgreSQL 16 (schema `core`)
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Schema Core
 
-## Project setup
+O Auth Gateway gerencia as entidades centrais da plataforma:
 
-```bash
-$ npm install
+```
+core.empresas          # Empresas (multi-tenant)
+core.filiais           # Filiais por empresa
+core.usuarios          # Usuarios da plataforma
+core.modulos           # Modulos disponiveis (GESTAO_TI, INVENTARIO, CONFIGURADOR)
+core.roles             # Roles por modulo
+core.usuario_modulos   # Vinculo usuario <-> modulo/role
+core.departamentos     # Departamentos
+core.centros_custo     # Centros de custo
 ```
 
-## Compile and run the project
+## Autenticacao JWT
 
-```bash
-# development
-$ npm run start
+### Endpoints
 
-# watch mode
-$ npm run start:dev
+| Metodo | Rota | Descricao |
+|--------|------|-----------|
+| POST | `/api/v1/auth/login` | Login (email + senha) |
+| POST | `/api/v1/auth/refresh` | Renovar access token |
+| POST | `/api/v1/auth/logout` | Invalidar refresh token |
+| GET | `/api/v1/auth/me` | Dados do usuario logado |
 
-# production mode
-$ npm run start:prod
+### JWT Payload
+
+```typescript
+{
+  sub: string,           // userId (UUID)
+  email: string,
+  nome: string,
+  empresaId: string,
+  filialId: string,
+  modulos: [
+    { codigo: 'GESTAO_TI', role: 'ADMIN' },
+    { codigo: 'INVENTARIO', role: 'SUPERVISOR' },
+    { codigo: 'CONFIGURADOR', role: 'ADMIN' }
+  ]
+}
 ```
 
-## Run tests
+### Configuracao
 
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+```env
+JWT_SECRET=<chave_64_caracteres>
+JWT_REFRESH_SECRET=<outra_chave>
+JWT_ACCESS_EXPIRATION=15m
+JWT_REFRESH_EXPIRATION=7d
 ```
 
-## Deployment
+## UNIFIED_AUTH
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Variavel de ambiente que habilita autenticacao unificada para todos os modulos:
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+```env
+UNIFIED_AUTH=true
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### Comportamento
 
-## Resources
+- **`UNIFIED_AUTH=true`**: Todos os modulos usam `core.usuarios` via JWT do Auth Gateway
+- **`UNIFIED_AUTH=false`**: Modulos podem ter tabelas de usuarios locais (legado)
 
-Check out a few resources that may come in handy when working with NestJS:
+### Impacto por Modulo
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+| Modulo | UNIFIED_AUTH=true | UNIFIED_AUTH=false |
+|--------|-------------------|-------------------|
+| Gestao TI | Usa `core.usuarios` | Usa `core.usuarios` |
+| Inventario | Usa `core.usuarios` | Usa `inventario.users` |
+| Configurador | Usa `core.usuarios` | Usa `core.usuarios` |
 
-## Support
+### Migracao
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Para migrar do modo legado para unificado:
 
-## Stay in touch
+1. Garantir que todos os usuarios necessarios existam em `core.usuarios`
+2. Atribuir modulo/role via Configurador
+3. Setar `UNIFIED_AUTH=true` no `.env`
+4. Reiniciar os containers
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+## Modulos e Roles
 
-## License
+### Gestao TI (9 roles)
+- ADMIN, GESTOR_TI, TECNICO, DESENVOLVEDOR
+- MANUTENCAO, INFRAESTRUTURA, USUARIO_FINAL
+- USUARIO_CHAVE, TERCEIRIZADO
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+### Inventario (3 roles)
+- ADMIN, SUPERVISOR, OPERATOR
+
+### Configurador (3 roles)
+- ADMIN, OPERADOR, VIEWER
+
+## Comandos
+
+```bash
+# Desenvolvimento
+npm install
+npm run start:dev
+
+# Producao
+npm run build
+npm run start:prod
+
+# Prisma
+npx prisma generate
+npx prisma migrate dev
+npx prisma db seed
+
+# Testes
+npm test
+npm run test:cov
+```
+
+## Docker
+
+```bash
+# Build
+docker compose build auth-gateway
+
+# Logs
+docker compose logs -f auth-gateway
+
+# Shell
+docker compose exec auth-gateway sh
+
+# Seed
+docker compose exec auth-gateway npx prisma db seed
+```
+
+## Estrutura
+
+```
+auth-gateway/
+├── prisma/
+│   ├── schema.prisma    # Schema do banco (core)
+│   └── seed.ts          # Seed inicial (empresa, modulos, roles, admin)
+├── src/
+│   ├── auth/            # Modulo de autenticacao
+│   │   ├── auth.controller.ts
+│   │   ├── auth.service.ts
+│   │   ├── jwt.strategy.ts
+│   │   └── guards/
+│   ├── usuarios/        # CRUD usuarios
+│   ├── prisma/          # PrismaService
+│   └── main.ts
+└── .env.example
+```
+
+---
+
+*Ultima atualizacao: 10/03/2026*

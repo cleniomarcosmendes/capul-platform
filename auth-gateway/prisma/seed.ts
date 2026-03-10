@@ -103,6 +103,7 @@ async function main() {
     { codigo: 'USUARIO_FINAL', nome: 'Usuario Final', descricao: 'Abrir chamados publicos e consultar status dos proprios chamados', moduloId: modGestaoTi.id },
     { codigo: 'FINANCEIRO', nome: 'Financeiro', descricao: 'Contratos, rateio e custos', moduloId: modGestaoTi.id },
     { codigo: 'USUARIO_CHAVE', nome: 'Usuario-Chave', descricao: 'Usuarios-chave de projetos (acesso limitado a pendencias)', moduloId: modGestaoTi.id },
+    { codigo: 'TERCEIRIZADO', nome: 'Terceirizado', descricao: 'Analista externo com acesso restrito a projetos e pendencias vinculados', moduloId: modGestaoTi.id },
   ];
 
   const roles: Record<string, { id: string }> = {};
