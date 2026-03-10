@@ -19,6 +19,11 @@ import type {
   StatusProjeto,
   PapelRaci,
   StatusFase,
+  UsuarioChaveProjeto,
+  PendenciaProjeto,
+  InteracaoPendencia,
+  StatusPendencia,
+  PrioridadePendencia,
 } from '../types';
 
 interface ProjetoFilters {
@@ -325,5 +330,70 @@ export const projetoService = {
   async buscarComentarios(query: string): Promise<ComentarioTarefa[]> {
     const { data } = await gestaoApi.get('/projetos/busca-comentarios', { params: { q: query } });
     return data;
+  },
+
+  // Usuarios-Chave
+  async listarUsuariosChave(id: string): Promise<UsuarioChaveProjeto[]> {
+    const { data } = await gestaoApi.get(`/projetos/${id}/usuarios-chave`);
+    return data;
+  },
+
+  async adicionarUsuarioChave(id: string, payload: { usuarioId: string; funcao: string }): Promise<UsuarioChaveProjeto> {
+    const { data } = await gestaoApi.post(`/projetos/${id}/usuarios-chave`, payload);
+    return data;
+  },
+
+  async removerUsuarioChave(id: string, ucId: string): Promise<void> {
+    await gestaoApi.delete(`/projetos/${id}/usuarios-chave/${ucId}`);
+  },
+
+  // Pendencias
+  async listarPendencias(id: string, filters: { status?: string; prioridade?: string; responsavelId?: string; search?: string } = {}): Promise<PendenciaProjeto[]> {
+    const params: Record<string, string> = {};
+    if (filters.status) params.status = filters.status;
+    if (filters.prioridade) params.prioridade = filters.prioridade;
+    if (filters.responsavelId) params.responsavelId = filters.responsavelId;
+    if (filters.search) params.search = filters.search;
+    const { data } = await gestaoApi.get(`/projetos/${id}/pendencias`, { params });
+    return data;
+  },
+
+  async criarPendencia(id: string, payload: { titulo: string; descricao?: string; prioridade?: PrioridadePendencia; faseId?: string; responsavelId: string; dataLimite?: string }): Promise<PendenciaProjeto> {
+    const { data } = await gestaoApi.post(`/projetos/${id}/pendencias`, payload);
+    return data;
+  },
+
+  async buscarPendencia(id: string, pid: string): Promise<PendenciaProjeto> {
+    const { data } = await gestaoApi.get(`/projetos/${id}/pendencias/${pid}`);
+    return data;
+  },
+
+  async atualizarPendencia(id: string, pid: string, payload: { titulo?: string; descricao?: string; status?: StatusPendencia; prioridade?: PrioridadePendencia; faseId?: string; responsavelId?: string; dataLimite?: string }): Promise<PendenciaProjeto> {
+    const { data } = await gestaoApi.patch(`/projetos/${id}/pendencias/${pid}`, payload);
+    return data;
+  },
+
+  async adicionarInteracaoPendencia(id: string, pid: string, payload: { descricao: string; publica?: boolean }): Promise<InteracaoPendencia> {
+    const { data } = await gestaoApi.post(`/projetos/${id}/pendencias/${pid}/interacoes`, payload);
+    return data;
+  },
+
+  async uploadAnexoPendencia(id: string, pid: string, file: File): Promise<void> {
+    const formData = new FormData();
+    formData.append('file', file);
+    await gestaoApi.post(`/projetos/${id}/pendencias/${pid}/anexos`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  async downloadAnexoPendencia(id: string, pid: string, anexoId: string): Promise<Blob> {
+    const { data } = await gestaoApi.get(`/projetos/${id}/pendencias/${pid}/anexos/${anexoId}/download`, {
+      responseType: 'blob',
+    });
+    return data;
+  },
+
+  async removerAnexoPendencia(id: string, pid: string, anexoId: string): Promise<void> {
+    await gestaoApi.delete(`/projetos/${id}/pendencias/${pid}/anexos/${anexoId}`);
   },
 };

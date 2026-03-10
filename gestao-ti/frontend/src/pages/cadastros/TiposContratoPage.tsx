@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { contratoService } from '../../services/contrato.service';
-import { Plus, Layers } from 'lucide-react';
+import { Plus, Layers, Pencil, Check, X } from 'lucide-react';
 import type { TipoContratoConfig } from '../../types';
 import { useToast } from '../../components/Toast';
 
@@ -18,20 +18,21 @@ export function TiposContratoPage() {
   const [nome, setNome] = useState('');
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    carregar();
-  }, []);
+  // Inline edit
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editCodigo, setEditCodigo] = useState('');
+  const [editNome, setEditNome] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+
+  useEffect(() => { carregar(); }, []);
 
   async function carregar() {
     setLoading(true);
     try {
       const data = await contratoService.listarTodosTiposContrato();
       setTipos(data);
-    } catch {
-      // erro tratado pelo interceptor
-    } finally {
-      setLoading(false);
-    }
+    } catch { /* empty */ }
+    setLoading(false);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -39,21 +40,45 @@ export function TiposContratoPage() {
     setSaving(true);
     try {
       await contratoService.criarTipoContrato({ codigo, nome });
-      setCodigo('');
-      setNome('');
+      setCodigo(''); setNome('');
       setShowForm(false);
+      toast('success', 'Tipo de contrato criado');
       carregar();
     } catch {
       toast('error', 'Erro ao criar tipo de contrato');
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
+  }
+
+  function startEdit(tipo: TipoContratoConfig) {
+    setEditId(tipo.id);
+    setEditCodigo(tipo.codigo);
+    setEditNome(tipo.nome);
+  }
+
+  function cancelEdit() {
+    setEditId(null);
+  }
+
+  async function saveEdit() {
+    if (!editId) return;
+    setEditSaving(true);
+    try {
+      await contratoService.atualizarTipoContrato(editId, { codigo: editCodigo, nome: editNome });
+      toast('success', 'Tipo de contrato atualizado');
+      setEditId(null);
+      carregar();
+    } catch {
+      toast('error', 'Erro ao atualizar tipo de contrato');
+    }
+    setEditSaving(false);
   }
 
   async function handleToggleStatus(tipo: TipoContratoConfig) {
     const novoStatus = tipo.status === 'ATIVO' ? 'INATIVO' : 'ATIVO';
     try {
       await contratoService.atualizarTipoContrato(tipo.id, { status: novoStatus });
+      toast('success', `Tipo ${novoStatus === 'ATIVO' ? 'ativado' : 'inativado'}`);
       carregar();
     } catch {
       toast('error', 'Erro ao atualizar status');
@@ -70,7 +95,7 @@ export function TiposContratoPage() {
           </p>
           {canManage && (
             <button
-              onClick={() => setShowForm(!showForm)}
+              onClick={() => { setShowForm(!showForm); cancelEdit(); }}
               className="flex items-center gap-2 bg-capul-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -84,42 +109,21 @@ export function TiposContratoPage() {
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Codigo *</label>
-                <input
-                  type="text"
-                  value={codigo}
-                  onChange={(e) => setCodigo(e.target.value)}
-                  required
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600"
-                  placeholder="LIC"
-                />
+                <input type="text" value={codigo} onChange={(e) => setCodigo(e.target.value)} required
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" placeholder="LIC" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Nome *</label>
-                <input
-                  type="text"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  required
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600"
-                  placeholder="Licenciamento"
-                />
+                <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} required
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" placeholder="Licenciamento" />
               </div>
             </div>
             <div className="flex gap-3">
-              <button
-                type="submit"
-                disabled={saving}
-                className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50"
-              >
+              <button type="submit" disabled={saving}
+                className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50">
                 {saving ? 'Salvando...' : 'Salvar'}
               </button>
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="text-sm text-slate-500 hover:text-slate-700"
-              >
-                Cancelar
-              </button>
+              <button type="button" onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
             </div>
           </form>
         )}
@@ -145,28 +149,55 @@ export function TiposContratoPage() {
               <tbody className="divide-y divide-slate-100">
                 {tipos.map((tipo) => (
                   <tr key={tipo.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 text-sm font-medium text-slate-700">{tipo.codigo}</td>
-                    <td className="px-6 py-4 text-sm text-slate-600">{tipo.nome}</td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`text-xs px-2 py-1 rounded-full ${
-                          tipo.status === 'ATIVO'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}
-                      >
-                        {tipo.status}
-                      </span>
-                    </td>
-                    {canManage && (
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={() => handleToggleStatus(tipo)}
-                          className="text-xs text-capul-600 hover:underline"
-                        >
-                          {tipo.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
-                        </button>
-                      </td>
+                    {editId === tipo.id ? (
+                      <>
+                        <td className="px-6 py-3">
+                          <input value={editCodigo} onChange={(e) => setEditCodigo(e.target.value)}
+                            className="w-full border border-slate-300 rounded px-2 py-1 text-sm" />
+                        </td>
+                        <td className="px-6 py-3">
+                          <input value={editNome} onChange={(e) => setEditNome(e.target.value)}
+                            className="w-full border border-slate-300 rounded px-2 py-1 text-sm" />
+                        </td>
+                        <td className="px-6 py-3">
+                          <span className={`text-xs px-2 py-1 rounded-full ${tipo.status === 'ATIVO' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            {tipo.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3">
+                          <div className="flex items-center gap-2">
+                            <button onClick={saveEdit} disabled={editSaving} className="text-green-600 hover:text-green-800" title="Salvar">
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button onClick={cancelEdit} className="text-slate-400 hover:text-slate-600" title="Cancelar">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-6 py-4 text-sm font-medium text-slate-700">{tipo.codigo}</td>
+                        <td className="px-6 py-4 text-sm text-slate-600">{tipo.nome}</td>
+                        <td className="px-6 py-4">
+                          <span className={`text-xs px-2 py-1 rounded-full ${tipo.status === 'ATIVO' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            {tipo.status}
+                          </span>
+                        </td>
+                        {canManage && (
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <button onClick={() => startEdit(tipo)} className="flex items-center gap-1 text-xs text-capul-600 hover:underline">
+                                <Pencil className="w-3.5 h-3.5" />
+                                Editar
+                              </button>
+                              <button onClick={() => handleToggleStatus(tipo)} className="text-xs text-capul-600 hover:underline">
+                                {tipo.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </>
                     )}
                   </tr>
                 ))}

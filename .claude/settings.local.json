@@ -1056,7 +1056,13 @@
       "Bash(docker image prune -a -f --filter \"until=24h\" 2>&1)",
       "Bash(cd /mnt/c/meus_projetos/capul-platform && docker compose up -d --build capul-gestao-ti-api capul-gestao-ti-web 2>&1 | tail -15)",
       "Bash(docker compose:*)",
-      "Bash(docker exec:*)"
+      "Bash(docker exec:*)",
+      "Bash(curl -s http://localhost/api/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin123\"}' | head -c 200)",
+      "Bash(curl -s -X POST http://localhost/api/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin123\"}' | head -c 200)",
+      "Bash(curl -s -X POST http://localhost:3000/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin123\"}' | head -c 200)",
+      "Bash(curl -s -X POST http://localhost:3000/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin123\"}' | head -c 300)",
+      "Bash(curl -s -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin123\"}' | head -c 300)",
+      "Bash(curl -s -X POST http://localhost/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"login\":\"admin\",\"senha\":\"admin123\"}')"
     ]
   }
 }

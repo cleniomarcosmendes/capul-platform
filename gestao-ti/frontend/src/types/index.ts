@@ -70,6 +70,7 @@ export interface Departamento {
   id: string;
   nome: string;
   codigo: string;
+  descricao: string | null;
   filialId: string;
   status: string;
 }
@@ -605,6 +606,68 @@ export type ModoProjeto = 'SIMPLES' | 'COMPLETO';
 export type StatusProjeto = 'PLANEJAMENTO' | 'EM_ANDAMENTO' | 'PAUSADO' | 'CONCLUIDO' | 'CANCELADO';
 export type PapelRaci = 'RESPONSAVEL' | 'APROVADOR' | 'CONSULTADO' | 'INFORMADO';
 export type StatusFase = 'PENDENTE' | 'EM_ANDAMENTO' | 'APROVADA' | 'REJEITADA';
+
+// === Fase 5B+ — Pendencias de Projeto types ===
+
+export type StatusPendencia = 'ABERTA' | 'EM_ANDAMENTO' | 'AGUARDANDO_VALIDACAO' | 'CONCLUIDA' | 'CANCELADA';
+export type PrioridadePendencia = 'BAIXA' | 'MEDIA' | 'ALTA' | 'URGENTE';
+export type TipoInteracaoPendencia = 'COMENTARIO' | 'ANEXO' | 'STATUS_ALTERADO' | 'RESPONSAVEL_ALTERADO';
+
+export interface UsuarioChaveProjeto {
+  id: string;
+  projetoId: string;
+  usuarioId: string;
+  usuario: { id: string; nome: string; username: string; email: string };
+  funcao: string;
+  ativo: boolean;
+  createdAt: string;
+}
+
+export interface PendenciaProjeto {
+  id: string;
+  numero: number;
+  titulo: string;
+  descricao: string | null;
+  status: StatusPendencia;
+  prioridade: PrioridadePendencia;
+  dataLimite: string | null;
+  projetoId: string;
+  faseId: string | null;
+  fase: { id: string; nome: string } | null;
+  responsavelId: string;
+  responsavel: { id: string; nome: string; username: string };
+  criadorId: string;
+  criador: { id: string; nome: string; username: string };
+  interacoes?: InteracaoPendencia[];
+  anexos?: AnexoPendenciaItem[];
+  _count?: { interacoes: number; anexos: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InteracaoPendencia {
+  id: string;
+  tipo: TipoInteracaoPendencia;
+  descricao: string | null;
+  publica: boolean;
+  pendenciaId: string;
+  usuarioId: string;
+  usuario: { id: string; nome: string; username: string };
+  createdAt: string;
+}
+
+export interface AnexoPendenciaItem {
+  id: string;
+  nomeOriginal: string;
+  nomeArquivo: string;
+  mimeType: string;
+  tamanho: number;
+  pendenciaId: string;
+  interacaoId: string | null;
+  usuarioId: string;
+  usuario: { id: string; nome: string };
+  createdAt: string;
+}
 
 // === Fase 5B — Projetos types adicionais ===
 

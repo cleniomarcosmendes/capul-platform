@@ -8,7 +8,7 @@ export class DepartamentoService {
 
   async findAll(filialId?: string) {
     return this.prisma.departamento.findMany({
-      where: filialId ? { filialId, status: 'ATIVO' } : { status: 'ATIVO' },
+      where: filialId ? { filialId } : {},
       include: { filial: { select: { id: true, codigo: true, nomeFantasia: true } } },
       orderBy: { nome: 'asc' },
     });

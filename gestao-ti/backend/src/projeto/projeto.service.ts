@@ -2,8 +2,11 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import * as fs from 'fs';
+import * as path from 'path';
 import { CreateProjetoDto } from './dto/create-projeto.dto';
 import { UpdateProjetoDto } from './dto/update-projeto.dto';
 import { CreateFaseDto } from './dto/create-fase.dto';
@@ -16,6 +19,12 @@ import { CreateDependenciaDto } from './dto/create-dependencia.dto';
 import { CreateAnexoDto } from './dto/create-anexo.dto';
 import { CreateApontamentoDto } from './dto/create-apontamento.dto';
 import { UpdateRegistroTempoDto } from './dto/update-registro-tempo.dto';
+import { CreateUsuarioChaveDto } from './dto/create-usuario-chave.dto';
+import { CreatePendenciaDto } from './dto/create-pendencia.dto';
+import { UpdatePendenciaDto } from './dto/update-pendencia.dto';
+import { CreateInteracaoPendenciaDto } from './dto/create-interacao-pendencia.dto';
+
+const PENDENCIA_UPLOADS_DIR = path.resolve('./uploads/pendencias');
 
 const projetoListInclude = {
   software: { select: { id: true, nome: true, tipo: true } },
@@ -26,6 +35,7 @@ const projetoListInclude = {
       subProjetos: true, membros: true, fases: true, atividades: true,
       cotacoes: true, custos: true, riscos: true, anexos: true,
       apontamentos: true, dependenciasOrigem: true,
+      usuariosChave: true, pendencias: true,
     },
   },
 };
@@ -86,6 +96,7 @@ const projetoDetailInclude = {
       subProjetos: true, membros: true, fases: true, atividades: true,
       cotacoes: true, custos: true, riscos: true, anexos: true,
       apontamentos: true, dependenciasOrigem: true,
+      usuariosChave: true, pendencias: true,
     },
   },
 };
@@ -1234,5 +1245,371 @@ export class ProjetoService {
     }
 
     return todos;
+  }
+
+  // ============================================================
+  // USUARIOS-CHAVE
+  // ============================================================
+
+  private static TI_ROLES = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO'];
+
+  async checkProjetoAccessChave(projetoId: string, userId: string, role: string) {
+    if (ProjetoService.TI_ROLES.includes(role)) return;
+    if (role === 'USUARIO_CHAVE') {
+      const uc = await this.prisma.usuarioChaveProjeto.findUnique({
+        where: { projetoId_usuarioId: { projetoId, usuarioId: userId } },
+      });
+      if (uc && uc.ativo) return;
+    }
+    throw new ForbiddenException('Sem acesso a este projeto');
+  }
+
+  async listUsuariosChave(projetoId: string) {
+    await this.findOne(projetoId);
+    return this.prisma.usuarioChaveProjeto.findMany({
+      where: { projetoId },
+      include: {
+        usuario: { select: { id: true, nome: true, username: true, email: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async addUsuarioChave(projetoId: string, dto: CreateUsuarioChaveDto) {
+    await this.findOne(projetoId);
+    const usuario = await this.prisma.usuario.findUnique({ where: { id: dto.usuarioId } });
+    if (!usuario) throw new BadRequestException('Usuario nao encontrado');
+
+    const existente = await this.prisma.usuarioChaveProjeto.findUnique({
+      where: { projetoId_usuarioId: { projetoId, usuarioId: dto.usuarioId } },
+    });
+    if (existente) {
+      if (existente.ativo) throw new BadRequestException('Usuario ja e usuario-chave deste projeto');
+      return this.prisma.usuarioChaveProjeto.update({
+        where: { id: existente.id },
+        data: { ativo: true, funcao: dto.funcao },
+        include: { usuario: { select: { id: true, nome: true, username: true, email: true } } },
+      });
+    }
+
+    return this.prisma.usuarioChaveProjeto.create({
+      data: { projetoId, usuarioId: dto.usuarioId, funcao: dto.funcao },
+      include: { usuario: { select: { id: true, nome: true, username: true, email: true } } },
+    });
+  }
+
+  async removeUsuarioChave(projetoId: string, ucId: string) {
+    const uc = await this.prisma.usuarioChaveProjeto.findFirst({
+      where: { id: ucId, projetoId },
+    });
+    if (!uc) throw new NotFoundException('Usuario-chave nao encontrado neste projeto');
+    return this.prisma.usuarioChaveProjeto.update({
+      where: { id: ucId },
+      data: { ativo: false },
+    });
+  }
+
+  // ============================================================
+  // PENDENCIAS
+  // ============================================================
+
+  async listPendencias(projetoId: string, filters: {
+    status?: string; prioridade?: string; responsavelId?: string; search?: string;
+  }, userId: string, role: string) {
+    await this.checkProjetoAccessChave(projetoId, userId, role);
+
+    const where: Record<string, unknown> = { projetoId };
+    if (filters.status) where.status = filters.status;
+    if (filters.prioridade) where.prioridade = filters.prioridade;
+    if (filters.responsavelId) where.responsavelId = filters.responsavelId;
+    if (filters.search) {
+      where.OR = [
+        { titulo: { contains: filters.search, mode: 'insensitive' } },
+        { descricao: { contains: filters.search, mode: 'insensitive' } },
+      ];
+    }
+
+    return this.prisma.pendenciaProjeto.findMany({
+      where,
+      include: {
+        responsavel: { select: { id: true, nome: true, username: true } },
+        criador: { select: { id: true, nome: true, username: true } },
+        fase: { select: { id: true, nome: true } },
+        _count: { select: { interacoes: true, anexos: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getPendencia(projetoId: string, pendenciaId: string, userId: string, role: string) {
+    await this.checkProjetoAccessChave(projetoId, userId, role);
+
+    const pendencia = await this.prisma.pendenciaProjeto.findFirst({
+      where: { id: pendenciaId, projetoId },
+      include: {
+        responsavel: { select: { id: true, nome: true, username: true } },
+        criador: { select: { id: true, nome: true, username: true } },
+        fase: { select: { id: true, nome: true } },
+        interacoes: {
+          include: {
+            usuario: { select: { id: true, nome: true, username: true } },
+            anexo: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+        anexos: {
+          include: { usuario: { select: { id: true, nome: true } } },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+    if (!pendencia) throw new NotFoundException('Pendencia nao encontrada neste projeto');
+
+    // USUARIO_CHAVE: filter internal interactions
+    if (role === 'USUARIO_CHAVE') {
+      pendencia.interacoes = pendencia.interacoes.filter((i) => i.publica);
+    }
+
+    return pendencia;
+  }
+
+  async createPendencia(projetoId: string, dto: CreatePendenciaDto, criadorId: string, role: string) {
+    await this.checkProjetoAccessChave(projetoId, criadorId, role);
+    const projeto = await this.findOne(projetoId);
+
+    if (['CONCLUIDO', 'CANCELADO'].includes(projeto.status)) {
+      throw new BadRequestException('Nao e possivel criar pendencias em projeto finalizado');
+    }
+
+    if (dto.faseId) {
+      const fase = await this.prisma.faseProjeto.findFirst({ where: { id: dto.faseId, projetoId } });
+      if (!fase) throw new BadRequestException('Fase nao encontrada neste projeto');
+    }
+
+    // Validate responsavel is member or usuario-chave
+    const isMembro = await this.prisma.membroProjeto.findUnique({
+      where: { projetoId_usuarioId: { projetoId, usuarioId: dto.responsavelId } },
+    });
+    const isChave = await this.prisma.usuarioChaveProjeto.findUnique({
+      where: { projetoId_usuarioId: { projetoId, usuarioId: dto.responsavelId } },
+    });
+    const isResponsavel = projeto.responsavelId === dto.responsavelId;
+    if (!isMembro && !isChave && !isResponsavel) {
+      throw new BadRequestException('Responsavel deve ser membro ou usuario-chave do projeto');
+    }
+
+    const pendencia = await this.prisma.pendenciaProjeto.create({
+      data: {
+        titulo: dto.titulo,
+        descricao: dto.descricao,
+        prioridade: dto.prioridade || 'MEDIA',
+        projetoId,
+        faseId: dto.faseId,
+        responsavelId: dto.responsavelId,
+        criadorId,
+        dataLimite: dto.dataLimite ? new Date(dto.dataLimite) : undefined,
+      },
+      include: {
+        responsavel: { select: { id: true, nome: true, username: true } },
+        criador: { select: { id: true, nome: true, username: true } },
+        fase: { select: { id: true, nome: true } },
+      },
+    });
+
+    // Create opening interaction
+    await this.prisma.interacaoPendencia.create({
+      data: {
+        tipo: 'STATUS_ALTERADO',
+        descricao: 'Pendencia criada',
+        pendenciaId: pendencia.id,
+        usuarioId: criadorId,
+      },
+    });
+
+    return pendencia;
+  }
+
+  async updatePendencia(projetoId: string, pendenciaId: string, dto: UpdatePendenciaDto, userId: string, role: string) {
+    await this.checkProjetoAccessChave(projetoId, userId, role);
+
+    const pendencia = await this.prisma.pendenciaProjeto.findFirst({
+      where: { id: pendenciaId, projetoId },
+    });
+    if (!pendencia) throw new NotFoundException('Pendencia nao encontrada');
+
+    if (['CONCLUIDA', 'CANCELADA'].includes(pendencia.status) && !dto.status) {
+      throw new BadRequestException('Pendencia finalizada nao pode ser alterada');
+    }
+
+    // USUARIO_CHAVE: restricted status transitions
+    if (role === 'USUARIO_CHAVE' && dto.status) {
+      const permitidos = ['AGUARDANDO_VALIDACAO', 'CONCLUIDA', 'EM_ANDAMENTO'];
+      if (!permitidos.includes(dto.status)) {
+        throw new ForbiddenException('Usuario-chave so pode alterar status para Em Andamento, Aguardando Validacao ou Concluida');
+      }
+    }
+
+    const data: Record<string, unknown> = {};
+    if (dto.titulo !== undefined) data.titulo = dto.titulo;
+    if (dto.descricao !== undefined) data.descricao = dto.descricao;
+    if (dto.prioridade !== undefined) data.prioridade = dto.prioridade;
+    if (dto.faseId !== undefined) data.faseId = dto.faseId || null;
+    if (dto.dataLimite !== undefined) data.dataLimite = dto.dataLimite ? new Date(dto.dataLimite) : null;
+
+    if (dto.responsavelId !== undefined && dto.responsavelId !== pendencia.responsavelId) {
+      data.responsavelId = dto.responsavelId;
+      await this.prisma.interacaoPendencia.create({
+        data: {
+          tipo: 'RESPONSAVEL_ALTERADO',
+          descricao: `Responsavel alterado`,
+          pendenciaId,
+          usuarioId: userId,
+        },
+      });
+    }
+
+    if (dto.status !== undefined && dto.status !== pendencia.status) {
+      data.status = dto.status;
+      await this.prisma.interacaoPendencia.create({
+        data: {
+          tipo: 'STATUS_ALTERADO',
+          descricao: `Status alterado de ${pendencia.status} para ${dto.status}`,
+          pendenciaId,
+          usuarioId: userId,
+        },
+      });
+    }
+
+    return this.prisma.pendenciaProjeto.update({
+      where: { id: pendenciaId },
+      data,
+      include: {
+        responsavel: { select: { id: true, nome: true, username: true } },
+        criador: { select: { id: true, nome: true, username: true } },
+        fase: { select: { id: true, nome: true } },
+      },
+    });
+  }
+
+  // ============================================================
+  // INTERACOES PENDENCIA
+  // ============================================================
+
+  async addInteracaoPendencia(projetoId: string, pendenciaId: string, dto: CreateInteracaoPendenciaDto, userId: string, role: string) {
+    await this.checkProjetoAccessChave(projetoId, userId, role);
+
+    const pendencia = await this.prisma.pendenciaProjeto.findFirst({
+      where: { id: pendenciaId, projetoId },
+    });
+    if (!pendencia) throw new NotFoundException('Pendencia nao encontrada');
+    if (['CONCLUIDA', 'CANCELADA'].includes(pendencia.status)) {
+      throw new BadRequestException('Nao e possivel comentar em pendencia finalizada');
+    }
+
+    // USUARIO_CHAVE: always public
+    const publica = role === 'USUARIO_CHAVE' ? true : (dto.publica ?? true);
+
+    return this.prisma.interacaoPendencia.create({
+      data: {
+        tipo: 'COMENTARIO',
+        descricao: dto.descricao,
+        publica,
+        pendenciaId,
+        usuarioId: userId,
+      },
+      include: {
+        usuario: { select: { id: true, nome: true, username: true } },
+      },
+    });
+  }
+
+  // ============================================================
+  // ANEXOS PENDENCIA
+  // ============================================================
+
+  async addAnexoPendencia(projetoId: string, pendenciaId: string, file: Express.Multer.File, userId: string, role: string) {
+    await this.checkProjetoAccessChave(projetoId, userId, role);
+
+    const pendencia = await this.prisma.pendenciaProjeto.findFirst({
+      where: { id: pendenciaId, projetoId },
+    });
+    if (!pendencia) throw new NotFoundException('Pendencia nao encontrada');
+
+    // Create interaction entry
+    const interacao = await this.prisma.interacaoPendencia.create({
+      data: {
+        tipo: 'ANEXO',
+        descricao: `Anexo adicionado: ${file.originalname}`,
+        pendenciaId,
+        usuarioId: userId,
+      },
+    });
+
+    return this.prisma.anexoPendencia.create({
+      data: {
+        nomeOriginal: file.originalname,
+        nomeArquivo: file.filename,
+        mimeType: file.mimetype,
+        tamanho: file.size,
+        pendenciaId,
+        interacaoId: interacao.id,
+        usuarioId: userId,
+      },
+      include: { usuario: { select: { id: true, nome: true } } },
+    });
+  }
+
+  async downloadAnexoPendencia(projetoId: string, pendenciaId: string, anexoId: string, userId: string, role: string) {
+    await this.checkProjetoAccessChave(projetoId, userId, role);
+
+    const anexo = await this.prisma.anexoPendencia.findFirst({
+      where: { id: anexoId, pendenciaId },
+    });
+    if (!anexo) throw new NotFoundException('Anexo nao encontrado');
+
+    const filePath = path.join(PENDENCIA_UPLOADS_DIR, anexo.nomeArquivo);
+    if (!fs.existsSync(filePath)) throw new NotFoundException('Arquivo nao encontrado no disco');
+
+    return { anexo, filePath };
+  }
+
+  async removeAnexoPendencia(projetoId: string, pendenciaId: string, anexoId: string) {
+    const anexo = await this.prisma.anexoPendencia.findFirst({
+      where: { id: anexoId, pendenciaId, pendencia: { projetoId } },
+    });
+    if (!anexo) throw new NotFoundException('Anexo nao encontrado');
+
+    const filePath = path.join(PENDENCIA_UPLOADS_DIR, anexo.nomeArquivo);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+    await this.prisma.anexoPendencia.delete({ where: { id: anexoId } });
+    return { deleted: true };
+  }
+
+  // ============================================================
+  // MEUS PROJETOS (USUARIO CHAVE)
+  // ============================================================
+
+  async meusProjetosChave(usuarioId: string) {
+    const vinculos = await this.prisma.usuarioChaveProjeto.findMany({
+      where: { usuarioId, ativo: true },
+      include: {
+        projeto: {
+          select: {
+            id: true, numero: true, nome: true, status: true, tipo: true, modo: true,
+            dataInicio: true, dataFimPrevista: true,
+            software: { select: { id: true, nome: true } },
+            responsavel: { select: { id: true, nome: true } },
+            _count: { select: { pendencias: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return vinculos.map((v) => ({
+      ...v.projeto,
+      funcao: v.funcao,
+    }));
   }
 }

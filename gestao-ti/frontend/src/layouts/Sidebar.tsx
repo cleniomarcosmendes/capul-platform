@@ -57,7 +57,7 @@ const menuItems: MenuItem[] = [
   { section: 'CADASTROS', roles: MANAGERS },
   { label: 'Departamentos', icon: Building2, path: '/gestao-ti/departamentos', roles: MANAGERS },
   { label: 'Centros de Custo', icon: Wallet, path: '/gestao-ti/centros-custo', roles: MANAGERS },
-  { label: 'Naturezas', icon: Tag, path: '/gestao-ti/naturezas', roles: MANAGERS },
+  { label: 'Nat. Financeiras', icon: Tag, path: '/gestao-ti/naturezas', roles: MANAGERS },
   { label: 'Tipos de Contrato', icon: Layers, path: '/gestao-ti/tipos-contrato', roles: MANAGERS },
 ];
 

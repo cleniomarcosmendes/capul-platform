@@ -8,7 +8,7 @@ export class CentroCustoService {
 
   async findAll(filialId?: string) {
     return this.prisma.centroCusto.findMany({
-      where: filialId ? { filialId, status: 'ATIVO' } : { status: 'ATIVO' },
+      where: filialId ? { filialId } : {},
       include: { filial: { select: { id: true, codigo: true, nomeFantasia: true } } },
       orderBy: { codigo: 'asc' },
     });

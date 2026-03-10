@@ -7,7 +7,7 @@ import { projetoService } from '../../services/projeto.service';
 import { chamadoService } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
-import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare, KeyRound, ClipboardList, Send, Download, Eye } from 'lucide-react';
 import type {
   Projeto,
   MembroProjeto,
@@ -34,6 +34,11 @@ import type {
   RegistroTempo,
   ComentarioTarefa,
   EquipeTI,
+  UsuarioChaveProjeto,
+  PendenciaProjeto,
+  AnexoPendenciaItem,
+  StatusPendencia,
+  PrioridadePendencia,
 } from '../../types';
 
 const statusLabel: Record<string, string> = {
@@ -149,7 +154,20 @@ const prioridadeLabel: Record<string, string> = {
   BAIXA: 'Baixa', MEDIA: 'Media', ALTA: 'Alta', CRITICA: 'Critica',
 };
 
-type Tab = 'subprojetos' | 'equipe' | 'atividades' | 'financeiro' | 'riscos' | 'dependencias' | 'anexos' | 'chamados';
+type Tab = 'subprojetos' | 'equipe' | 'atividades' | 'financeiro' | 'riscos' | 'dependencias' | 'anexos' | 'chamados' | 'usuariosChave' | 'pendencias';
+
+const pendenciaStatusLabel: Record<string, string> = {
+  ABERTA: 'Aberta', EM_ANDAMENTO: 'Em Andamento', AGUARDANDO_VALIDACAO: 'Aguardando Validacao', CONCLUIDA: 'Concluida', CANCELADA: 'Cancelada',
+};
+const pendenciaStatusCores: Record<string, string> = {
+  ABERTA: 'bg-blue-100 text-blue-700', EM_ANDAMENTO: 'bg-yellow-100 text-yellow-700', AGUARDANDO_VALIDACAO: 'bg-orange-100 text-orange-700', CONCLUIDA: 'bg-green-100 text-green-700', CANCELADA: 'bg-slate-100 text-slate-600',
+};
+const pendenciaPrioridadeLabel: Record<string, string> = {
+  BAIXA: 'Baixa', MEDIA: 'Media', ALTA: 'Alta', URGENTE: 'Urgente',
+};
+const pendenciaPrioridadeCores: Record<string, string> = {
+  BAIXA: 'bg-green-100 text-green-700', MEDIA: 'bg-yellow-100 text-yellow-700', ALTA: 'bg-orange-100 text-orange-700', URGENTE: 'bg-red-100 text-red-700',
+};
 
 export function ProjetoDetalhePage() {
   const { id } = useParams();
@@ -216,6 +234,8 @@ export function ProjetoDetalhePage() {
     ...(isCompleto ? [{ key: 'dependencias' as Tab, label: 'Dependencias', icon: Link2 }] : []),
     { key: 'anexos', label: 'Anexos', icon: Paperclip },
     { key: 'chamados', label: 'Chamados', icon: Ticket },
+    { key: 'usuariosChave' as Tab, label: 'Usuarios-Chave', icon: KeyRound },
+    { key: 'pendencias' as Tab, label: 'Pendencias', icon: ClipboardList },
   ];
 
   return (
@@ -356,6 +376,12 @@ export function ProjetoDetalhePage() {
         )}
         {tab === 'chamados' && (
           <TabChamados projetoId={projeto.id} canManage={canManage} />
+        )}
+        {tab === 'usuariosChave' && (
+          <TabUsuariosChave projetoId={projeto.id} canManage={canManage} />
+        )}
+        {tab === 'pendencias' && (
+          <TabPendencias projetoId={projeto.id} canManage={canManage} />
         )}
       </div>
     </>
@@ -1808,6 +1834,651 @@ function TabChamados({ projetoId, canManage }: { projetoId: string; canManage: b
         />
       )}
     </>
+  );
+}
+
+// --- Tab Usuarios-Chave ---
+function TabUsuariosChave({ projetoId, canManage }: { projetoId: string; canManage: boolean }) {
+  const { toast } = useToast();
+  const [itens, setItens] = useState<UsuarioChaveProjeto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [usuarios, setUsuarios] = useState<UsuarioCore[]>([]);
+  const [formUsuarioId, setFormUsuarioId] = useState('');
+  const [formFuncao, setFormFuncao] = useState('');
+  const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => { load(); }, [projetoId]);
+
+  async function load() {
+    setLoading(true);
+    try { setItens(await projetoService.listarUsuariosChave(projetoId)); } catch { /* empty */ }
+    setLoading(false);
+  }
+
+  async function handleShowForm() {
+    if (usuarios.length === 0) {
+      try { setUsuarios(await coreService.listarUsuarios()); } catch { /* empty */ }
+    }
+    setShowForm(true);
+    setFormUsuarioId('');
+    setFormFuncao('');
+  }
+
+  async function handleAdd() {
+    if (!formUsuarioId || !formFuncao.trim()) { toast('error', 'Preencha usuario e funcao'); return; }
+    setSalvando(true);
+    try {
+      await projetoService.adicionarUsuarioChave(projetoId, { usuarioId: formUsuarioId, funcao: formFuncao.trim() });
+      toast('success', 'Usuario-chave adicionado');
+      setShowForm(false);
+      load();
+    } catch {
+      toast('error', 'Erro ao adicionar usuario-chave');
+    }
+    setSalvando(false);
+  }
+
+  async function handleRemove(ucId: string) {
+    if (!confirm('Desativar este usuario-chave?')) return;
+    try {
+      await projetoService.removerUsuarioChave(projetoId, ucId);
+      toast('success', 'Usuario-chave desativado');
+      load();
+    } catch {
+      toast('error', 'Erro ao desativar');
+    }
+  }
+
+  // Filter out already-added users
+  const idsExistentes = new Set(itens.filter((i) => i.ativo).map((i) => i.usuarioId));
+  const usuariosDisponiveis = usuarios.filter((u) => !idsExistentes.has(u.id));
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200">
+      <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+        <h4 className="font-semibold text-slate-700">
+          Usuarios-Chave ({itens.filter((i) => i.ativo).length})
+        </h4>
+        {canManage && (
+          <button onClick={handleShowForm} className="flex items-center gap-1 text-sm text-capul-600 hover:underline">
+            <Plus className="w-4 h-4" />
+            Adicionar
+          </button>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Usuario</label>
+              <select value={formUsuarioId} onChange={(e) => setFormUsuarioId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                <option value="">Selecione...</option>
+                {usuariosDisponiveis.map((u) => <option key={u.id} value={u.id}>{u.nome} ({u.username})</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Funcao no Projeto</label>
+              <input value={formFuncao} onChange={(e) => setFormFuncao(e.target.value)} placeholder="Ex: Coordenador Financeiro" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div className="flex items-end gap-2">
+              <button onClick={handleAdd} disabled={salvando} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50">
+                {salvando ? 'Salvando...' : 'Adicionar'}
+              </button>
+              <button onClick={() => setShowForm(false)} className="border border-slate-300 text-slate-600 px-4 py-2 rounded-lg text-sm hover:bg-slate-100">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <p className="px-6 py-4 text-sm text-slate-400">Carregando...</p>
+      ) : itens.filter((i) => i.ativo).length === 0 ? (
+        <p className="px-6 py-4 text-sm text-slate-400">Nenhum usuario-chave adicionado</p>
+      ) : (
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th className="px-6 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Usuario</th>
+              <th className="px-6 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Email</th>
+              <th className="px-6 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Funcao</th>
+              <th className="px-6 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Desde</th>
+              {canManage && <th className="px-6 py-2.5 w-10"></th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {itens.filter((i) => i.ativo).map((uc) => (
+              <tr key={uc.id} className="hover:bg-slate-50">
+                <td className="px-6 py-3 font-medium text-slate-700">{uc.usuario.nome}</td>
+                <td className="px-6 py-3 text-slate-500">{uc.usuario.email}</td>
+                <td className="px-6 py-3 text-slate-600">{uc.funcao}</td>
+                <td className="px-6 py-3 text-slate-500">{new Date(uc.createdAt).toLocaleDateString('pt-BR')}</td>
+                {canManage && (
+                  <td className="px-6 py-3">
+                    <button onClick={() => handleRemove(uc.id)} className="text-red-500 hover:text-red-700" title="Desativar">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+// --- Tab Pendencias ---
+function TabPendencias({ projetoId, canManage }: { projetoId: string; canManage: boolean }) {
+  const { toast } = useToast();
+  const [itens, setItens] = useState<PendenciaProjeto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filtroStatus, setFiltroStatus] = useState('');
+  const [filtroPrioridade, setFiltroPrioridade] = useState('');
+  const [filtroSearch, setFiltroSearch] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [selectedPendencia, setSelectedPendencia] = useState<PendenciaProjeto | null>(null);
+
+  // Form states
+  const [formTitulo, setFormTitulo] = useState('');
+  const [formDescricao, setFormDescricao] = useState('');
+  const [formPrioridade, setFormPrioridade] = useState<PrioridadePendencia>('MEDIA');
+  const [formResponsavelId, setFormResponsavelId] = useState('');
+  const [formDataLimite, setFormDataLimite] = useState('');
+  const [salvando, setSalvando] = useState(false);
+
+  // Membros + Usuarios-chave para select de responsavel
+  const [responsaveis, setResponsaveis] = useState<{ id: string; nome: string }[]>([]);
+
+  useEffect(() => { load(); loadResponsaveis(); }, [projetoId]);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const params: Record<string, string> = {};
+      if (filtroStatus) params.status = filtroStatus;
+      if (filtroPrioridade) params.prioridade = filtroPrioridade;
+      if (filtroSearch) params.search = filtroSearch;
+      setItens(await projetoService.listarPendencias(projetoId, params));
+    } catch { /* empty */ }
+    setLoading(false);
+  }
+
+  async function loadResponsaveis() {
+    try {
+      const [membros, chaves] = await Promise.all([
+        projetoService.listarMembros(projetoId),
+        projetoService.listarUsuariosChave(projetoId),
+      ]);
+      const map = new Map<string, string>();
+      membros.forEach((m) => map.set(m.usuario.id, m.usuario.nome));
+      chaves.filter((c) => c.ativo).forEach((c) => map.set(c.usuarioId, c.usuario.nome));
+      setResponsaveis(Array.from(map, ([id, nome]) => ({ id, nome })));
+    } catch { /* empty */ }
+  }
+
+  useEffect(() => { load(); }, [filtroStatus, filtroPrioridade]);
+
+  function handleSearchKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') load();
+  }
+
+  function openForm() {
+    setFormTitulo('');
+    setFormDescricao('');
+    setFormPrioridade('MEDIA');
+    setFormResponsavelId('');
+    setFormDataLimite('');
+    setShowForm(true);
+  }
+
+  async function handleCreate() {
+    if (!formTitulo.trim() || !formResponsavelId) { toast('error', 'Preencha titulo e responsavel'); return; }
+    setSalvando(true);
+    try {
+      await projetoService.criarPendencia(projetoId, {
+        titulo: formTitulo.trim(),
+        descricao: formDescricao.trim() || undefined,
+        prioridade: formPrioridade,
+        responsavelId: formResponsavelId,
+        dataLimite: formDataLimite || undefined,
+      });
+      toast('success', 'Pendencia criada');
+      setShowForm(false);
+      load();
+    } catch {
+      toast('error', 'Erro ao criar pendencia');
+    }
+    setSalvando(false);
+  }
+
+  async function openDetail(pid: string) {
+    try {
+      const p = await projetoService.buscarPendencia(projetoId, pid);
+      setSelectedPendencia(p);
+    } catch {
+      toast('error', 'Erro ao carregar pendencia');
+    }
+  }
+
+  return (
+    <>
+      <div className="bg-white rounded-xl border border-slate-200">
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+          <h4 className="font-semibold text-slate-700">Pendencias ({itens.length})</h4>
+          <button onClick={openForm} className="flex items-center gap-1 text-sm text-capul-600 hover:underline">
+            <Plus className="w-4 h-4" />
+            Nova Pendencia
+          </button>
+        </div>
+
+        {/* Filters */}
+        <div className="px-6 py-3 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center gap-3">
+          <input
+            value={filtroSearch}
+            onChange={(e) => setFiltroSearch(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            placeholder="Buscar por titulo ou #numero..."
+            className="flex-1 min-w-[200px] border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
+          />
+          <select value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white">
+            <option value="">Todos os Status</option>
+            {Object.entries(pendenciaStatusLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <select value={filtroPrioridade} onChange={(e) => setFiltroPrioridade(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white">
+            <option value="">Todas Prioridades</option>
+            {Object.entries(pendenciaPrioridadeLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <button onClick={load} className="text-sm text-capul-600 hover:underline">
+            <Search className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Create form */}
+        {showForm && (
+          <div className="px-6 py-4 border-b border-slate-200 bg-capul-50/30">
+            <h5 className="text-sm font-medium text-slate-700 mb-3">Nova Pendencia</h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+              <div className="md:col-span-2">
+                <label className="text-xs text-slate-500 mb-1 block">Titulo *</label>
+                <input value={formTitulo} onChange={(e) => setFormTitulo(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs text-slate-500 mb-1 block">Descricao</label>
+                <textarea value={formDescricao} onChange={(e) => setFormDescricao(e.target.value)} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Responsavel *</label>
+                <select value={formResponsavelId} onChange={(e) => setFormResponsavelId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                  <option value="">Selecione...</option>
+                  {responsaveis.map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Prioridade</label>
+                <select value={formPrioridade} onChange={(e) => setFormPrioridade(e.target.value as PrioridadePendencia)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                  {Object.entries(pendenciaPrioridadeLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Data Limite</label>
+                <input type="date" value={formDataLimite} onChange={(e) => setFormDataLimite(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={handleCreate} disabled={salvando} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50">
+                {salvando ? 'Criando...' : 'Criar Pendencia'}
+              </button>
+              <button onClick={() => setShowForm(false)} className="border border-slate-300 text-slate-600 px-4 py-2 rounded-lg text-sm hover:bg-slate-100">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* List */}
+        {loading ? (
+          <p className="px-6 py-4 text-sm text-slate-400">Carregando...</p>
+        ) : itens.length === 0 ? (
+          <p className="px-6 py-4 text-sm text-slate-400">Nenhuma pendencia encontrada</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-6 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">#</th>
+                <th className="px-6 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Titulo</th>
+                <th className="px-6 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
+                <th className="px-6 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Prioridade</th>
+                <th className="px-6 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Responsavel</th>
+                <th className="px-6 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Data Limite</th>
+                <th className="px-6 py-2.5 w-10"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {itens.map((p) => (
+                <tr key={p.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => openDetail(p.id)}>
+                  <td className="px-6 py-3 text-slate-500 font-mono">{p.numero}</td>
+                  <td className="px-6 py-3 font-medium text-slate-700 max-w-[300px] truncate">{p.titulo}</td>
+                  <td className="px-6 py-3">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${pendenciaStatusCores[p.status]}`}>
+                      {pendenciaStatusLabel[p.status]}
+                    </span>
+                  </td>
+                  <td className="px-6 py-3">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${pendenciaPrioridadeCores[p.prioridade]}`}>
+                      {pendenciaPrioridadeLabel[p.prioridade]}
+                    </span>
+                  </td>
+                  <td className="px-6 py-3 text-slate-600">{p.responsavel.nome}</td>
+                  <td className="px-6 py-3 text-slate-500">
+                    {p.dataLimite ? new Date(p.dataLimite).toLocaleDateString('pt-BR') : '-'}
+                  </td>
+                  <td className="px-6 py-3">
+                    <Eye className="w-4 h-4 text-slate-400" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Detail Modal */}
+      {selectedPendencia && (
+        <ModalDetalhePendencia
+          projetoId={projetoId}
+          pendencia={selectedPendencia}
+          canManage={canManage}
+          onClose={() => setSelectedPendencia(null)}
+          onUpdate={() => { load(); }}
+        />
+      )}
+    </>
+  );
+}
+
+// --- Modal Detalhe Pendencia ---
+function ModalDetalhePendencia({
+  projetoId, pendencia: initial, canManage, onClose, onUpdate,
+}: {
+  projetoId: string;
+  pendencia: PendenciaProjeto;
+  canManage: boolean;
+  onClose: () => void;
+  onUpdate: () => void;
+}) {
+  const { toast } = useToast();
+  const [pendencia, setPendencia] = useState(initial);
+  const [comentario, setComentario] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  async function reload() {
+    try {
+      const p = await projetoService.buscarPendencia(projetoId, pendencia.id);
+      setPendencia(p);
+      onUpdate();
+    } catch { /* empty */ }
+  }
+
+  async function handleStatusChange(newStatus: StatusPendencia) {
+    try {
+      await projetoService.atualizarPendencia(projetoId, pendencia.id, { status: newStatus });
+      toast('success', 'Status atualizado');
+      reload();
+    } catch (err: any) {
+      toast('error', err?.response?.data?.message || 'Erro ao atualizar status');
+    }
+  }
+
+  async function handleAddComentario() {
+    if (!comentario.trim()) return;
+    setEnviando(true);
+    try {
+      await projetoService.adicionarInteracaoPendencia(projetoId, pendencia.id, { descricao: comentario.trim() });
+      setComentario('');
+      toast('success', 'Comentario adicionado');
+      reload();
+    } catch {
+      toast('error', 'Erro ao adicionar comentario');
+    }
+    setEnviando(false);
+  }
+
+  async function handleUploadAnexo(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      await projetoService.uploadAnexoPendencia(projetoId, pendencia.id, file);
+      toast('success', 'Anexo enviado');
+      reload();
+    } catch {
+      toast('error', 'Erro ao enviar anexo');
+    }
+    setUploading(false);
+    e.target.value = '';
+  }
+
+  async function handleDownloadAnexo(anexo: AnexoPendenciaItem) {
+    try {
+      const blob = await projetoService.downloadAnexoPendencia(projetoId, pendencia.id, anexo.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = anexo.nomeOriginal;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast('error', 'Erro ao baixar anexo');
+    }
+  }
+
+  async function handleRemoveAnexo(anexoId: string) {
+    if (!confirm('Remover este anexo?')) return;
+    try {
+      await projetoService.removerAnexoPendencia(projetoId, pendencia.id, anexoId);
+      toast('success', 'Anexo removido');
+      reload();
+    } catch {
+      toast('error', 'Erro ao remover anexo');
+    }
+  }
+
+  const isVencida = pendencia.dataLimite && new Date(pendencia.dataLimite) < new Date() && !['CONCLUIDA', 'CANCELADA'].includes(pendencia.status);
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-slate-400 font-mono">#{pendencia.numero}</span>
+              <h3 className="text-lg font-bold text-slate-800">{pendencia.titulo}</h3>
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`text-xs px-2 py-0.5 rounded-full ${pendenciaStatusCores[pendencia.status]}`}>
+                {pendenciaStatusLabel[pendencia.status]}
+              </span>
+              <span className={`text-xs px-2 py-0.5 rounded-full ${pendenciaPrioridadeCores[pendencia.prioridade]}`}>
+                {pendenciaPrioridadeLabel[pendencia.prioridade]}
+              </span>
+              {isVencida && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">Vencida</span>
+              )}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+          {/* Info grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <p className="text-slate-500 text-xs">Responsavel</p>
+              <p className="text-slate-800 font-medium">{pendencia.responsavel.nome}</p>
+            </div>
+            <div>
+              <p className="text-slate-500 text-xs">Criador</p>
+              <p className="text-slate-800">{pendencia.criador.nome}</p>
+            </div>
+            <div>
+              <p className="text-slate-500 text-xs">Data Limite</p>
+              <p className={`font-medium ${isVencida ? 'text-red-600' : 'text-slate-800'}`}>
+                {pendencia.dataLimite ? new Date(pendencia.dataLimite).toLocaleDateString('pt-BR') : '-'}
+              </p>
+            </div>
+            <div>
+              <p className="text-slate-500 text-xs">Fase</p>
+              <p className="text-slate-800">{pendencia.fase?.nome || '-'}</p>
+            </div>
+          </div>
+
+          {/* Description */}
+          {pendencia.descricao && (
+            <div>
+              <p className="text-xs text-slate-500 mb-1">Descricao</p>
+              <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 whitespace-pre-wrap">{pendencia.descricao}</p>
+            </div>
+          )}
+
+          {/* Status change */}
+          {!['CONCLUIDA', 'CANCELADA'].includes(pendencia.status) && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-slate-500">Alterar status:</span>
+              {pendencia.status === 'ABERTA' && (
+                <button onClick={() => handleStatusChange('EM_ANDAMENTO')} className="text-xs bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full hover:bg-yellow-200">
+                  Iniciar
+                </button>
+              )}
+              {pendencia.status === 'EM_ANDAMENTO' && (
+                <>
+                  <button onClick={() => handleStatusChange('AGUARDANDO_VALIDACAO')} className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded-full hover:bg-orange-200">
+                    Enviar p/ Validacao
+                  </button>
+                  <button onClick={() => handleStatusChange('CONCLUIDA')} className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-200">
+                    Concluir
+                  </button>
+                </>
+              )}
+              {pendencia.status === 'AGUARDANDO_VALIDACAO' && (
+                <>
+                  <button onClick={() => handleStatusChange('CONCLUIDA')} className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-200">
+                    Aprovar (Concluir)
+                  </button>
+                  <button onClick={() => handleStatusChange('EM_ANDAMENTO')} className="text-xs bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full hover:bg-yellow-200">
+                    Devolver
+                  </button>
+                </>
+              )}
+              <button onClick={() => handleStatusChange('CANCELADA')} className="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full hover:bg-slate-200">
+                Cancelar
+              </button>
+            </div>
+          )}
+
+          {/* Anexos */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-slate-500 uppercase">Anexos ({pendencia.anexos?.length || 0})</p>
+              <label className="flex items-center gap-1 text-xs text-capul-600 hover:underline cursor-pointer">
+                <Paperclip className="w-3.5 h-3.5" />
+                {uploading ? 'Enviando...' : 'Anexar arquivo'}
+                <input type="file" className="hidden" onChange={handleUploadAnexo} disabled={uploading} />
+              </label>
+            </div>
+            {(pendencia.anexos || []).length > 0 && (
+              <div className="space-y-1">
+                {pendencia.anexos!.map((a) => (
+                  <div key={a.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2 text-sm">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Paperclip className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                      <span className="truncate text-slate-700">{a.nomeOriginal}</span>
+                      <span className="text-xs text-slate-400 flex-shrink-0">({(a.tamanho / 1024).toFixed(0)} KB)</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button onClick={() => handleDownloadAnexo(a)} className="text-capul-600 hover:text-capul-700">
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                      {canManage && (
+                        <button onClick={() => handleRemoveAnexo(a.id)} className="text-red-400 hover:text-red-600">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Timeline */}
+          <div>
+            <p className="text-xs font-medium text-slate-500 uppercase mb-3">Timeline ({pendencia.interacoes?.length || 0})</p>
+            {(pendencia.interacoes || []).length === 0 ? (
+              <p className="text-sm text-slate-400">Nenhuma interacao</p>
+            ) : (
+              <div className="space-y-3">
+                {pendencia.interacoes!.map((inter) => (
+                  <div key={inter.id} className="flex gap-3">
+                    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-medium text-slate-600">{inter.usuario.nome.charAt(0)}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-sm font-medium text-slate-700">{inter.usuario.nome}</span>
+                        <span className="text-xs text-slate-400">{new Date(inter.createdAt).toLocaleString('pt-BR')}</span>
+                        {inter.tipo !== 'COMENTARIO' && (
+                          <span className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">
+                            {inter.tipo === 'STATUS_ALTERADO' ? 'Status alterado' : inter.tipo === 'RESPONSAVEL_ALTERADO' ? 'Responsavel alterado' : inter.tipo === 'ANEXO' ? 'Anexo' : 'Comentario'}
+                          </span>
+                        )}
+                        {!inter.publica && (
+                          <span className="text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded">Interno</span>
+                        )}
+                      </div>
+                      {inter.descricao && (
+                        <p className="text-sm text-slate-600 whitespace-pre-wrap">{inter.descricao}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Add comment */}
+          <div className="bg-slate-50 rounded-lg p-4">
+            <h4 className="font-medium text-sm text-slate-700 mb-2">Adicionar Comentario</h4>
+            <textarea
+              value={comentario}
+              onChange={(e) => setComentario(e.target.value)}
+              rows={3}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              placeholder="Escreva seu comentario..."
+            />
+            <div className="flex items-center justify-end gap-3 mt-2">
+              <button
+                onClick={handleAddComentario}
+                disabled={enviando || !comentario.trim()}
+                className="flex items-center gap-1.5 bg-capul-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50"
+              >
+                <Send className="w-4 h-4" />
+                {enviando ? 'Enviando...' : 'Salvar Comentario'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

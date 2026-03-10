@@ -62,6 +62,11 @@ model Usuario {
   paradaColaboracoes   ParadaColaborador[]     @relation("ParadaColaborador")
   registrosTempoChm    RegistroTempoChamado[]  @relation("RegistroTempoChamado")
   comentariosTarefa    ComentarioTarefa[]      @relation("ComentarioTarefaUsuario")
+  usuarioChaveProjetos   UsuarioChaveProjeto[]   @relation("UsuarioChaveProjeto")
+  pendenciasResponsavel  PendenciaProjeto[]      @relation("PendenciaResponsavel")
+  pendenciasCriador      PendenciaProjeto[]      @relation("PendenciaCriador")
+  interacoesPendencia    InteracaoPendencia[]    @relation("InteracaoPendenciaUsuario")
+  anexosPendencia        AnexoPendencia[]        @relation("AnexoPendenciaUsuario")
 
   @@map("usuarios")
   @@schema("core")
@@ -1265,6 +1270,8 @@ model Projeto {
   dependenciasOrigem  DependenciaProjeto[] @relation("DependenciaOrigem")
   dependenciasDestino DependenciaProjeto[] @relation("DependenciaDestino")
   chamados            Chamado[]
+  usuariosChave       UsuarioChaveProjeto[]
+  pendencias          PendenciaProjeto[]
 
   @@index([status])
   @@index([projetoPaiId])
@@ -1308,6 +1315,7 @@ model FaseProjeto {
 
   atividades   AtividadeProjeto[]
   apontamentos ApontamentoHoras[]
+  pendencias   PendenciaProjeto[]
 
   @@index([projetoId, ordem])
   @@map("fases_projeto")
@@ -1625,5 +1633,129 @@ model Notificacao {
   @@index([usuarioId, lida])
   @@index([usuarioId, createdAt])
   @@map("notificacoes")
+  @@schema("gestao_ti")
+}
+
+// ============================================================
+// MODELOS DO GESTAO_TI — Pendencias de Projeto + Usuarios-Chave
+// ============================================================
+
+enum StatusPendencia {
+  ABERTA
+  EM_ANDAMENTO
+  AGUARDANDO_VALIDACAO
+  CONCLUIDA
+  CANCELADA
+
+  @@schema("gestao_ti")
+}
+
+enum PrioridadePendencia {
+  BAIXA
+  MEDIA
+  ALTA
+  URGENTE
+
+  @@schema("gestao_ti")
+}
+
+enum TipoInteracaoPendencia {
+  COMENTARIO
+  ANEXO
+  STATUS_ALTERADO
+  RESPONSAVEL_ALTERADO
+
+  @@schema("gestao_ti")
+}
+
+model UsuarioChaveProjeto {
+  id        String   @id @default(uuid())
+  funcao    String
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  projetoId String  @map("projeto_id")
+  projeto   Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("UsuarioChaveProjeto", fields: [usuarioId], references: [id])
+
+  @@unique([projetoId, usuarioId])
+  @@index([usuarioId])
+  @@map("usuarios_chave_projeto")
+  @@schema("gestao_ti")
+}
+
+model PendenciaProjeto {
+  id         String              @id @default(uuid())
+  numero     Int                 @unique @default(autoincrement())
+  titulo     String
+  descricao  String?
+  status     StatusPendencia     @default(ABERTA)
+  prioridade PrioridadePendencia @default(MEDIA)
+  dataLimite DateTime?           @map("data_limite")
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+
+  projetoId String  @map("projeto_id")
+  projeto   Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  faseId String?      @map("fase_id")
+  fase   FaseProjeto? @relation(fields: [faseId], references: [id])
+
+  responsavelId String  @map("responsavel_id")
+  responsavel   Usuario @relation("PendenciaResponsavel", fields: [responsavelId], references: [id])
+
+  criadorId String  @map("criador_id")
+  criador   Usuario @relation("PendenciaCriador", fields: [criadorId], references: [id])
+
+  interacoes InteracaoPendencia[]
+  anexos     AnexoPendencia[]
+
+  @@index([projetoId, status])
+  @@index([responsavelId])
+  @@map("pendencias_projeto")
+  @@schema("gestao_ti")
+}
+
+model InteracaoPendencia {
+  id        String                  @id @default(uuid())
+  tipo      TipoInteracaoPendencia
+  descricao String?
+  publica   Boolean                 @default(true)
+  createdAt DateTime                @default(now()) @map("created_at")
+
+  pendenciaId String            @map("pendencia_id")
+  pendencia   PendenciaProjeto  @relation(fields: [pendenciaId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("InteracaoPendenciaUsuario", fields: [usuarioId], references: [id])
+
+  anexo AnexoPendencia?
+
+  @@index([pendenciaId])
+  @@map("interacoes_pendencia")
+  @@schema("gestao_ti")
+}
+
+model AnexoPendencia {
+  id           String   @id @default(uuid())
+  nomeOriginal String   @map("nome_original")
+  nomeArquivo  String   @map("nome_arquivo")
+  mimeType     String   @map("mime_type")
+  tamanho      Int
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  pendenciaId String           @map("pendencia_id")
+  pendencia   PendenciaProjeto @relation(fields: [pendenciaId], references: [id], onDelete: Cascade)
+
+  interacaoId String?             @unique @map("interacao_id")
+  interacao   InteracaoPendencia? @relation(fields: [interacaoId], references: [id])
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("AnexoPendenciaUsuario", fields: [usuarioId], references: [id])
+
+  @@index([pendenciaId])
+  @@map("anexos_pendencia")
   @@schema("gestao_ti")
 }

@@ -7,14 +7,24 @@ import {
   Body,
   Param,
   Query,
+  Res,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { randomUUID } from 'crypto';
+import * as path from 'path';
+import * as express from 'express';
 import { ProjetoService } from './projeto.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { GestaoTiGuard } from '../common/guards/gestao-ti.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 import { CreateProjetoDto } from './dto/create-projeto.dto';
 import { UpdateProjetoDto } from './dto/update-projeto.dto';
@@ -28,6 +38,12 @@ import { CreateDependenciaDto } from './dto/create-dependencia.dto';
 import { CreateAnexoDto } from './dto/create-anexo.dto';
 import { CreateApontamentoDto } from './dto/create-apontamento.dto';
 import { UpdateRegistroTempoDto } from './dto/update-registro-tempo.dto';
+import { CreateUsuarioChaveDto } from './dto/create-usuario-chave.dto';
+import { CreatePendenciaDto } from './dto/create-pendencia.dto';
+import { UpdatePendenciaDto } from './dto/update-pendencia.dto';
+import { CreateInteracaoPendenciaDto } from './dto/create-interacao-pendencia.dto';
+
+const PENDENCIA_UPLOADS_DIR = path.resolve('./uploads/pendencias');
 
 @Controller('projetos')
 @UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
@@ -62,6 +78,12 @@ export class ProjetoController {
   @Get('busca-comentarios')
   buscarComentarios(@Query('q') q: string) {
     return this.service.buscarComentarios(q);
+  }
+
+  @Get('meus-projetos-chave')
+  @Roles('USUARIO_CHAVE')
+  meusProjetosChave(@CurrentUser() user: JwtPayload) {
+    return this.service.meusProjetosChave(user.sub);
   }
 
   @Get(':id')
@@ -405,5 +427,140 @@ export class ProjetoController {
   @Get(':id/custos')
   getCustos(@Param('id') id: string) {
     return this.service.getCustosConsolidados(id);
+  }
+
+  // --- Usuarios-Chave ---
+
+  @Get(':id/usuarios-chave')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO')
+  listUsuariosChave(@Param('id') id: string) {
+    return this.service.listUsuariosChave(id);
+  }
+
+  @Post(':id/usuarios-chave')
+  @Roles('ADMIN', 'GESTOR_TI', 'GERENTE_PROJETO')
+  addUsuarioChave(@Param('id') id: string, @Body() dto: CreateUsuarioChaveDto) {
+    return this.service.addUsuarioChave(id, dto);
+  }
+
+  @Delete(':id/usuarios-chave/:ucId')
+  @Roles('ADMIN', 'GESTOR_TI', 'GERENTE_PROJETO')
+  removeUsuarioChave(@Param('id') id: string, @Param('ucId') ucId: string) {
+    return this.service.removeUsuarioChave(id, ucId);
+  }
+
+  // --- Pendencias ---
+
+  @Get(':id/pendencias')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE')
+  listPendencias(
+    @Param('id') id: string,
+    @Query('status') status?: string,
+    @Query('prioridade') prioridade?: string,
+    @Query('responsavelId') responsavelId?: string,
+    @Query('search') search?: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
+  ) {
+    return this.service.listPendencias(id, { status, prioridade, responsavelId, search }, user!.sub, role!);
+  }
+
+  @Post(':id/pendencias')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE')
+  createPendencia(
+    @Param('id') id: string,
+    @Body() dto: CreatePendenciaDto,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.createPendencia(id, dto, user.sub, role);
+  }
+
+  @Get(':id/pendencias/:pid')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE')
+  getPendencia(
+    @Param('id') id: string,
+    @Param('pid') pid: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.getPendencia(id, pid, user.sub, role);
+  }
+
+  @Patch(':id/pendencias/:pid')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE')
+  updatePendencia(
+    @Param('id') id: string,
+    @Param('pid') pid: string,
+    @Body() dto: UpdatePendenciaDto,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.updatePendencia(id, pid, dto, user.sub, role);
+  }
+
+  // --- Interacoes Pendencia ---
+
+  @Post(':id/pendencias/:pid/interacoes')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE')
+  addInteracao(
+    @Param('id') id: string,
+    @Param('pid') pid: string,
+    @Body() dto: CreateInteracaoPendenciaDto,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.addInteracaoPendencia(id, pid, dto, user.sub, role);
+  }
+
+  // --- Anexos Pendencia ---
+
+  @Post(':id/pendencias/:pid/anexos')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: PENDENCIA_UPLOADS_DIR,
+      filename: (_req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        cb(null, `${randomUUID()}${ext}`);
+      },
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 },
+  }))
+  addAnexoPendencia(
+    @Param('id') id: string,
+    @Param('pid') pid: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    if (!file) throw new BadRequestException('Arquivo obrigatorio');
+    return this.service.addAnexoPendencia(id, pid, file, user.sub, role);
+  }
+
+  @Get(':id/pendencias/:pid/anexos/:anexoId/download')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO', 'USUARIO_CHAVE')
+  async downloadAnexoPendencia(
+    @Param('id') id: string,
+    @Param('pid') pid: string,
+    @Param('anexoId') anexoId: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+    @Res() res: express.Response,
+  ) {
+    const { anexo, filePath } = await this.service.downloadAnexoPendencia(id, pid, anexoId, user.sub, role);
+    res.setHeader('Content-Type', anexo.mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(anexo.nomeOriginal)}"`);
+    res.sendFile(filePath);
+  }
+
+  @Delete(':id/pendencias/:pid/anexos/:anexoId')
+  @Roles('ADMIN', 'GESTOR_TI', 'GERENTE_PROJETO')
+  removeAnexoPendencia(
+    @Param('id') id: string,
+    @Param('pid') pid: string,
+    @Param('anexoId') anexoId: string,
+  ) {
+    return this.service.removeAnexoPendencia(id, pid, anexoId);
   }
 }
