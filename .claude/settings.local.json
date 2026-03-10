@@ -1053,7 +1053,10 @@
       "Bash(grep -l \"DashboardCsatPage\\\\|DashboardExecutivoPage\" /mnt/c/meus_projetos/capul-platform/gestao-ti/frontend/src/**/*.tsx 2>/dev/null | head -20)",
       "Bash(grep -l \"DashboardFinanceiroPage\\\\|DashboardDisponibilidadePage\\\\|DashboardOsPage\" /mnt/c/meus_projetos/capul-platform/gestao-ti/frontend/src/**/*.tsx 2>/dev/null)",
       "Bash(docker builder prune --all -f 2>&1)",
-      "Bash(docker image prune -a -f --filter \"until=24h\" 2>&1)"
+      "Bash(docker image prune -a -f --filter \"until=24h\" 2>&1)",
+      "Bash(cd /mnt/c/meus_projetos/capul-platform && docker compose up -d --build capul-gestao-ti-api capul-gestao-ti-web 2>&1 | tail -15)",
+      "Bash(docker compose:*)",
+      "Bash(docker exec:*)"
     ]
   }
 }

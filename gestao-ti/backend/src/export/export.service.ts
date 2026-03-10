@@ -504,6 +504,165 @@ export class ExportService {
     doc.end();
   }
 
+  async exportRelatorioRateioParcela(contratoId: string, parcelaId: string, res: Response) {
+    const contrato = await this.prisma.contrato.findUnique({
+      where: { id: contratoId },
+      include: {
+        tipoContrato: { select: { codigo: true, nome: true } },
+        filial: { select: { codigo: true, nomeFantasia: true } },
+        software: { select: { nome: true } },
+      },
+    });
+    if (!contrato) throw new BadRequestException('Contrato nao encontrado');
+
+    const parcela = await this.prisma.parcelaContrato.findFirst({
+      where: { id: parcelaId, contratoId },
+    });
+    if (!parcela) throw new BadRequestException('Parcela nao encontrada neste contrato');
+
+    const rateioItens = await this.prisma.parcelaRateioItem.findMany({
+      where: { parcelaId },
+      include: {
+        centroCusto: { select: { codigo: true, nome: true } },
+        natureza: { select: { codigo: true, nome: true } },
+      },
+    });
+    if (rateioItens.length === 0) throw new BadRequestException('Parcela nao possui rateio configurado');
+
+    const fmtCurrency = (v: number | null | undefined) =>
+      `R$ ${Number(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const fmtDate = (d: Date | null | undefined) =>
+      d ? new Date(d).toLocaleDateString('pt-BR') : '-';
+
+    const PRIMARY = '#4F46E5';
+    const DARK = '#1E293B';
+    const MUTED = '#64748B';
+    const LIGHT_BG = '#F1F5F9';
+    const WHITE = '#FFFFFF';
+
+    const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
+    const nomeArquivo = `Rateio_Contrato${contrato.numero}_Parcela${parcela.numero}_${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=${nomeArquivo}`);
+    doc.pipe(res);
+
+    const pageW = doc.page.width - 80;
+
+    // ===== HEADER =====
+    doc.rect(40, 40, pageW, 50).fill(PRIMARY);
+    doc.fontSize(16).fillColor(WHITE).text(`Relatorio de Rateio`, 55, 48, { width: pageW - 30 });
+    doc.fontSize(9).fillColor('#C7D2FE').text(`Contrato #${contrato.numero} — Parcela #${parcela.numero}`, 55, 68, { width: pageW - 30 });
+    doc.fontSize(8).fillColor('#C7D2FE').text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 55, 68, { width: pageW - 30, align: 'right' });
+
+    let y = 105;
+
+    // ===== DADOS DO CONTRATO =====
+    doc.rect(40, y, pageW, 22).fill(LIGHT_BG);
+    doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold').text('DADOS DO CONTRATO', 50, y + 6);
+    y += 30;
+
+    const camposContrato: [string, string][] = [
+      ['Contrato', `#${contrato.numero} — ${contrato.titulo}`],
+      ['Fornecedor', contrato.fornecedor || '-'],
+      ['Tipo', contrato.tipoContrato ? `${contrato.tipoContrato.codigo} - ${contrato.tipoContrato.nome}` : '-'],
+      ['Filial', contrato.filial ? `${contrato.filial.codigo} - ${contrato.filial.nomeFantasia}` : '-'],
+      ['Software', contrato.software?.nome || '-'],
+      ['Valor Total', fmtCurrency(Number(contrato.valorTotal))],
+      ['Vigencia', `${fmtDate(contrato.dataInicio)} a ${fmtDate(contrato.dataFim)}`],
+    ];
+
+    camposContrato.forEach(([label, value]) => {
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(MUTED).text(label, 50, y, { width: 100 });
+      doc.font('Helvetica').fontSize(9).fillColor(DARK).text(value, 155, y, { width: pageW - 125 });
+      y += 16;
+    });
+
+    // ===== DADOS DA PARCELA =====
+    y += 10;
+    doc.rect(40, y, pageW, 22).fill(LIGHT_BG);
+    doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold').text('DADOS DA PARCELA', 50, y + 6);
+    y += 30;
+
+    const camposParcela: [string, string][] = [
+      ['Parcela', `#${parcela.numero}`],
+      ['Descricao', parcela.descricao || '-'],
+      ['Valor', fmtCurrency(Number(parcela.valor))],
+      ['Vencimento', fmtDate(parcela.dataVencimento)],
+      ['Status', parcela.status],
+      ['Nota Fiscal', parcela.notaFiscal || '-'],
+    ];
+    if (parcela.dataPagamento) {
+      camposParcela.push(['Pago em', fmtDate(parcela.dataPagamento)]);
+    }
+
+    camposParcela.forEach(([label, value]) => {
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(MUTED).text(label, 50, y, { width: 100 });
+      doc.font('Helvetica').fontSize(9).fillColor(DARK).text(value, 155, y, { width: pageW - 125 });
+      y += 16;
+    });
+
+    // ===== TABELA DE RATEIO =====
+    y += 10;
+    doc.rect(40, y, pageW, 22).fill(LIGHT_BG);
+    doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold').text(`DISTRIBUICAO DO RATEIO (${rateioItens.length} centro(s) de custo)`, 50, y + 6);
+    y += 28;
+
+    // Table header — columns: CC | Natureza Financeira | % | Valor
+    const colX = [50, 190, 370, 420];
+    const colW = [135, 175, 45, pageW - 420 + 40];
+    doc.rect(40, y, pageW, 20).fill(PRIMARY);
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(WHITE);
+    doc.text('Centro de Custo', colX[0], y + 6, { width: colW[0] });
+    doc.text('Natureza Financeira', colX[1], y + 6, { width: colW[1] });
+    doc.text('%', colX[2], y + 6, { width: colW[2], align: 'right' });
+    doc.text('Valor (R$)', colX[3], y + 6, { width: colW[3], align: 'right' });
+    y += 24;
+
+    let somaValor = 0;
+    rateioItens.forEach((ri, i) => {
+      if (y > 750) { doc.addPage(); y = 50; }
+      const bg = i % 2 === 0 ? WHITE : '#F8FAFC';
+      doc.rect(40, y, pageW, 18).fill(bg);
+      doc.font('Helvetica').fontSize(8).fillColor(DARK);
+      doc.text(`${ri.centroCusto.codigo} - ${ri.centroCusto.nome}`, colX[0], y + 5, { width: colW[0] });
+      doc.text(ri.natureza ? `${ri.natureza.codigo} - ${ri.natureza.nome}` : '-', colX[1], y + 5, { width: colW[1] });
+      doc.text(ri.percentual != null ? `${Number(ri.percentual).toFixed(2)}%` : '-', colX[2], y + 5, { width: colW[2], align: 'right' });
+      doc.font('Helvetica-Bold').text(fmtCurrency(Number(ri.valorCalculado)), colX[3], y + 5, { width: colW[3], align: 'right' });
+      somaValor += Number(ri.valorCalculado);
+      y += 18;
+    });
+
+    // Total row
+    doc.rect(40, y, pageW, 22).fill(DARK);
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(WHITE);
+    doc.text('TOTAL', colX[0], y + 6);
+    doc.text(fmtCurrency(somaValor), colX[3], y + 6, { width: colW[3], align: 'right' });
+    y += 32;
+
+    // ===== CAMPO ASSINATURA (para contabilidade) =====
+    if (y > 700) { doc.addPage(); y = 50; }
+    y += 20;
+    doc.font('Helvetica').fontSize(8).fillColor(MUTED).text('Responsavel pelo lancamento:', 50, y);
+    y += 25;
+    doc.rect(50, y, 200, 0.5).fill(MUTED);
+    doc.fontSize(8).fillColor(MUTED).text('Nome / Assinatura', 50, y + 4);
+    doc.rect(300, y, 150, 0.5).fill(MUTED);
+    doc.text('Data', 300, y + 4);
+
+    // Footer on all pages
+    const pages = doc.bufferedPageRange();
+    for (let i = 0; i < pages.count; i++) {
+      doc.switchToPage(i);
+      const footerY = doc.page.height - 30;
+      doc.fontSize(7).fillColor(MUTED)
+        .text(`Gestao de T.I. — Rateio Contrato #${contrato.numero} Parcela #${parcela.numero} — Pagina ${i + 1} de ${pages.count}`, 40, footerY, {
+          width: pageW, align: 'center', lineBreak: false,
+        });
+    }
+
+    doc.end();
+  }
+
   private async exportProjetos(sheet: ExcelJS.Worksheet) {
     sheet.columns = [
       { header: 'Numero', key: 'numero' },

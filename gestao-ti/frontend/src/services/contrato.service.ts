@@ -171,6 +171,14 @@ export const contratoService = {
     return data;
   },
 
+  // Relatorio Rateio PDF
+  async downloadRelatorioRateio(contratoId: string, parcelaId: string): Promise<Blob> {
+    const { data } = await gestaoApi.get(`/export/contrato/${contratoId}/parcela/${parcelaId}/rateio`, {
+      responseType: 'blob',
+    });
+    return data;
+  },
+
   // Anexos
   async listarAnexos(contratoId: string): Promise<AnexoContrato[]> {
     const { data } = await gestaoApi.get(`/contratos/${contratoId}/anexos`);

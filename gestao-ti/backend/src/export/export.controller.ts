@@ -17,6 +17,16 @@ export class ExportController {
     return this.service.exportRelatorioOs(id, res);
   }
 
+  @Get('contrato/:id/parcela/:pid/rateio')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  async relatorioRateioParcela(
+    @Param('id') id: string,
+    @Param('pid') pid: string,
+    @Res() res: Response,
+  ) {
+    return this.service.exportRelatorioRateioParcela(id, pid, res);
+  }
+
   @Get(':entidade')
   @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
   async exportar(@Param('entidade') entidade: string, @Res() res: Response) {

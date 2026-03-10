@@ -7,7 +7,7 @@ import { coreService } from '../../services/core.service';
 import { licencaService } from '../../services/licenca.service';
 import {
   ArrowLeft, Edit3, RefreshCw, Receipt, PieChart, KeyRound, Clock,
-  X, FileText, Upload, Download, Trash2,
+  X, FileText, Upload, Download, Trash2, Printer,
   ChevronDown, ChevronRight, Copy, Zap, Pencil, Check,
 } from 'lucide-react';
 import type {
@@ -616,6 +616,11 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
   const [notaFiscal, setNotaFiscal] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Pagar modal
+  const [pagarModal, setPagarModal] = useState<ParcelaContrato | null>(null);
+  const [pagarNF, setPagarNF] = useState('');
+  const [pagando, setPagando] = useState(false);
+
   // Editing parcela
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -661,15 +666,26 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
     }
   }
 
-  async function handlePagar(p: ParcelaContrato) {
-    const ok = await confirm('Confirmar Pagamento', `Deseja registrar o pagamento da parcela #${p.numero} no valor de ${fmtCurrency(p.valor)}?`);
-    if (!ok) return;
+  function handlePagar(p: ParcelaContrato) {
+    setPagarNF(p.notaFiscal || '');
+    setPagarModal(p);
+  }
+
+  async function confirmarPagar() {
+    if (!pagarModal) return;
+    setPagando(true);
     try {
-      await contratoService.pagarParcela(contrato.id, p.id);
-      toast.show('success', `Parcela #${p.numero} paga`);
+      await contratoService.pagarParcela(contrato.id, pagarModal.id, {
+        notaFiscal: pagarNF || undefined,
+      });
+      toast.show('success', `Parcela #${pagarModal.numero} paga com sucesso`);
+      setPagarModal(null);
+      setPagarNF('');
       onReload();
     } catch (err) {
       toast.show('error', extractErrorMsg(err, 'Erro ao pagar parcela'));
+    } finally {
+      setPagando(false);
     }
   }
 
@@ -720,6 +736,20 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
       toast.show('success', `Rateio copiado para ${result.parcelasCopied} parcela(s)`);
     } catch (err) {
       toast.show('error', extractErrorMsg(err, 'Erro ao copiar rateio'));
+    }
+  }
+
+  async function handleImprimirRateio(parcelaId: string, parcelaNumero: number) {
+    try {
+      const blob = await contratoService.downloadRelatorioRateio(contrato.id, parcelaId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Rateio_Contrato${contrato.numero}_Parcela${parcelaNumero}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.show('error', extractErrorMsg(err, 'Erro ao gerar relatorio de rateio'));
     }
   }
 
@@ -780,6 +810,7 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
               <th className="text-left px-4 py-2 font-medium text-slate-600">Vencimento</th>
               <th className="text-center px-4 py-2 font-medium text-slate-600">Status</th>
               <th className="text-left px-4 py-2 font-medium text-slate-600">NF</th>
+              <th className="text-left px-4 py-2 font-medium text-slate-600">Dt. Pagamento</th>
               {canManage && <th className="text-center px-4 py-2 font-medium text-slate-600">Acoes</th>}
             </tr>
           </thead>
@@ -801,16 +832,67 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
                 onSaveEdit={(campos) => handleSaveEdit(p, campos)}
                 onGerarTemplate={() => handleGerarRateioTemplate(p.id)}
                 onCopiarPendentes={() => handleCopiarPendentes(p.id)}
+                onImprimirRateio={() => handleImprimirRateio(p.id, p.numero)}
               />
             ))}
           </tbody>
         </table>
       )}
+
+      {/* Modal Pagar Parcela */}
+      {pagarModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full mx-4 p-6">
+            <h3 className="text-lg font-semibold text-slate-800 mb-1">Registrar Pagamento</h3>
+            <p className="text-sm text-slate-500 mb-4">
+              Parcela #{pagarModal.numero} — {fmtCurrency(pagarModal.valor)} — Venc. {fmtDate(pagarModal.dataVencimento)}
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Nota Fiscal</label>
+                <input
+                  value={pagarNF}
+                  onChange={(e) => setPagarNF(e.target.value)}
+                  placeholder="Numero da nota fiscal"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-capul-500 focus:border-capul-500"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Data do Pagamento</label>
+                <input
+                  type="text"
+                  value={new Date().toLocaleDateString('pt-BR')}
+                  disabled
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-50 text-slate-500"
+                />
+                <p className="text-xs text-slate-400 mt-0.5">Data registrada automaticamente</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                onClick={() => { setPagarModal(null); setPagarNF(''); }}
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+                disabled={pagando}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarPagar}
+                disabled={pagando}
+                className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              >
+                {pagando ? 'Processando...' : 'Confirmar Pagamento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManage, editing, onToggle, onPagar, onCancelar, onEdit, onCancelEdit, onSaveEdit, onGerarTemplate, onCopiarPendentes }: {
+function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManage, editing, onToggle, onPagar, onCancelar, onEdit, onCancelEdit, onSaveEdit, onGerarTemplate, onCopiarPendentes, onImprimirRateio }: {
   parcela: ParcelaContrato;
   expanded: boolean;
   rateioItens: ParcelaRateioItem[];
@@ -825,6 +907,7 @@ function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManag
   onSaveEdit: (campos: { descricao?: string; notaFiscal?: string; observacoes?: string; valor?: number; dataVencimento?: string }) => void;
   onGerarTemplate: () => void;
   onCopiarPendentes: () => void;
+  onImprimirRateio: () => void;
 }) {
   const [editDesc, setEditDesc] = useState(p.descricao || '');
   const [editNF, setEditNF] = useState(p.notaFiscal || '');
@@ -869,6 +952,7 @@ function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManag
             <input value={editNF} onChange={(e) => setEditNF(e.target.value)} placeholder="Nota Fiscal"
               className="w-full border border-slate-300 rounded px-2 py-1 text-sm" />
           </td>
+          <td className="px-4 py-2.5 text-slate-400 text-sm">{p.dataPagamento ? fmtDate(p.dataPagamento) : '-'}</td>
           {canManage && (
             <td className="px-4 py-2.5 text-center">
               <div className="flex items-center justify-center gap-2">
@@ -889,7 +973,7 @@ function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManag
           )}
         </tr>
         <tr className="bg-amber-50">
-          <td colSpan={canManage ? 8 : 7} className="px-8 pb-3">
+          <td colSpan={canManage ? 9 : 8} className="px-8 pb-3">
             <label className="block text-xs text-slate-500 mb-1">Observacoes</label>
             <input value={editObs} onChange={(e) => setEditObs(e.target.value)} placeholder="Observacoes da parcela"
               className="w-full border border-slate-300 rounded px-2 py-1 text-sm" />
@@ -913,6 +997,7 @@ function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManag
           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${parcelaStatusCores[p.status]}`}>{p.status}</span>
         </td>
         <td className="px-4 py-2.5 text-slate-600">{p.notaFiscal || '-'}</td>
+        <td className="px-4 py-2.5 text-slate-600">{p.dataPagamento ? fmtDate(p.dataPagamento) : '-'}</td>
         {canManage && (
           <td className="px-4 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
             {p.status === 'PENDENTE' && (
@@ -929,24 +1014,32 @@ function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManag
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={canManage ? 8 : 7} className="bg-slate-50 px-8 py-4">
+          <td colSpan={canManage ? 9 : 8} className="bg-slate-50 px-8 py-4">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h5 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Rateio da Parcela #{p.numero}</h5>
-                {canManage && p.status === 'PENDENTE' && (
-                  <div className="flex gap-2">
-                    <button onClick={onGerarTemplate}
-                      className="flex items-center gap-1 text-xs text-capul-600 hover:underline">
-                      <Zap className="w-3 h-3" /> Gerar via Template
-                    </button>
-                    {rateioItens.length > 0 && (
-                      <button onClick={onCopiarPendentes}
-                        className="flex items-center gap-1 text-xs text-slate-600 hover:underline">
-                        <Copy className="w-3 h-3" /> Copiar p/ Pendentes
+                <div className="flex gap-2">
+                  {canManage && p.status === 'PENDENTE' && (
+                    <>
+                      <button onClick={onGerarTemplate}
+                        className="flex items-center gap-1 text-xs text-capul-600 hover:underline">
+                        <Zap className="w-3 h-3" /> Gerar via Template
                       </button>
-                    )}
-                  </div>
-                )}
+                      {rateioItens.length > 0 && (
+                        <button onClick={onCopiarPendentes}
+                          className="flex items-center gap-1 text-xs text-slate-600 hover:underline">
+                          <Copy className="w-3 h-3" /> Copiar p/ Pendentes
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {rateioItens.length > 0 && (
+                    <button onClick={onImprimirRateio}
+                      className="flex items-center gap-1 text-xs text-indigo-600 hover:underline">
+                      <Printer className="w-3 h-3" /> Imprimir Rateio
+                    </button>
+                  )}
+                </div>
               </div>
               {loadingRateio ? (
                 <p className="text-xs text-slate-400">Carregando...</p>
@@ -973,9 +1066,6 @@ function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManag
                     ))}
                   </tbody>
                 </table>
-              )}
-              {p.dataPagamento && (
-                <p className="text-xs text-slate-500">Pago em: {fmtDate(p.dataPagamento)}</p>
               )}
               {p.observacoes && (
                 <p className="text-xs text-slate-500">Obs: {p.observacoes}</p>
