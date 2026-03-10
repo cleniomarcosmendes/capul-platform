@@ -8,7 +8,6 @@ import { exportService } from '../../services/export.service';
 import type { Contrato, StatusContrato, TipoContratoConfig } from '../../types';
 
 const statusCores: Record<string, string> = {
-  RASCUNHO: 'bg-slate-100 text-slate-700',
   ATIVO: 'bg-green-100 text-green-700',
   SUSPENSO: 'bg-yellow-100 text-yellow-700',
   VENCIDO: 'bg-red-100 text-red-700',
@@ -17,7 +16,6 @@ const statusCores: Record<string, string> = {
 };
 
 const statusLabels: Record<string, string> = {
-  RASCUNHO: 'Rascunho',
   ATIVO: 'Ativo',
   SUSPENSO: 'Suspenso',
   VENCIDO: 'Vencido',
@@ -27,7 +25,7 @@ const statusLabels: Record<string, string> = {
 
 export function ContratosListPage() {
   const { gestaoTiRole } = useAuth();
-  const canManage = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
+  const canManage = ['ADMIN', 'GESTOR_TI', 'FINANCEIRO'].includes(gestaoTiRole || '');
 
   const [contratos, setContratos] = useState<Contrato[]>([]);
   const [tiposContrato, setTiposContrato] = useState<TipoContratoConfig[]>([]);

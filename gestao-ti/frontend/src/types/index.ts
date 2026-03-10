@@ -20,7 +20,7 @@ export interface UsuarioLogado {
   nome: string;
   email: string | null;
   departamento: { id: string; nome: string };
-  filialAtual: FilialUsuario;
+  filialAtual: FilialUsuario | null;
   modulos: ModuloUsuario[];
 }
 
@@ -960,6 +960,7 @@ export interface ArtigoConhecimento {
   categoria: CategoriaArtigo;
   status: StatusArtigo;
   tags: string | null;
+  publica: boolean;
   publicadoEm: string | null;
   softwareId: string | null;
   software: { id: string; nome: string } | null;

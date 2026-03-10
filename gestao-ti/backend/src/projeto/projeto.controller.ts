@@ -165,7 +165,7 @@ export class ProjetoController {
   }
 
   @Post(':id/atividades')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
   addAtividade(
     @Param('id') id: string,
     @Body() dto: { titulo: string; descricao?: string; faseId?: string; dataInicio?: string; dataFimPrevista?: string },
@@ -175,7 +175,7 @@ export class ProjetoController {
   }
 
   @Patch(':id/atividades/:atividadeId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
   updateAtividade(
     @Param('id') id: string,
     @Param('atividadeId') atividadeId: string,
@@ -185,7 +185,7 @@ export class ProjetoController {
   }
 
   @Delete(':id/atividades/:atividadeId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
   removeAtividade(@Param('id') id: string, @Param('atividadeId') atividadeId: string) {
     return this.service.removeAtividade(id, atividadeId);
   }
@@ -198,7 +198,7 @@ export class ProjetoController {
   }
 
   @Post(':id/atividades/:atividadeId/comentarios')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
   addComentario(
     @Param('id') id: string,
     @Param('atividadeId') atividadeId: string,
@@ -249,13 +249,13 @@ export class ProjetoController {
   // --- Chamados (vincular/desvincular) ---
 
   @Post(':id/chamados/:chamadoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
   vincularChamado(@Param('id') id: string, @Param('chamadoId') chamadoId: string) {
     return this.service.vincularChamado(id, chamadoId);
   }
 
   @Delete(':id/chamados/:chamadoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
   desvincularChamado(@Param('id') id: string, @Param('chamadoId') chamadoId: string) {
     return this.service.desvincularChamado(id, chamadoId);
   }
@@ -374,7 +374,7 @@ export class ProjetoController {
   }
 
   @Post(':id/anexos')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
   addAnexo(
     @Param('id') id: string,
     @Body() dto: CreateAnexoDto,
@@ -397,7 +397,7 @@ export class ProjetoController {
   }
 
   @Post(':id/apontamentos')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
   addApontamento(
     @Param('id') id: string,
     @Body() dto: CreateApontamentoDto,

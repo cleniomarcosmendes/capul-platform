@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { equipeService } from '../../services/equipe.service';
-import { Plus, Pencil, Users, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, Pencil, Users } from 'lucide-react';
 import type { EquipeTI } from '../../types';
 import { useToast } from '../../components/Toast';
 
@@ -95,15 +95,14 @@ export function EquipesListPage() {
                   <th className="px-6 py-3">Membros</th>
                   <th className="px-6 py-3">Chamados Externos</th>
                   <th className="px-6 py-3">Status</th>
-                  {isAdmin && <th className="px-6 py-3 text-right">Acoes</th>}
+                  {isAdmin && <th className="px-6 py-3">Acoes</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {equipes.map((equipe) => (
                   <tr
                     key={equipe.id}
-                    className="hover:bg-slate-50 cursor-pointer transition-colors"
-                    onClick={() => navigate(`/gestao-ti/equipes/${equipe.id}`)}
+                    className="hover:bg-slate-50 transition-colors"
                   >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
@@ -111,7 +110,7 @@ export function EquipesListPage() {
                           className="w-3 h-3 rounded-full flex-shrink-0"
                           style={{ backgroundColor: equipe.cor || '#006838' }}
                         />
-                        <span className="font-medium text-slate-700">{equipe.nome}</span>
+                        <button onClick={() => navigate(`/gestao-ti/equipes/${equipe.id}`)} className="font-medium text-capul-600 hover:underline text-left">{equipe.nome}</button>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600">{equipe.sigla}</td>
@@ -141,25 +140,20 @@ export function EquipesListPage() {
                       </span>
                     </td>
                     {isAdmin && (
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
                           <button
                             onClick={() => navigate(`/gestao-ti/equipes/${equipe.id}/editar`)}
-                            className="p-1.5 text-slate-400 hover:text-capul-600 transition-colors"
-                            title="Editar"
+                            className="flex items-center gap-1 text-xs text-capul-600 hover:underline"
                           >
-                            <Pencil className="w-4 h-4" />
+                            <Pencil className="w-3.5 h-3.5" />
+                            Editar
                           </button>
                           <button
                             onClick={() => toggleStatus(equipe)}
-                            className="p-1.5 text-slate-400 hover:text-capul-600 transition-colors"
-                            title={equipe.status === 'ATIVO' ? 'Desativar' : 'Ativar'}
+                            className="text-xs text-capul-600 hover:underline"
                           >
-                            {equipe.status === 'ATIVO' ? (
-                              <ToggleRight className="w-4 h-4 text-green-500" />
-                            ) : (
-                              <ToggleLeft className="w-4 h-4" />
-                            )}
+                            {equipe.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
                           </button>
                         </div>
                       </td>

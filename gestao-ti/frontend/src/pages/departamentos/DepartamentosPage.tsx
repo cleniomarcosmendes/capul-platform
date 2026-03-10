@@ -31,7 +31,7 @@ export function DepartamentosPage() {
   async function carregar() {
     setLoading(true);
     try {
-      const data = await coreService.listarDepartamentos(usuario?.filialAtual.id);
+      const data = await coreService.listarDepartamentos(usuario?.filialAtual?.id);
       setDepartamentos(data);
     } catch { /* empty */ }
     setLoading(false);
@@ -41,7 +41,7 @@ export function DepartamentosPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      await coreService.criarDepartamento({ nome, codigo, descricao: descricao || undefined, filialId: usuario?.filialAtual.id });
+      await coreService.criarDepartamento({ nome, codigo, descricao: descricao || undefined, filialId: usuario?.filialAtual?.id });
       setNome(''); setCodigo(''); setDescricao('');
       setShowForm(false);
       toast('success', 'Departamento criado');
@@ -94,7 +94,7 @@ export function DepartamentosPage() {
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
           <p className="text-sm text-slate-500">
-            Departamentos da filial {usuario?.filialAtual.codigo} - {usuario?.filialAtual.nome}
+            Departamentos da filial {usuario?.filialAtual?.codigo} - {usuario?.filialAtual?.nome}
           </p>
           {isAdmin && (
             <button
@@ -191,7 +191,9 @@ export function DepartamentosPage() {
                     ) : (
                       <>
                         <td className="px-6 py-4 text-sm font-medium text-slate-700">{depto.codigo || '-'}</td>
-                        <td className="px-6 py-4 text-sm text-slate-600">{depto.nome}</td>
+                        <td className="px-6 py-4 text-sm">
+                          <button onClick={() => startEdit(depto)} className="text-capul-600 hover:underline text-left">{depto.nome}</button>
+                        </td>
                         <td className="px-6 py-4 text-sm text-slate-500">{depto.descricao || '-'}</td>
                         <td className="px-6 py-4">
                           <span className={`text-xs px-2 py-1 rounded-full ${depto.status === 'ATIVO' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>

@@ -100,13 +100,13 @@ export class ChamadoController {
   }
 
   @Post(':id/assumir')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
   assumir(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.service.assumir(id, user);
   }
 
   @Post(':id/transferir-equipe')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
   transferirEquipe(
     @Param('id') id: string,
     @Body() dto: TransferirEquipeDto,
@@ -116,7 +116,7 @@ export class ChamadoController {
   }
 
   @Post(':id/transferir-tecnico')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
   transferirTecnico(
     @Param('id') id: string,
     @Body() dto: TransferirTecnicoDto,
@@ -135,7 +135,7 @@ export class ChamadoController {
   }
 
   @Patch(':id/resolver')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
   resolver(
     @Param('id') id: string,
     @Body() dto: ResolverChamadoDto,
@@ -145,7 +145,7 @@ export class ChamadoController {
   }
 
   @Patch(':id/fechar')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
   fechar(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.service.fechar(id, user);
   }
@@ -222,7 +222,7 @@ export class ChamadoController {
   }
 
   @Delete(':id/anexos/:anexoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
   removeAnexo(@Param('id') id: string, @Param('anexoId') anexoId: string) {
     return this.service.removeAnexo(id, anexoId);
   }
@@ -235,13 +235,13 @@ export class ChamadoController {
   }
 
   @Post(':id/colaboradores')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
   adicionarColaborador(@Param('id') id: string, @Body('usuarioId') usuarioId: string) {
     return this.service.adicionarColaborador(id, usuarioId);
   }
 
   @Delete(':id/colaboradores/:colaboradorId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
   removerColaborador(@Param('id') id: string, @Param('colaboradorId') colaboradorId: string) {
     return this.service.removerColaborador(id, colaboradorId);
   }

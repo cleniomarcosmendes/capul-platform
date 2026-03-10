@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { conhecimentoService } from '../../services/conhecimento.service';
 import { softwareService } from '../../services/software.service';
 import { equipeService } from '../../services/equipe.service';
-import { Plus, Search, BookMarked } from 'lucide-react';
+import { Plus, Search, BookMarked, Globe, Lock } from 'lucide-react';
 import type { ArtigoConhecimento, CategoriaArtigo, StatusArtigo, Software, EquipeTI } from '../../types';
 
 const categoriaLabel: Record<CategoriaArtigo, string> = {
@@ -24,7 +24,7 @@ const statusCores: Record<StatusArtigo, string> = {
 
 export function ConhecimentoListPage() {
   const { gestaoTiRole } = useAuth();
-  const canCreate = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR'].includes(gestaoTiRole || '');
+  const canCreate = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO'].includes(gestaoTiRole || '');
 
   const [artigos, setArtigos] = useState<ArtigoConhecimento[]>([]);
   const [softwares, setSoftwares] = useState<Software[]>([]);
@@ -119,9 +119,20 @@ export function ConhecimentoListPage() {
                 className="bg-white rounded-lg border border-slate-200 p-5 hover:border-amber-300 hover:shadow-sm transition-all"
               >
                 <div className="flex items-start justify-between mb-2">
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${categoriaCores[a.categoria]}`}>
-                    {categoriaLabel[a.categoria]}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${categoriaCores[a.categoria]}`}>
+                      {categoriaLabel[a.categoria]}
+                    </span>
+                    {a.publica ? (
+                      <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-600">
+                        <Globe className="w-3 h-3" /> Publica
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-50 text-slate-500">
+                        <Lock className="w-3 h-3" /> Interna
+                      </span>
+                    )}
+                  </div>
                   <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusCores[a.status]}`}>
                     {statusLabel[a.status]}
                   </span>

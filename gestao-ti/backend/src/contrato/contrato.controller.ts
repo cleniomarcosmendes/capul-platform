@@ -105,13 +105,13 @@ export class ContratoController {
   }
 
   @Post()
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   create(@Body() dto: CreateContratoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     return this.service.create(dto, user.sub, role);
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateContratoDto,
@@ -122,7 +122,7 @@ export class ContratoController {
   }
 
   @Patch(':id/status')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   alterarStatus(
     @Param('id') id: string,
     @Body() dto: UpdateStatusContratoDto,
@@ -133,7 +133,7 @@ export class ContratoController {
   }
 
   @Post(':id/renovar')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   renovar(
     @Param('id') id: string,
     @Body() dto: RenovarContratoDto,
@@ -151,7 +151,7 @@ export class ContratoController {
   }
 
   @Post(':id/parcelas')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   criarParcela(
     @Param('id') id: string,
     @Body() dto: CreateParcelaDto,
@@ -162,7 +162,7 @@ export class ContratoController {
   }
 
   @Patch(':id/parcelas/:pid')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   atualizarParcela(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -172,7 +172,7 @@ export class ContratoController {
   }
 
   @Post(':id/parcelas/:pid/pagar')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   pagarParcela(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -184,7 +184,7 @@ export class ContratoController {
   }
 
   @Post(':id/parcelas/:pid/cancelar')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   cancelarParcela(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -202,7 +202,7 @@ export class ContratoController {
   }
 
   @Post(':id/rateio-template')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   configurarRateioTemplate(
     @Param('id') id: string,
     @Body() dto: ConfigurarRateioTemplateDto,
@@ -213,7 +213,7 @@ export class ContratoController {
   }
 
   @Post(':id/rateio-template/simular')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   simularRateioTemplate(@Param('id') id: string, @Body() dto: SimularRateioDto) {
     return this.service.simularRateioTemplate(id, dto);
   }
@@ -226,7 +226,7 @@ export class ContratoController {
   }
 
   @Post(':id/parcelas/:pid/rateio')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   configurarRateioParcela(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -238,7 +238,7 @@ export class ContratoController {
   }
 
   @Post(':id/parcelas/:pid/rateio/gerar')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   gerarRateioParcela(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -250,7 +250,7 @@ export class ContratoController {
   }
 
   @Post(':id/parcelas/:pid/rateio/copiar-pendentes')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   copiarRateioParaPendentes(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -267,7 +267,7 @@ export class ContratoController {
   }
 
   @Post(':id/anexos')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
       destination: UPLOADS_DIR,
@@ -302,7 +302,7 @@ export class ContratoController {
   }
 
   @Delete(':id/anexos/:aid')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   excluirAnexo(
     @Param('id') id: string,
     @Param('aid') aid: string,
@@ -321,7 +321,7 @@ export class ContratoController {
   // --- Licencas ---
 
   @Post(':id/licencas')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   vincularLicenca(
     @Param('id') id: string,
     @Body('licencaId') licencaId: string,
@@ -332,7 +332,7 @@ export class ContratoController {
   }
 
   @Delete(':id/licencas/:licId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   desvincularLicenca(
     @Param('id') id: string,
     @Param('licId') licId: string,

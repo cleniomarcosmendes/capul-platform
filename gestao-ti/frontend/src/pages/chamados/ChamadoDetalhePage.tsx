@@ -109,7 +109,7 @@ export function ChamadoDetalhePage() {
   const [editRegObs, setEditRegObs] = useState('');
 
   const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
-  const isTecnico = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR'].includes(gestaoTiRole || '');
+  const isTecnico = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO'].includes(gestaoTiRole || '');
   const isSolicitante = chamado?.solicitanteId === usuario?.id;
 
   useEffect(() => {
@@ -313,9 +313,15 @@ export function ChamadoDetalhePage() {
             )}
 
             {/* Actions bar */}
+            {isTecnico && emAndamento && !temTecnico && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
+                <UserPlus className="w-4 h-4 flex-shrink-0" />
+                <span>Este chamado ainda nao possui um responsavel. E necessario <strong>assumir</strong> o chamado antes de finaliza-lo.</span>
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               {canAssumir && (
-                <button onClick={() => runAction(() => chamadoService.assumir(chamado.id))} disabled={actionLoading}
+                <button onClick={async () => { if (await confirm('Assumir Chamado', `Voce sera o responsavel pelo atendimento do chamado #${chamado.numero}. Deseja continuar?`, { confirmLabel: 'Sim, assumir' })) runAction(() => chamadoService.assumir(chamado.id)); }} disabled={actionLoading}
                   className="flex items-center gap-1.5 bg-capul-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
                   <UserPlus className="w-4 h-4" /> Assumir
                 </button>
@@ -339,7 +345,7 @@ export function ChamadoDetalhePage() {
                 </button>
               )}
               {canFechar && (
-                <button onClick={() => runAction(() => chamadoService.fechar(chamado.id))} disabled={actionLoading}
+                <button onClick={async () => { if (await confirm('Fechar Chamado', 'Ao fechar, o chamado nao podera mais receber interacoes. Deseja continuar?', { confirmLabel: 'Sim, fechar' })) runAction(() => chamadoService.fechar(chamado.id)); }} disabled={actionLoading}
                   className="flex items-center gap-1.5 bg-slate-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-slate-700 disabled:opacity-50">
                   <Lock className="w-4 h-4" /> Fechar
                 </button>

@@ -9,6 +9,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { CreateArtigoDto } from './dto/create-artigo.dto.js';
 import { UpdateArtigoDto, UpdateStatusArtigoDto } from './dto/update-artigo.dto.js';
+import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 
 @Controller('conhecimento')
 @UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
@@ -22,8 +23,9 @@ export class ConhecimentoController {
     @Query('softwareId') softwareId?: string,
     @Query('equipeTiId') equipeTiId?: string,
     @Query('search') search?: string,
+    @GestaoTiRole() role?: string,
   ) {
-    return this.service.findAll({ categoria, status, softwareId, equipeTiId, search });
+    return this.service.findAll({ categoria, status, softwareId, equipeTiId, search, role });
   }
 
   @Get(':id')
@@ -32,19 +34,19 @@ export class ConhecimentoController {
   }
 
   @Post()
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
   create(@Body() dto: CreateArtigoDto, @CurrentUser('sub') autorId: string) {
     return this.service.create(dto, autorId);
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
   update(@Param('id') id: string, @Body() dto: UpdateArtigoDto) {
     return this.service.update(id, dto);
   }
 
   @Patch(':id/status')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusArtigoDto) {
     return this.service.updateStatus(id, dto.status);
   }

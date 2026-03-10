@@ -29,8 +29,9 @@ type MenuItem =
   | { section: string; roles?: string[] }
   | { label: string; icon: React.ComponentType<{ className?: string }>; path: string; roles?: string[] };
 
-const STAFF = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR'];
+const STAFF = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO'];
 const MANAGERS = ['ADMIN', 'GESTOR_TI'];
+const CONTRATO_ROLES = ['ADMIN', 'GESTOR_TI', 'FINANCEIRO'];
 
 const menuItems: MenuItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/gestao-ti/' },
@@ -38,10 +39,10 @@ const menuItems: MenuItem[] = [
   { label: 'Chamados', icon: Ticket, path: '/gestao-ti/chamados' },
   { label: 'Ordens de Servico', icon: ClipboardList, path: '/gestao-ti/ordens-servico', roles: STAFF },
   { label: 'Base de Conhecimento', icon: BookMarked, path: '/gestao-ti/conhecimento' },
-  { section: 'PORTFOLIO', roles: [...STAFF, 'FINANCEIRO'] },
-  { label: 'Softwares', icon: AppWindow, path: '/gestao-ti/softwares', roles: [...STAFF, 'FINANCEIRO'] },
-  { label: 'Licencas', icon: KeyRound, path: '/gestao-ti/licencas', roles: [...STAFF, 'FINANCEIRO'] },
-  { label: 'Contratos', icon: FileText, path: '/gestao-ti/contratos', roles: [...STAFF, 'FINANCEIRO'] },
+  { section: 'PORTFOLIO', roles: STAFF },
+  { label: 'Softwares', icon: AppWindow, path: '/gestao-ti/softwares', roles: STAFF },
+  { label: 'Licencas', icon: KeyRound, path: '/gestao-ti/licencas', roles: STAFF },
+  { label: 'Contratos', icon: FileText, path: '/gestao-ti/contratos', roles: CONTRATO_ROLES },
   { section: 'SUSTENTACAO', roles: STAFF },
   { label: 'Paradas', icon: Activity, path: '/gestao-ti/paradas', roles: STAFF },
   { label: 'Motivos de Parada', icon: AlertTriangle, path: '/gestao-ti/motivos-parada', roles: MANAGERS },

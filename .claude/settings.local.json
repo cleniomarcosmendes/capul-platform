@@ -1062,7 +1062,8 @@
       "Bash(curl -s -X POST http://localhost:3000/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin123\"}' | head -c 200)",
       "Bash(curl -s -X POST http://localhost:3000/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin123\"}' | head -c 300)",
       "Bash(curl -s -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin123\"}' | head -c 300)",
-      "Bash(curl -s -X POST http://localhost/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"login\":\"admin\",\"senha\":\"admin123\"}')"
+      "Bash(curl -s -X POST http://localhost/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"login\":\"admin\",\"senha\":\"admin123\"}')",
+      "Bash(grep -r \"@Roles\" /mnt/c/meus_projetos/capul-platform/gestao-ti/backend/src --include=\"*.ts\" -A 1 | sed 's/--$//' | awk 'NF' > /tmp/roles_output.txt && wc -l /tmp/roles_output.txt && head -100 /tmp/roles_output.txt)"
     ]
   }
 }

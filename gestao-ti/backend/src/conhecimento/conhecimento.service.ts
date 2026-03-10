@@ -22,6 +22,7 @@ export class ConhecimentoService {
     softwareId?: string;
     equipeTiId?: string;
     search?: string;
+    role?: string;
   }) {
     const where: Record<string, unknown> = {};
     if (filters.categoria) where.categoria = filters.categoria;
@@ -34,6 +35,12 @@ export class ConhecimentoService {
         { conteudo: { contains: filters.search, mode: 'insensitive' } },
         { tags: { contains: filters.search, mode: 'insensitive' } },
       ];
+    }
+
+    // USUARIO_FINAL e USUARIO_CHAVE so veem artigos publicos e publicados
+    if (filters.role === 'USUARIO_FINAL' || filters.role === 'USUARIO_CHAVE') {
+      where.publica = true;
+      where.status = 'PUBLICADO';
     }
 
     return this.prisma.artigoConhecimento.findMany({
@@ -62,6 +69,7 @@ export class ConhecimentoService {
         tags: dto.tags,
         softwareId: dto.softwareId,
         equipeTiId: dto.equipeTiId,
+        publica: dto.publica ?? false,
         autorId,
       },
       include: artigoListInclude,

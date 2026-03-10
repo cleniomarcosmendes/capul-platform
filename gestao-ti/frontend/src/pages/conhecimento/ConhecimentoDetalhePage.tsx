@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { conhecimentoService } from '../../services/conhecimento.service';
-import { ArrowLeft, BookMarked, Edit, Trash2, Send, Archive } from 'lucide-react';
+import { ArrowLeft, BookMarked, Edit, Trash2, Send, Archive, Globe, Lock } from 'lucide-react';
 import type { ArtigoConhecimento, CategoriaArtigo, StatusArtigo } from '../../types';
 import { useToast } from '../../components/Toast';
 
@@ -25,7 +25,7 @@ export function ConhecimentoDetalhePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
-  const canEdit = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR'].includes(gestaoTiRole || '');
+  const canEdit = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO'].includes(gestaoTiRole || '');
   const { confirm } = useToast();
   const canDelete = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
 
@@ -83,6 +83,15 @@ export function ConhecimentoDetalhePage() {
                   <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusCores[artigo.status]}`}>
                     {statusLabel[artigo.status]}
                   </span>
+                  {artigo.publica ? (
+                    <span className="flex items-center gap-0.5 px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-600">
+                      <Globe className="w-3.5 h-3.5" /> Publica
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-0.5 px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-500">
+                      <Lock className="w-3.5 h-3.5" /> Interna
+                    </span>
+                  )}
                   <span className="text-xs text-slate-400">Autor: <strong className="text-slate-600">{artigo.autor?.nome}</strong></span>
                   <span className="text-xs text-slate-400">Criado: {new Date(artigo.createdAt).toLocaleDateString('pt-BR')}</span>
                   {artigo.publicadoEm && <span className="text-xs text-slate-400">Publicado: {new Date(artigo.publicadoEm).toLocaleDateString('pt-BR')}</span>}

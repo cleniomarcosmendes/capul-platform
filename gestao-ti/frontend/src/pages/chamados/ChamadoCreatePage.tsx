@@ -78,7 +78,7 @@ export function ChamadoCreatePage() {
   // Pre-preencher filial/depto do usuario logado
   useEffect(() => {
     if (!isUsuarioFinal && usuario) {
-      setFilialId(usuario.filialAtual.id);
+      setFilialId(usuario.filialAtual?.id || '');
       setDepartamentoId(usuario.departamento.id);
     }
   }, [isUsuarioFinal, usuario]);
@@ -150,7 +150,7 @@ export function ChamadoCreatePage() {
         moduloNome: moduloNome || undefined,
         catalogoServicoId: catalogoServicoId || undefined,
         projetoId: projetoIdParam || undefined,
-        filialId: (!isUsuarioFinal && filialId && filialId !== usuario?.filialAtual.id) ? filialId : undefined,
+        filialId: (!isUsuarioFinal && filialId && filialId !== usuario?.filialAtual?.id) ? filialId : undefined,
         departamentoId: (!isUsuarioFinal && departamentoId && departamentoId !== usuario?.departamento.id) ? departamentoId : undefined,
         ipMaquina: ipMaquina || undefined,
         ativoId: ativoId || undefined,

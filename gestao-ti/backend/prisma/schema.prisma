@@ -941,7 +941,7 @@ model Contrato {
   numeroContrato        String?         @map("numero_contrato")
   titulo                String
   descricao             String?
-  status                StatusContrato  @default(RASCUNHO)
+  status                StatusContrato  @default(ATIVO)
   modalidadeValor       ModalidadeValor @default(FIXO) @map("modalidade_valor")
   fornecedor            String
   codigoFornecedor      String?         @map("codigo_fornecedor")
@@ -1603,6 +1603,8 @@ model ArtigoConhecimento {
 
   equipeTiId String?   @map("equipe_ti_id")
   equipeTi   EquipeTI? @relation(fields: [equipeTiId], references: [id])
+
+  publica Boolean @default(false)
 
   autorId String  @map("autor_id")
   autor   Usuario @relation("ArtigoAutor", fields: [autorId], references: [id])

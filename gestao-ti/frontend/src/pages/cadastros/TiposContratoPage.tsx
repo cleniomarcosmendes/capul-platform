@@ -178,7 +178,9 @@ export function TiposContratoPage() {
                     ) : (
                       <>
                         <td className="px-6 py-4 text-sm font-medium text-slate-700">{tipo.codigo}</td>
-                        <td className="px-6 py-4 text-sm text-slate-600">{tipo.nome}</td>
+                        <td className="px-6 py-4 text-sm">
+                          <button onClick={() => startEdit(tipo)} className="text-capul-600 hover:underline text-left">{tipo.nome}</button>
+                        </td>
                         <td className="px-6 py-4">
                           <span className={`text-xs px-2 py-1 rounded-full ${tipo.status === 'ATIVO' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                             {tipo.status}

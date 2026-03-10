@@ -1,5 +1,5 @@
 import {
-  IsString, IsOptional, IsEnum, MaxLength, IsUUID,
+  IsString, IsOptional, IsEnum, MaxLength, IsUUID, IsBoolean,
 } from 'class-validator';
 import { CategoriaArtigo, StatusArtigo } from '@prisma/client';
 
@@ -24,6 +24,9 @@ export class UpdateArtigoDto {
 
   @IsOptional() @IsUUID()
   equipeTiId?: string;
+
+  @IsOptional() @IsBoolean()
+  publica?: boolean;
 }
 
 export class UpdateStatusArtigoDto {

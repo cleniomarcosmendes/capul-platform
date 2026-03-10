@@ -3,7 +3,7 @@ import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { slaService } from '../../services/sla.service';
 import { equipeService } from '../../services/equipe.service';
-import { Plus, X, Power } from 'lucide-react';
+import { Plus, X, Pencil } from 'lucide-react';
 import type { SlaDefinicao, EquipeTI, Prioridade } from '../../types';
 
 const prioridadeLabels: Record<Prioridade, string> = {
@@ -183,7 +183,9 @@ export function SlaPage() {
               <tbody className="divide-y divide-slate-100">
                 {items.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-800">{item.nome}</td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => openEdit(item)} className="font-medium text-capul-600 hover:underline text-left">{item.nome}</button>
+                    </td>
                     <td className="px-4 py-3 text-slate-600">{item.equipe.sigla} - {item.equipe.nome}</td>
                     <td className="px-4 py-3 text-slate-600">{prioridadeLabels[item.prioridade]}</td>
                     <td className="px-4 py-3 text-slate-600">{item.horasResposta}h</td>
@@ -195,10 +197,13 @@ export function SlaPage() {
                     </td>
                     {isAdmin && (
                       <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <button onClick={() => openEdit(item)} className="text-xs text-capul-600 hover:underline">Editar</button>
-                          <button onClick={() => toggleStatus(item)} title={item.status === 'ATIVO' ? 'Desativar' : 'Ativar'}>
-                            <Power className={`w-4 h-4 ${item.status === 'ATIVO' ? 'text-green-500' : 'text-slate-400'}`} />
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => openEdit(item)} className="flex items-center gap-1 text-xs text-capul-600 hover:underline">
+                            <Pencil className="w-3.5 h-3.5" />
+                            Editar
+                          </button>
+                          <button onClick={() => toggleStatus(item)} className="text-xs text-capul-600 hover:underline">
+                            {item.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
                           </button>
                         </div>
                       </td>

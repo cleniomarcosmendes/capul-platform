@@ -81,9 +81,9 @@ const TRANSICOES_VALIDAS: Record<StatusContrato, StatusContrato[]> = {
   RASCUNHO: ['ATIVO', 'CANCELADO'],
   ATIVO: ['SUSPENSO', 'VENCIDO', 'RENOVADO', 'CANCELADO'],
   SUSPENSO: ['ATIVO', 'CANCELADO'],
-  VENCIDO: ['RENOVADO'],
+  VENCIDO: ['RENOVADO', 'ATIVO'],
   RENOVADO: [],
-  CANCELADO: [],
+  CANCELADO: ['ATIVO'],
 };
 
 @Injectable()

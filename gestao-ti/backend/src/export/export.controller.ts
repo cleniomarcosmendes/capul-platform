@@ -12,13 +12,13 @@ export class ExportController {
   constructor(private readonly service: ExportService) {}
 
   @Get('ordem-servico/:id/relatorio')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
   async relatorioOs(@Param('id') id: string, @Res() res: Response) {
     return this.service.exportRelatorioOs(id, res);
   }
 
   @Get('contrato/:id/parcela/:pid/rateio')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
   async relatorioRateioParcela(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -28,7 +28,7 @@ export class ExportController {
   }
 
   @Get(':entidade')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
   async exportar(@Param('entidade') entidade: string, @Res() res: Response) {
     return this.service.exportar(entidade, res);
   }

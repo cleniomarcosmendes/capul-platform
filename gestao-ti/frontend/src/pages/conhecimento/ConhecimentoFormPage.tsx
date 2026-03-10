@@ -34,6 +34,7 @@ export function ConhecimentoFormPage() {
     tags: '',
     softwareId: '',
     equipeTiId: '',
+    publica: false,
   });
 
   useEffect(() => {
@@ -53,6 +54,7 @@ export function ConhecimentoFormPage() {
         tags: a.tags || '',
         softwareId: a.softwareId || '',
         equipeTiId: a.equipeTiId || '',
+        publica: a.publica ?? false,
       });
     }).catch(() => navigate('/gestao-ti/conhecimento'))
       .finally(() => setLoading(false));
@@ -75,6 +77,7 @@ export function ConhecimentoFormPage() {
       tags: form.tags || undefined,
       softwareId: form.softwareId || undefined,
       equipeTiId: form.equipeTiId || undefined,
+      publica: form.publica,
     };
 
     try {
@@ -140,6 +143,21 @@ export function ConhecimentoFormPage() {
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Tags (separar por virgula)</label>
               <input name="tags" value={form.tags} onChange={handleChange} maxLength={500} placeholder="Ex: windows, rede, vpn" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.publica}
+                  onChange={(e) => setForm({ ...form, publica: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+              </label>
+              <div>
+                <span className="text-sm font-medium text-slate-700">Artigo Publico</span>
+                <p className="text-xs text-slate-400">Artigos publicos ficam visiveis para todos os usuarios, incluindo usuarios finais</p>
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Conteudo *</label>

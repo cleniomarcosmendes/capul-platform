@@ -29,7 +29,7 @@ export function CentrosCustoPage() {
   async function carregar() {
     setLoading(true);
     try {
-      const data = await coreService.listarCentrosCusto(usuario?.filialAtual.id);
+      const data = await coreService.listarCentrosCusto(usuario?.filialAtual?.id);
       setCentrosCusto(data);
     } catch { /* empty */ }
     setLoading(false);
@@ -39,7 +39,7 @@ export function CentrosCustoPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      await coreService.criarCentroCusto({ nome, codigo, filialId: usuario?.filialAtual.id });
+      await coreService.criarCentroCusto({ nome, codigo, filialId: usuario?.filialAtual?.id });
       setNome(''); setCodigo('');
       setShowForm(false);
       toast('success', 'Centro de custo criado');
@@ -91,7 +91,7 @@ export function CentrosCustoPage() {
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
           <p className="text-sm text-slate-500">
-            Centros de custo da filial {usuario?.filialAtual.codigo} - {usuario?.filialAtual.nome}
+            Centros de custo da filial {usuario?.filialAtual?.codigo} - {usuario?.filialAtual?.nome}
           </p>
           {isAdmin && (
             <button
@@ -178,7 +178,9 @@ export function CentrosCustoPage() {
                     ) : (
                       <>
                         <td className="px-6 py-4 text-sm font-medium text-slate-700">{cc.codigo}</td>
-                        <td className="px-6 py-4 text-sm text-slate-600">{cc.nome}</td>
+                        <td className="px-6 py-4 text-sm">
+                          <button onClick={() => startEdit(cc)} className="text-capul-600 hover:underline text-left">{cc.nome}</button>
+                        </td>
                         <td className="px-6 py-4">
                           <span className={`text-xs px-2 py-1 rounded-full ${cc.status === 'ATIVO' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                             {cc.status}

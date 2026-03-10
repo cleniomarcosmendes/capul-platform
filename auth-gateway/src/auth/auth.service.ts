@@ -40,6 +40,7 @@ export class AuthService {
         filiais: {
           include: { filial: true },
         },
+        filialPrincipal: true,
         departamento: true,
       },
     });
@@ -56,12 +57,19 @@ export class AuthService {
     const filialAtiva =
       usuario.filiais.find((f) => f.isDefault) || usuario.filiais[0];
 
+    // Fallback para filialPrincipal se nao tem filiais vinculadas
+    const filialFallback = filialAtiva
+      ? { id: filialAtiva.filialId, codigo: filialAtiva.filial.codigo, nome: filialAtiva.filial.nomeFantasia }
+      : usuario.filialPrincipal
+        ? { id: usuario.filialPrincipal.id, codigo: usuario.filialPrincipal.codigo, nome: usuario.filialPrincipal.nomeFantasia }
+        : null;
+
     const payload: JwtPayload = {
       sub: usuario.id,
       username: usuario.username,
       email: usuario.email,
-      filialId: filialAtiva?.filialId || null,
-      filialCodigo: filialAtiva?.filial?.codigo || null,
+      filialId: filialFallback?.id || null,
+      filialCodigo: filialFallback?.codigo || null,
       departamentoId: usuario.departamentoId,
       departamentoNome: usuario.departamento.nome,
       modulos: usuario.permissoes.map((p) => ({
@@ -95,13 +103,7 @@ export class AuthService {
           id: usuario.departamento.id,
           nome: usuario.departamento.nome,
         },
-        filialAtual: filialAtiva
-          ? {
-              id: filialAtiva.filialId,
-              codigo: filialAtiva.filial.codigo,
-              nome: filialAtiva.filial.nomeFantasia,
-            }
-          : null,
+        filialAtual: filialFallback,
         modulos: usuario.permissoes.map((p) => ({
           codigo: p.modulo.codigo,
           nome: p.modulo.nome,
@@ -243,6 +245,21 @@ export class AuthService {
     const filialAtiva =
       usuario.filiais.find((f) => f.isDefault) || usuario.filiais[0];
 
+    // Fallback: se usuario nao tem filiais vinculadas, usa filialPrincipal
+    const filialAtualObj = filialAtiva
+      ? {
+          id: filialAtiva.filialId,
+          codigo: filialAtiva.filial.codigo,
+          nome: filialAtiva.filial.nomeFantasia,
+        }
+      : usuario.filialPrincipal
+        ? {
+            id: usuario.filialPrincipal.id,
+            codigo: usuario.filialPrincipal.codigo,
+            nome: usuario.filialPrincipal.nomeFantasia,
+          }
+        : null;
+
     return {
       id: usuario.id,
       username: usuario.username,
@@ -256,13 +273,7 @@ export class AuthService {
         id: usuario.departamento.id,
         nome: usuario.departamento.nome,
       },
-      filialAtual: filialAtiva
-        ? {
-            id: filialAtiva.filialId,
-            codigo: filialAtiva.filial.codigo,
-            nome: filialAtiva.filial.nomeFantasia,
-          }
-        : null,
+      filialAtual: filialAtualObj,
       filiais: usuario.filiais.map((uf) => ({
         id: uf.filialId,
         codigo: uf.filial.codigo,
