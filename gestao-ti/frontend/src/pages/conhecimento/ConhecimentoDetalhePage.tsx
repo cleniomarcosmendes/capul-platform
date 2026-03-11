@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { conhecimentoService } from '../../services/conhecimento.service';
-import { ArrowLeft, BookMarked, Edit, Trash2, Send, Archive, Globe, Lock } from 'lucide-react';
-import type { ArtigoConhecimento, CategoriaArtigo, StatusArtigo } from '../../types';
+import { ArrowLeft, BookMarked, Edit, Trash2, Send, Archive, Globe, Lock, Paperclip, Download, FileText, Image, File as FileIcon } from 'lucide-react';
+import type { ArtigoConhecimento, AnexoConhecimento, CategoriaArtigo, StatusArtigo } from '../../types';
 import { useToast } from '../../components/Toast';
 
 const categoriaLabel: Record<CategoriaArtigo, string> = {
@@ -21,6 +21,18 @@ const statusCores: Record<StatusArtigo, string> = {
   RASCUNHO: 'bg-yellow-100 text-yellow-700', PUBLICADO: 'bg-green-100 text-green-700', ARQUIVADO: 'bg-slate-100 text-slate-600',
 };
 
+function getFileIcon(mime: string) {
+  if (mime.startsWith('image/')) return Image;
+  if (mime === 'application/pdf') return FileText;
+  return FileIcon;
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function ConhecimentoDetalhePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -31,11 +43,17 @@ export function ConhecimentoDetalhePage() {
 
   const [artigo, setArtigo] = useState<ArtigoConhecimento | null>(null);
   const [loading, setLoading] = useState(true);
+  const [anexos, setAnexos] = useState<AnexoConhecimento[]>([]);
+  const [uploadingAnexo, setUploadingAnexo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    conhecimentoService.buscar(id).then(setArtigo)
+    conhecimentoService.buscar(id).then((data) => {
+      setArtigo(data);
+      if (data.anexos) setAnexos(data.anexos);
+    })
       .catch(() => navigate('/gestao-ti/conhecimento'))
       .finally(() => setLoading(false));
   }, [id, navigate]);
@@ -45,6 +63,26 @@ export function ConhecimentoDetalhePage() {
     try {
       const updated = await conhecimentoService.alterarStatus(id, status);
       setArtigo(updated);
+    } catch { /* ignore */ }
+  }
+
+  async function handleUploadAnexo(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!id || !e.target.files?.length) return;
+    setUploadingAnexo(true);
+    try {
+      const files = Array.from(e.target.files);
+      const uploaded = await Promise.all(files.map((f) => conhecimentoService.uploadAnexo(id, f)));
+      setAnexos((prev) => [...uploaded, ...prev]);
+    } catch { /* ignore */ }
+    setUploadingAnexo(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  async function handleRemoveAnexo(anexoId: string) {
+    if (!id || !(await confirm('Remover Anexo', 'Deseja remover este anexo?'))) return;
+    try {
+      await conhecimentoService.removerAnexo(id, anexoId);
+      setAnexos((prev) => prev.filter((a) => a.id !== anexoId));
     } catch { /* ignore */ }
   }
 
@@ -140,6 +178,79 @@ export function ConhecimentoDetalhePage() {
             {artigo.conteudo}
           </div>
         </div>
+
+        {/* Anexos */}
+        {(anexos.length > 0 || canEdit) && (
+          <div className="bg-white rounded-lg border border-slate-200 mt-6">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <h4 className="font-semibold text-slate-700 flex items-center gap-2">
+                <Paperclip className="w-4 h-4" />
+                Anexos {anexos.length > 0 && <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{anexos.length}</span>}
+              </h4>
+              {canEdit && (
+                <>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingAnexo}
+                    className="text-sm text-amber-600 hover:text-amber-700 flex items-center gap-1 disabled:opacity-50"
+                  >
+                    <Paperclip className="w-3.5 h-3.5" />
+                    {uploadingAnexo ? 'Enviando...' : 'Anexar'}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    onChange={handleUploadAnexo}
+                    className="hidden"
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.7z"
+                  />
+                </>
+              )}
+            </div>
+            <div className="p-4">
+              {anexos.length === 0 ? (
+                <p className="text-sm text-slate-400">Nenhum anexo</p>
+              ) : (
+                <div className="space-y-2">
+                  {anexos.map((a) => {
+                    const Icon = getFileIcon(a.mimeType);
+                    return (
+                      <div key={a.id} className="flex items-center gap-3 bg-slate-50 rounded-lg px-4 py-3">
+                        <Icon className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-slate-700 truncate">{a.nomeOriginal}</p>
+                          <p className="text-xs text-slate-400">
+                            {formatFileSize(a.tamanho)} — {a.usuario?.nome || 'Usuario'} — {new Date(a.createdAt).toLocaleString('pt-BR')}
+                          </p>
+                          {a.descricao && <p className="text-xs text-slate-500 mt-0.5">{a.descricao}</p>}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => conhecimentoService.downloadAnexo(id!, a.id, a.nomeOriginal)}
+                            className="p-1.5 text-slate-400 hover:text-amber-600 rounded"
+                            title="Download"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                          {canEdit && (
+                            <button
+                              onClick={() => handleRemoveAnexo(a.id)}
+                              className="p-1.5 text-slate-400 hover:text-red-500 rounded"
+                              title="Remover"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

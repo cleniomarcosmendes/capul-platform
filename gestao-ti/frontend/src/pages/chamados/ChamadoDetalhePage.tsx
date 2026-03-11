@@ -110,7 +110,12 @@ export function ChamadoDetalhePage() {
 
   const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
   const isTecnico = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO'].includes(gestaoTiRole || '');
+  const isGestor = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
   const isSolicitante = chamado?.solicitanteId === usuario?.id;
+  const isTecnicoAtribuido = chamado?.tecnicoId === usuario?.id;
+  const isColaborador = colaboradores.some((c) => c.usuarioId === usuario?.id);
+  // Pode movimentar: gestor (override), tecnico atribuido, ou colaborador
+  const podeMovimentar = isGestor || isTecnicoAtribuido || isColaborador;
 
   useEffect(() => {
     if (!id) return;
@@ -199,14 +204,14 @@ export function ChamadoDetalhePage() {
   const encerrado = ['FECHADO', 'CANCELADO'].includes(chamado.status);
   const emAndamento = !encerrado && chamado.status !== 'RESOLVIDO';
   const canAssumir = isTecnico && ['ABERTO', 'PENDENTE', 'REABERTO'].includes(chamado.status);
-  const canTransferirEquipe = isTecnico && emAndamento;
-  const canTransferirTecnico = isTecnico && emAndamento && temTecnico;
-  const canResolver = isTecnico && emAndamento && temTecnico;
-  const canFechar = isTecnico && chamado.status === 'RESOLVIDO';
-  const canReabrir = (chamado.status === 'RESOLVIDO' || chamado.status === 'FECHADO');
-  const canCancelar = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '') && emAndamento;
+  const canTransferirEquipe = podeMovimentar && emAndamento;
+  const canTransferirTecnico = podeMovimentar && emAndamento && temTecnico;
+  const canResolver = podeMovimentar && emAndamento && temTecnico;
+  const canFechar = podeMovimentar && chamado.status === 'RESOLVIDO';
+  const canReabrir = (podeMovimentar || isSolicitante) && (chamado.status === 'RESOLVIDO' || chamado.status === 'FECHADO');
+  const canCancelar = isGestor && emAndamento;
   const canAvaliar = isSolicitante && (chamado.status === 'RESOLVIDO' || chamado.status === 'FECHADO') && !chamado.notaSatisfacao;
-  const canComentar = !encerrado && (isSolicitante || temTecnico);
+  const canComentar = !encerrado && (isSolicitante || podeMovimentar);
   const canAnexar = !encerrado;
 
   return (
@@ -677,7 +682,7 @@ export function ChamadoDetalhePage() {
             )}
 
             {/* Colaboradores */}
-            {isTecnico && (
+            {podeMovimentar && (
               <div className="bg-white rounded-xl border border-slate-200 p-5">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
@@ -758,7 +763,7 @@ export function ChamadoDetalhePage() {
             )}
 
             {/* Registro de Tempo */}
-            {isTecnico && temTecnico && (
+            {podeMovimentar && temTecnico && (
               <div className="bg-white rounded-xl border border-slate-200 p-5">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
@@ -776,7 +781,7 @@ export function ChamadoDetalhePage() {
                           <span className="text-sm text-green-700 font-medium animate-pulse flex items-center gap-1.5">
                             <Play className="w-4 h-4" /> {nome}
                           </span>
-                          {!['FECHADO', 'CANCELADO'].includes(chamado.status) && (
+                          {!['FECHADO', 'CANCELADO'].includes(chamado.status) && (isGestor || r.usuarioId === usuario?.id) && (
                             <button onClick={async () => {
                               try {
                                 await chamadoService.encerrarTempo(chamado.id, r.usuarioId);
@@ -799,8 +804,8 @@ export function ChamadoDetalhePage() {
                   <div className="mb-4">
                     <label className="block text-xs text-slate-500 mb-1.5">Iniciar cronometro para:</label>
                     <div className="space-y-2">
-                      {/* Técnico responsável (eu ou outro) */}
-                      {chamado.tecnico && !chamado.registrosTempo?.find((r) => r.usuarioId === chamado.tecnicoId) && (
+                      {/* Técnico responsável — só mostra botão Iniciar se for o próprio usuário ou gestor */}
+                      {chamado.tecnico && !chamado.registrosTempo?.find((r) => r.usuarioId === chamado.tecnicoId) && (isGestor || chamado.tecnicoId === usuario?.id) && (
                         <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
                           <div className="flex items-center gap-2">
                             <div className="w-7 h-7 rounded-full bg-capul-100 text-capul-700 flex items-center justify-center text-xs font-bold">
@@ -820,9 +825,10 @@ export function ChamadoDetalhePage() {
                           </button>
                         </div>
                       )}
-                      {/* Colaboradores */}
+                      {/* Colaboradores — só mostra botão Iniciar para o próprio usuário ou gestor */}
                       {colaboradores
                         .filter((c) => !chamado.registrosTempo?.find((r) => r.usuarioId === c.usuarioId))
+                        .filter((c) => isGestor || c.usuarioId === usuario?.id)
                         .map((c) => (
                         <div key={c.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
                           <div className="flex items-center gap-2">

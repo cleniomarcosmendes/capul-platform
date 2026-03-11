@@ -242,6 +242,16 @@ export function ChamadoCreatePage() {
                   <option key={e.id} value={e.id}>{e.sigla} - {e.nome}</option>
                 ))}
               </select>
+              {(() => {
+                const equipeSel = equipes.find((e) => e.id === equipeAtualId);
+                if (!equipeSel?.descricao) return null;
+                return (
+                  <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs font-semibold text-blue-700 mb-1">{equipeSel.sigla} — {equipeSel.nome}</p>
+                    <p className="text-xs text-blue-600 whitespace-pre-wrap">{equipeSel.descricao}</p>
+                  </div>
+                );
+              })()}
             </div>
 
             <div>

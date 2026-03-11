@@ -36,12 +36,40 @@ const chamadoInclude = {
 
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads', 'chamados');
 
+const ROLES_GESTORES = ['ADMIN', 'GESTOR_TI'];
+
 @Injectable()
 export class ChamadoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificacaoService: NotificacaoService,
   ) {}
+
+  // ─── Validacao: usuario e tecnico atribuido ou colaborador ───
+  private async assertTecnicoOuColaborador(
+    chamadoId: string,
+    userId: string,
+    role: string,
+    { permitirSolicitante = false }: { permitirSolicitante?: boolean } = {},
+  ) {
+    if (ROLES_GESTORES.includes(role)) return;
+
+    const chamado = await this.prisma.chamado.findUnique({
+      where: { id: chamadoId },
+      select: {
+        tecnicoId: true,
+        solicitanteId: true,
+        colaboradores: { select: { usuarioId: true } },
+      },
+    });
+    if (!chamado) throw new NotFoundException('Chamado nao encontrado');
+
+    if (chamado.tecnicoId === userId) return;
+    if (chamado.colaboradores.some((c) => c.usuarioId === userId)) return;
+    if (permitirSolicitante && chamado.solicitanteId === userId) return;
+
+    throw new ForbiddenException('Apenas o tecnico atribuido ou colaboradores podem realizar esta acao');
+  }
 
   async findAll(user: JwtPayload, role: string, filters: {
     status?: StatusChamado;
@@ -274,7 +302,9 @@ export class ChamadoService {
     return updated;
   }
 
-  async transferirEquipe(id: string, dto: TransferirEquipeDto, user: JwtPayload) {
+  async transferirEquipe(id: string, dto: TransferirEquipeDto, user: JwtPayload, role: string) {
+    await this.assertTecnicoOuColaborador(id, user.sub, role);
+
     const chamado = await this.getChamadoOrFail(id);
 
     if (chamado.status === 'FECHADO' || chamado.status === 'CANCELADO') {
@@ -327,7 +357,9 @@ export class ChamadoService {
     return updated;
   }
 
-  async transferirTecnico(id: string, dto: TransferirTecnicoDto, user: JwtPayload) {
+  async transferirTecnico(id: string, dto: TransferirTecnicoDto, user: JwtPayload, role: string) {
+    await this.assertTecnicoOuColaborador(id, user.sub, role);
+
     const chamado = await this.getChamadoOrFail(id);
 
     if (chamado.status === 'FECHADO' || chamado.status === 'CANCELADO') {
@@ -368,7 +400,10 @@ export class ChamadoService {
     return updated;
   }
 
-  async comentar(id: string, dto: ComentarioChamadoDto, user: JwtPayload) {
+  async comentar(id: string, dto: ComentarioChamadoDto, user: JwtPayload, role: string) {
+    // Solicitante tambem pode comentar
+    await this.assertTecnicoOuColaborador(id, user.sub, role, { permitirSolicitante: true });
+
     const chamado = await this.getChamadoOrFail(id);
 
     if (['FECHADO', 'CANCELADO'].includes(chamado.status)) {
@@ -404,7 +439,9 @@ export class ChamadoService {
     return historico;
   }
 
-  async resolver(id: string, dto: ResolverChamadoDto, user: JwtPayload) {
+  async resolver(id: string, dto: ResolverChamadoDto, user: JwtPayload, role: string) {
+    await this.assertTecnicoOuColaborador(id, user.sub, role);
+
     const chamado = await this.getChamadoOrFail(id);
 
     if (chamado.status === 'FECHADO' || chamado.status === 'CANCELADO') {
@@ -415,7 +452,7 @@ export class ChamadoService {
       throw new BadRequestException('E necessario assumir o chamado antes de finaliza-lo');
     }
 
-    // Encerrar todos os cronômetros ativos
+    // Encerrar todos os cronometros ativos
     const timersAtivos = await this.prisma.registroTempoChamado.findMany({
       where: { chamadoId: id, horaFim: null },
     });
@@ -455,7 +492,9 @@ export class ChamadoService {
     return updated;
   }
 
-  async fechar(id: string, user: JwtPayload) {
+  async fechar(id: string, user: JwtPayload, role: string) {
+    await this.assertTecnicoOuColaborador(id, user.sub, role);
+
     const chamado = await this.getChamadoOrFail(id);
 
     if (chamado.status !== 'RESOLVIDO') {
@@ -489,7 +528,10 @@ export class ChamadoService {
     return updated;
   }
 
-  async reabrir(id: string, dto: ReabrirChamadoDto, user: JwtPayload) {
+  async reabrir(id: string, dto: ReabrirChamadoDto, user: JwtPayload, role: string) {
+    // Solicitante tambem pode reabrir
+    await this.assertTecnicoOuColaborador(id, user.sub, role, { permitirSolicitante: true });
+
     const chamado = await this.getChamadoOrFail(id);
 
     if (chamado.status === 'CANCELADO') {
@@ -518,7 +560,9 @@ export class ChamadoService {
     return updated;
   }
 
-  async cancelar(id: string, user: JwtPayload) {
+  async cancelar(id: string, user: JwtPayload, role: string) {
+    await this.assertTecnicoOuColaborador(id, user.sub, role);
+
     const chamado = await this.getChamadoOrFail(id);
 
     if (chamado.status === 'FECHADO' || chamado.status === 'CANCELADO') {
@@ -666,7 +710,9 @@ export class ChamadoService {
     });
   }
 
-  async adicionarColaborador(chamadoId: string, usuarioId: string) {
+  async adicionarColaborador(chamadoId: string, usuarioId: string, user: JwtPayload, role: string) {
+    await this.assertTecnicoOuColaborador(chamadoId, user.sub, role);
+
     const chamado = await this.getChamadoOrFail(chamadoId);
     if (!chamado.tecnicoId) {
       throw new BadRequestException('E necessario que um tecnico assuma o chamado antes de adicionar colaboradores');
@@ -689,7 +735,9 @@ export class ChamadoService {
     });
   }
 
-  async removerColaborador(chamadoId: string, colaboradorId: string) {
+  async removerColaborador(chamadoId: string, colaboradorId: string, user: JwtPayload, role: string) {
+    await this.assertTecnicoOuColaborador(chamadoId, user.sub, role);
+
     const chamado = await this.getChamadoOrFail(chamadoId);
     if (['FECHADO', 'CANCELADO'].includes(chamado.status)) {
       throw new BadRequestException('Nao e possivel remover colaborador de chamado encerrado');
@@ -718,7 +766,9 @@ export class ChamadoService {
     });
   }
 
-  async iniciarTempoChamado(chamadoId: string, userId: string) {
+  async iniciarTempoChamado(chamadoId: string, userId: string, role: string) {
+    await this.assertTecnicoOuColaborador(chamadoId, userId, role);
+
     const chamado = await this.getChamadoOrFail(chamadoId);
 
     if (['FECHADO', 'CANCELADO'].includes(chamado.status)) {

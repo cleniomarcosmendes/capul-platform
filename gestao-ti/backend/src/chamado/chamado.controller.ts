@@ -111,8 +111,9 @@ export class ChamadoController {
     @Param('id') id: string,
     @Body() dto: TransferirEquipeDto,
     @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
   ) {
-    return this.service.transferirEquipe(id, dto, user);
+    return this.service.transferirEquipe(id, dto, user, role);
   }
 
   @Post(':id/transferir-tecnico')
@@ -121,8 +122,9 @@ export class ChamadoController {
     @Param('id') id: string,
     @Body() dto: TransferirTecnicoDto,
     @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
   ) {
-    return this.service.transferirTecnico(id, dto, user);
+    return this.service.transferirTecnico(id, dto, user, role);
   }
 
   @Post(':id/comentar')
@@ -130,8 +132,9 @@ export class ChamadoController {
     @Param('id') id: string,
     @Body() dto: ComentarioChamadoDto,
     @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
   ) {
-    return this.service.comentar(id, dto, user);
+    return this.service.comentar(id, dto, user, role);
   }
 
   @Patch(':id/resolver')
@@ -140,14 +143,19 @@ export class ChamadoController {
     @Param('id') id: string,
     @Body() dto: ResolverChamadoDto,
     @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
   ) {
-    return this.service.resolver(id, dto, user);
+    return this.service.resolver(id, dto, user, role);
   }
 
   @Patch(':id/fechar')
   @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
-  fechar(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.service.fechar(id, user);
+  fechar(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.fechar(id, user, role);
   }
 
   @Post(':id/reabrir')
@@ -155,14 +163,19 @@ export class ChamadoController {
     @Param('id') id: string,
     @Body() dto: ReabrirChamadoDto,
     @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
   ) {
-    return this.service.reabrir(id, dto, user);
+    return this.service.reabrir(id, dto, user, role);
   }
 
   @Patch(':id/cancelar')
   @Roles('ADMIN', 'GESTOR_TI')
-  cancelar(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.service.cancelar(id, user);
+  cancelar(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.cancelar(id, user, role);
   }
 
   @Post(':id/avaliar')
@@ -236,14 +249,24 @@ export class ChamadoController {
 
   @Post(':id/colaboradores')
   @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
-  adicionarColaborador(@Param('id') id: string, @Body('usuarioId') usuarioId: string) {
-    return this.service.adicionarColaborador(id, usuarioId);
+  adicionarColaborador(
+    @Param('id') id: string,
+    @Body('usuarioId') usuarioId: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.adicionarColaborador(id, usuarioId, user, role);
   }
 
   @Delete(':id/colaboradores/:colaboradorId')
   @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
-  removerColaborador(@Param('id') id: string, @Param('colaboradorId') colaboradorId: string) {
-    return this.service.removerColaborador(id, colaboradorId);
+  removerColaborador(
+    @Param('id') id: string,
+    @Param('colaboradorId') colaboradorId: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.removerColaborador(id, colaboradorId, user, role);
   }
 
   // === Registro de Tempo ===
@@ -254,8 +277,13 @@ export class ChamadoController {
   }
 
   @Post(':id/registros-tempo/iniciar')
-  iniciarTempo(@Param('id') id: string, @CurrentUser() user: JwtPayload, @Body('usuarioId') usuarioId?: string) {
-    return this.service.iniciarTempoChamado(id, usuarioId || user.sub);
+  iniciarTempo(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+    @Body('usuarioId') usuarioId?: string,
+  ) {
+    return this.service.iniciarTempoChamado(id, usuarioId || user.sub, role);
   }
 
   @Post(':id/registros-tempo/encerrar')

@@ -68,6 +68,8 @@ model Usuario {
   pendenciasCriador      PendenciaProjeto[]      @relation("PendenciaCriador")
   interacoesPendencia    InteracaoPendencia[]    @relation("InteracaoPendenciaUsuario")
   anexosPendencia        AnexoPendencia[]        @relation("AnexoPendenciaUsuario")
+  licencaUsuarios        LicencaUsuario[]        @relation("LicencaUsuario")
+  anexosConhecimento     AnexoConhecimento[]     @relation("AnexoConhecimentoUsuario")
 
   @@map("usuarios")
   @@schema("core")
@@ -926,9 +928,27 @@ model SoftwareLicenca {
   contratoId String?   @map("contrato_id")
   contrato   Contrato? @relation(fields: [contratoId], references: [id])
 
+  usuarios LicencaUsuario[]
+
   @@index([dataVencimento])
   @@index([softwareId, status])
   @@map("software_licencas")
+  @@schema("gestao_ti")
+}
+
+model LicencaUsuario {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  licencaId String          @map("licenca_id")
+  licenca   SoftwareLicenca @relation(fields: [licencaId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("LicencaUsuario", fields: [usuarioId], references: [id])
+
+  @@unique([licencaId, usuarioId])
+  @@index([licencaId])
+  @@map("licenca_usuarios")
   @@schema("gestao_ti")
 }
 
@@ -1611,10 +1631,32 @@ model ArtigoConhecimento {
   autorId String  @map("autor_id")
   autor   Usuario @relation("ArtigoAutor", fields: [autorId], references: [id])
 
+  anexos AnexoConhecimento[]
+
   @@index([categoria, status])
   @@index([softwareId])
   @@index([autorId])
   @@map("artigos_conhecimento")
+  @@schema("gestao_ti")
+}
+
+model AnexoConhecimento {
+  id           String   @id @default(uuid())
+  nomeOriginal String   @map("nome_original")
+  nomeArquivo  String   @map("nome_arquivo")
+  mimeType     String   @map("mime_type")
+  tamanho      Int
+  descricao    String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  artigoId String             @map("artigo_id")
+  artigo   ArtigoConhecimento @relation(fields: [artigoId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("AnexoConhecimentoUsuario", fields: [usuarioId], references: [id])
+
+  @@index([artigoId])
+  @@map("anexos_conhecimento")
   @@schema("gestao_ti")
 }
 

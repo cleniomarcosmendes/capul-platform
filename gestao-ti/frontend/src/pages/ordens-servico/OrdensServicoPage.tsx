@@ -117,7 +117,7 @@ export function OrdensServicoPage() {
         descricao: descricao || undefined,
         filialId,
         tecnicoId: tecnicoId || undefined,
-        dataAgendamento: dataAgendamento || undefined,
+        dataAgendamento: dataAgendamento ? new Date(dataAgendamento).toISOString() : undefined,
         observacoes: observacoes || undefined,
       });
       setShowForm(false);

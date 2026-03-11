@@ -129,7 +129,7 @@ describe('ChamadoService', () => {
       prisma.membroEquipe.findMany.mockResolvedValue([]);
 
       const result = await service.transferirEquipe(
-        'ch-1', { equipeDestinoId: 'eq-2' } as any, mockUser as any,
+        'ch-1', { equipeDestinoId: 'eq-2' } as any, mockUser as any, 'ADMIN',
       );
 
       expect(prisma.chamado.update).toHaveBeenCalledWith(
@@ -149,7 +149,7 @@ describe('ChamadoService', () => {
       prisma.chamado.update.mockResolvedValue({ ...chamado, tecnicoId: 'tec-2' });
       prisma.historicoChamado.create.mockResolvedValue({});
 
-      await service.transferirTecnico('ch-1', { tecnicoId: 'tec-2' } as any, mockUser as any);
+      await service.transferirTecnico('ch-1', { tecnicoId: 'tec-2' } as any, mockUser as any, 'ADMIN');
 
       expect(prisma.chamado.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -170,7 +170,7 @@ describe('ChamadoService', () => {
       prisma.chamado.update.mockResolvedValue({ ...chamado, status: 'RESOLVIDO', dataResolucao: new Date() });
       prisma.historicoChamado.create.mockResolvedValue({});
 
-      const result = await service.resolver('ch-1', { descricao: 'Resolvido' } as any, mockUser as any);
+      const result = await service.resolver('ch-1', { descricao: 'Resolvido' } as any, mockUser as any, 'ADMIN');
 
       expect(prisma.chamado.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -188,14 +188,14 @@ describe('ChamadoService', () => {
       prisma.chamado.update.mockResolvedValue({ ...chamado, status: 'FECHADO' });
       prisma.historicoChamado.create.mockResolvedValue({});
 
-      const result = await service.fechar('ch-1', mockUser as any);
+      const result = await service.fechar('ch-1', mockUser as any, 'ADMIN');
       expect(result.status).toBe('FECHADO');
     });
 
     it('lanca BadRequestException se chamado nao esta resolvido', async () => {
       prisma.chamado.findUnique.mockResolvedValue(baseChamado({ status: 'EM_ATENDIMENTO' }));
 
-      await expect(service.fechar('ch-1', mockUser as any)).rejects.toThrow(BadRequestException);
+      await expect(service.fechar('ch-1', mockUser as any, 'ADMIN')).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -206,7 +206,7 @@ describe('ChamadoService', () => {
       prisma.chamado.update.mockResolvedValue({ ...chamado, status: 'ABERTO', dataResolucao: null, dataFechamento: null });
       prisma.historicoChamado.create.mockResolvedValue({});
 
-      const result = await service.reabrir('ch-1', {} as any, mockUser as any);
+      const result = await service.reabrir('ch-1', {} as any, mockUser as any, 'ADMIN');
 
       expect(prisma.chamado.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -224,7 +224,7 @@ describe('ChamadoService', () => {
       prisma.chamado.update.mockResolvedValue({ ...chamado, status: 'CANCELADO' });
       prisma.historicoChamado.create.mockResolvedValue({});
 
-      const result = await service.cancelar('ch-1', mockUser as any);
+      const result = await service.cancelar('ch-1', mockUser as any, 'ADMIN');
       expect(result.status).toBe('CANCELADO');
     });
   });

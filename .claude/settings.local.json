@@ -1076,7 +1076,9 @@
       "Bash(npx prisma generate:*)",
       "Bash(npx prisma db seed:*)",
       "Bash(docker-compose build:*)",
-      "Bash(docker-compose up:*)"
+      "Bash(docker-compose up:*)",
+      "Bash(find /mnt/c/meus_projetos/capul-platform/gestao-ti/frontend/src -type f \\\\\\( -name \"*Licenca*\" -o -name \"*licenca*\" -o -path \"*/types/*\" -path \"*licenca*\" \\\\\\) 2>/dev/null | head -20)",
+      "Bash(find /mnt/c/meus_projetos/capul-platform/gestao-ti/backend/prisma -name \"*.sql\" | xargs ls -lrt | tail -10)"
     ]
   }
 }

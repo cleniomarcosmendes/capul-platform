@@ -375,6 +375,14 @@ export interface ModuloFilialItem {
   createdAt: string;
 }
 
+export interface LicencaUsuario {
+  id: string;
+  licencaId: string;
+  usuarioId: string;
+  usuario: { id: string; username: string; nome: string; email: string | null };
+  createdAt: string;
+}
+
 export interface SoftwareLicenca {
   id: string;
   softwareId: string;
@@ -393,6 +401,8 @@ export interface SoftwareLicenca {
   status: StatusLicenca;
   createdAt: string;
   updatedAt: string;
+  usuarios?: LicencaUsuario[];
+  _count?: { usuarios: number };
 }
 
 // === Contrato interfaces ===
@@ -968,8 +978,20 @@ export interface ArtigoConhecimento {
   equipeTi: { id: string; nome: string; sigla: string } | null;
   autorId: string;
   autor: { id: string; nome: string; username: string };
+  anexos?: AnexoConhecimento[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AnexoConhecimento {
+  id: string;
+  nomeOriginal: string;
+  mimeType: string;
+  tamanho: number;
+  descricao: string | null;
+  usuarioId: string;
+  usuario: { id: string; nome: string };
+  createdAt: string;
 }
 
 // === Dashboard Executivo interface ===

@@ -187,6 +187,7 @@ export function LicencasPage() {
                     <th className="px-4 py-3 font-medium text-slate-600">Software</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Modelo</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Qtd</th>
+                    <th className="px-4 py-3 font-medium text-slate-600">Usuarios</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Valor Total</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Fornecedor</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Inicio</th>
@@ -214,6 +215,11 @@ export function LicencasPage() {
                         {lic.modeloLicenca ? modeloLabel[lic.modeloLicenca] || lic.modeloLicenca : '-'}
                       </td>
                       <td className="px-4 py-3 text-slate-600">{lic.quantidade ?? '-'}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {lic.modeloLicenca && ['POR_USUARIO', 'SUBSCRICAO', 'SAAS'].includes(lic.modeloLicenca)
+                          ? <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">{lic._count?.usuarios ?? 0}/{lic.quantidade ?? '∞'}</span>
+                          : '-'}
+                      </td>
                       <td className="px-4 py-3 text-slate-600">
                         {lic.valorTotal != null
                           ? `R$ ${Number(lic.valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
