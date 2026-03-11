@@ -8,6 +8,8 @@ import type {
   SoftwareLicenca,
   NaturezaContrato,
   TipoContratoConfig,
+  FornecedorConfig,
+  ProdutoConfig,
   ParcelaRateioItem,
   AnexoContrato,
   ContratoRenovacaoReg,
@@ -254,6 +256,42 @@ export const contratoService = {
   },
   async atualizarTipoContrato(id: string, payload: Record<string, unknown>): Promise<TipoContratoConfig> {
     const { data } = await gestaoApi.patch(`/contratos/tipos-contrato/${id}`, payload);
+    return data;
+  },
+
+  // Fornecedores
+  async listarFornecedores(): Promise<FornecedorConfig[]> {
+    const { data } = await gestaoApi.get('/contratos/fornecedores', { params: { status: 'ATIVO' } });
+    return data;
+  },
+  async listarTodosFornecedores(): Promise<FornecedorConfig[]> {
+    const { data } = await gestaoApi.get('/contratos/fornecedores');
+    return data;
+  },
+  async criarFornecedor(payload: { codigo: string; loja?: string; nome: string }): Promise<FornecedorConfig> {
+    const { data } = await gestaoApi.post('/contratos/fornecedores', payload);
+    return data;
+  },
+  async atualizarFornecedor(id: string, payload: Record<string, unknown>): Promise<FornecedorConfig> {
+    const { data } = await gestaoApi.patch(`/contratos/fornecedores/${id}`, payload);
+    return data;
+  },
+
+  // Produtos
+  async listarProdutos(): Promise<ProdutoConfig[]> {
+    const { data } = await gestaoApi.get('/contratos/produtos', { params: { status: 'ATIVO' } });
+    return data;
+  },
+  async listarTodosProdutos(): Promise<ProdutoConfig[]> {
+    const { data } = await gestaoApi.get('/contratos/produtos');
+    return data;
+  },
+  async criarProduto(payload: { codigo: string; descricao: string }): Promise<ProdutoConfig> {
+    const { data } = await gestaoApi.post('/contratos/produtos', payload);
+    return data;
+  },
+  async atualizarProduto(id: string, payload: Record<string, unknown>): Promise<ProdutoConfig> {
+    const { data } = await gestaoApi.patch(`/contratos/produtos/${id}`, payload);
     return data;
   },
 };

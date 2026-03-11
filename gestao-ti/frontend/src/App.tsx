@@ -39,6 +39,8 @@ import { NotificacoesPage } from './pages/notificacoes/NotificacoesPage';
 import { ImportPage } from './pages/import/ImportPage';
 import { NaturezasPage } from './pages/cadastros/NaturezasPage';
 import { TiposContratoPage } from './pages/cadastros/TiposContratoPage';
+import { FornecedoresPage } from './pages/cadastros/FornecedoresPage';
+import { ProdutosPage } from './pages/cadastros/ProdutosPage';
 import { ToastProvider } from './components/Toast';
 import type { ReactNode } from 'react';
 
@@ -129,6 +131,8 @@ function AppRoutes() {
         <Route path="centros-custo" element={<CentrosCustoPage />} />
         <Route path="naturezas" element={<NaturezasPage />} />
         <Route path="tipos-contrato" element={<TiposContratoPage />} />
+        <Route path="fornecedores" element={<FornecedoresPage />} />
+        <Route path="produtos" element={<ProdutosPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/gestao-ti" replace />} />
     </Routes>

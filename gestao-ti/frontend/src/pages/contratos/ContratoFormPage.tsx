@@ -6,7 +6,7 @@ import { softwareService } from '../../services/software.service';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
 import { ArrowLeft } from 'lucide-react';
-import type { Software, TipoContratoConfig, EquipeTI } from '../../types';
+import type { Software, TipoContratoConfig, EquipeTI, FornecedorConfig, ProdutoConfig } from '../../types';
 
 export function ContratoFormPage() {
   const { id } = useParams();
@@ -17,6 +17,8 @@ export function ContratoFormPage() {
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);
   const [filiais, setFiliais] = useState<{ id: string; codigo: string; nomeFantasia: string }[]>([]);
   const [tiposContrato, setTiposContrato] = useState<TipoContratoConfig[]>([]);
+  const [fornecedores, setFornecedores] = useState<FornecedorConfig[]>([]);
+  const [produtos, setProdutos] = useState<ProdutoConfig[]>([]);
   const [saving, setSaving] = useState(false);
   const [loadingData, setLoadingData] = useState(isEdit);
   const [error, setError] = useState('');
@@ -27,6 +29,10 @@ export function ContratoFormPage() {
   const [fornecedor, setFornecedor] = useState('');
   const [codigoFornecedor, setCodigoFornecedor] = useState('');
   const [lojaFornecedor, setLojaFornecedor] = useState('');
+  const [codigoProduto, setCodigoProduto] = useState('');
+  const [descricaoProduto, setDescricaoProduto] = useState('');
+  const [fornecedorId, setFornecedorId] = useState('');
+  const [produtoId, setProdutoId] = useState('');
   const [numeroContrato, setNumeroContrato] = useState('');
   const [filialId, setFilialId] = useState('');
   const [modalidadeValor, setModalidadeValor] = useState('FIXO');
@@ -50,6 +56,8 @@ export function ContratoFormPage() {
       coreService.listarFiliais().then(setFiliais).catch(() => {}),
       contratoService.listarTiposContrato().then(setTiposContrato).catch(() => {}),
       equipeService.listar('ATIVO').then(setEquipes).catch(() => {}),
+      contratoService.listarFornecedores().then(setFornecedores).catch(() => {}),
+      contratoService.listarProdutos().then(setProdutos).catch(() => {}),
     ]);
 
     if (isEdit && id) {
@@ -60,6 +68,10 @@ export function ContratoFormPage() {
         setFornecedor(c.fornecedor);
         setCodigoFornecedor(c.codigoFornecedor || '');
         setLojaFornecedor(c.lojaFornecedor || '');
+        setCodigoProduto(c.codigoProduto || '');
+        setDescricaoProduto(c.descricaoProduto || '');
+        setFornecedorId(c.fornecedorId || '');
+        setProdutoId(c.produtoId || '');
         setNumeroContrato(c.numeroContrato || '');
         setFilialId(c.filialId || '');
         setModalidadeValor(c.modalidadeValor || 'FIXO');
@@ -92,6 +104,10 @@ export function ContratoFormPage() {
       modalidadeValor,
       codigoFornecedor: codigoFornecedor || undefined,
       lojaFornecedor: lojaFornecedor || undefined,
+      codigoProduto: codigoProduto || undefined,
+      descricaoProduto: descricaoProduto || undefined,
+      fornecedorId: fornecedorId || undefined,
+      produtoId: produtoId || undefined,
       numeroContrato: numeroContrato || undefined,
       valorTotal: parseFloat(valorTotal),
       valorMensal: valorMensal ? parseFloat(valorMensal) : undefined,
@@ -197,21 +213,26 @@ export function ContratoFormPage() {
             <p className="text-xs text-slate-400 mt-1">Membros da equipe com permissao poderao gerenciar este contrato</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Fornecedor *</label>
-              <input value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} required maxLength={200}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Nome do fornecedor" />
+              <label className="block text-sm font-medium text-slate-700 mb-1">Fornecedor</label>
+              <select value={fornecedorId} onChange={(e) => setFornecedorId(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                <option value="">Selecione o fornecedor</option>
+                {fornecedores.map((f) => (
+                  <option key={f.id} value={f.id}>{f.codigo}{f.loja ? `/${f.loja}` : ''} - {f.nome}</option>
+                ))}
+              </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Codigo Fornecedor</label>
-              <input value={codigoFornecedor} onChange={(e) => setCodigoFornecedor(e.target.value)} maxLength={20}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="F00051" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Loja</label>
-              <input value={lojaFornecedor} onChange={(e) => setLojaFornecedor(e.target.value)} maxLength={10}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="0001" />
+              <label className="block text-sm font-medium text-slate-700 mb-1">Produto (ERP)</label>
+              <select value={produtoId} onChange={(e) => setProdutoId(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                <option value="">Selecione o produto</option>
+                {produtos.map((p) => (
+                  <option key={p.id} value={p.id}>{p.codigo} - {p.descricao}</option>
+                ))}
+              </select>
             </div>
           </div>
 

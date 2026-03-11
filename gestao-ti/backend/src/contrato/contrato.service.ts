@@ -19,6 +19,8 @@ import { ConfigurarRateioTemplateDto, SimularRateioDto, RateioItemDto, GerarRate
 import { RenovarContratoDto } from './dto/renovar-contrato.dto';
 import { CreateNaturezaDto, UpdateNaturezaDto } from './dto/create-natureza.dto';
 import { CreateTipoContratoDto, UpdateTipoContratoDto } from './dto/create-tipo-contrato.dto';
+import { CreateFornecedorDto, UpdateFornecedorDto } from './dto/create-fornecedor.dto';
+import { CreateProdutoDto, UpdateProdutoDto } from './dto/create-produto.dto';
 
 const UPLOADS_DIR = path.resolve('./uploads/contratos');
 
@@ -27,6 +29,8 @@ const contratoListInclude = {
   tipoContrato: { select: { id: true, codigo: true, nome: true } },
   filial: { select: { id: true, codigo: true, nomeFantasia: true } },
   equipe: { select: { id: true, nome: true, sigla: true } },
+  fornecedorRef: { select: { id: true, codigo: true, loja: true, nome: true } },
+  produtoRef: { select: { id: true, codigo: true, descricao: true } },
   rateioTemplate: { select: { id: true, modalidade: true } },
   _count: { select: { parcelas: true, licencas: true, anexos: true } },
 };
@@ -36,6 +40,8 @@ const contratoDetailInclude = {
   tipoContrato: { select: { id: true, codigo: true, nome: true } },
   filial: { select: { id: true, codigo: true, nomeFantasia: true } },
   equipe: { select: { id: true, nome: true, sigla: true } },
+  fornecedorRef: { select: { id: true, codigo: true, loja: true, nome: true } },
+  produtoRef: { select: { id: true, codigo: true, descricao: true } },
   parcelas: {
     include: {
       rateioItens: {
@@ -1063,6 +1069,78 @@ export class ContratoService {
     if (dto.status !== undefined) data.status = dto.status;
 
     return this.prisma.tipoContratoConfig.update({
+      where: { id },
+      data,
+    });
+  }
+
+  // --- Fornecedores ---
+
+  async findAllFornecedores(status?: string) {
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
+    return this.prisma.fornecedorConfig.findMany({
+      where,
+      orderBy: { nome: 'asc' },
+    });
+  }
+
+  async createFornecedor(dto: CreateFornecedorDto) {
+    return this.prisma.fornecedorConfig.create({
+      data: {
+        codigo: dto.codigo,
+        loja: dto.loja,
+        nome: dto.nome,
+      },
+    });
+  }
+
+  async updateFornecedor(id: string, dto: UpdateFornecedorDto) {
+    const existing = await this.prisma.fornecedorConfig.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Fornecedor nao encontrado');
+
+    const data: Record<string, unknown> = {};
+    if (dto.codigo !== undefined) data.codigo = dto.codigo;
+    if (dto.loja !== undefined) data.loja = dto.loja;
+    if (dto.nome !== undefined) data.nome = dto.nome;
+    if (dto.status !== undefined) data.status = dto.status;
+
+    return this.prisma.fornecedorConfig.update({
+      where: { id },
+      data,
+    });
+  }
+
+  // --- Produtos ---
+
+  async findAllProdutos(status?: string) {
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
+    return this.prisma.produtoConfig.findMany({
+      where,
+      orderBy: { descricao: 'asc' },
+    });
+  }
+
+  async createProduto(dto: CreateProdutoDto) {
+    return this.prisma.produtoConfig.create({
+      data: {
+        codigo: dto.codigo,
+        descricao: dto.descricao,
+      },
+    });
+  }
+
+  async updateProduto(id: string, dto: UpdateProdutoDto) {
+    const existing = await this.prisma.produtoConfig.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Produto nao encontrado');
+
+    const data: Record<string, unknown> = {};
+    if (dto.codigo !== undefined) data.codigo = dto.codigo;
+    if (dto.descricao !== undefined) data.descricao = dto.descricao;
+    if (dto.status !== undefined) data.status = dto.status;
+
+    return this.prisma.produtoConfig.update({
       where: { id },
       data,
     });

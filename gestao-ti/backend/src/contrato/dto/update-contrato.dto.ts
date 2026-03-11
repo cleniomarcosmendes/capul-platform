@@ -51,6 +51,24 @@ export class UpdateContratoDto {
   lojaFornecedor?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(15)
+  codigoProduto?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  descricaoProduto?: string;
+
+  @IsOptional()
+  @IsString()
+  fornecedorId?: string;
+
+  @IsOptional()
+  @IsString()
+  produtoId?: string;
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
   valorTotal?: number;

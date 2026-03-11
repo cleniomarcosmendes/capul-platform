@@ -34,6 +34,8 @@ import { ConfigurarRateioTemplateDto, SimularRateioDto, ConfigurarRateioDto, Ger
 import { RenovarContratoDto } from './dto/renovar-contrato.dto';
 import { CreateNaturezaDto, UpdateNaturezaDto } from './dto/create-natureza.dto';
 import { CreateTipoContratoDto, UpdateTipoContratoDto } from './dto/create-tipo-contrato.dto';
+import { CreateFornecedorDto, UpdateFornecedorDto } from './dto/create-fornecedor.dto';
+import { CreateProdutoDto, UpdateProdutoDto } from './dto/create-produto.dto';
 
 const UPLOADS_DIR = path.resolve('./uploads/contratos');
 
@@ -78,6 +80,44 @@ export class ContratoController {
   @Roles('ADMIN', 'GESTOR_TI')
   updateTipoContrato(@Param('id') id: string, @Body() dto: UpdateTipoContratoDto) {
     return this.service.updateTipoContrato(id, dto);
+  }
+
+  // --- Fornecedores ---
+
+  @Get('fornecedores')
+  findAllFornecedores(@Query('status') status?: string) {
+    return this.service.findAllFornecedores(status);
+  }
+
+  @Post('fornecedores')
+  @Roles('ADMIN', 'GESTOR_TI')
+  createFornecedor(@Body() dto: CreateFornecedorDto) {
+    return this.service.createFornecedor(dto);
+  }
+
+  @Patch('fornecedores/:id')
+  @Roles('ADMIN', 'GESTOR_TI')
+  updateFornecedor(@Param('id') id: string, @Body() dto: UpdateFornecedorDto) {
+    return this.service.updateFornecedor(id, dto);
+  }
+
+  // --- Produtos ---
+
+  @Get('produtos')
+  findAllProdutos(@Query('status') status?: string) {
+    return this.service.findAllProdutos(status);
+  }
+
+  @Post('produtos')
+  @Roles('ADMIN', 'GESTOR_TI')
+  createProduto(@Body() dto: CreateProdutoDto) {
+    return this.service.createProduto(dto);
+  }
+
+  @Patch('produtos/:id')
+  @Roles('ADMIN', 'GESTOR_TI')
+  updateProduto(@Param('id') id: string, @Body() dto: UpdateProdutoDto) {
+    return this.service.updateProduto(id, dto);
   }
 
   // --- Contratos ---

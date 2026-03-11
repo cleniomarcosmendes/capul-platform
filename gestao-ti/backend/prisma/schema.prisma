@@ -562,6 +562,35 @@ model TipoContratoConfig {
   @@schema("gestao_ti")
 }
 
+model FornecedorConfig {
+  id        String      @id @default(uuid())
+  codigo    String      @unique @db.VarChar(20)
+  loja      String?     @db.VarChar(10)
+  nome      String      @db.VarChar(200)
+  status    StatusGeral @default(ATIVO)
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  contratos Contrato[]
+
+  @@map("fornecedores")
+  @@schema("gestao_ti")
+}
+
+model ProdutoConfig {
+  id        String      @id @default(uuid())
+  codigo    String      @unique @db.VarChar(15)
+  descricao String      @db.VarChar(50)
+  status    StatusGeral @default(ATIVO)
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  contratos Contrato[]
+
+  @@map("produtos")
+  @@schema("gestao_ti")
+}
+
 enum StatusContrato {
   RASCUNHO
   ATIVO
@@ -964,9 +993,17 @@ model Contrato {
   descricao             String?
   status                StatusContrato  @default(ATIVO)
   modalidadeValor       ModalidadeValor @default(FIXO) @map("modalidade_valor")
-  fornecedor            String
+  fornecedor            String?
   codigoFornecedor      String?         @map("codigo_fornecedor")
   lojaFornecedor        String?         @map("loja_fornecedor")
+  codigoProduto         String?         @map("codigo_produto") @db.VarChar(15)
+  descricaoProduto      String?         @map("descricao_produto") @db.VarChar(50)
+
+  fornecedorId String?           @map("fornecedor_id")
+  fornecedorRef FornecedorConfig? @relation(fields: [fornecedorId], references: [id])
+
+  produtoId String?        @map("produto_id")
+  produtoRef ProdutoConfig? @relation(fields: [produtoId], references: [id])
   valorTotal            Decimal         @map("valor_total") @db.Decimal(12, 2)
   valorMensal           Decimal?        @map("valor_mensal") @db.Decimal(12, 2)
   dataInicio            DateTime        @map("data_inicio")

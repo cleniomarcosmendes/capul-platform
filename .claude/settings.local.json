@@ -1078,7 +1078,10 @@
       "Bash(docker-compose build:*)",
       "Bash(docker-compose up:*)",
       "Bash(find /mnt/c/meus_projetos/capul-platform/gestao-ti/frontend/src -type f \\\\\\( -name \"*Licenca*\" -o -name \"*licenca*\" -o -path \"*/types/*\" -path \"*licenca*\" \\\\\\) 2>/dev/null | head -20)",
-      "Bash(find /mnt/c/meus_projetos/capul-platform/gestao-ti/backend/prisma -name \"*.sql\" | xargs ls -lrt | tail -10)"
+      "Bash(find /mnt/c/meus_projetos/capul-platform/gestao-ti/backend/prisma -name \"*.sql\" | xargs ls -lrt | tail -10)",
+      "Bash(cd /mnt/c/meus_projetos/capul-platform/gestao-ti/backend && npx prisma generate 2>&1 | tail -3 && npx nest build 2>&1 | tail -3)",
+      "Bash(grep -rn \"ROLES_GESTORES\\\\|ROLES_ADMIN\\\\|ROLES_\" /mnt/c/meus_projetos/capul-platform/gestao-ti/backend/src --include=\"*.ts\" 2>/dev/null | head -20)",
+      "Bash(grep -rn \"includes\\(role\\)\\\\|role.*includes\" /mnt/c/meus_projetos/capul-platform/gestao-ti/backend/src --include=\"*.service.ts\" 2>/dev/null | head -30)"
     ]
   }
 }

@@ -346,8 +346,8 @@ export function ContratoDetalhePage() {
                 </span>
               </div>
               <p className="text-sm text-slate-500">
-                {contrato.tipoContrato?.nome || '-'} | Fornecedor: {contrato.fornecedor}
-                {contrato.codigoFornecedor && ` (${contrato.codigoFornecedor}${contrato.lojaFornecedor ? `/${contrato.lojaFornecedor}` : ''})`}
+                {contrato.tipoContrato?.nome || '-'}
+                {contrato.fornecedorRef ? ` | Fornecedor: ${contrato.fornecedorRef.nome} (${contrato.fornecedorRef.codigo}${contrato.fornecedorRef.loja ? `/${contrato.fornecedorRef.loja}` : ''})` : contrato.fornecedor ? ` | Fornecedor: ${contrato.fornecedor}` : ''}
               </p>
               {contrato.software && (
                 <p className="text-sm text-slate-500 mt-1">
@@ -520,8 +520,8 @@ function TabGeral({ contrato, canManage, onReload, toast, confirm }: TabPropsWit
         <h4 className="font-semibold text-slate-700 mb-4">Informacoes do Contrato</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
           <InfoItem label="Tipo Contrato" value={contrato.tipoContrato?.nome || '-'} />
-          <InfoItem label="Fornecedor" value={contrato.fornecedor} />
-          <InfoItem label="Codigo Fornecedor" value={contrato.codigoFornecedor ? `${contrato.codigoFornecedor}${contrato.lojaFornecedor ? `/${contrato.lojaFornecedor}` : ''}` : '-'} />
+          <InfoItem label="Fornecedor" value={contrato.fornecedorRef ? `${contrato.fornecedorRef.codigo}${contrato.fornecedorRef.loja ? `/${contrato.fornecedorRef.loja}` : ''} — ${contrato.fornecedorRef.nome}` : contrato.fornecedor || '-'} />
+          <InfoItem label="Produto (ERP)" value={contrato.produtoRef ? `${contrato.produtoRef.codigo} — ${contrato.produtoRef.descricao}` : contrato.codigoProduto ? `${contrato.codigoProduto}${contrato.descricaoProduto ? ` — ${contrato.descricaoProduto}` : ''}` : '-'} />
           <InfoItem label="Filial" value={contrato.filial ? `${contrato.filial.codigo} - ${contrato.filial.nomeFantasia}` : '-'} />
           <InfoItem label="Software" value={contrato.software?.nome || '-'} />
           <InfoItem label="Numero Contrato" value={contrato.numeroContrato || '-'} />

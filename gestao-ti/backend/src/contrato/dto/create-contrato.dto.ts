@@ -49,6 +49,24 @@ export class CreateContratoDto {
   @MaxLength(10)
   lojaFornecedor?: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(15)
+  codigoProduto?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  descricaoProduto?: string;
+
+  @IsOptional()
+  @IsString()
+  fornecedorId?: string;
+
+  @IsOptional()
+  @IsString()
+  produtoId?: string;
+
   @IsNumber({}, { message: 'Valor total deve ser um numero' })
   @Min(0)
   valorTotal: number;

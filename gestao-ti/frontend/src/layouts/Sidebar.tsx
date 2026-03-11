@@ -23,6 +23,8 @@ import {
   Tag,
   Layers,
   AlertTriangle,
+  Truck,
+  Package,
 } from 'lucide-react';
 
 type MenuItem =
@@ -60,6 +62,8 @@ const menuItems: MenuItem[] = [
   { label: 'Centros de Custo', icon: Wallet, path: '/gestao-ti/centros-custo', roles: MANAGERS },
   { label: 'Nat. Financeiras', icon: Tag, path: '/gestao-ti/naturezas', roles: MANAGERS },
   { label: 'Tipos de Contrato', icon: Layers, path: '/gestao-ti/tipos-contrato', roles: MANAGERS },
+  { label: 'Fornecedores', icon: Truck, path: '/gestao-ti/fornecedores', roles: MANAGERS },
+  { label: 'Produtos', icon: Package, path: '/gestao-ti/produtos', roles: MANAGERS },
 ];
 
 function filterMenuByRole(items: MenuItem[], role: string | null): MenuItem[] {

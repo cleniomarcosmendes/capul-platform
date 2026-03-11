@@ -117,6 +117,21 @@ export interface TipoContratoConfig {
   status: string;
 }
 
+export interface FornecedorConfig {
+  id: string;
+  codigo: string;
+  loja: string | null;
+  nome: string;
+  status: string;
+}
+
+export interface ProdutoConfig {
+  id: string;
+  codigo: string;
+  descricao: string;
+  status: string;
+}
+
 export type StatusContrato = 'RASCUNHO' | 'ATIVO' | 'SUSPENSO' | 'VENCIDO' | 'RENOVADO' | 'CANCELADO';
 export type ModalidadeRateio = 'PERCENTUAL_CUSTOMIZADO' | 'VALOR_FIXO' | 'PROPORCIONAL_CRITERIO' | 'IGUALITARIO' | 'SEM_RATEIO';
 export type ModalidadeValor = 'FIXO' | 'VARIAVEL';
@@ -418,6 +433,12 @@ export interface Contrato {
   numeroContrato: string | null;
   codigoFornecedor: string | null;
   lojaFornecedor: string | null;
+  codigoProduto: string | null;
+  descricaoProduto: string | null;
+  fornecedorId: string | null;
+  fornecedorRef: { id: string; codigo: string; loja: string | null; nome: string } | null;
+  produtoId: string | null;
+  produtoRef: { id: string; codigo: string; descricao: string } | null;
   tipoContratoId: string | null;
   tipoContrato: { id: string; codigo: string; nome: string } | null;
   filialId: string | null;
