@@ -1099,7 +1099,11 @@
       "Bash(powershell -Command \"\nAdd-Type -AssemblyName System.IO.Compression.FileSystem\n$zip = [System.IO.Compression.ZipFile]::OpenRead\\(''c:\\\\temp\\\\Projetos.docx''\\)\n$entry = $zip.Entries | Where-Object { $_.FullName -eq ''word/document.xml'' }\n$stream = $entry.Open\\(\\)\n$reader = New-Object System.IO.StreamReader\\($stream\\)\n$xml = [xml]$reader.ReadToEnd\\(\\)\n$reader.Close\\(\\)\n$stream.Close\\(\\)\n$zip.Dispose\\(\\)\n$xml.document.body.InnerText\n\")",
       "Bash(powershell -ExecutionPolicy Bypass -File \"c:\\\\temp\\\\extract_docx.ps1\")",
       "Bash(powershell -ExecutionPolicy Bypass -Command \"\nAdd-Type -AssemblyName System.IO.Compression.FileSystem\n$zip = [System.IO.Compression.ZipFile]::OpenRead\\(''c:\\\\temp\\\\Projetos_copy.docx''\\)\n$entry = $zip.Entries | Where-Object { $_.FullName -eq ''word/document.xml'' }\n$stream = $entry.Open\\(\\)\n$reader = New-Object System.IO.StreamReader\\($stream\\)\n$xml = [xml]$reader.ReadToEnd\\(\\)\n$reader.Close\\(\\)\n$stream.Close\\(\\)\n$zip.Dispose\\(\\)\n$xml.document.body.InnerText\n\")",
-      "Bash(docker logs:*)"
+      "Bash(docker logs:*)",
+      "Bash(docker stats:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx eslint:*)",
+      "Bash(ls:*)"
     ]
   }
 }

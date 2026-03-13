@@ -124,11 +124,6 @@ export const contratoService = {
   },
 
   // Parcelas
-  async listarParcelas(contratoId: string): Promise<ParcelaContrato[]> {
-    const { data } = await gestaoApi.get(`/contratos/${contratoId}/parcelas`);
-    return data;
-  },
-
   async criarParcela(contratoId: string, payload: { numero: number; descricao?: string; valor: number; dataVencimento: string; notaFiscal?: string; observacoes?: string }): Promise<ParcelaContrato> {
     const { data } = await gestaoApi.post(`/contratos/${contratoId}/parcelas`, payload);
     return data;
