@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
+import { useAuth } from '../../contexts/AuthContext';
 import { contratoService } from '../../services/contrato.service';
 import { softwareService } from '../../services/software.service';
 import { equipeService } from '../../services/equipe.service';
@@ -12,6 +13,9 @@ export function ContratoFormPage() {
   const { id } = useParams();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  const { gestaoTiRole } = useAuth();
+
+  const isManager = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
 
   const [softwares, setSoftwares] = useState<Software[]>([]);
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);
@@ -55,9 +59,9 @@ export function ContratoFormPage() {
       softwareService.listar({ status: 'ATIVO' }).then(setSoftwares).catch(() => {}),
       coreService.listarFiliais().then(setFiliais).catch(() => {}),
       contratoService.listarTiposContrato().then(setTiposContrato).catch(() => {}),
-      equipeService.listar('ATIVO').then(setEquipes).catch(() => {}),
-      contratoService.listarFornecedores().then(setFornecedores).catch(() => {}),
-      contratoService.listarProdutos().then(setProdutos).catch(() => {}),
+      equipeService.listarParaContratos().then(setEquipes).catch(() => {}),
+      contratoService.listarTodosFornecedores().then(setFornecedores).catch(() => {}),
+      contratoService.listarTodosProdutos().then(setProdutos).catch(() => {}),
     ]);
 
     if (isEdit && id) {
@@ -99,7 +103,7 @@ export function ContratoFormPage() {
       titulo,
       descricao: descricao || undefined,
       tipoContratoId,
-      fornecedor,
+      fornecedor: fornecedor || undefined,
       filialId,
       modalidadeValor,
       codigoFornecedor: codigoFornecedor || undefined,
@@ -109,7 +113,7 @@ export function ContratoFormPage() {
       fornecedorId: fornecedorId || undefined,
       produtoId: produtoId || undefined,
       numeroContrato: numeroContrato || undefined,
-      valorTotal: parseFloat(valorTotal),
+      valorTotal: valorTotal ? parseFloat(valorTotal) : (modalidadeValor === 'VARIAVEL' ? undefined : 0),
       valorMensal: valorMensal ? parseFloat(valorMensal) : undefined,
       dataInicio,
       dataFim,
@@ -158,6 +162,15 @@ export function ContratoFormPage() {
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>
         )}
 
+        {/* Alerta para contrato sem equipe em modo edicao */}
+        {isEdit && !equipeId && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg mb-4 text-sm">
+            Contrato sem equipe associada. {isManager
+              ? 'Associe uma equipe ao contrato para que membros possam gerencia-lo.'
+              : 'Solicite a um ADMIN/GESTOR_TI para associar uma equipe a este contrato.'}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Titulo *</label>
@@ -204,19 +217,74 @@ export function ContratoFormPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Equipe Responsavel</label>
-            <select value={equipeId} onChange={(e) => setEquipeId(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-              <option value="">Nenhuma (somente ADMIN/Gestor)</option>
-              {equipes.map((eq) => <option key={eq.id} value={eq.id}>{eq.sigla} - {eq.nome}</option>)}
-            </select>
-            <p className="text-xs text-slate-400 mt-1">Membros da equipe com permissao poderao gerenciar este contrato</p>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Equipe Responsavel{!isManager && !isEdit && ' *'}
+            </label>
+            {/* Em modo edicao, apenas ADMIN/GESTOR_TI pode alterar a equipe */}
+            {isEdit && !isManager ? (
+              <>
+                <select
+                  value={equipeId}
+                  disabled
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed"
+                >
+                  {equipeId ? (
+                    equipes.find(eq => eq.id === equipeId)
+                      ? <option value={equipeId}>{equipes.find(eq => eq.id === equipeId)?.sigla} - {equipes.find(eq => eq.id === equipeId)?.nome}</option>
+                      : <option value={equipeId}>Equipe vinculada</option>
+                  ) : (
+                    <option value="">Nenhuma (somente ADMIN/Gestor)</option>
+                  )}
+                </select>
+                <p className="text-xs text-amber-600 mt-1">
+                  Apenas ADMIN/GESTOR_TI pode alterar a equipe responsavel
+                </p>
+              </>
+            ) : (
+              <>
+                <select
+                  value={equipeId}
+                  onChange={(e) => setEquipeId(e.target.value)}
+                  required={!isManager && !isEdit}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                >
+                  {isManager ? (
+                    <option value="">Nenhuma (somente ADMIN/Gestor)</option>
+                  ) : equipes.length === 0 ? (
+                    <option value="">Nenhuma equipe disponivel</option>
+                  ) : (
+                    <option value="">Selecione sua equipe...</option>
+                  )}
+                  {equipes.map((eq) => <option key={eq.id} value={eq.id}>{eq.sigla} - {eq.nome}</option>)}
+                </select>
+                <p className="text-xs text-slate-400 mt-1">
+                  {isManager
+                    ? 'Membros da equipe com permissao poderao gerenciar este contrato'
+                    : 'Selecione a equipe que gerenciara este contrato'}
+                </p>
+              </>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Fornecedor</label>
-              <select value={fornecedorId} onChange={(e) => setFornecedorId(e.target.value)}
+              <select
+                value={fornecedorId}
+                onChange={(e) => {
+                  const selectedId = e.target.value;
+                  setFornecedorId(selectedId);
+                  const selected = fornecedores.find((f) => f.id === selectedId);
+                  if (selected) {
+                    setFornecedor(selected.nome);
+                    setCodigoFornecedor(selected.codigo || '');
+                    setLojaFornecedor(selected.loja || '');
+                  } else {
+                    setFornecedor('');
+                    setCodigoFornecedor('');
+                    setLojaFornecedor('');
+                  }
+                }}
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
                 <option value="">Selecione o fornecedor</option>
                 {fornecedores.map((f) => (
@@ -226,7 +294,20 @@ export function ContratoFormPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Produto (ERP)</label>
-              <select value={produtoId} onChange={(e) => setProdutoId(e.target.value)}
+              <select
+                value={produtoId}
+                onChange={(e) => {
+                  const selectedId = e.target.value;
+                  setProdutoId(selectedId);
+                  const selected = produtos.find((p) => p.id === selectedId);
+                  if (selected) {
+                    setCodigoProduto(selected.codigo || '');
+                    setDescricaoProduto(selected.descricao || '');
+                  } else {
+                    setCodigoProduto('');
+                    setDescricaoProduto('');
+                  }
+                }}
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
                 <option value="">Selecione o produto</option>
                 {produtos.map((p) => (
@@ -251,9 +332,18 @@ export function ContratoFormPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Valor Total (R$) *</label>
-              <input type="number" step="0.01" min="0" value={valorTotal} onChange={(e) => setValorTotal(e.target.value)} required
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Vr. Total (R$){modalidadeValor === 'FIXO' ? ' *' : ' (opc. variavel)'}
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={valorTotal}
+                onChange={(e) => setValorTotal(e.target.value)}
+                required={modalidadeValor === 'FIXO'}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Valor Mensal (R$)</label>

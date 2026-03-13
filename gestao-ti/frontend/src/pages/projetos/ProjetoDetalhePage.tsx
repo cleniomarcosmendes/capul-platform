@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/Toast';
@@ -7,7 +7,7 @@ import { projetoService } from '../../services/projeto.service';
 import { chamadoService } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
-import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare, KeyRound, ClipboardList, Send, Download, Eye } from 'lucide-react';
+import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare, KeyRound, ClipboardList, Download, Eye, Upload } from 'lucide-react';
 import type {
   Projeto,
   MembroProjeto,
@@ -27,7 +27,6 @@ import type {
   ImpactoRisco,
   StatusRisco,
   TipoDependencia,
-  TipoAnexo,
   PapelRaci,
   StatusFase,
   UsuarioCore,
@@ -36,8 +35,6 @@ import type {
   EquipeTI,
   UsuarioChaveProjeto,
   PendenciaProjeto,
-  AnexoPendenciaItem,
-  StatusPendencia,
   PrioridadePendencia,
 } from '../../types';
 
@@ -140,7 +137,7 @@ const dependenciaCores: Record<string, string> = {
 };
 
 const anexoTipoLabel: Record<string, string> = {
-  DOCUMENTO: 'Documento', PLANILHA: 'Planilha', IMAGEM: 'Imagem', LINK: 'Link', OUTRO: 'Outro',
+  DOCUMENTO: 'Documento', PLANILHA: 'Planilha', IMAGEM: 'Imagem', LINK: 'Link', OUTRO: 'Outro', ARQUIVO: 'Arquivo',
 };
 
 const chamadoStatusLabel: Record<string, string> = {
@@ -172,6 +169,7 @@ const pendenciaPrioridadeCores: Record<string, string> = {
 export function ProjetoDetalhePage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { gestaoTiRole, usuario } = useAuth();
   const canManage = gestaoTiRole !== 'USUARIO_FINAL' && Boolean(gestaoTiRole);
   const canAddAtividade = gestaoTiRole !== 'USUARIO_FINAL' && Boolean(gestaoTiRole);
@@ -180,6 +178,12 @@ export function ProjetoDetalhePage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('subprojetos');
   const [statusChanging, setStatusChanging] = useState(false);
+
+  // Ler aba da URL se especificada (ex: ?tab=atividades)
+  useEffect(() => {
+    const tabParam = searchParams.get('tab') as Tab | null;
+    if (tabParam) setTab(tabParam);
+  }, [searchParams]);
 
   useEffect(() => {
     if (id) loadProjeto();
@@ -224,27 +228,58 @@ export function ProjetoDetalhePage() {
 
   const showEquipeTab = projeto.modo === 'COMPLETO' || projeto.nivel === 1;
   const isCompleto = projeto.modo === 'COMPLETO';
+  const isRestrictedRole = gestaoTiRole === 'USUARIO_CHAVE' || gestaoTiRole === 'TERCEIRIZADO';
 
-  const tabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  const allTabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { key: 'subprojetos', label: 'Sub-projetos', icon: FolderKanban },
     ...(showEquipeTab ? [{ key: 'equipe' as Tab, label: 'Equipe', icon: Users }] : []),
     { key: 'atividades', label: 'Atividades', icon: Clock },
+    { key: 'pendencias' as Tab, label: 'Pendencias', icon: ClipboardList },
     { key: 'financeiro', label: 'Financeiro', icon: DollarSign },
     ...(isCompleto ? [{ key: 'riscos' as Tab, label: 'Riscos', icon: AlertTriangle }] : []),
     ...(isCompleto ? [{ key: 'dependencias' as Tab, label: 'Dependencias', icon: Link2 }] : []),
     { key: 'anexos', label: 'Anexos', icon: Paperclip },
     { key: 'chamados', label: 'Chamados', icon: Ticket },
     { key: 'usuariosChave' as Tab, label: 'Usuarios-Chave', icon: KeyRound },
-    { key: 'pendencias' as Tab, label: 'Pendencias', icon: ClipboardList },
   ];
+
+  // USUARIO_CHAVE e TERCEIRIZADO: apenas Sub-projetos e Pendencias
+  const restrictedTabs: Tab[] = ['subprojetos', 'pendencias'];
+  const tabs = isRestrictedRole ? allTabs.filter(t => restrictedTabs.includes(t.key)) : allTabs;
+
+  // Navegacao: voltar para projeto pai se existir, senao para lista
+  const handleVoltar = () => {
+    if (projeto.projetoPai) {
+      navigate(`/gestao-ti/projetos/${projeto.projetoPai.id}`);
+    } else {
+      navigate('/gestao-ti/projetos');
+    }
+  };
 
   return (
     <>
       <Header title={`Projeto #${projeto.numero}`} />
       <div className="p-6">
-        <button onClick={() => navigate('/gestao-ti/projetos')} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4">
+        {/* Breadcrumbs - Navegacao Hierarquica */}
+        <nav className="flex items-center gap-2 text-sm mb-4">
+          <Link to="/gestao-ti/projetos" className="text-slate-500 hover:text-capul-600">
+            Projetos
+          </Link>
+          {projeto.projetoPai && (
+            <>
+              <ChevronRight className="w-4 h-4 text-slate-400" />
+              <Link to={`/gestao-ti/projetos/${projeto.projetoPai.id}`} className="text-slate-500 hover:text-capul-600">
+                #{projeto.projetoPai.numero} {projeto.projetoPai.nome}
+              </Link>
+            </>
+          )}
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+          <span className="text-slate-700 font-medium">#{projeto.numero} {projeto.nome}</span>
+        </nav>
+
+        <button onClick={handleVoltar} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4">
           <ArrowLeft className="w-4 h-4" />
-          Voltar
+          {projeto.projetoPai ? `Voltar para #${projeto.projetoPai.numero}` : 'Voltar para lista'}
         </button>
 
         {/* Header */}
@@ -354,7 +389,7 @@ export function ProjetoDetalhePage() {
 
         {/* Tab Content */}
         {tab === 'subprojetos' && (
-          <TabSubProjetos projeto={projeto} canManage={canManage} />
+          <TabSubProjetos projeto={projeto} canManage={canManage} isRestrictedRole={isRestrictedRole} />
         )}
         {tab === 'equipe' && showEquipeTab && (
           <TabEquipe projetoId={projeto.id} canManage={canManage} />
@@ -381,7 +416,11 @@ export function ProjetoDetalhePage() {
           <TabUsuariosChave projetoId={projeto.id} canManage={canManage} />
         )}
         {tab === 'pendencias' && (
-          <TabPendencias projetoId={projeto.id} canManage={canManage} />
+          <TabPendencias
+            projetoId={projeto.id}
+            projetoNumero={projeto.numero}
+            isSubProjeto={!!projeto.projetoPai}
+          />
         )}
       </div>
     </>
@@ -389,14 +428,18 @@ export function ProjetoDetalhePage() {
 }
 
 // --- Tab Sub-projetos ---
-function TabSubProjetos({ projeto, canManage }: { projeto: Projeto; canManage: boolean }) {
+function TabSubProjetos({ projeto, canManage, isRestrictedRole }: { projeto: Projeto; canManage: boolean; isRestrictedRole?: boolean }) {
   const subs = projeto.subProjetos || [];
+  // USUARIO_CHAVE e TERCEIRIZADO nao podem criar sub-projetos
+  const canCreateSubProjeto = canManage && !isRestrictedRole && projeto.nivel < 3;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200">
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-        <h4 className="font-semibold text-slate-700">Sub-projetos ({subs.length})</h4>
-        {canManage && projeto.nivel < 3 && (
+        <h4 className="font-semibold text-slate-700">
+          {isRestrictedRole ? 'Sub-projetos vinculados' : 'Sub-projetos'} ({subs.length})
+        </h4>
+        {canCreateSubProjeto && (
           <Link
             to={`/gestao-ti/projetos/novo?projetoPaiId=${projeto.id}`}
             className="flex items-center gap-1 text-sm text-capul-600 hover:underline"
@@ -407,7 +450,9 @@ function TabSubProjetos({ projeto, canManage }: { projeto: Projeto; canManage: b
         )}
       </div>
       {subs.length === 0 ? (
-        <p className="px-6 py-4 text-sm text-slate-400">Nenhum sub-projeto</p>
+        <p className="px-6 py-4 text-sm text-slate-400">
+          {isRestrictedRole ? 'Voce nao esta vinculado a nenhum sub-projeto' : 'Nenhum sub-projeto'}
+        </p>
       ) : (
         <div className="divide-y divide-slate-100">
           {subs.map((s) => (
@@ -570,6 +615,17 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
   const [savingComentario, setSavingComentario] = useState(false);
   // Fases colapsadas
   const [collapsedFases, setCollapsedFases] = useState<Set<string>>(new Set());
+  // Edicao de atividade
+  const [editingAtividade, setEditingAtividade] = useState<AtividadeProjeto | null>(null);
+  const [editAtivTitulo, setEditAtivTitulo] = useState('');
+  const [editAtivDescricao, setEditAtivDescricao] = useState('');
+  const [editAtivDataInicio, setEditAtivDataInicio] = useState('');
+  const [editAtivDataFimPrevista, setEditAtivDataFimPrevista] = useState('');
+  const [editAtivFaseId, setEditAtivFaseId] = useState('');
+  const [savingAtividade, setSavingAtividade] = useState(false);
+  // Edicao de notas
+  const [editingComentario, setEditingComentario] = useState<string | null>(null);
+  const [editComentarioTexto, setEditComentarioTexto] = useState('');
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -676,6 +732,41 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
     try { await projetoService.removerAtividade(projetoId, atividadeId); loadAll(); } catch { /* empty */ }
   }
 
+  function openEditAtividade(a: AtividadeProjeto) {
+    setEditingAtividade(a);
+    setEditAtivTitulo(a.titulo);
+    setEditAtivDescricao(a.descricao || '');
+    setEditAtivDataInicio(a.dataInicio ? a.dataInicio.substring(0, 10) : '');
+    setEditAtivDataFimPrevista(a.dataFimPrevista ? a.dataFimPrevista.substring(0, 10) : '');
+    setEditAtivFaseId(a.faseId || '');
+  }
+
+  function closeEditAtividade() {
+    setEditingAtividade(null);
+    setEditAtivTitulo('');
+    setEditAtivDescricao('');
+    setEditAtivDataInicio('');
+    setEditAtivDataFimPrevista('');
+    setEditAtivFaseId('');
+  }
+
+  async function handleSaveAtividade() {
+    if (!editingAtividade || !editAtivTitulo.trim() || savingAtividade) return;
+    setSavingAtividade(true);
+    try {
+      await projetoService.atualizarAtividade(projetoId, editingAtividade.id, {
+        titulo: editAtivTitulo.trim(),
+        descricao: editAtivDescricao.trim() || undefined,
+        dataInicio: editAtivDataInicio || undefined,
+        dataFimPrevista: editAtivDataFimPrevista || undefined,
+        faseId: editAtivFaseId || undefined,
+      });
+      closeEditAtividade();
+      loadAll();
+    } catch { /* empty */ }
+    setSavingAtividade(false);
+  }
+
   async function handleAddComentario() {
     if (!novoComentario.trim() || !expandedId || savingComentario) return;
     setSavingComentario(true);
@@ -695,6 +786,23 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
       if (expandedId) loadComentarios(expandedId);
       loadAll();
     } catch { /* empty */ }
+  }
+
+  function startEditComentario(c: { id: string; texto: string }) {
+    setEditingComentario(c.id);
+    setEditComentarioTexto(c.texto);
+  }
+
+  async function handleSaveComentario(comentarioId: string) {
+    if (!editComentarioTexto.trim() || savingComentario) return;
+    setSavingComentario(true);
+    try {
+      await projetoService.atualizarComentario(projetoId, comentarioId, editComentarioTexto.trim());
+      setEditingComentario(null);
+      setEditComentarioTexto('');
+      if (expandedId) loadComentarios(expandedId);
+    } catch { /* empty */ }
+    setSavingComentario(false);
   }
 
   const totalMinutos = registros.reduce((sum, r) => sum + (r.duracaoMinutos ?? 0), 0);
@@ -724,6 +832,53 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
     const meuRegistroAtivo = a.registrosTempo?.find((r) => r.usuarioId === userId);
     const temRegistros = (a._count?.registrosTempo ?? 0) > 0;
     const cfg = statusAtividadeConfig[a.status] || statusAtividadeConfig.PENDENTE;
+    const isEditing = editingAtividade?.id === a.id;
+
+    // Formulario de edicao inline
+    if (isEditing) {
+      return (
+        <div key={a.id} className="mx-3 my-2">
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-5">
+            <h5 className="text-sm font-semibold text-slate-700 mb-4">Editar Tarefa</h5>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Titulo *</label>
+                <input type="text" placeholder="Titulo da tarefa" value={editAtivTitulo} onChange={(e) => setEditAtivTitulo(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Data Inicio</label>
+                  <input type="date" value={editAtivDataInicio} onChange={(e) => setEditAtivDataInicio(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Data Fim Prevista</label>
+                  <input type="date" value={editAtivDataFimPrevista} onChange={(e) => setEditAtivDataFimPrevista(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                {fases.length > 0 && (
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Fase</label>
+                    <select value={editAtivFaseId} onChange={(e) => setEditAtivFaseId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                      <option value="">Sem fase</option>
+                      {fases.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Descricao</label>
+                <textarea placeholder="Descricao da tarefa (opcional) - detalhe o que precisa ser feito, parametros, configuracoes..." value={editAtivDescricao} onChange={(e) => setEditAtivDescricao(e.target.value)} rows={10} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button onClick={closeEditAtividade} className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2">Cancelar</button>
+                <button onClick={handleSaveAtividade} disabled={savingAtividade || !editAtivTitulo.trim()} className="bg-capul-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
+                  {savingAtividade ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div key={a.id} className="mx-3 my-2">
@@ -770,6 +925,11 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
                 {(a._count?.comentarios ?? 0) > 0 && (
                   <span className="text-[11px] text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">
                     <MessageSquare className="w-3 h-3" />{a._count?.comentarios}
+                  </span>
+                )}
+                {a.pendencia && (
+                  <span className="text-[11px] text-purple-600 bg-purple-100 border border-purple-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                    <ClipboardList className="w-3 h-3" /> P#{a.pendencia.numero}
                   </span>
                 )}
               </div>
@@ -819,6 +979,13 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
               {canAdd && meuRegistroAtivo && (
                 <button onClick={() => handleEncerrar(a.id)} className="inline-flex items-center gap-1 text-[11px] font-medium text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-lg transition-colors" title="Encerrar cronometro">
                   <Square className="w-3 h-3" /> Parar
+                </button>
+              )}
+
+              {/* Editar */}
+              {canAdd && (
+                <button onClick={() => openEditAtividade(a)} className="text-slate-300 hover:text-capul-600 transition-colors p-1" title="Editar tarefa">
+                  <Pencil className="w-3.5 h-3.5" />
                 </button>
               )}
 
@@ -923,17 +1090,41 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
                 <p className="text-xs text-slate-400 italic">Nenhuma nota</p>
               ) : (
                 <div className="space-y-2">
-                  {comentarios.map((c) => (
+                  {comentarios.map((c) => editingComentario === c.id ? (
+                    <div key={c.id} className="bg-amber-50 rounded-lg border border-amber-300 px-4 py-3">
+                      <div className="flex items-center gap-2 text-xs mb-3">
+                        <span className="font-medium text-slate-700">{c.usuario.nome}</span>
+                        <span className="text-slate-400">{new Date(c.createdAt).toLocaleDateString('pt-BR')} {new Date(c.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <textarea
+                        value={editComentarioTexto}
+                        onChange={(e) => setEditComentarioTexto(e.target.value)}
+                        rows={30}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs mb-3"
+                      />
+                      <div className="flex justify-end gap-3">
+                        <button onClick={() => { setEditingComentario(null); setEditComentarioTexto(''); }} className="text-xs text-slate-500 hover:text-slate-700 px-3 py-1.5">Cancelar</button>
+                        <button onClick={() => handleSaveComentario(c.id)} disabled={!editComentarioTexto.trim() || savingComentario} className="bg-capul-600 text-white px-4 py-1.5 rounded-lg text-xs hover:bg-capul-700 disabled:opacity-50">
+                          {savingComentario ? '...' : 'Salvar'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
                     <div key={c.id} className="bg-white rounded-lg border border-slate-200 px-3 py-2">
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2 text-xs">
                           <span className="font-medium text-slate-700">{c.usuario.nome}</span>
                           <span className="text-slate-400">{new Date(c.createdAt).toLocaleDateString('pt-BR')} {new Date(c.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
-                        {canManage && (
-                          <button onClick={() => handleRemoveComentario(c.id)} className="text-slate-300 hover:text-red-500 transition-colors" title="Remover">
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+                        {(canManage || c.usuarioId === userId) && (
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => startEditComentario(c)} className="text-slate-300 hover:text-capul-600 transition-colors" title="Editar">
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                            <button onClick={() => handleRemoveComentario(c.id)} className="text-slate-300 hover:text-red-500 transition-colors" title="Remover">
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
                         )}
                       </div>
                       <p className="text-xs text-slate-600 whitespace-pre-wrap">{c.texto}</p>
@@ -1082,6 +1273,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
           )}
         </div>
       )}
+
     </div>
   );
 }
@@ -1651,15 +1843,11 @@ function TabDependencias({ projetoId, canManage }: { projetoId: string; canManag
 
 // --- Tab Anexos ---
 function TabAnexos({ projetoId, canAdd, canManage }: { projetoId: string; canAdd: boolean; canManage: boolean }) {
-  const { confirm } = useToast();
+  const { confirm, toast } = useToast();
   const [itens, setItens] = useState<AnexoProjeto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [titulo, setTitulo] = useState('');
-  const [url, setUrl] = useState('');
-  const [tipo, setTipo] = useState<TipoAnexo>('DOCUMENTO');
-  const [descricao, setDescricao] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { load(); }, [projetoId]);
 
@@ -1669,18 +1857,27 @@ function TabAnexos({ projetoId, canAdd, canManage }: { projetoId: string; canAdd
     setLoading(false);
   }
 
-  async function handleAdd() {
-    if (!titulo || !url || saving) return;
-    setSaving(true);
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
     try {
-      await projetoService.adicionarAnexo(projetoId, {
-        titulo, url, tipo, descricao: descricao || undefined,
-      });
-      setShowForm(false);
-      setTitulo(''); setUrl(''); setDescricao('');
+      await projetoService.uploadAnexo(projetoId, file);
+      toast('success', 'Arquivo enviado com sucesso');
       load();
-    } catch { /* empty */ }
-    setSaving(false);
+    } catch {
+      toast('error', 'Erro ao enviar arquivo');
+    }
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  async function handleDownload(a: AnexoProjeto) {
+    try {
+      await projetoService.downloadAnexo(projetoId, a.id, a.nomeOriginal || a.titulo);
+    } catch {
+      toast('error', 'Erro ao baixar arquivo');
+    }
   }
 
   async function handleRemove(anexoId: string) {
@@ -1692,26 +1889,16 @@ function TabAnexos({ projetoId, canAdd, canManage }: { projetoId: string; canAdd
     <div className="bg-white rounded-xl border border-slate-200">
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
         <h4 className="font-semibold text-slate-700">Anexos ({itens.length})</h4>
-        {canAdd && !showForm && (
-          <button onClick={() => setShowForm(true)} className="flex items-center gap-1 text-sm text-capul-600 hover:underline">
-            <Plus className="w-4 h-4" />
-            Novo Anexo
-          </button>
+        {canAdd && (
+          <div className="flex items-center gap-3">
+            <input type="file" ref={fileInputRef} className="hidden" onChange={handleUpload} disabled={uploading} />
+            <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-1 text-sm text-capul-600 hover:underline disabled:opacity-50">
+              <Upload className="w-4 h-4" />
+              {uploading ? 'Enviando...' : 'Upload Arquivo'}
+            </button>
+          </div>
         )}
       </div>
-
-      {showForm && (
-        <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex gap-3 items-end flex-wrap">
-          <input type="text" placeholder="Titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-48" />
-          <input type="url" placeholder="URL" value={url} onChange={(e) => setUrl(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-48" />
-          <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoAnexo)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-            {Object.entries(anexoTipoLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-          <input type="text" placeholder="Descricao (opcional)" value={descricao} onChange={(e) => setDescricao(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-36" />
-          <button onClick={handleAdd} disabled={!titulo || !url || saving} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">Adicionar</button>
-          <button onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
-        </div>
-      )}
 
       {loading ? (
         <p className="px-6 py-4 text-sm text-slate-400">Carregando...</p>
@@ -1723,11 +1910,19 @@ function TabAnexos({ projetoId, canAdd, canManage }: { projetoId: string; canAdd
             <div key={a.id} className="px-6 py-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{anexoTipoLabel[a.tipo]}</span>
-                <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-sm text-capul-600 hover:underline font-medium flex items-center gap-1">
-                  {a.titulo}
-                  <ExternalLink className="w-3 h-3" />
-                </a>
+                {a.tipo === 'ARQUIVO' ? (
+                  <button onClick={() => handleDownload(a)} className="text-sm text-capul-600 hover:underline font-medium flex items-center gap-1">
+                    <Download className="w-3 h-3" />
+                    {a.nomeOriginal || a.titulo}
+                  </button>
+                ) : (
+                  <a href={a.url.match(/^https?:\/\//) ? a.url : `https://${a.url}`} target="_blank" rel="noopener noreferrer" className="text-sm text-capul-600 hover:underline font-medium flex items-center gap-1">
+                    {a.titulo}
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
                 {a.descricao && <span className="text-xs text-slate-400">{a.descricao}</span>}
+                {a.tamanho && a.tipo === 'ARQUIVO' && <span className="text-xs text-slate-400">({a.tamanho})</span>}
               </div>
               <div className="flex items-center gap-3">
                 {a.usuario && <span className="text-xs text-slate-400">{a.usuario.nome}</span>}
@@ -1973,7 +2168,12 @@ function TabUsuariosChave({ projetoId, canManage }: { projetoId: string; canMana
 }
 
 // --- Tab Pendencias ---
-function TabPendencias({ projetoId, canManage }: { projetoId: string; canManage: boolean }) {
+function TabPendencias({ projetoId, projetoNumero, isSubProjeto }: {
+  projetoId: string;
+  projetoNumero?: number;
+  isSubProjeto?: boolean;
+}) {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [itens, setItens] = useState<PendenciaProjeto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1981,7 +2181,6 @@ function TabPendencias({ projetoId, canManage }: { projetoId: string; canManage:
   const [filtroPrioridade, setFiltroPrioridade] = useState('');
   const [filtroSearch, setFiltroSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [selectedPendencia, setSelectedPendencia] = useState<PendenciaProjeto | null>(null);
 
   // Form states
   const [formTitulo, setFormTitulo] = useState('');
@@ -1999,7 +2198,7 @@ function TabPendencias({ projetoId, canManage }: { projetoId: string; canManage:
   async function load() {
     setLoading(true);
     try {
-      const params: Record<string, string> = {};
+      const params: { status?: string; prioridade?: string; search?: string } = {};
       if (filtroStatus) params.status = filtroStatus;
       if (filtroPrioridade) params.prioridade = filtroPrioridade;
       if (filtroSearch) params.search = filtroSearch;
@@ -2010,12 +2209,19 @@ function TabPendencias({ projetoId, canManage }: { projetoId: string; canManage:
 
   async function loadResponsaveis() {
     try {
-      const [membros, chaves] = await Promise.all([
+      const [projeto, membros, chaves] = await Promise.all([
+        projetoService.buscar(projetoId),
         projetoService.listarMembros(projetoId),
         projetoService.listarUsuariosChave(projetoId),
       ]);
       const map = new Map<string, string>();
+      // Adiciona responsavel principal do projeto
+      if (projeto.responsavel) {
+        map.set(projeto.responsavel.id, projeto.responsavel.nome);
+      }
+      // Adiciona membros da equipe
       membros.forEach((m) => map.set(m.usuario.id, m.usuario.nome));
+      // Adiciona usuarios-chave ativos
       chaves.filter((c) => c.ativo).forEach((c) => map.set(c.usuarioId, c.usuario.nome));
       setResponsaveis(Array.from(map, ([id, nome]) => ({ id, nome })));
     } catch { /* empty */ }
@@ -2049,25 +2255,33 @@ function TabPendencias({ projetoId, canManage }: { projetoId: string; canManage:
       });
       toast('success', 'Pendencia criada');
       setShowForm(false);
-      load();
+      await load();
     } catch {
       toast('error', 'Erro ao criar pendencia');
     }
     setSalvando(false);
   }
 
-  async function openDetail(pid: string) {
-    try {
-      const p = await projetoService.buscarPendencia(projetoId, pid);
-      setSelectedPendencia(p);
-    } catch {
-      toast('error', 'Erro ao carregar pendencia');
-    }
+  function openDetail(pid: string) {
+    navigate(`/gestao-ti/projetos/${projetoId}/pendencias/${pid}`);
   }
 
   return (
     <>
       <div className="bg-white rounded-xl border border-slate-200">
+        {/* Indicador de Contexto */}
+        <div className={`px-6 py-3 border-b ${isSubProjeto ? 'bg-blue-50 border-blue-200' : 'bg-capul-50 border-capul-200'}`}>
+          <div className="flex items-center gap-2">
+            <ClipboardList className={`w-5 h-5 ${isSubProjeto ? 'text-blue-600' : 'text-capul-600'}`} />
+            <span className={`text-sm font-medium ${isSubProjeto ? 'text-blue-700' : 'text-capul-700'}`}>
+              {isSubProjeto ? 'Pendencias do Sub-projeto' : 'Pendencias do Projeto Principal'}
+            </span>
+            <span className={`text-xs px-2 py-0.5 rounded ${isSubProjeto ? 'bg-blue-100 text-blue-600' : 'bg-capul-100 text-capul-600'}`}>
+              #{projetoNumero}
+            </span>
+          </div>
+        </div>
+
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
           <h4 className="font-semibold text-slate-700">Pendencias ({itens.length})</h4>
           <button onClick={openForm} className="flex items-center gap-1 text-sm text-capul-600 hover:underline">
@@ -2186,299 +2400,7 @@ function TabPendencias({ projetoId, canManage }: { projetoId: string; canManage:
           </table>
         )}
       </div>
-
-      {/* Detail Modal */}
-      {selectedPendencia && (
-        <ModalDetalhePendencia
-          projetoId={projetoId}
-          pendencia={selectedPendencia}
-          canManage={canManage}
-          onClose={() => setSelectedPendencia(null)}
-          onUpdate={() => { load(); }}
-        />
-      )}
     </>
-  );
-}
-
-// --- Modal Detalhe Pendencia ---
-function ModalDetalhePendencia({
-  projetoId, pendencia: initial, canManage, onClose, onUpdate,
-}: {
-  projetoId: string;
-  pendencia: PendenciaProjeto;
-  canManage: boolean;
-  onClose: () => void;
-  onUpdate: () => void;
-}) {
-  const { toast } = useToast();
-  const [pendencia, setPendencia] = useState(initial);
-  const [comentario, setComentario] = useState('');
-  const [enviando, setEnviando] = useState(false);
-  const [uploading, setUploading] = useState(false);
-
-  async function reload() {
-    try {
-      const p = await projetoService.buscarPendencia(projetoId, pendencia.id);
-      setPendencia(p);
-      onUpdate();
-    } catch { /* empty */ }
-  }
-
-  async function handleStatusChange(newStatus: StatusPendencia) {
-    try {
-      await projetoService.atualizarPendencia(projetoId, pendencia.id, { status: newStatus });
-      toast('success', 'Status atualizado');
-      reload();
-    } catch (err: any) {
-      toast('error', err?.response?.data?.message || 'Erro ao atualizar status');
-    }
-  }
-
-  async function handleAddComentario() {
-    if (!comentario.trim()) return;
-    setEnviando(true);
-    try {
-      await projetoService.adicionarInteracaoPendencia(projetoId, pendencia.id, { descricao: comentario.trim() });
-      setComentario('');
-      toast('success', 'Comentario adicionado');
-      reload();
-    } catch {
-      toast('error', 'Erro ao adicionar comentario');
-    }
-    setEnviando(false);
-  }
-
-  async function handleUploadAnexo(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      await projetoService.uploadAnexoPendencia(projetoId, pendencia.id, file);
-      toast('success', 'Anexo enviado');
-      reload();
-    } catch {
-      toast('error', 'Erro ao enviar anexo');
-    }
-    setUploading(false);
-    e.target.value = '';
-  }
-
-  async function handleDownloadAnexo(anexo: AnexoPendenciaItem) {
-    try {
-      const blob = await projetoService.downloadAnexoPendencia(projetoId, pendencia.id, anexo.id);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = anexo.nomeOriginal;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast('error', 'Erro ao baixar anexo');
-    }
-  }
-
-  async function handleRemoveAnexo(anexoId: string) {
-    if (!confirm('Remover este anexo?')) return;
-    try {
-      await projetoService.removerAnexoPendencia(projetoId, pendencia.id, anexoId);
-      toast('success', 'Anexo removido');
-      reload();
-    } catch {
-      toast('error', 'Erro ao remover anexo');
-    }
-  }
-
-  const isVencida = pendencia.dataLimite && new Date(pendencia.dataLimite) < new Date() && !['CONCLUIDA', 'CANCELADA'].includes(pendencia.status);
-
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-slate-400 font-mono">#{pendencia.numero}</span>
-              <h3 className="text-lg font-bold text-slate-800">{pendencia.titulo}</h3>
-            </div>
-            <div className="flex items-center gap-2 mt-1">
-              <span className={`text-xs px-2 py-0.5 rounded-full ${pendenciaStatusCores[pendencia.status]}`}>
-                {pendenciaStatusLabel[pendencia.status]}
-              </span>
-              <span className={`text-xs px-2 py-0.5 rounded-full ${pendenciaPrioridadeCores[pendencia.prioridade]}`}>
-                {pendenciaPrioridadeLabel[pendencia.prioridade]}
-              </span>
-              {isVencida && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">Vencida</span>
-              )}
-            </div>
-          </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
-          {/* Info grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <p className="text-slate-500 text-xs">Responsavel</p>
-              <p className="text-slate-800 font-medium">{pendencia.responsavel.nome}</p>
-            </div>
-            <div>
-              <p className="text-slate-500 text-xs">Criador</p>
-              <p className="text-slate-800">{pendencia.criador.nome}</p>
-            </div>
-            <div>
-              <p className="text-slate-500 text-xs">Data Limite</p>
-              <p className={`font-medium ${isVencida ? 'text-red-600' : 'text-slate-800'}`}>
-                {pendencia.dataLimite ? new Date(pendencia.dataLimite).toLocaleDateString('pt-BR') : '-'}
-              </p>
-            </div>
-            <div>
-              <p className="text-slate-500 text-xs">Fase</p>
-              <p className="text-slate-800">{pendencia.fase?.nome || '-'}</p>
-            </div>
-          </div>
-
-          {/* Description */}
-          {pendencia.descricao && (
-            <div>
-              <p className="text-xs text-slate-500 mb-1">Descricao</p>
-              <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 whitespace-pre-wrap">{pendencia.descricao}</p>
-            </div>
-          )}
-
-          {/* Status change */}
-          {!['CONCLUIDA', 'CANCELADA'].includes(pendencia.status) && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-slate-500">Alterar status:</span>
-              {pendencia.status === 'ABERTA' && (
-                <button onClick={() => handleStatusChange('EM_ANDAMENTO')} className="text-xs bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full hover:bg-yellow-200">
-                  Iniciar
-                </button>
-              )}
-              {pendencia.status === 'EM_ANDAMENTO' && (
-                <>
-                  <button onClick={() => handleStatusChange('AGUARDANDO_VALIDACAO')} className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded-full hover:bg-orange-200">
-                    Enviar p/ Validacao
-                  </button>
-                  <button onClick={() => handleStatusChange('CONCLUIDA')} className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-200">
-                    Concluir
-                  </button>
-                </>
-              )}
-              {pendencia.status === 'AGUARDANDO_VALIDACAO' && (
-                <>
-                  <button onClick={() => handleStatusChange('CONCLUIDA')} className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-200">
-                    Aprovar (Concluir)
-                  </button>
-                  <button onClick={() => handleStatusChange('EM_ANDAMENTO')} className="text-xs bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full hover:bg-yellow-200">
-                    Devolver
-                  </button>
-                </>
-              )}
-              <button onClick={() => handleStatusChange('CANCELADA')} className="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full hover:bg-slate-200">
-                Cancelar
-              </button>
-            </div>
-          )}
-
-          {/* Anexos */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-slate-500 uppercase">Anexos ({pendencia.anexos?.length || 0})</p>
-              <label className="flex items-center gap-1 text-xs text-capul-600 hover:underline cursor-pointer">
-                <Paperclip className="w-3.5 h-3.5" />
-                {uploading ? 'Enviando...' : 'Anexar arquivo'}
-                <input type="file" className="hidden" onChange={handleUploadAnexo} disabled={uploading} />
-              </label>
-            </div>
-            {(pendencia.anexos || []).length > 0 && (
-              <div className="space-y-1">
-                {pendencia.anexos!.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2 text-sm">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Paperclip className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                      <span className="truncate text-slate-700">{a.nomeOriginal}</span>
-                      <span className="text-xs text-slate-400 flex-shrink-0">({(a.tamanho / 1024).toFixed(0)} KB)</span>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <button onClick={() => handleDownloadAnexo(a)} className="text-capul-600 hover:text-capul-700">
-                        <Download className="w-3.5 h-3.5" />
-                      </button>
-                      {canManage && (
-                        <button onClick={() => handleRemoveAnexo(a.id)} className="text-red-400 hover:text-red-600">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Timeline */}
-          <div>
-            <p className="text-xs font-medium text-slate-500 uppercase mb-3">Timeline ({pendencia.interacoes?.length || 0})</p>
-            {(pendencia.interacoes || []).length === 0 ? (
-              <p className="text-sm text-slate-400">Nenhuma interacao</p>
-            ) : (
-              <div className="space-y-3">
-                {pendencia.interacoes!.map((inter) => (
-                  <div key={inter.id} className="flex gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-medium text-slate-600">{inter.usuario.nome.charAt(0)}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-sm font-medium text-slate-700">{inter.usuario.nome}</span>
-                        <span className="text-xs text-slate-400">{new Date(inter.createdAt).toLocaleString('pt-BR')}</span>
-                        {inter.tipo !== 'COMENTARIO' && (
-                          <span className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">
-                            {inter.tipo === 'STATUS_ALTERADO' ? 'Status alterado' : inter.tipo === 'RESPONSAVEL_ALTERADO' ? 'Responsavel alterado' : inter.tipo === 'ANEXO' ? 'Anexo' : 'Comentario'}
-                          </span>
-                        )}
-                        {!inter.publica && (
-                          <span className="text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded">Interno</span>
-                        )}
-                      </div>
-                      {inter.descricao && (
-                        <p className="text-sm text-slate-600 whitespace-pre-wrap">{inter.descricao}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Add comment */}
-          <div className="bg-slate-50 rounded-lg p-4">
-            <h4 className="font-medium text-sm text-slate-700 mb-2">Adicionar Comentario</h4>
-            <textarea
-              value={comentario}
-              onChange={(e) => setComentario(e.target.value)}
-              rows={3}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-              placeholder="Escreva seu comentario..."
-            />
-            <div className="flex items-center justify-end gap-3 mt-2">
-              <button
-                onClick={handleAddComentario}
-                disabled={enviando || !comentario.trim()}
-                className="flex items-center gap-1.5 bg-capul-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50"
-              >
-                <Send className="w-4 h-4" />
-                {enviando ? 'Enviando...' : 'Salvar Comentario'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }
 

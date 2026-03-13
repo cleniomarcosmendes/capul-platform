@@ -71,13 +71,10 @@ export function ChamadoDetalhePage() {
   const [comentarioPublico, setComentarioPublico] = useState(true);
 
   const [showTransferir, setShowTransferir] = useState(false);
-  const [transferirTab, setTransferirTab] = useState<'equipe' | 'tecnico'>('equipe');
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);
   const [equipeDestinoId, setEquipeDestinoId] = useState('');
   const [transferMotivo, setTransferMotivo] = useState('');
   const [membrosEquipe, setMembrosEquipe] = useState<EquipeTI | null>(null);
-  const [tecnicoDestinoId, setTecnicoDestinoId] = useState('');
-  const [transferTecnicoMotivo, setTransferTecnicoMotivo] = useState('');
 
   const [showResolver, setShowResolver] = useState(false);
   const [resolverDescricao, setResolverDescricao] = useState('');
@@ -109,7 +106,7 @@ export function ChamadoDetalhePage() {
   const [editRegObs, setEditRegObs] = useState('');
 
   const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
-  const isTecnico = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO'].includes(gestaoTiRole || '');
+  const isTecnico = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
   const isGestor = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
   const isSolicitante = chamado?.solicitanteId === usuario?.id;
   const isTecnicoAtribuido = chamado?.tecnicoId === usuario?.id;
@@ -128,6 +125,9 @@ export function ChamadoDetalhePage() {
     chamadoService.listarRegistrosTempo(id).then(setRegistrosTempo).catch(() => {});
   }, [id]);
 
+  const [membrosEquipeDestino, setMembrosEquipeDestino] = useState<EquipeTI | null>(null);
+  const [tecnicoEquipeDestinoId, setTecnicoEquipeDestinoId] = useState('');
+
   useEffect(() => {
     if (showTransferir && equipes.length === 0) {
       equipeService.listar('ATIVO').then(setEquipes).catch(() => {});
@@ -136,6 +136,15 @@ export function ChamadoDetalhePage() {
       equipeService.buscar(chamado.equipeAtualId).then(setMembrosEquipe).catch(() => {});
     }
   }, [showTransferir, equipes.length, chamado?.equipeAtualId]);
+
+  useEffect(() => {
+    if (equipeDestinoId) {
+      setTecnicoEquipeDestinoId('');
+      equipeService.buscar(equipeDestinoId).then(setMembrosEquipeDestino).catch(() => {});
+    } else {
+      setMembrosEquipeDestino(null);
+    }
+  }, [equipeDestinoId]);
 
   async function runAction(fn: () => Promise<Chamado>) {
     setActionLoading(true);
@@ -146,6 +155,10 @@ export function ChamadoDetalhePage() {
       const full = await chamadoService.buscar(updated.id);
       setChamado(full);
       if (full.anexos) setAnexos(full.anexos);
+      if (full.colaboradores) setColaboradores(full.colaboradores);
+      // Recarregar registros de tempo (importante apos resolver/reabrir)
+      const regs = await chamadoService.listarRegistrosTempo(updated.id);
+      setRegistrosTempo(regs);
       closeAllPanels();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -163,8 +176,7 @@ export function ChamadoDetalhePage() {
     setShowAvaliar(false);
     setComentarioTexto('');
     setTransferMotivo('');
-    setTecnicoDestinoId('');
-    setTransferTecnicoMotivo('');
+    setTecnicoEquipeDestinoId('');
     setResolverDescricao('');
     setReabrirMotivo('');
     setCsatComentario('');
@@ -201,8 +213,8 @@ export function ChamadoDetalhePage() {
   if (!chamado) return <><Header title="Chamado" /><div className="p-6 text-red-500">{error || 'Nao encontrado'}</div></>;
 
   const temTecnico = !!chamado.tecnicoId;
-  const encerrado = ['FECHADO', 'CANCELADO'].includes(chamado.status);
-  const emAndamento = !encerrado && chamado.status !== 'RESOLVIDO';
+  const finalizado = ['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status);
+  const emAndamento = !finalizado;
   const canAssumir = isTecnico && ['ABERTO', 'PENDENTE', 'REABERTO'].includes(chamado.status);
   const canTransferirEquipe = podeMovimentar && emAndamento;
   const canTransferirTecnico = podeMovimentar && emAndamento && temTecnico;
@@ -211,8 +223,8 @@ export function ChamadoDetalhePage() {
   const canReabrir = (podeMovimentar || isSolicitante) && (chamado.status === 'RESOLVIDO' || chamado.status === 'FECHADO');
   const canCancelar = isGestor && emAndamento;
   const canAvaliar = isSolicitante && (chamado.status === 'RESOLVIDO' || chamado.status === 'FECHADO') && !chamado.notaSatisfacao;
-  const canComentar = !encerrado && (isSolicitante || podeMovimentar);
-  const canAnexar = !encerrado;
+  const canComentar = !finalizado && (isSolicitante || (podeMovimentar && temTecnico));
+  const canAnexar = !finalizado && (isSolicitante || podeMovimentar);
 
   return (
     <>
@@ -274,9 +286,14 @@ export function ChamadoDetalhePage() {
                     </>
                   )}
                 </div>
-                <div className="p-4">
+                <div
+                  className="p-4 transition-colors"
+                  onDragOver={(e) => { if (!canAnexar) return; e.preventDefault(); e.currentTarget.classList.add('bg-capul-50'); }}
+                  onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('bg-capul-50'); }}
+                  onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove('bg-capul-50'); if (!canAnexar || !e.dataTransfer.files.length) return; const fakeEvent = { target: { files: e.dataTransfer.files, value: '' } } as unknown as React.ChangeEvent<HTMLInputElement>; handleUploadAnexo(fakeEvent); }}
+                >
                   {anexos.length === 0 ? (
-                    <p className="text-sm text-slate-400">Nenhum anexo</p>
+                    <p className="text-sm text-slate-400">{canAnexar ? 'Nenhum anexo — arraste arquivos para ca' : 'Nenhum anexo'}</p>
                   ) : (
                     <div className="space-y-2">
                       {anexos.map((a) => {
@@ -338,7 +355,7 @@ export function ChamadoDetalhePage() {
                 </button>
               )}
               {(canTransferirEquipe || canTransferirTecnico) && (
-                <button onClick={() => { closeAllPanels(); setShowTransferir(true); setTransferirTab(canTransferirEquipe ? 'equipe' : 'tecnico'); }}
+                <button onClick={() => { closeAllPanels(); setShowTransferir(true); }}
                   className="flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm hover:bg-slate-200">
                   <ArrowRightLeft className="w-4 h-4" /> Transferir
                 </button>
@@ -400,79 +417,59 @@ export function ChamadoDetalhePage() {
 
             {showTransferir && (
               <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-                <div className="flex gap-1 border-b border-slate-200 -mx-4 px-4">
-                  <button
-                    onClick={() => setTransferirTab('equipe')}
-                    className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                      transferirTab === 'equipe'
-                        ? 'border-capul-600 text-capul-600'
-                        : 'border-transparent text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5"><ArrowRightLeft className="w-3.5 h-3.5" /> Para Equipe</span>
-                  </button>
-                  {canTransferirTecnico && (
-                    <button
-                      onClick={() => setTransferirTab('tecnico')}
-                      className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                        transferirTab === 'tecnico'
-                          ? 'border-capul-600 text-capul-600'
-                          : 'border-transparent text-slate-500 hover:text-slate-700'
-                      }`}
-                    >
-                      <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> Para Tecnico</span>
-                    </button>
-                  )}
-                </div>
-
-                {transferirTab === 'equipe' && (
-                  <div className="space-y-3">
+                <h4 className="font-medium text-sm text-slate-700 flex items-center gap-2">
+                  <ArrowRightLeft className="w-4 h-4" /> Transferir Chamado
+                </h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Equipe</label>
                     <select value={equipeDestinoId} onChange={(e) => setEquipeDestinoId(e.target.value)}
                       className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-                      <option value="">Selecione a equipe destino</option>
-                      {equipes.filter((e) => e.id !== chamado.equipeAtualId).map((e) => (
-                        <option key={e.id} value={e.id}>{e.sigla} - {e.nome}</option>
+                      <option value="">Selecione a equipe</option>
+                      {equipes.map((e) => (
+                        <option key={e.id} value={e.id}>
+                          {e.sigla} - {e.nome}{e.id === chamado.equipeAtualId ? ' (atual)' : ''}
+                        </option>
                       ))}
                     </select>
-                    <input value={transferMotivo} onChange={(e) => setTransferMotivo(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Motivo da transferencia (opcional)" />
-                    <div className="flex gap-2">
-                      <button onClick={() => runAction(() => chamadoService.transferirEquipe(chamado.id, equipeDestinoId, transferMotivo || undefined))}
-                        disabled={actionLoading || !equipeDestinoId}
-                        className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
-                        Transferir
-                      </button>
-                      <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
-                    </div>
                   </div>
-                )}
-
-                {transferirTab === 'tecnico' && (
-                  <div className="space-y-3">
-                    <p className="text-xs text-slate-500">Equipe atual: <strong>{chamado.equipeAtual.nome}</strong></p>
-                    <select value={tecnicoDestinoId} onChange={(e) => setTecnicoDestinoId(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-                      <option value="">Selecione o tecnico</option>
-                      {membrosEquipe?.membros
-                        .filter((m) => m.status === 'ATIVO' && m.usuarioId !== chamado.tecnicoId)
-                        .map((m) => (
-                          <option key={m.usuarioId} value={m.usuarioId}>
-                            {m.usuario.nome}{m.isLider ? ' (Lider)' : ''}
-                          </option>
-                        ))}
-                    </select>
-                    <input value={transferTecnicoMotivo} onChange={(e) => setTransferTecnicoMotivo(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Motivo da transferencia (opcional)" />
-                    <div className="flex gap-2">
-                      <button onClick={() => runAction(() => chamadoService.transferirTecnico(chamado.id, tecnicoDestinoId, transferTecnicoMotivo || undefined))}
-                        disabled={actionLoading || !tecnicoDestinoId}
-                        className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
-                        Transferir
-                      </button>
-                      <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+                  {equipeDestinoId && (equipeDestinoId === chamado.equipeAtualId ? membrosEquipe : membrosEquipeDestino) && (
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">
+                        {equipeDestinoId === chamado.equipeAtualId ? 'Transferir para tecnico' : 'Indicar tecnico (opcional)'}
+                      </label>
+                      <select value={tecnicoEquipeDestinoId} onChange={(e) => setTecnicoEquipeDestinoId(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                        <option value="">{equipeDestinoId === chamado.equipeAtualId ? 'Selecione o tecnico' : 'Nenhum (equipe assume)'}</option>
+                        {(equipeDestinoId === chamado.equipeAtualId ? membrosEquipe : membrosEquipeDestino)?.membros
+                          ?.filter((m) => m.status === 'ATIVO' && m.usuarioId !== chamado.tecnicoId)
+                          .map((m) => (
+                            <option key={m.usuarioId} value={m.usuarioId}>
+                              {m.usuario.nome}{m.isLider ? ' (Lider)' : ''}
+                            </option>
+                          ))}
+                      </select>
                     </div>
+                  )}
+                  <input value={transferMotivo} onChange={(e) => setTransferMotivo(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Motivo da transferencia (opcional)" />
+                  <div className="flex gap-2">
+                    <button onClick={() => {
+                      if (equipeDestinoId === chamado.equipeAtualId) {
+                        // Transferir para tecnico da mesma equipe
+                        runAction(() => chamadoService.transferirTecnico(chamado.id, tecnicoEquipeDestinoId, transferMotivo || undefined));
+                      } else {
+                        // Transferir para outra equipe
+                        runAction(() => chamadoService.transferirEquipe(chamado.id, equipeDestinoId, transferMotivo || undefined, tecnicoEquipeDestinoId || undefined));
+                      }
+                    }}
+                      disabled={actionLoading || !equipeDestinoId || (equipeDestinoId === chamado.equipeAtualId && !tecnicoEquipeDestinoId)}
+                      className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
+                      Transferir
+                    </button>
+                    <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
                   </div>
-                )}
+                </div>
               </div>
             )}
 
@@ -480,10 +477,10 @@ export function ChamadoDetalhePage() {
               <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
                 <h4 className="font-medium text-sm text-slate-700">Finalizar Chamado</h4>
                 <textarea value={resolverDescricao} onChange={(e) => setResolverDescricao(e.target.value)} rows={3}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Descricao da resolucao (opcional)" />
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Descreva a resolucao do chamado *" />
                 <div className="flex gap-2">
-                  <button onClick={() => runAction(() => chamadoService.resolver(chamado.id, resolverDescricao || undefined))}
-                    disabled={actionLoading}
+                  <button onClick={() => runAction(() => chamadoService.resolver(chamado.id, resolverDescricao))}
+                    disabled={actionLoading || !resolverDescricao.trim()}
                     className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700 disabled:opacity-50">
                     Confirmar Finalizacao
                   </button>
@@ -688,7 +685,7 @@ export function ChamadoDetalhePage() {
                   <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
                     <Users className="w-4 h-4" /> Colaboradores ({colaboradores.length})
                   </h4>
-                  {!['FECHADO', 'CANCELADO'].includes(chamado.status) && chamado.tecnicoId && (
+                  {!['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status) && chamado.tecnicoId && (
                     <button onClick={() => {
                       setShowAddColab(!showAddColab);
                       if (!showAddColab && usuariosDisponiveis.length === 0) {
@@ -737,7 +734,7 @@ export function ChamadoDetalhePage() {
                           </div>
                           <span className="text-sm text-slate-700">{c.usuario.nome}</span>
                         </div>
-                        {!['FECHADO', 'CANCELADO'].includes(chamado.status) && (() => {
+                        {!['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status) && (() => {
                           const temTempo = registrosTempo.some((r) => r.usuarioId === c.usuarioId);
                           return temTempo ? (
                             <span className="text-[10px] text-slate-400" title="Possui registros de tempo">com apontamento</span>
@@ -781,7 +778,7 @@ export function ChamadoDetalhePage() {
                           <span className="text-sm text-green-700 font-medium animate-pulse flex items-center gap-1.5">
                             <Play className="w-4 h-4" /> {nome}
                           </span>
-                          {!['FECHADO', 'CANCELADO'].includes(chamado.status) && (isGestor || r.usuarioId === usuario?.id) && (
+                          {!['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status) && (isGestor || r.usuarioId === usuario?.id) && (
                             <button onClick={async () => {
                               try {
                                 await chamadoService.encerrarTempo(chamado.id, r.usuarioId);
@@ -800,7 +797,7 @@ export function ChamadoDetalhePage() {
                 )}
 
                 {/* Iniciar para quem */}
-                {!['FECHADO', 'CANCELADO'].includes(chamado.status) && (
+                {!['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status) && (
                   <div className="mb-4">
                     <label className="block text-xs text-slate-500 mb-1.5">Iniciar cronometro para:</label>
                     <div className="space-y-2">
@@ -917,6 +914,7 @@ export function ChamadoDetalhePage() {
                             <span className="text-sm text-slate-700 font-medium">
                               {new Date(r.horaInicio).toLocaleDateString('pt-BR')}
                             </span>
+                            {['RESOLVIDO', 'FECHADO'].includes(chamado.status) && (
                             <div className="flex gap-2">
                               <button onClick={() => {
                                 setEditingReg(r.id);
@@ -932,6 +930,7 @@ export function ChamadoDetalhePage() {
                                 } catch { /* empty */ }
                               }} className="text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
                             </div>
+                            )}
                           </div>
                           <div className="text-sm text-slate-600">
                             {new Date(r.horaInicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}

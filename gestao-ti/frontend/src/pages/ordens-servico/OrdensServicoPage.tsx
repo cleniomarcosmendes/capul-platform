@@ -42,7 +42,7 @@ export function OrdensServicoPage() {
   const navigate = useNavigate();
   const { usuario, gestaoTiRole } = useAuth();
   const { toast, confirm } = useToast();
-  const isTecnico = ['ADMIN', 'GESTOR_TI', 'TECNICO'].includes(gestaoTiRole || '');
+  const isTecnico = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
 
   const [ordens, setOrdens] = useState<OrdemServico[]>([]);
   const [loading, setLoading] = useState(true);

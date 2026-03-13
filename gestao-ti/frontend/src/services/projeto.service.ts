@@ -279,6 +279,30 @@ export const projetoService = {
     return data;
   },
 
+  async uploadAnexo(id: string, file: File, descricao?: string): Promise<AnexoProjeto> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (descricao) formData.append('descricao', descricao);
+    const { data } = await gestaoApi.post(`/projetos/${id}/anexos/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
+
+  async downloadAnexo(id: string, anexoId: string, nomeOriginal: string): Promise<void> {
+    const { data } = await gestaoApi.get(`/projetos/${id}/anexos/${anexoId}/download`, {
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeOriginal;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
   async removerAnexo(id: string, anexoId: string): Promise<void> {
     await gestaoApi.delete(`/projetos/${id}/anexos/${anexoId}`);
   },
@@ -327,6 +351,11 @@ export const projetoService = {
     await gestaoApi.delete(`/projetos/${id}/comentarios/${comentarioId}`);
   },
 
+  async atualizarComentario(id: string, comentarioId: string, texto: string): Promise<ComentarioTarefa> {
+    const { data } = await gestaoApi.patch(`/projetos/${id}/comentarios/${comentarioId}`, { texto });
+    return data;
+  },
+
   async buscarComentarios(query: string): Promise<ComentarioTarefa[]> {
     const { data } = await gestaoApi.get('/projetos/busca-comentarios', { params: { q: query } });
     return data;
@@ -348,12 +377,13 @@ export const projetoService = {
   },
 
   // Pendencias
-  async listarPendencias(id: string, filters: { status?: string; prioridade?: string; responsavelId?: string; search?: string } = {}): Promise<PendenciaProjeto[]> {
+  async listarPendencias(id: string, filters: { status?: string; prioridade?: string; responsavelId?: string; search?: string; incluirSubProjetos?: boolean } = {}): Promise<PendenciaProjeto[]> {
     const params: Record<string, string> = {};
     if (filters.status) params.status = filters.status;
     if (filters.prioridade) params.prioridade = filters.prioridade;
     if (filters.responsavelId) params.responsavelId = filters.responsavelId;
     if (filters.search) params.search = filters.search;
+    if (filters.incluirSubProjetos) params.incluirSubProjetos = 'true';
     const { data } = await gestaoApi.get(`/projetos/${id}/pendencias`, { params });
     return data;
   },
@@ -370,6 +400,11 @@ export const projetoService = {
 
   async atualizarPendencia(id: string, pid: string, payload: { titulo?: string; descricao?: string; status?: StatusPendencia; prioridade?: PrioridadePendencia; faseId?: string; responsavelId?: string; dataLimite?: string }): Promise<PendenciaProjeto> {
     const { data } = await gestaoApi.patch(`/projetos/${id}/pendencias/${pid}`, payload);
+    return data;
+  },
+
+  async gerarAtividadeFromPendencia(id: string, pid: string, payload?: { titulo?: string; descricao?: string; dataFimPrevista?: string }): Promise<AtividadeProjeto> {
+    const { data } = await gestaoApi.post(`/projetos/${id}/pendencias/${pid}/gerar-atividade`, payload || {});
     return data;
   },
 

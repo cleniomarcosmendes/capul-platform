@@ -261,7 +261,7 @@ export function EmpresaFiliaisPage() {
                       <th className="px-6 py-3">CNPJ</th>
                       <th className="px-6 py-3">Cidade/UF</th>
                       <th className="px-6 py-3">Status</th>
-                      {canEdit && <th className="px-6 py-3 text-right">Acoes</th>}
+                      {canEdit && <th className="px-6 py-3">Acoes</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -273,7 +273,13 @@ export function EmpresaFiliaisPage() {
                             {filial.codigo === '01' && <Star className="w-3.5 h-3.5 text-amber-500" />}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-slate-600">{filial.nomeFantasia}</td>
+                        <td className="px-6 py-4 text-sm">
+                          {canEdit ? (
+                            <button onClick={() => abrirEditarFilial(filial)} className="text-emerald-600 hover:underline text-left">{filial.nomeFantasia}</button>
+                          ) : (
+                            <span className="text-slate-600">{filial.nomeFantasia}</span>
+                          )}
+                        </td>
                         <td className="px-6 py-4 text-sm text-slate-600">{filial.cnpj || '—'}</td>
                         <td className="px-6 py-4 text-sm text-slate-600">
                           {[filial.cidade, filial.estado].filter(Boolean).join(' / ') || '—'}
@@ -284,15 +290,12 @@ export function EmpresaFiliaisPage() {
                           </span>
                         </td>
                         {canEdit && (
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <button onClick={() => abrirEditarFilial(filial)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-emerald-600 transition-all" title="Editar">
-                                <Pencil className="w-4 h-4" />
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <button onClick={() => abrirEditarFilial(filial)} className="flex items-center gap-1 text-xs text-emerald-600 hover:underline">
+                                <Pencil className="w-3.5 h-3.5" /> Editar
                               </button>
-                              <button
-                                onClick={() => toggleFilialStatus(filial)}
-                                className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${filial.status === 'ATIVO' ? 'text-red-600 hover:bg-red-50' : 'text-green-600 hover:bg-green-50'}`}
-                              >
+                              <button onClick={() => toggleFilialStatus(filial)} className="text-xs text-emerald-600 hover:underline">
                                 {filial.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
                               </button>
                             </div>

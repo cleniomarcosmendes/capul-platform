@@ -97,11 +97,8 @@ async function main() {
     // Gestao TI
     { codigo: 'ADMIN', nome: 'Administrador', descricao: 'Acesso total a gestao de TI', moduloId: modGestaoTi.id },
     { codigo: 'GESTOR_TI', nome: 'Gestor de TI', descricao: 'Gestao completa do departamento', moduloId: modGestaoTi.id },
-    { codigo: 'TECNICO', nome: 'Tecnico', descricao: 'Atender chamados (publicos e privados) e registrar atividades', moduloId: modGestaoTi.id },
-    { codigo: 'DESENVOLVEDOR', nome: 'Desenvolvedor', descricao: 'Chamados internos e projetos dev', moduloId: modGestaoTi.id },
-    { codigo: 'GERENTE_PROJETO', nome: 'Gerente de Projeto', descricao: 'Projetos, custos e aprovacoes', moduloId: modGestaoTi.id },
+    { codigo: 'SUPORTE_TI', nome: 'Suporte de TI', descricao: 'Equipe de TI: atender chamados, projetos, contratos, OS, paradas e base de conhecimento', moduloId: modGestaoTi.id },
     { codigo: 'USUARIO_FINAL', nome: 'Usuario Final', descricao: 'Abrir chamados publicos e consultar status dos proprios chamados', moduloId: modGestaoTi.id },
-    { codigo: 'FINANCEIRO', nome: 'Financeiro', descricao: 'Contratos, rateio e custos', moduloId: modGestaoTi.id },
     { codigo: 'USUARIO_CHAVE', nome: 'Usuario-Chave', descricao: 'Usuarios-chave de projetos (acesso limitado a pendencias)', moduloId: modGestaoTi.id },
     { codigo: 'TERCEIRIZADO', nome: 'Terceirizado', descricao: 'Analista externo com acesso restrito a projetos e pendencias vinculados', moduloId: modGestaoTi.id },
   ];
@@ -118,7 +115,7 @@ async function main() {
   const roleAdminConfig = roles[`${modConfigurador.id}:ADMIN`];
   const roleAdminInv = roles[`${modInventario.id}:ADMIN`];
   const roleAdminTi = roles[`${modGestaoTi.id}:ADMIN`];
-  console.log('Roles: 3 Configurador + 3 Inventario + 7 Gestao TI = 13 total');
+  console.log('Roles: 3 Configurador + 3 Inventario + 6 Gestao TI = 12 total');
 
   // 5. Departamentos (find or create)
   const deptosData = [
@@ -141,6 +138,27 @@ async function main() {
   }
   const deptoTI = deptos['Tecnologia da Informacao'];
   console.log('Departamentos: TI, Administrativo, Operacoes');
+
+  // 5b. Centros de Custo
+  const ccData = [
+    { codigo: '1001', nome: 'TI - Infraestrutura', descricao: 'Custos de infraestrutura de TI' },
+    { codigo: '1002', nome: 'TI - Sistemas', descricao: 'Custos de sistemas e softwares' },
+    { codigo: '1003', nome: 'TI - Projetos', descricao: 'Custos de projetos de TI' },
+    { codigo: '2001', nome: 'Administrativo', descricao: 'Custos administrativos gerais' },
+    { codigo: '3001', nome: 'Operacoes', descricao: 'Custos operacionais' },
+  ];
+
+  for (const cc of ccData) {
+    const existing = await prisma.centroCusto.findFirst({
+      where: { codigo: cc.codigo, filialId: filial.id },
+    });
+    if (!existing) {
+      await prisma.centroCusto.create({
+        data: { ...cc, filialId: filial.id },
+      });
+    }
+  }
+  console.log('Centros de Custo: 5 (TI-Infra, TI-Sistemas, TI-Projetos, Administrativo, Operacoes)');
 
   // 6. Admin master (find or create)
   let admin = await prisma.usuario.findFirst({

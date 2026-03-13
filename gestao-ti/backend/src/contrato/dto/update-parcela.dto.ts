@@ -36,6 +36,10 @@ export class UpdateParcelaDto {
   @IsOptional()
   @IsString()
   observacoes?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dataPagamento?: string;
 }
 
 export class PagarParcelaDto {

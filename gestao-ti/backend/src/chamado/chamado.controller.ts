@@ -89,24 +89,20 @@ export class ChamadoController {
     @Body() dto: CreateChamadoDto,
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
-    @Req() req: express.Request,
   ) {
-    if (!dto.ipMaquina) {
-      const forwarded = req.headers['x-forwarded-for'];
-      const ip = typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : req.socket.remoteAddress;
-      if (ip) dto.ipMaquina = ip.replace('::ffff:', '');
-    }
+    // IP da maquina deve ser informado pelo usuario, nao capturado automaticamente
+    // (captura automatica retorna IP do Docker/proxy ao inves do IP real)
     return this.service.create(dto, user, role);
   }
 
   @Post(':id/assumir')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   assumir(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.service.assumir(id, user);
   }
 
   @Post(':id/transferir-equipe')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   transferirEquipe(
     @Param('id') id: string,
     @Body() dto: TransferirEquipeDto,
@@ -117,7 +113,7 @@ export class ChamadoController {
   }
 
   @Post(':id/transferir-tecnico')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   transferirTecnico(
     @Param('id') id: string,
     @Body() dto: TransferirTecnicoDto,
@@ -138,7 +134,7 @@ export class ChamadoController {
   }
 
   @Patch(':id/resolver')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   resolver(
     @Param('id') id: string,
     @Body() dto: ResolverChamadoDto,
@@ -149,7 +145,7 @@ export class ChamadoController {
   }
 
   @Patch(':id/fechar')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   fechar(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -235,7 +231,7 @@ export class ChamadoController {
   }
 
   @Delete(':id/anexos/:anexoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   removeAnexo(@Param('id') id: string, @Param('anexoId') anexoId: string) {
     return this.service.removeAnexo(id, anexoId);
   }
@@ -248,7 +244,7 @@ export class ChamadoController {
   }
 
   @Post(':id/colaboradores')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   adicionarColaborador(
     @Param('id') id: string,
     @Body('usuarioId') usuarioId: string,
@@ -259,7 +255,7 @@ export class ChamadoController {
   }
 
   @Delete(':id/colaboradores/:colaboradorId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   removerColaborador(
     @Param('id') id: string,
     @Param('colaboradorId') colaboradorId: string,

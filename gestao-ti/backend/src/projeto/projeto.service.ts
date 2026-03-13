@@ -24,12 +24,18 @@ import { CreatePendenciaDto } from './dto/create-pendencia.dto';
 import { UpdatePendenciaDto } from './dto/update-pendencia.dto';
 import { CreateInteracaoPendenciaDto } from './dto/create-interacao-pendencia.dto';
 
+const PROJETO_UPLOADS_DIR = path.resolve('./uploads/projetos');
+if (!fs.existsSync(PROJETO_UPLOADS_DIR)) {
+  fs.mkdirSync(PROJETO_UPLOADS_DIR, { recursive: true });
+}
+
 const PENDENCIA_UPLOADS_DIR = path.resolve('./uploads/pendencias');
 
 const projetoListInclude = {
   software: { select: { id: true, nome: true, tipo: true } },
   contrato: { select: { id: true, numero: true, titulo: true } },
   responsavel: { select: { id: true, nome: true, username: true } },
+  projetoPai: { select: { id: true, numero: true, nome: true } },
   _count: {
     select: {
       subProjetos: true, membros: true, fases: true, atividades: true,
@@ -115,6 +121,7 @@ export class ProjetoService {
     apenasRaiz?: string;
     meusProjetos?: string;
     usuarioId?: string;
+    role?: string;
   }) {
     const where: Record<string, unknown> = {};
 
@@ -131,7 +138,12 @@ export class ProjetoService {
       where.nivel = 1;
     }
 
-    if (filters.meusProjetos === 'true' && filters.usuarioId) {
+    // USUARIO_CHAVE e TERCEIRIZADO so veem projetos vinculados
+    if (filters.role === 'USUARIO_CHAVE' && filters.usuarioId) {
+      where.usuariosChave = { some: { usuarioId: filters.usuarioId, ativo: true } };
+    } else if (filters.role === 'TERCEIRIZADO' && filters.usuarioId) {
+      where.terceirizados = { some: { usuarioId: filters.usuarioId, ativo: true } };
+    } else if (filters.meusProjetos === 'true' && filters.usuarioId) {
       where.OR = [
         { responsavelId: filters.usuarioId },
         { membros: { some: { usuarioId: filters.usuarioId } } },
@@ -158,13 +170,56 @@ export class ProjetoService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId?: string, role?: string) {
     const projeto = await this.prisma.projeto.findUnique({
       where: { id },
       include: projetoDetailInclude,
     });
     if (!projeto) throw new NotFoundException('Projeto nao encontrado');
+
+    // Validar acesso para USUARIO_CHAVE e TERCEIRIZADO
+    if (userId && role) {
+      await this.checkProjetoAccessChave(id, userId, role);
+
+      // Filtrar subProjetos pelos quais o usuario esta vinculado
+      if (role === 'USUARIO_CHAVE' || role === 'TERCEIRIZADO') {
+        const subProjetosVinculados = await this.getSubProjetosVinculados(
+          projeto.subProjetos.map((s) => s.id),
+          userId,
+          role,
+        );
+        projeto.subProjetos = projeto.subProjetos.filter((s) =>
+          subProjetosVinculados.includes(s.id),
+        );
+      }
+    }
+
     return projeto;
+  }
+
+  /**
+   * Retorna IDs dos sub-projetos aos quais o usuario esta vinculado
+   */
+  private async getSubProjetosVinculados(subProjetoIds: string[], userId: string, role: string): Promise<string[]> {
+    if (subProjetoIds.length === 0) return [];
+
+    if (role === 'USUARIO_CHAVE') {
+      const vinculos = await this.prisma.usuarioChaveProjeto.findMany({
+        where: { projetoId: { in: subProjetoIds }, usuarioId: userId, ativo: true },
+        select: { projetoId: true },
+      });
+      return vinculos.map((v) => v.projetoId);
+    }
+
+    if (role === 'TERCEIRIZADO') {
+      const vinculos = await this.prisma.terceirizadoProjeto.findMany({
+        where: { projetoId: { in: subProjetoIds }, usuarioId: userId, ativo: true },
+        select: { projetoId: true },
+      });
+      return vinculos.map((v) => v.projetoId);
+    }
+
+    return [];
   }
 
   async create(dto: CreateProjetoDto) {
@@ -493,6 +548,7 @@ export class ProjetoService {
       include: {
         usuario: { select: { id: true, nome: true } },
         fase: { select: { id: true, nome: true } },
+        pendencia: { select: { id: true, numero: true, titulo: true, status: true } },
         _count: { select: { registrosTempo: true, comentarios: true } },
         registrosTempo: {
           where: { horaFim: null },
@@ -505,7 +561,7 @@ export class ProjetoService {
 
   async addAtividade(
     projetoId: string,
-    dto: { titulo: string; descricao?: string; faseId?: string; dataInicio?: string; dataFimPrevista?: string },
+    dto: { titulo: string; descricao?: string; faseId?: string; pendenciaId?: string; dataInicio?: string; dataFimPrevista?: string },
     userId: string,
   ) {
     await this.ensureProjetoExists(projetoId);
@@ -517,6 +573,14 @@ export class ProjetoService {
       if (!fase) throw new NotFoundException('Fase nao encontrada neste projeto');
     }
 
+    // Valida pendencia se informada
+    if (dto.pendenciaId) {
+      const pendencia = await this.prisma.pendenciaProjeto.findFirst({
+        where: { id: dto.pendenciaId, projetoId },
+      });
+      if (!pendencia) throw new NotFoundException('Pendencia nao encontrada neste projeto');
+    }
+
     return this.prisma.atividadeProjeto.create({
       data: {
         titulo: dto.titulo,
@@ -524,12 +588,14 @@ export class ProjetoService {
         projetoId,
         usuarioId: userId,
         faseId: dto.faseId,
+        pendenciaId: dto.pendenciaId,
         dataInicio: dto.dataInicio ? new Date(dto.dataInicio) : undefined,
         dataFimPrevista: dto.dataFimPrevista ? new Date(dto.dataFimPrevista) : undefined,
       },
       include: {
         usuario: { select: { id: true, nome: true } },
         fase: { select: { id: true, nome: true } },
+        pendencia: { select: { id: true, numero: true, titulo: true, status: true } },
       },
     });
   }
@@ -1008,11 +1074,57 @@ export class ProjetoService {
     });
   }
 
+  async uploadAnexo(projetoId: string, file: Express.Multer.File, userId: string, descricao?: string) {
+    await this.ensureProjetoExists(projetoId);
+    return this.prisma.anexoProjeto.create({
+      data: {
+        titulo: file.originalname,
+        url: file.filename,
+        tipo: 'ARQUIVO',
+        nomeArquivo: file.filename,
+        nomeOriginal: file.originalname,
+        mimeType: file.mimetype,
+        tamanhoBytes: file.size,
+        tamanho: file.size > 1024 * 1024
+          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+          : `${(file.size / 1024).toFixed(0)} KB`,
+        descricao,
+        projetoId,
+        usuarioId: userId,
+      },
+      include: { usuario: { select: { id: true, nome: true } } },
+    });
+  }
+
+  async getAnexoFile(projetoId: string, anexoId: string) {
+    const anexo = await this.prisma.anexoProjeto.findFirst({
+      where: { id: anexoId, projetoId },
+    });
+    if (!anexo) throw new NotFoundException('Anexo nao encontrado neste projeto');
+    if (anexo.tipo !== 'ARQUIVO' || !anexo.nomeArquivo) {
+      throw new BadRequestException('Este anexo nao e um arquivo para download');
+    }
+    const filePath = path.join(PROJETO_UPLOADS_DIR, anexo.nomeArquivo);
+    if (!fs.existsSync(filePath)) {
+      throw new NotFoundException('Arquivo nao encontrado no disco');
+    }
+    return { filePath, anexo };
+  }
+
   async removeAnexo(projetoId: string, anexoId: string) {
     const anexo = await this.prisma.anexoProjeto.findFirst({
       where: { id: anexoId, projetoId },
     });
     if (!anexo) throw new NotFoundException('Anexo nao encontrado neste projeto');
+
+    // Remove file from disk if it's a file attachment
+    if (anexo.tipo === 'ARQUIVO' && anexo.nomeArquivo) {
+      const filePath = path.join(PROJETO_UPLOADS_DIR, anexo.nomeArquivo);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
     await this.prisma.anexoProjeto.delete({ where: { id: anexoId } });
     return { deleted: true };
   }
@@ -1187,14 +1299,35 @@ export class ProjetoService {
     });
   }
 
-  async removeComentario(projetoId: string, comentarioId: string) {
+  async removeComentario(projetoId: string, comentarioId: string, userId: string, role?: string) {
     await this.ensureProjetoExists(projetoId);
     const comentario = await this.prisma.comentarioTarefa.findFirst({
       where: { id: comentarioId, atividade: { projetoId } },
     });
     if (!comentario) throw new NotFoundException('Comentario nao encontrado');
+    const isAdmin = ['ADMIN', 'GESTOR_TI'].includes(role || '');
+    if (comentario.usuarioId !== userId && !isAdmin) {
+      throw new ForbiddenException('Somente o autor pode remover esta nota');
+    }
     await this.prisma.comentarioTarefa.delete({ where: { id: comentarioId } });
     return { deleted: true };
+  }
+
+  async updateComentario(projetoId: string, comentarioId: string, texto: string, userId: string, role?: string) {
+    await this.ensureProjetoExists(projetoId);
+    const comentario = await this.prisma.comentarioTarefa.findFirst({
+      where: { id: comentarioId, atividade: { projetoId } },
+    });
+    if (!comentario) throw new NotFoundException('Comentario nao encontrado');
+    const isAdmin = ['ADMIN', 'GESTOR_TI'].includes(role || '');
+    if (comentario.usuarioId !== userId && !isAdmin) {
+      throw new ForbiddenException('Somente o autor pode editar esta nota');
+    }
+    return this.prisma.comentarioTarefa.update({
+      where: { id: comentarioId },
+      data: { texto },
+      include: { usuario: { select: { id: true, nome: true } } },
+    });
   }
 
   async buscarComentarios(query: string) {
@@ -1251,7 +1384,7 @@ export class ProjetoService {
   // USUARIOS-CHAVE
   // ============================================================
 
-  private static TI_ROLES = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'GERENTE_PROJETO', 'FINANCEIRO'];
+  private static TI_ROLES = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
 
   /**
    * Verifica se usuario tem acesso ao projeto (USUARIO_CHAVE ou TERCEIRIZADO)
@@ -1326,11 +1459,21 @@ export class ProjetoService {
   // ============================================================
 
   async listPendencias(projetoId: string, filters: {
-    status?: string; prioridade?: string; responsavelId?: string; search?: string;
+    status?: string; prioridade?: string; responsavelId?: string; search?: string; incluirSubProjetos?: boolean;
   }, userId: string, role: string) {
     await this.checkProjetoAccessChave(projetoId, userId, role);
 
-    const where: Record<string, unknown> = { projetoId };
+    // Se incluirSubProjetos, busca IDs do projeto e todos seus sub-projetos
+    let projetoIds = [projetoId];
+    if (filters.incluirSubProjetos) {
+      const subProjetos = await this.prisma.projeto.findMany({
+        where: { projetoPaiId: projetoId },
+        select: { id: true },
+      });
+      projetoIds = [projetoId, ...subProjetos.map((s) => s.id)];
+    }
+
+    const where: Record<string, unknown> = { projetoId: { in: projetoIds } };
     if (filters.status) where.status = filters.status;
     if (filters.prioridade) where.prioridade = filters.prioridade;
     if (filters.responsavelId) where.responsavelId = filters.responsavelId;
@@ -1347,6 +1490,7 @@ export class ProjetoService {
         responsavel: { select: { id: true, nome: true, username: true } },
         criador: { select: { id: true, nome: true, username: true } },
         fase: { select: { id: true, nome: true } },
+        projeto: { select: { id: true, numero: true, nome: true } },
         _count: { select: { interacoes: true, anexos: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -1373,6 +1517,12 @@ export class ProjetoService {
           include: { usuario: { select: { id: true, nome: true } } },
           orderBy: { createdAt: 'desc' },
         },
+        atividades: {
+          include: {
+            usuario: { select: { id: true, nome: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
     if (!pendencia) throw new NotFoundException('Pendencia nao encontrada neste projeto');
@@ -1383,6 +1533,52 @@ export class ProjetoService {
     }
 
     return pendencia;
+  }
+
+  async gerarAtividadeFromPendencia(
+    projetoId: string,
+    pendenciaId: string,
+    dto: { titulo?: string; descricao?: string; dataFimPrevista?: string },
+    userId: string,
+  ) {
+    await this.ensureProjetoExists(projetoId);
+
+    const pendencia = await this.prisma.pendenciaProjeto.findFirst({
+      where: { id: pendenciaId, projetoId },
+    });
+    if (!pendencia) throw new NotFoundException('Pendencia nao encontrada neste projeto');
+
+    // Cria atividade com dados da pendencia (permite override)
+    const atividade = await this.prisma.atividadeProjeto.create({
+      data: {
+        titulo: dto.titulo || `[P#${pendencia.numero}] ${pendencia.titulo}`,
+        descricao: dto.descricao || pendencia.descricao,
+        projetoId,
+        usuarioId: userId,
+        faseId: pendencia.faseId,
+        pendenciaId: pendencia.id,
+        dataInicio: new Date(),
+        dataFimPrevista: dto.dataFimPrevista ? new Date(dto.dataFimPrevista) : pendencia.dataLimite,
+      },
+      include: {
+        usuario: { select: { id: true, nome: true } },
+        fase: { select: { id: true, nome: true } },
+        pendencia: { select: { id: true, numero: true, titulo: true, status: true } },
+      },
+    });
+
+    // Registra interacao na pendencia
+    await this.prisma.interacaoPendencia.create({
+      data: {
+        pendenciaId: pendencia.id,
+        usuarioId: userId,
+        tipo: 'COMENTARIO',
+        descricao: `Atividade gerada: ${atividade.titulo}`,
+        publica: true,
+      },
+    });
+
+    return atividade;
   }
 
   async createPendencia(projetoId: string, dto: CreatePendenciaDto, criadorId: string, role: string) {

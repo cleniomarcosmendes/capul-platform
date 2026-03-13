@@ -24,7 +24,7 @@ const statusCores: Record<StatusArtigo, string> = {
 
 export function ConhecimentoListPage() {
   const { gestaoTiRole } = useAuth();
-  const canCreate = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO'].includes(gestaoTiRole || '');
+  const canCreate = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
 
   const [artigos, setArtigos] = useState<ArtigoConhecimento[]>([]);
   const [softwares, setSoftwares] = useState<Software[]>([]);

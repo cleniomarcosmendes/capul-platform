@@ -67,20 +67,20 @@ const osStatusColor: Record<string, string> = {
 
 type TabKey = 'suporte' | 'portfolio' | 'contratos' | 'sustentacao' | 'projetos' | 'infraestrutura' | 'executivo' | 'csat' | 'metricas_os' | 'financeiro' | 'disponibilidade';
 
-const STAFF_ROLES = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR'];
+const STAFF_ROLES = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
 const MANAGERS = ['ADMIN', 'GESTOR_TI'];
 
 const tabsDef: { key: TabKey; label: string; icon: LucideIcon; roles?: string[] }[] = [
   { key: 'suporte', label: 'Suporte', icon: Ticket },
-  { key: 'portfolio', label: 'Portfolio', icon: AppWindow, roles: [...STAFF_ROLES, 'FINANCEIRO'] },
-  { key: 'contratos', label: 'Contratos', icon: FileText, roles: [...STAFF_ROLES, 'FINANCEIRO'] },
+  { key: 'portfolio', label: 'Portfolio', icon: AppWindow, roles: STAFF_ROLES },
+  { key: 'contratos', label: 'Contratos', icon: FileText, roles: STAFF_ROLES },
   { key: 'sustentacao', label: 'Sustentacao', icon: Activity, roles: STAFF_ROLES },
-  { key: 'projetos', label: 'Projetos', icon: FolderKanban, roles: [...STAFF_ROLES, 'GERENTE_PROJETO'] },
+  { key: 'projetos', label: 'Projetos', icon: FolderKanban, roles: STAFF_ROLES },
   { key: 'infraestrutura', label: 'Infraestrutura', icon: Server, roles: STAFF_ROLES },
   { key: 'executivo', label: 'Executivo', icon: PieChart, roles: MANAGERS },
   { key: 'csat', label: 'Satisfacao (CSAT)', icon: Star, roles: MANAGERS },
   { key: 'metricas_os', label: 'Metricas OS', icon: ClipboardList, roles: MANAGERS },
-  { key: 'financeiro', label: 'Financeiro', icon: DollarSign, roles: [...MANAGERS, 'FINANCEIRO'] },
+  { key: 'financeiro', label: 'Financeiro', icon: DollarSign, roles: STAFF_ROLES },
   { key: 'disponibilidade', label: 'Disponibilidade', icon: BarChart2, roles: STAFF_ROLES },
 ];
 
@@ -1449,10 +1449,10 @@ export function DashboardPage() {
                                     className="w-3 h-3 rounded-full"
                                     style={{ backgroundColor: item.equipe.cor || '#006838' }}
                                   />
-                                  <span className="text-sm text-slate-700">{item.equipe.nome}</span>
+                                  <Link to={`/gestao-ti/chamados?equipeId=${item.equipe.id}`} className="text-sm text-slate-700 hover:text-capul-600 hover:underline">{item.equipe.nome}</Link>
                                   <span className="text-xs text-slate-400">({item.equipe.sigla})</span>
                                 </div>
-                                <span className="text-sm font-semibold text-slate-800">{item.total}</span>
+                                <Link to={`/gestao-ti/chamados?equipeId=${item.equipe.id}`} className="text-sm font-semibold text-slate-800 hover:text-capul-600">{item.total}</Link>
                               </div>
                             ))
                           )}

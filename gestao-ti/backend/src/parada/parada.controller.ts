@@ -79,19 +79,19 @@ export class ParadaController {
   }
 
   @Post()
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   create(@Body() dto: CreateParadaDto, @CurrentUser() user: JwtPayload) {
     return this.service.create(dto, user.sub);
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   update(@Param('id') id: string, @Body() dto: UpdateParadaDto) {
     return this.service.update(id, dto);
   }
 
   @Post(':id/finalizar')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   finalizar(
     @Param('id') id: string,
     @Body() dto: FinalizarParadaDto,
@@ -107,7 +107,7 @@ export class ParadaController {
   }
 
   @Post(':id/chamados')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   vincularChamado(
     @Param('id') id: string,
     @Body() body: { chamadoId: string },
@@ -116,7 +116,7 @@ export class ParadaController {
   }
 
   @Delete(':id/chamados/:chamadoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   desvincularChamado(
     @Param('id') id: string,
     @Param('chamadoId') chamadoId: string,
@@ -130,7 +130,7 @@ export class ParadaController {
   }
 
   @Post(':id/colaboradores')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   adicionarColaborador(
     @Param('id') id: string,
     @Body('usuarioId') usuarioId: string,
@@ -139,7 +139,7 @@ export class ParadaController {
   }
 
   @Delete(':id/colaboradores/:colaboradorId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   removerColaborador(
     @Param('id') id: string,
     @Param('colaboradorId') colaboradorId: string,

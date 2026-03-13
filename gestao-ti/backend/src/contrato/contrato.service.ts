@@ -100,6 +100,14 @@ export class ContratoService {
     }
   }
 
+  /** Converte string de data (YYYY-MM-DD) para Date sem offset de timezone */
+  private parseDate(dateStr: string): Date {
+    // Se ja contem 'T', e um datetime completo
+    if (dateStr.includes('T')) return new Date(dateStr);
+    // Senao, tratar como data local adicionando T12:00:00 para evitar offset UTC-3
+    return new Date(dateStr + 'T12:00:00');
+  }
+
   /**
    * Verifica se o usuario tem permissao para gerenciar contratos de uma equipe.
    * ADMIN e GESTOR_TI sempre tem acesso. TECNICO precisa ser membro da equipe com podeGerirContratos.
@@ -107,7 +115,7 @@ export class ContratoService {
   private async ensureContratoPermission(equipeId: string | null | undefined, usuarioId: string, role: string) {
     if (role === 'ADMIN' || role === 'GESTOR_TI') return;
     if (!equipeId) {
-      throw new ForbiddenException('Contrato sem equipe associada. Apenas ADMIN ou GESTOR_TI podem gerenciar.');
+      throw new ForbiddenException('Contrato sem equipe associada. Associe uma equipe ao contrato ou solicite a um ADMIN/GESTOR_TI.');
     }
     const membro = await this.prisma.membroEquipe.findUnique({
       where: { usuarioId_equipeId: { usuarioId, equipeId } },
@@ -117,13 +125,25 @@ export class ContratoService {
     }
   }
 
+  /**
+   * Verifica se o usuario tem acesso ao modulo de contratos.
+   * ADMIN e GESTOR_TI sempre tem acesso. Outros precisam ser membro de alguma equipe com podeGerirContratos.
+   */
+  async verificarAcessoContratos(usuarioId: string, role: string): Promise<boolean> {
+    if (role === 'ADMIN' || role === 'GESTOR_TI') return true;
+    const count = await this.prisma.membroEquipe.count({
+      where: { usuarioId, status: 'ATIVO', podeGerirContratos: true },
+    });
+    return count > 0;
+  }
+
   async findAll(filters: {
     tipoContratoId?: string;
     status?: string;
     softwareId?: string;
     fornecedor?: string;
     vencendoEm?: number;
-  }) {
+  }, usuarioId?: string, role?: string) {
     const where: Record<string, unknown> = {};
 
     if (filters.tipoContratoId) where.tipoContratoId = filters.tipoContratoId;
@@ -139,11 +159,30 @@ export class ContratoService {
       where.status = { in: ['ATIVO', 'SUSPENSO'] };
     }
 
+    // SUPORTE_TI e outros roles: filtrar por equipes com podeGerirContratos
+    if (usuarioId && role && role !== 'ADMIN' && role !== 'GESTOR_TI') {
+      const membrosComPermissao = await this.prisma.membroEquipe.findMany({
+        where: { usuarioId, status: 'ATIVO', podeGerirContratos: true },
+        select: { equipeId: true },
+      });
+      const equipeIds = membrosComPermissao.map(m => m.equipeId);
+      if (equipeIds.length === 0) {
+        return []; // Sem permissao em nenhuma equipe
+      }
+      where.equipeId = { in: equipeIds };
+    }
+
     return this.prisma.contrato.findMany({
       where,
       include: contratoListInclude,
       orderBy: { numero: 'desc' },
     });
+  }
+
+  async findOneWithPermission(id: string, usuarioId: string, role: string) {
+    const contrato = await this.findOne(id);
+    await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    return contrato;
   }
 
   async findOne(id: string) {
@@ -177,11 +216,11 @@ export class ContratoService {
         fornecedor: dto.fornecedor,
         codigoFornecedor: dto.codigoFornecedor,
         lojaFornecedor: dto.lojaFornecedor,
-        valorTotal: dto.valorTotal,
+        valorTotal: dto.valorTotal ?? 0,
         valorMensal: dto.valorMensal,
-        dataInicio: new Date(dto.dataInicio),
-        dataFim: new Date(dto.dataFim),
-        dataAssinatura: dto.dataAssinatura ? new Date(dto.dataAssinatura) : undefined,
+        dataInicio: this.parseDate(dto.dataInicio),
+        dataFim: this.parseDate(dto.dataFim),
+        dataAssinatura: dto.dataAssinatura ? this.parseDate(dto.dataAssinatura) : undefined,
         modalidadeValor: (dto.modalidadeValor as 'FIXO' | 'VARIAVEL') || 'FIXO',
         renovacaoAutomatica: dto.renovacaoAutomatica,
         diasAlertaVencimento: dto.diasAlertaVencimento,
@@ -196,7 +235,7 @@ export class ContratoService {
 
     // Auto-generate parcelas if requested
     if (dto.gerarParcelas && dto.quantidadeParcelas && dto.quantidadeParcelas > 0) {
-      await this.gerarParcelasAuto(contrato.id, dto.valorTotal, dto.quantidadeParcelas, dto.primeiroVencimento);
+      await this.gerarParcelasAuto(contrato.id, dto.valorTotal ?? 0, dto.quantidadeParcelas, dto.primeiroVencimento);
     }
 
     return contrato;
@@ -226,9 +265,9 @@ export class ContratoService {
     if (dto.lojaFornecedor !== undefined) data.lojaFornecedor = dto.lojaFornecedor;
     if (dto.valorTotal !== undefined) data.valorTotal = dto.valorTotal;
     if (dto.valorMensal !== undefined) data.valorMensal = dto.valorMensal;
-    if (dto.dataInicio !== undefined) data.dataInicio = new Date(dto.dataInicio);
-    if (dto.dataFim !== undefined) data.dataFim = new Date(dto.dataFim);
-    if (dto.dataAssinatura !== undefined) data.dataAssinatura = dto.dataAssinatura ? new Date(dto.dataAssinatura) : null;
+    if (dto.dataInicio !== undefined) data.dataInicio = this.parseDate(dto.dataInicio);
+    if (dto.dataFim !== undefined) data.dataFim = this.parseDate(dto.dataFim);
+    if (dto.dataAssinatura !== undefined) data.dataAssinatura = dto.dataAssinatura ? this.parseDate(dto.dataAssinatura) : null;
     if (dto.modalidadeValor !== undefined) data.modalidadeValor = dto.modalidadeValor;
     if (dto.renovacaoAutomatica !== undefined) data.renovacaoAutomatica = dto.renovacaoAutomatica;
     if (dto.diasAlertaVencimento !== undefined) data.diasAlertaVencimento = dto.diasAlertaVencimento;
@@ -309,8 +348,8 @@ export class ContratoService {
 
     // Calculate dates
     const duracaoMs = new Date(contrato.dataFim).getTime() - new Date(contrato.dataInicio).getTime();
-    const novaDataInicio = dto.novaDataInicio ? new Date(dto.novaDataInicio) : new Date(contrato.dataFim);
-    const novaDataFim = dto.novaDataFim ? new Date(dto.novaDataFim) : new Date(novaDataInicio.getTime() + duracaoMs);
+    const novaDataInicio = dto.novaDataInicio ? this.parseDate(dto.novaDataInicio) : new Date(contrato.dataFim);
+    const novaDataFim = dto.novaDataFim ? this.parseDate(dto.novaDataFim) : new Date(novaDataInicio.getTime() + duracaoMs);
 
     const [, novoContrato] = await this.prisma.$transaction([
       this.prisma.contrato.update({
@@ -450,7 +489,7 @@ export class ContratoService {
         numero: dto.numero,
         descricao: dto.descricao,
         valor: dto.valor,
-        dataVencimento: new Date(dto.dataVencimento),
+        dataVencimento: this.parseDate(dto.dataVencimento),
         notaFiscal: dto.notaFiscal,
         observacoes: dto.observacoes,
         contratoId,
@@ -462,24 +501,36 @@ export class ContratoService {
     return parcela;
   }
 
-  async atualizarParcela(contratoId: string, parcelaId: string, dto: UpdateParcelaDto) {
+  async atualizarParcela(contratoId: string, parcelaId: string, dto: UpdateParcelaDto, usuarioId: string, role: string = 'ADMIN') {
+    const contrato = await this.findOne(contratoId);
+    await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+
     const parcela = await this.prisma.parcelaContrato.findFirst({
       where: { id: parcelaId, contratoId },
     });
     if (!parcela) {
       throw new NotFoundException('Parcela nao encontrada neste contrato');
     }
-    if (parcela.status === 'PAGA') {
-      throw new BadRequestException('Parcela ja paga nao pode ser alterada');
-    }
 
     const data: Record<string, unknown> = {};
-    if (dto.numero !== undefined) data.numero = dto.numero;
-    if (dto.descricao !== undefined) data.descricao = dto.descricao;
-    if (dto.valor !== undefined) data.valor = dto.valor;
-    if (dto.dataVencimento !== undefined) data.dataVencimento = new Date(dto.dataVencimento);
-    if (dto.notaFiscal !== undefined) data.notaFiscal = dto.notaFiscal;
-    if (dto.observacoes !== undefined) data.observacoes = dto.observacoes;
+
+    if (parcela.status === 'PAGA') {
+      // Parcela paga: permite alterar apenas NF, observacoes e data de envio
+      if (dto.notaFiscal !== undefined) data.notaFiscal = dto.notaFiscal;
+      if (dto.observacoes !== undefined) data.observacoes = dto.observacoes;
+      if (dto.dataPagamento !== undefined) data.dataPagamento = this.parseDate(dto.dataPagamento);
+      if (Object.keys(data).length === 0) {
+        throw new BadRequestException('Parcela paga: apenas Nota Fiscal, Data de Envio e Observacoes podem ser alterados');
+      }
+    } else {
+      if (dto.numero !== undefined) data.numero = dto.numero;
+      if (dto.descricao !== undefined) data.descricao = dto.descricao;
+      if (dto.valor !== undefined) data.valor = dto.valor;
+      if (dto.dataVencimento !== undefined) data.dataVencimento = this.parseDate(dto.dataVencimento);
+      if (dto.notaFiscal !== undefined) data.notaFiscal = dto.notaFiscal;
+      if (dto.observacoes !== undefined) data.observacoes = dto.observacoes;
+      if (dto.dataPagamento !== undefined) data.dataPagamento = this.parseDate(dto.dataPagamento);
+    }
 
     return this.prisma.parcelaContrato.update({
       where: { id: parcelaId },
@@ -508,7 +559,7 @@ export class ContratoService {
       where: { id: parcelaId },
       data: {
         status: 'PAGA',
-        dataPagamento: dto.dataPagamento ? new Date(dto.dataPagamento) : new Date(),
+        dataPagamento: dto.dataPagamento ? this.parseDate(dto.dataPagamento) : new Date(),
         notaFiscal: dto.notaFiscal ?? parcela.notaFiscal,
       },
     });
@@ -651,8 +702,8 @@ export class ContratoService {
     if (!parcela) {
       throw new NotFoundException('Parcela nao encontrada neste contrato');
     }
-    if (['PAGA', 'CANCELADA'].includes(parcela.status)) {
-      throw new BadRequestException(`Nao e possivel alterar rateio de parcela ${parcela.status.toLowerCase()}`);
+    if (parcela.status === 'CANCELADA') {
+      throw new BadRequestException('Nao e possivel alterar rateio de parcela cancelada');
     }
 
     if (dto.usarTemplate) {
@@ -707,8 +758,8 @@ export class ContratoService {
     if (!parcela) {
       throw new NotFoundException('Parcela nao encontrada neste contrato');
     }
-    if (['PAGA', 'CANCELADA'].includes(parcela.status)) {
-      throw new BadRequestException(`Nao e possivel alterar rateio de parcela ${parcela.status.toLowerCase()}`);
+    if (parcela.status === 'CANCELADA') {
+      throw new BadRequestException('Nao e possivel alterar rateio de parcela cancelada');
     }
 
     const valorParcela = new Decimal(parcela.valor.toString());
@@ -1086,6 +1137,12 @@ export class ContratoService {
   }
 
   async createFornecedor(dto: CreateFornecedorDto) {
+    const existing = await this.prisma.fornecedorConfig.findUnique({
+      where: { codigo_loja: { codigo: dto.codigo, loja: dto.loja || '' } },
+    });
+    if (existing) {
+      throw new ConflictException(`Fornecedor ${dto.codigo} loja ${dto.loja || ''} ja cadastrado`);
+    }
     return this.prisma.fornecedorConfig.create({
       data: {
         codigo: dto.codigo,

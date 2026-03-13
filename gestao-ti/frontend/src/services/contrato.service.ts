@@ -26,13 +26,17 @@ interface ListFilters {
 interface CreateContratoPayload {
   titulo: string;
   tipoContratoId: string;
-  fornecedor: string;
+  fornecedor?: string;
   filialId: string;
   modalidadeValor?: string;
   numeroContrato?: string;
   codigoFornecedor?: string;
   lojaFornecedor?: string;
-  valorTotal: number;
+  fornecedorId?: string;
+  produtoId?: string;
+  codigoProduto?: string;
+  descricaoProduto?: string;
+  valorTotal?: number;
   valorMensal?: number;
   dataInicio: string;
   dataFim: string;
@@ -74,6 +78,15 @@ interface RenovarPayload {
 }
 
 export const contratoService = {
+  async verificarAcesso(): Promise<boolean> {
+    try {
+      const { data } = await gestaoApi.get('/contratos/acesso');
+      return data.temAcesso === true;
+    } catch {
+      return false;
+    }
+  },
+
   async listar(filters: ListFilters = {}): Promise<Contrato[]> {
     const params: Record<string, string> = {};
     if (filters.tipoContratoId) params.tipoContratoId = filters.tipoContratoId;

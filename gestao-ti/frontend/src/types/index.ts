@@ -654,6 +654,14 @@ export interface UsuarioChaveProjeto {
   createdAt: string;
 }
 
+export interface AtividadeVinculada {
+  id: string;
+  titulo: string;
+  status: StatusAtividade;
+  usuario: { id: string; nome: string };
+  createdAt: string;
+}
+
 export interface PendenciaProjeto {
   id: string;
   numero: number;
@@ -663,6 +671,7 @@ export interface PendenciaProjeto {
   prioridade: PrioridadePendencia;
   dataLimite: string | null;
   projetoId: string;
+  projeto?: { id: string; numero: number; nome: string };
   faseId: string | null;
   fase: { id: string; nome: string } | null;
   responsavelId: string;
@@ -671,7 +680,8 @@ export interface PendenciaProjeto {
   criador: { id: string; nome: string; username: string };
   interacoes?: InteracaoPendencia[];
   anexos?: AnexoPendenciaItem[];
-  _count?: { interacoes: number; anexos: number };
+  atividades?: AtividadeVinculada[];
+  _count?: { interacoes: number; anexos: number; atividades?: number };
   createdAt: string;
   updatedAt: string;
 }
@@ -708,7 +718,7 @@ export type ProbabilidadeRisco = 'MUITO_BAIXA' | 'BAIXA' | 'MEDIA' | 'ALTA' | 'M
 export type ImpactoRisco = 'MUITO_BAIXO' | 'BAIXO' | 'MEDIO' | 'ALTO' | 'MUITO_ALTO';
 export type StatusRisco = 'IDENTIFICADO' | 'EM_ANALISE' | 'MITIGANDO' | 'ACEITO' | 'RESOLVIDO';
 export type TipoDependencia = 'BLOQUEIO' | 'PREDECESSOR' | 'SUCESSOR' | 'RELACIONADO';
-export type TipoAnexo = 'DOCUMENTO' | 'PLANILHA' | 'IMAGEM' | 'LINK' | 'OUTRO';
+export type TipoAnexo = 'DOCUMENTO' | 'PLANILHA' | 'IMAGEM' | 'LINK' | 'OUTRO' | 'ARQUIVO';
 
 // === Fase 6A — CMDB + Conhecimento types ===
 
@@ -779,6 +789,10 @@ export interface AnexoProjeto {
   tipo: TipoAnexo;
   tamanho: string | null;
   descricao: string | null;
+  nomeArquivo: string | null;
+  nomeOriginal: string | null;
+  mimeType: string | null;
+  tamanhoBytes: number | null;
   projetoId: string;
   usuarioId: string;
   usuario: { id: string; nome: string };
@@ -816,6 +830,7 @@ export interface Projeto {
   custoRealizado: number | null;
   observacoes: string | null;
   projetoPaiId: string | null;
+  projetoPai: { id: string; numero: number; nome: string } | null;
   softwareId: string | null;
   software: { id: string; nome: string; tipo: string } | null;
   contratoId: string | null;
@@ -883,6 +898,8 @@ export interface AtividadeProjeto {
   usuario: { id: string; nome: string };
   faseId: string | null;
   fase: { id: string; nome: string } | null;
+  pendenciaId: string | null;
+  pendencia?: { id: string; numero: number; titulo: string; status: StatusPendencia } | null;
   _count?: { registrosTempo: number; comentarios: number };
   registrosTempo?: { id: string; usuarioId: string; horaInicio: string }[];
   createdAt: string;

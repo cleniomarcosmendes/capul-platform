@@ -279,7 +279,7 @@ export function ChamadosListPage() {
                     <td className="px-4 py-3 text-slate-500 font-mono">#{c.numero}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-800 max-w-[250px] truncate">{c.titulo}</span>
+                        <Link to={`/gestao-ti/chamados/${c.id}`} className="font-medium text-slate-800 hover:text-capul-600 max-w-[250px] truncate">{c.titulo}</Link>
                         {c.visibilidade === 'PRIVADO' && (
                           <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">PRIVADO</span>
                         )}

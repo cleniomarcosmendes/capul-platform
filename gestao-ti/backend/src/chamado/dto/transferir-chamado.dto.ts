@@ -7,6 +7,10 @@ export class TransferirEquipeDto {
 
   @IsOptional()
   @IsString()
+  tecnicoDestinoId?: string;
+
+  @IsOptional()
+  @IsString()
   motivo?: string;
 }
 

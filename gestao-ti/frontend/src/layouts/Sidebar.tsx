@@ -1,5 +1,7 @@
+import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { contratoService } from '../services/contrato.service';
 import {
   LayoutDashboard,
   Building2,
@@ -31,9 +33,10 @@ type MenuItem =
   | { section: string; roles?: string[] }
   | { label: string; icon: React.ComponentType<{ className?: string }>; path: string; roles?: string[] };
 
-const STAFF = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO'];
+const STAFF = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
 const MANAGERS = ['ADMIN', 'GESTOR_TI'];
-const CONTRATO_ROLES = ['ADMIN', 'GESTOR_TI', 'FINANCEIRO'];
+const CONTRATO_ROLES_STATIC = ['ADMIN', 'GESTOR_TI'];
+const CONTRATO_ROLES_DYNAMIC = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
 
 const menuItems: MenuItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/gestao-ti/' },
@@ -44,12 +47,12 @@ const menuItems: MenuItem[] = [
   { section: 'PORTFOLIO', roles: STAFF },
   { label: 'Softwares', icon: AppWindow, path: '/gestao-ti/softwares', roles: STAFF },
   { label: 'Licencas', icon: KeyRound, path: '/gestao-ti/licencas', roles: STAFF },
-  { label: 'Contratos', icon: FileText, path: '/gestao-ti/contratos', roles: CONTRATO_ROLES },
+  { label: 'Contratos', icon: FileText, path: '/gestao-ti/contratos', roles: CONTRATO_ROLES_STATIC },
   { section: 'SUSTENTACAO', roles: STAFF },
   { label: 'Paradas', icon: Activity, path: '/gestao-ti/paradas', roles: STAFF },
   { label: 'Motivos de Parada', icon: AlertTriangle, path: '/gestao-ti/motivos-parada', roles: MANAGERS },
-  { section: 'PROJETOS', roles: [...STAFF, 'GERENTE_PROJETO'] },
-  { label: 'Projetos', icon: FolderKanban, path: '/gestao-ti/projetos', roles: [...STAFF, 'GERENTE_PROJETO'] },
+  { section: 'PROJETOS', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'] },
+  { label: 'Projetos', icon: FolderKanban, path: '/gestao-ti/projetos', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'] },
   { section: 'INFRAESTRUTURA', roles: STAFF },
   { label: 'Ativos', icon: Server, path: '/gestao-ti/ativos', roles: STAFF },
   { section: 'CONFIGURACOES', roles: MANAGERS },
@@ -84,7 +87,22 @@ function filterMenuByRole(items: MenuItem[], role: string | null): MenuItem[] {
 
 export function Sidebar() {
   const { usuario, gestaoTiRole, logout } = useAuth();
-  const visibleItems = filterMenuByRole(menuItems, gestaoTiRole);
+  const [podeGerirContratos, setPodeGerirContratos] = useState(false);
+
+  useEffect(() => {
+    if (gestaoTiRole === 'SUPORTE_TI') {
+      contratoService.verificarAcesso().then(setPodeGerirContratos);
+    }
+  }, [gestaoTiRole]);
+
+  const effectiveItems = menuItems.map((item) => {
+    if ('label' in item && item.label === 'Contratos' && gestaoTiRole === 'SUPORTE_TI') {
+      return podeGerirContratos ? { ...item, roles: CONTRATO_ROLES_DYNAMIC } : item;
+    }
+    return item;
+  });
+
+  const visibleItems = filterMenuByRole(effectiveItems, gestaoTiRole);
 
   return (
     <aside className="w-64 h-screen flex flex-col flex-shrink-0" style={{ backgroundColor: 'var(--bg-sidebar)' }}>

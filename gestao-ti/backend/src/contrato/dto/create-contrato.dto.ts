@@ -34,10 +34,10 @@ export class CreateContratoDto {
   @MaxLength(50)
   numeroContrato?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Fornecedor e obrigatorio' })
   @MaxLength(200)
-  fornecedor: string;
+  fornecedor?: string;
 
   @IsOptional()
   @IsString()
@@ -67,9 +67,10 @@ export class CreateContratoDto {
   @IsString()
   produtoId?: string;
 
+  @IsOptional()
   @IsNumber({}, { message: 'Valor total deve ser um numero' })
   @Min(0)
-  valorTotal: number;
+  valorTotal?: number;
 
   @IsOptional()
   @IsNumber()

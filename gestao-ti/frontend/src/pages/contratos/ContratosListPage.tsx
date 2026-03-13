@@ -25,7 +25,7 @@ const statusLabels: Record<string, string> = {
 
 export function ContratosListPage() {
   const { gestaoTiRole } = useAuth();
-  const canManage = ['ADMIN', 'GESTOR_TI', 'FINANCEIRO'].includes(gestaoTiRole || '');
+  const canManage = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
 
   const [contratos, setContratos] = useState<Contrato[]>([]);
   const [tiposContrato, setTiposContrato] = useState<TipoContratoConfig[]>([]);

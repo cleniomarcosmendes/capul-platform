@@ -37,9 +37,9 @@ export function ConhecimentoDetalhePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
-  const canEdit = ['ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR', 'FINANCEIRO'].includes(gestaoTiRole || '');
+  const canEdit = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
   const { confirm } = useToast();
-  const canDelete = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const canDelete = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
 
   const [artigo, setArtigo] = useState<ArtigoConhecimento | null>(null);
   const [loading, setLoading] = useState(true);

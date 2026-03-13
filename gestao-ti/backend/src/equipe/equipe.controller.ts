@@ -14,6 +14,9 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { GestaoTiGuard } from '../common/guards/gestao-ti.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { CreateEquipeDto } from './dto/create-equipe.dto.js';
 import { UpdateEquipeDto } from './dto/update-equipe.dto.js';
 import { UpdateStatusDto } from './dto/update-status.dto.js';
@@ -29,6 +32,20 @@ export class EquipeController {
   @Get()
   findAll(@Query('status') status?: StatusGeral) {
     return this.equipeService.findAll(status);
+  }
+
+  /**
+   * Retorna equipes disponiveis para vincular a contratos.
+   * ADMIN/GESTOR_TI: todas as equipes ativas.
+   * Outros: apenas equipes onde o usuario pode gerir contratos.
+   */
+  @Get('para-contratos')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  findEquipesParaContratos(
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.equipeService.findEquipesParaContratos(user.sub, role);
   }
 
   @Get(':id')

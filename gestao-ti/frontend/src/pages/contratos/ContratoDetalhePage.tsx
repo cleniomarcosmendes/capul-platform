@@ -33,7 +33,10 @@ function fmtCurrency(v: number | null | undefined): string {
 
 function fmtDate(d: string | null | undefined): string {
   if (!d) return '-';
-  return new Date(d).toLocaleDateString('pt-BR');
+  // Usar split para evitar problema de timezone UTC-3
+  const dateStr = d.substring(0, 10); // "2026-03-17"
+  const [y, m, day] = dateStr.split('-');
+  return `${day}/${m}/${y}`;
 }
 
 function fmtDateTime(d: string): string {
@@ -136,7 +139,7 @@ export function ContratoDetalhePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
-  const canManage = ['ADMIN', 'GESTOR_TI', 'FINANCEIRO'].includes(gestaoTiRole || '');
+  const canManage = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
   const toast = useToast();
 
   const [contrato, setContrato] = useState<Contrato | null>(null);
@@ -259,26 +262,34 @@ export function ContratoDetalhePage() {
           <div className="bg-white rounded-xl shadow-lg max-w-lg w-full mx-4 p-6">
             <h3 className="text-lg font-semibold text-slate-800 mb-4">Renovar Contrato</h3>
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Indice Reajuste</label>
-                  <input value={renovarForm.indiceReajuste}
-                    onChange={(e) => setRenovarForm({ ...renovarForm, indiceReajuste: e.target.value })}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Ex: IGPM, IPCA" />
+              {contrato.modalidadeValor === 'FIXO' ? (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">Indice Reajuste</label>
+                      <input value={renovarForm.indiceReajuste}
+                        onChange={(e) => setRenovarForm({ ...renovarForm, indiceReajuste: e.target.value })}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Ex: IGPM, IPCA" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">% Reajuste</label>
+                      <input type="number" step="0.01" value={renovarForm.percentualReajuste}
+                        onChange={(e) => setRenovarForm({ ...renovarForm, percentualReajuste: e.target.value })}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Ex: 5.5" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">OU Novo Valor Total (R$)</label>
+                    <input type="number" step="0.01" value={renovarForm.novoValorTotal}
+                      onChange={(e) => setRenovarForm({ ...renovarForm, novoValorTotal: e.target.value })}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Sobrescreve o percentual" />
+                  </div>
+                </>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-xs text-amber-700">Contrato com valor variavel — nao possui percentual de reajuste. Os valores das parcelas serao definidos individualmente.</p>
                 </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">% Reajuste</label>
-                  <input type="number" step="0.01" value={renovarForm.percentualReajuste}
-                    onChange={(e) => setRenovarForm({ ...renovarForm, percentualReajuste: e.target.value })}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Ex: 5.5" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">OU Novo Valor Total (R$)</label>
-                <input type="number" step="0.01" value={renovarForm.novoValorTotal}
-                  onChange={(e) => setRenovarForm({ ...renovarForm, novoValorTotal: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Sobrescreve o percentual" />
-              </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">Nova Data Inicio</label>
@@ -515,7 +526,6 @@ function TabGeral({ contrato, canManage, onReload, toast, confirm }: TabPropsWit
 
   return (
     <div className="space-y-6">
-      {/* Info Cards */}
       <div className="bg-white rounded-xl border border-slate-200 p-6">
         <h4 className="font-semibold text-slate-700 mb-4">Informacoes do Contrato</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
@@ -552,17 +562,20 @@ function TabGeral({ contrato, canManage, onReload, toast, confirm }: TabPropsWit
         </div>
       </div>
 
-      {/* Anexos */}
       <div className="bg-white rounded-xl border border-slate-200">
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
           <h4 className="font-semibold text-slate-700">Anexos ({anexos.length})</h4>
           {canManage && !finalizado && (
-            <label className="flex items-center gap-1 text-xs text-capul-600 hover:underline cursor-pointer">
-              <Upload className="w-3.5 h-3.5" />
-              {uploading ? 'Enviando...' : 'Upload'}
-              <input ref={fileInputRef} type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
-            </label>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="flex items-center gap-1.5 text-sm text-capul-600 hover:text-capul-700 font-medium"
+            >
+              <Upload className="w-4 h-4" />
+              {uploading ? 'Enviando...' : 'Anexar Arquivo'}
+            </button>
           )}
+          <input ref={fileInputRef} type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
         </div>
         {anexos.length === 0 ? (
           <p className="px-6 py-8 text-sm text-slate-400 text-center">Nenhum anexo</p>
@@ -618,12 +631,13 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
   // Pagar modal
   const [pagarModal, setPagarModal] = useState<ParcelaContrato | null>(null);
   const [pagarNF, setPagarNF] = useState('');
+  const [pagarData, setPagarData] = useState('');
   const [pagando, setPagando] = useState(false);
 
   // Editing parcela
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  async function handleSaveEdit(p: ParcelaContrato, campos: { descricao?: string; notaFiscal?: string; observacoes?: string; valor?: number; dataVencimento?: string }) {
+  async function handleSaveEdit(p: ParcelaContrato, campos: { descricao?: string; notaFiscal?: string; observacoes?: string; valor?: number; dataVencimento?: string; dataPagamento?: string }) {
     try {
       await contratoService.atualizarParcela(contrato.id, p.id, campos);
       toast.show('success', `Parcela #${p.numero} atualizada`);
@@ -667,6 +681,7 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
 
   function handlePagar(p: ParcelaContrato) {
     setPagarNF(p.notaFiscal || '');
+    setPagarData(new Date().toISOString().slice(0, 10));
     setPagarModal(p);
   }
 
@@ -676,10 +691,12 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
     try {
       await contratoService.pagarParcela(contrato.id, pagarModal.id, {
         notaFiscal: pagarNF || undefined,
+        dataPagamento: pagarData || undefined,
       });
       toast.show('success', `Parcela #${pagarModal.numero} paga com sucesso`);
       setPagarModal(null);
       setPagarNF('');
+      setPagarData('');
       onReload();
     } catch (err) {
       toast.show('error', extractErrorMsg(err, 'Erro ao pagar parcela'));
@@ -809,7 +826,7 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
               <th className="text-left px-4 py-2 font-medium text-slate-600">Vencimento</th>
               <th className="text-center px-4 py-2 font-medium text-slate-600">Status</th>
               <th className="text-left px-4 py-2 font-medium text-slate-600">NF</th>
-              <th className="text-left px-4 py-2 font-medium text-slate-600">Dt. Pagamento</th>
+              <th className="text-left px-4 py-2 font-medium text-slate-600">Dt. Envio</th>
               {canManage && <th className="text-center px-4 py-2 font-medium text-slate-600">Acoes</th>}
             </tr>
           </thead>
@@ -858,14 +875,13 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Data do Pagamento</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Data de Envio</label>
                 <input
-                  type="text"
-                  value={new Date().toLocaleDateString('pt-BR')}
-                  disabled
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-50 text-slate-500"
+                  type="date"
+                  value={pagarData}
+                  onChange={(e) => setPagarData(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-capul-500 focus:border-capul-500"
                 />
-                <p className="text-xs text-slate-400 mt-0.5">Data registrada automaticamente</p>
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-5">
@@ -903,7 +919,7 @@ function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManag
   onCancelar: () => void;
   onEdit: () => void;
   onCancelEdit: () => void;
-  onSaveEdit: (campos: { descricao?: string; notaFiscal?: string; observacoes?: string; valor?: number; dataVencimento?: string }) => void;
+  onSaveEdit: (campos: { descricao?: string; notaFiscal?: string; observacoes?: string; valor?: number; dataVencimento?: string; dataPagamento?: string }) => void;
   onGerarTemplate: () => void;
   onCopiarPendentes: () => void;
   onImprimirRateio: () => void;
@@ -913,6 +929,7 @@ function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManag
   const [editValor, setEditValor] = useState(String(p.valor));
   const [editVenc, setEditVenc] = useState(p.dataVencimento ? p.dataVencimento.substring(0, 10) : '');
   const [editObs, setEditObs] = useState(p.observacoes || '');
+  const [editDataEnvio, setEditDataEnvio] = useState(p.dataPagamento ? p.dataPagamento.substring(0, 10) : '');
 
   useEffect(() => {
     if (editing) {
@@ -921,8 +938,11 @@ function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManag
       setEditValor(String(p.valor));
       setEditVenc(p.dataVencimento ? p.dataVencimento.substring(0, 10) : '');
       setEditObs(p.observacoes || '');
+      setEditDataEnvio(p.dataPagamento ? p.dataPagamento.substring(0, 10) : '');
     }
   }, [editing, p]);
+
+  const isPaga = p.status === 'PAGA';
 
   if (editing) {
     return (
@@ -933,16 +953,22 @@ function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManag
           </td>
           <td className="px-4 py-2.5 text-slate-500">{p.numero}</td>
           <td className="px-4 py-2.5">
-            <input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} placeholder="Descricao"
-              className="w-full border border-slate-300 rounded px-2 py-1 text-sm" />
+            {isPaga ? <span className="text-sm text-slate-600">{p.descricao || '-'}</span> : (
+              <input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} placeholder="Descricao"
+                className="w-full border border-slate-300 rounded px-2 py-1 text-sm" />
+            )}
           </td>
           <td className="px-4 py-2.5">
-            <input type="number" step="0.01" value={editValor} onChange={(e) => setEditValor(e.target.value)}
-              className="w-28 border border-slate-300 rounded px-2 py-1 text-sm text-right" />
+            {isPaga ? <span className="text-sm text-slate-600 text-right">{fmtCurrency(p.valor)}</span> : (
+              <input type="number" step="0.01" value={editValor} onChange={(e) => setEditValor(e.target.value)}
+                className="w-28 border border-slate-300 rounded px-2 py-1 text-sm text-right" />
+            )}
           </td>
           <td className="px-4 py-2.5">
-            <input type="date" value={editVenc} onChange={(e) => setEditVenc(e.target.value)}
-              className="border border-slate-300 rounded px-2 py-1 text-sm" />
+            {isPaga ? <span className="text-sm text-slate-600">{fmtDate(p.dataVencimento)}</span> : (
+              <input type="date" value={editVenc} onChange={(e) => setEditVenc(e.target.value)}
+                className="border border-slate-300 rounded px-2 py-1 text-sm" />
+            )}
           </td>
           <td className="px-4 py-2.5 text-center">
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${parcelaStatusCores[p.status]}`}>{p.status}</span>
@@ -951,16 +977,26 @@ function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManag
             <input value={editNF} onChange={(e) => setEditNF(e.target.value)} placeholder="Nota Fiscal"
               className="w-full border border-slate-300 rounded px-2 py-1 text-sm" />
           </td>
-          <td className="px-4 py-2.5 text-slate-400 text-sm">{p.dataPagamento ? fmtDate(p.dataPagamento) : '-'}</td>
+          <td className="px-4 py-2.5">
+            {isPaga ? (
+              <input type="date" value={editDataEnvio} onChange={(e) => setEditDataEnvio(e.target.value)}
+                className="border border-slate-300 rounded px-2 py-1 text-sm" />
+            ) : (
+              <span className="text-slate-400 text-sm">{p.dataPagamento ? fmtDate(p.dataPagamento) : '-'}</span>
+            )}
+          </td>
           {canManage && (
             <td className="px-4 py-2.5 text-center">
               <div className="flex items-center justify-center gap-2">
                 <button onClick={() => onSaveEdit({
-                  descricao: editDesc || undefined,
+                  ...(isPaga ? {} : {
+                    descricao: editDesc || undefined,
+                    valor: parseFloat(editValor),
+                    dataVencimento: editVenc || undefined,
+                  }),
                   notaFiscal: editNF || undefined,
-                  valor: parseFloat(editValor),
-                  dataVencimento: editVenc || undefined,
                   observacoes: editObs || undefined,
+                  ...(isPaga ? { dataPagamento: editDataEnvio || undefined } : {}),
                 })} className="text-xs text-green-600 hover:underline flex items-center gap-0.5">
                   <Check className="w-3 h-3" /> Salvar
                 </button>
@@ -1008,6 +1044,13 @@ function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManag
                 <button onClick={onCancelar} className="text-xs text-red-500 hover:underline">Cancelar</button>
               </div>
             )}
+            {p.status === 'PAGA' && (
+              <div className="flex items-center justify-center gap-2">
+                <button onClick={onEdit} className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
+                  <Pencil className="w-3 h-3" /> Editar
+                </button>
+              </div>
+            )}
           </td>
         )}
       </tr>
@@ -1018,13 +1061,13 @@ function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManag
               <div className="flex items-center justify-between">
                 <h5 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Rateio da Parcela #{p.numero}</h5>
                 <div className="flex gap-2">
-                  {canManage && p.status === 'PENDENTE' && (
+                  {canManage && p.status !== 'CANCELADA' && (
                     <>
                       <button onClick={onGerarTemplate}
                         className="flex items-center gap-1 text-xs text-capul-600 hover:underline">
-                        <Zap className="w-3 h-3" /> Gerar via Template
+                        <Zap className="w-3 h-3" /> {p.status === 'PAGA' ? 'Recalcular Rateio' : 'Gerar via Template'}
                       </button>
-                      {rateioItens.length > 0 && (
+                      {rateioItens.length > 0 && p.status === 'PENDENTE' && (
                         <button onClick={onCopiarPendentes}
                           className="flex items-center gap-1 text-xs text-slate-600 hover:underline">
                           <Copy className="w-3 h-3" /> Copiar p/ Pendentes

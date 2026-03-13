@@ -28,6 +28,7 @@ import { MotivosParadaPage } from './pages/sustentacao/MotivosParadaPage';
 import { ProjetosListPage } from './pages/projetos/ProjetosListPage';
 import { ProjetoFormPage } from './pages/projetos/ProjetoFormPage';
 import { ProjetoDetalhePage } from './pages/projetos/ProjetoDetalhePage';
+import { PendenciaDetalhePage } from './pages/projetos/PendenciaDetalhePage';
 import { AtivosListPage } from './pages/ativos/AtivosListPage';
 import { AtivoFormPage } from './pages/ativos/AtivoFormPage';
 import { AtivoDetalhePage } from './pages/ativos/AtivoDetalhePage';
@@ -114,6 +115,7 @@ function AppRoutes() {
         <Route path="projetos/novo" element={<ProjetoFormPage />} />
         <Route path="projetos/:id" element={<ProjetoDetalhePage />} />
         <Route path="projetos/:id/editar" element={<ProjetoFormPage />} />
+        <Route path="projetos/:projetoId/pendencias/:pendenciaId" element={<PendenciaDetalhePage />} />
         <Route path="ativos" element={<AtivosListPage />} />
         <Route path="ativos/novo" element={<AtivoFormPage />} />
         <Route path="ativos/:id" element={<AtivoDetalhePage />} />

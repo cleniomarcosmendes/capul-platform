@@ -223,7 +223,9 @@ export function ProjetosListPage() {
                           {p.nome}
                         </Link>
                         {p.nivel > 1 && (
-                          <span className="ml-2 text-xs text-slate-400">N{p.nivel}</span>
+                          <span className="ml-2 text-xs text-slate-400">
+                            N{p.nivel}{p.projetoPai ? <> — <Link to={`/gestao-ti/projetos/${p.projetoPai.id}`} className="text-capul-500 hover:underline">{p.projetoPai.nome}</Link></> : ''}
+                          </span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-slate-600 text-xs">{tipoLabel[p.tipo] || p.tipo}</td>

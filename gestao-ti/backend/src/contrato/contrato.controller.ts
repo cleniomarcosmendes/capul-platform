@@ -122,6 +122,11 @@ export class ContratoController {
 
   // --- Contratos ---
 
+  @Get('acesso')
+  verificarAcesso(@CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
+    return this.service.verificarAcessoContratos(user.sub, role).then(temAcesso => ({ temAcesso }));
+  }
+
   @Get()
   findAll(
     @Query('tipoContratoId') tipoContratoId?: string,
@@ -129,6 +134,8 @@ export class ContratoController {
     @Query('softwareId') softwareId?: string,
     @Query('fornecedor') fornecedor?: string,
     @Query('vencendoEm') vencendoEm?: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
   ) {
     return this.service.findAll({
       tipoContratoId,
@@ -136,22 +143,22 @@ export class ContratoController {
       softwareId,
       fornecedor,
       vencendoEm: vencendoEm ? parseInt(vencendoEm, 10) : undefined,
-    });
+    }, user?.sub, role);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
+    return this.service.findOneWithPermission(id, user.sub, role);
   }
 
   @Post()
-  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   create(@Body() dto: CreateContratoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     return this.service.create(dto, user.sub, role);
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateContratoDto,
@@ -162,7 +169,7 @@ export class ContratoController {
   }
 
   @Patch(':id/status')
-  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   alterarStatus(
     @Param('id') id: string,
     @Body() dto: UpdateStatusContratoDto,
@@ -173,7 +180,7 @@ export class ContratoController {
   }
 
   @Post(':id/renovar')
-  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   renovar(
     @Param('id') id: string,
     @Body() dto: RenovarContratoDto,
@@ -191,7 +198,7 @@ export class ContratoController {
   }
 
   @Post(':id/parcelas')
-  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   criarParcela(
     @Param('id') id: string,
     @Body() dto: CreateParcelaDto,
@@ -202,17 +209,19 @@ export class ContratoController {
   }
 
   @Patch(':id/parcelas/:pid')
-  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   atualizarParcela(
     @Param('id') id: string,
     @Param('pid') pid: string,
     @Body() dto: UpdateParcelaDto,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
   ) {
-    return this.service.atualizarParcela(id, pid, dto);
+    return this.service.atualizarParcela(id, pid, dto, user.sub, role);
   }
 
   @Post(':id/parcelas/:pid/pagar')
-  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   pagarParcela(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -224,7 +233,7 @@ export class ContratoController {
   }
 
   @Post(':id/parcelas/:pid/cancelar')
-  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   cancelarParcela(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -242,7 +251,7 @@ export class ContratoController {
   }
 
   @Post(':id/rateio-template')
-  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   configurarRateioTemplate(
     @Param('id') id: string,
     @Body() dto: ConfigurarRateioTemplateDto,
@@ -253,7 +262,7 @@ export class ContratoController {
   }
 
   @Post(':id/rateio-template/simular')
-  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   simularRateioTemplate(@Param('id') id: string, @Body() dto: SimularRateioDto) {
     return this.service.simularRateioTemplate(id, dto);
   }
@@ -266,7 +275,7 @@ export class ContratoController {
   }
 
   @Post(':id/parcelas/:pid/rateio')
-  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   configurarRateioParcela(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -278,7 +287,7 @@ export class ContratoController {
   }
 
   @Post(':id/parcelas/:pid/rateio/gerar')
-  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   gerarRateioParcela(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -290,7 +299,7 @@ export class ContratoController {
   }
 
   @Post(':id/parcelas/:pid/rateio/copiar-pendentes')
-  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   copiarRateioParaPendentes(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -307,7 +316,7 @@ export class ContratoController {
   }
 
   @Post(':id/anexos')
-  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
       destination: UPLOADS_DIR,
@@ -342,7 +351,7 @@ export class ContratoController {
   }
 
   @Delete(':id/anexos/:aid')
-  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   excluirAnexo(
     @Param('id') id: string,
     @Param('aid') aid: string,
@@ -361,7 +370,7 @@ export class ContratoController {
   // --- Licencas ---
 
   @Post(':id/licencas')
-  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   vincularLicenca(
     @Param('id') id: string,
     @Body('licencaId') licencaId: string,
@@ -372,7 +381,7 @@ export class ContratoController {
   }
 
   @Delete(':id/licencas/:licId')
-  @Roles('ADMIN', 'GESTOR_TI', 'FINANCEIRO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   desvincularLicenca(
     @Param('id') id: string,
     @Param('licId') licId: string,

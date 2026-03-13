@@ -56,7 +56,7 @@ export function ParadaDetalhePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
-  const canManage = ['ADMIN', 'GESTOR_TI', 'TECNICO'].includes(gestaoTiRole || '');
+  const canManage = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
   const { confirm } = useToast();
   const canCancel = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
 

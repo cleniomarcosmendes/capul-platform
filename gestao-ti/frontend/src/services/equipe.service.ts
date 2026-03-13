@@ -41,4 +41,13 @@ export const equipeService = {
   async removerMembro(equipeId: string, membroId: string): Promise<void> {
     await gestaoApi.delete(`/equipes/${equipeId}/membros/${membroId}`);
   },
+
+  /**
+   * Lista equipes disponiveis para vincular a contratos.
+   * Para ADMIN/GESTOR_TI retorna todas. Para SUPORTE_TI, apenas as autorizadas.
+   */
+  async listarParaContratos(): Promise<EquipeTI[]> {
+    const { data } = await gestaoApi.get('/equipes/para-contratos');
+    return data;
+  },
 };

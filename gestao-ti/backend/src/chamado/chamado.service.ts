@@ -271,7 +271,7 @@ export class ChamadoService {
   async assumir(id: string, user: JwtPayload) {
     const chamado = await this.getChamadoOrFail(id);
 
-    if (chamado.status !== 'ABERTO' && chamado.status !== 'PENDENTE') {
+    if (!['ABERTO', 'PENDENTE', 'REABERTO'].includes(chamado.status)) {
       throw new BadRequestException('Chamado nao pode ser assumido neste status');
     }
 
@@ -291,6 +291,11 @@ export class ChamadoService {
       },
     });
 
+    // Auto-iniciar cronometro ao assumir
+    await this.prisma.registroTempoChamado.create({
+      data: { horaInicio: new Date(), chamadoId: id, usuarioId: user.sub },
+    });
+
     // Notificar solicitante
     this.notificacaoService.criarParaUsuario(
       chamado.solicitanteId, 'CHAMADO_ATUALIZADO',
@@ -307,8 +312,8 @@ export class ChamadoService {
 
     const chamado = await this.getChamadoOrFail(id);
 
-    if (chamado.status === 'FECHADO' || chamado.status === 'CANCELADO') {
-      throw new BadRequestException('Chamado encerrado nao pode ser transferido');
+    if (['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status)) {
+      throw new BadRequestException('Chamado finalizado nao pode ser transferido. Reabra o chamado primeiro.');
     }
 
     const equipeDestino = await this.prisma.equipeTI.findUnique({
@@ -316,12 +321,22 @@ export class ChamadoService {
     });
     if (!equipeDestino) throw new BadRequestException('Equipe destino nao encontrada');
 
+    // Se indicou tecnico destino, validar que pertence a equipe destino
+    if (dto.tecnicoDestinoId) {
+      const membro = await this.prisma.membroEquipe.findUnique({
+        where: { usuarioId_equipeId: { usuarioId: dto.tecnicoDestinoId, equipeId: dto.equipeDestinoId } },
+      });
+      if (!membro || membro.status !== 'ATIVO') {
+        throw new BadRequestException('Tecnico informado nao pertence a equipe destino');
+      }
+    }
+
     const updated = await this.prisma.chamado.update({
       where: { id },
       data: {
         equipeAtualId: dto.equipeDestinoId,
-        tecnicoId: null,
-        status: 'ABERTO',
+        tecnicoId: dto.tecnicoDestinoId || null,
+        status: dto.tecnicoDestinoId ? 'EM_ATENDIMENTO' : 'ABERTO',
       },
       include: chamadoInclude,
     });
@@ -329,7 +344,7 @@ export class ChamadoService {
     await this.prisma.historicoChamado.create({
       data: {
         tipo: 'TRANSFERENCIA_EQUIPE',
-        descricao: dto.motivo || 'Chamado transferido para outra equipe',
+        descricao: dto.motivo || `Chamado transferido para outra equipe${dto.tecnicoDestinoId ? ' com tecnico indicado' : ''}`,
         publico: true,
         chamadoId: id,
         usuarioId: user.sub,
@@ -362,8 +377,8 @@ export class ChamadoService {
 
     const chamado = await this.getChamadoOrFail(id);
 
-    if (chamado.status === 'FECHADO' || chamado.status === 'CANCELADO') {
-      throw new BadRequestException('Chamado encerrado nao pode ser transferido');
+    if (['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status)) {
+      throw new BadRequestException('Chamado finalizado nao pode ser transferido. Reabra o chamado primeiro.');
     }
 
     if (!chamado.tecnicoId) {
@@ -406,8 +421,13 @@ export class ChamadoService {
 
     const chamado = await this.getChamadoOrFail(id);
 
-    if (['FECHADO', 'CANCELADO'].includes(chamado.status)) {
-      throw new BadRequestException('Nao e possivel comentar em chamado encerrado');
+    if (['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status)) {
+      throw new BadRequestException('Nao e possivel comentar em chamado finalizado. Reabra o chamado para adicionar comentarios.');
+    }
+
+    // Se chamado nao tem tecnico atribuido, apenas solicitante pode comentar
+    if (!chamado.tecnicoId && chamado.solicitanteId !== user.sub && !ROLES_GESTORES.includes(role)) {
+      throw new BadRequestException('E necessario assumir o chamado antes de comentar');
     }
 
     const historico = await this.prisma.historicoChamado.create({
@@ -450,6 +470,14 @@ export class ChamadoService {
 
     if (!chamado.tecnicoId) {
       throw new BadRequestException('E necessario assumir o chamado antes de finaliza-lo');
+    }
+
+    // Verificar se ha registro de tempo
+    const totalRegistros = await this.prisma.registroTempoChamado.count({
+      where: { chamadoId: id },
+    });
+    if (totalRegistros === 0) {
+      throw new BadRequestException('E necessario iniciar o tempo de atendimento antes de finalizar o chamado');
     }
 
     // Encerrar todos os cronometros ativos
@@ -541,9 +569,19 @@ export class ChamadoService {
       throw new BadRequestException('Apenas chamados resolvidos ou fechados podem ser reabertos');
     }
 
+    // Se quem reabre e um tecnico de TI (nao USUARIO_FINAL), ele automaticamente assume o chamado
+    const isTecnicoTI = role !== 'USUARIO_FINAL';
+    const novoTecnicoId = isTecnicoTI ? user.sub : null;
+    const novoStatus = isTecnicoTI ? 'EM_ATENDIMENTO' : 'REABERTO';
+
     const updated = await this.prisma.chamado.update({
       where: { id },
-      data: { status: 'ABERTO', dataResolucao: null, dataFechamento: null },
+      data: {
+        status: novoStatus,
+        tecnicoId: novoTecnicoId,
+        dataResolucao: null,
+        dataFechamento: null,
+      },
       include: chamadoInclude,
     });
 
@@ -556,6 +594,24 @@ export class ChamadoService {
         usuarioId: user.sub,
       },
     });
+
+    // Se tecnico assumiu ao reabrir, criar historico de assumido tambem
+    if (isTecnicoTI) {
+      await this.prisma.historicoChamado.create({
+        data: {
+          tipo: 'ASSUMIDO',
+          descricao: 'Chamado assumido ao reabrir',
+          publico: true,
+          chamadoId: id,
+          usuarioId: user.sub,
+        },
+      });
+
+      // Auto-iniciar cronometro ao assumir
+      await this.prisma.registroTempoChamado.create({
+        data: { horaInicio: new Date(), chamadoId: id, usuarioId: user.sub },
+      });
+    }
 
     return updated;
   }
@@ -645,7 +701,10 @@ export class ChamadoService {
   }
 
   async addAnexo(chamadoId: string, file: Express.Multer.File, userId: string, descricao?: string) {
-    await this.getChamadoOrFail(chamadoId);
+    const chamado = await this.getChamadoOrFail(chamadoId);
+    if (['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status)) {
+      throw new BadRequestException('Nao e possivel anexar arquivos em chamado finalizado');
+    }
     return this.prisma.anexoChamado.create({
       data: {
         nomeOriginal: file.originalname,
@@ -675,8 +734,8 @@ export class ChamadoService {
 
   async removeAnexo(chamadoId: string, anexoId: string) {
     const chamado = await this.getChamadoOrFail(chamadoId);
-    if (['FECHADO', 'CANCELADO'].includes(chamado.status)) {
-      throw new BadRequestException('Nao e possivel remover anexo de chamado encerrado');
+    if (['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status)) {
+      throw new BadRequestException('Nao e possivel remover anexo de chamado finalizado');
     }
 
     const anexo = await this.prisma.anexoChamado.findFirst({
@@ -739,8 +798,8 @@ export class ChamadoService {
     await this.assertTecnicoOuColaborador(chamadoId, user.sub, role);
 
     const chamado = await this.getChamadoOrFail(chamadoId);
-    if (['FECHADO', 'CANCELADO'].includes(chamado.status)) {
-      throw new BadRequestException('Nao e possivel remover colaborador de chamado encerrado');
+    if (['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status)) {
+      throw new BadRequestException('Nao e possivel remover colaborador de chamado finalizado');
     }
 
     const reg = await this.prisma.chamadoColaborador.findFirst({
@@ -771,8 +830,8 @@ export class ChamadoService {
 
     const chamado = await this.getChamadoOrFail(chamadoId);
 
-    if (['FECHADO', 'CANCELADO'].includes(chamado.status)) {
-      throw new BadRequestException('Nao e possivel registrar tempo em chamado encerrado');
+    if (['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status)) {
+      throw new BadRequestException('Nao e possivel registrar tempo em chamado finalizado');
     }
 
     // Encerra qualquer registro aberto do usuario neste chamado
@@ -809,8 +868,8 @@ export class ChamadoService {
 
   async ajustarRegistroTempoChamado(chamadoId: string, registroId: string, dto: UpdateRegistroTempoChamadoDto) {
     const chamado = await this.getChamadoOrFail(chamadoId);
-    if (['FECHADO', 'CANCELADO'].includes(chamado.status)) {
-      throw new BadRequestException('Nao e possivel ajustar registro de tempo em chamado encerrado');
+    if (!['RESOLVIDO', 'FECHADO'].includes(chamado.status)) {
+      throw new BadRequestException('O registro de tempo so pode ser editado apos a finalizacao do chamado');
     }
 
     const registro = await this.prisma.registroTempoChamado.findFirst({
@@ -838,8 +897,8 @@ export class ChamadoService {
 
   async removerRegistroTempoChamado(chamadoId: string, registroId: string) {
     const chamado = await this.getChamadoOrFail(chamadoId);
-    if (['FECHADO', 'CANCELADO'].includes(chamado.status)) {
-      throw new BadRequestException('Nao e possivel remover registro de tempo de chamado encerrado');
+    if (!['RESOLVIDO', 'FECHADO'].includes(chamado.status)) {
+      throw new BadRequestException('O registro de tempo so pode ser removido apos a finalizacao do chamado');
     }
 
     const registro = await this.prisma.registroTempoChamado.findFirst({

@@ -405,10 +405,15 @@ export function ChamadoCreatePage() {
           {/* Anexos */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Anexos (opcional)</label>
-            <div className="border border-dashed border-slate-300 rounded-lg p-4">
+            <div
+              className="border border-dashed border-slate-300 rounded-lg p-4 transition-colors"
+              onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-capul-400', 'bg-capul-50'); }}
+              onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-capul-400', 'bg-capul-50'); }}
+              onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-capul-400', 'bg-capul-50'); if (e.dataTransfer.files.length > 0) { const fakeEvent = { target: { files: e.dataTransfer.files } } as unknown as React.ChangeEvent<HTMLInputElement>; handleFileChange(fakeEvent); } }}
+            >
               <label className="flex items-center gap-2 text-sm text-capul-600 hover:text-capul-700 cursor-pointer w-fit">
                 <Paperclip className="w-4 h-4" />
-                Selecionar arquivos
+                Selecionar ou arrastar arquivos
                 <input
                   type="file"
                   multiple
@@ -417,7 +422,7 @@ export function ChamadoCreatePage() {
                   accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.7z"
                 />
               </label>
-              <p className="text-xs text-slate-400 mt-1">Max 10MB por arquivo. Imagens, PDF, documentos, planilhas, ZIP.</p>
+              <p className="text-xs text-slate-400 mt-1">Max 10MB por arquivo. Imagens, PDF, documentos, planilhas, ZIP. Arraste arquivos para ca.</p>
               {arquivos.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {arquivos.map((file, i) => (

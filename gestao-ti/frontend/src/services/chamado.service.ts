@@ -60,8 +60,8 @@ export const chamadoService = {
     return data;
   },
 
-  async transferirEquipe(id: string, equipeDestinoId: string, motivo?: string): Promise<Chamado> {
-    const { data } = await gestaoApi.post(`/chamados/${id}/transferir-equipe`, { equipeDestinoId, motivo });
+  async transferirEquipe(id: string, equipeDestinoId: string, motivo?: string, tecnicoDestinoId?: string): Promise<Chamado> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/transferir-equipe`, { equipeDestinoId, motivo, tecnicoDestinoId });
     return data;
   },
 

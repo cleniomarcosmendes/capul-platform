@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { contratoService } from '../../services/contrato.service';
-import { Plus, Truck, Pencil, Check, X } from 'lucide-react';
+import { Plus, Truck, Pencil, Check, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { FornecedorConfig } from '../../types';
 import { useToast } from '../../components/Toast';
+
+type SortKey = 'codigo' | 'loja' | 'nome' | 'status';
+type SortDir = 'asc' | 'desc';
 
 export function FornecedoresPage() {
   const { gestaoTiRole } = useAuth();
@@ -25,12 +28,38 @@ export function FornecedoresPage() {
   const [editNome, setEditNome] = useState('');
   const [editSaving, setEditSaving] = useState(false);
 
+  const [sortKey, setSortKey] = useState<SortKey>('codigo');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
   useEffect(() => { carregar(); }, []);
 
   async function carregar() {
     setLoading(true);
     try { setFornecedores(await contratoService.listarTodosFornecedores()); } catch { /* empty */ }
     setLoading(false);
+  }
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
+
+  const sorted = useMemo(() => {
+    return [...fornecedores].sort((a, b) => {
+      const va = (a[sortKey] || '').toString().toLowerCase();
+      const vb = (b[sortKey] || '').toString().toLowerCase();
+      const cmp = va.localeCompare(vb);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [fornecedores, sortKey, sortDir]);
+
+  function SortIcon({ col }: { col: SortKey }) {
+    if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300" />;
+    return sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-capul-600" /> : <ArrowDown className="w-3 h-3 text-capul-600" />;
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -42,7 +71,10 @@ export function FornecedoresPage() {
       setShowForm(false);
       toast('success', 'Fornecedor criado');
       carregar();
-    } catch { toast('error', 'Erro ao criar fornecedor'); }
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao criar fornecedor';
+      toast('error', msg);
+    }
     setSaving(false);
   }
 
@@ -54,7 +86,7 @@ export function FornecedoresPage() {
     if (!editId) return;
     setEditSaving(true);
     try {
-      await contratoService.atualizarFornecedor(editId, { codigo: editCodigo, loja: editLoja || null, nome: editNome });
+      await contratoService.atualizarFornecedor(editId, { codigo: editCodigo, loja: editLoja || '', nome: editNome });
       toast('success', 'Fornecedor atualizado');
       setEditId(null);
       carregar();
@@ -94,8 +126,8 @@ export function FornecedoresPage() {
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" placeholder="F00051" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Loja</label>
-                <input type="text" value={loja} onChange={(e) => setLoja(e.target.value)} maxLength={10}
+                <label className="block text-sm font-medium text-slate-700 mb-1">Loja *</label>
+                <input type="text" value={loja} onChange={(e) => setLoja(e.target.value)} required maxLength={10}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" placeholder="0001" />
               </div>
               <div>
@@ -126,15 +158,15 @@ export function FornecedoresPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  <th className="px-6 py-3">Codigo</th>
-                  <th className="px-6 py-3">Loja</th>
-                  <th className="px-6 py-3">Nome</th>
-                  <th className="px-6 py-3">Status</th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('codigo')} className="flex items-center gap-1 hover:text-slate-700">Codigo <SortIcon col="codigo" /></button></th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('loja')} className="flex items-center gap-1 hover:text-slate-700">Loja <SortIcon col="loja" /></button></th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('nome')} className="flex items-center gap-1 hover:text-slate-700">Nome <SortIcon col="nome" /></button></th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-slate-700">Status <SortIcon col="status" /></button></th>
                   {canManage && <th className="px-6 py-3">Acoes</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {fornecedores.map((f) => (
+                {sorted.map((f) => (
                   <tr key={f.id} className="hover:bg-slate-50">
                     {editId === f.id ? (
                       <>

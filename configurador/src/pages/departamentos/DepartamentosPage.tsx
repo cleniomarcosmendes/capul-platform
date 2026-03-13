@@ -158,22 +158,30 @@ export function DepartamentosPage() {
                   <th className="px-6 py-3">Nome</th>
                   <th className="px-6 py-3">Descricao</th>
                   <th className="px-6 py-3">Status</th>
-                  {canEdit && <th className="px-6 py-3 text-right">Acoes</th>}
+                  {canEdit && <th className="px-6 py-3">Acoes</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {departamentos.map((depto) => (
                   <tr key={depto.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 text-sm font-medium text-slate-700">{depto.nome}</td>
+                    <td className="px-6 py-4 text-sm font-medium">
+                      {canEdit ? (
+                        <button onClick={() => iniciarEdicao(depto)} className="text-emerald-600 hover:underline text-left">{depto.nome}</button>
+                      ) : (
+                        <span className="text-slate-700">{depto.nome}</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-sm text-slate-600">{depto.descricao || '—'}</td>
                     <td className="px-6 py-4">
                       <span className={`text-xs px-2 py-1 rounded-full ${depto.status === 'ATIVO' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{depto.status}</span>
                     </td>
                     {canEdit && (
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => iniciarEdicao(depto)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-emerald-600 transition-all" title="Editar"><Pencil className="w-4 h-4" /></button>
-                          <button onClick={() => toggleStatus(depto)} className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${depto.status === 'ATIVO' ? 'text-red-600 hover:bg-red-50' : 'text-green-600 hover:bg-green-50'}`}>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => iniciarEdicao(depto)} className="flex items-center gap-1 text-xs text-emerald-600 hover:underline">
+                            <Pencil className="w-3.5 h-3.5" /> Editar
+                          </button>
+                          <button onClick={() => toggleStatus(depto)} className="text-xs text-emerald-600 hover:underline">
                             {depto.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
                           </button>
                         </div>

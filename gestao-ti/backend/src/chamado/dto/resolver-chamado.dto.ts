@@ -1,9 +1,9 @@
-import { IsString, IsOptional, IsInt, Min, Max } from 'class-validator';
+import { IsString, IsOptional, IsNotEmpty, IsInt, Min, Max } from 'class-validator';
 
 export class ResolverChamadoDto {
-  @IsOptional()
   @IsString()
-  descricao?: string;
+  @IsNotEmpty({ message: 'A descricao da resolucao e obrigatoria' })
+  descricao: string;
 }
 
 export class FecharChamadoDto {

@@ -178,6 +178,7 @@ enum StatusChamado {
   RESOLVIDO
   FECHADO
   CANCELADO
+  REABERTO
 
   @@schema("gestao_ti")
 }
@@ -564,8 +565,8 @@ model TipoContratoConfig {
 
 model FornecedorConfig {
   id        String      @id @default(uuid())
-  codigo    String      @unique @db.VarChar(20)
-  loja      String?     @db.VarChar(10)
+  codigo    String      @db.VarChar(20)
+  loja      String      @default("") @db.VarChar(10)
   nome      String      @db.VarChar(200)
   status    StatusGeral @default(ATIVO)
   createdAt DateTime    @default(now()) @map("created_at")
@@ -573,6 +574,7 @@ model FornecedorConfig {
 
   contratos Contrato[]
 
+  @@unique([codigo, loja])
   @@map("fornecedores")
   @@schema("gestao_ti")
 }
@@ -793,6 +795,7 @@ enum TipoAnexo {
   IMAGEM
   LINK
   OUTRO
+  ARQUIVO
 
   @@schema("gestao_ti")
 }
@@ -1398,6 +1401,10 @@ model AtividadeProjeto {
   faseId String?       @map("fase_id")
   fase   FaseProjeto?  @relation(fields: [faseId], references: [id])
 
+  // Vinculo com pendencia origem (opcional)
+  pendenciaId String?           @map("pendencia_id")
+  pendencia   PendenciaProjeto? @relation(fields: [pendenciaId], references: [id], onDelete: SetNull)
+
   dataInicio     DateTime?       @map("data_inicio")
   dataFimPrevista DateTime?      @map("data_fim_prevista")
 
@@ -1405,6 +1412,7 @@ model AtividadeProjeto {
   comentarios    ComentarioTarefa[]
 
   @@index([projetoId, dataAtividade])
+  @@index([pendenciaId])
   @@map("atividades_projeto")
   @@schema("gestao_ti")
 }
@@ -1532,13 +1540,17 @@ model DependenciaProjeto {
 }
 
 model AnexoProjeto {
-  id        String    @id @default(uuid())
-  titulo    String
-  url       String
-  tipo      TipoAnexo @default(DOCUMENTO)
-  tamanho   String?
-  descricao String?
-  createdAt DateTime  @default(now()) @map("created_at")
+  id            String    @id @default(uuid())
+  titulo        String
+  url           String
+  tipo          TipoAnexo @default(DOCUMENTO)
+  tamanho       String?
+  descricao     String?
+  nomeArquivo   String?   @map("nome_arquivo")
+  nomeOriginal  String?   @map("nome_original")
+  mimeType      String?   @map("mime_type")
+  tamanhoBytes  Int?      @map("tamanho_bytes")
+  createdAt     DateTime  @default(now()) @map("created_at")
 
   projetoId String  @map("projeto_id")
   projeto   Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
@@ -1794,6 +1806,7 @@ model PendenciaProjeto {
 
   interacoes InteracaoPendencia[]
   anexos     AnexoPendencia[]
+  atividades AtividadeProjeto[]
 
   @@index([projetoId, status])
   @@index([responsavelId])

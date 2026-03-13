@@ -183,4 +183,34 @@ export class EquipeService {
 
     return { message: 'Membro removido com sucesso' };
   }
+
+  /**
+   * Retorna as equipes onde o usuario pode gerir contratos.
+   * Para ADMIN/GESTOR_TI retorna todas as equipes ativas.
+   * Para outros roles, retorna apenas equipes onde o usuario tem podeGerirContratos.
+   */
+  async findEquipesParaContratos(usuarioId: string, role: string) {
+    if (role === 'ADMIN' || role === 'GESTOR_TI') {
+      return this.prisma.equipeTI.findMany({
+        where: { status: 'ATIVO' },
+        orderBy: { ordem: 'asc' },
+      });
+    }
+
+    const membros = await this.prisma.membroEquipe.findMany({
+      where: {
+        usuarioId,
+        status: 'ATIVO',
+        podeGerirContratos: true,
+      },
+      include: {
+        equipe: true,
+      },
+    });
+
+    return membros
+      .filter(m => m.equipe.status === 'ATIVO')
+      .map(m => m.equipe)
+      .sort((a, b) => a.ordem - b.ordem);
+  }
 }

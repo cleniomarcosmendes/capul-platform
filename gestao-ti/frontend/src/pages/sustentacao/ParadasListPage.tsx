@@ -48,7 +48,7 @@ function formatDuracao(minutos: number | null): string {
 
 export function ParadasListPage() {
   const { gestaoTiRole } = useAuth();
-  const canManage = ['ADMIN', 'GESTOR_TI', 'TECNICO'].includes(gestaoTiRole || '');
+  const canManage = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
 
   const [paradas, setParadas] = useState<RegistroParada[]>([]);
   const [softwares, setSoftwares] = useState<Software[]>([]);
