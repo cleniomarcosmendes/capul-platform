@@ -682,7 +682,6 @@ enum TipoProjeto {
 }
 
 enum ModoProjeto {
-  SIMPLES
   COMPLETO
 
   @@schema("gestao_ti")
@@ -1294,7 +1293,7 @@ model Projeto {
   nome            String
   descricao       String?
   tipo            TipoProjeto
-  modo            ModoProjeto   @default(SIMPLES)
+  modo            ModoProjeto   @default(COMPLETO)
   status          StatusProjeto @default(PLANEJAMENTO)
   nivel           Int           @default(1)
   dataInicio      DateTime?     @map("data_inicio")

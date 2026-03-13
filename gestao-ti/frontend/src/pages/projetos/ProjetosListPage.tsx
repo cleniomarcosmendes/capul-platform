@@ -6,18 +6,13 @@ import { projetoService } from '../../services/projeto.service';
 import { softwareService } from '../../services/software.service';
 import { FolderKanban, Plus, Search, Download } from 'lucide-react';
 import { exportService } from '../../services/export.service';
-import type { Projeto, Software, TipoProjeto, ModoProjeto } from '../../types';
+import type { Projeto, Software, TipoProjeto } from '../../types';
 
 const tipoLabel: Record<string, string> = {
   DESENVOLVIMENTO_INTERNO: 'Desenv. Interno',
   IMPLANTACAO_TERCEIRO: 'Implantacao',
   INFRAESTRUTURA: 'Infraestrutura',
   OUTRO: 'Outro',
-};
-
-const modoLabel: Record<string, string> = {
-  SIMPLES: 'Simples',
-  COMPLETO: 'Completo',
 };
 
 const statusLabel: Record<string, string> = {
@@ -36,11 +31,6 @@ const statusCores: Record<string, string> = {
   CANCELADO: 'bg-slate-100 text-slate-600',
 };
 
-const modoCores: Record<string, string> = {
-  SIMPLES: 'bg-slate-100 text-slate-600',
-  COMPLETO: 'bg-capul-100 text-capul-700',
-};
-
 export function ProjetosListPage() {
   const { gestaoTiRole } = useAuth();
   const canManage = gestaoTiRole !== 'USUARIO_FINAL' && Boolean(gestaoTiRole);
@@ -50,7 +40,6 @@ export function ProjetosListPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filtroTipo, setFiltroTipo] = useState<TipoProjeto | ''>('');
-  const [filtroModo, setFiltroModo] = useState<ModoProjeto | ''>('');
   const [filtroStatus, setFiltroStatus] = useState<string>('EM_ANDAMENTO,PLANEJAMENTO');
   const [filtroSoftware, setFiltroSoftware] = useState('');
   const [apenasRaiz, setApenasRaiz] = useState(false);
@@ -62,14 +51,13 @@ export function ProjetosListPage() {
 
   useEffect(() => {
     loadData();
-  }, [filtroTipo, filtroModo, filtroStatus, filtroSoftware, apenasRaiz, meusProjetos]);
+  }, [filtroTipo, filtroStatus, filtroSoftware, apenasRaiz, meusProjetos]);
 
   async function loadData() {
     setLoading(true);
     try {
       const data = await projetoService.listar({
         tipo: filtroTipo || undefined,
-        modo: filtroModo || undefined,
         status: filtroStatus || undefined,
         softwareId: filtroSoftware || undefined,
         search: search || undefined,
@@ -160,10 +148,6 @@ export function ProjetosListPage() {
             <option value="">Todos Tipos</option>
             {Object.entries(tipoLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
-          <select value={filtroModo} onChange={(e) => setFiltroModo(e.target.value as ModoProjeto | '')} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-            <option value="">Todos Modos</option>
-            {Object.entries(modoLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
           <select value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
             <option value="">Todos Status</option>
             <option value="EM_ANDAMENTO,PLANEJAMENTO">Ativos (Andamento + Planejamento)</option>
@@ -206,7 +190,6 @@ export function ProjetosListPage() {
                     <th className="px-4 py-3 font-medium text-slate-600">#</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Nome</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Tipo</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Modo</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Status</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Software</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Responsavel</th>
@@ -229,11 +212,6 @@ export function ProjetosListPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-slate-600 text-xs">{tipoLabel[p.tipo] || p.tipo}</td>
-                      <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${modoCores[p.modo]}`}>
-                          {modoLabel[p.modo]}
-                        </span>
-                      </td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusCores[p.status]}`}>
                           {statusLabel[p.status]}

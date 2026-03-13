@@ -256,7 +256,7 @@ export class ProjetoService {
         nome: dto.nome,
         descricao: dto.descricao,
         tipo: dto.tipo,
-        modo: dto.modo || 'SIMPLES',
+        modo: dto.modo || 'COMPLETO',
         nivel,
         dataInicio: dto.dataInicio ? new Date(dto.dataInicio) : undefined,
         dataFimPrevista: dto.dataFimPrevista ? new Date(dto.dataFimPrevista) : undefined,
@@ -408,12 +408,6 @@ export class ProjetoService {
   async addMembro(projetoId: string, dto: CreateMembroDto) {
     const projeto = await this.prisma.projeto.findUnique({ where: { id: projetoId } });
     if (!projeto) throw new NotFoundException('Projeto nao encontrado');
-
-    if (projeto.modo === 'SIMPLES' && projeto.nivel > 1) {
-      throw new BadRequestException(
-        'Sub-projetos em modo SIMPLES herdam membros do pai. Altere para modo COMPLETO para gerenciar membros.',
-      );
-    }
 
     const existing = await this.prisma.membroProjeto.findUnique({
       where: { projetoId_usuarioId: { projetoId, usuarioId: dto.usuarioId } },

@@ -6,7 +6,7 @@ import { softwareService } from '../../services/software.service';
 import { contratoService } from '../../services/contrato.service';
 import { coreService } from '../../services/core.service';
 import { ArrowLeft } from 'lucide-react';
-import type { Software, Contrato, UsuarioCore, TipoProjeto, ModoProjeto, Projeto } from '../../types';
+import type { Software, Contrato, UsuarioCore, TipoProjeto, Projeto } from '../../types';
 
 const tipoOptions: { value: TipoProjeto; label: string }[] = [
   { value: 'DESENVOLVIMENTO_INTERNO', label: 'Desenvolvimento Interno' },
@@ -32,7 +32,6 @@ export function ProjetoFormPage() {
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [tipo, setTipo] = useState<TipoProjeto>('DESENVOLVIMENTO_INTERNO');
-  const [modo, setModo] = useState<ModoProjeto>('SIMPLES');
   const [projetoPaiId, setProjetoPaiId] = useState(searchParams.get('projetoPaiId') || '');
   const [softwareId, setSoftwareId] = useState('');
   const [contratoId, setContratoId] = useState('');
@@ -53,7 +52,6 @@ export function ProjetoFormPage() {
         setNome(p.nome);
         setDescricao(p.descricao || '');
         setTipo(p.tipo);
-        setModo(p.modo);
         setProjetoPaiId(p.projetoPaiId || '');
         setSoftwareId(p.softwareId || '');
         setContratoId(p.contratoId || '');
@@ -75,7 +73,7 @@ export function ProjetoFormPage() {
     const payload = {
       nome,
       tipo,
-      modo,
+      modo: 'COMPLETO' as const,
       projetoPaiId: projetoPaiId || undefined,
       softwareId: softwareId || undefined,
       contratoId: contratoId || undefined,
@@ -153,20 +151,6 @@ export function ProjetoFormPage() {
               >
                 {tipoOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Modo</label>
-              <div className="flex gap-4 mt-2">
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="radio" name="modo" value="SIMPLES" checked={modo === 'SIMPLES'} onChange={() => setModo('SIMPLES')} />
-                  Simples
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="radio" name="modo" value="COMPLETO" checked={modo === 'COMPLETO'} onChange={() => setModo('COMPLETO')} />
-                  Completo
-                </label>
-              </div>
             </div>
 
             {!isEdit && (

@@ -1366,22 +1366,25 @@ export function DashboardPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-end gap-4 mb-6">
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
           <PeriodFilter
             dataInicio={dataInicio}
             dataFim={dataFim}
             onPeriodChange={(inicio, fim) => { setDataInicio(inicio); setDataFim(fim); }}
           />
-          <select
-            value={filterDepartamento}
-            onChange={(e) => setFilterDepartamento(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
-          >
-            <option value="">Todos os Departamentos</option>
-            {departamentos.map((d) => (
-              <option key={d.id} value={d.id}>{d.nome}</option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-slate-600">Departamento:</label>
+            <select
+              value={filterDepartamento}
+              onChange={(e) => setFilterDepartamento(e.target.value)}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-w-[200px]"
+            >
+              <option value="">Todos</option>
+              {departamentos.map((d) => (
+                <option key={d.id} value={d.id}>{d.nome}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Tabs */}

@@ -1103,7 +1103,9 @@
       "Bash(docker stats:*)",
       "Bash(npx tsc:*)",
       "Bash(npx eslint:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(docker cp:*)",
+      "Bash(cat:*)"
     ]
   }
 }

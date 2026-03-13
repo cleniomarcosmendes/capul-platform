@@ -61,11 +61,6 @@ const tipoLabel: Record<string, string> = {
   OUTRO: 'Outro',
 };
 
-const modoLabel: Record<string, string> = {
-  SIMPLES: 'Simples',
-  COMPLETO: 'Completo',
-};
-
 const papelLabel: Record<string, string> = {
   RESPONSAVEL: 'Responsavel',
   APROVADOR: 'Aprovador',
@@ -226,8 +221,8 @@ export function ProjetoDetalhePage() {
     );
   }
 
-  const showEquipeTab = projeto.modo === 'COMPLETO' || projeto.nivel === 1;
-  const isCompleto = projeto.modo === 'COMPLETO';
+  const showEquipeTab = true;
+  const isCompleto = true; // Modo SIMPLES removido - todos projetos são COMPLETO
   const isRestrictedRole = gestaoTiRole === 'USUARIO_CHAVE' || gestaoTiRole === 'TERCEIRIZADO';
 
   const allTabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -294,7 +289,6 @@ export function ProjetoDetalhePage() {
               </div>
               <div className="flex items-center gap-2 text-sm text-slate-500">
                 <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs">{tipoLabel[projeto.tipo]}</span>
-                <span className="bg-capul-50 text-capul-600 px-2 py-0.5 rounded text-xs">{modoLabel[projeto.modo]}</span>
                 <span className="text-xs">Nivel {projeto.nivel}</span>
               </div>
             </div>
@@ -466,7 +460,7 @@ function TabSubProjetos({ projeto, canManage, isRestrictedRole }: { projeto: Pro
                   {statusLabel[s.status]}
                 </span>
               </div>
-              <span className="text-xs text-slate-400">{modoLabel[s.modo]} — N{s.nivel}</span>
+              <span className="text-xs text-slate-400">N{s.nivel}</span>
             </div>
           ))}
         </div>

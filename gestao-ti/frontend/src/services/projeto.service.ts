@@ -15,7 +15,6 @@ import type {
   Chamado,
   ComentarioTarefa,
   TipoProjeto,
-  ModoProjeto,
   StatusProjeto,
   PapelRaci,
   StatusFase,
@@ -29,7 +28,6 @@ import type {
 interface ProjetoFilters {
   status?: string;
   tipo?: TipoProjeto;
-  modo?: ModoProjeto;
   softwareId?: string;
   contratoId?: string;
   search?: string;
@@ -40,7 +38,7 @@ interface ProjetoFilters {
 interface CreateProjetoPayload {
   nome: string;
   tipo: TipoProjeto;
-  modo?: ModoProjeto;
+  modo?: 'COMPLETO';
   projetoPaiId?: string;
   softwareId?: string;
   contratoId?: string;
@@ -55,7 +53,6 @@ interface CreateProjetoPayload {
 interface UpdateProjetoPayload {
   nome?: string;
   tipo?: TipoProjeto;
-  modo?: ModoProjeto;
   status?: StatusProjeto;
   softwareId?: string;
   contratoId?: string;
@@ -73,7 +70,6 @@ export const projetoService = {
     const params: Record<string, string> = {};
     if (filters.status) params.status = filters.status;
     if (filters.tipo) params.tipo = filters.tipo;
-    if (filters.modo) params.modo = filters.modo;
     if (filters.softwareId) params.softwareId = filters.softwareId;
     if (filters.contratoId) params.contratoId = filters.contratoId;
     if (filters.search) params.search = filters.search;

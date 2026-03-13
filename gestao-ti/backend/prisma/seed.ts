@@ -653,7 +653,7 @@ async function main() {
       nome: 'Upgrade SAP Business One 10.1',
       descricao: 'Atualizacao do SAP para versao 10.1 com novos recursos fiscais.',
       tipo: 'INFRAESTRUTURA',
-      modo: 'SIMPLES',
+      modo: 'COMPLETO',
       status: 'PLANEJAMENTO',
       nivel: 1,
       dataInicio: new Date(now.getFullYear(), 3, 1),
@@ -670,7 +670,7 @@ async function main() {
       nome: 'Modulo RH - Salesforce',
       descricao: 'Configuracao do modulo de RH dentro do Salesforce.',
       tipo: 'IMPLANTACAO_TERCEIRO',
-      modo: 'SIMPLES',
+      modo: 'COMPLETO',
       status: 'PLANEJAMENTO',
       nivel: 2,
       projetoPaiId: projetoSalesforce.id,
@@ -744,7 +744,7 @@ async function main() {
     },
   });
 
-  console.log('Projetos: 3 (1 completo + 1 simples + 1 sub-projeto)');
+  console.log('Projetos: 3 (2 completos + 1 sub-projeto)');
 
   // ── 15. Ativos ────────────────────────────────────────────────────
 

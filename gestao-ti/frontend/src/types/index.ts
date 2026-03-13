@@ -633,7 +633,7 @@ export interface DashboardDisponibilidade {
 // === Fase 5 — Projetos types ===
 
 export type TipoProjeto = 'DESENVOLVIMENTO_INTERNO' | 'IMPLANTACAO_TERCEIRO' | 'INFRAESTRUTURA' | 'OUTRO';
-export type ModoProjeto = 'SIMPLES' | 'COMPLETO';
+export type ModoProjeto = 'COMPLETO';
 export type StatusProjeto = 'PLANEJAMENTO' | 'EM_ANDAMENTO' | 'PAUSADO' | 'CONCLUIDO' | 'CANCELADO';
 export type PapelRaci = 'RESPONSAVEL' | 'APROVADOR' | 'CONSULTADO' | 'INFORMADO';
 export type StatusFase = 'PENDENTE' | 'EM_ANDAMENTO' | 'APROVADA' | 'REJEITADA';
