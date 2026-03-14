@@ -90,6 +90,7 @@ model CentroCusto {
 model Departamento {
   id   String @id
   nome String
+  tipo String @default("ADMINISTRATIVO")
 
   filialId String @map("filial_id")
   filial   Filial @relation(fields: [filialId], references: [id])

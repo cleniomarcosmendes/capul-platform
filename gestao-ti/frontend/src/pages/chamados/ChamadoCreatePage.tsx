@@ -12,7 +12,7 @@ import { ordemServicoService } from '../../services/ordem-servico.service';
 import { ativoService } from '../../services/ativo.service';
 import { coreService } from '../../services/core.service';
 import { ArrowLeft, FolderKanban, Paperclip, X } from 'lucide-react';
-import type { EquipeTI, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento, Ativo } from '../../types';
+import type { EquipeTI, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento, Ativo, TipoDepartamento } from '../../types';
 
 export function ChamadoCreatePage() {
   const navigate = useNavigate();
@@ -313,9 +313,23 @@ export function ChamadoCreatePage() {
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white disabled:opacity-50"
                   >
                     <option value="">Selecione</option>
-                    {departamentos.map((d) => (
-                      <option key={d.id} value={d.id}>{d.nome}</option>
-                    ))}
+                    {(['ADMINISTRATIVO', 'COMERCIAL', 'OPERACIONAL', 'TECNOLOGIA'] as TipoDepartamento[]).map((tipo) => {
+                      const deptosDoTipo = departamentos.filter((d) => d.tipo === tipo);
+                      if (deptosDoTipo.length === 0) return null;
+                      const labels: Record<TipoDepartamento, string> = {
+                        ADMINISTRATIVO: 'Administrativo',
+                        COMERCIAL: 'Comercial',
+                        OPERACIONAL: 'Operacional',
+                        TECNOLOGIA: 'Tecnologia',
+                      };
+                      return (
+                        <optgroup key={tipo} label={labels[tipo]}>
+                          {deptosDoTipo.map((d) => (
+                            <option key={d.id} value={d.id}>{d.nome}</option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
                   </select>
                 </div>
               </div>

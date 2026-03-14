@@ -18,6 +18,7 @@ import {
   KeyRound,
   FileText,
   Activity,
+  Gauge,
   FolderKanban,
   Server,
   BookMarked,
@@ -40,6 +41,7 @@ const CONTRATO_ROLES_DYNAMIC = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
 
 const menuItems: MenuItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/gestao-ti/' },
+  { label: 'Monitor', icon: Gauge, path: '/gestao-ti/monitor', roles: STAFF },
   { section: 'SUPORTE' },
   { label: 'Chamados', icon: Ticket, path: '/gestao-ti/chamados' },
   { label: 'Ordens de Servico', icon: ClipboardList, path: '/gestao-ti/ordens-servico', roles: STAFF },

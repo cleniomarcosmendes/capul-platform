@@ -14,6 +14,10 @@ export class CreateDepartamentoDto {
   descricao?: string;
 
   @IsNotEmpty()
+  @IsIn(['ADMINISTRATIVO', 'COMERCIAL', 'OPERACIONAL', 'TECNOLOGIA'])
+  tipo: string;
+
+  @IsNotEmpty()
   @IsUUID()
   filialId: string;
 }
@@ -30,6 +34,10 @@ export class UpdateDepartamentoDto {
   @IsOptional()
   @IsString()
   descricao?: string;
+
+  @IsOptional()
+  @IsIn(['ADMINISTRATIVO', 'COMERCIAL', 'OPERACIONAL', 'TECNOLOGIA'])
+  tipo?: string;
 
   @IsOptional()
   @IsIn(['ATIVO', 'INATIVO'])

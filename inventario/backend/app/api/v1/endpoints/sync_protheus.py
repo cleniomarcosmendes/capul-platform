@@ -25,9 +25,9 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # Configurações da API Protheus
-# ✅ v2.19.47: Atualizado endpoint para porta 8104
+# ✅ v2.19.55: Atualizado endpoint para IP interno 192.168.7.63:8115
 PROTHEUS_API_URL = getattr(settings, 'PROTHEUS_API_URL',
-    "https://apiportal.capul.com.br:8104/rest/api/INFOCLIENTES/hierarquiaMercadologica")
+    "https://192.168.7.63:8115/rest/api/INFOCLIENTES/inventario/hierarquiaMercadologica")
 PROTHEUS_API_AUTH = getattr(settings, 'PROTHEUS_API_AUTH',
     "Basic QVBJQ0FQVUw6QXAxQzRwdTFQUkQ=")
 PROTHEUS_API_TIMEOUT = getattr(settings, 'PROTHEUS_API_TIMEOUT', 30)

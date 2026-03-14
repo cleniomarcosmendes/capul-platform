@@ -341,6 +341,51 @@ export class ProjetoService {
           );
         }
 
+        // Validar registros de tempo abertos — encerrar automaticamente
+        const registrosAbertos = await this.prisma.registroTempo.findMany({
+          where: { atividade: { projetoId: id }, horaFim: null },
+        });
+        if (registrosAbertos.length > 0) {
+          const agora = new Date();
+          for (const reg of registrosAbertos) {
+            const duracao = Math.round((agora.getTime() - new Date(reg.horaInicio).getTime()) / 60000);
+            await this.prisma.registroTempo.update({
+              where: { id: reg.id },
+              data: { horaFim: agora, duracaoMinutos: duracao },
+            });
+          }
+        }
+
+        // Validar atividades pendentes/em andamento
+        const atividadesPendentes = await this.prisma.atividadeProjeto.count({
+          where: { projetoId: id, status: { in: ['PENDENTE', 'EM_ANDAMENTO'] } },
+        });
+        if (atividadesPendentes > 0) {
+          throw new BadRequestException(
+            `Nao e possivel concluir projeto com ${atividadesPendentes} atividade(s) pendente(s) ou em andamento. Conclua ou cancele as atividades antes.`,
+          );
+        }
+
+        // Validar fases pendentes/em andamento
+        const fasesPendentes = await this.prisma.faseProjeto.count({
+          where: { projetoId: id, status: { in: ['PENDENTE', 'EM_ANDAMENTO'] } },
+        });
+        if (fasesPendentes > 0) {
+          throw new BadRequestException(
+            `Nao e possivel concluir projeto com ${fasesPendentes} fase(s) pendente(s) ou em andamento. Aprove ou rejeite as fases antes.`,
+          );
+        }
+
+        // Validar pendencias abertas
+        const pendenciasAbertas = await this.prisma.pendenciaProjeto.count({
+          where: { projetoId: id, status: { in: ['ABERTA', 'EM_ANDAMENTO', 'AGUARDANDO_VALIDACAO'] } },
+        });
+        if (pendenciasAbertas > 0) {
+          throw new BadRequestException(
+            `Nao e possivel concluir projeto com ${pendenciasAbertas} pendencia(s) aberta(s). Conclua ou cancele as pendencias antes.`,
+          );
+        }
+
         if (!projeto.dataFimReal) {
           data.dataFimReal = new Date();
         }
@@ -619,14 +664,42 @@ export class ProjetoService {
     if (dto.dataInicio !== undefined) data.dataInicio = dto.dataInicio ? new Date(dto.dataInicio) : null;
     if (dto.dataFimPrevista !== undefined) data.dataFimPrevista = dto.dataFimPrevista ? new Date(dto.dataFimPrevista) : null;
 
-    return this.prisma.atividadeProjeto.update({
+    const updated = await this.prisma.atividadeProjeto.update({
       where: { id: atividadeId },
       data,
       include: {
         usuario: { select: { id: true, nome: true } },
         fase: { select: { id: true, nome: true } },
+        pendencia: { select: { id: true, status: true } },
       },
     });
+
+    // Sync: ao concluir atividade vinculada a pendencia, verificar se pode concluir a pendencia
+    if (dto.status === 'CONCLUIDA' && updated.pendencia && updated.pendencia.status !== 'CONCLUIDA' && updated.pendencia.status !== 'CANCELADA') {
+      const outrasAtividades = await this.prisma.atividadeProjeto.count({
+        where: {
+          pendenciaId: updated.pendencia.id,
+          id: { not: atividadeId },
+          status: { in: ['PENDENTE', 'EM_ANDAMENTO'] },
+        },
+      });
+      if (outrasAtividades === 0) {
+        await this.prisma.pendenciaProjeto.update({
+          where: { id: updated.pendencia.id },
+          data: { status: 'CONCLUIDA' },
+        });
+        await this.prisma.interacaoPendencia.create({
+          data: {
+            tipo: 'STATUS_ALTERADO',
+            descricao: 'Pendencia concluida automaticamente — todas as atividades vinculadas foram concluidas',
+            pendenciaId: updated.pendencia.id,
+            usuarioId: atividade.usuarioId,
+          },
+        });
+      }
+    }
+
+    return updated;
   }
 
   async removeAtividade(projetoId: string, atividadeId: string) {

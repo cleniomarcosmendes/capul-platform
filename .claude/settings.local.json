@@ -1105,7 +1105,9 @@
       "Bash(npx eslint:*)",
       "Bash(ls:*)",
       "Bash(docker cp:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(sleep 3 && curl -s http://localhost:3000/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"username\":\"admin\",\"password\":\"admin123\"}' | python3 -c \"import sys,json; t=json.load\\(sys.stdin\\); print\\(t.get\\('accessToken','ERRO'\\)[:50]\\)\" 2>&1)",
+      "Bash(curl -s http://localhost:3000/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"login\":\"admin\",\"senha\":\"admin123\"}' | python3 -c \"import sys,json; t=json.load\\(sys.stdin\\); print\\(t.get\\('accessToken',''\\)[:80]\\)\" 2>&1)"
     ]
   }
 }

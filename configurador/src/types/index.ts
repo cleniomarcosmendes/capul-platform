@@ -69,10 +69,13 @@ export interface Filial {
 }
 
 // Departamento
+export type TipoDepartamento = 'ADMINISTRATIVO' | 'COMERCIAL' | 'OPERACIONAL' | 'TECNOLOGIA';
+
 export interface Departamento {
   id: string;
   nome: string;
   descricao: string | null;
+  tipo: TipoDepartamento;
   status: 'ATIVO' | 'INATIVO';
   filialId: string;
   createdAt: string;

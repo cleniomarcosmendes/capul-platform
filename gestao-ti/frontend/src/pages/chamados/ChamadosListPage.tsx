@@ -7,7 +7,7 @@ import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
 import { Plus, Eye, Download, Star } from 'lucide-react';
 import { exportService } from '../../services/export.service';
-import type { Chamado, EquipeTI, Departamento, StatusChamado, Visibilidade } from '../../types';
+import type { Chamado, EquipeTI, Departamento, StatusChamado, Visibilidade, TipoDepartamento } from '../../types';
 
 interface FilialOption {
   id: string;
@@ -196,9 +196,23 @@ export function ChamadosListPage() {
                     className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
                   >
                     <option value="">Todos Departamentos</option>
-                    {departamentos.map((d) => (
-                      <option key={d.id} value={d.id}>{d.nome}</option>
-                    ))}
+                    {(['ADMINISTRATIVO', 'COMERCIAL', 'OPERACIONAL', 'TECNOLOGIA'] as TipoDepartamento[]).map((tipo) => {
+                      const deptosDoTipo = departamentos.filter((d) => d.tipo === tipo);
+                      if (deptosDoTipo.length === 0) return null;
+                      const labels: Record<TipoDepartamento, string> = {
+                        ADMINISTRATIVO: 'Administrativo',
+                        COMERCIAL: 'Comercial',
+                        OPERACIONAL: 'Operacional',
+                        TECNOLOGIA: 'Tecnologia',
+                      };
+                      return (
+                        <optgroup key={tipo} label={labels[tipo]}>
+                          {deptosDoTipo.map((d) => (
+                            <option key={d.id} value={d.id}>{d.nome}</option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
                   </select>
 
                   <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">

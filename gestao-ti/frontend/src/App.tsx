@@ -36,6 +36,7 @@ import { ConhecimentoListPage } from './pages/conhecimento/ConhecimentoListPage'
 import { ConhecimentoFormPage } from './pages/conhecimento/ConhecimentoFormPage';
 import { ConhecimentoDetalhePage } from './pages/conhecimento/ConhecimentoDetalhePage';
 
+import { MonitorPlayerPage } from './pages/monitor/MonitorPlayerPage';
 import { NotificacoesPage } from './pages/notificacoes/NotificacoesPage';
 import { ImportPage } from './pages/import/ImportPage';
 import { NaturezasPage } from './pages/cadastros/NaturezasPage';
@@ -88,6 +89,7 @@ function AppRoutes() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="monitor" element={<MonitorPlayerPage />} />
         <Route path="chamados" element={<ChamadosListPage />} />
         <Route path="chamados/novo" element={<ChamadoCreatePage />} />
         <Route path="chamados/:id" element={<ChamadoDetalhePage />} />

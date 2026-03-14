@@ -16,6 +16,15 @@ enum StatusGeral {
   @@schema("core")
 }
 
+enum TipoDepartamento {
+  ADMINISTRATIVO
+  COMERCIAL
+  OPERACIONAL
+  TECNOLOGIA
+
+  @@schema("core")
+}
+
 model Empresa {
   id           String   @id @default(uuid())
   razaoSocial  String   @map("razao_social")
@@ -67,13 +76,14 @@ model Filial {
 }
 
 model Departamento {
-  id        String      @id @default(uuid())
+  id        String           @id @default(uuid())
   codigo    String?
   nome      String
   descricao String?
-  status    StatusGeral @default(ATIVO)
-  createdAt DateTime    @default(now()) @map("created_at")
-  updatedAt DateTime    @updatedAt @map("updated_at")
+  tipo      TipoDepartamento @default(ADMINISTRATIVO)
+  status    StatusGeral      @default(ATIVO)
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
 
   filialId String @map("filial_id")
   filial   Filial @relation(fields: [filialId], references: [id])

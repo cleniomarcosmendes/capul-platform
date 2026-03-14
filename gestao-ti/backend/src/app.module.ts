@@ -18,6 +18,7 @@ import { ConhecimentoModule } from './conhecimento/conhecimento.module.js';
 import { NotificacaoModule } from './notificacao/notificacao.module.js';
 import { ExportModule } from './export/export.module.js';
 import { ImportModule } from './import/import.module.js';
+import { MonitorModule } from './monitor/monitor.module.js';
 import { JwtStrategy } from './common/strategies/jwt.strategy.js';
 
 @Module({
@@ -40,6 +41,7 @@ import { JwtStrategy } from './common/strategies/jwt.strategy.js';
     NotificacaoModule,
     ExportModule,
     ImportModule,
+    MonitorModule,
     DashboardModule,
   ],
   providers: [JwtStrategy],

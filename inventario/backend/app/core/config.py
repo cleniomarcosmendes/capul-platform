@@ -47,10 +47,10 @@ class Settings:
     ALGORITHM: str = "HS256"
 
     # ✅ NOVO v2.14.0: API Protheus (Sincronização)
-    # ✅ v2.19.47: Atualizado endpoint para porta 8104
+    # ✅ v2.19.55: Atualizado endpoint para IP interno 192.168.7.63:8115
     PROTHEUS_API_URL: str = os.getenv(
         "PROTHEUS_API_URL",
-        "https://apiportal.capul.com.br:8104/rest/api/INFOCLIENTES/hierarquiaMercadologica"
+        "https://192.168.7.63:8115/rest/api/INFOCLIENTES/inventario/hierarquiaMercadologica"
     )
     PROTHEUS_API_AUTH: str = os.getenv(
         "PROTHEUS_API_AUTH",

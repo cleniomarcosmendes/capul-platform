@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { departamentoService } from '../../services/departamento.service';
 import { filialService } from '../../services/filial.service';
 import { Plus, Building, Pencil } from 'lucide-react';
-import type { Departamento, FilialOption } from '../../types';
+import type { Departamento, FilialOption, TipoDepartamento } from '../../types';
 
 export function DepartamentosPage() {
   const { configuradorRole } = useAuth();
@@ -19,7 +19,15 @@ export function DepartamentosPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
+  const [tipo, setTipo] = useState<TipoDepartamento>('ADMINISTRATIVO');
   const [saving, setSaving] = useState(false);
+
+  const tipoLabels: Record<TipoDepartamento, string> = {
+    ADMINISTRATIVO: 'Administrativo',
+    COMERCIAL: 'Comercial',
+    OPERACIONAL: 'Operacional',
+    TECNOLOGIA: 'Tecnologia',
+  };
 
   useEffect(() => {
     filialService.listar().then((data) => {
@@ -48,6 +56,7 @@ export function DepartamentosPage() {
     setEditingId(depto.id);
     setNome(depto.nome);
     setDescricao(depto.descricao || '');
+    setTipo(depto.tipo || 'ADMINISTRATIVO');
     setShowForm(true);
   }
 
@@ -55,6 +64,7 @@ export function DepartamentosPage() {
     setEditingId(null);
     setNome('');
     setDescricao('');
+    setTipo('ADMINISTRATIVO');
     setShowForm(true);
   }
 
@@ -63,9 +73,9 @@ export function DepartamentosPage() {
     setSaving(true);
     try {
       if (editingId) {
-        await departamentoService.atualizar(editingId, { nome, descricao });
+        await departamentoService.atualizar(editingId, { nome, descricao, tipo });
       } else {
-        await departamentoService.criar({ nome, descricao, filialId });
+        await departamentoService.criar({ nome, descricao, tipo, filialId });
       }
       setNome('');
       setDescricao('');
@@ -126,10 +136,18 @@ export function DepartamentosPage() {
               {editingId ? 'Editar Departamento' : 'Novo Departamento'}
               {filialSelecionada && <span className="font-normal text-slate-500"> — {filialSelecionada.codigo} - {filialSelecionada.nomeFantasia}</span>}
             </h4>
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-3 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Nome *</label>
                 <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} required className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600" placeholder="Tecnologia da Informacao" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Tipo *</label>
+                <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoDepartamento)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600">
+                  {(Object.keys(tipoLabels) as TipoDepartamento[]).map((t) => (
+                    <option key={t} value={t}>{tipoLabels[t]}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Descricao</label>
@@ -156,6 +174,7 @@ export function DepartamentosPage() {
               <thead>
                 <tr className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   <th className="px-6 py-3">Nome</th>
+                  <th className="px-6 py-3">Tipo</th>
                   <th className="px-6 py-3">Descricao</th>
                   <th className="px-6 py-3">Status</th>
                   {canEdit && <th className="px-6 py-3">Acoes</th>}
@@ -171,6 +190,7 @@ export function DepartamentosPage() {
                         <span className="text-slate-700">{depto.nome}</span>
                       )}
                     </td>
+                    <td className="px-6 py-4 text-sm text-slate-600">{tipoLabels[depto.tipo] || depto.tipo}</td>
                     <td className="px-6 py-4 text-sm text-slate-600">{depto.descricao || '—'}</td>
                     <td className="px-6 py-4">
                       <span className={`text-xs px-2 py-1 rounded-full ${depto.status === 'ATIVO' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{depto.status}</span>

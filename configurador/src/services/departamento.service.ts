@@ -8,7 +8,7 @@ export const departamentoService = {
     return data;
   },
 
-  async criar(dto: { nome: string; descricao?: string; filialId: string }): Promise<Departamento> {
+  async criar(dto: { nome: string; descricao?: string; tipo: string; filialId: string }): Promise<Departamento> {
     const { data } = await coreApi.post('/departamentos', dto);
     return data;
   },
