@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { dashboardService } from '../../services/dashboard.service';
@@ -293,8 +294,11 @@ function DaySummaryBar({ dateKey, items, horarioIni, horarioFim, totalHoras, hor
 
 export function AcompanhamentoPage() {
   const { gestaoTiRole, usuario } = useAuth();
+  const [searchParams] = useSearchParams();
+  const paramTecnico = searchParams.get('tecnico');
+
   const [tecnicos, setTecnicos] = useState<TecnicoResumo[]>([]);
-  const [tecnicoId, setTecnicoId] = useState('');
+  const [tecnicoId, setTecnicoId] = useState(paramTecnico || '');
   const [dataInicio, setDataInicio] = useState(hoje());
   const [dataFim, setDataFim] = useState(hoje());
   const [data, setData] = useState<AcompanhamentoData | null>(null);
@@ -693,20 +697,35 @@ export function AcompanhamentoPage() {
                         {item.duracaoMinutos ? formatMin(item.duracaoMinutos) : 'ativo'}
                       </span>
                       {item.tipo === 'chamado' && item.referencia && (
-                        <a href={`/gestao-ti/chamados/${item.referencia}`}
-                          target="_blank" rel="noopener noreferrer"
-                          className="text-capul-600 hover:text-capul-800 flex-shrink-0">Ver</a>
+                        <>
+                          <a href={`/gestao-ti/chamados/${item.referencia}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="text-capul-600 hover:text-capul-800 flex-shrink-0">Ver</a>
+                          <a href={`/gestao-ti/acompanhamento-item?tipo=chamado&id=${item.referencia}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="text-orange-500 hover:text-orange-700 flex-shrink-0">Acompanhar</a>
+                        </>
                       )}
                       {item.tipo === 'atividade' && item.detalhes.projetoId ? (
-                        <a href={`/gestao-ti/projetos/${String(item.detalhes.projetoId)}`}
-                          target="_blank" rel="noopener noreferrer"
-                          className="text-capul-600 hover:text-capul-800 flex-shrink-0">Ver</a>
+                        <>
+                          <a href={`/gestao-ti/projetos/${String(item.detalhes.projetoId)}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="text-capul-600 hover:text-capul-800 flex-shrink-0">Ver</a>
+                          <a href={`/gestao-ti/acompanhamento-item?tipo=atividade&id=${item.referencia}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="text-purple-500 hover:text-purple-700 flex-shrink-0">Acompanhar</a>
+                        </>
                       ) : null}
                     </div>
                   ))}
                 </div>
               </div>
             )}
+
+            <button onClick={() => { setData(null); setTecnicoId(''); setDataInicio(hoje()); setDataFim(hoje()); }}
+              className="text-sm text-capul-600 hover:text-capul-800">
+              ← Voltar para selecao
+            </button>
           </>
         )}
 
