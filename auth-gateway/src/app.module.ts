@@ -6,6 +6,7 @@ import { EmpresaModule } from './empresa/empresa.module';
 import { FilialModule } from './filial/filial.module';
 import { UsuarioModule } from './usuario/usuario.module';
 import { DepartamentoModule } from './departamento/departamento.module';
+import { TipoDepartamentoModule } from './tipo-departamento/tipo-departamento.module';
 import { CentroCustoModule } from './centro-custo/centro-custo.module';
 import { ModuloModule } from './modulo/modulo.module';
 
@@ -18,6 +19,7 @@ import { ModuloModule } from './modulo/modulo.module';
     FilialModule,
     UsuarioModule,
     DepartamentoModule,
+    TipoDepartamentoModule,
     CentroCustoModule,
     ModuloModule,
   ],

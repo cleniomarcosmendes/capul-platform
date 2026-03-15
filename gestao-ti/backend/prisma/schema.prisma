@@ -87,13 +87,25 @@ model CentroCusto {
   @@schema("core")
 }
 
+model TipoDepartamento {
+  id   String @id
+  nome String
+  ordem Int   @default(0)
+
+  departamentos Departamento[]
+
+  @@map("tipos_departamento")
+  @@schema("core")
+}
+
 model Departamento {
   id   String @id
   nome String
-  tipo String @default("ADMINISTRATIVO")
 
-  filialId String @map("filial_id")
-  filial   Filial @relation(fields: [filialId], references: [id])
+  filialId           String           @map("filial_id")
+  filial             Filial           @relation(fields: [filialId], references: [id])
+  tipoDepartamentoId String           @map("tipo_departamento_id")
+  tipoDepartamento   TipoDepartamento @relation(fields: [tipoDepartamentoId], references: [id])
 
   ativos   Ativo[]
   chamados Chamado[]

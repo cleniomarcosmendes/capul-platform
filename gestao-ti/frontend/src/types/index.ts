@@ -66,14 +66,20 @@ export interface UsuarioCore {
   email: string | null;
 }
 
-export type TipoDepartamento = 'ADMINISTRATIVO' | 'COMERCIAL' | 'OPERACIONAL' | 'TECNOLOGIA';
+export interface TipoDepartamento {
+  id: string;
+  nome: string;
+  descricao: string | null;
+  ordem: number;
+}
 
 export interface Departamento {
   id: string;
   nome: string;
   codigo: string;
   descricao: string | null;
-  tipo: TipoDepartamento;
+  tipoDepartamentoId: string;
+  tipoDepartamento: TipoDepartamento;
   filialId: string;
   status: string;
 }

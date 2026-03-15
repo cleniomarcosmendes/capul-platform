@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { TipoDepartamento } from '@prisma/client';
 import { CreateDepartamentoDto, UpdateDepartamentoDto } from './dto/create-departamento.dto';
+
+const tipoDepartamentoSelect = { id: true, nome: true, descricao: true, ordem: true };
 
 @Injectable()
 export class DepartamentoService {
@@ -10,8 +11,11 @@ export class DepartamentoService {
   async findAll(filialId?: string) {
     return this.prisma.departamento.findMany({
       where: filialId ? { filialId } : {},
-      include: { filial: { select: { id: true, codigo: true, nomeFantasia: true } } },
-      orderBy: [{ tipo: 'asc' }, { nome: 'asc' }],
+      include: {
+        filial: { select: { id: true, codigo: true, nomeFantasia: true } },
+        tipoDepartamento: { select: tipoDepartamentoSelect },
+      },
+      orderBy: [{ tipoDepartamento: { ordem: 'asc' } }, { nome: 'asc' }],
     });
   }
 
@@ -21,10 +25,13 @@ export class DepartamentoService {
         codigo: dto.codigo,
         nome: dto.nome,
         descricao: dto.descricao,
-        tipo: dto.tipo as TipoDepartamento,
         filialId: dto.filialId,
+        tipoDepartamentoId: dto.tipoDepartamentoId,
       },
-      include: { filial: { select: { id: true, codigo: true, nomeFantasia: true } } },
+      include: {
+        filial: { select: { id: true, codigo: true, nomeFantasia: true } },
+        tipoDepartamento: { select: tipoDepartamentoSelect },
+      },
     });
   }
 
@@ -37,8 +44,11 @@ export class DepartamentoService {
         ...(dto.codigo !== undefined && { codigo: dto.codigo }),
         ...(dto.nome !== undefined && { nome: dto.nome }),
         ...(dto.descricao !== undefined && { descricao: dto.descricao }),
-        ...(dto.tipo !== undefined && { tipo: dto.tipo as TipoDepartamento }),
+        ...(dto.tipoDepartamentoId !== undefined && { tipoDepartamentoId: dto.tipoDepartamentoId }),
         ...(dto.status !== undefined && { status: dto.status }),
+      },
+      include: {
+        tipoDepartamento: { select: tipoDepartamentoSelect },
       },
     });
   }

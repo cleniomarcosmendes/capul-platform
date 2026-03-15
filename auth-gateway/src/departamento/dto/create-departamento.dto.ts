@@ -14,8 +14,8 @@ export class CreateDepartamentoDto {
   descricao?: string;
 
   @IsNotEmpty()
-  @IsIn(['ADMINISTRATIVO', 'COMERCIAL', 'OPERACIONAL', 'TECNOLOGIA'])
-  tipo: string;
+  @IsUUID()
+  tipoDepartamentoId: string;
 
   @IsNotEmpty()
   @IsUUID()
@@ -36,8 +36,8 @@ export class UpdateDepartamentoDto {
   descricao?: string;
 
   @IsOptional()
-  @IsIn(['ADMINISTRATIVO', 'COMERCIAL', 'OPERACIONAL', 'TECNOLOGIA'])
-  tipo?: string;
+  @IsUUID()
+  tipoDepartamentoId?: string;
 
   @IsOptional()
   @IsIn(['ATIVO', 'INATIVO'])
