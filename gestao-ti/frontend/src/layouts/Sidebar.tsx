@@ -29,6 +29,7 @@ import {
   AlertTriangle,
   Truck,
   Package,
+  Search,
 } from 'lucide-react';
 
 type MenuItem =
@@ -44,6 +45,7 @@ const menuItems: MenuItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/gestao-ti/' },
   { label: 'Monitor', icon: Gauge, path: '/gestao-ti/monitor', roles: STAFF },
   { label: 'Acompanhamento', icon: Timer, path: '/gestao-ti/acompanhamento', roles: STAFF },
+  { label: 'Acomp. por Item', icon: Search, path: '/gestao-ti/acompanhamento-item', roles: STAFF },
   { section: 'SUPORTE' },
   { label: 'Chamados', icon: Ticket, path: '/gestao-ti/chamados' },
   { label: 'Ordens de Servico', icon: ClipboardList, path: '/gestao-ti/ordens-servico', roles: STAFF },

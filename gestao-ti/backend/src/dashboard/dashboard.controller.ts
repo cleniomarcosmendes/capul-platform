@@ -75,4 +75,44 @@ export class DashboardController {
   getTecnicos() {
     return this.service.getTecnicosAtivos();
   }
+
+  @Get('acompanhamento-chamado')
+  getAcompanhamentoChamado(@Query('chamadoId') chamadoId: string) {
+    return this.service.getAcompanhamentoChamado(chamadoId);
+  }
+
+  @Get('acompanhamento-chamado/equipes')
+  listarEquipes() {
+    return this.service.listarEquipes();
+  }
+
+  @Get('acompanhamento-chamado/buscar')
+  buscarChamados(
+    @Query('q') q?: string,
+    @Query('status') status?: string,
+    @Query('prioridade') prioridade?: string,
+    @Query('equipeId') equipeId?: string,
+    @Query('tecnicoId') tecnicoId?: string,
+  ) {
+    return this.service.buscarChamados({ q, status, prioridade, equipeId, tecnicoId });
+  }
+
+  @Get('acompanhamento-atividade')
+  getAcompanhamentoAtividade(@Query('atividadeId') atividadeId: string) {
+    return this.service.getAcompanhamentoAtividade(atividadeId);
+  }
+
+  @Get('acompanhamento-atividade/buscar')
+  buscarAtividades(
+    @Query('q') q?: string,
+    @Query('projetoId') projetoId?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.service.buscarAtividades(q, projetoId, status);
+  }
+
+  @Get('acompanhamento-atividade/projetos')
+  listarProjetosAtivos() {
+    return this.service.listarProjetosAtivos();
+  }
 }

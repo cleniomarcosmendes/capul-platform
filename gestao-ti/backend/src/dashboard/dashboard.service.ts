@@ -1289,4 +1289,346 @@ export class DashboardService {
       })).sort((a, b) => b.totalMinutos - a.totalMinutos),
     };
   }
+
+  // ========== ACOMPANHAMENTO POR CHAMADO ==========
+
+  async listarEquipes() {
+    return this.prisma.equipeTI.findMany({
+      where: { status: 'ATIVO' },
+      select: { id: true, nome: true, sigla: true },
+      orderBy: { nome: 'asc' },
+    });
+  }
+
+  async buscarChamados(filters: { q?: string; status?: string; prioridade?: string; equipeId?: string; tecnicoId?: string }) {
+    const where: Record<string, unknown> = {};
+    if (filters.q) {
+      const num = parseInt(filters.q, 10);
+      if (!isNaN(num)) {
+        where.numero = num;
+      } else {
+        where.titulo = { contains: filters.q, mode: 'insensitive' };
+      }
+    }
+    if (filters.status) where.status = filters.status;
+    if (filters.prioridade) where.prioridade = filters.prioridade;
+    if (filters.equipeId) where.equipeAtualId = filters.equipeId;
+    if (filters.tecnicoId) where.tecnicoId = filters.tecnicoId;
+    return this.prisma.chamado.findMany({
+      where,
+      select: {
+        id: true, numero: true, titulo: true, status: true, prioridade: true,
+        createdAt: true,
+        solicitante: { select: { id: true, nome: true } },
+        tecnico: { select: { id: true, nome: true } },
+        equipeAtual: { select: { id: true, nome: true, sigla: true } },
+      },
+      orderBy: { numero: 'desc' },
+      take: 50,
+    });
+  }
+
+  async getAcompanhamentoChamado(chamadoId: string) {
+    const chamado = await this.prisma.chamado.findUnique({
+      where: { id: chamadoId },
+      include: {
+        solicitante: { select: { id: true, nome: true, username: true } },
+        tecnico: { select: { id: true, nome: true, username: true } },
+        equipeAtual: { select: { id: true, nome: true, sigla: true, cor: true } },
+        catalogoServico: { select: { id: true, nome: true } },
+        slaDefinicao: { select: { id: true, nome: true, horasResposta: true, horasResolucao: true } },
+        software: { select: { id: true, nome: true } },
+        softwareModulo: { select: { id: true, nome: true } },
+        ativo: { select: { id: true, nome: true, tipo: true } },
+        projeto: { select: { id: true, nome: true, numero: true } },
+        colaboradores: {
+          include: { usuario: { select: { id: true, nome: true, username: true } } },
+        },
+      },
+    });
+    if (!chamado) return null;
+
+    // Histórico completo (lifecycle)
+    const historicos = await this.prisma.historicoChamado.findMany({
+      where: { chamadoId },
+      include: {
+        usuario: { select: { id: true, nome: true } },
+        equipeOrigem: { select: { id: true, nome: true, sigla: true } },
+        equipeDestino: { select: { id: true, nome: true, sigla: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Registros de tempo
+    const registrosTempo = await this.prisma.registroTempoChamado.findMany({
+      where: { chamadoId },
+      include: {
+        usuario: { select: { id: true, nome: true, username: true } },
+      },
+      orderBy: { horaInicio: 'asc' },
+    });
+
+    // Anexos
+    const anexos = await this.prisma.anexoChamado.findMany({
+      where: { chamadoId },
+      include: {
+        usuario: { select: { id: true, nome: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // OS vinculadas
+    const osVinculadas = await this.prisma.osChamado.findMany({
+      where: { chamadoId },
+      include: {
+        os: { select: { id: true, numero: true, titulo: true, status: true } },
+      },
+    });
+
+    // KPIs
+    const totalMinutosTrabalhados = registrosTempo.reduce((s, r) => s + (r.duracaoMinutos ?? 0), 0);
+    const tecnicosEnvolvidos = new Set(registrosTempo.map((r) => r.usuarioId));
+    const totalSessoes = registrosTempo.length;
+    const tempoMedioPorSessao = totalSessoes > 0 ? Math.round(totalMinutosTrabalhados / totalSessoes) : 0;
+
+    // SLA
+    let slaStatus: 'no_prazo' | 'em_risco' | 'estourado' | 'sem_sla' = 'sem_sla';
+    let slaPercentual: number | null = null;
+    if (chamado.dataLimiteSla) {
+      const now = chamado.dataResolucao || new Date();
+      const totalSla = chamado.dataLimiteSla.getTime() - chamado.createdAt.getTime();
+      const elapsed = now.getTime() - chamado.createdAt.getTime();
+      slaPercentual = totalSla > 0 ? Math.round((elapsed / totalSla) * 100) : 100;
+      if (now > chamado.dataLimiteSla) {
+        slaStatus = 'estourado';
+      } else if (slaPercentual >= 80) {
+        slaStatus = 'em_risco';
+      } else {
+        slaStatus = 'no_prazo';
+      }
+    }
+
+    // Tempo de resposta (abertura → primeiro ASSUMIDO)
+    const primeiroAssumido = historicos.find((h) => h.tipo === 'ASSUMIDO');
+    const tempoRespostaMinutos = primeiroAssumido
+      ? Math.round((primeiroAssumido.createdAt.getTime() - chamado.createdAt.getTime()) / 60000)
+      : null;
+
+    // Tempo de resolução (abertura → RESOLVIDO)
+    const tempoResolucaoMinutos = chamado.dataResolucao
+      ? Math.round((chamado.dataResolucao.getTime() - chamado.createdAt.getTime()) / 60000)
+      : null;
+
+    // Por técnico
+    const porTecnico = new Map<string, { nome: string; minutos: number; sessoes: number }>();
+    for (const r of registrosTempo) {
+      const t = porTecnico.get(r.usuarioId) || { nome: r.usuario.nome, minutos: 0, sessoes: 0 };
+      t.minutos += r.duracaoMinutos ?? 0;
+      t.sessoes++;
+      porTecnico.set(r.usuarioId, t);
+    }
+
+    // Transferências
+    const transferencias = historicos.filter((h) =>
+      ['TRANSFERENCIA_EQUIPE', 'TRANSFERENCIA_TECNICO'].includes(h.tipo),
+    );
+
+    return {
+      chamado: {
+        id: chamado.id,
+        numero: chamado.numero,
+        titulo: chamado.titulo,
+        descricao: chamado.descricao,
+        status: chamado.status,
+        prioridade: chamado.prioridade,
+        visibilidade: chamado.visibilidade,
+        createdAt: chamado.createdAt,
+        dataLimiteSla: chamado.dataLimiteSla,
+        dataResolucao: chamado.dataResolucao,
+        dataFechamento: chamado.dataFechamento,
+        notaSatisfacao: chamado.notaSatisfacao,
+        comentarioSatisfacao: chamado.comentarioSatisfacao,
+        ipMaquina: chamado.ipMaquina,
+        solicitante: chamado.solicitante,
+        tecnico: chamado.tecnico,
+        equipeAtual: chamado.equipeAtual,
+        catalogoServico: chamado.catalogoServico,
+        slaDefinicao: chamado.slaDefinicao,
+        software: chamado.software,
+        softwareModulo: chamado.softwareModulo,
+        ativo: chamado.ativo,
+        projeto: chamado.projeto,
+        colaboradores: chamado.colaboradores.map((c) => c.usuario),
+      },
+      resumo: {
+        totalMinutosTrabalhados,
+        totalHorasTrabalhadas: +(totalMinutosTrabalhados / 60).toFixed(1),
+        tecnicosEnvolvidos: tecnicosEnvolvidos.size,
+        totalSessoes,
+        tempoMedioPorSessao,
+        tempoMedioPorSessaoFormatado: this.formatDuration(tempoMedioPorSessao),
+        tempoRespostaMinutos,
+        tempoRespostaFormatado: tempoRespostaMinutos !== null ? this.formatDuration(tempoRespostaMinutos) : null,
+        tempoResolucaoMinutos,
+        tempoResolucaoFormatado: tempoResolucaoMinutos !== null ? this.formatDuration(tempoResolucaoMinutos) : null,
+        totalTransferencias: transferencias.length,
+        totalAnexos: anexos.length,
+        slaStatus,
+        slaPercentual,
+      },
+      historicos,
+      registrosTempo,
+      anexos,
+      osVinculadas: osVinculadas.map((o) => o.os),
+      porTecnico: Array.from(porTecnico.entries()).map(([id, t]) => ({
+        usuarioId: id,
+        nome: t.nome,
+        minutos: t.minutos,
+        horas: +(t.minutos / 60).toFixed(1),
+        sessoes: t.sessoes,
+        tempoMedioSessao: t.sessoes > 0 ? Math.round(t.minutos / t.sessoes) : 0,
+      })).sort((a, b) => b.minutos - a.minutos),
+    };
+  }
+
+  // ========== ACOMPANHAMENTO POR ATIVIDADE ==========
+
+  async listarProjetosAtivos() {
+    return this.prisma.projeto.findMany({
+      where: { status: { in: ['PLANEJAMENTO', 'EM_ANDAMENTO', 'PAUSADO'] }, nivel: 1 },
+      select: { id: true, numero: true, nome: true, status: true },
+      orderBy: { nome: 'asc' },
+    });
+  }
+
+  async buscarAtividades(q?: string, projetoId?: string, status?: string) {
+    const where: Record<string, unknown> = {};
+    if (projetoId) where.projetoId = projetoId;
+    if (status) where.status = status;
+    if (q) {
+      where.titulo = { contains: q, mode: 'insensitive' };
+    }
+    return this.prisma.atividadeProjeto.findMany({
+      where,
+      select: {
+        id: true, titulo: true, status: true, dataInicio: true, dataFimPrevista: true, createdAt: true,
+        usuario: { select: { id: true, nome: true } },
+        projeto: { select: { id: true, numero: true, nome: true } },
+        fase: { select: { id: true, nome: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+  }
+
+  async getAcompanhamentoAtividade(atividadeId: string) {
+    const atividade = await this.prisma.atividadeProjeto.findUnique({
+      where: { id: atividadeId },
+      include: {
+        usuario: { select: { id: true, nome: true, username: true } },
+        projeto: {
+          select: {
+            id: true, numero: true, nome: true, status: true, tipo: true,
+            responsavel: { select: { id: true, nome: true } },
+          },
+        },
+        fase: { select: { id: true, nome: true, status: true } },
+        comentarios: {
+          include: { usuario: { select: { id: true, nome: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+    if (!atividade) return null;
+
+    // Registros de tempo
+    const registrosTempo = await this.prisma.registroTempo.findMany({
+      where: { atividadeId },
+      include: {
+        usuario: { select: { id: true, nome: true, username: true } },
+      },
+      orderBy: { horaInicio: 'asc' },
+    });
+
+    // KPIs
+    const totalMinutosTrabalhados = registrosTempo.reduce((s, r) => s + (r.duracaoMinutos ?? 0), 0);
+    const participantes = new Set(registrosTempo.map((r) => r.usuarioId));
+    const totalSessoes = registrosTempo.length;
+    const tempoMedioPorSessao = totalSessoes > 0 ? Math.round(totalMinutosTrabalhados / totalSessoes) : 0;
+
+    // Duração prevista (em dias)
+    let diasPrevistos: number | null = null;
+    if (atividade.dataInicio && atividade.dataFimPrevista) {
+      diasPrevistos = Math.ceil(
+        (atividade.dataFimPrevista.getTime() - atividade.dataInicio.getTime()) / (1000 * 60 * 60 * 24),
+      );
+    }
+
+    // Dias em andamento
+    let diasEmAndamento: number | null = null;
+    if (atividade.dataInicio) {
+      const fim = atividade.status === 'CONCLUIDA' ? atividade.createdAt : new Date();
+      diasEmAndamento = Math.ceil(
+        (fim.getTime() - atividade.dataInicio.getTime()) / (1000 * 60 * 60 * 24),
+      );
+    }
+
+    // Por participante
+    const porParticipante = new Map<string, { nome: string; minutos: number; sessoes: number }>();
+    for (const r of registrosTempo) {
+      const p = porParticipante.get(r.usuarioId) || { nome: r.usuario.nome, minutos: 0, sessoes: 0 };
+      p.minutos += r.duracaoMinutos ?? 0;
+      p.sessoes++;
+      porParticipante.set(r.usuarioId, p);
+    }
+
+    // Chamados vinculados ao projeto desta atividade
+    const chamadosVinculados = await this.prisma.chamado.findMany({
+      where: { projetoId: atividade.projetoId },
+      select: {
+        id: true, numero: true, titulo: true, status: true, prioridade: true,
+        tecnico: { select: { id: true, nome: true } },
+      },
+      orderBy: { numero: 'desc' },
+      take: 10,
+    });
+
+    return {
+      atividade: {
+        id: atividade.id,
+        titulo: atividade.titulo,
+        descricao: atividade.descricao,
+        status: atividade.status,
+        dataAtividade: atividade.dataAtividade,
+        dataInicio: atividade.dataInicio,
+        dataFimPrevista: atividade.dataFimPrevista,
+        createdAt: atividade.createdAt,
+        usuario: atividade.usuario,
+        projeto: atividade.projeto,
+        fase: atividade.fase,
+      },
+      resumo: {
+        totalMinutosTrabalhados,
+        totalHorasTrabalhadas: +(totalMinutosTrabalhados / 60).toFixed(1),
+        participantes: participantes.size,
+        totalSessoes,
+        tempoMedioPorSessao,
+        tempoMedioPorSessaoFormatado: this.formatDuration(tempoMedioPorSessao),
+        diasPrevistos,
+        diasEmAndamento,
+        totalComentarios: atividade.comentarios.length,
+      },
+      registrosTempo,
+      comentarios: atividade.comentarios,
+      chamadosVinculados,
+      porParticipante: Array.from(porParticipante.entries()).map(([id, p]) => ({
+        usuarioId: id,
+        nome: p.nome,
+        minutos: p.minutos,
+        horas: +(p.minutos / 60).toFixed(1),
+        sessoes: p.sessoes,
+        tempoMedioSessao: p.sessoes > 0 ? Math.round(p.minutos / p.sessoes) : 0,
+      })).sort((a, b) => b.minutos - a.minutos),
+    };
+  }
 }

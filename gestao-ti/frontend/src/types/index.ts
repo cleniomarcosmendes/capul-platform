@@ -1232,3 +1232,100 @@ export interface AcompanhamentoData {
     totalRegistros: number;
   }[];
 }
+
+// Acompanhamento por Chamado
+export interface ChamadoBusca {
+  id: string;
+  numero: number;
+  titulo: string;
+  status: string;
+  prioridade: string;
+  createdAt: string;
+  solicitante: { id: string; nome: string };
+  tecnico: { id: string; nome: string } | null;
+  equipeAtual: { id: string; nome: string; sigla: string };
+}
+
+export interface AcompanhamentoChamadoData {
+  chamado: {
+    id: string; numero: number; titulo: string; descricao: string;
+    status: string; prioridade: string; visibilidade: string;
+    createdAt: string; dataLimiteSla: string | null;
+    dataResolucao: string | null; dataFechamento: string | null;
+    notaSatisfacao: number | null; comentarioSatisfacao: string | null;
+    ipMaquina: string | null;
+    solicitante: { id: string; nome: string; username: string };
+    tecnico: { id: string; nome: string; username: string } | null;
+    equipeAtual: { id: string; nome: string; sigla: string; cor: string | null };
+    catalogoServico: { id: string; nome: string } | null;
+    slaDefinicao: { id: string; nome: string; horasResposta: number; horasResolucao: number } | null;
+    software: { id: string; nome: string } | null;
+    softwareModulo: { id: string; nome: string } | null;
+    ativo: { id: string; nome: string; tipo: string } | null;
+    projeto: { id: string; nome: string; numero: number } | null;
+    colaboradores: { id: string; nome: string; username: string }[];
+  };
+  resumo: {
+    totalMinutosTrabalhados: number; totalHorasTrabalhadas: number;
+    tecnicosEnvolvidos: number; totalSessoes: number;
+    tempoMedioPorSessao: number; tempoMedioPorSessaoFormatado: string;
+    tempoRespostaMinutos: number | null; tempoRespostaFormatado: string | null;
+    tempoResolucaoMinutos: number | null; tempoResolucaoFormatado: string | null;
+    totalTransferencias: number; totalAnexos: number;
+    slaStatus: 'no_prazo' | 'em_risco' | 'estourado' | 'sem_sla';
+    slaPercentual: number | null;
+  };
+  historicos: {
+    id: string; tipo: string; descricao: string | null; publico: boolean; createdAt: string;
+    usuario: { id: string; nome: string };
+    equipeOrigem: { id: string; nome: string; sigla: string } | null;
+    equipeDestino: { id: string; nome: string; sigla: string } | null;
+  }[];
+  registrosTempo: {
+    id: string; horaInicio: string; horaFim: string | null;
+    duracaoMinutos: number | null; observacoes: string | null;
+    usuario: { id: string; nome: string; username: string };
+  }[];
+  anexos: { id: string; nomeOriginal: string; mimeType: string; tamanho: number; createdAt: string; usuario: { id: string; nome: string } }[];
+  osVinculadas: { id: string; numero: number; titulo: string; status: string }[];
+  porTecnico: { usuarioId: string; nome: string; minutos: number; horas: number; sessoes: number; tempoMedioSessao: number }[];
+}
+
+// Acompanhamento por Atividade
+export interface AtividadeBusca {
+  id: string; titulo: string; status: string;
+  dataInicio: string | null; dataFimPrevista: string | null; createdAt: string;
+  usuario: { id: string; nome: string };
+  projeto: { id: string; numero: number; nome: string };
+  fase: { id: string; nome: string } | null;
+}
+
+export interface ProjetoResumo {
+  id: string; numero: number; nome: string; status: string;
+}
+
+export interface AcompanhamentoAtividadeData {
+  atividade: {
+    id: string; titulo: string; descricao: string | null;
+    status: string; dataAtividade: string;
+    dataInicio: string | null; dataFimPrevista: string | null; createdAt: string;
+    usuario: { id: string; nome: string; username: string };
+    projeto: { id: string; numero: number; nome: string; status: string; tipo: string; responsavel: { id: string; nome: string } };
+    fase: { id: string; nome: string; status: string } | null;
+  };
+  resumo: {
+    totalMinutosTrabalhados: number; totalHorasTrabalhadas: number;
+    participantes: number; totalSessoes: number;
+    tempoMedioPorSessao: number; tempoMedioPorSessaoFormatado: string;
+    diasPrevistos: number | null; diasEmAndamento: number | null;
+    totalComentarios: number;
+  };
+  registrosTempo: {
+    id: string; horaInicio: string; horaFim: string | null;
+    duracaoMinutos: number | null; observacoes: string | null;
+    usuario: { id: string; nome: string; username: string };
+  }[];
+  comentarios: { id: string; texto: string; createdAt: string; usuario: { id: string; nome: string } }[];
+  chamadosVinculados: { id: string; numero: number; titulo: string; status: string; prioridade: string; tecnico: { id: string; nome: string } | null }[];
+  porParticipante: { usuarioId: string; nome: string; minutos: number; horas: number; sessoes: number; tempoMedioSessao: number }[];
+}

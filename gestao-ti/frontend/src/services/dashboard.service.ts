@@ -1,5 +1,10 @@
 import { gestaoApi } from './api';
-import type { DashboardResumo, DashboardFinanceiro, DashboardDisponibilidade, DashboardExecutivo, DashboardCsat, AcompanhamentoData, TecnicoResumo } from '../types';
+import type {
+  DashboardResumo, DashboardFinanceiro, DashboardDisponibilidade, DashboardExecutivo, DashboardCsat,
+  AcompanhamentoData, TecnicoResumo,
+  ChamadoBusca, AcompanhamentoChamadoData,
+  AtividadeBusca, ProjetoResumo, AcompanhamentoAtividadeData,
+} from '../types';
 
 export const dashboardService = {
   async getResumo(params?: { dataInicio?: string; dataFim?: string; departamentoId?: string }): Promise<DashboardResumo> {
@@ -42,6 +47,38 @@ export const dashboardService = {
 
   async getTecnicos(): Promise<TecnicoResumo[]> {
     const { data } = await gestaoApi.get('/dashboard/acompanhamento/tecnicos');
+    return data;
+  },
+
+  // Acompanhamento por Chamado
+  async listarEquipes(): Promise<{ id: string; nome: string; sigla: string }[]> {
+    const { data } = await gestaoApi.get('/dashboard/acompanhamento-chamado/equipes');
+    return data;
+  },
+
+  async buscarChamados(params?: { q?: string; status?: string; prioridade?: string; equipeId?: string; tecnicoId?: string }): Promise<ChamadoBusca[]> {
+    const { data } = await gestaoApi.get('/dashboard/acompanhamento-chamado/buscar', { params });
+    return data;
+  },
+
+  async getAcompanhamentoChamado(chamadoId: string): Promise<AcompanhamentoChamadoData> {
+    const { data } = await gestaoApi.get('/dashboard/acompanhamento-chamado', { params: { chamadoId } });
+    return data;
+  },
+
+  // Acompanhamento por Atividade
+  async listarProjetosAtivos(): Promise<ProjetoResumo[]> {
+    const { data } = await gestaoApi.get('/dashboard/acompanhamento-atividade/projetos');
+    return data;
+  },
+
+  async buscarAtividades(params?: { q?: string; projetoId?: string; status?: string }): Promise<AtividadeBusca[]> {
+    const { data } = await gestaoApi.get('/dashboard/acompanhamento-atividade/buscar', { params });
+    return data;
+  },
+
+  async getAcompanhamentoAtividade(atividadeId: string): Promise<AcompanhamentoAtividadeData> {
+    const { data } = await gestaoApi.get('/dashboard/acompanhamento-atividade', { params: { atividadeId } });
     return data;
   },
 };
