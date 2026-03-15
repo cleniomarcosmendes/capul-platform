@@ -1,5 +1,5 @@
 import { gestaoApi } from './api';
-import type { DashboardResumo, DashboardFinanceiro, DashboardDisponibilidade, DashboardExecutivo, DashboardCsat } from '../types';
+import type { DashboardResumo, DashboardFinanceiro, DashboardDisponibilidade, DashboardExecutivo, DashboardCsat, AcompanhamentoData, TecnicoResumo } from '../types';
 
 export const dashboardService = {
   async getResumo(params?: { dataInicio?: string; dataFim?: string; departamentoId?: string }): Promise<DashboardResumo> {
@@ -29,6 +29,19 @@ export const dashboardService = {
 
   async getCsat(params?: { dataInicio?: string; dataFim?: string; departamentoId?: string }): Promise<DashboardCsat> {
     const { data } = await gestaoApi.get('/dashboard/csat', { params });
+    return data;
+  },
+
+  async getAcompanhamento(params?: { usuarioId?: string; dataInicio?: string; dataFim?: string }): Promise<AcompanhamentoData> {
+    const tzOffset = new Date().getTimezoneOffset();
+    const { data } = await gestaoApi.get('/dashboard/acompanhamento', {
+      params: { ...params, tzOffset },
+    });
+    return data;
+  },
+
+  async getTecnicos(): Promise<TecnicoResumo[]> {
+    const { data } = await gestaoApi.get('/dashboard/acompanhamento/tecnicos');
     return data;
   },
 };

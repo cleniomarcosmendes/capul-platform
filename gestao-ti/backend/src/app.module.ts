@@ -19,6 +19,7 @@ import { NotificacaoModule } from './notificacao/notificacao.module.js';
 import { ExportModule } from './export/export.module.js';
 import { ImportModule } from './import/import.module.js';
 import { MonitorModule } from './monitor/monitor.module.js';
+import { HorarioModule } from './horario/horario.module.js';
 import { JwtStrategy } from './common/strategies/jwt.strategy.js';
 
 @Module({
@@ -42,6 +43,7 @@ import { JwtStrategy } from './common/strategies/jwt.strategy.js';
     ExportModule,
     ImportModule,
     MonitorModule,
+    HorarioModule,
     DashboardModule,
   ],
   providers: [JwtStrategy],

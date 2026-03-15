@@ -60,4 +60,19 @@ export class DashboardController {
   ) {
     return this.service.getCsat({ dataInicio, dataFim, departamentoId });
   }
+
+  @Get('acompanhamento')
+  getAcompanhamento(
+    @Query('usuarioId') usuarioId?: string,
+    @Query('dataInicio') dataInicio?: string,
+    @Query('dataFim') dataFim?: string,
+    @Query('tzOffset') tzOffset?: string,
+  ) {
+    return this.service.getAcompanhamento({ usuarioId, dataInicio, dataFim, tzOffset: tzOffset ? parseInt(tzOffset, 10) : 0 });
+  }
+
+  @Get('acompanhamento/tecnicos')
+  getTecnicos() {
+    return this.service.getTecnicosAtivos();
+  }
 }

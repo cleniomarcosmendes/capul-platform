@@ -70,6 +70,7 @@ model Usuario {
   anexosPendencia        AnexoPendencia[]        @relation("AnexoPendenciaUsuario")
   licencaUsuarios        LicencaUsuario[]        @relation("LicencaUsuario")
   anexosConhecimento     AnexoConhecimento[]     @relation("AnexoConhecimentoUsuario")
+  horarioTrabalho        HorarioTrabalho?        @relation("HorarioTrabalho")
 
   @@map("usuarios")
   @@schema("core")
@@ -1894,5 +1895,22 @@ model TerceirizadoProjeto {
   @@index([usuarioId])
   @@index([projetoId, ativo])
   @@map("terceirizados_projeto")
+  @@schema("gestao_ti")
+}
+
+model HorarioTrabalho {
+  id                   String   @id @default(uuid())
+  horaInicioExpediente String   @default("08:00") @map("hora_inicio_expediente")
+  horaFimExpediente    String   @default("17:00") @map("hora_fim_expediente")
+  horaInicioAlmoco     String   @default("12:00") @map("hora_inicio_almoco")
+  horaFimAlmoco        String   @default("13:00") @map("hora_fim_almoco")
+  isDefault            Boolean  @default(false) @map("is_default")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  usuarioId String?  @unique @map("usuario_id")
+  usuario   Usuario? @relation("HorarioTrabalho", fields: [usuarioId], references: [id])
+
+  @@map("horarios_trabalho")
   @@schema("gestao_ti")
 }

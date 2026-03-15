@@ -14,6 +14,7 @@ import {
   ClipboardList,
   BookOpen,
   Clock,
+  Timer,
   AppWindow,
   KeyRound,
   FileText,
@@ -42,6 +43,7 @@ const CONTRATO_ROLES_DYNAMIC = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
 const menuItems: MenuItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/gestao-ti/' },
   { label: 'Monitor', icon: Gauge, path: '/gestao-ti/monitor', roles: STAFF },
+  { label: 'Acompanhamento', icon: Timer, path: '/gestao-ti/acompanhamento', roles: STAFF },
   { section: 'SUPORTE' },
   { label: 'Chamados', icon: Ticket, path: '/gestao-ti/chamados' },
   { label: 'Ordens de Servico', icon: ClipboardList, path: '/gestao-ti/ordens-servico', roles: STAFF },
@@ -61,6 +63,7 @@ const menuItems: MenuItem[] = [
   { label: 'Equipes de T.I.', icon: Users, path: '/gestao-ti/equipes', roles: MANAGERS },
   { label: 'Catalogo de Servicos', icon: BookOpen, path: '/gestao-ti/catalogo', roles: MANAGERS },
   { label: 'SLA', icon: Clock, path: '/gestao-ti/sla', roles: MANAGERS },
+  { label: 'Horarios de Trabalho', icon: Timer, path: '/gestao-ti/horarios-trabalho', roles: MANAGERS },
   { label: 'Importar Dados', icon: Upload, path: '/gestao-ti/importar', roles: MANAGERS },
   { section: 'CADASTROS', roles: MANAGERS },
   { label: 'Departamentos', icon: Building2, path: '/gestao-ti/departamentos', roles: MANAGERS },

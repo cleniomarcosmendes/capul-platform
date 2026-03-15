@@ -219,9 +219,12 @@ Variavel de ambiente que habilita autenticacao unificada:
 - **Gestao TI**: `gestao-ti/docs/documentacao-tecnica-v1.md`
 - **Inventario**: `inventario/CLAUDE.md`
 
+### Roteiros e Procedimentos
+- **Roteiro de Finalizacao**: `docs/ROTEIRO_FINALIZACAO.md` — Procedimento padrao pos-desenvolvimento (documentacao + commits + verificacao). Invocar com: `"Execute roteiro completo: ETAPA 0 + ETAPA 1 + ETAPA 2"`
+
 ### Este Arquivo
 Este arquivo serve como ponto de entrada para o Claude Code entender a estrutura geral da plataforma e navegar entre os modulos.
 
 ---
 
-*Ultima atualizacao: 10/03/2026*
+*Ultima atualizacao: 15/03/2026*

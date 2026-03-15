@@ -1159,3 +1159,76 @@ export interface DashboardCsat {
     catalogoServico: { id: string; nome: string } | null;
   }[];
 }
+
+// Acompanhamento do Tecnico
+export interface TecnicoResumo {
+  id: string;
+  nome: string;
+  username: string;
+}
+
+export interface TimelineItem {
+  id: string;
+  tipo: 'chamado' | 'atividade';
+  titulo: string;
+  referencia: string;
+  horaInicio: string;
+  horaFim: string | null;
+  duracaoMinutos: number | null;
+  observacoes: string | null;
+  detalhes: Record<string, unknown>;
+  usuarioId: string;
+  usuarioNome: string;
+}
+
+export interface HorarioTrabalho {
+  id: string;
+  horaInicioExpediente: string;
+  horaFimExpediente: string;
+  horaInicioAlmoco: string;
+  horaFimAlmoco: string;
+  isDefault: boolean;
+  usuarioId: string | null;
+  usuario?: { id: string; nome: string; username: string };
+}
+
+export interface HorarioConfig {
+  inicioExpediente: number;
+  fimExpediente: number;
+  inicioAlmoco: number;
+  fimAlmoco: number;
+  horasUteis: number;
+}
+
+export interface AcompanhamentoData {
+  periodo: { inicio: string; fim: string };
+  horario: HorarioConfig;
+  resumo: {
+    totalMinutosTrabalhados: number;
+    totalHorasTrabalhadas: number;
+    horasDisponiveis: number;
+    taxaOcupacao: number;
+    totalMinutosChamados: number;
+    totalMinutosAtividades: number;
+    chamadosTrabalhados: number;
+    atividadesTrabalhadas: number;
+    tempoMedioPorChamado: number;
+    tempoMedioPorChamadoFormatado: string;
+    totalGaps: number;
+    tempoOciosoMinutos: number;
+    totalSobreposicoes: number;
+  };
+  timeline: TimelineItem[];
+  gaps: { inicio: string; fim: string; duracaoMinutos: number; tipo: 'ocioso' | 'almoco' }[];
+  sobreposicoes: { item1: string; item2: string; inicio: string; fim: string; duracaoMinutos: number }[];
+  interacoesPorTipo: { tipo: string; total: number }[];
+  porUsuario: {
+    usuarioId: string;
+    nome: string;
+    minutosChamados: number;
+    minutosAtividades: number;
+    totalMinutos: number;
+    totalHoras: number;
+    totalRegistros: number;
+  }[];
+}

@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { HorarioService } from '../horario/horario.service.js';
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly horarioService: HorarioService,
+  ) {}
 
   private resolvePeriodo(filters?: { dataInicio?: string; dataFim?: string }) {
     const now = new Date();
@@ -953,6 +957,336 @@ export class DashboardService {
         totalOs: t._count,
       })),
       evolucaoMensal: evolucao,
+    };
+  }
+
+  async getTecnicosAtivos() {
+    const membros = await this.prisma.membroEquipe.findMany({
+      where: { status: 'ATIVO' },
+      select: { usuarioId: true },
+      distinct: ['usuarioId'],
+    });
+    const ids = membros.map((m) => m.usuarioId);
+    if (ids.length === 0) return [];
+    const usuarios = await this.prisma.usuario.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, nome: true, username: true },
+      orderBy: { nome: 'asc' },
+    });
+    return usuarios;
+  }
+
+  async getAcompanhamento(filters: {
+    usuarioId?: string;
+    dataInicio?: string;
+    dataFim?: string;
+    tzOffset?: number; // minutos (ex: -180 para BRT)
+  }) {
+    // Resolve período — para acompanhamento, default = hoje
+    const now = new Date();
+    const inicio = filters.dataInicio
+      ? new Date(filters.dataInicio + 'T00:00:00.000Z')
+      : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const fim = filters.dataFim
+      ? new Date(filters.dataFim + 'T23:59:59.999Z')
+      : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    const periodoFilter = { gte: inicio, lte: fim };
+    const userFilter = filters.usuarioId ? { usuarioId: filters.usuarioId } : {};
+
+    // Buscar registros de tempo (queries separadas para preservar tipos)
+    const registrosChamado = await this.prisma.registroTempoChamado.findMany({
+      where: { horaInicio: periodoFilter, ...userFilter },
+      include: {
+        chamado: { select: { id: true, numero: true, titulo: true, status: true, prioridade: true } },
+        usuario: { select: { id: true, nome: true, username: true } },
+      },
+      orderBy: { horaInicio: 'asc' },
+    });
+
+    const registrosAtividade = await this.prisma.registroTempo.findMany({
+      where: { horaInicio: periodoFilter, ...userFilter },
+      include: {
+        atividade: {
+          select: {
+            id: true,
+            titulo: true,
+            status: true,
+            projeto: { select: { id: true, nome: true, numero: true } },
+          },
+        },
+        usuario: { select: { id: true, nome: true, username: true } },
+      },
+      orderBy: { horaInicio: 'asc' },
+    });
+
+    const chamadosAssumidos = await this.prisma.historicoChamado.findMany({
+      where: {
+        createdAt: periodoFilter,
+        tipo: { in: ['ASSUMIDO', 'COMENTARIO', 'RESOLVIDO'] },
+        ...(filters.usuarioId ? { usuarioId: filters.usuarioId } : {}),
+      },
+      include: {
+        chamado: { select: { id: true, numero: true, titulo: true, status: true, prioridade: true } },
+        usuario: { select: { id: true, nome: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Unificar timeline
+    const timeline: {
+      id: string;
+      tipo: 'chamado' | 'atividade';
+      titulo: string;
+      referencia: string;
+      horaInicio: Date;
+      horaFim: Date | null;
+      duracaoMinutos: number | null;
+      observacoes: string | null;
+      detalhes: Record<string, unknown>;
+      usuarioId: string;
+      usuarioNome: string;
+    }[] = [];
+
+    for (const r of registrosChamado) {
+      timeline.push({
+        id: r.id,
+        tipo: 'chamado',
+        titulo: `#${r.chamado.numero} — ${r.chamado.titulo}`,
+        referencia: r.chamado.id,
+        horaInicio: r.horaInicio,
+        horaFim: r.horaFim,
+        duracaoMinutos: r.duracaoMinutos,
+        observacoes: r.observacoes,
+        detalhes: {
+          numero: r.chamado.numero,
+          status: r.chamado.status,
+          prioridade: r.chamado.prioridade,
+        },
+        usuarioId: r.usuarioId,
+        usuarioNome: r.usuario.nome,
+      });
+    }
+
+    for (const r of registrosAtividade) {
+      timeline.push({
+        id: r.id,
+        tipo: 'atividade',
+        titulo: r.atividade.titulo,
+        referencia: r.atividadeId,
+        horaInicio: r.horaInicio,
+        horaFim: r.horaFim,
+        duracaoMinutos: r.duracaoMinutos,
+        observacoes: r.observacoes,
+        detalhes: {
+          projetoId: r.atividade.projeto?.id,
+          projetoNome: r.atividade.projeto?.nome,
+          projetoNumero: r.atividade.projeto?.numero,
+          statusAtividade: r.atividade.status,
+        },
+        usuarioId: r.usuarioId,
+        usuarioNome: r.usuario.nome,
+      });
+    }
+
+    timeline.sort((a, b) => a.horaInicio.getTime() - b.horaInicio.getTime());
+
+    // Buscar horário de trabalho configurado
+    const horarioConfig = filters.usuarioId
+      ? await this.horarioService.getHorarioParaUsuario(filters.usuarioId)
+      : await this.horarioService.getDefault().then((h) => {
+          const parseH = (s: string) => { const [hh, mm] = s.split(':').map(Number); return hh + mm / 60; };
+          const ini = parseH(h.horaInicioExpediente);
+          const fim2 = parseH(h.horaFimExpediente);
+          const ai = parseH(h.horaInicioAlmoco);
+          const af = parseH(h.horaFimAlmoco);
+          return { inicioExpediente: ini, fimExpediente: fim2, inicioAlmoco: ai, fimAlmoco: af, horasUteis: (fim2 - ini) - (af - ai) };
+        });
+
+    // KPIs
+    const totalMinutosChamados = registrosChamado.reduce((s, r) => s + (r.duracaoMinutos ?? 0), 0);
+    const totalMinutosAtividades = registrosAtividade.reduce((s, r) => s + (r.duracaoMinutos ?? 0), 0);
+    const totalMinutosTrabalhados = totalMinutosChamados + totalMinutosAtividades;
+
+    // Horas disponíveis calculadas com base no horário configurado
+    const diasPeriodo = Math.max(1, Math.ceil((fim.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)));
+    const horasDisponiveis = +(diasPeriodo * horarioConfig.horasUteis).toFixed(1);
+    const taxaOcupacao = horasDisponiveis > 0
+      ? Math.min(100, +((totalMinutosTrabalhados / (horasDisponiveis * 60)) * 100).toFixed(1))
+      : 0;
+
+    // Chamados únicos trabalhados
+    const chamadosUnicos = new Set(registrosChamado.map((r) => r.chamadoId));
+    const atividadesUnicas = new Set(registrosAtividade.map((r) => r.atividadeId));
+
+    // Tempo médio por chamado
+    const tempoMedioPorChamado = chamadosUnicos.size > 0
+      ? Math.round(totalMinutosChamados / chamadosUnicos.size)
+      : 0;
+
+    // Análise de gaps (períodos ociosos > 15min, incluindo bordas do expediente)
+    const gaps: { inicio: Date; fim: Date; duracaoMinutos: number; tipo: 'ocioso' | 'almoco' }[] = [];
+
+    // Helper para classificar gap como almoço ou ocioso (converte UTC para hora local)
+    const tzMin = filters.tzOffset ?? 0;
+    const classificarGap = (gapInicio: Date, gapFim: Date): 'ocioso' | 'almoco' => {
+      // Converter UTC para hora local: local = utc - (tzOffset / 60)
+      // getTimezoneOffset() retorna 180 para BRT, então: local = utc - 3
+      const gapInicioLocal = gapInicio.getUTCHours() + gapInicio.getUTCMinutes() / 60 - (tzMin / 60);
+      const gapFimLocal = gapFim.getUTCHours() + gapFim.getUTCMinutes() / 60 - (tzMin / 60);
+      const isAlmoco = gapInicioLocal >= horarioConfig.inicioAlmoco - 0.25
+        && gapFimLocal <= horarioConfig.fimAlmoco + 0.25;
+      return isAlmoco ? 'almoco' : 'ocioso';
+    };
+
+    const addGap = (gapInicio: Date, gapFim: Date) => {
+      const gapMin = (gapFim.getTime() - gapInicio.getTime()) / 60000;
+      if (gapMin > 15) {
+        gaps.push({
+          inicio: gapInicio,
+          fim: gapFim,
+          duracaoMinutos: Math.round(gapMin),
+          tipo: classificarGap(gapInicio, gapFim),
+        });
+      }
+    };
+
+    // Agrupar registros por dia para calcular gaps de borda
+    const registrosPorDia = new Map<string, typeof timeline>();
+    for (const r of timeline) {
+      const diaKey = r.horaInicio.toISOString().slice(0, 10);
+      const arr = registrosPorDia.get(diaKey) || [];
+      arr.push(r);
+      registrosPorDia.set(diaKey, arr);
+    }
+
+    for (const [diaKey, registrosDia] of registrosPorDia) {
+      const registrosFinalizados = registrosDia.filter((r) => r.horaFim).sort(
+        (a, b) => a.horaInicio.getTime() - b.horaInicio.getTime(),
+      );
+      if (registrosFinalizados.length === 0) continue;
+
+      // Construir início e fim do expediente para este dia, ajustando timezone
+      // getTimezoneOffset() retorna 180 para BRT (UTC-3)
+      // Converter hora local para UTC: utc = local + (tzOffset / 60)
+      // Ex: 08:00 BRT com offset 180 → 08 + 3 = 11:00 UTC
+      const tzHours = (filters.tzOffset ?? 0) / 60;
+      const diaDate = new Date(diaKey + 'T00:00:00.000Z');
+      const iniExpH = Math.floor(horarioConfig.inicioExpediente + tzHours);
+      const iniExpM = Math.round((horarioConfig.inicioExpediente - Math.floor(horarioConfig.inicioExpediente)) * 60);
+      const fimExpH = Math.floor(horarioConfig.fimExpediente + tzHours);
+      const fimExpM = Math.round((horarioConfig.fimExpediente - Math.floor(horarioConfig.fimExpediente)) * 60);
+      const inicioExpedienteDia = new Date(diaDate);
+      inicioExpedienteDia.setUTCHours(iniExpH, iniExpM, 0, 0);
+      const fimExpedienteDia = new Date(diaDate);
+      fimExpedienteDia.setUTCHours(fimExpH, fimExpM, 0, 0);
+
+      // Gap de borda: início do expediente → primeiro registro
+      const primeiroInicio = registrosFinalizados[0].horaInicio;
+      if (primeiroInicio.getTime() > inicioExpedienteDia.getTime()) {
+        addGap(inicioExpedienteDia, primeiroInicio);
+      }
+
+      // Gaps entre registros consecutivos
+      for (let i = 0; i < registrosFinalizados.length - 1; i++) {
+        const fimAtual = registrosFinalizados[i].horaFim!;
+        const inicioProx = registrosFinalizados[i + 1].horaInicio;
+        addGap(fimAtual, inicioProx);
+      }
+
+      // Gap de borda: último registro → fim do expediente
+      const ultimoFim = registrosFinalizados[registrosFinalizados.length - 1].horaFim!;
+      if (ultimoFim.getTime() < fimExpedienteDia.getTime()) {
+        addGap(ultimoFim, fimExpedienteDia);
+      }
+    }
+
+    gaps.sort((a, b) => a.inicio.getTime() - b.inicio.getTime());
+
+    // Sobreposições (multitasking)
+    const sobreposicoes: { item1: string; item2: string; inicio: Date; fim: Date; duracaoMinutos: number }[] = [];
+    for (let i = 0; i < timeline.length; i++) {
+      for (let j = i + 1; j < timeline.length; j++) {
+        const a = timeline[i];
+        const b = timeline[j];
+        if (!a.horaFim || !b.horaFim) continue;
+        const overlapStart = Math.max(a.horaInicio.getTime(), b.horaInicio.getTime());
+        const overlapEnd = Math.min(a.horaFim.getTime(), b.horaFim.getTime());
+        if (overlapStart < overlapEnd) {
+          const overlapMin = (overlapEnd - overlapStart) / 60000;
+          if (overlapMin >= 5) {
+            sobreposicoes.push({
+              item1: a.titulo,
+              item2: b.titulo,
+              inicio: new Date(overlapStart),
+              fim: new Date(overlapEnd),
+              duracaoMinutos: Math.round(overlapMin),
+            });
+          }
+        }
+      }
+    }
+
+    // Interações no período (histórico de chamados)
+    const interacoesPorTipo: Record<string, number> = {};
+    for (const h of chamadosAssumidos) {
+      interacoesPorTipo[h.tipo] = (interacoesPorTipo[h.tipo] || 0) + 1;
+    }
+
+    // Agrupamento por usuário (quando sem filtro de usuário)
+    const porUsuario = new Map<string, { nome: string; minutosChamados: number; minutosAtividades: number; totalRegistros: number }>();
+    for (const r of registrosChamado) {
+      const u = porUsuario.get(r.usuarioId) || { nome: r.usuario.nome, minutosChamados: 0, minutosAtividades: 0, totalRegistros: 0 };
+      u.minutosChamados += r.duracaoMinutos ?? 0;
+      u.totalRegistros++;
+      porUsuario.set(r.usuarioId, u);
+    }
+    for (const r of registrosAtividade) {
+      const u = porUsuario.get(r.usuarioId) || { nome: r.usuario.nome, minutosChamados: 0, minutosAtividades: 0, totalRegistros: 0 };
+      u.minutosAtividades += r.duracaoMinutos ?? 0;
+      u.totalRegistros++;
+      porUsuario.set(r.usuarioId, u);
+    }
+
+    const gapsOciosos = gaps.filter((g) => g.tipo === 'ocioso');
+
+    return {
+      periodo: { inicio: inicio.toISOString(), fim: fim.toISOString() },
+      horario: {
+        inicioExpediente: horarioConfig.inicioExpediente,
+        fimExpediente: horarioConfig.fimExpediente,
+        inicioAlmoco: horarioConfig.inicioAlmoco,
+        fimAlmoco: horarioConfig.fimAlmoco,
+        horasUteis: horarioConfig.horasUteis,
+      },
+      resumo: {
+        totalMinutosTrabalhados,
+        totalHorasTrabalhadas: +(totalMinutosTrabalhados / 60).toFixed(1),
+        horasDisponiveis,
+        taxaOcupacao,
+        totalMinutosChamados,
+        totalMinutosAtividades,
+        chamadosTrabalhados: chamadosUnicos.size,
+        atividadesTrabalhadas: atividadesUnicas.size,
+        tempoMedioPorChamado,
+        tempoMedioPorChamadoFormatado: this.formatDuration(tempoMedioPorChamado),
+        totalGaps: gapsOciosos.length,
+        tempoOciosoMinutos: gapsOciosos.reduce((s, g) => s + g.duracaoMinutos, 0),
+        totalSobreposicoes: sobreposicoes.length,
+      },
+      timeline,
+      gaps,
+      sobreposicoes,
+      interacoesPorTipo: Object.entries(interacoesPorTipo).map(([tipo, total]) => ({ tipo, total })),
+      porUsuario: Array.from(porUsuario.entries()).map(([id, u]) => ({
+        usuarioId: id,
+        nome: u.nome,
+        minutosChamados: u.minutosChamados,
+        minutosAtividades: u.minutosAtividades,
+        totalMinutos: u.minutosChamados + u.minutosAtividades,
+        totalHoras: +((u.minutosChamados + u.minutosAtividades) / 60).toFixed(1),
+        totalRegistros: u.totalRegistros,
+      })).sort((a, b) => b.totalMinutos - a.totalMinutos),
     };
   }
 }
