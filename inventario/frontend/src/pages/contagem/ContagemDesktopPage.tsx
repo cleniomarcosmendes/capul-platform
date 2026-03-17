@@ -182,13 +182,23 @@ export function ContagemDesktopPage() {
       <div className="p-3 md:p-4 space-y-3">
         {/* Voltar + info compacta */}
         <div className="flex items-center justify-between">
-          <button
-            onClick={() => navigate('/inventario/contagem')}
-            className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Voltar
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/inventario/contagem')}
+              className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Voltar
+            </button>
+            {inventoryId && (
+              <button
+                onClick={() => navigate(`/inventario/inventarios/${inventoryId}`)}
+                className="text-xs text-capul-600 hover:underline"
+              >
+                Ver Inventario
+              </button>
+            )}
+          </div>
 
           <div className="flex items-center gap-3 text-sm">
             <span className="text-slate-500">Armazem: <strong className="text-slate-700">{inventario?.warehouse || '—'}</strong></span>

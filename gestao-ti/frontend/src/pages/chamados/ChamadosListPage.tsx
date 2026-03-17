@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
@@ -63,18 +63,24 @@ export function ChamadosListPage() {
 
   useEffect(() => {
     equipeService.listar('ATIVO').then(setEquipes).catch(() => {});
-    coreService.listarFiliais().then(setFiliais).catch(() => {});
+    // Staff vê todas as filiais; demais usuários veem apenas suas filiais vinculadas
+    const isStaff = gestaoTiRole && ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole);
+    if (isStaff) {
+      coreService.listarFiliais().then(setFiliais).catch(() => {});
+    } else if (usuario?.filiais?.length) {
+      setFiliais(usuario.filiais.map((f) => ({ id: f.id, codigo: f.codigo, nomeFantasia: f.nome })));
+    }
     coreService.listarDepartamentos().then(setDepartamentos).catch(() => {});
-  }, []);
+  }, [gestaoTiRole, usuario]);
 
-  useEffect(() => {
-    setLoading(true);
+  const carregarChamados = useCallback((silent = false) => {
+    if (!silent) setLoading(true);
     if (pendentesAvaliacao) {
       chamadoService
         .listar({ pendentesAvaliacao: true })
         .then(setChamados)
         .catch(() => {})
-        .finally(() => setLoading(false));
+        .finally(() => { if (!silent) setLoading(false); });
     } else {
       const filialId = filterFilial === 'atual'
         ? usuario?.filialAtual?.id
@@ -90,9 +96,21 @@ export function ChamadosListPage() {
         })
         .then(setChamados)
         .catch(() => {})
-        .finally(() => setLoading(false));
+        .finally(() => { if (!silent) setLoading(false); });
     }
   }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, filterDepartamento, usuario, pendentesAvaliacao]);
+
+  useEffect(() => {
+    carregarChamados();
+  }, [carregarChamados]);
+
+  // Auto-refresh a cada 60s (silencioso)
+  const silentRef = useRef(carregarChamados);
+  silentRef.current = carregarChamados;
+  useEffect(() => {
+    const poll = setInterval(() => silentRef.current(true), 60000);
+    return () => clearInterval(poll);
+  }, []);
 
   return (
     <>

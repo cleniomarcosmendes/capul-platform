@@ -116,7 +116,12 @@ export function ContagemSelectorPage() {
                 {inventarios.map((inv) => (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 px-4">
-                      <span className="font-medium text-slate-800">{inv.name}</span>
+                      <button
+                        onClick={() => handleSelectInventario(inv.id)}
+                        className="font-medium text-capul-600 hover:underline text-left"
+                      >
+                        {inv.name}
+                      </button>
                       {inv.description && (
                         <p className="text-xs text-slate-400 mt-0.5 truncate max-w-xs">{inv.description}</p>
                       )}

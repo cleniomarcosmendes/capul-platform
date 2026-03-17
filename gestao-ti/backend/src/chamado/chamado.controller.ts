@@ -174,6 +174,15 @@ export class ChamadoController {
     return this.service.cancelar(id, user, role);
   }
 
+  @Patch(':id/vincular-projeto')
+  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  vincularProjeto(
+    @Param('id') id: string,
+    @Body('projetoId') projetoId: string,
+  ) {
+    return this.service.vincularProjeto(id, projetoId);
+  }
+
   @Post(':id/avaliar')
   avaliar(
     @Param('id') id: string,

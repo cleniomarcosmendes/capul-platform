@@ -21,6 +21,7 @@ export interface UsuarioLogado {
   email: string | null;
   departamento: { id: string; nome: string };
   filialAtual: FilialUsuario | null;
+  filiais: (FilialUsuario & { isDefault: boolean })[];
   modulos: ModuloUsuario[];
 }
 

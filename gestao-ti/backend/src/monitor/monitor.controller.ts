@@ -19,6 +19,22 @@ export class MonitorController {
     return this.monitorService.encerrarTodosTimers(userId);
   }
 
+  @Post('encerrar-chamado/:chamadoId')
+  encerrarChamado(
+    @Param('chamadoId') chamadoId: string,
+    @CurrentUser('sub') userId: string,
+  ) {
+    return this.monitorService.encerrarTimerChamado(chamadoId, userId);
+  }
+
+  @Post('encerrar-atividade/:atividadeId')
+  encerrarAtividade(
+    @Param('atividadeId') atividadeId: string,
+    @CurrentUser('sub') userId: string,
+  ) {
+    return this.monitorService.encerrarTimerAtividade(atividadeId, userId);
+  }
+
   @Post('iniciar-chamado/:chamadoId')
   iniciarChamado(
     @Param('chamadoId') chamadoId: string,

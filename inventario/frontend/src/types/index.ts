@@ -757,12 +757,14 @@ export interface SendLog {
   error_message: string | null;
   duration_ms: number;
   created_at: string;
+  send_batch: number;
 }
 
 export interface SendLogsResult {
   integration_id: string;
   total: number;
   ok: number;
+  partial: number;
   errors: number;
   logs: SendLog[];
 }

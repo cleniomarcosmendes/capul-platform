@@ -1010,13 +1010,14 @@ function TabDisponibilidade({ software }: { software: Software }) {
     <div>
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-slate-500">{paradas.length} parada(s) registrada(s)</p>
-        <Link
-          to="/gestao-ti/paradas/nova"
+        <a
+          href="/gestao-ti/paradas/nova"
+          target="_blank" rel="noopener noreferrer"
           className="flex items-center gap-2 text-sm text-capul-600 border border-capul-300 px-3 py-1.5 rounded-lg hover:bg-capul-50"
         >
           <Plus className="w-4 h-4" />
           Registrar Parada
-        </Link>
+        </a>
       </div>
 
       {paradas.length === 0 ? (
@@ -1043,9 +1044,9 @@ function TabDisponibilidade({ software }: { software: Software }) {
                 {paradas.map((p) => (
                   <tr key={p.id} className={`hover:bg-slate-50 ${p.status === 'EM_ANDAMENTO' ? 'bg-red-50' : ''}`}>
                     <td className="px-4 py-3">
-                      <Link to={`/gestao-ti/paradas/${p.id}`} className="text-capul-600 hover:underline font-medium">
+                      <a href={`/gestao-ti/paradas/${p.id}`} target="_blank" rel="noopener noreferrer" className="text-capul-600 hover:underline font-medium">
                         {p.titulo}
-                      </Link>
+                      </a>
                     </td>
                     <td className="px-4 py-3 text-slate-600 text-xs">
                       {p.tipo === 'PARADA_PROGRAMADA' ? 'Programada' : p.tipo === 'PARADA_NAO_PROGRAMADA' ? 'Nao Programada' : 'Manut. Preventiva'}

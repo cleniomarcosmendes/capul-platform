@@ -17,7 +17,9 @@ import {
 } from 'lucide-react';
 import { inventoryService } from '../../../services/inventory.service';
 import { useToast } from '../../../contexts/ToastContext';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import type { InventoryList, CountingList } from '../../../types';
+import { ClipboardCheck } from 'lucide-react';
 
 interface Props {
   inventario: InventoryList;
@@ -38,33 +40,36 @@ export function TabVisaoGeral({
 }: Props) {
   const toast = useToast();
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<'finalize' | 'close' | null>(null);
 
   const status = inventario.status;
   const allListsClosed =
     listas.length > 0 && listas.every((l) => l.list_status === 'ENCERRADA');
   const pending = inventario.total_items - inventario.counted_items;
+  const hasNoCounting = inventario.total_items > 0 && inventario.counted_items === 0;
 
-  async function handleFinalizar() {
-    setActionLoading('finalize');
-    try {
-      await inventoryService.atualizar(inventario.id, { status: 'COMPLETED' });
-      onReload();
-      toast.success('Inventario finalizado.');
-    } catch {
-      toast.error('Erro ao finalizar inventario.');
-    } finally {
-      setActionLoading(null);
-    }
+  function handleFinalizar() {
+    setConfirmAction('finalize');
   }
 
-  async function handleEncerrar() {
-    setActionLoading('close');
+  function handleEncerrar() {
+    setConfirmAction('close');
+  }
+
+  async function executeConfirmedAction() {
+    const action = confirmAction;
+    setConfirmAction(null);
+    if (!action) return;
+
+    const newStatus = action === 'finalize' ? 'COMPLETED' : 'CLOSED';
+    setActionLoading(action === 'finalize' ? 'finalize' : 'close');
     try {
-      await inventoryService.atualizar(inventario.id, { status: 'CLOSED' });
+      await inventoryService.atualizar(inventario.id, { status: newStatus });
       onReload();
-      toast.success('Inventario encerrado.');
-    } catch {
-      toast.error('Erro ao encerrar inventario.');
+      toast.success(action === 'finalize' ? 'Inventario finalizado.' : 'Inventario encerrado.');
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || (action === 'finalize' ? 'Erro ao finalizar inventario.' : 'Erro ao encerrar inventario.'));
     } finally {
       setActionLoading(null);
     }
@@ -72,6 +77,36 @@ export function TabVisaoGeral({
 
   return (
     <div className="space-y-6">
+      <ConfirmDialog
+        open={confirmAction !== null}
+        title={confirmAction === 'finalize' ? 'Concluir Contagens' : 'Encerrar sem Integracao'}
+        description={
+          hasNoCounting
+            ? 'ATENCAO: Nenhuma contagem foi realizada neste inventario! Deseja realmente prosseguir?'
+            : pending > 0
+              ? `Existem ${pending} item(ns) sem contagem de um total de ${inventario.total_items}. Deseja prosseguir?`
+              : confirmAction === 'finalize'
+                ? 'Todas as contagens foram realizadas. O inventario ficara disponivel para analise e integracao com o Protheus.'
+                : 'O inventario sera encerrado definitivamente SEM enviar ao Protheus. Esta acao e irreversivel.'
+        }
+        details={
+          confirmAction === 'finalize'
+            ? [
+                `Total de itens: ${inventario.total_items}`,
+                `Itens contados: ${inventario.counted_items}`,
+                `Itens pendentes: ${pending}`,
+              ]
+            : [
+                'O inventario sera bloqueado para alteracoes.',
+                'Se precisar integrar ao Protheus, faca ANTES de encerrar.',
+                'Use esta opcao apenas se NAO for enviar ao ERP.',
+              ]
+        }
+        variant={hasNoCounting ? 'danger' : confirmAction === 'close' ? 'danger' : pending > 0 ? 'warning' : 'info'}
+        confirmLabel={confirmAction === 'finalize' ? 'Concluir Contagens' : 'Encerrar Definitivamente'}
+        onConfirm={executeConfirmedAction}
+        onCancel={() => setConfirmAction(null)}
+      />
       <StatusBanner status={status} />
 
       {status === 'DRAFT' && (
@@ -128,8 +163,8 @@ function StatusBanner({ status }: { status: string }) {
       bg: 'bg-blue-50 border-blue-200',
     },
     COMPLETED: {
-      title: 'Inventario Concluido',
-      desc: 'O inventario foi finalizado. Consulte os resultados e exporte os dados.',
+      title: 'Contagens Concluidas',
+      desc: 'As contagens foram concluidas. Analise os resultados e envie ao Protheus via Integracao.',
       color: 'text-green-700',
       bg: 'bg-green-50 border-green-200',
     },
@@ -384,6 +419,7 @@ function InProgressPanel({
   onFinalizar: () => void;
   actionLoading: string | null;
 }) {
+  const navigate = useNavigate();
   const listasEmContagem = listas.filter(
     (l) => l.list_status === 'LIBERADA' || l.list_status === 'EM_CONTAGEM',
   ).length;
@@ -413,18 +449,18 @@ function InProgressPanel({
       {/* Acoes */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <ActionCard
+          icon={ClipboardCheck}
+          iconColor="bg-capul-100 text-capul-600"
+          title="Ir para Contagem"
+          description="Acesse a tela de contagem para registrar as quantidades dos produtos."
+          actionLabel="Contar Agora"
+          onClick={() => navigate(`/inventario/contagem`)}
+        />
+        <ActionCard
           icon={ListChecks}
           iconColor="bg-blue-100 text-blue-600"
           title="Gerenciar Listas"
           description="Gerencie as listas de contagem e adicione produtos manualmente."
-          actionLabel="Ver Listas"
-          onClick={() => onNavigateTab('listas')}
-        />
-        <ActionCard
-          icon={Unlock}
-          iconColor="bg-emerald-100 text-emerald-600"
-          title="Liberar para Contagem"
-          description="Libere as listas para os contadores iniciarem."
           actionLabel="Ver Listas"
           onClick={() => onNavigateTab('listas')}
           badge={listasEmContagem > 0 ? `${listasEmContagem} em contagem` : undefined}
@@ -447,7 +483,7 @@ function InProgressPanel({
         />
       </div>
 
-      {/* Finalizar */}
+      {/* Concluir Contagens */}
       <div
         className={`bg-white rounded-xl border-2 p-5 ${
           allListsClosed ? 'border-capul-300' : 'border-slate-200'
@@ -463,9 +499,9 @@ function InProgressPanel({
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
-              <h4 className="text-sm font-semibold text-slate-800">Finalizar Inventario</h4>
+              <h4 className="text-sm font-semibold text-slate-800">Concluir Contagens</h4>
               <p className="text-xs text-slate-500">
-                Encerre o inventario apos todas as contagens e analises.
+                Conclua as contagens para liberar o inventario para analise e integracao Protheus.
               </p>
             </div>
           </div>
@@ -475,7 +511,7 @@ function InProgressPanel({
               disabled={!allListsClosed || actionLoading === 'finalize'}
               className="px-4 py-2 bg-capul-600 text-white text-sm rounded-lg font-medium hover:bg-capul-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {actionLoading === 'finalize' ? 'Finalizando...' : 'Finalizar'}
+              {actionLoading === 'finalize' ? 'Concluindo...' : 'Concluir Contagens'}
             </button>
             {!allListsClosed && (
               <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
@@ -644,27 +680,27 @@ function CompletedSummary({
         </div>
       )}
 
-      {/* Encerrar — apenas COMPLETED (nao-efetivado) */}
+      {/* Encerrar sem Integracao — apenas COMPLETED (nao-efetivado) */}
       {status === 'COMPLETED' && (
-        <div className="bg-white rounded-xl border-2 border-green-200 p-5">
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center">
                 <Lock className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-sm font-semibold text-slate-800">Encerrar Inventario</h4>
+                <h4 className="text-sm font-semibold text-slate-700">Encerrar sem Integracao</h4>
                 <p className="text-xs text-slate-500">
-                  Apos encerrar, nao sera possivel fazer alteracoes.
+                  Encerra o inventario SEM enviar ao Protheus. Use apenas se nao for integrar ao ERP.
                 </p>
               </div>
             </div>
             <button
               onClick={onEncerrar}
               disabled={actionLoading === 'close'}
-              className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-slate-500 text-white text-sm rounded-lg font-medium hover:bg-slate-600 transition-colors disabled:opacity-50"
             >
-              {actionLoading === 'close' ? 'Encerrando...' : 'Encerrar Inventario'}
+              {actionLoading === 'close' ? 'Encerrando...' : 'Encerrar sem Integracao'}
             </button>
           </div>
         </div>

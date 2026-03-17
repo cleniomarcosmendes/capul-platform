@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Calendar } from 'lucide-react';
 
 type PresetPeriodo = 'mes' | 'trimestre' | 'semestre' | 'anual' | 'personalizado';
@@ -7,6 +7,7 @@ interface PeriodFilterProps {
   dataInicio: string;
   dataFim: string;
   onPeriodChange: (inicio: string, fim: string) => void;
+  children?: ReactNode;
 }
 
 const presets: { value: PresetPeriodo; label: string }[] = [
@@ -45,7 +46,7 @@ function calcularPeriodo(preset: PresetPeriodo): { inicio: string; fim: string }
   }
 }
 
-export function PeriodFilter({ dataInicio, dataFim, onPeriodChange }: PeriodFilterProps) {
+export function PeriodFilter({ dataInicio, dataFim, onPeriodChange, children }: PeriodFilterProps) {
   const [preset, setPreset] = useState<PresetPeriodo>('mes');
 
   function handlePreset(p: PresetPeriodo) {
@@ -75,7 +76,7 @@ export function PeriodFilter({ dataInicio, dataFim, onPeriodChange }: PeriodFilt
           </button>
         ))}
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="block text-xs text-slate-500 mb-1">Inicio</label>
           <input
@@ -100,6 +101,7 @@ export function PeriodFilter({ dataInicio, dataFim, onPeriodChange }: PeriodFilt
             className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
           />
         </div>
+        {children}
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { ordemServicoService } from '../../services/ordem-servico.service';
@@ -39,7 +39,6 @@ function formatDuracao(inicio: string, fim: string | null): string {
 }
 
 export function OrdensServicoPage() {
-  const navigate = useNavigate();
   const { usuario, gestaoTiRole } = useAuth();
   const { toast, confirm } = useToast();
   const isTecnico = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
@@ -94,7 +93,12 @@ export function OrdensServicoPage() {
       coreService.listarUsuarios().then(setTecnicos).catch(() => {});
     }
     if (showForm && filiais.length === 0) {
-      coreService.listarFiliais().then(setFiliais).catch(() => {});
+      const isStaff = gestaoTiRole && ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole);
+      if (isStaff) {
+        coreService.listarFiliais().then(setFiliais).catch(() => {});
+      } else if (usuario?.filiais?.length) {
+        setFiliais(usuario.filiais.map((f) => ({ id: f.id, codigo: f.codigo, nomeFantasia: f.nome })));
+      }
     }
   }, [showForm, showAddTecnico, tecnicos.length, filiais.length]);
 
@@ -406,10 +410,10 @@ export function OrdensServicoPage() {
                     className="flex items-center gap-1 text-sm text-teal-600 hover:text-teal-700">
                     <Link2 className="w-4 h-4" /> Vincular Existentes
                   </button>
-                  <button onClick={() => navigate(`/gestao-ti/chamados/novo?osId=${os.id}`)}
+                  <a href={`/gestao-ti/chamados/novo?osId=${os.id}`} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700">
                     <Plus className="w-4 h-4" /> Novo Chamado
-                  </button>
+                  </a>
                 </div>
               )}
             </div>
@@ -431,8 +435,8 @@ export function OrdensServicoPage() {
                     <tr key={oc.id} className="hover:bg-slate-50">
                       <td className="px-3 py-2 font-mono text-slate-500">#{oc.chamado.numero}</td>
                       <td className="px-3 py-2">
-                        <button onClick={() => navigate(`/gestao-ti/chamados/${oc.chamadoId}`)}
-                          className="text-teal-600 hover:underline text-left">{oc.chamado.titulo}</button>
+                        <a href={`/gestao-ti/chamados/${oc.chamadoId}`} target="_blank" rel="noopener noreferrer"
+                          className="text-teal-600 hover:underline">{oc.chamado.titulo}</a>
                       </td>
                       <td className="px-3 py-2">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${statusChamadoCores[oc.chamado.status] || ''}`}>

@@ -616,6 +616,14 @@ export class ChamadoService {
     return updated;
   }
 
+  async vincularProjeto(chamadoId: string, projetoId: string) {
+    return this.prisma.chamado.update({
+      where: { id: chamadoId },
+      data: { projetoId },
+      select: { id: true, projetoId: true },
+    });
+  }
+
   async cancelar(id: string, user: JwtPayload, role: string) {
     await this.assertTecnicoOuColaborador(id, user.sub, role);
 

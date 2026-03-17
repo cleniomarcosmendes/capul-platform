@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { licencaService } from '../../services/licenca.service';
@@ -201,12 +200,13 @@ export function LicencasPage() {
                   {licencas.map((lic) => (
                     <tr key={lic.id} className={`hover:bg-slate-50 ${isVencendo(lic) ? 'bg-amber-50' : ''}`}>
                       <td className="px-4 py-3">
-                        <Link
-                          to={`/gestao-ti/softwares/${lic.softwareId}`}
+                        <a
+                          href={`/gestao-ti/softwares/${lic.softwareId}`}
+                          target="_blank" rel="noopener noreferrer"
                           className="text-capul-600 hover:underline font-medium"
                         >
                           {lic.software.nome}
-                        </Link>
+                        </a>
                         {lic.software.fabricante && (
                           <p className="text-xs text-slate-400">{lic.software.fabricante}</p>
                         )}
@@ -239,9 +239,9 @@ export function LicencasPage() {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         {lic.contrato ? (
-                          <Link to={`/gestao-ti/contratos/${lic.contrato.id}`} className="text-capul-600 hover:underline text-xs">
+                          <a href={`/gestao-ti/contratos/${lic.contrato.id}`} target="_blank" rel="noopener noreferrer" className="text-capul-600 hover:underline text-xs">
                             #{lic.contrato.numero}
-                          </Link>
+                          </a>
                         ) : (
                           <span className="text-slate-400 text-xs">-</span>
                         )}

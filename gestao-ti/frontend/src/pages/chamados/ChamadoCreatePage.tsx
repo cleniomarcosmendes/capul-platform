@@ -70,7 +70,12 @@ export function ChamadoCreatePage() {
     }
     // Carregar filiais e ativos para tecnicos
     if (!isUsuarioFinal) {
-      coreService.listarFiliais().then(setFiliais).catch(() => {});
+      const isStaff = gestaoTiRole && ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole);
+      if (isStaff) {
+        coreService.listarFiliais().then(setFiliais).catch(() => {});
+      } else if (usuario?.filiais?.length) {
+        setFiliais(usuario.filiais.map((f) => ({ id: f.id, codigo: f.codigo, nomeFantasia: f.nome })));
+      }
       ativoService.listar({ status: 'ATIVO' }).then(setAtivosList).catch(() => {});
     }
   }, [isUsuarioFinal]);

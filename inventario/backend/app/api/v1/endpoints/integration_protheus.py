@@ -527,6 +527,20 @@ def calculate_comparative_integration(
                 # Adicionar linhas de lote após a linha agregada
                 transfers.extend(lot_details)
 
+                # ✅ v2.19.55: Recalcular saldo_ajustado com transferência REAL por lote
+                # (transfer_qty é teórica no nível produto, agg_qty é a real por lote)
+                if agg_qty != transfer_qty:
+                    logger.info(f"  🔄 Recalculando ajustado para {product_code}: transfer_teorica={transfer_qty} → real_lotes={agg_qty}")
+                    transfer_qty = agg_qty
+                    saldo_a_ajustado = expected_a
+                    saldo_b_ajustado = expected_b
+                    if source_wh == inventory_a["warehouse"]:
+                        saldo_a_ajustado = expected_a - transfer_qty
+                        saldo_b_ajustado = expected_b + transfer_qty
+                    elif source_wh == inventory_b["warehouse"]:
+                        saldo_b_ajustado = expected_b - transfer_qty
+                        saldo_a_ajustado = expected_a + transfer_qty
+
             else:
                 # Produto SEM lote - manter lógica original
                 # ✅ v2.19.49: Qtde contada baseada em qual armazém é origem/destino

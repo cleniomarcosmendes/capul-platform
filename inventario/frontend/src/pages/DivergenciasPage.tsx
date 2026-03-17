@@ -291,10 +291,19 @@ function TabDivergencias({
 // Tab Simulacao de Comparacao
 // =============================================
 
+interface SimLotRow {
+  lot_number: string;
+  system_a: number; counted_a: number; diff_a: number;
+  system_b: number; counted_b: number; diff_b: number;
+  adjusted_a: number; adjusted_b: number;
+  final_diff_a: number; final_diff_b: number;
+}
+
 interface SimulationRow {
   product_code: string;
   product_description: string;
   lot_number: string | null;
+  lots: SimLotRow[];
   system_a: number;
   counted_a: number;
   diff_a: number;
@@ -324,14 +333,24 @@ function buildSimulationRows(preview: IntegrationPreviewResult): SimulationRow[]
   const adjBMap = new Map<string, IntegrationAdjustment>();
   const transferMap = new Map<string, IntegrationTransfer>();
 
+  // Lot detail maps por product_code
+  const lotAMap = new Map<string, IntegrationAdjustment[]>();
+  const lotBMap = new Map<string, IntegrationAdjustment[]>();
+
   for (const a of adjA) {
     if (a.row_type === 'AGGREGATE' || !a.row_type) {
       adjAMap.set(keyFn(a.product_code, a.lot_number), a);
+    } else if (a.row_type === 'LOT_DETAIL' && a.lot_number) {
+      if (!lotAMap.has(a.product_code)) lotAMap.set(a.product_code, []);
+      lotAMap.get(a.product_code)!.push(a);
     }
   }
   for (const b of adjB) {
     if (b.row_type === 'AGGREGATE' || !b.row_type) {
       adjBMap.set(keyFn(b.product_code, b.lot_number), b);
+    } else if (b.row_type === 'LOT_DETAIL' && b.lot_number) {
+      if (!lotBMap.has(b.product_code)) lotBMap.set(b.product_code, []);
+      lotBMap.get(b.product_code)!.push(b);
     }
   }
   for (const t of transfers) {
@@ -374,10 +393,51 @@ function buildSimulationRows(preview: IntegrationPreviewResult): SimulationRow[]
       transferDir = `${t.source_warehouse} → ${t.target_warehouse}`;
     }
 
+    // Montar lotes combinados A+B
+    const lotsA = lotAMap.get(code) ?? [];
+    const lotsB = lotBMap.get(code) ?? [];
+    const allLotNums = new Set([...lotsA.map(l => l.lot_number!), ...lotsB.map(l => l.lot_number!)]);
+    // Buscar transferências por lote (LOT_DETAIL)
+    const lotTransfers = (transfers).filter(lt => lt.product_code === code && lt.row_type === 'LOT_DETAIL' && lt.lot_number);
+    const lotRows: SimLotRow[] = [];
+    for (const ln of allLotNums) {
+      const la = lotsA.find(l => l.lot_number === ln);
+      const lb = lotsB.find(l => l.lot_number === ln);
+      const sysA = la?.expected_qty ?? 0;
+      const cntA = la?.counted_qty ?? 0;
+      const sysB = lb?.expected_qty ?? 0;
+      const cntB = lb?.counted_qty ?? 0;
+      const diffA = cntA - sysA;
+      const diffB = cntB - sysB;
+      // Transferência deste lote
+      const lt = lotTransfers.find(x => x.lot_number === ln);
+      const ltQty = lt?.quantity ?? 0;
+      // Ajustado: se sai de A → A diminui, B aumenta
+      let adjA = sysA, adjB = sysB;
+      if (ltQty > 0 && lt) {
+        if (lt.source_warehouse === (preview?.inventory_a?.warehouse)) {
+          adjA = sysA - ltQty;
+          adjB = sysB + ltQty;
+        } else {
+          adjB = sysB - ltQty;
+          adjA = sysA + ltQty;
+        }
+      }
+      lotRows.push({
+        lot_number: ln,
+        system_a: sysA, counted_a: cntA, diff_a: diffA,
+        system_b: sysB, counted_b: cntB, diff_b: diffB,
+        adjusted_a: adjA, adjusted_b: adjB,
+        final_diff_a: cntA - adjA, final_diff_b: cntB - adjB,
+      });
+    }
+    lotRows.sort((x, y) => x.lot_number.localeCompare(y.lot_number));
+
     rows.push({
       product_code: code,
       product_description: a?.product_description ?? b?.product_description ?? t?.product_description ?? '',
       lot_number: lot || null,
+      lots: lotRows,
       system_a: systemA,
       counted_a: countedA,
       diff_a: diffA,
@@ -410,6 +470,7 @@ function TabSimulacao() {
   const [preview, setPreview] = useState<IntegrationPreviewResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [expandedSim, setExpandedSim] = useState<Set<string>>(new Set());
 
   // Load completed/closed inventories
   useEffect(() => {
@@ -647,9 +708,20 @@ function TabSimulacao() {
                 <tbody className="divide-y divide-slate-100">
                   {rows.map((r, idx) => {
                     const hasTransfer = r.transfer_qty > 0;
+                    const hasLots = r.lots.length > 0;
+                    const isExp = expandedSim.has(r.product_code);
                     return (
-                      <tr key={idx} className={`hover:bg-slate-50 ${hasTransfer ? 'bg-purple-50/20' : ''}`}>
-                        <td className="py-2 px-3 font-mono whitespace-nowrap">{r.product_code}</td>
+                      <React.Fragment key={idx}>
+                      <tr
+                        className={`hover:bg-slate-50 ${hasTransfer ? 'bg-purple-50/20' : ''} ${hasLots ? 'cursor-pointer' : ''}`}
+                        onClick={hasLots ? () => setExpandedSim(prev => { const n = new Set(prev); n.has(r.product_code) ? n.delete(r.product_code) : n.add(r.product_code); return n; }) : undefined}
+                      >
+                        <td className="py-2 px-3 font-mono whitespace-nowrap">
+                          <span className="flex items-center gap-1">
+                            {hasLots && (isExp ? <ChevronDown className="w-3 h-3 text-slate-400" /> : <ChevronRight className="w-3 h-3 text-slate-400" />)}
+                            {r.product_code}
+                          </span>
+                        </td>
                         <td className="py-2 px-3 max-w-[160px] truncate" title={r.product_description}>
                           {r.product_description}
                           {r.lot_number && <span className="text-slate-400 ml-1">[{r.lot_number}]</span>}
@@ -687,6 +759,36 @@ function TabSimulacao() {
                           {Math.abs(r.final_diff_b) < 0.01 ? '0' : (r.final_diff_b > 0 ? '+' : '') + fmt(r.final_diff_b)}
                         </td>
                       </tr>
+                      {hasLots && isExp && r.lots.map((lot) => (
+                        <tr key={lot.lot_number} className="bg-slate-50/60 text-[11px]">
+                          <td className="py-1 px-3 pl-8 font-mono text-slate-500">{lot.lot_number}</td>
+                          <td className="py-1 px-3 text-slate-400 italic">Lote</td>
+                          {/* ARM A */}
+                          <td className="py-1 px-3 text-right tabular-nums text-slate-500">{fmt(lot.system_a)}</td>
+                          <td className="py-1 px-3 text-right tabular-nums text-slate-500">{fmt(lot.counted_a)}</td>
+                          <td className={`py-1 px-3 text-right tabular-nums ${lot.diff_a > 0 ? 'text-blue-500' : lot.diff_a < 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                            {lot.diff_a > 0 ? '+' : ''}{fmt(lot.diff_a)}
+                          </td>
+                          <td className="py-1 px-3 text-right tabular-nums text-slate-500">{fmt(lot.adjusted_a)}</td>
+                          {/* Transf */}
+                          <td className="py-1 px-3"></td>
+                          {/* ARM B */}
+                          <td className="py-1 px-3 text-right tabular-nums text-slate-500">{fmt(lot.system_b)}</td>
+                          <td className="py-1 px-3 text-right tabular-nums text-slate-500">{fmt(lot.counted_b)}</td>
+                          <td className={`py-1 px-3 text-right tabular-nums ${lot.diff_b > 0 ? 'text-blue-500' : lot.diff_b < 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                            {lot.diff_b > 0 ? '+' : ''}{fmt(lot.diff_b)}
+                          </td>
+                          <td className="py-1 px-3 text-right tabular-nums text-slate-500">{fmt(lot.adjusted_b)}</td>
+                          {/* Resultado */}
+                          <td className={`py-1 px-3 text-right tabular-nums font-medium ${Math.abs(lot.final_diff_a) < 0.01 ? 'text-green-600' : lot.final_diff_a > 0 ? 'text-blue-500' : 'text-red-500'}`}>
+                            {Math.abs(lot.final_diff_a) < 0.01 ? '0' : (lot.final_diff_a > 0 ? '+' : '') + fmt(lot.final_diff_a)}
+                          </td>
+                          <td className={`py-1 px-3 text-right tabular-nums font-medium ${Math.abs(lot.final_diff_b) < 0.01 ? 'text-green-600' : lot.final_diff_b > 0 ? 'text-blue-500' : 'text-red-500'}`}>
+                            {Math.abs(lot.final_diff_b) < 0.01 ? '0' : (lot.final_diff_b > 0 ? '+' : '') + fmt(lot.final_diff_b)}
+                          </td>
+                        </tr>
+                      ))}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>

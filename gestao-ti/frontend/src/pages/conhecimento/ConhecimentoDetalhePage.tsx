@@ -142,7 +142,7 @@ export function ConhecimentoDetalhePage() {
                   </div>
                 )}
                 <div className="flex flex-wrap gap-3 mt-2 text-xs text-slate-500">
-                  {artigo.software && <span>Software: <Link to={`/gestao-ti/softwares/${artigo.software.id}`} className="text-amber-600 hover:underline">{artigo.software.nome}</Link></span>}
+                  {artigo.software && <span>Software: <a href={`/gestao-ti/softwares/${artigo.software.id}`} target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">{artigo.software.nome}</a></span>}
                   {artigo.equipeTi && <span>Equipe: <strong>{artigo.equipeTi.sigla} — {artigo.equipeTi.nome}</strong></span>}
                 </div>
               </div>
@@ -159,8 +159,8 @@ export function ConhecimentoDetalhePage() {
                 </button>
               )}
               {canEdit && (
-                <Link to={`/gestao-ti/conhecimento/${id}/editar`} className="p-2 text-slate-400 hover:text-amber-600 transition-colors">
-                  <Edit className="w-4 h-4" />
+                <Link to={`/gestao-ti/conhecimento/${id}/editar`} className="flex items-center gap-1 text-xs border border-slate-300 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors">
+                  <Edit className="w-3.5 h-3.5" /> Editar
                 </Link>
               )}
               {canDelete && (

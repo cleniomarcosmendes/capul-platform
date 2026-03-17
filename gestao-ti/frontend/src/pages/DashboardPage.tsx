@@ -1366,14 +1366,13 @@ export function DashboardPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
-          <PeriodFilter
-            dataInicio={dataInicio}
-            dataFim={dataFim}
-            onPeriodChange={(inicio, fim) => { setDataInicio(inicio); setDataFim(fim); }}
-          />
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-slate-600">Departamento:</label>
+        <PeriodFilter
+          dataInicio={dataInicio}
+          dataFim={dataFim}
+          onPeriodChange={(inicio, fim) => { setDataInicio(inicio); setDataFim(fim); }}
+        >
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Departamento</label>
             <select
               value={filterDepartamento}
               onChange={(e) => setFilterDepartamento(e.target.value)}
@@ -1385,7 +1384,7 @@ export function DashboardPage() {
               ))}
             </select>
           </div>
-        </div>
+        </PeriodFilter>
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 border-b border-slate-200 overflow-x-auto">

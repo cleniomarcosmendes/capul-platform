@@ -72,10 +72,28 @@ export function MonitorPlayerPage() {
     setActionLoading(null);
   }
 
+  async function handlePararChamado(chamadoId: string) {
+    setActionLoading(chamadoId);
+    try {
+      await monitorService.encerrarTimerChamado(chamadoId);
+      await carregar();
+    } catch { /* */ }
+    setActionLoading(null);
+  }
+
   async function handleIniciarAtividade(atividadeId: string) {
     setActionLoading(atividadeId);
     try {
       await monitorService.iniciarTimerAtividade(atividadeId);
+      await carregar();
+    } catch { /* */ }
+    setActionLoading(null);
+  }
+
+  async function handlePararAtividade(atividadeId: string) {
+    setActionLoading(atividadeId);
+    try {
+      await monitorService.encerrarTimerAtividade(atividadeId);
       await carregar();
     } catch { /* */ }
     setActionLoading(null);
@@ -182,6 +200,7 @@ export function MonitorPlayerPage() {
                   chamado={chamado}
                   timer={timerChamadoMap.get(chamado.id)}
                   onPlay={() => handleIniciarChamado(chamado.id)}
+                  onStop={() => handlePararChamado(chamado.id)}
                   loading={actionLoading === chamado.id}
                 />
               ))}
@@ -203,6 +222,7 @@ export function MonitorPlayerPage() {
                   atividade={atividade}
                   timer={timerAtividadeMap.get(atividade.id)}
                   onPlay={() => handleIniciarAtividade(atividade.id)}
+                  onStop={() => handlePararAtividade(atividade.id)}
                   loading={actionLoading === atividade.id}
                 />
               ))}
@@ -218,11 +238,13 @@ function ChamadoCard({
   chamado,
   timer,
   onPlay,
+  onStop,
   loading,
 }: {
   chamado: MonitorChamado;
   timer?: { id: string; horaInicio: string };
   onPlay: () => void;
+  onStop: () => void;
   loading: boolean;
 }) {
   const isAtivo = !!timer;
@@ -235,14 +257,14 @@ function ChamadoCard({
     }`}>
       {/* Play/Stop */}
       <button
-        onClick={onPlay}
+        onClick={isAtivo ? onStop : onPlay}
         disabled={loading}
         className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 ${
           isAtivo
-            ? 'bg-green-500 text-white hover:bg-green-600'
+            ? 'bg-red-500 text-white hover:bg-red-600'
             : 'bg-slate-100 text-slate-500 hover:bg-capul-100 hover:text-capul-600'
         }`}
-        title={isAtivo ? 'Timer ativo — clique para reiniciar' : 'Iniciar timer'}
+        title={isAtivo ? 'Parar timer' : 'Iniciar timer'}
       >
         {isAtivo ? <Square className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
       </button>
@@ -288,11 +310,13 @@ function AtividadeCard({
   atividade,
   timer,
   onPlay,
+  onStop,
   loading,
 }: {
   atividade: MonitorAtividade;
   timer?: { id: string; horaInicio: string };
   onPlay: () => void;
+  onStop: () => void;
   loading: boolean;
 }) {
   const isAtivo = !!timer;
@@ -305,14 +329,14 @@ function AtividadeCard({
     }`}>
       {/* Play/Stop */}
       <button
-        onClick={onPlay}
+        onClick={isAtivo ? onStop : onPlay}
         disabled={loading}
         className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 ${
           isAtivo
-            ? 'bg-green-500 text-white hover:bg-green-600'
+            ? 'bg-red-500 text-white hover:bg-red-600'
             : 'bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-indigo-600'
         }`}
-        title={isAtivo ? 'Timer ativo — clique para reiniciar' : 'Iniciar timer'}
+        title={isAtivo ? 'Parar timer' : 'Iniciar timer'}
       >
         {isAtivo ? <Square className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
       </button>

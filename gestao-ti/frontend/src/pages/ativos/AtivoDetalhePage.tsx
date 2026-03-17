@@ -151,8 +151,8 @@ export function AtivoDetalhePage() {
                   >
                     {Object.entries(statusLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
-                  <Link to={`/gestao-ti/ativos/${id}/editar`} className="p-2 text-slate-400 hover:text-teal-600 transition-colors">
-                    <Edit className="w-4 h-4" />
+                  <Link to={`/gestao-ti/ativos/${id}/editar`} className="flex items-center gap-1 text-xs border border-slate-300 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors">
+                    <Edit className="w-3.5 h-3.5" /> Editar
                   </Link>
                   <button onClick={handleDelete} className="p-2 text-slate-400 hover:text-red-600 transition-colors">
                     <Trash2 className="w-4 h-4" />
@@ -282,7 +282,7 @@ export function AtivoDetalhePage() {
             ) : (
               <p className="text-sm text-slate-500 text-center py-8">
                 <AlertCircle className="w-4 h-4 inline mr-1" />
-                {ativo._count?.chamados} chamado(s) vinculado(s). <Link to={`/gestao-ti/chamados`} className="text-teal-600 hover:underline">Ver chamados</Link>
+                {ativo._count?.chamados} chamado(s) vinculado(s). <a href="/gestao-ti/chamados" target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:underline">Ver chamados</a>
               </p>
             )}
           </div>

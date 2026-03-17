@@ -240,6 +240,7 @@ function TabProdutos() {
   const [result, setResult] = useState<ProductImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showResultModal, setShowResultModal] = useState(false);
 
   const loadWarehouses = useCallback(async () => {
     setLoadingWarehouses(true);
@@ -306,6 +307,7 @@ function TabProdutos() {
     try {
       const res = await importService.importProducts(filial, armazens);
       setResult(res);
+      setShowResultModal(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao importar produtos.';
       setError(msg);
@@ -490,10 +492,57 @@ function TabProdutos() {
       <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
         <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
         <div>
-          <p>A importacao consulta a API do Protheus e processa cada armazem sequencialmente.</p>
+          <p>A importacao consulta a API do Protheus e processa os armazens em paralelo.</p>
           <p className="mt-1">Tabelas atualizadas: <strong>SB1010</strong> (produtos), <strong>SB2010</strong> (saldos), <strong>SB8010</strong> (lotes), <strong>SBZ010</strong> (indicadores), <strong>SLK010</strong> (codigos de barras).</p>
         </div>
       </div>
+
+      {/* Modal de resultado da importacao */}
+      {result && showResultModal && (() => {
+        const hasErrors = (result.armazens_com_erro?.length ?? 0) > 0;
+        const allFailed = (result.armazens_processados?.length ?? 0) === 0 && hasErrors;
+        const variant = allFailed ? 'danger' : hasErrors ? 'warning' : 'info';
+        const title = allFailed
+          ? 'Falha na Importacao'
+          : hasErrors
+            ? 'Importacao Parcial — Atencao!'
+            : 'Importacao Concluida com Sucesso';
+
+        const details: string[] = [];
+        if (result.armazens_processados?.length > 0) {
+          details.push(`Armazens importados: ${result.armazens_processados.join(', ')}`);
+        }
+        if (hasErrors) {
+          details.push(`Armazens com ERRO: ${result.armazens_com_erro.join(', ')}`);
+          details.push('');
+          details.push('IMPORTANTE: Os armazens com erro NAO foram atualizados.');
+          details.push('Os dados desses armazens podem estar desatualizados.');
+          details.push('Recomenda-se reimportar os armazens que falharam.');
+        }
+        if (result.stats?.total_produtos > 0) {
+          details.push(`Total de produtos processados: ${result.stats.total_produtos.toLocaleString('pt-BR')}`);
+        }
+
+        return (
+          <ConfirmDialog
+            open={showResultModal}
+            title={title}
+            description={result.message}
+            details={details}
+            variant={variant}
+            confirmLabel="Entendi"
+            cancelLabel={hasErrors ? 'Reimportar' : 'Fechar'}
+            onConfirm={() => setShowResultModal(false)}
+            onCancel={() => {
+              setShowResultModal(false);
+              if (hasErrors) {
+                // Pre-selecionar apenas os armazens com erro para reimportacao
+                setSelected(new Set(result.armazens_com_erro));
+              }
+            }}
+          />
+        );
+      })()}
 
       <ConfirmDialog
         open={showConfirm}

@@ -90,6 +90,11 @@ export const chamadoService = {
     return data;
   },
 
+  async vincularProjeto(id: string, projetoId: string): Promise<unknown> {
+    const { data } = await gestaoApi.patch(`/chamados/${id}/vincular-projeto`, { projetoId });
+    return data;
+  },
+
   async cancelar(id: string): Promise<Chamado> {
     const { data } = await gestaoApi.patch(`/chamados/${id}/cancelar`);
     return data;

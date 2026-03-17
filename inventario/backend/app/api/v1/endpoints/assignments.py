@@ -419,34 +419,8 @@ async def get_products_by_cycle_type(
             localizacao_details = localizacao_details_map.get(item.product_code.strip())  # Usar código trimado também para localizações
             stock_details = stock_details_map.get(item.product_code.strip())  # 🔑 ESTOQUE DA SB2010 - usar código trimado
 
-            # ✅ v2.10.1 - CORREÇÃO: Produtos com lote usam SUM(B8_SALDO), não B2_QATU
-            has_lot_control = product_details and product_details.b1_rastro == 'L'
-            current_quantity = 0.0
-
-            if has_lot_control:
-                # Produto com controle de lote - somar SB8010.B8_SALDO
-                print(f"🔍 Produto {item.product_code.strip()} tem controle de lote - calculando soma de SB8010.B8_SALDO")
-
-                lot_sum_query = text("""
-                    SELECT COALESCE(SUM(b8.b8_saldo), 0) as total_lot_qty
-                    FROM inventario.sb8010 b8
-                    WHERE b8.b8_produto = :product_code
-                      AND b8.b8_filial = :filial
-                      AND b8.b8_local = :warehouse
-                      AND b8.b8_saldo > 0
-                """)
-
-                lot_sum_result = db.execute(lot_sum_query, {
-                    'product_code': item.product_code.strip(),
-                    'filial': filial_code,
-                    'warehouse': warehouse_code
-                }).fetchone()
-
-                current_quantity = float(lot_sum_result[0]) if lot_sum_result else 0.0
-                print(f"📊 Produto {item.product_code.strip()} - Soma de lotes: {current_quantity}")
-            else:
-                # Produto SEM controle de lote - usar B2_QATU
-                current_quantity = float(stock_details.b2_qatu) if stock_details and stock_details.b2_qatu else 0.0
+            # ✅ v2.19.55 - Sempre usar B2_QATU como saldo de referência (saldo oficial do ERP Protheus)
+            current_quantity = float(stock_details.b2_qatu) if stock_details and stock_details.b2_qatu else 0.0
             
             product_data = {
                 "item_id": str(item.id),

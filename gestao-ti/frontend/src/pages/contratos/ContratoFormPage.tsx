@@ -13,7 +13,7 @@ export function ContratoFormPage() {
   const { id } = useParams();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
-  const { gestaoTiRole } = useAuth();
+  const { gestaoTiRole, usuario } = useAuth();
 
   const isManager = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
 
@@ -57,7 +57,11 @@ export function ContratoFormPage() {
   useEffect(() => {
     Promise.all([
       softwareService.listar({ status: 'ATIVO' }).then(setSoftwares).catch(() => {}),
-      coreService.listarFiliais().then(setFiliais).catch(() => {}),
+      (isManager
+        ? coreService.listarFiliais().then(setFiliais).catch(() => {})
+        : Promise.resolve(usuario?.filiais?.length
+          ? setFiliais(usuario.filiais.map((f) => ({ id: f.id, codigo: f.codigo, nomeFantasia: f.nome })))
+          : undefined)),
       contratoService.listarTiposContrato().then(setTiposContrato).catch(() => {}),
       equipeService.listarParaContratos().then(setEquipes).catch(() => {}),
       contratoService.listarTodosFornecedores().then(setFornecedores).catch(() => {}),

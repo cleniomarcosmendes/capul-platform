@@ -57,6 +57,14 @@ export const monitorService = {
     await gestaoApi.post(`/monitor/iniciar-atividade/${atividadeId}`);
   },
 
+  async encerrarTimerChamado(chamadoId: string): Promise<void> {
+    await gestaoApi.post(`/monitor/encerrar-chamado/${chamadoId}`);
+  },
+
+  async encerrarTimerAtividade(atividadeId: string): Promise<void> {
+    await gestaoApi.post(`/monitor/encerrar-atividade/${atividadeId}`);
+  },
+
   async encerrarTodos(): Promise<void> {
     await gestaoApi.post('/monitor/encerrar-todos');
   },

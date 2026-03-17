@@ -805,13 +805,12 @@ async def compare_inventories(
                     'b2_xentpos_b': data.get('b2_xentpos_b'),  # ✅ v2.17.0
                     'b2_cm1_a': data.get('b2_cm1_a'),  # ✅ v2.18.1: Custo médio A
                     'b2_cm1_b': data.get('b2_cm1_b'),  # ✅ v2.18.1: Custo médio B
-                    # ✅ v2.18.0: Novos campos de transferência lógica
-                    # 🐛 FIX v2.18.3: Correção de lógica quando origem == None (sem transferência)
+                    # ✅ v2.19.55: Calcular ajustados de forma simples
                     'transferencia_logica': transferencia_logica,
-                    'saldo_ajustado_a': transferencia_logica['saldo_destino_depois'] if transferencia_logica['origem'] == inventory_b.warehouse else transferencia_logica['saldo_origem_depois'],
-                    'saldo_ajustado_b': transferencia_logica['saldo_origem_depois'] if transferencia_logica['origem'] == inventory_b.warehouse else transferencia_logica['saldo_destino_depois'],
-                    'diferenca_final_a': transferencia_logica['diferenca_destino_depois'] if transferencia_logica['origem'] == inventory_b.warehouse else transferencia_logica['diferenca_origem_depois'],
-                    'diferenca_final_b': transferencia_logica['diferenca_origem_depois'] if transferencia_logica['origem'] == inventory_b.warehouse else transferencia_logica['diferenca_destino_depois']
+                    'saldo_ajustado_a': expected_a - qty_transfer if transferencia_logica['origem'] == inventory_a.warehouse else expected_a + qty_transfer,
+                    'saldo_ajustado_b': expected_b - qty_transfer if transferencia_logica['origem'] == inventory_b.warehouse else expected_b + qty_transfer,
+                    'diferenca_final_a': counted_a - (expected_a - qty_transfer) if transferencia_logica['origem'] == inventory_a.warehouse else counted_a - (expected_a + qty_transfer),
+                    'diferenca_final_b': counted_b - (expected_b - qty_transfer) if transferencia_logica['origem'] == inventory_b.warehouse else counted_b - (expected_b + qty_transfer),
                 })
 
             # ⚠️ ANÁLISE MANUAL: Outros casos (ambos positivos, ambos negativos, ou apenas um lado com divergência)
@@ -872,13 +871,12 @@ async def compare_inventories(
                     'b2_xentpos_b': data.get('b2_xentpos_b'),  # ✅ v2.17.0
                     'b2_cm1_a': data.get('b2_cm1_a'),  # ✅ v2.18.1: Custo médio A
                     'b2_cm1_b': data.get('b2_cm1_b'),  # ✅ v2.18.1: Custo médio B
-                    # ✅ v2.18.0: Novos campos de transferência lógica
-                    # 🐛 FIX v2.18.3: Correção de lógica quando origem == None (sem transferência)
+                    # ✅ v2.19.55: Calcular ajustados de forma simples
                     'transferencia_logica': transferencia_logica,
-                    'saldo_ajustado_a': transferencia_logica['saldo_destino_depois'] if transferencia_logica['origem'] == inventory_b.warehouse else transferencia_logica['saldo_origem_depois'],
-                    'saldo_ajustado_b': transferencia_logica['saldo_origem_depois'] if transferencia_logica['origem'] == inventory_b.warehouse else transferencia_logica['saldo_destino_depois'],
-                    'diferenca_final_a': transferencia_logica['diferenca_destino_depois'] if transferencia_logica['origem'] == inventory_b.warehouse else transferencia_logica['diferenca_origem_depois'],
-                    'diferenca_final_b': transferencia_logica['diferenca_origem_depois'] if transferencia_logica['origem'] == inventory_b.warehouse else transferencia_logica['diferenca_destino_depois']
+                    'saldo_ajustado_a': expected_a - transferencia_logica['quantidade_transferida'] if transferencia_logica['origem'] == inventory_a.warehouse else expected_a + transferencia_logica['quantidade_transferida'] if transferencia_logica['origem'] == inventory_b.warehouse else expected_a,
+                    'saldo_ajustado_b': expected_b - transferencia_logica['quantidade_transferida'] if transferencia_logica['origem'] == inventory_b.warehouse else expected_b + transferencia_logica['quantidade_transferida'] if transferencia_logica['origem'] == inventory_a.warehouse else expected_b,
+                    'diferenca_final_a': counted_a - (expected_a - transferencia_logica['quantidade_transferida']) if transferencia_logica['origem'] == inventory_a.warehouse else counted_a - (expected_a + transferencia_logica['quantidade_transferida']) if transferencia_logica['origem'] == inventory_b.warehouse else div_a,
+                    'diferenca_final_b': counted_b - (expected_b - transferencia_logica['quantidade_transferida']) if transferencia_logica['origem'] == inventory_b.warehouse else counted_b - (expected_b + transferencia_logica['quantidade_transferida']) if transferencia_logica['origem'] == inventory_a.warehouse else div_b,
                 })
 
         # ========================================
@@ -972,14 +970,29 @@ async def compare_inventories(
 
                     # Atualizar campos de transferência
                     agg['transferencia_logica'] = transf
-                    agg['saldo_ajustado_a'] = transf['saldo_destino_depois'] if transf['origem'] == inventory_b.warehouse else transf['saldo_origem_depois']
-                    agg['saldo_ajustado_b'] = transf['saldo_origem_depois'] if transf['origem'] == inventory_b.warehouse else transf['saldo_destino_depois']
-                    agg['diferenca_final_a'] = transf['diferenca_destino_depois'] if transf['origem'] == inventory_b.warehouse else transf['diferenca_origem_depois']
-                    agg['diferenca_final_b'] = transf['diferenca_origem_depois'] if transf['origem'] == inventory_b.warehouse else transf['diferenca_destino_depois']
+
+                    # ✅ v2.19.55: Calcular ajustados de forma simples e correta
+                    # Ajustado = Expected +/- quantidade transferida
+                    qty_t = sum_qty_transferida
+                    if origem == inventory_a.warehouse:
+                        # Transferência sai de A, entra em B
+                        agg['saldo_ajustado_a'] = sum_expected_a - qty_t
+                        agg['saldo_ajustado_b'] = sum_expected_b + qty_t
+                    elif origem == inventory_b.warehouse:
+                        # Transferência sai de B, entra em A
+                        agg['saldo_ajustado_a'] = sum_expected_a + qty_t
+                        agg['saldo_ajustado_b'] = sum_expected_b - qty_t
+                    else:
+                        agg['saldo_ajustado_a'] = sum_expected_a
+                        agg['saldo_ajustado_b'] = sum_expected_b
+
+                    agg['diferenca_final_a'] = sum_counted_a - agg['saldo_ajustado_a']
+                    agg['diferenca_final_b'] = sum_counted_b - agg['saldo_ajustado_b']
 
                     logger.info(f"    → AGGREGATE recalculado: exp_a={sum_expected_a}, cnt_a={sum_counted_a}, exp_b={sum_expected_b}, cnt_b={sum_counted_b}")
-                    logger.info(f"    → Saldo Origem: {sum_saldo_origem_antes} → {sum_saldo_origem_depois}")
-                    logger.info(f"    → Saldo Destino: {sum_saldo_destino_antes} → {sum_saldo_destino_depois}")
+                    logger.info(f"    → origem={origem}, inv_a_wh={inventory_a.warehouse}, inv_b_wh={inventory_b.warehouse}")
+                    logger.info(f"    → qty_t={qty_t}, ajust_a={agg['saldo_ajustado_a']}, ajust_b={agg['saldo_ajustado_b']}")
+                    logger.info(f"    → dif_final_a={agg['diferenca_final_a']}, dif_final_b={agg['diferenca_final_b']}")
                     logger.info(f"    → Transferência: {sum_qty_transferida} unidades, Economia: R$ {sum_economia:.2f}")
 
         # Aplicar recálculo em matches e manual_review

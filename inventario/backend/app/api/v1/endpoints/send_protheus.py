@@ -20,7 +20,7 @@ import os
 import json
 import time
 import httpx
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Any
 from uuid import UUID
 
@@ -169,6 +169,17 @@ async def call_protheus(endpoint: str, payload: dict, method: str = "POST") -> d
     raise Exception(f"Falha apos {max_attempts} tentativas: {last_error}")
 
 
+def _get_next_batch(db: Session, integration_id: str) -> int:
+    """Retorna o próximo número de batch para uma integração."""
+    result = db.execute(text("""
+        SELECT COALESCE(MAX(send_batch), 0) + 1 FROM inventario.protheus_send_logs
+        WHERE integration_id = :id
+    """), {"id": integration_id}).scalar()
+    return result or 1
+
+# Variável de módulo para manter batch da rodada atual
+_current_batch: Dict[str, int] = {}
+
 def log_send(
     db: Session,
     integration_id: str,
@@ -183,15 +194,16 @@ def log_send(
 ):
     """Registra log de envio na tabela protheus_send_logs."""
     try:
+        batch = _current_batch.get(integration_id, 1)
         db.execute(text("""
             INSERT INTO inventario.protheus_send_logs (
                 integration_id, endpoint, item_type, product_code,
                 request_payload, response_payload, status,
-                error_message, duration_ms
+                error_message, duration_ms, send_batch
             ) VALUES (
                 :integration_id, :endpoint, :item_type, :product_code,
                 :request_payload, :response_payload, :status,
-                :error_message, :duration_ms
+                :error_message, :duration_ms, :send_batch
             )
         """), {
             "integration_id": integration_id,
@@ -202,7 +214,8 @@ def log_send(
             "response_payload": json.dumps(response_payload, default=str) if response_payload else None,
             "status": status,
             "error_message": error_message,
-            "duration_ms": duration_ms
+            "duration_ms": duration_ms,
+            "send_batch": batch
         })
     except Exception as e:
         logger.error(f"Erro ao gravar log de envio: {e}")
@@ -212,8 +225,12 @@ def log_send(
 # FUNCOES AUXILIARES
 # =====================================================
 
+# ✅ v2.19.55: Timezone GMT-3 (BRT) para envio ao Protheus
+BRT = timezone(timedelta(hours=-3))
+
+
 def format_date_protheus(dt: Optional[datetime]) -> str:
-    """Formata datetime para YYYYMMDD (formato Protheus)."""
+    """Formata datetime para YYYYMMDD (formato Protheus) em GMT-3."""
     if not dt:
         return ""
     if isinstance(dt, str):
@@ -221,20 +238,25 @@ def format_date_protheus(dt: Optional[datetime]) -> str:
             dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
         except Exception:
             return dt[:10].replace("-", "") if len(dt) >= 10 else ""
+    # Converter para BRT (GMT-3)
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(BRT)
     return dt.strftime("%Y%m%d")
 
 
 def format_time_protheus(dt: Optional[datetime]) -> str:
-    """Formata datetime para HH:MM:SS (formato Protheus)."""
+    """Formata datetime para HH:MM:SS (formato Protheus) em GMT-3."""
     if not dt:
         return ""
     if isinstance(dt, str):
         try:
             dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
         except Exception:
-            # Tentar extrair hora de string
             parts = dt.split(" ")
             return parts[1] if len(parts) > 1 else ""
+    # Converter para BRT (GMT-3)
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(BRT)
     return dt.strftime("%H:%M:%S")
 
 
@@ -288,13 +310,14 @@ async def send_transferencias(
             detail=f"Integracao nao pode ser enviada. Status atual: {integration['status']}"
         )
 
-    # Buscar itens de transferencia
+    # Buscar itens de transferencia (excluir já enviados com sucesso)
     items_query = text("""
         SELECT id, product_code, product_description, lot_number,
                source_warehouse, target_warehouse, quantity,
                unit_cost, total_value, item_status
         FROM inventario.protheus_integration_items
         WHERE integration_id = :id AND item_type = 'TRANSFER'
+          AND COALESCE(item_status, '') != 'SENT'
         ORDER BY product_code
     """)
     items = db.execute(items_query, {"id": str(integration_id)}).fetchall()
@@ -307,22 +330,43 @@ async def send_transferencias(
         }
 
     filial = integration["store_code"]
+    raw_name = integration.get("inventory_a_name", "INV001")
+    doc_name = f"INVENT_{raw_name}"[:20]
 
-    # Montar payload agrupado por filial
+    # Montar payload — filtrar linhas AGGREGATE sem lote e qty=0
     itens_payload = []
     for item in items:
         row = dict(item._mapping)
+        qty = float(row["quantity"])
+        lot = (row.get("lot_number") or "").strip()
+
+        # ✅ v2.19.55: Pular linhas AGGREGATE (sem lote) e qty=0
+        if not lot:
+            logger.info(f"  ⏭️ TRANSFER skip AGGREGATE sem lote: {row['product_code']} qty={qty}")
+            continue
+        if qty <= 0:
+            logger.info(f"  ⏭️ TRANSFER skip qty=0: {row['product_code']} lote={lot}")
+            continue
+
         itens_payload.append({
             "produto": row["product_code"],
             "armazemOrigem": row["source_warehouse"],
             "armazemDestino": row["target_warehouse"],
-            "quantidade": float(row["quantity"]),
-            "loteOrigem": row.get("lot_number") or "",
-            "loteDestino": row.get("lot_number") or ""
+            "quantidade": qty,
+            "loteOrigem": lot,
+            "loteDestino": lot
         })
+
+    if not itens_payload:
+        return {
+            "success": True,
+            "message": "Nenhuma transferencia valida para enviar (apenas aggregates filtrados)",
+            "total": 0, "enviados": 0, "erros": 0
+        }
 
     payload = {
         "filial": filial,
+        "documento": doc_name,
         "itens": itens_payload
     }
 
@@ -332,45 +376,56 @@ async def send_transferencias(
         response = await call_protheus("/inventario/transferencia", payload)
         duration_ms = int((time.time() - start_time) * 1000)
 
-        # Processar resposta
+        # Processar resposta usando detalhes do Protheus
         detalhes = response.get("detalhes", [])
+        gravados = response.get("gravados", 0)
+        erros_protheus = response.get("erros", 0)
 
+        # ✅ v2.19.55: Classificar status baseado na resposta real do Protheus
         enviados = 0
         erros = 0
+        for detalhe in detalhes:
+            if isinstance(detalhe, dict):
+                if detalhe.get("status", "").upper() == "OK":
+                    enviados += 1
+                else:
+                    erros += 1
 
+        # Atualizar status dos items na DB baseado nos detalhes
         for i, item in enumerate(items):
             row = dict(item._mapping)
-            item_id = str(row["id"])
+            lot = (row.get("lot_number") or "").strip()
+            qty = float(row["quantity"])
 
+            # Pular AGGREGATE e qty=0 (não foram enviados)
+            if (not lot) or qty <= 0:
+                continue
+
+            # Buscar detalhe correspondente pelo código + lote
             item_ok = False
             item_error = None
-            if detalhes and i < len(detalhes):
-                detalhe = detalhes[i]
-                if isinstance(detalhe, dict):
-                    # Protheus retorna status: "OK" ou "ERRO"
-                    item_ok = detalhe.get("status", "").upper() == "OK"
-                    if not item_ok:
-                        item_error = detalhe.get("mensagem", detalhe.get("erro", "Erro no item"))
-
-            new_status = "SENT" if item_ok else "ERROR"
-            if item_ok:
-                enviados += 1
-            else:
-                erros += 1
+            for detalhe in detalhes:
+                if isinstance(detalhe, dict) and detalhe.get("codigo") == row["product_code"]:
+                    if detalhe.get("lote") == lot or (not detalhe.get("lote") and not lot):
+                        item_ok = detalhe.get("status", "").upper() == "OK"
+                        if not item_ok:
+                            item_error = detalhe.get("mensagem", "Erro no item")
+                        break
 
             db.execute(text("""
                 UPDATE inventario.protheus_integration_items
                 SET item_status = :status, error_detail = :error
                 WHERE id = :id
             """), {
-                "status": new_status,
+                "status": "SENT" if item_ok else "ERROR",
                 "error": item_error,
-                "id": item_id
+                "id": str(row["id"])
             })
 
+        log_status = "OK" if erros == 0 else "PARTIAL"
         log_send(
             db, str(integration_id), "/inventario/transferencia", "TRANSFER",
-            None, payload, response, "OK" if erros == 0 else "PARTIAL",
+            None, payload, response, log_status,
             None, duration_ms
         )
 
@@ -441,7 +496,7 @@ async def send_digitacao(
             detail=f"Integracao nao pode ser enviada. Status atual: {integration['status']}"
         )
 
-    # Buscar itens de ajuste
+    # Buscar itens de ajuste (excluir já enviados com sucesso)
     items_query = text("""
         SELECT id, product_code, product_description, lot_number,
                target_warehouse, quantity, adjustment_type,
@@ -449,6 +504,7 @@ async def send_digitacao(
                unit_cost, total_value, item_status
         FROM inventario.protheus_integration_items
         WHERE integration_id = :id AND item_type = 'ADJUSTMENT'
+          AND COALESCE(item_status, '') != 'SENT'
         ORDER BY target_warehouse, product_code
     """)
     items = db.execute(items_query, {"id": str(integration_id)}).fetchall()
@@ -461,8 +517,9 @@ async def send_digitacao(
         }
 
     filial = integration["store_code"]
-    inventory_name = integration.get("inventory_a_name", "INV001")
-    ref_date = format_date_protheus(integration.get("reference_date_a")) or datetime.now().strftime("%Y%m%d")
+    raw_name = integration.get("inventory_a_name", "INV001")
+    inventory_name = f"INVENT_{raw_name}"
+    ref_date = format_date_protheus(integration.get("reference_date_a")) or datetime.now(BRT).strftime("%Y%m%d")
 
     # Agrupar itens por armazem
     groups: Dict[str, List[dict]] = {}
@@ -478,15 +535,36 @@ async def send_digitacao(
     responses = []
 
     for armazem, group_items in groups.items():
-        # Montar payload
+        # Montar payload — filtrar AGGREGATE sem lote para produtos com lote
+        # e itens com qty=0
         itens_payload = []
+        # Detectar quais produtos têm linhas com lote (são rastreáveis)
+        produtos_com_lote = set()
         for row in group_items:
-            item_payload = {
-                "codigo": row["product_code"],
-                "quantidade": float(row.get("counted_qty") or row.get("quantity") or 0)
+            if (row.get("lot_number") or "").strip():
+                produtos_com_lote.add(row["product_code"])
+
+        for row in group_items:
+            qty = float(row.get("counted_qty") or row.get("quantity") or 0)
+            lot = (row.get("lot_number") or "").strip()
+            code = row["product_code"]
+
+            # ✅ v2.19.55: Pular AGGREGATE (sem lote) se produto tem linhas de lote
+            if not lot and code in produtos_com_lote:
+                logger.info(f"  ⏭️ DIGITACAO skip AGGREGATE sem lote: {code} arm={armazem} qty={qty}")
+                continue
+
+            # ✅ v2.19.55: Pular qty=0 (NO_CHANGE)
+            if qty == 0:
+                logger.info(f"  ⏭️ DIGITACAO skip qty=0: {code} arm={armazem}")
+                continue
+
+            item_payload: Dict[str, Any] = {
+                "codigo": code,
+                "quantidade": qty
             }
-            if row.get("lot_number"):
-                item_payload["lote"] = row["lot_number"]
+            if lot:
+                item_payload["lote"] = lot
             itens_payload.append(item_payload)
 
         payload = {
@@ -504,29 +582,45 @@ async def send_digitacao(
 
             detalhes = response.get("detalhes", [])
 
-            for i, row in enumerate(group_items):
+            # ✅ v2.19.55: Classificar baseado na resposta real do Protheus
+            arm_enviados = 0
+            arm_erros = 0
+            for detalhe in detalhes:
+                if isinstance(detalhe, dict):
+                    if detalhe.get("status", "").upper() == "OK":
+                        arm_enviados += 1
+                    else:
+                        arm_erros += 1
+            total_enviados += arm_enviados
+            total_erros += arm_erros
+
+            # Atualizar items na DB — match por código + lote
+            for row in group_items:
+                lot = (row.get("lot_number") or "").strip()
+                code = row["product_code"]
+                qty = float(row.get("counted_qty") or row.get("quantity") or 0)
+
+                # Pular AGGREGATE e qty=0 (não foram enviados)
+                if (not lot and code in produtos_com_lote) or qty == 0:
+                    continue
+
                 item_ok = False
                 item_error = None
-                if detalhes and i < len(detalhes):
-                    detalhe = detalhes[i]
-                    if isinstance(detalhe, dict):
-                        # Protheus retorna status: "OK" ou "ERRO"
-                        item_ok = detalhe.get("status", "").upper() == "OK"
-                        if not item_ok:
-                            item_error = detalhe.get("mensagem", detalhe.get("erro", "Erro no item"))
-
-                new_status = "SENT" if item_ok else "ERROR"
-                if item_ok:
-                    total_enviados += 1
-                else:
-                    total_erros += 1
+                for detalhe in detalhes:
+                    if isinstance(detalhe, dict) and detalhe.get("codigo") == code:
+                        d_lote = (detalhe.get("lote") or "").strip()
+                        if d_lote == lot or (not d_lote and not lot):
+                            item_ok = detalhe.get("status", "").upper() == "OK"
+                            if not item_ok:
+                                item_error = detalhe.get("mensagem", "Erro no item")
+                            break
 
                 db.execute(text("""
                     UPDATE inventario.protheus_integration_items
                     SET item_status = :status, error_detail = :error
                     WHERE id = :id
                 """), {
-                    "status": new_status,
+                    "status": "SENT" if item_ok else "ERROR",
                     "error": item_error,
                     "id": str(row["id"])
                 })
@@ -534,7 +628,7 @@ async def send_digitacao(
             log_send(
                 db, str(integration_id), "/inventario/digitacao", "ADJUSTMENT",
                 None, payload, response,
-                "OK" if total_erros == 0 else "PARTIAL",
+                "OK" if arm_erros == 0 else "PARTIAL",
                 None, duration_ms
             )
             responses.append({"armazem": armazem, "response": response})
@@ -598,17 +692,18 @@ async def send_historico(
         )
 
     filial = integration["store_code"]
-    inventory_name = integration.get("inventory_a_name", "INVENTARIO")
-    inv_date = format_date_protheus(integration.get("reference_date_a")) or datetime.now().strftime("%Y%m%d")
+    raw_name = integration.get("inventory_a_name", "INVENTARIO")
+    inventory_name = f"INVENT_{raw_name}"
+    inv_date = format_date_protheus(integration.get("reference_date_a")) or datetime.now(BRT).strftime("%Y%m%d")
     inventory_a_id = str(integration["inventory_a_id"])
     inventory_b_id = str(integration["inventory_b_id"]) if integration.get("inventory_b_id") else None
 
-    # Buscar todos os itens da integracao
+    # Buscar itens da integracao (excluir já enviados com sucesso no histórico)
     items_query = text("""
         SELECT id, item_type, product_code, product_description,
                lot_number, source_warehouse, target_warehouse,
                quantity, expected_qty, counted_qty, adjusted_qty,
-               adjustment_type, unit_cost, total_value
+               adjustment_type, unit_cost, total_value, item_status
         FROM inventario.protheus_integration_items
         WHERE integration_id = :id
         ORDER BY product_code
@@ -624,11 +719,43 @@ async def send_historico(
 
     total_enviados = 0
     total_erros = 0
+    total_skipped = 0
 
-    for item in items:
-        row = dict(item._mapping)
+    # ✅ v2.19.55: Pré-carregar lotes fornecedor para enriquecer ZIV_LOTEFO
+    lot_supplier_map = {}
+    try:
+        lot_rows = db.execute(text("""
+            SELECT TRIM(b8_produto) as produto, b8_lotectl, b8_lotefor
+            FROM inventario.sb8010
+            WHERE b8_lotefor IS NOT NULL AND b8_lotefor != ''
+        """)).fetchall()
+        for lr in lot_rows:
+            lot_supplier_map[(lr.produto, lr.b8_lotectl)] = (lr.b8_lotefor or "").strip()
+    except Exception:
+        pass
+
+    # Detectar quais produtos têm linhas com lote (são rastreáveis)
+    items_list = [dict(item._mapping) for item in items]
+    produtos_com_lote = set()
+    for row in items_list:
+        if (row.get("lot_number") or "").strip():
+            produtos_com_lote.add(row["product_code"])
+
+    for row in items_list:
         product_code = row["product_code"]
-        lot_number = row.get("lot_number") or ""
+        lot_number = (row.get("lot_number") or "").strip()
+
+        # ✅ v2.19.55: Pular itens já enviados com sucesso (evita duplicação no reenvio)
+        if row.get("item_status") == "SENT":
+            logger.info(f"  ⏭️ HISTORICO skip já SENT: {product_code} lote={lot_number}")
+            total_skipped += 1
+            continue
+
+        # ✅ v2.19.55: Pular AGGREGATE (sem lote) se produto tem linhas de lote
+        if not lot_number and product_code in produtos_com_lote:
+            logger.info(f"  ⏭️ HISTORICO skip AGGREGATE sem lote: {product_code}")
+            total_skipped += 1
+            continue
 
         # Determinar armazem de origem e destino
         if row["item_type"] == "TRANSFER":
@@ -668,7 +795,7 @@ async def send_historico(
             "ZIV_CODIGO": product_code,
             "ZIV_DESCRI": (row.get("product_description") or "")[:60],
             "ZIV_LOTECT": lot_number,
-            "ZIV_LOTEFO": "",
+            "ZIV_LOTEFO": lot_supplier_map.get((product_code.strip(), lot_number), ""),
             "ZIV_SALDO": saldo,
             "ZIV_ENTPOS": 0,
             "ZIV_CONT1": counting_data.get("count1", 0),
@@ -694,8 +821,8 @@ async def send_historico(
             "ZIV_ECONOM": 0,
             "ZIV_OBSERV": "Contagem inventario",
             "ZIV_USRINC": current_user.username if hasattr(current_user, 'username') else "sistema",
-            "ZIV_DATINC": datetime.now().strftime("%Y%m%d"),
-            "ZIV_HORINC": datetime.now().strftime("%H:%M:%S"),
+            "ZIV_DATINC": datetime.now(BRT).strftime("%Y%m%d"),
+            "ZIV_HORINC": datetime.now(BRT).strftime("%H:%M:%S"),
             "ZIV_ORIGIN": "INVENTARIO.SISTEMA"
         }
 
@@ -878,6 +1005,11 @@ async def send_all(
             detail=f"Integracao nao pode ser enviada. Status atual: {integration['status']}"
         )
 
+    # ✅ v2.19.55: Inicializar batch para esta rodada de envio
+    next_batch = _get_next_batch(db, str(integration_id))
+    _current_batch[str(integration_id)] = next_batch
+    logger.info(f"📦 [SEND ALL] Rodada de envio #{next_batch} para integração {integration_id}")
+
     results = {}
     total_enviados = 0
     total_erros = 0
@@ -1032,32 +1164,59 @@ async def get_send_logs(
     query = text(f"""
         SELECT id, endpoint, item_type, product_code,
                request_payload, response_payload,
-               status, error_message, duration_ms, created_at
+               status, error_message, duration_ms, created_at,
+               COALESCE(send_batch, 1) as send_batch
         FROM inventario.protheus_send_logs
         WHERE {where_clause}
-        ORDER BY created_at DESC
+        ORDER BY send_batch DESC, created_at DESC
     """)
 
     rows = db.execute(query, params).fetchall()
 
+    # ✅ v2.19.55: Buscar lotes fornecedor (b8_lotefor) para enriquecer detalhes
+    lot_supplier_map = {}
+    try:
+        lot_rows = db.execute(text("""
+            SELECT TRIM(b8_produto) as produto, b8_lotectl, b8_lotefor
+            FROM inventario.sb8010
+            WHERE b8_lotefor IS NOT NULL AND b8_lotefor != ''
+        """)).fetchall()
+        for lr in lot_rows:
+            lot_supplier_map[(lr.produto, lr.b8_lotectl)] = lr.b8_lotefor.strip() if lr.b8_lotefor else ''
+    except Exception:
+        pass
+
     logs = []
     for row in rows:
         log_data = dict(row._mapping)
-        # Converter UUID e datetime para string
         log_data["id"] = str(log_data["id"])
         if log_data.get("created_at"):
             log_data["created_at"] = log_data["created_at"].isoformat()
+
+        # Enriquecer detalhes da resposta com lote_fornecedor
+        resp = log_data.get("response_payload")
+        if resp and isinstance(resp, dict) and resp.get("detalhes"):
+            for detalhe in resp["detalhes"]:
+                codigo = (detalhe.get("codigo") or "").strip()
+                lote = (detalhe.get("lote") or "").strip()
+                if lote and codigo:
+                    detalhe["lote_fornecedor"] = lot_supplier_map.get((codigo, lote), "")
+                else:
+                    detalhe["lote_fornecedor"] = ""
+
         logs.append(log_data)
 
     # Resumo
     total = len(logs)
-    ok_count = sum(1 for l in logs if l.get("status") == "OK")
+    ok_count = sum(1 for l in logs if l.get("status") in ("OK", "SUCCESS", "SENT"))
+    partial_count = sum(1 for l in logs if l.get("status") == "PARTIAL")
     error_count = sum(1 for l in logs if l.get("status") == "ERROR")
 
     return {
         "integration_id": str(integration_id),
         "total": total,
         "ok": ok_count,
+        "partial": partial_count,
         "errors": error_count,
         "logs": logs
     }

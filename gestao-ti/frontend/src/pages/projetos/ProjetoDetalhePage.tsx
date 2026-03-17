@@ -328,17 +328,17 @@ export function ProjetoDetalhePage() {
             <div>
               <p className="text-slate-500 text-xs">Software</p>
               <p className="text-slate-800">{projeto.software ? (
-                <Link to={`/gestao-ti/softwares/${projeto.software.id}`} className="text-capul-600 hover:underline">
+                <a href={`/gestao-ti/softwares/${projeto.software.id}`} target="_blank" rel="noopener noreferrer" className="text-capul-600 hover:underline">
                   {projeto.software.nome}
-                </Link>
+                </a>
               ) : '-'}</p>
             </div>
             <div>
               <p className="text-slate-500 text-xs">Contrato</p>
               <p className="text-slate-800">{projeto.contrato ? (
-                <Link to={`/gestao-ti/contratos/${projeto.contrato.id}`} className="text-capul-600 hover:underline">
+                <a href={`/gestao-ti/contratos/${projeto.contrato.id}`} target="_blank" rel="noopener noreferrer" className="text-capul-600 hover:underline">
                   #{projeto.contrato.numero} - {projeto.contrato.titulo}
-                </Link>
+                </a>
               ) : '-'}</p>
             </div>
             <div>
@@ -1790,9 +1790,9 @@ function TabDependencias({ projetoId, canManage }: { projetoId: string; canManag
                     <div key={d.id} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${dependenciaCores[d.tipo]}`}>{dependenciaLabel[d.tipo]}</span>
-                        <Link to={`/gestao-ti/projetos/${d.projetoDestino?.id}`} className="text-sm text-capul-600 hover:underline">
+                        <a href={`/gestao-ti/projetos/${d.projetoDestino?.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-capul-600 hover:underline">
                           #{d.projetoDestino?.numero} - {d.projetoDestino?.nome}
-                        </Link>
+                        </a>
                       </div>
                       {canManage && (
                         <button onClick={() => handleRemove(d.id)} className="text-slate-400 hover:text-red-500">
@@ -1814,9 +1814,9 @@ function TabDependencias({ projetoId, canManage }: { projetoId: string; canManag
                     <div key={d.id} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${dependenciaCores[d.tipo]}`}>{dependenciaLabel[d.tipo]}</span>
-                        <Link to={`/gestao-ti/projetos/${d.projetoOrigem?.id}`} className="text-sm text-capul-600 hover:underline">
+                        <a href={`/gestao-ti/projetos/${d.projetoOrigem?.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-capul-600 hover:underline">
                           #{d.projetoOrigem?.numero} - {d.projetoOrigem?.nome}
-                        </Link>
+                        </a>
                       </div>
                       {canManage && (
                         <button onClick={() => handleRemove(d.id)} className="text-slate-400 hover:text-red-500">
@@ -1973,13 +1973,14 @@ function TabChamados({ projetoId, canManage }: { projetoId: string; canManage: b
                 Vincular Existente
               </button>
             )}
-            <Link
-              to={`/gestao-ti/chamados/novo?projetoId=${projetoId}`}
+            <a
+              href={`/gestao-ti/chamados/novo?projetoId=${projetoId}`}
+              target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1 text-sm text-capul-600 hover:underline"
             >
               <Plus className="w-4 h-4" />
               Novo Chamado
-            </Link>
+            </a>
           </div>
         </div>
 
@@ -1992,9 +1993,9 @@ function TabChamados({ projetoId, canManage }: { projetoId: string; canManage: b
             {itens.map((c) => (
               <div key={c.id} className="px-6 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Link to={`/gestao-ti/chamados/${c.id}`} className="text-sm text-capul-600 hover:underline font-medium">
+                  <a href={`/gestao-ti/chamados/${c.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-capul-600 hover:underline font-medium">
                     #{c.numero}
-                  </Link>
+                  </a>
                   <span className="text-sm text-slate-700">{c.titulo}</span>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${chamadoStatusCores[c.status]}`}>{chamadoStatusLabel[c.status]}</span>
                   <span className="text-xs text-slate-400">{prioridadeLabel[c.prioridade]}</span>

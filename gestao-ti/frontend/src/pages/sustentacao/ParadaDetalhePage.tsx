@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { paradaService } from '../../services/parada.service';
 import { chamadoService } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
-import { Activity, ArrowLeft, Clock, AlertTriangle, Building2, User, Wrench, Unlink, Plus, Ticket, X, Filter, CheckSquare, Users, Trash2, Search } from 'lucide-react';
+import { Activity, ArrowLeft, Clock, AlertTriangle, Building2, User, Wrench, Unlink, Plus, Ticket, X, Filter, CheckSquare, Users, Trash2, Search, Pencil } from 'lucide-react';
 import type { RegistroParada, Chamado, EquipeTI } from '../../types';
 import { useToast } from '../../components/Toast';
 
@@ -152,9 +152,9 @@ export function ParadaDetalhePage() {
                   <>
                     <Link
                       to={`/gestao-ti/paradas/${parada.id}/editar`}
-                      className="text-xs border border-slate-300 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-50"
+                      className="flex items-center gap-1 text-xs border border-slate-300 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-50"
                     >
-                      Editar
+                      <Pencil className="w-3.5 h-3.5" /> Editar
                     </Link>
                     <button
                       onClick={() => setShowFinalizar(true)}
@@ -234,9 +234,9 @@ export function ParadaDetalhePage() {
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-500">Software</span>
-                <Link to={`/gestao-ti/softwares/${parada.softwareId}`} className="text-capul-600 hover:underline">
+                <a href={`/gestao-ti/softwares/${parada.softwareId}`} target="_blank" rel="noopener noreferrer" className="text-capul-600 hover:underline">
                   {parada.software.nome}
-                </Link>
+                </a>
               </div>
               {parada.softwareModulo && (
                 <div className="flex justify-between">
@@ -364,7 +364,6 @@ const statusChamadoLabel: Record<string, string> = {
 
 function TabChamados({ parada, canManage, onUpdate }: { parada: RegistroParada; canManage: boolean; onUpdate: (p: RegistroParada) => void }) {
   const { toast } = useToast();
-  const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
 
   async function handleDesvincular(chamadoId: string) {
@@ -392,12 +391,13 @@ function TabChamados({ parada, canManage, onUpdate }: { parada: RegistroParada; 
               >
                 <CheckSquare className="w-3.5 h-3.5" /> Vincular Existentes
               </button>
-              <button
-                onClick={() => navigate(`/gestao-ti/chamados/novo?paradaId=${parada.id}`)}
+              <a
+                href={`/gestao-ti/chamados/novo?paradaId=${parada.id}`}
+                target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
               >
                 <Plus className="w-3.5 h-3.5" /> Novo Chamado
-              </button>
+              </a>
             </div>
           )}
         </div>
@@ -410,9 +410,9 @@ function TabChamados({ parada, canManage, onUpdate }: { parada: RegistroParada; 
               <div key={pc.id} className="px-6 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Ticket className="w-4 h-4 text-slate-400" />
-                  <Link to={`/gestao-ti/chamados/${pc.chamado.id}`} className="text-sm text-capul-600 hover:underline font-medium">
+                  <a href={`/gestao-ti/chamados/${pc.chamado.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-capul-600 hover:underline font-medium">
                     #{pc.chamado.numero}
-                  </Link>
+                  </a>
                   <span className="text-sm text-slate-600">{pc.chamado.titulo}</span>
                   <span className={`text-xs px-1.5 py-0.5 rounded ${statusChamadoCores[pc.chamado.status] || 'bg-slate-100 text-slate-600'}`}>
                     {pc.chamado.status.replace(/_/g, ' ')}

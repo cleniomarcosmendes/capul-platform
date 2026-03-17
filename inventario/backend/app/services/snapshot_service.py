@@ -136,32 +136,11 @@ class SnapshotService:
             'bz_xlocal3': result.bz_xlocal3
         }
 
-        # ✅ v2.10.0.18 - CORREÇÃO CRÍTICA: Produtos com lote usam SUM(B8_SALDO), não B2_QATU
+        # ✅ v2.19.55 - Sempre usar B2_QATU como saldo de referência (saldo oficial do ERP Protheus)
+        # Para produtos com lote, SUM(B8_SALDO) pode divergir de B2_QATU por ajustes pendentes no ERP
+        # Os snapshots de lotes individuais continuam sendo criados para detalhe na contagem
         if result.b1_rastro == 'L':
-            logger.info(f"🔍 Produto {product_code} tem controle de lote - calculando soma de SB8010.B8_SALDO")
-
-            # Calcular soma dos lotes no armazém específico
-            lot_sum_query = text("""
-                SELECT COALESCE(SUM(b8.b8_saldo), 0) as total_lot_qty
-                FROM inventario.sb8010 b8
-                WHERE b8.b8_produto = :product_code
-                  AND b8.b8_filial = :filial
-                  AND b8.b8_local = :warehouse
-                  AND b8.b8_saldo > 0
-            """)
-
-            lot_sum_result = db.execute(lot_sum_query, {
-                'product_code': product_code,
-                'filial': filial,
-                'warehouse': warehouse
-            }).fetchone()
-
-            total_lot_qty = float(lot_sum_result.total_lot_qty) if lot_sum_result else 0.0
-
-            logger.info(f"📦 Produto {product_code}: B2_QATU={snapshot_data['b2_qatu']} → SUM(B8_SALDO)={total_lot_qty} (CORRIGIDO)")
-
-            # Substituir b2_qatu pela soma dos lotes (fonte da verdade para produtos com lote)
-            snapshot_data['b2_qatu'] = total_lot_qty
+            logger.info(f"📦 Produto {product_code} com lote: usando B2_QATU={snapshot_data['b2_qatu']} (saldo oficial ERP)")
 
         logger.info(f"✅ Snapshot capturado: {product_code} | Qty: {snapshot_data['b2_qatu']} | Custo: {snapshot_data['b2_cm1']}")
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Fragment } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Header } from '../layouts/Header';
 import { syncService } from '../services/sync.service';
@@ -23,6 +23,11 @@ import {
   Loader2,
   ArrowRightLeft,
   Eye,
+  ChevronDown,
+  ChevronRight,
+  XCircle,
+  CheckCircle,
+  FileText,
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 import { TableSkeleton } from '../components/LoadingSkeleton';
@@ -605,8 +610,9 @@ function TabEnvio() {
                             {['ERROR', 'PARTIAL'].includes(integration.status) ? 'Reenviar' : 'Enviar'}
                           </button>
                         ) : (
-                          <span className="text-xs text-slate-400">
-                            {integration.sent_at ? new Date(integration.sent_at).toLocaleString('pt-BR') : ''}
+                          <span className="text-xs text-green-600 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            {integration.sent_at ? `Enviado ${new Date(integration.sent_at).toLocaleString('pt-BR')}` : 'Enviado'}
                           </span>
                         )}
                         {['SENT', 'ERROR', 'PARTIAL', 'CONFIRMED'].includes(integration.status) && (
@@ -658,66 +664,7 @@ function TabEnvio() {
       />
 
       {/* Logs modal */}
-      {logsData && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
-              <div>
-                <h3 className="font-semibold text-slate-800">Logs de Envio</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {logsData.ok} OK, {logsData.errors} erros — {logsData.total} total
-                </p>
-              </div>
-              <button onClick={() => setLogsData(null)} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
-            </div>
-            <div className="overflow-auto flex-1 p-4">
-              {logsData.logs.length === 0 ? (
-                <p className="text-sm text-slate-500 text-center py-4">Nenhum log de envio encontrado.</p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200">
-                      <th className="text-left py-2 px-3 font-medium text-slate-600">Endpoint</th>
-                      <th className="text-left py-2 px-3 font-medium text-slate-600">Tipo</th>
-                      <th className="text-left py-2 px-3 font-medium text-slate-600">Produto</th>
-                      <th className="text-left py-2 px-3 font-medium text-slate-600">Status</th>
-                      <th className="text-right py-2 px-3 font-medium text-slate-600">Tempo</th>
-                      <th className="text-left py-2 px-3 font-medium text-slate-600">Data</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {logsData.logs.map((log) => (
-                      <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="py-2 px-3 font-mono text-xs">{log.endpoint}</td>
-                        <td className="py-2 px-3 text-xs">{log.item_type}</td>
-                        <td className="py-2 px-3 font-mono text-xs">{log.product_code || '—'}</td>
-                        <td className="py-2 px-3">
-                          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                            log.status === 'OK' ? 'bg-green-100 text-green-700'
-                              : log.status === 'ERROR' ? 'bg-red-100 text-red-700'
-                              : 'bg-amber-100 text-amber-700'
-                          }`}>
-                            {log.status}
-                          </span>
-                          {log.error_message && (
-                            <p className="text-[10px] text-red-500 mt-0.5 max-w-[200px] truncate" title={log.error_message}>
-                              {log.error_message}
-                            </p>
-                          )}
-                        </td>
-                        <td className="py-2 px-3 text-right text-xs text-slate-500">{log.duration_ms}ms</td>
-                        <td className="py-2 px-3 text-xs text-slate-500">
-                          {new Date(log.created_at).toLocaleString('pt-BR')}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {logsData && <LogsEnvioModal logsData={logsData} onClose={() => setLogsData(null)} />}
     </div>
   );
 }
@@ -764,6 +711,231 @@ function TabHistorico({ syncStatus }: { syncStatus: SyncStatus | null }) {
                 <p className="text-sm text-red-700">Erros na Ultima Sync</p>
                 <p className="text-xs text-red-500">{syncStatus?.errors} erros encontrados</p>
               </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// === Logs de Envio Modal ===
+
+const endpointLabels: Record<string, { label: string; color: string }> = {
+  '/inventario/transferencia': { label: 'Transferencias', color: 'text-purple-700 bg-purple-50 border-purple-200' },
+  '/inventario/digitacao': { label: 'Digitacao (Ajustes)', color: 'text-blue-700 bg-blue-50 border-blue-200' },
+  '/INVENTARIO/historico': { label: 'Historico', color: 'text-slate-700 bg-slate-50 border-slate-200' },
+};
+
+const statusConfig: Record<string, { label: string; bg: string; icon: typeof CheckCircle }> = {
+  SUCCESS: { label: 'Sucesso', bg: 'bg-green-100 text-green-700', icon: CheckCircle },
+  OK: { label: 'Sucesso', bg: 'bg-green-100 text-green-700', icon: CheckCircle },
+  SENT: { label: 'Enviado', bg: 'bg-green-100 text-green-700', icon: CheckCircle },
+  PARTIAL: { label: 'Parcial', bg: 'bg-amber-100 text-amber-700', icon: AlertTriangle },
+  ERROR: { label: 'Erro', bg: 'bg-red-100 text-red-700', icon: XCircle },
+};
+
+interface ResponseDetalhe {
+  codigo?: string;
+  lote?: string;
+  lote_fornecedor?: string;
+  status?: string;
+  mensagem?: string;
+  quantidade?: number;
+}
+
+function LogsEnvioModal({ logsData, onClose }: { logsData: SendLogsResult; onClose: () => void }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [filterEndpoint, setFilterEndpoint] = useState('');
+
+  // Agrupar por rodada (send_batch)
+  const batches = [...new Set(logsData.logs.map((l) => l.send_batch || 1))].sort((a, b) => b - a);
+  const [activeBatch, setActiveBatch] = useState(batches[0] || 1);
+  const batchLogs = logsData.logs.filter((l) => (l.send_batch || 1) === activeBatch);
+
+  // Agrupar por endpoint para resumo (da rodada ativa)
+  const byEndpoint = batchLogs.reduce<Record<string, { ok: number; partial: number; error: number; total: number; totalMs: number }>>((acc, log) => {
+    const ep = log.endpoint;
+    if (!acc[ep]) acc[ep] = { ok: 0, partial: 0, error: 0, total: 0, totalMs: 0 };
+    acc[ep].total++;
+    acc[ep].totalMs += log.duration_ms || 0;
+    if (log.status === 'SUCCESS' || log.status === 'OK' || log.status === 'SENT') acc[ep].ok++;
+    else if (log.status === 'PARTIAL') acc[ep].partial++;
+    else acc[ep].error++;
+    return acc;
+  }, {});
+
+  const hasErrors = batchLogs.some((l) => l.status === 'ERROR' || l.status === 'PARTIAL');
+  const filteredLogs = filterEndpoint ? batchLogs.filter((l) => l.endpoint === filterEndpoint) : batchLogs;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl max-w-5xl w-full max-h-[85vh] flex flex-col shadow-2xl">
+        {/* Header */}
+        <div className={`flex items-center justify-between px-5 py-4 border-b rounded-t-xl ${hasErrors ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+          <div className="flex items-center gap-3">
+            {hasErrors ? <AlertTriangle className="w-5 h-5 text-amber-600" /> : <CheckCircle className="w-5 h-5 text-green-600" />}
+            <div>
+              <h3 className="font-semibold text-slate-800">Resultado do Envio ao Protheus</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Rodada #{activeBatch} — {batchLogs.length} chamada(s) — {batchLogs[0] ? new Date(batchLogs[0].created_at).toLocaleString('pt-BR') : ''}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-white/80 transition-colors">
+            <XCircle className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Seletor de rodadas */}
+        {batches.length > 1 && (
+          <div className="px-5 py-2 border-b border-slate-200 bg-slate-50 flex items-center gap-2 overflow-x-auto">
+            <span className="text-xs text-slate-500 shrink-0">Rodada:</span>
+            {batches.map((b) => {
+              const bLogs = logsData.logs.filter((l) => (l.send_batch || 1) === b);
+              const bHasError = bLogs.some((l) => l.status === 'ERROR' || l.status === 'PARTIAL');
+              const bDate = bLogs[0] ? new Date(bLogs[0].created_at) : null;
+              return (
+                <button
+                  key={b}
+                  onClick={() => { setActiveBatch(b); setFilterEndpoint(''); setExpandedId(null); }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${
+                    activeBatch === b
+                      ? 'bg-capul-600 text-white'
+                      : bHasError
+                        ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  #{b}
+                  {bDate && <span className="opacity-70">{bDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>}
+                  {bHasError && activeBatch !== b && <AlertTriangle className="w-3 h-3" />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Resumo por endpoint */}
+        <div className="px-5 py-3 border-b border-slate-200 bg-white">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {Object.entries(byEndpoint).map(([ep, stats]) => {
+              const cfg = endpointLabels[ep] || { label: ep, color: 'text-slate-700 bg-slate-50 border-slate-200' };
+              const isFiltered = filterEndpoint === ep;
+              return (
+                <button
+                  key={ep}
+                  onClick={() => setFilterEndpoint(isFiltered ? '' : ep)}
+                  className={`p-3 rounded-lg border text-left transition-all ${isFiltered ? 'ring-2 ring-capul-500 ' : ''}${cfg.color}`}
+                >
+                  <div className="text-xs font-medium opacity-70">{cfg.label}</div>
+                  <div className="flex items-center gap-2 mt-1">
+                    {stats.ok > 0 && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">{stats.ok} OK</span>}
+                    {stats.partial > 0 && <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">{stats.partial} Parcial</span>}
+                    {stats.error > 0 && <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-medium">{stats.error} Erro</span>}
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1">{(stats.totalMs / 1000).toFixed(1)}s</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Tabela de logs detalhada */}
+        <div className="overflow-auto flex-1 p-4">
+          {filteredLogs.length === 0 ? (
+            <p className="text-sm text-slate-500 text-center py-8">Nenhum log encontrado.</p>
+          ) : (
+            <div className="space-y-2">
+              {filteredLogs.map((log) => {
+                const isExpanded = expandedId === log.id;
+                const cfg = statusConfig[log.status] || statusConfig.ERROR;
+                const StatusIcon = cfg.icon;
+                const resp = log.response_payload as { detalhes?: ResponseDetalhe[]; gravados?: number; erros?: number; sucesso?: boolean } | null;
+                const detalhes = resp?.detalhes || [];
+                const hasDetalhes = detalhes.length > 0;
+
+                return (
+                  <Fragment key={log.id}>
+                    <div
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg border cursor-pointer transition-colors ${
+                        isExpanded ? 'bg-slate-50 border-slate-300' : 'bg-white border-slate-200 hover:border-slate-300'
+                      }`}
+                      onClick={() => hasDetalhes && setExpandedId(isExpanded ? null : log.id)}
+                    >
+                      {/* Expand icon */}
+                      <div className="w-4 shrink-0">
+                        {hasDetalhes ? (
+                          isExpanded ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />
+                        ) : <FileText className="w-4 h-4 text-slate-300" />}
+                      </div>
+
+                      {/* Status */}
+                      <span className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium shrink-0 ${cfg.bg}`}>
+                        <StatusIcon className="w-3 h-3" />
+                        {cfg.label}
+                      </span>
+
+                      {/* Endpoint */}
+                      <span className="text-xs text-slate-500 shrink-0 w-36 truncate">
+                        {endpointLabels[log.endpoint]?.label || log.endpoint}
+                      </span>
+
+                      {/* Tipo */}
+                      <span className="text-xs font-medium text-slate-600 shrink-0 w-20">{log.item_type}</span>
+
+                      {/* Resumo resposta */}
+                      <span className="text-xs text-slate-500 flex-1 truncate">
+                        {resp?.gravados !== undefined ? `${resp.gravados} gravados, ${resp.erros || 0} erros` : log.product_code || ''}
+                        {hasDetalhes ? ` — ${detalhes.length} itens` : ''}
+                      </span>
+
+                      {/* Tempo */}
+                      <span className="text-xs text-slate-400 shrink-0">{((log.duration_ms || 0) / 1000).toFixed(1)}s</span>
+                    </div>
+
+                    {/* Detalhes expandidos */}
+                    {isExpanded && hasDetalhes && (
+                      <div className="ml-8 mr-2 mb-2 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-slate-100 border-b border-slate-200">
+                              <th className="text-left py-2 px-3 font-medium text-slate-600">Codigo</th>
+                              <th className="text-left py-2 px-3 font-medium text-slate-600">Lote</th>
+                              <th className="text-left py-2 px-3 font-medium text-slate-600">Lote Fornecedor</th>
+                              <th className="text-right py-2 px-3 font-medium text-slate-600">Qtde</th>
+                              <th className="text-left py-2 px-3 font-medium text-slate-600">Status</th>
+                              <th className="text-left py-2 px-3 font-medium text-slate-600">Mensagem Protheus</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {detalhes.map((d, i) => (
+                              <tr key={i} className={`border-b border-slate-100 ${d.status === 'ERRO' ? 'bg-red-50' : ''}`}>
+                                <td className="py-1.5 px-3 font-mono">{d.codigo || '—'}</td>
+                                <td className="py-1.5 px-3 font-mono">{d.lote || '—'}</td>
+                                <td className="py-1.5 px-3 font-mono text-slate-500">{d.lote_fornecedor || '—'}</td>
+                                <td className="py-1.5 px-3 text-right">{d.quantidade ?? '—'}</td>
+                                <td className="py-1.5 px-3">
+                                  <span className={`px-1.5 py-0.5 rounded font-medium ${
+                                    d.status === 'OK' || d.status === 'GRAVADO' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                  }`}>
+                                    {d.status}
+                                  </span>
+                                </td>
+                                <td className="py-1.5 px-3">
+                                  <span className={`whitespace-pre-wrap break-words ${d.status === 'ERRO' ? 'text-red-600' : 'text-green-600'}`}>
+                                    {(d.mensagem || '—').replace(/\r\n/g, '\n').replace(/\s*\|\s*/g, '\n').trim()}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </Fragment>
+                );
+              })}
             </div>
           )}
         </div>

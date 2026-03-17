@@ -362,7 +362,7 @@ export function ContratoDetalhePage() {
               </p>
               {contrato.software && (
                 <p className="text-sm text-slate-500 mt-1">
-                  Software: <Link to={`/gestao-ti/softwares/${contrato.software.id}`} className="text-capul-600 hover:underline">{contrato.software.nome}</Link>
+                  Software: <a href={`/gestao-ti/softwares/${contrato.software.id}`} target="_blank" rel="noopener noreferrer" className="text-capul-600 hover:underline">{contrato.software.nome}</a>
                 </p>
               )}
               {contrato.contratoOriginal && (
@@ -1447,7 +1447,7 @@ function TabLicencas({ contrato, canManage, onReload, toast, confirm }: TabProps
           <tbody className="divide-y divide-slate-100">
             {licencas.map((l) => (
               <tr key={l.id} className="hover:bg-slate-50">
-                <td className="px-4 py-2.5 text-slate-700">{l.software.nome}</td>
+                <td className="px-4 py-2.5"><a href={`/gestao-ti/softwares/${l.software.id}`} target="_blank" rel="noopener noreferrer" className="text-capul-600 hover:underline">{l.software.nome}</a></td>
                 <td className="px-4 py-2.5 text-slate-600">{l.modeloLicenca || '-'}</td>
                 <td className="px-4 py-2.5 text-right text-slate-700">{fmtCurrency(l.valorTotal)}</td>
                 <td className="px-4 py-2.5 text-slate-600">{fmtDate(l.dataVencimento)}</td>

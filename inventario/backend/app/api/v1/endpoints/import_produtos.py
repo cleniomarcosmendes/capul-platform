@@ -62,7 +62,7 @@ async def import_produtos_protheus(
         logger.info(f"📋 [SEQUENCIAL] Processando {len(armazem)} armazém(ns) um de cada vez...")
 
         # ========================================
-        # 1. CHAMAR API PROTHEUS SEQUENCIALMENTE (UM ARMAZÉM DE CADA VEZ)
+        # 1. CHAMAR API PROTHEUS EM PARALELO (v2.19.55)
         # ========================================
         headers = {
             "Authorization": f"Basic {PROTHEUS_AUTH}",
@@ -73,60 +73,50 @@ async def import_produtos_protheus(
         armazens_processados = []
         armazens_com_erro = []
 
-        # ✅ v2.19.7: Processar cada armazém SEQUENCIALMENTE
+        async def _fetch_armazem(client: httpx.AsyncClient, arm: str, idx: int):
+            """Busca produtos de um armazém específico"""
+            logger.info(f"📡 [API {idx}/{len(armazem)}] Processando armazém {arm}...")
+            payload = {"filial": filial, "armazem": [{"codigo": arm}]}
+            logger.info(f"📦 [PAYLOAD {idx}] {json.dumps(payload)}")
+
+            api_start = time.time()
+            response = await client.post(PROTHEUS_API_URL, json=payload, headers=headers)
+            api_duration = time.time() - api_start
+            response.raise_for_status()
+
+            logger.info(f"⏱️ [API {idx}] Tempo de resposta armazém {arm}: {api_duration:.2f}s")
+
+            try:
+                text_content = response.content.decode('utf-8')
+                data = json.loads(text_content)
+            except UnicodeDecodeError:
+                logger.warning(f"⚠️ [API {idx}] Erro UTF-8, tentando ISO-8859-1...")
+                text_content = response.content.decode('iso-8859-1')
+                data = json.loads(text_content)
+
+            produtos_armazem = data.get("produtos", [])
+            logger.info(f"✅ [API {idx}] Armazém {arm}: {len(produtos_armazem)} produtos recebidos")
+
+            if len(produtos_armazem) == 0:
+                logger.warning(f"⚠️ [API {idx}] Armazém {arm} retornou 0 produtos")
+
+            return arm, produtos_armazem
+
+        # ✅ v2.19.55: Processar armazéns EM PARALELO (asyncio.gather)
+        import asyncio
         async with httpx.AsyncClient(verify=False, timeout=900.0) as client:
-            for idx, arm in enumerate(armazem, 1):
-                logger.info(f"📡 [API {idx}/{len(armazem)}] Processando armazém {arm}...")
+            tasks = [_fetch_armazem(client, arm, idx) for idx, arm in enumerate(armazem, 1)]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                try:
-                    # Payload com apenas 1 armazém
-                    payload = {
-                        "filial": filial,
-                        "armazem": [{"codigo": arm}]
-                    }
-
-                    logger.info(f"📦 [PAYLOAD {idx}] {json.dumps(payload)}")
-
-                    api_start = time.time()
-                    response = await client.post(PROTHEUS_API_URL, json=payload, headers=headers)
-                    api_duration = time.time() - api_start
-                    response.raise_for_status()
-
-                    logger.info(f"⏱️ [API {idx}] Tempo de resposta armazém {arm}: {api_duration:.2f}s")
-
-                    # Tentar decodificar com diferentes encodings
-                    try:
-                        text_content = response.content.decode('utf-8')
-                        data = json.loads(text_content)
-                    except UnicodeDecodeError:
-                        logger.warning(f"⚠️ [API {idx}] Erro UTF-8, tentando ISO-8859-1...")
-                        text_content = response.content.decode('iso-8859-1')
-                        data = json.loads(text_content)
-
-                    produtos_armazem = data.get("produtos", [])
-                    logger.info(f"✅ [API {idx}] Armazém {arm}: {len(produtos_armazem)} produtos recebidos")
-
-                    if len(produtos_armazem) == 0:
-                        logger.warning(f"⚠️ [API {idx}] Armazém {arm} retornou 0 produtos")
-                        logger.warning(f"⚠️ [API {idx}] Resposta: {str(data)[:500]}")
-
-                    # Acumular produtos
-                    todos_produtos.extend(produtos_armazem)
-                    armazens_processados.append(arm)
-
-                except httpx.HTTPError as e:
-                    logger.error(f"❌ [API {idx}] Erro HTTP no armazém {arm}: {str(e)}")
-                    if hasattr(e, 'response') and e.response is not None:
-                        logger.error(f"❌ [API {idx}] Status: {e.response.status_code}, Body: {e.response.text[:500]}")
-                    armazens_com_erro.append(arm)
-
-                except json.JSONDecodeError as e:
-                    logger.error(f"❌ [API {idx}] Erro JSON no armazém {arm}: {str(e)}")
-                    armazens_com_erro.append(arm)
-
-                except Exception as e:
-                    logger.error(f"❌ [API {idx}] Erro inesperado no armazém {arm}: {str(e)}")
-                    armazens_com_erro.append(arm)
+        for idx, result in enumerate(results):
+            arm = armazem[idx]
+            if isinstance(result, Exception):
+                logger.error(f"❌ [API] Erro no armazém {arm}: {str(result)}")
+                armazens_com_erro.append(arm)
+            else:
+                arm_code, produtos_armazem = result
+                todos_produtos.extend(produtos_armazem)
+                armazens_processados.append(arm_code)
 
         total_produtos = len(todos_produtos)
         logger.info(f"📊 [RESUMO API] Total de {total_produtos} produtos de {len(armazens_processados)} armazéns (erros: {len(armazens_com_erro)})")
@@ -269,6 +259,34 @@ async def import_produtos_protheus(
 
         logger.info(f"💾 [BATCH UPSERT] Processando {len(sb8_batch)} lotes SB8010...")
         stats["sb8_inserted"] = await _batch_upsert(db, "sb8010", sb8_batch)
+
+        # ✅ v2.19.55: Limpar lotes órfãos — zerar saldo de lotes que NÃO vieram na importação
+        # (produto existe, mas lote específico não veio mais da API Protheus)
+        lotes_importados = set()
+        for item in sb8_batch:
+            lotes_importados.add((item["b8_produto"], item["b8_local"], item["b8_lotectl"]))
+
+        if lotes_importados:
+            # Construir lista de chaves importadas para filtro
+            lotes_keys = [(p, l, lt) for p, l, lt in lotes_importados]
+            # Zerar saldo de lotes órfãos nos armazéns importados
+            orphan_query = text("""
+                UPDATE inventario.sb8010
+                SET b8_saldo = 0, updated_at = NOW()
+                WHERE b8_filial = :filial
+                  AND b8_local = ANY(:armazens)
+                  AND b8_saldo > 0
+                  AND updated_at < :import_start
+            """)
+            from datetime import datetime, timezone
+            import_start_ts = datetime.fromtimestamp(start_time, tz=timezone.utc)
+            result_orphan = db.execute(orphan_query, {
+                "filial": filial,
+                "armazens": armazem,
+                "import_start": import_start_ts
+            })
+            stats["sb8_orphan_zeroed"] = result_orphan.rowcount
+            logger.info(f"🧹 [SB8010] {stats['sb8_orphan_zeroed']} lotes órfãos zerados (não atualizados nesta importação)")
 
         logger.info(f"💾 [BATCH INSERT] Inserindo {len(sbz_batch)} indicadores SBZ010...")
         stats["sbz_inserted"] = await _batch_upsert(db, "sbz010", sbz_batch)

@@ -1793,10 +1793,15 @@ async def filter_products_for_inventory(
             query = query.filter(func.trim(SB1010.b1_cod) >= filters["produto_from"].strip())
         elif filters.get("produto_to"):
             query = query.filter(func.trim(SB1010.b1_cod) <= filters["produto_to"].strip())
-            
+
         if filters.get("descricao"):
-            query = query.filter(SB1010.b1_desc.ilike(f"%{filters['descricao']}%"))
-        
+            termo = filters["descricao"].strip()
+            # Buscar por código OU descrição
+            query = query.filter(or_(
+                func.trim(SB1010.b1_cod).ilike(f"%{termo}%"),
+                SB1010.b1_desc.ilike(f"%{termo}%")
+            ))
+
         # Aplicar filtros conforme documentação
         if filters.get("grupo_de") and filters.get("grupo_ate"):
             query = query.filter(and_(
@@ -1890,36 +1895,6 @@ async def filter_products_for_inventory(
         produtos_filtrados = []
         # ✅ CORREÇÃO: Usar dicionário para rastrear produtos únicos
         produtos_unicos = {}
-        
-        # ✅ PERFORMANCE: Coletar códigos de produtos com lote para batch query única
-        lot_product_codes = set()
-        for sb1_produto, sb2_estoque, sbz_localizacao, inventory_status, other_inventory_name in resultados:
-            if sb1_produto.b1_rastro == 'L':
-                lot_product_codes.add(sb1_produto.b1_cod.strip())
-
-        # ✅ PERFORMANCE: Uma única query para TODOS os saldos de lote (substitui N+1 queries)
-        lot_totals = {}
-        if lot_product_codes:
-            lot_codes_list = list(lot_product_codes)
-            # Processar em batches de 500 para evitar limite de parametros SQL
-            for i in range(0, len(lot_codes_list), 500):
-                batch = lot_codes_list[i:i+500]
-                placeholders = ','.join([f':code_{j}' for j in range(len(batch))])
-                params = {f'code_{j}': code for j, code in enumerate(batch)}
-                params['filial'] = store_code_suffix
-                params['warehouse'] = target_warehouse
-                lot_batch_query = text(f"""
-                    SELECT TRIM(b8.b8_produto) as produto, COALESCE(SUM(b8.b8_saldo), 0) as total
-                    FROM inventario.sb8010 b8
-                    WHERE TRIM(b8.b8_produto) IN ({placeholders})
-                      AND b8.b8_filial = :filial
-                      AND b8.b8_local = :warehouse
-                      AND b8.b8_saldo > 0
-                    GROUP BY TRIM(b8.b8_produto)
-                """)
-                for row in db.execute(lot_batch_query, params):
-                    lot_totals[row[0].strip()] = float(row[1])
-            logger.info(f"📊 Batch de lotes: {len(lot_totals)} produtos com saldo calculado em 1 query")
 
         for sb1_produto, sb2_estoque, sbz_localizacao, inventory_status, other_inventory_name in resultados:
             produto_codigo = sb1_produto.b1_cod.strip()
@@ -1931,17 +1906,9 @@ async def filter_products_for_inventory(
                     produtos_unicos[produto_codigo]["other_inventory_name"] = other_inventory_name
                     produtos_unicos[produto_codigo]["is_in_other_inventory"] = True
                 continue
-            # ✅ v2.10.1 - CORREÇÃO: Produtos com lote usam SUM(B8_SALDO), não B2_QATU
-            has_lot_control = (sb1_produto.b1_rastro == 'L')
-            calculated_quantity = 0.0
-
-            if has_lot_control:
-                # ✅ PERFORMANCE: Lookup no dict pré-calculado (era N+1 queries)
-                calculated_quantity = lot_totals.get(produto_codigo, 0.0)
-            else:
-                # Produto SEM controle de lote - usar B2_QATU
-                # ✅ v2.15.2: Com INNER JOIN, sb2_estoque sempre existe
-                calculated_quantity = float(sb2_estoque.b2_qatu) if sb2_estoque.b2_qatu else 0.0
+            # ✅ v2.19.55 - CORREÇÃO: Sempre usar B2_QATU como saldo de referência (é o saldo oficial do ERP Protheus)
+            # Para produtos com lote, SUM(B8_SALDO) pode divergir de B2_QATU por ajustes pendentes no ERP
+            calculated_quantity = float(sb2_estoque.b2_qatu) if sb2_estoque and sb2_estoque.b2_qatu else 0.0
 
             produto_data = {
                 # Dados do produto (SB1010)
@@ -2069,7 +2036,11 @@ async def filter_products_codes_only(
             query = query.filter(func.trim(SB1010.b1_cod) <= filters["produto_to"].strip())
 
         if filters.get("descricao"):
-            query = query.filter(SB1010.b1_desc.ilike(f"%{filters['descricao']}%"))
+            termo = filters["descricao"].strip()
+            query = query.filter(or_(
+                func.trim(SB1010.b1_cod).ilike(f"%{termo}%"),
+                SB1010.b1_desc.ilike(f"%{termo}%")
+            ))
 
         if filters.get("grupo_de"):
             query = query.filter(SB1010.b1_grupo >= filters["grupo_de"])
@@ -2343,75 +2314,41 @@ async def add_products_to_inventory(
                         skipped_count += 1
                         continue
 
-                    # ✅ v2.10.0.18 - CORREÇÃO CRÍTICA: Produtos com lote usam SUM(B8_SALDO), não B2_QATU
-                    has_lot_control = (product_sb1010.b1_rastro == 'L')
+                    # ✅ v2.19.55 - CORREÇÃO: Sempre usar B2_QATU como saldo esperado (é o saldo oficial do ERP Protheus)
+                    # Para produtos com lote, SUM(B8_SALDO) pode divergir de B2_QATU por ajustes pendentes no ERP
+                    # Os snapshots de lotes continuam sendo criados para detalhe na contagem
 
-                    # ✅ v2.19.36 - CORREÇÃO CRÍTICA: Buscar filial ANTES do if para usar em ambos os casos
+                    # Buscar filial
                     store = db.query(Store).filter(Store.id == inventory.store_id).first()
                     filial = store.code if store else '01'
 
-                    if has_lot_control:
-                        logger.info(f"🔍 Produto {product_code} tem controle de lote - calculando soma de SB8010.B8_SALDO")
+                    from sqlalchemy import text
+                    balance_query = text("""
+                        SELECT COALESCE(b2_qatu, 0) as b2_qatu
+                        FROM inventario.sb2010
+                        WHERE TRIM(b2_cod) = :product_code
+                          AND b2_filial = :filial
+                          AND b2_local = :warehouse
+                        LIMIT 1
+                    """)
 
-                        # Calcular soma dos lotes no armazém específico
-                        from sqlalchemy import text
-                        lot_sum_query = text("""
-                            SELECT COALESCE(SUM(b8.b8_saldo), 0) as total_lot_qty
-                            FROM inventario.sb8010 b8
-                            WHERE b8.b8_produto = :product_code
-                              AND b8.b8_filial = :filial
-                              AND b8.b8_local = :warehouse
-                              AND b8.b8_saldo > 0
-                        """)
+                    balance_result = safe_query(
+                        db,
+                        lambda: db.execute(balance_query, {
+                            'product_code': validator.safe_string(product_code).strip(),
+                            'filial': filial,
+                            'warehouse': validator.safe_string(warehouse_location)
+                        }).fetchone(),
+                        fallback=None,
+                        log_prefix=f"get_balance_{product_code}_{warehouse_location}"
+                    )
 
-                        lot_sum_result = safe_query(
-                            db,
-                            lambda: db.execute(lot_sum_query, {
-                                'product_code': product_code,
-                                'filial': filial,
-                                'warehouse': warehouse_location
-                            }).fetchone(),
-                            fallback=None,
-                            log_prefix=f"get_lot_sum_{product_code}_{warehouse_location}"
-                        )
+                    expected_qty = validator.safe_number(
+                        balance_result.b2_qatu if balance_result else 0.0,
+                        default=0.0
+                    )
 
-                        expected_qty = validator.safe_number(
-                            lot_sum_result.total_lot_qty if lot_sum_result else 0.0,
-                            default=0.0
-                        )
-
-                        logger.info(f"📦 Produto {product_code} com lote: SUM(B8_SALDO)={expected_qty}")
-                    else:
-                        # Produto SEM lote: usar B2_QATU da SB2010 do armazém específico
-                        # ✅ v2.19.36 - CORREÇÃO CRÍTICA: Adicionar filtro de FILIAL para evitar pegar saldo de outra filial
-                        from sqlalchemy import text
-                        balance_query = text("""
-                            SELECT COALESCE(b2_qatu, 0) as b2_qatu
-                            FROM inventario.sb2010
-                            WHERE TRIM(b2_cod) = :product_code
-                              AND b2_filial = :filial
-                              AND b2_local = :warehouse
-                            LIMIT 1
-                        """)
-
-                        balance_result = safe_query(
-                            db,
-                            lambda: db.execute(balance_query, {
-                                'product_code': validator.safe_string(product_code).strip(),
-                                'filial': filial,
-                                'warehouse': validator.safe_string(warehouse_location)
-                            }).fetchone(),
-                            fallback=None,
-                            log_prefix=f"get_balance_{product_code}_{warehouse_location}"
-                        )
-
-                        # Usar validação robusta para quantidade
-                        expected_qty = validator.safe_number(
-                            balance_result.b2_qatu if balance_result else 0.0,
-                            default=0.0
-                        )
-
-                        logger.info(f"📊 Produto {product_code} sem lote: B2_QATU={expected_qty} (filial={filial}, armazém={warehouse_location})")
+                    logger.info(f"📊 Produto {product_code}: B2_QATU={expected_qty} (filial={filial}, armazém={warehouse_location}, rastro={product_sb1010.b1_rastro})")
                 
                     # ✅ CRIAR ITEM NO INVENTÁRIO - TOTALMENTE DESACOPLADO E ROBUSTO
                     # Usar apenas product_code (chave natural), sem foreign keys
@@ -5380,7 +5317,24 @@ async def update_inventory(
             inventory.list_status = inventory_data["list_status"]
             logger.info(f"✅ Atualizando list_status de {inventory_id} para {inventory_data['list_status']}")
         if "status" in inventory_data:
-            inventory.status = inventory_data["status"]
+            new_status = inventory_data["status"]
+            # ✅ v2.19.55 - Validação: Não permitir COMPLETED/CLOSED sem contagens
+            if new_status in ('COMPLETED', 'CLOSED'):
+                from app.models.models import InventoryItem
+                total_items = db.query(InventoryItem).filter(
+                    InventoryItem.inventory_list_id == inventory.id
+                ).count()
+                counted_items = db.query(InventoryItem).filter(
+                    InventoryItem.inventory_list_id == inventory.id,
+                    InventoryItem.count_cycle_1.isnot(None)
+                ).count()
+                if total_items > 0 and counted_items == 0:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Nao e possivel finalizar/encerrar o inventario sem nenhuma contagem realizada. "
+                               f"Total de itens: {total_items}, Contados: 0."
+                    )
+            inventory.status = new_status
         if "reference_date" in inventory_data:
             inventory.reference_date = datetime.fromisoformat(inventory_data["reference_date"])
         if "count_deadline" in inventory_data:
@@ -9267,7 +9221,7 @@ async def get_product_details(product_id: str, db: Session = Depends(get_db)):
         
         # Buscar saldos em estoque (SB2010)
         try:
-            saldos_estoque = db.query(SB2010).filter(SB2010.b2_cod.like(f"{product_code}%")).limit(10).all()
+            saldos_estoque = db.query(SB2010).filter(SB2010.b2_cod.like(f"{product_code}%")).all()
         except:
             saldos_estoque = []
         
@@ -9275,7 +9229,7 @@ async def get_product_details(product_id: str, db: Session = Depends(get_db)):
         saldos_lote = []
         if product.b1_rastro == 'L':
             try:
-                saldos_lote = db.query(SB8010).filter(SB8010.b8_produto.like(f"{product_code}%")).limit(10).all()
+                saldos_lote = db.query(SB8010).filter(SB8010.b8_produto.like(f"{product_code}%")).all()
             except:
                 saldos_lote = []
         

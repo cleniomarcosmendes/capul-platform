@@ -55,23 +55,40 @@ export class MonitorService {
 
     const chamados = [...chamadosTecnico, ...chamadosColab];
 
-    // Atividades de projeto (minhas, ativas)
-    const atividades = await this.prisma.atividadeProjeto.findMany({
-      where: {
-        usuarioId: userId,
-        status: { in: ['PENDENTE', 'EM_ANDAMENTO'] },
-        projeto: { status: { in: ['EM_ANDAMENTO', 'PLANEJAMENTO'] } },
-      },
-      select: {
-        id: true,
-        titulo: true,
-        status: true,
-        createdAt: true,
-        projeto: { select: { id: true, numero: true, nome: true, status: true } },
-        fase: { select: { id: true, nome: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    // Atividades de projeto (minhas, ativas) + atividades com timer ativo do usuário
+    const atividadeSelect = {
+      id: true,
+      titulo: true,
+      status: true,
+      createdAt: true,
+      projeto: { select: { id: true, numero: true, nome: true, status: true } },
+      fase: { select: { id: true, nome: true } },
+    } as const;
+
+    const [atividadesMinhas, atividadesComTimer] = await Promise.all([
+      // Atividades onde sou responsável
+      this.prisma.atividadeProjeto.findMany({
+        where: {
+          usuarioId: userId,
+          status: { in: ['PENDENTE', 'EM_ANDAMENTO'] },
+          projeto: { status: { in: ['EM_ANDAMENTO', 'PLANEJAMENTO'] } },
+        },
+        select: atividadeSelect,
+        orderBy: { createdAt: 'desc' },
+      }),
+      // Atividades com timer ativo meu (mesmo que não seja responsável)
+      this.prisma.atividadeProjeto.findMany({
+        where: {
+          registrosTempo: { some: { usuarioId: userId, horaFim: null } },
+        },
+        select: atividadeSelect,
+      }),
+    ]);
+
+    // Unificar sem duplicatas
+    const atividadeIds = new Set(atividadesMinhas.map((a) => a.id));
+    const atividadesExtra = atividadesComTimer.filter((a) => !atividadeIds.has(a.id));
+    const atividades = [...atividadesMinhas, ...atividadesExtra];
 
     // Timers ativos do usuário (chamados + atividades)
     const [timersChamado, timersAtividade] = await Promise.all([
@@ -140,6 +157,40 @@ export class MonitorService {
     }
 
     return { encerrados: encerrados.length };
+  }
+
+  /**
+   * Encerra o timer ativo de um chamado específico
+   */
+  async encerrarTimerChamado(chamadoId: string, userId: string) {
+    const agora = new Date();
+    const reg = await this.prisma.registroTempoChamado.findFirst({
+      where: { chamadoId, usuarioId: userId, horaFim: null },
+    });
+    if (!reg) return { encerrado: false };
+    const duracao = Math.round((agora.getTime() - new Date(reg.horaInicio).getTime()) / 60000);
+    await this.prisma.registroTempoChamado.update({
+      where: { id: reg.id },
+      data: { horaFim: agora, duracaoMinutos: duracao },
+    });
+    return { encerrado: true };
+  }
+
+  /**
+   * Encerra o timer ativo de uma atividade específica
+   */
+  async encerrarTimerAtividade(atividadeId: string, userId: string) {
+    const agora = new Date();
+    const reg = await this.prisma.registroTempo.findFirst({
+      where: { atividadeId, usuarioId: userId, horaFim: null },
+    });
+    if (!reg) return { encerrado: false };
+    const duracao = Math.round((agora.getTime() - new Date(reg.horaInicio).getTime()) / 60000);
+    await this.prisma.registroTempo.update({
+      where: { id: reg.id },
+      data: { horaFim: agora, duracaoMinutos: duracao },
+    });
+    return { encerrado: true };
   }
 
   /**

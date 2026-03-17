@@ -318,13 +318,16 @@ export function AcompanhamentoPage() {
   }, [isManager, usuario]);
 
   useEffect(() => {
+    // Não-managers: aguardar tecnicoId ser setado com o ID do usuário antes de carregar
+    if (!isManager && !tecnicoId) return;
+
     setLoading(true);
     dashboardService
       .getAcompanhamento({ usuarioId: tecnicoId || undefined, dataInicio, dataFim })
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setLoading(false));
-  }, [tecnicoId, dataInicio, dataFim]);
+  }, [tecnicoId, dataInicio, dataFim, isManager]);
 
   const isMultiDay = dataInicio !== dataFim;
   const timelineByDate = useMemo(() => data ? groupByDate(data.timeline) : new Map(), [data]);

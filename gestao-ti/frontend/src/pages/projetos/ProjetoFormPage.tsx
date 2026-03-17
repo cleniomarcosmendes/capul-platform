@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { projetoService } from '../../services/projeto.service';
+import { chamadoService } from '../../services/chamado.service';
 import { softwareService } from '../../services/software.service';
 import { contratoService } from '../../services/contrato.service';
 import { coreService } from '../../services/core.service';
@@ -29,13 +30,16 @@ export function ProjetoFormPage() {
   const [loadingData, setLoadingData] = useState(isEdit);
   const [error, setError] = useState('');
 
-  const [nome, setNome] = useState('');
-  const [descricao, setDescricao] = useState('');
-  const [tipo, setTipo] = useState<TipoProjeto>('DESENVOLVIMENTO_INTERNO');
+  const chamadoId = searchParams.get('chamadoId') || '';
+  const chamadoNumero = searchParams.get('chamadoNumero') || '';
+
+  const [nome, setNome] = useState(searchParams.get('nome') || '');
+  const [descricao, setDescricao] = useState(searchParams.get('descricao') || '');
+  const [tipo, setTipo] = useState<TipoProjeto>((searchParams.get('tipo') as TipoProjeto) || 'DESENVOLVIMENTO_INTERNO');
   const [projetoPaiId, setProjetoPaiId] = useState(searchParams.get('projetoPaiId') || '');
-  const [softwareId, setSoftwareId] = useState('');
+  const [softwareId, setSoftwareId] = useState(searchParams.get('softwareId') || '');
   const [contratoId, setContratoId] = useState('');
-  const [responsavelId, setResponsavelId] = useState('');
+  const [responsavelId, setResponsavelId] = useState(searchParams.get('responsavelId') || '');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFimPrevista, setDataFimPrevista] = useState('');
   const [custoPrevisto, setCustoPrevisto] = useState('');
@@ -90,9 +94,18 @@ export function ProjetoFormPage() {
         const { projetoPaiId: _pai, ...updatePayload } = payload;
         await projetoService.atualizar(id, updatePayload);
       } else {
-        await projetoService.criar(payload);
+        const novoProjeto = await projetoService.criar(payload);
+        // Vincular chamado ao projeto se veio de um chamado
+        if (chamadoId && novoProjeto?.id) {
+          await chamadoService.vincularProjeto(chamadoId, novoProjeto.id).catch(() => {});
+        }
       }
-      navigate('/gestao-ti/projetos');
+      // Se veio de um chamado, voltar para o chamado
+      if (chamadoId) {
+        navigate(`/gestao-ti/chamados/${chamadoId}`);
+      } else {
+        navigate('/gestao-ti/projetos');
+      }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(msg || 'Erro ao salvar projeto');
@@ -121,6 +134,12 @@ export function ProjetoFormPage() {
           <ArrowLeft className="w-4 h-4" />
           Voltar
         </button>
+
+        {chamadoId && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg mb-4 text-sm">
+            Criando projeto a partir do chamado <strong>#{chamadoNumero}</strong>. O chamado sera vinculado automaticamente ao projeto.
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">

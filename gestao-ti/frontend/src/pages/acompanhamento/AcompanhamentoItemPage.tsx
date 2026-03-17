@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
+import { useAuth } from '../../contexts/AuthContext';
 import { dashboardService } from '../../services/dashboard.service';
 import {
   Clock, Ticket, FolderKanban, Users, Search, AlertTriangle, CheckCircle,
@@ -100,10 +101,12 @@ const slaLabels: Record<string, string> = {
 type Tab = 'chamado' | 'atividade';
 
 export function AcompanhamentoItemPage() {
+  const { gestaoTiRole, usuario } = useAuth();
   const [searchParams] = useSearchParams();
   const paramTipo = searchParams.get('tipo');
   const paramId = searchParams.get('id');
 
+  const isManager = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>(paramTipo === 'atividade' ? 'atividade' : 'chamado');
   const [autoLoaded, setAutoLoaded] = useState(false);
@@ -153,16 +156,17 @@ export function AcompanhamentoItemPage() {
     }
   }, [paramTipo, paramId, autoLoaded]);
 
-  // Buscar chamados
+  // Buscar chamados — não-managers veem apenas seus chamados
   const buscarChamados = useCallback(() => {
+    const tecnico = !isManager && usuario?.id ? usuario.id : (filterTecnico || undefined);
     dashboardService.buscarChamados({
       q: buscaChamado || undefined,
       status: filterStatus || undefined,
       prioridade: filterPrioridade || undefined,
       equipeId: filterEquipe || undefined,
-      tecnicoId: filterTecnico || undefined,
+      tecnicoId: tecnico,
     }).then(setChamadosResultado).catch(() => {});
-  }, [buscaChamado, filterStatus, filterPrioridade, filterEquipe, filterTecnico]);
+  }, [buscaChamado, filterStatus, filterPrioridade, filterEquipe, filterTecnico, isManager, usuario]);
 
   useEffect(() => {
     if (tab === 'chamado') buscarChamados();
@@ -219,22 +223,24 @@ export function AcompanhamentoItemPage() {
         {tab === 'chamado' && (
           <>
             {/* Busca + Filtros */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4">
-              <div className="flex flex-wrap gap-3 items-end">
-                <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Buscar (numero ou titulo)</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text" value={buscaChamado} onChange={(e) => setBuscaChamado(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && buscarChamados()}
-                      placeholder="Ex: 71 ou 'problema cupom'"
-                      className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500"
-                    />
-                    <button onClick={buscarChamados} className="px-3 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600">
-                      <Search className="w-4 h-4" />
-                    </button>
-                  </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+              {/* Busca */}
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Buscar (numero ou titulo)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text" value={buscaChamado} onChange={(e) => setBuscaChamado(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && buscarChamados()}
+                    placeholder="Ex: 71 ou 'problema cupom'"
+                    className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500"
+                  />
+                  <button onClick={buscarChamados} className="px-3 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600">
+                    <Search className="w-4 h-4" />
+                  </button>
                 </div>
+              </div>
+              {/* Filtros */}
+              <div className="flex flex-wrap gap-3 items-end">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Status</label>
                   <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
@@ -263,7 +269,7 @@ export function AcompanhamentoItemPage() {
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Equipe</label>
                   <select value={filterEquipe} onChange={(e) => setFilterEquipe(e.target.value)}
-                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-w-[140px]">
                     <option value="">Todas</option>
                     {equipes.map((e) => (
                       <option key={e.id} value={e.id}>{e.sigla} — {e.nome}</option>
@@ -273,7 +279,7 @@ export function AcompanhamentoItemPage() {
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Tecnico</label>
                   <select value={filterTecnico} onChange={(e) => setFilterTecnico(e.target.value)}
-                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-w-[140px]">
                     <option value="">Todos</option>
                     {tecnicos.map((t) => (
                       <option key={t.id} value={t.id}>{t.nome}</option>
@@ -284,22 +290,40 @@ export function AcompanhamentoItemPage() {
 
               {/* Resultados */}
               {chamadosResultado.length > 0 && !chamadoData && (
-                <div className="mt-3 min-h-[calc(100vh-300px)] max-h-[calc(100vh-300px)] overflow-y-auto space-y-1">
-                  {chamadosResultado.map((c) => (
-                    <button key={c.id} onClick={() => selecionarChamado(c.id)}
-                      className="w-full text-left flex items-center gap-3 p-2 rounded-lg hover:bg-orange-50 text-xs transition-colors">
-                      <span className="font-mono text-orange-600 font-bold w-10">#{c.numero}</span>
-                      <span className="flex-1 truncate text-slate-700">{c.titulo}</span>
-                      <span className="text-slate-400 w-24 truncate hidden md:inline">{c.equipeAtual.sigla}</span>
-                      <span className="text-slate-400 w-28 truncate hidden lg:inline">{c.tecnico?.nome || '—'}</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusColors[c.status] || ''}`}>
-                        {statusLabels[c.status] || c.status}
-                      </span>
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${prioridadeColors[c.prioridade] || ''}`}>
-                        {c.prioridade}
-                      </span>
-                    </button>
-                  ))}
+                <div className="mt-3 min-h-[calc(100vh-380px)] max-h-[calc(100vh-380px)] overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-slate-400 border-b border-slate-100">
+                        <th className="py-2 px-2 font-medium w-12">#</th>
+                        <th className="py-2 px-2 font-medium">Titulo</th>
+                        <th className="py-2 px-2 font-medium w-20">Equipe</th>
+                        <th className="py-2 px-2 font-medium w-32">Tecnico</th>
+                        <th className="py-2 px-2 font-medium w-24 text-center">Status</th>
+                        <th className="py-2 px-2 font-medium w-16 text-center">Prior.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {chamadosResultado.map((c) => (
+                        <tr key={c.id} onClick={() => selecionarChamado(c.id)}
+                          className="cursor-pointer hover:bg-orange-50 transition-colors border-b border-slate-50">
+                          <td className="py-2 px-2 font-mono text-orange-600 font-bold">#{c.numero}</td>
+                          <td className="py-2 px-2 text-slate-700 truncate max-w-0">{c.titulo}</td>
+                          <td className="py-2 px-2 text-slate-400">{c.equipeAtual.sigla}</td>
+                          <td className="py-2 px-2 text-slate-400 truncate">{c.tecnico?.nome || '—'}</td>
+                          <td className="py-2 px-2 text-center">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusColors[c.status] || ''}`}>
+                              {statusLabels[c.status] || c.status}
+                            </span>
+                          </td>
+                          <td className="py-2 px-2 text-center">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${prioridadeColors[c.prioridade] || ''}`}>
+                              {c.prioridade}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
@@ -533,20 +557,36 @@ export function AcompanhamentoItemPage() {
               </div>
 
               {atividadesResultado.length > 0 && !atividadeData && (
-                <div className="mt-3 min-h-[calc(100vh-300px)] max-h-[calc(100vh-300px)] overflow-y-auto space-y-1">
-                  {atividadesResultado.map((a) => (
-                    <button key={a.id} onClick={() => selecionarAtividade(a.id)}
-                      className="w-full text-left flex items-center gap-3 p-2 rounded-lg hover:bg-purple-50 text-xs transition-colors">
-                      <FolderKanban className="w-3.5 h-3.5 text-purple-500 flex-shrink-0" />
-                      <span className="flex-1 truncate text-slate-700">{a.titulo}</span>
-                      <span className="text-slate-400 w-32 truncate hidden md:inline">{a.projeto.nome}</span>
-                      <span className="text-slate-400 w-24 truncate hidden lg:inline">{a.usuario.nome}</span>
-                      {a.fase && <span className="text-slate-400 w-20 truncate hidden lg:inline">{a.fase.nome}</span>}
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusColors[a.status] || ''}`}>
-                        {statusLabels[a.status] || a.status}
-                      </span>
-                    </button>
-                  ))}
+                <div className="mt-3 min-h-[calc(100vh-380px)] max-h-[calc(100vh-380px)] overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-slate-400 border-b border-slate-100">
+                        <th className="py-2 px-2 font-medium w-6"></th>
+                        <th className="py-2 px-2 font-medium">Titulo</th>
+                        <th className="py-2 px-2 font-medium w-36">Projeto</th>
+                        <th className="py-2 px-2 font-medium w-28">Responsavel</th>
+                        <th className="py-2 px-2 font-medium w-20">Fase</th>
+                        <th className="py-2 px-2 font-medium w-20 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {atividadesResultado.map((a) => (
+                        <tr key={a.id} onClick={() => selecionarAtividade(a.id)}
+                          className="cursor-pointer hover:bg-purple-50 transition-colors border-b border-slate-50">
+                          <td className="py-2 px-2"><FolderKanban className="w-3.5 h-3.5 text-purple-500" /></td>
+                          <td className="py-2 px-2 text-slate-700 truncate max-w-0">{a.titulo}</td>
+                          <td className="py-2 px-2 text-slate-400 truncate">{a.projeto.nome}</td>
+                          <td className="py-2 px-2 text-slate-400 truncate">{a.usuario.nome}</td>
+                          <td className="py-2 px-2 text-slate-400 truncate">{a.fase?.nome || '—'}</td>
+                          <td className="py-2 px-2 text-center">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusColors[a.status] || ''}`}>
+                              {statusLabels[a.status] || a.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>

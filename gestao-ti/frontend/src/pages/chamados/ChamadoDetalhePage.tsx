@@ -250,7 +250,9 @@ export function ChamadoDetalhePage() {
               <p className="text-sm text-slate-600 whitespace-pre-wrap">{chamado.descricao}</p>
 
               {chamado.softwareNome && (
-                <p className="mt-3 text-xs text-slate-500">Software: <span className="text-slate-700">{chamado.softwareNome}</span></p>
+                <p className="mt-3 text-xs text-slate-500">Software: {chamado.software ? (
+                  <a href={`/gestao-ti/softwares/${chamado.software.id}`} target="_blank" rel="noopener noreferrer" className="text-capul-600 hover:underline">{chamado.softwareNome}</a>
+                ) : <span className="text-slate-700">{chamado.softwareNome}</span>}</p>
               )}
               {chamado.moduloNome && (
                 <p className="text-xs text-slate-500">Modulo: <span className="text-slate-700">{chamado.moduloNome}</span></p>
@@ -620,11 +622,28 @@ export function ChamadoDetalhePage() {
 
               {chamado.ativo && (
                 <InfoRow label="Ativo">
-                  <button onClick={() => navigate(`/gestao-ti/ativos/${chamado.ativo!.id}`)} className="text-xs text-teal-600 hover:text-teal-700 hover:underline">
+                  <a href={`/gestao-ti/ativos/${chamado.ativo!.id}`} target="_blank" rel="noopener noreferrer" className="text-xs text-teal-600 hover:text-teal-700 hover:underline">
                     [{chamado.ativo.tag}] {chamado.ativo.nome}
-                  </button>
+                  </a>
                 </InfoRow>
               )}
+
+              <InfoRow label="Projeto">
+                {chamado.projeto ? (
+                  <a href={`/gestao-ti/projetos/${chamado.projeto.id}`} target="_blank" rel="noopener noreferrer" className="text-xs text-capul-600 hover:underline">
+                    #{chamado.projeto.numero} — {chamado.projeto.nome}
+                  </a>
+                ) : isTecnico ? (
+                  <a
+                    href={`/gestao-ti/projetos/novo?chamadoId=${chamado.id}&chamadoNumero=${chamado.numero}&nome=${encodeURIComponent(`Chamado #${chamado.numero} - ${chamado.titulo}`)}&descricao=${encodeURIComponent(chamado.descricao || '')}&softwareId=${chamado.softwareId || ''}&responsavelId=${chamado.tecnicoId || ''}`}
+                    className="text-xs text-capul-600 hover:underline"
+                  >
+                    + Gerar Projeto
+                  </a>
+                ) : (
+                  <span className="text-xs text-slate-400">Nenhum</span>
+                )}
+              </InfoRow>
 
               {chamado.catalogoServico && (
                 <InfoRow label="Servico">
