@@ -329,17 +329,25 @@ async def compare_inventories(
             )
 
         # Validação 3: Ambos ENCERRADOS (status COMPLETED)
-        # ✅ CORREÇÃO v2.15.0: Usar inventory.status (COMPLETED) em vez de list_status (FINALIZED)
+        status_labels = {
+            "DRAFT": "Em Preparacao",
+            "IN_PROGRESS": "Em Andamento",
+            "COMPLETED": "Concluido",
+            "CLOSED": "Efetivado",
+        }
+
         if inventory_a.status.value != "COMPLETED":
+            label = status_labels.get(inventory_a.status.value, inventory_a.status.value)
             raise HTTPException(
                 status_code=400,
-                detail=f"Inventário A ({inventory_a.name}) não está encerrado. Status: {inventory_a.status.value}"
+                detail=f"Inventario A ({inventory_a.name}) nao esta encerrado. Status atual: {label}"
             )
 
         if inventory_b.status.value != "COMPLETED":
+            label = status_labels.get(inventory_b.status.value, inventory_b.status.value)
             raise HTTPException(
                 status_code=400,
-                detail=f"Inventário B ({inventory_b.name}) não está encerrado. Status: {inventory_b.status.value}"
+                detail=f"Inventario B ({inventory_b.name}) nao esta encerrado. Status atual: {label}"
             )
 
         logger.info(f"✅ Validações OK: {inventory_a.warehouse} vs {inventory_b.warehouse}")

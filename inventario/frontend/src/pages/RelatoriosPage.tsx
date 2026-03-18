@@ -924,6 +924,7 @@ function SubTabSimulacao({ inventarios }: { inventarios: InventoryList[] }) {
   const [invBId, setInvBId] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ComparisonResult | null>(null);
+  const [errorMsg, setErrorMsg] = useState('');
   const [compatibleInvs, setCompatibleInvs] = useState<InventoryList[]>([]);
   const [loadingCompat, setLoadingCompat] = useState(false);
 
@@ -945,11 +946,16 @@ function SubTabSimulacao({ inventarios }: { inventarios: InventoryList[] }) {
   }, [invAId, inventarios]);
 
   useEffect(() => {
-    if (!invAId || !invBId) { setResult(null); return; }
+    if (!invAId || !invBId) { setResult(null); setErrorMsg(''); return; }
     setLoading(true);
+    setErrorMsg('');
     comparisonService.comparar(invAId, invBId)
       .then(setResult)
-      .catch(() => setResult(null))
+      .catch((err) => {
+        setResult(null);
+        const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+        setErrorMsg(detail || 'Erro ao carregar comparacao.');
+      })
       .finally(() => setLoading(false));
   }, [invAId, invBId]);
 
@@ -1011,6 +1017,8 @@ function SubTabSimulacao({ inventarios }: { inventarios: InventoryList[] }) {
         </div>
       ) : loading ? (
         <TableSkeleton rows={6} cols={8} />
+      ) : errorMsg ? (
+        <ErrorState message={errorMsg} />
       ) : !result ? (
         <ErrorState message="Erro ao carregar comparacao." />
       ) : withTransfer.length === 0 ? (
