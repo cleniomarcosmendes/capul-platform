@@ -276,6 +276,16 @@ export interface HistoricoChamado {
   createdAt: string;
 }
 
+export interface HistoricoOrdemServico {
+  id: string;
+  tipo: string;
+  descricao: string | null;
+  osId: string;
+  usuarioId: string;
+  usuario: { id: string; nome: string; username: string };
+  createdAt: string;
+}
+
 export interface OrdemServico {
   id: string;
   numero: number;
@@ -288,6 +298,7 @@ export interface OrdemServico {
   solicitante: { id: string; nome: string; username: string };
   tecnicos: { id: string; tecnicoId: string; tecnico: { id: string; nome: string; username: string } }[];
   chamados: { id: string; chamadoId: string; chamado: { id: string; numero: number; titulo: string; status: string } }[];
+  historicos?: HistoricoOrdemServico[];
   dataAgendamento: string | null;
   dataInicio: string | null;
   dataFim: string | null;

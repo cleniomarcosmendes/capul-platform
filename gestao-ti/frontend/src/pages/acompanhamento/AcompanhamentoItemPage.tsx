@@ -9,6 +9,15 @@ import {
   Calendar, User, FileText,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+
+function fmtHoras(decimal: number): string {
+  const h = Math.floor(decimal);
+  const m = Math.round((decimal - h) * 60);
+  if (h === 0) return `${m}min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m.toString().padStart(2, '0')}min`;
+}
+
 import type {
   ChamadoBusca, AcompanhamentoChamadoData,
   AtividadeBusca, ProjetoResumo, AcompanhamentoAtividadeData,
@@ -379,7 +388,7 @@ export function AcompanhamentoItemPage() {
 
                 {/* KPIs */}
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                  <KpiCard label="Tempo Trabalhado" value={chamadoData.resumo.totalHorasTrabalhadas + 'h'}
+                  <KpiCard label="Tempo Trabalhado" value={fmtHoras(chamadoData.resumo.totalHorasTrabalhadas)}
                     sub={`${chamadoData.resumo.totalSessoes} sessoes`} icon={Clock} color="text-blue-600" />
                   <KpiCard label="Tecnicos Envolvidos" value={chamadoData.resumo.tecnicosEnvolvidos}
                     sub={chamadoData.resumo.tempoMedioPorSessaoFormatado + '/sessao'} icon={Users} color="text-purple-600" />
@@ -409,7 +418,7 @@ export function AcompanhamentoItemPage() {
                             <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
                               <div className="h-full bg-orange-400 rounded-full" style={{ width: `${pct}%` }} />
                             </div>
-                            <span className="text-xs text-slate-600 w-20 text-right">{t.horas}h ({t.sessoes}x)</span>
+                            <span className="text-xs text-slate-600 w-20 text-right">{fmtHoras(t.horas)} ({t.sessoes}x)</span>
                           </div>
                         );
                       })}
@@ -634,7 +643,7 @@ export function AcompanhamentoItemPage() {
 
                 {/* KPIs */}
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  <KpiCard label="Tempo Trabalhado" value={atividadeData.resumo.totalHorasTrabalhadas + 'h'}
+                  <KpiCard label="Tempo Trabalhado" value={fmtHoras(atividadeData.resumo.totalHorasTrabalhadas)}
                     sub={`${atividadeData.resumo.totalSessoes} sessoes`} icon={Clock} color="text-blue-600" />
                   <KpiCard label="Participantes" value={atividadeData.resumo.participantes}
                     sub={atividadeData.resumo.tempoMedioPorSessaoFormatado + '/sessao'} icon={Users} color="text-purple-600" />
@@ -663,7 +672,7 @@ export function AcompanhamentoItemPage() {
                             <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
                               <div className="h-full bg-purple-400 rounded-full" style={{ width: `${pct}%` }} />
                             </div>
-                            <span className="text-xs text-slate-600 w-20 text-right">{p.horas}h ({p.sessoes}x)</span>
+                            <span className="text-xs text-slate-600 w-20 text-right">{fmtHoras(p.horas)} ({p.sessoes}x)</span>
                           </div>
                         );
                       })}

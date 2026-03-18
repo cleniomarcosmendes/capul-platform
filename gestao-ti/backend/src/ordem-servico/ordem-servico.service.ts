@@ -1,9 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateOsDto } from './dto/create-os.dto.js';
 import { UpdateOsDto } from './dto/update-os.dto.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { StatusOS } from '@prisma/client';
+
+const ROLES_GESTORES = ['ADMIN', 'GESTOR_TI'];
 
 const osListInclude = {
   filial: { select: { id: true, codigo: true, nomeFantasia: true } },
@@ -14,6 +16,10 @@ const osListInclude = {
   },
   chamados: {
     include: { chamado: { select: { id: true, numero: true, titulo: true, status: true } } },
+    orderBy: { createdAt: 'asc' as const },
+  },
+  historicos: {
+    include: { usuario: { select: { id: true, nome: true, username: true } } },
     orderBy: { createdAt: 'asc' as const },
   },
   _count: { select: { chamados: true, tecnicos: true } },
@@ -61,7 +67,8 @@ export class OrdemServicoService {
     return os;
   }
 
-  async update(id: string, dto: UpdateOsDto) {
+  async update(id: string, dto: UpdateOsDto, userId?: string, role?: string) {
+    if (userId && role) await this.assertAlocadoOuGestor(id, userId, role);
     await this.findOne(id);
     return this.prisma.ordemServico.update({
       where: { id },
@@ -77,18 +84,22 @@ export class OrdemServicoService {
 
   // --- Workflow: Iniciar / Encerrar / Cancelar ---
 
-  async iniciar(id: string) {
+  async iniciar(id: string, userId?: string, role?: string) {
+    if (userId && role) await this.assertAlocadoOuGestor(id, userId, role);
     const os = await this.findOne(id);
     if (os.status !== 'ABERTA') throw new BadRequestException('Somente OS com status ABERTA pode ser iniciada');
     if (os.tecnicos.length === 0) throw new BadRequestException('Adicione pelo menos um tecnico antes de iniciar');
-    return this.prisma.ordemServico.update({
+    const updated = await this.prisma.ordemServico.update({
       where: { id },
       data: { status: 'EM_EXECUCAO', dataInicio: new Date() },
       include: osListInclude,
     });
+    if (userId) await this.registrarHistorico(id, 'INICIADA', 'Execucao iniciada', userId);
+    return updated;
   }
 
-  async encerrar(id: string, observacoes?: string) {
+  async encerrar(id: string, observacoes?: string, userId?: string, role?: string) {
+    if (userId && role) await this.assertAlocadoOuGestor(id, userId, role);
     const os = await this.findOne(id);
     if (os.status !== 'EM_EXECUCAO') throw new BadRequestException('Somente OS em execucao pode ser encerrada');
 
@@ -103,7 +114,7 @@ export class OrdemServicoService {
       );
     }
 
-    return this.prisma.ordemServico.update({
+    const updated = await this.prisma.ordemServico.update({
       where: { id },
       data: {
         status: 'CONCLUIDA',
@@ -112,21 +123,27 @@ export class OrdemServicoService {
       },
       include: osListInclude,
     });
+    if (userId) await this.registrarHistorico(id, 'CONCLUIDA', observacoes || 'OS concluida', userId);
+    return updated;
   }
 
-  async cancelar(id: string) {
+  async cancelar(id: string, userId?: string, role?: string) {
+    if (userId && role) await this.assertAlocadoOuGestor(id, userId, role);
     const os = await this.findOne(id);
     if (['CONCLUIDA', 'CANCELADA'].includes(os.status)) throw new BadRequestException('OS ja encerrada');
-    return this.prisma.ordemServico.update({
+    const updated = await this.prisma.ordemServico.update({
       where: { id },
       data: { status: 'CANCELADA', dataFim: os.status === 'EM_EXECUCAO' ? new Date() : undefined },
       include: osListInclude,
     });
+    if (userId) await this.registrarHistorico(id, 'CANCELADA', 'OS cancelada', userId);
+    return updated;
   }
 
   // --- Chamados N:N ---
 
-  async vincularChamado(osId: string, chamadoId: string) {
+  async vincularChamado(osId: string, chamadoId: string, userId?: string, role?: string) {
+    if (userId && role) await this.assertAlocadoOuGestor(osId, userId, role);
     await this.findOne(osId);
     const chamado = await this.prisma.chamado.findUnique({ where: { id: chamadoId } });
     if (!chamado) throw new BadRequestException('Chamado nao encontrado');
@@ -138,7 +155,8 @@ export class OrdemServicoService {
     return this.findOne(osId);
   }
 
-  async desvincularChamado(osId: string, chamadoId: string) {
+  async desvincularChamado(osId: string, chamadoId: string, userId?: string, role?: string) {
+    if (userId && role) await this.assertAlocadoOuGestor(osId, userId, role);
     const item = await this.prisma.osChamado.findUnique({
       where: { osId_chamadoId: { osId, chamadoId } },
     });
@@ -168,5 +186,45 @@ export class OrdemServicoService {
     if (!item) throw new NotFoundException('Vinculo nao encontrado');
     await this.prisma.osTecnico.delete({ where: { id: item.id } });
     return this.findOne(osId);
+  }
+
+  async comentar(osId: string, descricao: string, userId: string, role?: string) {
+    if (role) await this.assertAlocadoOuGestor(osId, userId, role);
+    await this.getOsOrFail(osId);
+    await this.prisma.historicoOrdemServico.create({
+      data: { tipo: 'COMENTARIO', descricao, osId, usuarioId: userId },
+    });
+    return this.findOne(osId);
+  }
+
+  async registrarHistorico(osId: string, tipo: string, descricao: string, userId: string) {
+    await this.prisma.historicoOrdemServico.create({
+      data: { tipo, descricao, osId, usuarioId: userId },
+    });
+  }
+
+  private async getOsOrFail(id: string) {
+    const os = await this.prisma.ordemServico.findUnique({ where: { id } });
+    if (!os) throw new NotFoundException('Ordem de servico nao encontrada');
+    return os;
+  }
+
+  /** Verifica se o usuario esta alocado na OS (tecnico ou solicitante) ou e gestor */
+  private async assertAlocadoOuGestor(osId: string, userId: string, role: string) {
+    if (ROLES_GESTORES.includes(role)) return; // gestores podem tudo
+
+    const os = await this.prisma.ordemServico.findUnique({
+      where: { id: osId },
+      select: {
+        solicitanteId: true,
+        tecnicos: { select: { tecnicoId: true } },
+      },
+    });
+    if (!os) throw new NotFoundException('Ordem de servico nao encontrada');
+
+    if (os.solicitanteId === userId) return;
+    if (os.tecnicos.some((t) => t.tecnicoId === userId)) return;
+
+    throw new ForbiddenException('Somente tecnicos alocados na OS, o solicitante ou gestores podem realizar esta acao');
   }
 }

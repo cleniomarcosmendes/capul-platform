@@ -472,15 +472,24 @@ function TabSimulacao() {
   const [error, setError] = useState('');
   const [expandedSim, setExpandedSim] = useState<Set<string>>(new Set());
 
-  // Load completed/closed inventories
+  // Load completed/closed inventories, excluindo já integrados
   useEffect(() => {
     (async () => {
       try {
-        const [completed, closed] = await Promise.all([
+        const [completed, closed, histRes] = await Promise.all([
           inventoryService.listar({ status: 'COMPLETED', size: '100' }),
           inventoryService.listar({ status: 'CLOSED', size: '100' }),
+          integrationService.historico(undefined, 200),
         ]);
-        const all = [...completed.items, ...closed.items];
+        // IDs de inventários já integrados (não cancelados)
+        const integratedIds = new Set<string>();
+        for (const h of histRes.history) {
+          if (h.status !== 'CANCELLED') {
+            if (h.inventory_a_id) integratedIds.add(h.inventory_a_id);
+            if (h.inventory_b_id) integratedIds.add(h.inventory_b_id);
+          }
+        }
+        const all = [...completed.items, ...closed.items].filter((inv) => !integratedIds.has(inv.id));
         all.sort((a, b) => a.name.localeCompare(b.name));
         setInventories(all);
       } catch {
@@ -963,14 +972,24 @@ function TabIntegracoes() {
   const [filterType, setFilterType] = useState<'ALL' | 'TRANSFER' | 'ADJUSTMENT'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Carregar apenas inventários que possuem integração com Protheus
   useEffect(() => {
     (async () => {
       try {
-        const [completed, closed] = await Promise.all([
+        const [completed, closed, histRes] = await Promise.all([
           inventoryService.listar({ status: 'COMPLETED', size: '100' }),
           inventoryService.listar({ status: 'CLOSED', size: '100' }),
+          integrationService.historico(undefined, 200),
         ]);
-        const all = [...completed.items, ...closed.items];
+        // IDs de inventários já integrados (não cancelados)
+        const integratedIds = new Set<string>();
+        for (const h of histRes.history) {
+          if (h.status !== 'CANCELLED') {
+            if (h.inventory_a_id) integratedIds.add(h.inventory_a_id);
+            if (h.inventory_b_id) integratedIds.add(h.inventory_b_id);
+          }
+        }
+        const all = [...completed.items, ...closed.items].filter((inv) => integratedIds.has(inv.id));
         all.sort((a, b) => b.name.localeCompare(a.name));
         setInventories(all);
         if (all.length > 0) setSelectedInvId(all[0].id);

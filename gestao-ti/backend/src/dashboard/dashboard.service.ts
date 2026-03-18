@@ -1108,9 +1108,17 @@ export class DashboardService {
     const totalMinutosAtividades = registrosAtividade.reduce((s, r) => s + (r.duracaoMinutos ?? 0), 0);
     const totalMinutosTrabalhados = totalMinutosChamados + totalMinutosAtividades;
 
-    // Horas disponíveis calculadas com base no horário configurado
-    const diasPeriodo = Math.max(1, Math.ceil((fim.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)));
-    const horasDisponiveis = +(diasPeriodo * horarioConfig.horasUteis).toFixed(1);
+    // Contar apenas dias uteis (seg-sex) no periodo
+    let diasUteis = 0;
+    const cursor = new Date(inicio);
+    while (cursor <= fim) {
+      const dow = cursor.getUTCDay();
+      if (dow !== 0 && dow !== 6) diasUteis++;
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    diasUteis = Math.max(1, diasUteis);
+
+    const horasDisponiveis = +(diasUteis * horarioConfig.horasUteis).toFixed(1);
     const taxaOcupacao = horasDisponiveis > 0
       ? Math.min(100, +((totalMinutosTrabalhados / (horasDisponiveis * 60)) * 100).toFixed(1))
       : 0;
@@ -1127,11 +1135,14 @@ export class DashboardService {
     // Análise de gaps (períodos ociosos > 15min, incluindo bordas do expediente)
     const gaps: { inicio: Date; fim: Date; duracaoMinutos: number; tipo: 'ocioso' | 'almoco' }[] = [];
 
-    // Helper para classificar gap como almoço ou ocioso (converte UTC para hora local)
+    // Helper para converter UTC <-> hora local
+    // tzOffset vem do frontend como getTimezoneOffset() → 180 para BRT (UTC-3)
+    // UTC→local: localHour = utcHour - (tzOffset / 60)
+    // local→UTC: utcHour = localHour + (tzOffset / 60)
     const tzMin = filters.tzOffset ?? 0;
+    const localToUtcH = (localH: number) => localH + (tzMin / 60);
+
     const classificarGap = (gapInicio: Date, gapFim: Date): 'ocioso' | 'almoco' => {
-      // Converter UTC para hora local: local = utc - (tzOffset / 60)
-      // getTimezoneOffset() retorna 180 para BRT, então: local = utc - 3
       const gapInicioLocal = gapInicio.getUTCHours() + gapInicio.getUTCMinutes() / 60 - (tzMin / 60);
       const gapFimLocal = gapFim.getUTCHours() + gapFim.getUTCMinutes() / 60 - (tzMin / 60);
       const isAlmoco = gapInicioLocal >= horarioConfig.inicioAlmoco - 0.25
@@ -1141,7 +1152,44 @@ export class DashboardService {
 
     const addGap = (gapInicio: Date, gapFim: Date) => {
       const gapMin = (gapFim.getTime() - gapInicio.getTime()) / 60000;
-      if (gapMin > 15) {
+      if (gapMin <= 15) return;
+
+      // Verificar se o gap cruza o horario de almoco — se sim, dividir em 3 partes
+      const gapInicioLocal = gapInicio.getUTCHours() + gapInicio.getUTCMinutes() / 60 - (tzMin / 60);
+      const gapFimLocal = gapFim.getUTCHours() + gapFim.getUTCMinutes() / 60 - (tzMin / 60);
+      const almocoIni = horarioConfig.inicioAlmoco;
+      const almocoFim = horarioConfig.fimAlmoco;
+
+      // Gap cruza o almoco se comeca antes do fim do almoco E termina depois do inicio do almoco
+      if (gapInicioLocal < almocoFim && gapFimLocal > almocoIni) {
+        // Parte 1: antes do almoco (ocioso)
+        if (gapInicioLocal < almocoIni) {
+          const preAlmocoFim = new Date(gapInicio.getTime() + (almocoIni - gapInicioLocal) * 3600000);
+          const preMin = (preAlmocoFim.getTime() - gapInicio.getTime()) / 60000;
+          if (preMin > 15) {
+            gaps.push({ inicio: gapInicio, fim: preAlmocoFim, duracaoMinutos: Math.round(preMin), tipo: 'ocioso' });
+          }
+        }
+
+        // Parte 2: almoco
+        const almocoInicio = new Date(gapInicio.getTime() + Math.max(0, almocoIni - gapInicioLocal) * 3600000);
+        const almocoFimDate = new Date(gapInicio.getTime() + (almocoFim - gapInicioLocal) * 3600000);
+        const almocoRealFim = almocoFimDate.getTime() > gapFim.getTime() ? gapFim : almocoFimDate;
+        const almocoMin = (almocoRealFim.getTime() - almocoInicio.getTime()) / 60000;
+        if (almocoMin > 5) {
+          gaps.push({ inicio: almocoInicio, fim: almocoRealFim, duracaoMinutos: Math.round(almocoMin), tipo: 'almoco' });
+        }
+
+        // Parte 3: depois do almoco (ocioso)
+        if (gapFimLocal > almocoFim) {
+          const posAlmocoIni = almocoFimDate.getTime() < gapInicio.getTime() ? gapInicio : almocoFimDate;
+          const posMin = (gapFim.getTime() - posAlmocoIni.getTime()) / 60000;
+          if (posMin > 15) {
+            gaps.push({ inicio: posAlmocoIni, fim: gapFim, duracaoMinutos: Math.round(posMin), tipo: 'ocioso' });
+          }
+        }
+      } else {
+        // Gap nao cruza almoco — classificar normalmente
         gaps.push({
           inicio: gapInicio,
           fim: gapFim,
@@ -1160,26 +1208,43 @@ export class DashboardService {
       registrosPorDia.set(diaKey, arr);
     }
 
+    // Adicionar dias uteis sem nenhum registro como gaps completos
+    const cursorDia = new Date(inicio);
+    while (cursorDia <= fim) {
+      const dow = cursorDia.getUTCDay();
+      const diaStr = cursorDia.toISOString().slice(0, 10);
+      if (dow !== 0 && dow !== 6 && !registrosPorDia.has(diaStr)) {
+        const diaD = new Date(diaStr + 'T00:00:00.000Z');
+        const iniU = localToUtcH(horarioConfig.inicioExpediente);
+        const fimU = localToUtcH(horarioConfig.fimExpediente);
+        const iniExp = new Date(diaD);
+        iniExp.setUTCHours(Math.floor(iniU), Math.round((iniU % 1) * 60), 0, 0);
+        const fimExp = new Date(diaD);
+        fimExp.setUTCHours(Math.floor(fimU), Math.round((fimU % 1) * 60), 0, 0);
+        addGap(iniExp, fimExp);
+      }
+      cursorDia.setUTCDate(cursorDia.getUTCDate() + 1);
+    }
+
     for (const [diaKey, registrosDia] of registrosPorDia) {
+      // Ignorar fins de semana para calculo de gaps
+      const diaDow = new Date(diaKey + 'T00:00:00.000Z').getUTCDay();
+      if (diaDow === 0 || diaDow === 6) continue;
+
       const registrosFinalizados = registrosDia.filter((r) => r.horaFim).sort(
         (a, b) => a.horaInicio.getTime() - b.horaInicio.getTime(),
       );
       if (registrosFinalizados.length === 0) continue;
 
-      // Construir início e fim do expediente para este dia, ajustando timezone
-      // getTimezoneOffset() retorna 180 para BRT (UTC-3)
-      // Converter hora local para UTC: utc = local + (tzOffset / 60)
-      // Ex: 08:00 BRT com offset 180 → 08 + 3 = 11:00 UTC
-      const tzHours = (filters.tzOffset ?? 0) / 60;
+      // Construir início e fim do expediente para este dia, convertendo local→UTC
+      // localToUtcH: ex. 08:00 BRT com offset 180 → 08 + 3 = 11:00 UTC
       const diaDate = new Date(diaKey + 'T00:00:00.000Z');
-      const iniExpH = Math.floor(horarioConfig.inicioExpediente + tzHours);
-      const iniExpM = Math.round((horarioConfig.inicioExpediente - Math.floor(horarioConfig.inicioExpediente)) * 60);
-      const fimExpH = Math.floor(horarioConfig.fimExpediente + tzHours);
-      const fimExpM = Math.round((horarioConfig.fimExpediente - Math.floor(horarioConfig.fimExpediente)) * 60);
+      const iniUtc = localToUtcH(horarioConfig.inicioExpediente);
+      const fimUtc = localToUtcH(horarioConfig.fimExpediente);
       const inicioExpedienteDia = new Date(diaDate);
-      inicioExpedienteDia.setUTCHours(iniExpH, iniExpM, 0, 0);
+      inicioExpedienteDia.setUTCHours(Math.floor(iniUtc), Math.round((iniUtc % 1) * 60), 0, 0);
       const fimExpedienteDia = new Date(diaDate);
-      fimExpedienteDia.setUTCHours(fimExpH, fimExpM, 0, 0);
+      fimExpedienteDia.setUTCHours(Math.floor(fimUtc), Math.round((fimUtc % 1) * 60), 0, 0);
 
       // Gap de borda: início do expediente → primeiro registro
       const primeiroInicio = registrosFinalizados[0].horaInicio;

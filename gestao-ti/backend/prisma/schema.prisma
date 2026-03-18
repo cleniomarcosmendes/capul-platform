@@ -44,6 +44,7 @@ model Usuario {
   historicosChamado    HistoricoChamado[]
   ordensServicoSolicit OrdemServico[]   @relation("OsSolicitante")
   osTecnicos           OsTecnico[]      @relation("OsTecnicoMembro")
+  historicosOs         HistoricoOrdemServico[] @relation("OsHistorico")
   historicosContrato   ContratoHistorico[]
   paradasRegistradas   RegistroParada[]  @relation("ParadaRegistradoPor")
   paradasFinalizadas   RegistroParada[]  @relation("ParadaFinalizadoPor")
@@ -435,8 +436,9 @@ model OrdemServico {
   solicitanteId String  @map("solicitante_id")
   solicitante   Usuario @relation("OsSolicitante", fields: [solicitanteId], references: [id])
 
-  chamados  OsChamado[]
-  tecnicos  OsTecnico[]
+  chamados    OsChamado[]
+  tecnicos    OsTecnico[]
+  historicos  HistoricoOrdemServico[]
 
   @@index([status])
   @@map("ordens_servico")
@@ -470,6 +472,23 @@ model OsTecnico {
 
   @@unique([osId, tecnicoId])
   @@map("os_tecnicos")
+  @@schema("gestao_ti")
+}
+
+model HistoricoOrdemServico {
+  id        String   @id @default(uuid())
+  tipo      String   // COMENTARIO, CRIACAO, INICIADA, CONCLUIDA, CANCELADA
+  descricao String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  osId      String       @map("os_id")
+  os        OrdemServico @relation(fields: [osId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("OsHistorico", fields: [usuarioId], references: [id])
+
+  @@index([osId])
+  @@map("historicos_ordem_servico")
   @@schema("gestao_ti")
 }
 

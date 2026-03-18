@@ -5,6 +5,7 @@ import { GestaoTiGuard } from '../common/guards/gestao-ti.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { CreateOsDto } from './dto/create-os.dto.js';
 import { UpdateOsDto } from './dto/update-os.dto.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
@@ -33,40 +34,46 @@ export class OrdemServicoController {
 
   @Patch(':id')
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
-  update(@Param('id') id: string, @Body() dto: UpdateOsDto) {
-    return this.service.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateOsDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
+    return this.service.update(id, dto, user.sub, role);
   }
 
   // Workflow
   @Post(':id/iniciar')
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
-  iniciar(@Param('id') id: string) {
-    return this.service.iniciar(id);
+  iniciar(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
+    return this.service.iniciar(id, user.sub, role);
   }
 
   @Post(':id/encerrar')
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
-  encerrar(@Param('id') id: string, @Body() body: { observacoes?: string }) {
-    return this.service.encerrar(id, body.observacoes);
+  encerrar(@Param('id') id: string, @Body() body: { observacoes?: string }, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
+    return this.service.encerrar(id, body.observacoes, user.sub, role);
   }
 
   @Post(':id/cancelar')
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
-  cancelar(@Param('id') id: string) {
-    return this.service.cancelar(id);
+  cancelar(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
+    return this.service.cancelar(id, user.sub, role);
+  }
+
+  // Comentarios
+  @Post(':id/comentar')
+  comentar(@Param('id') id: string, @Body() body: { descricao: string }, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
+    return this.service.comentar(id, body.descricao, user.sub, role);
   }
 
   // Chamados N:N
   @Post(':id/chamados')
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
-  vincularChamado(@Param('id') id: string, @Body() body: { chamadoId: string }) {
-    return this.service.vincularChamado(id, body.chamadoId);
+  vincularChamado(@Param('id') id: string, @Body() body: { chamadoId: string }, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
+    return this.service.vincularChamado(id, body.chamadoId, user.sub, role);
   }
 
   @Delete(':id/chamados/:chamadoId')
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
-  desvincularChamado(@Param('id') id: string, @Param('chamadoId') chamadoId: string) {
-    return this.service.desvincularChamado(id, chamadoId);
+  desvincularChamado(@Param('id') id: string, @Param('chamadoId') chamadoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
+    return this.service.desvincularChamado(id, chamadoId, user.sub, role);
   }
 
   // Tecnicos N:N

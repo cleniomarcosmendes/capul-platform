@@ -9,7 +9,7 @@ import { exportService } from '../../services/export.service';
 import { useToast } from '../../components/Toast';
 import {
   Plus, X, ArrowLeft, Play, Square, Ban, UserPlus, Link2, Unlink,
-  Clock, CheckCircle, Users, FileText, Download,
+  Clock, CheckCircle, Users, FileText, Download, MessageSquare, Send,
 } from 'lucide-react';
 import type { OrdemServico, StatusOS, UsuarioCore, Chamado, StatusChamado, FilialResumo } from '../../types';
 
@@ -395,6 +395,84 @@ export function OrdensServicoPage() {
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+
+          {/* Historico / Comentarios */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+            <h3 className="font-semibold text-slate-700 flex items-center gap-2 mb-4">
+              <MessageSquare className="w-4 h-4" /> Historico e Comentarios
+            </h3>
+
+            {/* Timeline */}
+            {(os.historicos ?? []).length > 0 && (
+              <div className="space-y-3 mb-4">
+                {(os.historicos ?? []).map((h) => {
+                  const isComentario = h.tipo === 'COMENTARIO';
+                  const tipoLabel: Record<string, string> = {
+                    COMENTARIO: 'Comentario',
+                    CRIACAO: 'OS criada',
+                    INICIADA: 'Execucao iniciada',
+                    CONCLUIDA: 'OS concluida',
+                    CANCELADA: 'OS cancelada',
+                  };
+                  return (
+                    <div key={h.id} className={`flex gap-3 ${isComentario ? '' : 'opacity-75'}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                        isComentario ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        <MessageSquare className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <span className="font-medium text-slate-700">{h.usuario.nome}</span>
+                          <span>{tipoLabel[h.tipo] || h.tipo}</span>
+                          <span>{new Date(h.createdAt).toLocaleString('pt-BR')}</span>
+                        </div>
+                        {h.descricao && isComentario && (
+                          <p className="text-sm text-slate-700 mt-1 whitespace-pre-wrap">{h.descricao}</p>
+                        )}
+                        {h.descricao && !isComentario && (
+                          <p className="text-xs text-slate-500 mt-0.5">{h.descricao}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {(os.historicos ?? []).length === 0 && (
+              <p className="text-sm text-slate-400 mb-4">Nenhum comentario registrado.</p>
+            )}
+
+            {/* Input comentario */}
+            {!['CONCLUIDA', 'CANCELADA'].includes(os.status) && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const input = e.currentTarget.querySelector('input') as HTMLInputElement;
+                  const texto = input.value.trim();
+                  if (!texto) return;
+                  try {
+                    const updated = await ordemServicoService.comentar(os.id, texto);
+                    setOsDetalhe(updated);
+                    input.value = '';
+                  } catch {
+                    toast('error', 'Erro ao adicionar comentario');
+                  }
+                }}
+                className="flex gap-2"
+              >
+                <input
+                  type="text"
+                  placeholder="Adicionar comentario..."
+                  className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+                <button type="submit" className="flex items-center gap-1 bg-teal-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-teal-700">
+                  <Send className="w-4 h-4" /> Enviar
+                </button>
+              </form>
             )}
           </div>
 

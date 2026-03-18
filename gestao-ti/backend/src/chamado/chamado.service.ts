@@ -106,7 +106,7 @@ export class ChamadoService {
         const filialIds = userFiliais.map((f) => f.filial_id);
         if (filialIds.length > 0) {
           where.filialId = { in: filialIds };
-        } else {
+        } else if (user.filialId) {
           // Fallback: filial do JWT
           where.filialId = user.filialId;
         }

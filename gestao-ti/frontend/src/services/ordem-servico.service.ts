@@ -77,6 +77,12 @@ export const ordemServicoService = {
     await gestaoApi.delete(`/ordens-servico/${osId}/tecnicos/${tecnicoId}`);
   },
 
+  // Comentarios
+  async comentar(osId: string, descricao: string): Promise<OrdemServico> {
+    const { data } = await gestaoApi.post(`/ordens-servico/${osId}/comentar`, { descricao });
+    return data;
+  },
+
   async downloadRelatorio(osId: string, osNumero: number): Promise<void> {
     const { data } = await gestaoApi.get(`/export/ordem-servico/${osId}/relatorio`, {
       responseType: 'blob',

@@ -13,6 +13,15 @@ import type { AcompanhamentoData, TecnicoResumo, TimelineItem } from '../../type
 const DEFAULT_HORA_INICIO = 7;
 const DEFAULT_HORA_FIM = 20;
 
+/** Formata horas decimais para "Xh YYmin" (ex: 8.8 → "8h 48min") */
+function fmtHoras(decimal: number): string {
+  const h = Math.floor(decimal);
+  const m = Math.round((decimal - h) * 60);
+  if (h === 0) return `${m}min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m.toString().padStart(2, '0')}min`;
+}
+
 function formatMin(min: number): string {
   if (min < 1) return '< 1m';
   const h = Math.floor(min / 60);
@@ -418,8 +427,8 @@ export function AcompanhamentoPage() {
           <>
             {/* KPI Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              <KpiCard label="Horas Trabalhadas" value={data.resumo.totalHorasTrabalhadas}
-                sub={`de ${data.resumo.horasDisponiveis}h uteis (${data.horario.horasUteis}h/dia)`}
+              <KpiCard label="Horas Trabalhadas" value={fmtHoras(data.resumo.totalHorasTrabalhadas)}
+                sub={`de ${fmtHoras(data.resumo.horasDisponiveis)} uteis (${fmtHoras(data.horario.horasUteis)}/dia)`}
                 icon={Clock} color="text-blue-600" />
               <KpiCard label="Taxa Ocupacao" value={`${data.resumo.taxaOcupacao}%`}
                 sub={data.resumo.taxaOcupacao >= 80 ? 'Alta produtividade' : data.resumo.taxaOcupacao >= 50 ? 'Produtividade moderada' : 'Baixa ocupacao'}
@@ -657,7 +666,7 @@ export function AcompanhamentoPage() {
                             <td className="py-2 font-medium text-slate-700">{u.nome}</td>
                             <td className="py-2 text-right text-orange-600">{formatMin(u.minutosChamados)}</td>
                             <td className="py-2 text-right text-purple-600">{formatMin(u.minutosAtividades)}</td>
-                            <td className="py-2 text-right font-semibold">{u.totalHoras}h</td>
+                            <td className="py-2 text-right font-semibold">{fmtHoras(u.totalHoras)}</td>
                             <td className="py-2 text-right text-slate-500">{u.totalRegistros}</td>
                             <td className="py-2 pl-4">
                               <div className="flex items-center gap-2">
