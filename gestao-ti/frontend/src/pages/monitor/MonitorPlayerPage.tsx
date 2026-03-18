@@ -49,9 +49,17 @@ export function MonitorPlayerPage() {
 
   useEffect(() => {
     carregar();
-    // Polling a cada 30s para atualizar dados
-    const poll = setInterval(carregar, 30000);
-    return () => clearInterval(poll);
+    // Polling a cada 10s para atualizar dados
+    const poll = setInterval(carregar, 10000);
+    // Atualizar imediatamente quando usuario volta a aba
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') carregar();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(poll);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [carregar]);
 
   // Tick a cada segundo para atualizar timers visuais
