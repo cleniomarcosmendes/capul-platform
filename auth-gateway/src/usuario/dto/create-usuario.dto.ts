@@ -94,6 +94,11 @@ export class UpdateUsuarioDto {
   @IsOptional()
   @IsUUID()
   departamentoId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  filialIds?: string[];
 }
 
 export class UpdateStatusDto {

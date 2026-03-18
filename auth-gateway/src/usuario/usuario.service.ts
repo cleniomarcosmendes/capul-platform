@@ -115,12 +115,30 @@ export class UsuarioService {
 
   async update(id: string, dto: UpdateUsuarioDto) {
     await this.findOne(id);
+
+    const { filialIds, ...userData } = dto;
+
+    // Atualizar filiais vinculadas (delete + recreate)
+    if (filialIds !== undefined) {
+      await this.prisma.usuarioFilial.deleteMany({ where: { usuarioId: id } });
+      if (filialIds.length > 0) {
+        await this.prisma.usuarioFilial.createMany({
+          data: filialIds.map((filialId, i) => ({
+            usuarioId: id,
+            filialId,
+            isDefault: i === 0,
+          })),
+        });
+      }
+    }
+
     return this.prisma.usuario.update({
       where: { id },
-      data: dto,
+      data: userData,
       include: {
         filialPrincipal: true,
         departamento: true,
+        filiais: { include: { filial: true } },
         permissoes: { include: { modulo: true, roleModulo: true } },
       },
     });

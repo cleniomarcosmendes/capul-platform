@@ -33,7 +33,8 @@ export function ContagemSelectorPage() {
       navigate(`/inventario/contagem/${inventoryId}/mobile`);
       return;
     }
-    setShowModeModal(inventoryId);
+    // ADMIN/SUPERVISOR vai direto para desktop
+    navigate(`/inventario/contagem/${inventoryId}/desktop`);
   }
 
   function handleSelectMode(mode: 'desktop' | 'mobile') {

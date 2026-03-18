@@ -31,6 +31,7 @@ import {
   Send,
   ArrowLeftRight,
   ShieldCheck,
+  ScanLine,
 } from 'lucide-react';
 import { PageSkeleton } from '../../components/LoadingSkeleton';
 import { ErrorState } from '../../components/ErrorState';
@@ -651,6 +652,7 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
   inventoryStatus: string;
   onReload: () => void;
 }) {
+  const navigate = useNavigate();
   const toast = useToast();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [detalheLista, setDetalheLista] = useState<CountingList | null>(null);
@@ -968,6 +970,17 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
                             >
                               <Unlock className="w-3.5 h-3.5" />
                               Liberar
+                            </button>
+                          )}
+
+                          {(lista.list_status === 'LIBERADA' || lista.list_status === 'EM_CONTAGEM') && (
+                            <button
+                              onClick={() => navigate(`/inventario/contagem/${inventoryId}/desktop`)}
+                              title="Abrir tela de contagem"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-white bg-capul-600 rounded-md hover:bg-capul-700 transition-colors"
+                            >
+                              <ScanLine className="w-3.5 h-3.5" />
+                              Contar
                             </button>
                           )}
 

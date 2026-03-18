@@ -1113,7 +1113,9 @@
       "Bash(docker image:*)",
       "Bash(docker builder:*)",
       "Bash(git add:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(npm install:*)",
+      "Bash(openssl req:*)"
     ]
   }
 }

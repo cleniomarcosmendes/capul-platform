@@ -705,6 +705,51 @@ export interface Integration {
   items_count?: number;
 }
 
+export interface IntegrationHistory {
+  id: string;
+  integration_type: 'SIMPLE' | 'COMPARATIVE';
+  status: string;
+  version: number;
+  summary: {
+    total_transfers: number;
+    total_adjustments: number;
+    total_transfer_value: number;
+    total_adjustment_value: number;
+    warehouses?: string[];
+  };
+  created_at: string | null;
+  sent_at: string | null;
+  confirmed_at: string | null;
+  protheus_doc_transfers: string | null;
+  protheus_doc_inventory: string | null;
+  inventory_a_id: string | null;
+  inventory_b_id: string | null;
+  inventory_a_name: string;
+  warehouse_a: string;
+  inventory_b_name: string | null;
+  warehouse_b: string | null;
+  created_by_name: string;
+}
+
+export interface IntegrationDetailItem {
+  id: string;
+  integration_id: string;
+  item_type: 'TRANSFER' | 'ADJUSTMENT';
+  product_code: string;
+  product_description: string;
+  lot_number: string | null;
+  source_warehouse: string;
+  target_warehouse: string | null;
+  quantity: number;
+  expected_qty: number;
+  counted_qty: number;
+  adjusted_qty: number;
+  unit_cost: number;
+  total_value: number;
+  adjustment_type: string | null;
+  item_status: string;
+}
+
 export interface IntegrationSaveResult {
   success: boolean;
   action: string;

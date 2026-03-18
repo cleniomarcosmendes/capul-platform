@@ -37,6 +37,7 @@ export const usuarioService = {
     cargo?: string;
     filialPrincipalId?: string;
     departamentoId?: string;
+    filialIds?: string[];
   }): Promise<UsuarioDetalhe> {
     const { data } = await coreApi.patch(`/usuarios/${id}`, dto);
     return data;

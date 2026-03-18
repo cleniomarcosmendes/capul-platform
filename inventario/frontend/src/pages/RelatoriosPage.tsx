@@ -2,6 +2,8 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Header } from '../layouts/Header';
 import { inventoryService } from '../services/inventory.service';
+import { comparisonService } from '../services/comparison.service';
+import { integrationService } from '../services/integration.service';
 import {
   BarChart2,
   TrendingDown,
@@ -13,20 +15,22 @@ import {
   Layers,
   DollarSign,
   Package,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { ExportDropdown } from '../components/ExportDropdown';
 import { downloadCSV } from '../utils/csv';
 import { downloadExcel, printTable } from '../utils/export';
 import { PageSkeleton, TableSkeleton } from '../components/LoadingSkeleton';
 import { ErrorState } from '../components/ErrorState';
-import type { InventoryList, FinalReport, FinalReportItem } from '../types';
+import type { InventoryList, FinalReport, FinalReportItem, ComparisonResult, IntegrationHistory, IntegrationDetailItem } from '../types';
 
-type Tab = 'divergencias' | 'final' | 'lotes';
+type Tab = 'divergencias' | 'final' | 'lotes' | 'transferencias';
 
 const tabConfig: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: 'divergencias', label: 'Divergencias', icon: AlertTriangle },
   { key: 'final', label: 'Relatorio Final', icon: FileText },
   { key: 'lotes', label: 'Relatorio por Lote', icon: Layers },
+  { key: 'transferencias', label: 'Transferencias', icon: ArrowRightLeft },
 ];
 
 const formatCurrency = (v: number) =>
@@ -161,38 +165,42 @@ export function RelatoriosPage() {
               })}
             </div>
 
-            {/* Inventory selector */}
-            <div className="flex flex-wrap items-center gap-3">
-              <Filter className="w-4 h-4 text-slate-400" />
-              <select
-                value={selectedInv}
-                onChange={(e) => setSelectedInv(e.target.value)}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500"
-              >
-                <option value="">Selecione um inventario</option>
-                {inventarios.map((inv) => (
-                  <option key={inv.id} value={inv.id}>
-                    {inv.name} ({inv.warehouse}) — {{ DRAFT: 'Em Preparacao', IN_PROGRESS: 'Em Andamento', COMPLETED: 'Concluido', CLOSED: 'Efetivado' }[inv.status] ?? inv.status}
-                  </option>
-                ))}
-              </select>
-
-              {activeTab === 'divergencias' && (
+            {/* Inventory selector - oculto na aba transferencias */}
+            {activeTab !== 'transferencias' && (
+              <div className="flex flex-wrap items-center gap-3">
+                <Filter className="w-4 h-4 text-slate-400" />
                 <select
-                  value={tolerance}
-                  onChange={(e) => setTolerance(Number(e.target.value))}
+                  value={selectedInv}
+                  onChange={(e) => setSelectedInv(e.target.value)}
                   className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500"
                 >
-                  <option value={0}>Todas as divergencias</option>
-                  <option value={1}>Variacao {'>'} 1%</option>
-                  <option value={5}>Variacao {'>'} 5%</option>
-                  <option value={10}>Variacao {'>'} 10%</option>
-                  <option value={20}>Variacao {'>'} 20%</option>
+                  <option value="">Selecione um inventario</option>
+                  {inventarios.map((inv) => (
+                    <option key={inv.id} value={inv.id}>
+                      {inv.name} ({inv.warehouse}) — {{ DRAFT: 'Em Preparacao', IN_PROGRESS: 'Em Andamento', COMPLETED: 'Concluido', CLOSED: 'Efetivado' }[inv.status] ?? inv.status}
+                    </option>
+                  ))}
                 </select>
-              )}
-            </div>
 
-            {!selectedInv ? (
+                {activeTab === 'divergencias' && (
+                  <select
+                    value={tolerance}
+                    onChange={(e) => setTolerance(Number(e.target.value))}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500"
+                  >
+                    <option value={0}>Todas as divergencias</option>
+                    <option value={1}>Variacao {'>'} 1%</option>
+                    <option value={5}>Variacao {'>'} 5%</option>
+                    <option value={10}>Variacao {'>'} 10%</option>
+                    <option value={20}>Variacao {'>'} 20%</option>
+                  </select>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'transferencias' ? (
+              <TabTransferencias inventarios={inventarios} />
+            ) : !selectedInv ? (
               <div className="text-center py-12">
                 <BarChart2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <p className="text-slate-500">Selecione um inventario para ver os relatorios.</p>
@@ -570,6 +578,550 @@ function TabLotes({ items, loading, inventoryName }: { items: FinalReportItem[];
       </div>
 
       <p className="text-xs text-slate-400 text-right">{items.length} produto(s) com lote, {flatRows.length} linha(s) de lote</p>
+    </>
+  );
+}
+
+// ==================== TAB TRANSFERENCIAS ====================
+
+type TransfSubTab = 'integradas' | 'simulacao';
+
+function TabTransferencias({ inventarios }: { inventarios: InventoryList[] }) {
+  const [subTab, setSubTab] = useState<TransfSubTab>('integradas');
+  const [integratedInvIds, setIntegratedInvIds] = useState<Set<string>>(new Set());
+
+  // Carregar IDs de inventários já integrados (para filtrar na simulação)
+  useEffect(() => {
+    integrationService.historico(undefined, 200)
+      .then((res) => {
+        const ids = new Set<string>();
+        for (const h of res.history) {
+          if (h.status !== 'CANCELLED') {
+            if (h.inventory_a_id) ids.add(h.inventory_a_id);
+            if (h.inventory_b_id) ids.add(h.inventory_b_id);
+          }
+        }
+        setIntegratedInvIds(ids);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Inventários não integrados
+  const nonIntegratedInvs = useMemo(() =>
+    inventarios.filter((inv) => !integratedInvIds.has(inv.id)),
+  [inventarios, integratedInvIds]);
+
+  return (
+    <>
+      {/* Sub-tabs */}
+      <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
+        <button
+          onClick={() => setSubTab('integradas')}
+          className={`px-4 py-1.5 text-sm rounded-md transition-colors ${subTab === 'integradas' ? 'bg-white shadow text-capul-700 font-medium' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Integradas (Protheus)
+        </button>
+        <button
+          onClick={() => setSubTab('simulacao')}
+          className={`px-4 py-1.5 text-sm rounded-md transition-colors ${subTab === 'simulacao' ? 'bg-white shadow text-capul-700 font-medium' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Simulacao
+        </button>
+      </div>
+
+      {subTab === 'integradas' ? (
+        <SubTabIntegradas />
+      ) : (
+        <SubTabSimulacao inventarios={nonIntegratedInvs} />
+      )}
+    </>
+  );
+}
+
+// ---- Sub-tab: Integrações reais (Protheus) ----
+
+function SubTabIntegradas() {
+  const [history, setHistory] = useState<IntegrationHistory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<{ items: IntegrationDetailItem[] } | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
+  const [logs, setLogs] = useState<{ endpoint: string; status: string; detalhes: { codigo: string; lote: string; status: string; mensagem: string }[] }[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    integrationService.historico(undefined, 100)
+      .then((res) => setHistory(res.history))
+      .catch(() => setHistory([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Carregar detalhes ao selecionar
+  useEffect(() => {
+    if (!selectedId) { setDetail(null); return; }
+    setLoadingDetail(true);
+    integrationService.buscarPorId(selectedId)
+      .then((res) => {
+        // O endpoint retorna { integration: {...}, items: [...] }
+        const data = res as unknown as { items: IntegrationDetailItem[] };
+        setDetail(data);
+      })
+      .catch(() => setDetail(null))
+      .finally(() => setLoadingDetail(false));
+  }, [selectedId]);
+
+  // Filtrar apenas COMPARATIVE com transferencias
+  const comparativeHistory = history.filter((h) => h.integration_type === 'COMPARATIVE');
+  // Filtrar transferencias reais (qty > 0 e com lote — excluir linhas agregadas)
+  const transferItems = (detail?.items ?? []).filter((i) =>
+    i.item_type === 'TRANSFER' && i.quantity > 0 && i.lot_number
+  );
+
+  const statusLabel: Record<string, { text: string; color: string }> = {
+    DRAFT: { text: 'Rascunho', color: 'bg-slate-100 text-slate-600' },
+    SENT: { text: 'Enviada', color: 'bg-blue-100 text-blue-700' },
+    CONFIRMED: { text: 'Confirmada', color: 'bg-green-100 text-green-700' },
+    PARTIAL: { text: 'Parcial', color: 'bg-amber-100 text-amber-700' },
+    ERROR: { text: 'Erro', color: 'bg-red-100 text-red-700' },
+    CANCELLED: { text: 'Cancelada', color: 'bg-slate-100 text-slate-500' },
+  };
+
+  if (loading) return <TableSkeleton rows={4} cols={6} />;
+
+  if (comparativeHistory.length === 0) {
+    return (
+      <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200">
+        <ArrowRightLeft className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+        <p className="text-slate-600 text-sm font-medium">Nenhuma integracao comparativa realizada.</p>
+        <p className="text-slate-400 text-xs mt-1">As transferencias aparecerao aqui apos serem salvas na pagina de Envio ao Protheus.</p>
+      </div>
+    );
+  }
+
+  const selectedIntegration = comparativeHistory.find((h) => h.id === selectedId);
+
+  return (
+    <>
+      {/* Lista de integrações */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-200">
+              <th className="text-left py-2.5 px-3 font-medium text-slate-600">Inventarios</th>
+              <th className="text-left py-2.5 px-3 font-medium text-slate-600">Armazens</th>
+              <th className="text-center py-2.5 px-3 font-medium text-slate-600">Status</th>
+              <th className="text-right py-2.5 px-3 font-medium text-slate-600">Transf.</th>
+              <th className="text-right py-2.5 px-3 font-medium text-slate-600">Valor Transf.</th>
+              <th className="text-left py-2.5 px-3 font-medium text-slate-600">Data</th>
+              <th className="py-2.5 px-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {comparativeHistory.map((h) => {
+              const st = statusLabel[h.status] ?? { text: h.status, color: 'bg-slate-100 text-slate-600' };
+              const isSelected = selectedId === h.id;
+              return (
+                <tr key={h.id} className={isSelected ? 'bg-capul-50' : 'hover:bg-slate-50'}>
+                  <td className="py-2 px-3">
+                    <p className="text-xs text-slate-700 font-medium">{h.inventory_a_name}</p>
+                    {h.inventory_b_name && <p className="text-xs text-slate-500">{h.inventory_b_name}</p>}
+                  </td>
+                  <td className="py-2 px-3 text-xs text-slate-600">
+                    {h.warehouse_a} ↔ {h.warehouse_b ?? '—'}
+                  </td>
+                  <td className="py-2 px-3 text-center">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${st.color}`}>{st.text}</span>
+                  </td>
+                  <td className="py-2 px-3 text-right tabular-nums text-slate-700">{h.summary?.total_transfers ?? 0}</td>
+                  <td className="py-2 px-3 text-right tabular-nums text-slate-700">{formatCurrency(h.summary?.total_transfer_value ?? 0)}</td>
+                  <td className="py-2 px-3 text-xs text-slate-500">
+                    {h.sent_at ? new Date(h.sent_at).toLocaleDateString('pt-BR') : h.created_at ? new Date(h.created_at).toLocaleDateString('pt-BR') : '—'}
+                  </td>
+                  <td className="py-2 px-3">
+                    <button
+                      onClick={() => setSelectedId(isSelected ? null : h.id)}
+                      className="text-xs text-capul-600 hover:underline font-medium"
+                    >
+                      {isSelected ? 'Fechar' : 'Ver itens'}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Detalhes da integração selecionada */}
+      {selectedId && selectedIntegration && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-slate-700">
+              Transferencias — {selectedIntegration.warehouse_a} ↔ {selectedIntegration.warehouse_b}
+            </h4>
+            {transferItems.length > 0 && (
+              <ExportDropdown
+                onCSV={() => {
+                  const header = 'Codigo;Descricao;Lote;Origem;Destino;Quantidade;Custo Un.;Valor Total;Status\n';
+                  const rows = transferItems.map((i) =>
+                    `${i.product_code};${i.product_description};${i.lot_number ?? ''};${i.source_warehouse};${i.target_warehouse ?? ''};${i.quantity};${i.unit_cost};${i.total_value};${i.item_status}`
+                  );
+                  downloadCSV(`transferencias_protheus_${new Date().toISOString().slice(0, 10)}.csv`, header, rows);
+                }}
+                onExcel={() => {
+                  downloadExcel(`transferencias_protheus_${new Date().toISOString().slice(0, 10)}`, 'Transferencias',
+                    ['Codigo', 'Descricao', 'Lote', 'Origem', 'Destino', 'Quantidade', 'Custo Un.', 'Valor Total', 'Status'],
+                    transferItems.map((i) => [i.product_code, i.product_description, i.lot_number ?? '', i.source_warehouse, i.target_warehouse ?? '', i.quantity, i.unit_cost, i.total_value, i.item_status]),
+                  );
+                }}
+                onPrint={() => {
+                  printTable(`Transferencias Protheus — ${selectedIntegration.warehouse_a} ↔ ${selectedIntegration.warehouse_b}`,
+                    ['Codigo', 'Descricao', 'Lote', 'Origem', 'Destino', 'Quantidade', 'Custo Un.', 'Valor Total'],
+                    transferItems.map((i) => [i.product_code, i.product_description, i.lot_number ?? '', i.source_warehouse, i.target_warehouse ?? '', i.quantity.toFixed(2), i.unit_cost.toFixed(2), i.total_value.toFixed(2)]),
+                  );
+                }}
+              />
+            )}
+          </div>
+
+          {loadingDetail ? (
+            <TableSkeleton rows={5} cols={7} />
+          ) : transferItems.length === 0 ? (
+            <div className="text-center py-6 text-slate-400 text-sm">Nenhum item de transferencia nesta integracao.</div>
+          ) : (
+            <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="text-left py-2.5 px-3 font-medium text-slate-600">Codigo</th>
+                    <th className="text-left py-2.5 px-3 font-medium text-slate-600">Descricao</th>
+                    <th className="text-left py-2.5 px-3 font-medium text-slate-600">Lote</th>
+                    <th className="text-center py-2.5 px-3 font-medium text-blue-600">Origem</th>
+                    <th className="text-center py-2.5 px-3 font-medium text-purple-600">Destino</th>
+                    <th className="text-right py-2.5 px-3 font-medium text-slate-600">Quantidade</th>
+                    <th className="text-right py-2.5 px-3 font-medium text-slate-600">Custo Un.</th>
+                    <th className="text-right py-2.5 px-3 font-medium text-slate-600">Valor Total</th>
+                    <th className="text-center py-2.5 px-3 font-medium text-slate-600">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {transferItems.map((item, i) => {
+                    const itemSt = item.item_status === 'SENT' || item.item_status === 'CONFIRMED'
+                      ? { text: 'OK', color: 'bg-green-100 text-green-700' }
+                      : item.item_status === 'ERROR'
+                        ? { text: 'Erro', color: 'bg-red-100 text-red-700' }
+                        : { text: item.item_status, color: 'bg-slate-100 text-slate-600' };
+                    return (
+                      <tr key={i} className={`hover:bg-slate-50 ${item.item_status === 'ERROR' ? 'bg-red-50/30' : ''}`}>
+                        <td className="py-2 px-3 font-mono text-xs text-slate-700">{item.product_code}</td>
+                        <td className="py-2 px-3 text-slate-800 truncate max-w-[180px]">{item.product_description}</td>
+                        <td className="py-2 px-3 text-xs text-slate-500">{item.lot_number || '—'}</td>
+                        <td className="py-2 px-3 text-center text-xs font-medium text-blue-600">{item.source_warehouse}</td>
+                        <td className="py-2 px-3 text-center text-xs font-medium text-purple-600">{item.target_warehouse || '—'}</td>
+                        <td className="py-2 px-3 text-right font-semibold text-blue-600 tabular-nums">{item.quantity.toFixed(2)}</td>
+                        <td className="py-2 px-3 text-right text-slate-500 tabular-nums">{item.unit_cost.toFixed(2)}</td>
+                        <td className="py-2 px-3 text-right text-slate-700 tabular-nums">{formatCurrency(item.total_value)}</td>
+                        <td className="py-2 px-3 text-center">
+                          <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-medium ${itemSt.color}`}>{itemSt.text}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold">
+                    <td colSpan={5} className="py-2.5 px-3 text-slate-700">Total ({transferItems.length} itens)</td>
+                    <td className="py-2.5 px-3 text-right text-blue-700 tabular-nums">
+                      {transferItems.reduce((s, i) => s + i.quantity, 0).toFixed(2)}
+                    </td>
+                    <td className="py-2.5 px-3"></td>
+                    <td className="py-2.5 px-3 text-right text-slate-700 tabular-nums">
+                      {formatCurrency(transferItems.reduce((s, i) => s + i.total_value, 0))}
+                    </td>
+                    <td className="py-2.5 px-3"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
+          {/* Botão ver logs de envio */}
+          {selectedIntegration.status === 'PARTIAL' || selectedIntegration.status === 'ERROR' ? (
+            <div>
+              <button
+                onClick={() => {
+                  if (showLogs) { setShowLogs(false); return; }
+                  setLoadingLogs(true);
+                  setShowLogs(true);
+                  integrationService.buscarLogs(selectedId)
+                    .then((res) => {
+                      // Agrupar logs com detalhes de erro do response_payload
+                      const parsed = res.logs
+                        .filter((l) => l.endpoint !== '/INVENTARIO/historico')
+                        .map((l) => {
+                          const resp = l.response_payload as { detalhes?: { codigo: string; lote: string; status: string; mensagem: string }[] } | null;
+                          return {
+                            endpoint: l.endpoint,
+                            status: l.status,
+                            detalhes: (resp?.detalhes ?? []).filter((d) => d.status === 'ERRO'),
+                          };
+                        })
+                        .filter((l) => l.detalhes.length > 0);
+                      setLogs(parsed);
+                    })
+                    .catch(() => setLogs([]))
+                    .finally(() => setLoadingLogs(false));
+                }}
+                className="flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-700 font-medium"
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                {showLogs ? 'Ocultar erros do Protheus' : 'Ver erros do Protheus'}
+              </button>
+
+              {showLogs && (
+                <div className="mt-2">
+                  {loadingLogs ? (
+                    <p className="text-xs text-slate-400">Carregando logs...</p>
+                  ) : logs.length === 0 ? (
+                    <p className="text-xs text-green-600">Nenhum erro encontrado nos logs.</p>
+                  ) : (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-3">
+                      <p className="text-xs text-amber-700 font-medium">Erros retornados pelo Protheus:</p>
+                      {logs.map((log, li) => (
+                        <div key={li}>
+                          <p className="text-xs text-slate-600 font-medium mb-1">
+                            {log.endpoint === '/inventario/transferencia' ? 'Transferencia (SD3)' : 'Digitacao (SB7)'}
+                          </p>
+                          <div className="space-y-1">
+                            {log.detalhes.map((d, di) => (
+                              <div key={di} className="flex items-start gap-2 text-xs bg-white rounded px-2 py-1.5 border border-amber-100">
+                                <span className="font-mono text-slate-600 shrink-0">{d.codigo}</span>
+                                {d.lote && <span className="text-slate-400 shrink-0">Lote: {d.lote || 'vazio'}</span>}
+                                <span className="text-red-600">{d.mensagem.replace(/\r\n/g, ' ').replace(/\s+/g, ' ').trim()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+      )}
+    </>
+  );
+}
+
+// ---- Sub-tab: Simulação (comparação livre) ----
+
+function SubTabSimulacao({ inventarios }: { inventarios: InventoryList[] }) {
+  const [invAId, setInvAId] = useState('');
+  const [invBId, setInvBId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<ComparisonResult | null>(null);
+  const [compatibleInvs, setCompatibleInvs] = useState<InventoryList[]>([]);
+  const [loadingCompat, setLoadingCompat] = useState(false);
+
+  useEffect(() => {
+    setInvBId('');
+    setResult(null);
+    setCompatibleInvs([]);
+    if (!invAId) return;
+
+    setLoadingCompat(true);
+    comparisonService.listarDisponiveis(invAId)
+      .then((list) => {
+        setCompatibleInvs(list.length > 0 ? list : inventarios.filter((i) => i.id !== invAId));
+      })
+      .catch(() => {
+        setCompatibleInvs(inventarios.filter((i) => i.id !== invAId));
+      })
+      .finally(() => setLoadingCompat(false));
+  }, [invAId, inventarios]);
+
+  useEffect(() => {
+    if (!invAId || !invBId) { setResult(null); return; }
+    setLoading(true);
+    comparisonService.comparar(invAId, invBId)
+      .then(setResult)
+      .catch(() => setResult(null))
+      .finally(() => setLoading(false));
+  }, [invAId, invBId]);
+
+  const withTransfer = useMemo(() => {
+    if (!result) return [];
+    const all = [...(result.matches ?? []), ...(result.manual_review ?? [])];
+    return all.filter((i) => i.transferencia_logica?.quantidade_transferida);
+  }, [result]);
+
+  const totalEconomia = withTransfer.reduce((sum, i) => sum + (i.transferencia_logica?.economia_estimada ?? 0), 0);
+  const totalTransferido = withTransfer.reduce((sum, i) => sum + (i.transferencia_logica?.quantidade_transferida ?? 0), 0);
+
+  return (
+    <>
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+        <p className="text-xs text-amber-700">
+          <strong>Simulacao:</strong> esta visao permite comparar inventarios livremente. Para dados oficiais integrados com o Protheus, use a aba "Integradas".
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Inventario A</label>
+          <select
+            value={invAId}
+            onChange={(e) => setInvAId(e.target.value)}
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500"
+          >
+            <option value="">Selecione...</option>
+            {inventarios.map((inv) => (
+              <option key={inv.id} value={inv.id}>
+                {inv.name} ({inv.warehouse})
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Inventario B (comparar)</label>
+          <select
+            value={invBId}
+            onChange={(e) => setInvBId(e.target.value)}
+            disabled={!invAId || loadingCompat}
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500 disabled:opacity-50"
+          >
+            <option value="">{loadingCompat ? 'Carregando...' : 'Selecione...'}</option>
+            {compatibleInvs.map((inv) => (
+              <option key={inv.id} value={inv.id}>
+                {inv.name} ({inv.warehouse})
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {!invAId || !invBId ? (
+        <div className="text-center py-10">
+          <ArrowRightLeft className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+          <p className="text-slate-500 text-sm">Selecione dois inventarios para simular transferencias.</p>
+        </div>
+      ) : loading ? (
+        <TableSkeleton rows={6} cols={8} />
+      ) : !result ? (
+        <ErrorState message="Erro ao carregar comparacao." />
+      ) : withTransfer.length === 0 ? (
+        <div className="text-center py-8 bg-slate-50 rounded-xl border border-slate-200">
+          <CheckCircle2 className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+          <p className="text-slate-600 text-sm font-medium">Nenhuma transferencia logica identificada.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <p className="text-xs text-slate-500 mb-1">Produtos Transferidos</p>
+              <p className="text-xl font-bold text-slate-800">{withTransfer.length}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <p className="text-xs text-slate-500 mb-1">Qtd Total Transferida</p>
+              <p className="text-xl font-bold text-blue-600">{totalTransferido.toFixed(2)}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <p className="text-xs text-slate-500 mb-1">Zerados A / B</p>
+              <p className="text-xl font-bold text-green-600">{result.summary.zeroed_a} / {result.summary.zeroed_b}</p>
+            </div>
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+              <p className="text-xs text-green-600 mb-1">Economia Estimada</p>
+              <p className="text-xl font-bold text-green-700">{formatCurrency(totalEconomia)}</p>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <ExportDropdown
+              onCSV={() => {
+                const header = 'Codigo;Descricao;Origem;Saldo Antes;Saldo Depois;Destino;Saldo Antes;Saldo Depois;Qtd Transf.;Economia\n';
+                const rows = withTransfer.map((i) => {
+                  const t = i.transferencia_logica;
+                  return `${i.product_code};${i.description};${t.origem};${t.saldo_origem_antes};${t.saldo_origem_depois};${t.destino};${t.saldo_destino_antes};${t.saldo_destino_depois};${t.quantidade_transferida};${t.economia_estimada.toFixed(2)}`;
+                });
+                downloadCSV(`simulacao_transferencias_${new Date().toISOString().slice(0, 10)}.csv`, header, rows);
+              }}
+              onExcel={() => {
+                downloadExcel(`simulacao_transferencias_${new Date().toISOString().slice(0, 10)}`, 'Simulacao',
+                  ['Codigo', 'Descricao', 'Origem', 'Saldo Antes', 'Saldo Depois', 'Destino', 'Saldo Antes', 'Saldo Depois', 'Qtd Transf.', 'Economia'],
+                  withTransfer.map((i) => {
+                    const t = i.transferencia_logica;
+                    return [i.product_code, i.description, t.origem, t.saldo_origem_antes, t.saldo_origem_depois, t.destino, t.saldo_destino_antes, t.saldo_destino_depois, t.quantidade_transferida, t.economia_estimada];
+                  }),
+                );
+              }}
+              onPrint={() => {
+                printTable('Simulacao de Transferencias Logicas',
+                  ['Codigo', 'Descricao', 'Origem', 'Antes', 'Depois', 'Destino', 'Antes', 'Depois', 'Qtd Transf.', 'Economia'],
+                  withTransfer.map((i) => {
+                    const t = i.transferencia_logica;
+                    return [i.product_code, i.description, t.origem, t.saldo_origem_antes.toFixed(2), t.saldo_origem_depois.toFixed(2), t.destino, t.saldo_destino_antes.toFixed(2), t.saldo_destino_depois.toFixed(2), t.quantidade_transferida.toFixed(2), formatCurrency(t.economia_estimada)];
+                  }),
+                );
+              }}
+            />
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="text-left py-2.5 px-3 font-medium text-slate-600" rowSpan={2}>Codigo</th>
+                  <th className="text-left py-2.5 px-3 font-medium text-slate-600" rowSpan={2}>Descricao</th>
+                  <th className="py-2 px-3 font-medium text-blue-600 text-center border-b border-slate-200" colSpan={2}>Origem</th>
+                  <th className="py-2 px-3 font-medium text-purple-600 text-center border-b border-slate-200" colSpan={2}>Destino</th>
+                  <th className="text-right py-2.5 px-3 font-medium text-slate-600" rowSpan={2}>Qtd Transf.</th>
+                  <th className="text-right py-2.5 px-3 font-medium text-slate-600" rowSpan={2}>Economia</th>
+                </tr>
+                <tr className="bg-slate-50 text-xs">
+                  <th className="py-2 px-3 text-right text-slate-500">Antes</th>
+                  <th className="py-2 px-3 text-right text-slate-500">Depois</th>
+                  <th className="py-2 px-3 text-right text-slate-500">Antes</th>
+                  <th className="py-2 px-3 text-right text-slate-500">Depois</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {withTransfer.map((item, i) => {
+                  const t = item.transferencia_logica;
+                  return (
+                    <tr key={i} className="hover:bg-slate-50">
+                      <td className="py-2 px-3 font-mono text-xs text-slate-700">{item.product_code}</td>
+                      <td className="py-2 px-3 text-slate-800 truncate max-w-[180px]">{item.description}</td>
+                      <td className="py-2 px-3 text-right tabular-nums">
+                        <span className="text-xs text-blue-600 font-medium">{t.origem}</span>{' '}{t.saldo_origem_antes.toFixed(2)}
+                      </td>
+                      <td className="py-2 px-3 text-right tabular-nums">{t.saldo_origem_depois.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right tabular-nums">
+                        <span className="text-xs text-purple-600 font-medium">{t.destino}</span>{' '}{t.saldo_destino_antes.toFixed(2)}
+                      </td>
+                      <td className="py-2 px-3 text-right tabular-nums">{t.saldo_destino_depois.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right font-semibold text-blue-600 tabular-nums">{t.quantidade_transferida.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right text-green-600 tabular-nums">
+                        {t.economia_estimada > 0 ? formatCurrency(t.economia_estimada) : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold">
+                  <td colSpan={6} className="py-2.5 px-3 text-slate-700">Total ({withTransfer.length} produtos)</td>
+                  <td className="py-2.5 px-3 text-right text-blue-700 tabular-nums">{totalTransferido.toFixed(2)}</td>
+                  <td className="py-2.5 px-3 text-right text-green-700 tabular-nums">{formatCurrency(totalEconomia)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </>
+      )}
     </>
   );
 }

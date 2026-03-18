@@ -1519,7 +1519,9 @@ async def get_integration_history(
             ila.warehouse as warehouse_a,
             ilb.name as inventory_b_name,
             ilb.warehouse as warehouse_b,
-            u.username as created_by_name
+            u.username as created_by_name,
+            pi.inventory_a_id,
+            pi.inventory_b_id
         FROM inventario.protheus_integrations pi
         JOIN inventario.inventory_lists ila ON ila.id = pi.inventory_a_id
         LEFT JOIN inventario.inventory_lists ilb ON ilb.id = pi.inventory_b_id
@@ -1548,7 +1550,9 @@ async def get_integration_history(
             "warehouse_a": row[11],
             "inventory_b_name": row[12],
             "warehouse_b": row[13],
-            "created_by_name": row[14]
+            "created_by_name": row[14],
+            "inventory_a_id": str(row[15]) if row[15] else None,
+            "inventory_b_id": str(row[16]) if row[16] else None,
         })
 
     return {

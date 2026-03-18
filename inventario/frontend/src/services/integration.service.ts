@@ -1,6 +1,7 @@
 import { inventarioApi } from './api';
 import type {
   Integration,
+  IntegrationHistory,
   IntegrationPreviewResult,
   IntegrationSaveResult,
   SendResult,
@@ -88,6 +89,14 @@ export const integrationService = {
 
   async enviarTudo(integrationId: string): Promise<SendAllResult> {
     const { data } = await inventarioApi.post(`/integration/protheus/send/${integrationId}/enviar-tudo`);
+    return data;
+  },
+
+  async historico(status?: string, limit?: number): Promise<{ history: IntegrationHistory[]; total: number }> {
+    const params: Record<string, string> = {};
+    if (status) params.status = status;
+    if (limit) params.limit = String(limit);
+    const { data } = await inventarioApi.get('/integration/protheus/history', { params });
     return data;
   },
 

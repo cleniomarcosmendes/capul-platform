@@ -124,6 +124,7 @@ export function UsuarioFormPage() {
           cargo: cargo || undefined,
           filialPrincipalId: filialPrincipalId || undefined,
           departamentoId: departamentoId || undefined,
+          filialIds,
         });
 
         for (const perm of permsHabilitadas) {
@@ -242,7 +243,7 @@ export function UsuarioFormPage() {
                 </div>
               </div>
 
-              {!isEdicao && filiais.length > 0 && (
+              {filiais.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Filiais de Acesso</label>
                   <div className="space-y-2">
@@ -252,18 +253,6 @@ export function UsuarioFormPage() {
                         <span className="text-sm text-slate-700">{f.codigo} - {f.nomeFantasia}</span>
                       </label>
                     ))}
-                  </div>
-                </div>
-              )}
-
-              {isEdicao && filialIds.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Filiais Vinculadas</label>
-                  <div className="flex flex-wrap gap-2">
-                    {filialIds.map((fId) => {
-                      const f = filiais.find((fl) => fl.id === fId);
-                      return f ? <span key={fId} className="inline-flex px-3 py-1 rounded-full text-xs bg-slate-100 text-slate-700">{f.codigo} - {f.nomeFantasia}</span> : null;
-                    })}
                   </div>
                 </div>
               )}

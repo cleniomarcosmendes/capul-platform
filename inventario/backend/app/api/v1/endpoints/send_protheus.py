@@ -397,8 +397,20 @@ async def send_transferencias(
             lot = (row.get("lot_number") or "").strip()
             qty = float(row["quantity"])
 
-            # Pular AGGREGATE e qty=0 (não foram enviados)
-            if (not lot) or qty <= 0:
+            # ✅ v2.19.56: Marcar linhas AGGREGATE/sem lote como SENT (enviado por lote individual)
+            if not lot:
+                db.execute(text("""
+                    UPDATE inventario.protheus_integration_items
+                    SET item_status = 'SENT', error_detail = 'Linha agregada - enviado por lote individual'
+                    WHERE id = :id AND item_status != 'SENT'
+                """), {"id": str(row["id"])})
+                continue
+            if qty <= 0:
+                db.execute(text("""
+                    UPDATE inventario.protheus_integration_items
+                    SET item_status = 'SENT', error_detail = 'Quantidade zero - nao aplicavel'
+                    WHERE id = :id AND item_status != 'SENT'
+                """), {"id": str(row["id"])})
                 continue
 
             # Buscar detalhe correspondente pelo código + lote
@@ -554,9 +566,15 @@ async def send_digitacao(
                 logger.info(f"  ⏭️ DIGITACAO skip AGGREGATE sem lote: {code} arm={armazem} qty={qty}")
                 continue
 
-            # ✅ v2.19.55: Pular qty=0 (NO_CHANGE)
-            if qty == 0:
-                logger.info(f"  ⏭️ DIGITACAO skip qty=0: {code} arm={armazem}")
+            # ✅ v2.19.56: Produto com rastro sem lote valido — nao pode ser enviado
+            # (precisa corrigir na origem/Protheus primeiro)
+            if not lot and code not in produtos_com_lote:
+                # Produto SEM rastro: qty=0 é valido (zerar estoque)
+                pass
+
+            # Pular qty=0 APENAS para produtos com rastro (sem lote pra apontar)
+            if qty == 0 and code in produtos_com_lote:
+                logger.info(f"  ⏭️ DIGITACAO skip qty=0 produto com rastro: {code} arm={armazem}")
                 continue
 
             item_payload: Dict[str, Any] = {
@@ -600,8 +618,22 @@ async def send_digitacao(
                 code = row["product_code"]
                 qty = float(row.get("counted_qty") or row.get("quantity") or 0)
 
-                # Pular AGGREGATE e qty=0 (não foram enviados)
-                if (not lot and code in produtos_com_lote) or qty == 0:
+                # ✅ v2.19.56: AGGREGATE sem lote de produto rastreavel — marcar como SENT (nao precisa enviar)
+                if not lot and code in produtos_com_lote:
+                    db.execute(text("""
+                        UPDATE inventario.protheus_integration_items
+                        SET item_status = 'SENT', error_detail = 'Linha agregada - enviado por lote individual'
+                        WHERE id = :id AND item_status != 'SENT'
+                    """), {"id": str(row["id"])})
+                    continue
+
+                # Produto com rastro qty=0 — marcar como SENT (sem lote para apontar)
+                if qty == 0 and code in produtos_com_lote:
+                    db.execute(text("""
+                        UPDATE inventario.protheus_integration_items
+                        SET item_status = 'SENT', error_detail = 'Produto rastreavel sem lote - nao aplicavel'
+                        WHERE id = :id AND item_status != 'SENT'
+                    """), {"id": str(row["id"])})
                     continue
 
                 item_ok = False

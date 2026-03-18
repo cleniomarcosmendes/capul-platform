@@ -8,7 +8,7 @@ interface LotRow {
   lot_number: string;
   b8_lotefor: string;
   system_qty: number;
-  counted_qty: string; // string for input control
+  counted_qty: string;
   prefilled: boolean;
   prefilledValue: number;
 }
@@ -29,7 +29,6 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
   const [confirmEdit, setConfirmEdit] = useState<{ lotIndex: number; newValue: string } | null>(null);
   const firstInputRef = useRef<HTMLInputElement>(null);
 
-  // Mapa de contagens do ciclo anterior (para pre-fill em ciclo 2+)
   const previousCycleCounts = useMemo(() => {
     const map = new Map<string, number>();
     if (currentCycle <= 1) return map;
@@ -42,19 +41,16 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
     return map;
   }, [currentCycle, product.countings]);
 
-  // Load lot snapshot
   useEffect(() => {
     setLoading(true);
     setError('');
     inventoryService.buscarLotesSnapshot(product.id)
       .then((res) => {
         if (res.has_lots && res.lots.length > 0) {
-          // Contagens salvas NESTE ciclo (snapshot_lots com counted_qty)
           const savedLots = product.snapshot_lots || [];
           const savedMap = new Map(savedLots.map((l) => [l.lot_number, l.counted_qty]));
 
           setLots(res.lots.map((l) => {
-            // 1. Se ja tem contagem salva NESTE ciclo, usa ela (prioridade maxima)
             const savedQty = savedMap.get(l.lot_number);
             if (savedQty !== null && savedQty !== undefined) {
               return {
@@ -67,13 +63,11 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
               };
             }
 
-            // 2. Se ciclo 2+ e lote tem contagem do ciclo anterior
             if (currentCycle > 1 && previousCycleCounts.has(l.lot_number)) {
               const prevQty = previousCycleCounts.get(l.lot_number)!;
               const matched = Math.abs(prevQty - l.system_qty) <= 0.01;
 
               if (matched) {
-                // Lote CONFERIU no ciclo anterior: pre-preenche
                 return {
                   lot_number: l.lot_number,
                   b8_lotefor: l.b8_lotefor || '',
@@ -83,7 +77,6 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
                   prefilledValue: prevQty,
                 };
               }
-              // Lote DIVERGIU: vazio para recontagem
               return {
                 lot_number: l.lot_number,
                 b8_lotefor: l.b8_lotefor || '',
@@ -94,7 +87,6 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
               };
             }
 
-            // 3. Ciclo 1 ou lote sem contagem anterior: vazio
             return {
               lot_number: l.lot_number,
               b8_lotefor: l.b8_lotefor || '',
@@ -112,7 +104,6 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
       .finally(() => setLoading(false));
   }, [product.id, product.snapshot_lots, currentCycle, previousCycleCounts]);
 
-  // Focus first empty input when loaded (skip prefilled)
   useEffect(() => {
     if (!loading && lots.length > 0) {
       const firstEmptyIdx = lots.findIndex((l) => !l.prefilled && l.counted_qty === '');
@@ -128,10 +119,9 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
   const updateLotQty = useCallback((index: number, value: string) => {
     setLots((prev) => {
       const lot = prev[index];
-      // Se o lote foi pre-preenchido e o valor esta mudando
       if (lot.prefilled && value !== String(lot.prefilledValue)) {
         setConfirmEdit({ lotIndex: index, newValue: value });
-        return prev; // nao atualiza ainda, espera confirmacao
+        return prev;
       }
       return prev.map((l, i) => i === index ? { ...l, counted_qty: value } : l);
     });
@@ -144,7 +134,6 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
       i === lotIndex ? { ...l, counted_qty: newValue, prefilled: false } : l
     ));
     setConfirmEdit(null);
-    // Re-focus the input
     setTimeout(() => {
       const el = document.querySelector<HTMLInputElement>(`[data-lot-index="${lotIndex}"]`);
       el?.focus();
@@ -184,7 +173,6 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
   function handleKeyDown(e: React.KeyboardEvent, index: number) {
     if (e.key === 'Enter') {
       e.preventDefault();
-      // Move to next input or save
       if (index < lots.length - 1) {
         const nextInput = document.querySelector<HTMLInputElement>(`[data-lot-index="${index + 1}"]`);
         nextInput?.focus();
@@ -194,35 +182,46 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
     }
   }
 
+  function formatDiff(value: number | null) {
+    if (value === null) return '—';
+    if (value === 0) return '0.00';
+    return `${value > 0 ? '+' : ''}${value.toFixed(2)}`;
+  }
+
+  function diffColor(value: number | null) {
+    if (value === null) return 'text-slate-400';
+    if (value > 0) return 'text-green-600';
+    if (value < 0) return 'text-red-600';
+    return 'text-slate-400';
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
+      <div className="bg-white sm:rounded-xl rounded-t-xl shadow-xl w-full sm:max-w-2xl sm:mx-4 max-h-[95vh] sm:max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0">
-          <div>
-            <h3 className="text-base font-semibold text-slate-800">Contagem por Lote</h3>
-            <p className="text-xs text-slate-500 mt-0.5">
+        <div className="flex items-start justify-between px-4 py-3 border-b border-slate-200 shrink-0">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-semibold text-slate-800">Contagem por Lote</h3>
+            <p className="text-xs text-slate-500 mt-0.5 truncate">
               <span className="font-mono">{product.product_code}</span>
               {' — '}
               {product.product_description || product.product_name}
-              {' — '}
-              <span className="font-medium">{currentCycle}o Ciclo</span>
             </p>
+            <p className="text-xs text-capul-700 font-medium">{currentCycle}o Ciclo</p>
             {currentCycle > 1 && prefilledCount > 0 && (
               <p className="flex items-center gap-1 text-[11px] text-blue-600 mt-1">
-                <Info className="w-3 h-3" />
-                {prefilledCount} lote(s) conferido(s) no {currentCycle - 1}o ciclo foram pre-preenchidos.
-                Apenas lotes divergentes precisam ser recontados.
+                <Info className="w-3 h-3 shrink-0" />
+                {prefilledCount} lote(s) conferido(s) no {currentCycle - 1}o ciclo pre-preenchido(s).
               </p>
             )}
           </div>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600">
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 shrink-0 ml-2">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-5">
+        <div className="flex-1 overflow-auto px-4 py-3">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-6 h-6 text-capul-500 animate-spin" />
@@ -235,34 +234,47 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
             </div>
           ) : (
             <>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="text-left py-2 px-3 font-medium text-slate-600">Lote</th>
-                    <th className="text-left py-2 px-3 font-medium text-slate-500 text-xs">Lote Forn.</th>
-                    <th className="text-right py-2 px-3 font-medium text-slate-600">Saldo Sistema</th>
-                    <th className="text-right py-2 px-3 font-medium text-capul-700">Qtd Contada</th>
-                    <th className="text-right py-2 px-3 font-medium text-slate-600 w-20">Dif.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lots.map((lot, idx) => {
-                    const counted = parseFloat(lot.counted_qty);
-                    const lotDiff = !isNaN(counted) ? counted - lot.system_qty : null;
-                    return (
-                      <tr key={lot.lot_number} className={`border-b border-slate-100 ${lot.prefilled ? 'bg-green-50/50' : ''}`}>
-                        <td className="py-2 px-3 font-mono text-xs text-slate-700">
-                          <span>{lot.lot_number}</span>
-                          {lot.prefilled && (
-                            <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
-                              <CheckCircle2 className="w-2.5 h-2.5" />
-                              Conf. C{currentCycle - 1}
-                            </span>
+              {/* Cards mobile */}
+              <div className="space-y-3">
+                {lots.map((lot, idx) => {
+                  const counted = parseFloat(lot.counted_qty);
+                  const lotDiff = !isNaN(counted) ? counted - lot.system_qty : null;
+                  return (
+                    <div
+                      key={lot.lot_number}
+                      className={`border rounded-lg p-3 ${
+                        lot.prefilled ? 'border-green-300 bg-green-50/50' : 'border-slate-200'
+                      }`}
+                    >
+                      {/* Lote info */}
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-mono text-slate-700 truncate">{lot.lot_number}</span>
+                            {lot.prefilled && (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full shrink-0">
+                                <CheckCircle2 className="w-2.5 h-2.5" />
+                                Conf. C{currentCycle - 1}
+                              </span>
+                            )}
+                          </div>
+                          {lot.b8_lotefor && (
+                            <span className="text-[11px] text-slate-400">Forn: {lot.b8_lotefor}</span>
                           )}
-                        </td>
-                        <td className="py-2 px-3 text-xs text-slate-400">{lot.b8_lotefor || '—'}</td>
-                        <td className="py-2 px-3 text-right tabular-nums text-slate-600">{lot.system_qty.toFixed(2)}</td>
-                        <td className="py-2 px-3 text-right">
+                        </div>
+                        <span className={`text-sm font-semibold tabular-nums ${diffColor(lotDiff)}`}>
+                          {formatDiff(lotDiff)}
+                        </span>
+                      </div>
+
+                      {/* Saldo + Input */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1">
+                          <span className="text-[11px] text-slate-500">Saldo Sistema</span>
+                          <p className="text-sm font-medium tabular-nums text-slate-700">{lot.system_qty.toFixed(2)}</p>
+                        </div>
+                        <div className="flex-1">
+                          <span className="text-[11px] text-capul-700 font-medium">Qtd Contada</span>
                           <input
                             ref={idx === 0 ? firstInputRef : undefined}
                             data-lot-index={idx}
@@ -274,44 +286,43 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
                             onChange={(e) => updateLotQty(idx, e.target.value)}
                             onKeyDown={(e) => handleKeyDown(e, idx)}
                             placeholder="0"
-                            className={`w-28 text-right border rounded-lg px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 ${
+                            className={`w-full text-right border rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 ${
                               lot.prefilled
                                 ? 'border-green-400 bg-green-50 focus:ring-green-500'
                                 : 'border-slate-300 focus:ring-capul-500'
                             }`}
                           />
-                        </td>
-                        <td className={`py-2 px-3 text-right text-xs font-medium tabular-nums ${
-                          lotDiff !== null && lotDiff > 0 ? 'text-green-600' : lotDiff !== null && lotDiff < 0 ? 'text-red-600' : 'text-slate-400'
-                        }`}>
-                          {lotDiff !== null ? (
-                            <>{lotDiff > 0 ? '+' : ''}{lotDiff.toFixed(2)}</>
-                          ) : '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-slate-50 border-t-2 border-slate-300">
-                    <td colSpan={2} className="py-2.5 px-3 font-semibold text-slate-700">
-                      Total ({lots.length} lote{lots.length !== 1 ? 's' : ''})
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-semibold tabular-nums text-slate-700">{totalSistema.toFixed(2)}</td>
-                    <td className="py-2.5 px-3 text-right font-bold tabular-nums text-capul-700 text-lg">{totalContado.toFixed(2)}</td>
-                    <td className={`py-2.5 px-3 text-right font-semibold tabular-nums ${
-                      diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-slate-400'
-                    }`}>
-                      {diff !== 0 ? (
-                        <>{diff > 0 ? '+' : ''}{diff.toFixed(2)}</>
-                      ) : '0.00'}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Total */}
+              <div className="mt-3 border-t-2 border-slate-300 pt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-slate-700">
+                    Total ({lots.length} lote{lots.length !== 1 ? 's' : ''})
+                  </span>
+                  <span className={`text-sm font-semibold tabular-nums ${diffColor(diff)}`}>
+                    Dif: {formatDiff(diff)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between mt-1">
+                  <div>
+                    <span className="text-[11px] text-slate-500">Sistema</span>
+                    <p className="text-sm tabular-nums text-slate-600">{totalSistema.toFixed(2)}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[11px] text-capul-700">Contado</span>
+                    <p className="text-lg font-bold tabular-nums text-capul-700">{totalContado.toFixed(2)}</p>
+                  </div>
+                </div>
+              </div>
 
               {/* Observacao */}
-              <div className="mt-4">
+              <div className="mt-3">
                 <label className="block text-xs text-slate-500 mb-1">Observacao (opcional)</label>
                 <input
                   type="text"
@@ -326,23 +337,21 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 shrink-0">
-          <p className="text-xs text-slate-500">
-            {allFilled
-              ? <span className="text-green-600 font-medium">Todos os lotes preenchidos</span>
-              : <span className="text-amber-600">Preencha todos os lotes para salvar</span>}
-          </p>
+        <div className="px-4 py-3 border-t border-slate-200 shrink-0">
+          {!allFilled && (
+            <p className="text-xs text-amber-600 mb-2">Preencha todos os lotes para salvar</p>
+          )}
           <div className="flex gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50"
+              className="flex-1 px-4 py-2.5 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50"
             >
               Cancelar
             </button>
             <button
               onClick={handleSave}
               disabled={!allFilled || saving}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm bg-capul-600 text-white rounded-lg hover:bg-capul-700 disabled:opacity-50"
+              className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm bg-capul-600 text-white rounded-lg hover:bg-capul-700 disabled:opacity-50"
             >
               {saving ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -355,7 +364,6 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
         </div>
       </div>
 
-      {/* Confirm dialog ao alterar lote pre-preenchido */}
       <ConfirmDialog
         open={confirmEdit !== null}
         title="Alterar lote ja conferido"

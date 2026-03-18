@@ -737,17 +737,25 @@ export class ProjetoService {
     });
     if (!atividade) throw new NotFoundException('Atividade nao encontrada neste projeto');
 
-    // Encerra qualquer registro aberto do usuario (em qualquer atividade do projeto)
+    // Encerra qualquer registro aberto do usuario em QUALQUER atividade/projeto
     const abertos = await this.prisma.registroTempo.findMany({
-      where: {
-        usuarioId: userId,
-        horaFim: null,
-        atividade: { projetoId },
-      },
+      where: { usuarioId: userId, horaFim: null },
     });
     for (const reg of abertos) {
       const duracao = Math.round((Date.now() - new Date(reg.horaInicio).getTime()) / 60000);
       await this.prisma.registroTempo.update({
+        where: { id: reg.id },
+        data: { horaFim: new Date(), duracaoMinutos: duracao },
+      });
+    }
+
+    // Encerra timers abertos em chamados (cross-module)
+    const abertosChamado = await this.prisma.registroTempoChamado.findMany({
+      where: { usuarioId: userId, horaFim: null },
+    });
+    for (const reg of abertosChamado) {
+      const duracao = Math.round((Date.now() - new Date(reg.horaInicio).getTime()) / 60000);
+      await this.prisma.registroTempoChamado.update({
         where: { id: reg.id },
         data: { horaFim: new Date(), duracaoMinutos: duracao },
       });

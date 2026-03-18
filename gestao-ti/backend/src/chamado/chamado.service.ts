@@ -96,6 +96,22 @@ export class ChamadoService {
       if (filters.filialId) where.filialId = filters.filialId;
       if (filters.departamentoId) where.departamentoId = filters.departamentoId;
 
+      // Para roles nao-staff, restringir as filiais vinculadas ao usuario
+      const isStaff = ['ADMIN', 'GESTOR_TI'].includes(role);
+      if (!isStaff && !filters.filialId) {
+        const userFiliais = await this.prisma.$queryRawUnsafe<{ filial_id: string }[]>(
+          `SELECT filial_id FROM core.usuario_filiais WHERE usuario_id = $1`,
+          user.sub,
+        );
+        const filialIds = userFiliais.map((f) => f.filial_id);
+        if (filialIds.length > 0) {
+          where.filialId = { in: filialIds };
+        } else {
+          // Fallback: filial do JWT
+          where.filialId = user.filialId;
+        }
+      }
+
       if (role === 'USUARIO_FINAL') {
         where.solicitanteId = user.sub;
         where.visibilidade = 'PUBLICO';
@@ -842,13 +858,25 @@ export class ChamadoService {
       throw new BadRequestException('Nao e possivel registrar tempo em chamado finalizado');
     }
 
-    // Encerra qualquer registro aberto do usuario neste chamado
+    // Encerra qualquer registro aberto do usuario em QUALQUER chamado
     const abertos = await this.prisma.registroTempoChamado.findMany({
-      where: { usuarioId: userId, horaFim: null, chamadoId },
+      where: { usuarioId: userId, horaFim: null },
     });
     for (const reg of abertos) {
       const duracao = Math.round((Date.now() - new Date(reg.horaInicio).getTime()) / 60000);
       await this.prisma.registroTempoChamado.update({
+        where: { id: reg.id },
+        data: { horaFim: new Date(), duracaoMinutos: duracao },
+      });
+    }
+
+    // Encerra timers abertos em atividades de projeto (cross-module)
+    const abertosProjeto = await this.prisma.registroTempo.findMany({
+      where: { usuarioId: userId, horaFim: null },
+    });
+    for (const reg of abertosProjeto) {
+      const duracao = Math.round((Date.now() - new Date(reg.horaInicio).getTime()) / 60000);
+      await this.prisma.registroTempo.update({
         where: { id: reg.id },
         data: { horaFim: new Date(), duracaoMinutos: duracao },
       });
