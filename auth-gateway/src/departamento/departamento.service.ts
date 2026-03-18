@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDepartamentoDto, UpdateDepartamentoDto } from './dto/create-departamento.dto';
 
@@ -51,5 +51,19 @@ export class DepartamentoService {
         tipoDepartamento: { select: tipoDepartamentoSelect },
       },
     });
+  }
+
+  async remove(id: string) {
+    const depto = await this.prisma.departamento.findUnique({ where: { id } });
+    if (!depto) throw new NotFoundException('Departamento nao encontrado');
+
+    // Verificar se tem usuarios vinculados
+    const usuarios = await this.prisma.usuario.count({ where: { departamentoId: id } });
+    if (usuarios > 0) {
+      throw new BadRequestException(`Departamento possui ${usuarios} usuario(s) vinculado(s). Remova os vinculos antes de excluir.`);
+    }
+
+    await this.prisma.departamento.delete({ where: { id } });
+    return { success: true, message: 'Departamento excluido com sucesso' };
   }
 }

@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { contratoService } from '../../services/contrato.service';
-import { Plus, Truck, Pencil, Check, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Truck, Pencil, Check, X, ArrowUpDown, ArrowUp, ArrowDown, Trash2 } from 'lucide-react';
 import type { FornecedorConfig } from '../../types';
 import { useToast } from '../../components/Toast';
 
@@ -207,6 +207,13 @@ export function FornecedoresPage() {
                             <div className="flex items-center gap-3">
                               <button onClick={() => startEdit(f)} className="flex items-center gap-1 text-xs text-capul-600 hover:underline"><Pencil className="w-3.5 h-3.5" /> Editar</button>
                               <button onClick={() => handleToggleStatus(f)} className="text-xs text-capul-600 hover:underline">{f.status === 'ATIVO' ? 'Inativar' : 'Ativar'}</button>
+                              <button onClick={async () => {
+                                if (!confirm(`Excluir fornecedor "${f.nome}"?`)) return;
+                                try { await contratoService.excluirFornecedor(f.id); carregar(); toast('success', 'Fornecedor excluido'); }
+                                catch (err: unknown) { toast('error',(err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir'); }
+                              }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">
+                                <Trash2 className="w-3.5 h-3.5" /> Excluir
+                              </button>
                             </div>
                           </td>
                         )}

@@ -17,4 +17,8 @@ export const departamentoService = {
     const { data } = await coreApi.patch(`/departamentos/${id}`, dto);
     return data;
   },
+
+  async excluir(id: string): Promise<void> {
+    await coreApi.delete(`/departamentos/${id}`);
+  },
 };

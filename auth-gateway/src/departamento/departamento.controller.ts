@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Param, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { DepartamentoService } from './departamento.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateDepartamentoDto, UpdateDepartamentoDto } from './dto/create-departamento.dto';
@@ -21,5 +21,10 @@ export class DepartamentoController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateDepartamentoDto) {
     return this.departamentoService.update(id, dto);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.departamentoService.remove(id);
   }
 }

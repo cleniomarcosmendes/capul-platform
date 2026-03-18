@@ -17,4 +17,8 @@ export const centroCustoService = {
     const { data } = await coreApi.patch(`/centros-custo/${id}`, dto);
     return data;
   },
+
+  async excluir(id: string): Promise<void> {
+    await coreApi.delete(`/centros-custo/${id}`);
+  },
 };

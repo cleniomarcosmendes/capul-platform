@@ -284,6 +284,19 @@ export const contratoService = {
     const { data } = await gestaoApi.patch(`/contratos/fornecedores/${id}`, payload);
     return data;
   },
+  async excluirFornecedor(id: string): Promise<void> {
+    await gestaoApi.delete(`/contratos/fornecedores/${id}`);
+  },
+
+  // Naturezas - excluir
+  async excluirNatureza(id: string): Promise<void> {
+    await gestaoApi.delete(`/contratos/naturezas/${id}`);
+  },
+
+  // Tipos Contrato - excluir
+  async excluirTipoContrato(id: string): Promise<void> {
+    await gestaoApi.delete(`/contratos/tipos-contrato/${id}`);
+  },
 
   // Produtos
   async listarProdutos(): Promise<ProdutoConfig[]> {

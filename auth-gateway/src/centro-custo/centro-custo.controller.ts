@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Param, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { CentroCustoService } from './centro-custo.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateCentroCustoDto, UpdateCentroCustoDto } from './dto/create-centro-custo.dto';
@@ -21,5 +21,10 @@ export class CentroCustoController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateCentroCustoDto) {
     return this.centroCustoService.update(id, dto);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.centroCustoService.remove(id);
   }
 }

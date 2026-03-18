@@ -63,6 +63,12 @@ export class ContratoController {
     return this.service.updateNatureza(id, dto);
   }
 
+  @Delete('naturezas/:id')
+  @Roles('ADMIN', 'GESTOR_TI')
+  removeNatureza(@Param('id') id: string) {
+    return this.service.removeNatureza(id);
+  }
+
   // --- Tipos de Contrato ---
 
   @Get('tipos-contrato')
@@ -82,6 +88,12 @@ export class ContratoController {
     return this.service.updateTipoContrato(id, dto);
   }
 
+  @Delete('tipos-contrato/:id')
+  @Roles('ADMIN', 'GESTOR_TI')
+  removeTipoContrato(@Param('id') id: string) {
+    return this.service.removeTipoContrato(id);
+  }
+
   // --- Fornecedores ---
 
   @Get('fornecedores')
@@ -99,6 +111,12 @@ export class ContratoController {
   @Roles('ADMIN', 'GESTOR_TI')
   updateFornecedor(@Param('id') id: string, @Body() dto: UpdateFornecedorDto) {
     return this.service.updateFornecedor(id, dto);
+  }
+
+  @Delete('fornecedores/:id')
+  @Roles('ADMIN', 'GESTOR_TI')
+  removeFornecedor(@Param('id') id: string) {
+    return this.service.removeFornecedor(id);
   }
 
   // --- Produtos ---

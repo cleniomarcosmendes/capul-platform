@@ -49,6 +49,10 @@ export const softwareService = {
     await gestaoApi.patch(`/softwares/${id}/status`, { status });
   },
 
+  async excluir(id: string): Promise<void> {
+    await gestaoApi.delete(`/softwares/${id}`);
+  },
+
   // ─── Software ↔ Filial ────────────────────────────────────
 
   async adicionarFilial(softwareId: string, filialId: string): Promise<SoftwareFilialItem> {

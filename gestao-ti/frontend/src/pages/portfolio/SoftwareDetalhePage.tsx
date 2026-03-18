@@ -176,6 +176,21 @@ export function SoftwareDetalhePage() {
                     reload();
                   }}
                 />
+                <button
+                  onClick={async () => {
+                    if (!confirm(`Excluir software "${software.nome}"? Esta acao nao pode ser desfeita.`)) return;
+                    try {
+                      await softwareService.excluir(id!);
+                      navigate('/gestao-ti/softwares');
+                    } catch (err: unknown) {
+                      alert((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir');
+                    }
+                  }}
+                  className="flex items-center gap-1 text-sm text-red-600 hover:text-red-700 border border-red-300 px-3 py-1.5 rounded-lg hover:bg-red-50"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Excluir
+                </button>
               </div>
             )}
           </div>

@@ -96,6 +96,17 @@ export class SoftwareService {
     return this.prisma.software.update({ where: { id }, data: { status } });
   }
 
+  async remove(id: string) {
+    await this.getSoftwareOrFail(id);
+    const chamados = await this.prisma.chamado.count({ where: { softwareId: id } });
+    const licencas = await this.prisma.softwareLicenca.count({ where: { softwareId: id } });
+    const contratos = await this.prisma.contrato.count({ where: { softwareId: id } });
+    const total = chamados + licencas + contratos;
+    if (total > 0) throw new BadRequestException(`Software possui vinculos (${chamados} chamado(s), ${licencas} licenca(s), ${contratos} contrato(s)). Inative-o em vez de excluir.`);
+    await this.prisma.software.delete({ where: { id } });
+    return { success: true };
+  }
+
   // ─── Software ↔ Filial ────────────────────────────────────
 
   async addFilial(softwareId: string, filialId: string) {

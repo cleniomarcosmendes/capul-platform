@@ -26,4 +26,15 @@ export class CentroCustoService {
     if (!cc) throw new NotFoundException('Centro de custo nao encontrado');
     return this.prisma.centroCusto.update({ where: { id }, data: dto });
   }
+
+  async remove(id: string) {
+    const cc = await this.prisma.centroCusto.findUnique({ where: { id } });
+    if (!cc) throw new NotFoundException('Centro de custo nao encontrado');
+    try {
+      await this.prisma.centroCusto.delete({ where: { id } });
+      return { success: true, message: 'Centro de custo excluido com sucesso' };
+    } catch {
+      throw new NotFoundException('Centro de custo possui vinculos. Inative-o em vez de excluir.');
+    }
+  }
 }

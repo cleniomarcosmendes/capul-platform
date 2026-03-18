@@ -1090,6 +1090,17 @@ export class ContratoService {
     });
   }
 
+  async removeNatureza(id: string) {
+    const existing = await this.prisma.naturezaContrato.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Natureza nao encontrada');
+    const vinculos = await this.prisma.rateioTemplateItem.count({ where: { naturezaId: id } });
+    const vinculosParcela = await this.prisma.parcelaRateioItem.count({ where: { naturezaId: id } });
+    const total = vinculos + vinculosParcela;
+    if (total > 0) throw new BadRequestException(`Natureza possui ${total} vinculo(s) em rateios. Inative-a em vez de excluir.`);
+    await this.prisma.naturezaContrato.delete({ where: { id } });
+    return { success: true };
+  }
+
   // --- Tipos de Contrato ---
 
   async findAllTiposContrato(status?: string) {
@@ -1123,6 +1134,15 @@ export class ContratoService {
       where: { id },
       data,
     });
+  }
+
+  async removeTipoContrato(id: string) {
+    const existing = await this.prisma.tipoContratoConfig.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Tipo de contrato nao encontrado');
+    const vinculos = await this.prisma.contrato.count({ where: { tipoContratoId: id } });
+    if (vinculos > 0) throw new BadRequestException(`Tipo possui ${vinculos} contrato(s) vinculado(s). Inative-o em vez de excluir.`);
+    await this.prisma.tipoContratoConfig.delete({ where: { id } });
+    return { success: true };
   }
 
   // --- Fornecedores ---
@@ -1166,6 +1186,15 @@ export class ContratoService {
       where: { id },
       data,
     });
+  }
+
+  async removeFornecedor(id: string) {
+    const existing = await this.prisma.fornecedorConfig.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Fornecedor nao encontrado');
+    const vinculos = await this.prisma.contrato.count({ where: { fornecedorId: id } });
+    if (vinculos > 0) throw new BadRequestException(`Fornecedor possui ${vinculos} contrato(s) vinculado(s). Inative-o em vez de excluir.`);
+    await this.prisma.fornecedorConfig.delete({ where: { id } });
+    return { success: true };
   }
 
   // --- Produtos ---

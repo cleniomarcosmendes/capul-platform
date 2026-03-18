@@ -52,6 +52,12 @@ export class SoftwareController {
     return this.service.updateStatus(id, dto.status);
   }
 
+  @Delete(':id')
+  @Roles('ADMIN', 'GESTOR_TI')
+  remove(@Param('id') id: string) {
+    return this.service.remove(id);
+  }
+
   // ─── Software ↔ Filial ────────────────────────────────────
 
   @Post(':id/filiais')
