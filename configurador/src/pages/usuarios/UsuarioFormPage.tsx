@@ -245,7 +245,22 @@ export function UsuarioFormPage() {
 
               {filiais.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Filiais de Acesso</label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-slate-700">Filiais de Acesso</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (filialIds.length === filiais.length) {
+                          setFilialIds([]);
+                        } else {
+                          setFilialIds(filiais.map((f) => f.id));
+                        }
+                      }}
+                      className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+                    >
+                      {filialIds.length === filiais.length ? 'Desmarcar Todas' : 'Selecionar Todas'}
+                    </button>
+                  </div>
                   <div className="space-y-2">
                     {filiais.map((f) => (
                       <label key={f.id} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer">

@@ -291,6 +291,7 @@ export function ChamadosListPage() {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="text-left px-4 py-3 font-medium text-slate-600">#</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">Filial</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Titulo</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Status</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Prioridade</th>
@@ -298,7 +299,6 @@ export function ChamadosListPage() {
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Tecnico</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Solicitante</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Depto</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Filial</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Data</th>
                   <th className="px-4 py-3"></th>
                 </tr>
@@ -307,6 +307,7 @@ export function ChamadosListPage() {
                 {chamados.map((c) => (
                   <tr key={c.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 text-slate-500 font-mono">#{c.numero}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs font-medium">{c.filial?.codigo || '—'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Link to={`/gestao-ti/chamados/${c.id}`} className="font-medium text-slate-800 hover:text-capul-600 max-w-[250px] truncate">{c.titulo}</Link>
@@ -334,7 +335,6 @@ export function ChamadosListPage() {
                     <td className="px-4 py-3 text-slate-600">{c.tecnico?.nome || '-'}</td>
                     <td className="px-4 py-3 text-slate-600">{c.solicitante.nome}</td>
                     <td className="px-4 py-3 text-slate-500 text-xs">{c.departamento?.nome || '—'}</td>
-                    <td className="px-4 py-3 text-slate-500 text-xs">{c.filial?.codigo || '—'}</td>
                     <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
                       {new Date(c.createdAt).toLocaleDateString('pt-BR')}
                     </td>

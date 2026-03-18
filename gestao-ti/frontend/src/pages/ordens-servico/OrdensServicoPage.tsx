@@ -627,6 +627,7 @@ export function OrdensServicoPage() {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="text-left px-4 py-3 font-medium text-slate-600">#</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">Filial</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Titulo</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Status</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Tecnicos</th>
@@ -640,6 +641,7 @@ export function OrdensServicoPage() {
                 {ordens.map((os) => (
                   <tr key={os.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => openDetalhe(os)}>
                     <td className="px-4 py-3 text-slate-500 font-mono">#{os.numero}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs font-medium">{os.filial?.codigo || '—'}</td>
                     <td className="px-4 py-3 font-medium text-slate-800 max-w-[200px] truncate">{os.titulo}</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs font-medium px-2 py-1 rounded-full ${statusColors[os.status]}`}>

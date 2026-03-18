@@ -1115,7 +1115,8 @@
       "Bash(git add:*)",
       "Bash(grep:*)",
       "Bash(npm install:*)",
-      "Bash(openssl req:*)"
+      "Bash(openssl req:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
