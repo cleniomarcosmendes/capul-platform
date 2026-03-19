@@ -30,6 +30,7 @@ import {
   Truck,
   Package,
   Search,
+  ListChecks,
 } from 'lucide-react';
 
 type MenuItem =
@@ -59,6 +60,7 @@ const menuItems: MenuItem[] = [
   { label: 'Motivos de Parada', icon: AlertTriangle, path: '/gestao-ti/motivos-parada', roles: MANAGERS },
   { section: 'PROJETOS', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'] },
   { label: 'Projetos', icon: FolderKanban, path: '/gestao-ti/projetos', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'] },
+  { label: 'Minhas Pendencias', icon: ListChecks, path: '/gestao-ti/minhas-pendencias', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'] },
   { section: 'INFRAESTRUTURA', roles: STAFF },
   { label: 'Ativos', icon: Server, path: '/gestao-ti/ativos', roles: STAFF },
   { section: 'CONFIGURACOES', roles: MANAGERS },

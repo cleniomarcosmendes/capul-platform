@@ -11,9 +11,36 @@ export const authService = {
       login,
       senha,
     });
+    if (data.mfaRequired) {
+      // Retornar sem salvar tokens — precisa do segundo fator
+      return data;
+    }
     localStorage.setItem('accessToken', data.accessToken);
     localStorage.setItem('refreshToken', data.refreshToken);
     localStorage.setItem('usuario', JSON.stringify(data.usuario));
+    return data;
+  },
+
+  async mfaLogin(mfaToken: string, code: string): Promise<LoginResponse> {
+    const { data } = await authApi.post<LoginResponse>('/mfa/login', { mfaToken, code });
+    localStorage.setItem('accessToken', data.accessToken);
+    localStorage.setItem('refreshToken', data.refreshToken);
+    localStorage.setItem('usuario', JSON.stringify(data.usuario));
+    return data;
+  },
+
+  async mfaSetup(): Promise<{ qrCodeUrl: string; secret: string }> {
+    const { data } = await authApi.post('/mfa/setup');
+    return data;
+  },
+
+  async mfaVerify(code: string): Promise<{ success: boolean }> {
+    const { data } = await authApi.post('/mfa/verify', { code });
+    return data;
+  },
+
+  async mfaDisable(code: string): Promise<{ success: boolean }> {
+    const { data } = await authApi.post('/mfa/disable', { code });
     return data;
   },
 

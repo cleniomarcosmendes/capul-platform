@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditLogService } from '../audit-log/audit-log.service';
 import {
   CreateUsuarioDto,
   UpdateUsuarioDto,
@@ -13,7 +14,7 @@ import {
 
 @Injectable()
 export class UsuarioService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private auditLog: AuditLogService) {}
 
   async findAll(filialId?: string) {
     const where: any = {};
@@ -79,7 +80,7 @@ export class UsuarioService {
 
     const senhaHash = await bcrypt.hash(dto.senha, 10);
 
-    return this.prisma.usuario.create({
+    const novoUsuario = await this.prisma.usuario.create({
       data: {
         username: dto.username,
         email: dto.email,
@@ -111,6 +112,8 @@ export class UsuarioService {
         permissoes: { include: { modulo: true, roleModulo: true } },
       },
     });
+    this.auditLog.log({ action: 'USER_CREATE', metadata: { targetUserId: novoUsuario.id, username: dto.username } });
+    return novoUsuario;
   }
 
   async update(id: string, dto: UpdateUsuarioDto) {
@@ -164,13 +167,14 @@ export class UsuarioService {
       where: { usuarioId: id, revoked: false },
       data: { revoked: true },
     });
+    this.auditLog.log({ action: 'PASSWORD_RESET', metadata: { targetUserId: id } });
     return { success: true, message: 'Senha redefinida com sucesso. O usuario devera trocar a senha no proximo login.' };
   }
 
   async atribuirPermissao(usuarioId: string, dto: AtribuirPermissaoDto) {
     await this.findOne(usuarioId);
 
-    return this.prisma.permissaoModulo.upsert({
+    const result = await this.prisma.permissaoModulo.upsert({
       where: {
         usuarioId_moduloId: {
           usuarioId,
@@ -188,6 +192,8 @@ export class UsuarioService {
       },
       include: { modulo: true, roleModulo: true },
     });
+    this.auditLog.log({ action: 'PERMISSION_GRANT', metadata: { targetUserId: usuarioId, modulo: result.modulo.codigo, role: result.roleModulo.codigo } });
+    return result;
   }
 
   async revogarPermissao(usuarioId: string, moduloId: string) {
@@ -200,9 +206,11 @@ export class UsuarioService {
       throw new NotFoundException('Permissao nao encontrada');
     }
 
-    return this.prisma.permissaoModulo.update({
+    const result = await this.prisma.permissaoModulo.update({
       where: { id: permissao.id },
       data: { status: 'INATIVO' },
     });
+    this.auditLog.log({ action: 'PERMISSION_REVOKE', metadata: { targetUserId: usuarioId, moduloId } });
+    return result;
   }
 }

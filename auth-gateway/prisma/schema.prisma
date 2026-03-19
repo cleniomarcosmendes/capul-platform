@@ -130,6 +130,8 @@ model Usuario {
   avatarUrl      String?     @map("avatar_url")
   status         StatusGeral @default(ATIVO)
   primeiroAcesso Boolean     @default(true) @map("primeiro_acesso")
+  mfaSecret      String?     @map("mfa_secret")
+  mfaEnabled     Boolean     @default(false) @map("mfa_enabled")
   ultimoLogin    DateTime?   @map("ultimo_login")
   createdAt      DateTime    @default(now()) @map("created_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")

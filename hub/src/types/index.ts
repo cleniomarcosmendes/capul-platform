@@ -24,6 +24,7 @@ export interface UsuarioLogado {
   cargo?: string | null;
   avatarUrl?: string | null;
   primeiroAcesso: boolean;
+  mfaEnabled?: boolean;
   filialAtual: FilialUsuario | null;
   filiais?: FilialUsuario[];
   modulos: ModuloUsuario[];
@@ -33,6 +34,8 @@ export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
   usuario: UsuarioLogado;
+  mfaRequired?: boolean;
+  mfaToken?: string;
 }
 
 export interface RefreshResponse {

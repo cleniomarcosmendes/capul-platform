@@ -1116,7 +1116,8 @@
       "Bash(grep:*)",
       "Bash(npm install:*)",
       "Bash(openssl req:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(chmod:*)"
     ]
   }
 }

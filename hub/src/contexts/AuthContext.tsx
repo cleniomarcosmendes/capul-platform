@@ -46,6 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       const response = await authService.login(loginStr, senha);
+      if (response.mfaRequired) {
+        // Lançar com mfaToken para o LoginPage tratar
+        const err = new Error('MFA_REQUIRED');
+        (err as any).mfaToken = response.mfaToken;
+        throw err;
+      }
       setUsuario(response.usuario);
     } finally {
       setLoading(false);

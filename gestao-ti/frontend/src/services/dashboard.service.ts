@@ -81,4 +81,13 @@ export const dashboardService = {
     const { data } = await gestaoApi.get('/dashboard/acompanhamento-atividade', { params: { atividadeId } });
     return data;
   },
+
+  async getMinhasPendencias(): Promise<{
+    atividades: { id: string; titulo: string; status: string; dataFimPrevista: string | null; projeto: { id: string; numero: number; nome: string }; fase: { id: string; nome: string } | null }[];
+    pendencias: { id: string; numero: number; titulo: string; status: string; prioridade: string; dataLimite: string | null; createdAt: string; projeto: { id: string; numero: number; nome: string }; fase: { id: string; nome: string } | null; criador: { id: string; nome: string } }[];
+    resumo: { totalAtividades: number; totalPendencias: number; vencidas: number; urgentes: number };
+  }> {
+    const { data } = await gestaoApi.get('/dashboard/minhas-pendencias');
+    return data;
+  },
 };

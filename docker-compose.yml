@@ -34,6 +34,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init-schemas.sql:/docker-entrypoint-initdb.d/01-schemas.sql
+      - ./inventario/database:/migrations-inv:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
       interval: 10s

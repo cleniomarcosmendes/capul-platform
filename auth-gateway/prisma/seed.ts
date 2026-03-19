@@ -117,11 +117,27 @@ async function main() {
   const roleAdminTi = roles[`${modGestaoTi.id}:ADMIN`];
   console.log('Roles: 3 Configurador + 3 Inventario + 6 Gestao TI = 12 total');
 
-  // 5. Departamentos (find or create)
+  // 5. Tipos de Departamento (find or create)
+  const tiposDeptData = [
+    { nome: 'Administrativo', descricao: 'Setores administrativos', ordem: 1 },
+    { nome: 'Operacional', descricao: 'Setores operacionais', ordem: 2 },
+    { nome: 'Tecnologia', descricao: 'Setores de tecnologia', ordem: 3 },
+  ];
+  const tiposDepto: Record<string, { id: string }> = {};
+  for (const t of tiposDeptData) {
+    let tipo = await prisma.tipoDepartamento.findFirst({ where: { nome: t.nome } });
+    if (!tipo) {
+      tipo = await prisma.tipoDepartamento.create({ data: t });
+    }
+    tiposDepto[t.nome] = tipo;
+  }
+  console.log('Tipos Departamento: Administrativo, Operacional, Tecnologia');
+
+  // 5b. Departamentos (find or create)
   const deptosData = [
-    { nome: 'Tecnologia da Informacao', descricao: 'Departamento de TI' },
-    { nome: 'Administrativo', descricao: 'Departamento Administrativo' },
-    { nome: 'Operacoes', descricao: 'Departamento de Operacoes' },
+    { nome: 'Tecnologia da Informacao', descricao: 'Departamento de TI', tipoDepartamentoId: tiposDepto['Tecnologia'].id },
+    { nome: 'Administrativo', descricao: 'Departamento Administrativo', tipoDepartamentoId: tiposDepto['Administrativo'].id },
+    { nome: 'Operacoes', descricao: 'Departamento de Operacoes', tipoDepartamentoId: tiposDepto['Operacional'].id },
   ];
 
   const deptos: Record<string, { id: string }> = {};

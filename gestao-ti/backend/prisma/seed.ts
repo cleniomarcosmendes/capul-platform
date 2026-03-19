@@ -20,44 +20,26 @@ async function main() {
 
   // ── 2. Equipes TI ────────────────────────────────────────────────
 
-  const equipeSup = await prisma.equipeTI.upsert({
-    where: { sigla: 'SUP' },
-    update: {},
-    create: {
-      nome: 'Suporte N1',
-      sigla: 'SUP',
-      cor: '#3B82F6',
-      descricao: 'Atendimento de primeiro nivel a usuarios',
-      aceitaChamadoExterno: true,
-      ordem: 1,
-    },
-  });
+  let equipeSup = await prisma.equipeTI.findFirst({ where: { nome: 'Suporte N1' } });
+  if (!equipeSup) {
+    equipeSup = await prisma.equipeTI.create({
+      data: { nome: 'Suporte N1', sigla: 'SUP', cor: '#3B82F6', descricao: 'Atendimento de primeiro nivel a usuarios', aceitaChamadoExterno: true, ordem: 1 },
+    });
+  }
 
-  const equipeInf = await prisma.equipeTI.upsert({
-    where: { sigla: 'INF' },
-    update: {},
-    create: {
-      nome: 'Infraestrutura',
-      sigla: 'INF',
-      cor: '#10B981',
-      descricao: 'Redes, servidores e infraestrutura de TI',
-      aceitaChamadoExterno: false,
-      ordem: 2,
-    },
-  });
+  let equipeInf = await prisma.equipeTI.findFirst({ where: { nome: 'Infraestrutura' } });
+  if (!equipeInf) {
+    equipeInf = await prisma.equipeTI.create({
+      data: { nome: 'Infraestrutura', sigla: 'INF', cor: '#10B981', descricao: 'Redes, servidores e infraestrutura de TI', aceitaChamadoExterno: false, ordem: 2 },
+    });
+  }
 
-  const equipeDev = await prisma.equipeTI.upsert({
-    where: { sigla: 'DEV' },
-    update: {},
-    create: {
-      nome: 'Desenvolvimento',
-      sigla: 'DEV',
-      cor: '#8B5CF6',
-      descricao: 'Desenvolvimento e manutencao de sistemas',
-      aceitaChamadoExterno: false,
-      ordem: 3,
-    },
-  });
+  let equipeDev = await prisma.equipeTI.findFirst({ where: { nome: 'Desenvolvimento' } });
+  if (!equipeDev) {
+    equipeDev = await prisma.equipeTI.create({
+      data: { nome: 'Desenvolvimento', sigla: 'DEV', cor: '#8B5CF6', descricao: 'Desenvolvimento e manutencao de sistemas', aceitaChamadoExterno: false, ordem: 3 },
+    });
+  }
 
   console.log(`Equipes: ${equipeSup.nome}, ${equipeInf.nome}, ${equipeDev.nome}`);
 

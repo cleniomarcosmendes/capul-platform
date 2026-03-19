@@ -1696,4 +1696,50 @@ export class DashboardService {
       })).sort((a, b) => b.minutos - a.minutos),
     };
   }
+
+  // ========== MINHAS PENDENCIAS ==========
+
+  async getMinhasPendencias(userId: string) {
+    const [atividades, pendencias] = await Promise.all([
+      this.prisma.atividadeProjeto.findMany({
+        where: {
+          usuarioId: userId,
+          status: { in: ['PENDENTE', 'EM_ANDAMENTO'] },
+        },
+        include: {
+          projeto: { select: { id: true, numero: true, nome: true } },
+          fase: { select: { id: true, nome: true } },
+          pendencia: { select: { id: true, numero: true, titulo: true } },
+        },
+        orderBy: [{ status: 'asc' }, { dataAtividade: 'desc' }],
+      }),
+      this.prisma.pendenciaProjeto.findMany({
+        where: {
+          responsavelId: userId,
+          status: { in: ['ABERTA', 'EM_ANDAMENTO', 'AGUARDANDO_VALIDACAO'] },
+        },
+        include: {
+          projeto: { select: { id: true, numero: true, nome: true } },
+          fase: { select: { id: true, nome: true } },
+          criador: { select: { id: true, nome: true } },
+        },
+        orderBy: [{ prioridade: 'asc' }, { dataLimite: 'asc' }],
+      }),
+    ]);
+
+    const now = new Date();
+    const vencidas = pendencias.filter((p) => p.dataLimite && new Date(p.dataLimite) < now).length;
+    const urgentes = pendencias.filter((p) => ['URGENTE', 'ALTA'].includes(p.prioridade)).length;
+
+    return {
+      atividades,
+      pendencias,
+      resumo: {
+        totalAtividades: atividades.length,
+        totalPendencias: pendencias.length,
+        vencidas,
+        urgentes,
+      },
+    };
+  }
 }

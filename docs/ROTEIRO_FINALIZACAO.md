@@ -175,7 +175,22 @@ find . -type f -name ".DS_Store" -delete
 find . -type f -name "*.log" ! -path "./.git/*" -delete 2>/dev/null
 ```
 
-### 2.7 Relatorio Final
+### 2.7 Verificacao de Impacto em Migracao
+Verificar se houve alteracoes em arquivos que impactam o roteiro de migracao para producao:
+```bash
+# Arquivos que impactam migracao (verificar nos commits da sessao)
+git diff --name-only HEAD~5 | grep -E "(schema\.prisma|docker-compose\.yml|Dockerfile|migrations/|migrate\.sh|\.env)"
+```
+
+**Se houver alteracoes**: verificar se `docs/ROTEIRO_MIGRACAO_PRODUCAO.md` precisa ser atualizado.
+Cenarios que exigem atualizacao:
+- Novo modelo/tabela no Prisma schema
+- Mudanca no docker-compose (portas, volumes, servicos)
+- Novo Dockerfile ou mudanca de CMD
+- Nova migration SQL no inventario
+- Mudanca na estrategia de deploy
+
+### 2.8 Relatorio Final
 Ao concluir, apresentar:
 
 ```
@@ -197,6 +212,10 @@ ETAPA 2 - Verificacao:
   [x] Migrations: em dia
   [x] Arquivos orfaos: N encontrados
   [x] Limpeza Docker: Xmb liberados
+
+ALERTA MIGRACAO:
+  [ ] Arquivos de infra alterados: SIM/NAO
+      Se SIM → Atualizar docs/ROTEIRO_MIGRACAO_PRODUCAO.md
 
 ================================
 ```
@@ -225,6 +244,7 @@ ETAPA 2 - Verificacao:
 - [ ] Migrations em dia
 - [ ] Arquivos orfaos analisados
 - [ ] Limpeza Docker (se necessario)
+- [ ] Impacto em migracao verificado (schema, docker-compose, Dockerfile)
 - [ ] Relatorio apresentado
 
 ---
@@ -247,5 +267,5 @@ ETAPA 2 - Verificacao:
 
 ---
 
-**Ultima Atualizacao**: 15/03/2026
-**Versao**: 1.0
+**Ultima Atualizacao**: 19/03/2026
+**Versao**: 1.1

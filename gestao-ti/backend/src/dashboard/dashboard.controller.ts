@@ -2,6 +2,8 @@ import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { DashboardService } from './dashboard.service.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { GestaoTiGuard } from '../common/guards/gestao-ti.guard.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard, GestaoTiGuard)
@@ -114,5 +116,10 @@ export class DashboardController {
   @Get('acompanhamento-atividade/projetos')
   listarProjetosAtivos() {
     return this.service.listarProjetosAtivos();
+  }
+
+  @Get('minhas-pendencias')
+  getMinhasPendencias(@CurrentUser() user: JwtPayload) {
+    return this.service.getMinhasPendencias(user.sub);
   }
 }

@@ -11,15 +11,17 @@ import { DepartamentoModule } from './departamento/departamento.module';
 import { TipoDepartamentoModule } from './tipo-departamento/tipo-departamento.module';
 import { CentroCustoModule } from './centro-custo/centro-custo.module';
 import { ModuloModule } from './modulo/modulo.module';
+import { AuditLogModule } from './audit-log/audit-log.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([{
-      ttl: 60000,   // 1 minuto
-      limit: 30,    // 30 requisicoes por minuto (geral)
+      ttl: 60000,
+      limit: 30,
     }]),
     PrismaModule,
+    AuditLogModule,
     AuthModule,
     EmpresaModule,
     FilialModule,
