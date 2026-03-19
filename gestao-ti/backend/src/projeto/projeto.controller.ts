@@ -137,6 +137,12 @@ export class ProjetoController {
     return this.service.remove(id);
   }
 
+  @Post(':id/duplicar')
+  @Roles('ADMIN', 'GESTOR_TI')
+  duplicar(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.service.duplicar(id, user.sub);
+  }
+
   // --- Membros ---
 
   @Get(':id/membros')

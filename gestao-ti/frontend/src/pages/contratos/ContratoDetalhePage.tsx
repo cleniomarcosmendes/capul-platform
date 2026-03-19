@@ -300,6 +300,7 @@ export function ContratoDetalhePage() {
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">Nova Data Fim</label>
                   <input type="date" value={renovarForm.novaDataFim}
+                    min={renovarForm.novaDataInicio || undefined}
                     onChange={(e) => setRenovarForm({ ...renovarForm, novaDataFim: e.target.value })}
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
                 </div>

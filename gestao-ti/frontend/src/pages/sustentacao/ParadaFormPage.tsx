@@ -204,6 +204,7 @@ export function ParadaFormPage() {
               <input
                 type="datetime-local"
                 value={fim}
+                min={inicio || undefined}
                 onChange={(e) => setFim(e.target.value)}
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
               />

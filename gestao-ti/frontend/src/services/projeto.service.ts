@@ -98,6 +98,11 @@ export const projetoService = {
     await gestaoApi.delete(`/projetos/${id}`);
   },
 
+  async duplicar(id: string): Promise<Projeto> {
+    const { data } = await gestaoApi.post(`/projetos/${id}/duplicar`);
+    return data;
+  },
+
   // Membros
   async listarMembros(id: string): Promise<MembroProjeto[]> {
     const { data } = await gestaoApi.get(`/projetos/${id}/membros`);

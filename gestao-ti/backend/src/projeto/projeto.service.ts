@@ -63,6 +63,11 @@ const projetoDetailInclude = {
     include: {
       usuario: { select: { id: true, nome: true } },
       fase: { select: { id: true, nome: true } },
+      _count: { select: { registrosTempo: true, comentarios: true } },
+      registrosTempo: {
+        where: { horaFim: null },
+        select: { id: true, usuarioId: true, horaInicio: true },
+      },
     },
     orderBy: { dataAtividade: 'desc' as const },
     take: 50,
@@ -2041,5 +2046,228 @@ export class ProjetoService {
       where: { id: terceirizadoId },
       data: { ativo: false },
     });
+  }
+
+  // ========== DUPLICAR PROJETO ==========
+
+  async duplicar(id: string, userId: string) {
+    const original = await this.prisma.projeto.findUnique({
+      where: { id },
+      include: {
+        membros: true,
+        fases: { orderBy: { ordem: 'asc' } },
+        atividades: { include: { comentarios: true } },
+        cotacoes: true,
+        custos: true,
+        riscos: true,
+        usuariosChave: true,
+        terceirizados: true,
+        pendencias: { include: { interacoes: true } },
+      },
+    });
+    if (!original) throw new NotFoundException('Projeto nao encontrado');
+
+    // Criar projeto duplicado
+    const novoProjeto = await this.prisma.projeto.create({
+      data: {
+        nome: `${original.nome} (Copia)`,
+        descricao: original.descricao,
+        tipo: original.tipo,
+        modo: original.modo,
+        status: 'PLANEJAMENTO',
+        nivel: original.nivel,
+        custoPrevisto: original.custoPrevisto,
+        custoRealizado: null,
+        dataInicio: null,
+        dataFimPrevista: original.dataFimPrevista,
+        dataFimReal: null,
+        observacoes: original.observacoes,
+        responsavelId: userId,
+        softwareId: original.softwareId,
+        contratoId: original.contratoId,
+        projetoPaiId: original.projetoPaiId,
+      },
+    });
+
+    // Duplicar membros
+    if (original.membros.length > 0) {
+      await this.prisma.membroProjeto.createMany({
+        data: original.membros.map((m) => ({
+          projetoId: novoProjeto.id,
+          usuarioId: m.usuarioId,
+          papel: m.papel,
+          observacoes: m.observacoes,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    // Duplicar fases (status resetado para PENDENTE)
+    if (original.fases.length > 0) {
+      await this.prisma.faseProjeto.createMany({
+        data: original.fases.map((f) => ({
+          projetoId: novoProjeto.id,
+          nome: f.nome,
+          descricao: f.descricao,
+          ordem: f.ordem,
+          status: 'PENDENTE',
+          dataInicio: null,
+          dataFimPrevista: f.dataFimPrevista,
+          dataFimReal: null,
+          observacoes: f.observacoes,
+        })),
+      });
+    }
+
+    // Duplicar cotações (status resetado para RASCUNHO)
+    if (original.cotacoes.length > 0) {
+      await this.prisma.cotacaoProjeto.createMany({
+        data: original.cotacoes.map((c) => ({
+          projetoId: novoProjeto.id,
+          fornecedor: c.fornecedor,
+          descricao: c.descricao,
+          valor: c.valor,
+          moeda: c.moeda,
+          status: 'RASCUNHO',
+          observacoes: c.observacoes,
+        })),
+      });
+    }
+
+    // Duplicar custos (realizado zerado)
+    if (original.custos.length > 0) {
+      await this.prisma.custoProjeto.createMany({
+        data: original.custos.map((c) => ({
+          projetoId: novoProjeto.id,
+          descricao: c.descricao,
+          categoria: c.categoria,
+          valorPrevisto: c.valorPrevisto,
+          valorRealizado: null,
+          observacoes: c.observacoes,
+        })),
+      });
+    }
+
+    // Duplicar riscos (status resetado para IDENTIFICADO)
+    if (original.riscos.length > 0) {
+      await this.prisma.riscoProjeto.createMany({
+        data: original.riscos.map((r) => ({
+          projetoId: novoProjeto.id,
+          titulo: r.titulo,
+          descricao: r.descricao,
+          probabilidade: r.probabilidade,
+          impacto: r.impacto,
+          status: 'IDENTIFICADO',
+          planoMitigacao: r.planoMitigacao,
+          observacoes: r.observacoes,
+          responsavelId: r.responsavelId,
+        })),
+      });
+    }
+
+    // Duplicar usuarios-chave
+    if (original.usuariosChave.length > 0) {
+      await this.prisma.usuarioChaveProjeto.createMany({
+        data: original.usuariosChave.map((u) => ({
+          projetoId: novoProjeto.id,
+          usuarioId: u.usuarioId,
+          funcao: u.funcao,
+          ativo: true,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    // Duplicar terceirizados
+    if (original.terceirizados.length > 0) {
+      await this.prisma.terceirizadoProjeto.createMany({
+        data: original.terceirizados.map((t) => ({
+          projetoId: novoProjeto.id,
+          usuarioId: t.usuarioId,
+          empresa: t.empresa,
+          funcao: t.funcao,
+          especialidade: t.especialidade,
+          ativo: true,
+          observacoes: t.observacoes,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    // Mapear IDs das fases originais para as novas (para vincular atividades)
+    const faseMap = new Map<string, string>();
+    if (original.fases.length > 0) {
+      const novasFases = await this.prisma.faseProjeto.findMany({
+        where: { projetoId: novoProjeto.id },
+        orderBy: { ordem: 'asc' },
+      });
+      for (let i = 0; i < original.fases.length && i < novasFases.length; i++) {
+        faseMap.set(original.fases[i].id, novasFases[i].id);
+      }
+    }
+
+    // Duplicar atividades (status resetado para PENDENTE, sem registros de tempo)
+    if (original.atividades.length > 0) {
+      for (const a of original.atividades) {
+        const novaAtividade = await this.prisma.atividadeProjeto.create({
+          data: {
+            projetoId: novoProjeto.id,
+            titulo: a.titulo,
+            descricao: a.descricao,
+            status: 'PENDENTE',
+            dataAtividade: new Date(),
+            dataInicio: null,
+            dataFimPrevista: a.dataFimPrevista,
+            usuarioId: a.usuarioId,
+            faseId: a.faseId ? faseMap.get(a.faseId) || null : null,
+          },
+        });
+
+        // Duplicar comentários/notas da atividade
+        if (a.comentarios && a.comentarios.length > 0) {
+          await this.prisma.comentarioTarefa.createMany({
+            data: a.comentarios.map((c) => ({
+              atividadeId: novaAtividade.id,
+              usuarioId: c.usuarioId,
+              texto: c.texto,
+            })),
+          });
+        }
+      }
+    }
+
+    // Duplicar pendências (status resetado para ABERTA) + interações
+    if (original.pendencias.length > 0) {
+      for (const p of original.pendencias) {
+        const novaPendencia = await this.prisma.pendenciaProjeto.create({
+          data: {
+            projetoId: novoProjeto.id,
+            titulo: p.titulo,
+            descricao: p.descricao,
+            status: 'ABERTA',
+            prioridade: p.prioridade,
+            dataLimite: p.dataLimite,
+            responsavelId: p.responsavelId,
+            criadorId: userId,
+            faseId: p.faseId ? faseMap.get(p.faseId) || null : null,
+          },
+        });
+
+        // Duplicar interações da pendência (sem anexos)
+        if (p.interacoes && p.interacoes.length > 0) {
+          await this.prisma.interacaoPendencia.createMany({
+            data: p.interacoes.map((i) => ({
+              pendenciaId: novaPendencia.id,
+              tipo: i.tipo,
+              descricao: i.descricao,
+              publica: i.publica,
+              usuarioId: i.usuarioId,
+            })),
+          });
+        }
+      }
+    }
+
+    return this.findOne(novoProjeto.id);
   }
 }

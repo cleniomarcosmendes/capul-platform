@@ -74,6 +74,11 @@ export function ProjetoFormPage() {
     setSaving(true);
     setError('');
 
+    if (dataInicio && dataFimPrevista && dataFimPrevista < dataInicio) {
+      setError('A Data Fim Prevista nao pode ser anterior a Data Inicio.');
+      return;
+    }
+
     const payload = {
       nome,
       tipo,
@@ -240,6 +245,7 @@ export function ProjetoFormPage() {
               <input
                 type="date"
                 value={dataFimPrevista}
+                min={dataInicio || undefined}
                 onChange={(e) => setDataFimPrevista(e.target.value)}
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
               />

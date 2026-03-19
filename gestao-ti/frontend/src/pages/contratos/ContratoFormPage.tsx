@@ -369,7 +369,7 @@ export function ContratoFormPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Data Fim *</label>
-              <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} required
+              <input type="date" value={dataFim} min={dataInicio || undefined} onChange={(e) => setDataFim(e.target.value)} required
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
             </div>
           </div>

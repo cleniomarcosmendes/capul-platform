@@ -7,7 +7,7 @@ import { projetoService } from '../../services/projeto.service';
 import { chamadoService } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
-import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare, KeyRound, ClipboardList, Download, Eye, Upload } from 'lucide-react';
+import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare, KeyRound, ClipboardList, Download, Eye, Upload, Copy } from 'lucide-react';
 import type {
   Projeto,
   MembroProjeto,
@@ -309,13 +309,30 @@ export function ProjetoDetalhePage() {
                 </select>
               )}
               {canManage && (
-                <Link
-                  to={`/gestao-ti/projetos/${projeto.id}/editar`}
-                  className="flex items-center gap-1 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm hover:bg-slate-200"
-                >
-                  <Pencil className="w-4 h-4" />
-                  Editar
-                </Link>
+                <>
+                  <Link
+                    to={`/gestao-ti/projetos/${projeto.id}/editar`}
+                    className="flex items-center gap-1 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm hover:bg-slate-200"
+                  >
+                    <Pencil className="w-4 h-4" />
+                    Editar
+                  </Link>
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm(`Duplicar projeto "${projeto.nome}"?\n\nSera criada uma copia com equipe, fases, custos, riscos e cotacoes. Status sera PLANEJAMENTO.`)) return;
+                      try {
+                        const novo = await projetoService.duplicar(projeto.id);
+                        navigate(`/gestao-ti/projetos/${novo.id}`);
+                      } catch {
+                        alert('Erro ao duplicar projeto');
+                      }
+                    }}
+                    className="flex items-center gap-1 bg-blue-50 text-blue-700 px-3 py-2 rounded-lg text-sm hover:bg-blue-100"
+                  >
+                    <Copy className="w-4 h-4" />
+                    Duplicar
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -683,6 +700,18 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
     setSaving(false);
   }
   async function handleIniciar(atividadeId: string) {
+    // Verificar se ha outro timer ativo (em qualquer atividade deste projeto)
+    const outraAtiva = atividades.find((a) =>
+      a.id !== atividadeId && a.registrosTempo?.some((r) => r.usuarioId === userId),
+    );
+    if (outraAtiva) {
+      const ok = await confirm(
+        'Cronometro ativo',
+        `Voce ja possui um cronometro ativo na atividade "${outraAtiva.titulo}". Ao continuar, o cronometro anterior sera encerrado automaticamente.`,
+        { variant: 'warning', confirmLabel: 'Continuar', cancelLabel: 'Cancelar' },
+      );
+      if (!ok) return;
+    }
     try { await projetoService.iniciarTempo(projetoId, atividadeId); loadAll(); if (expandedId === atividadeId) loadRegistros(atividadeId); } catch { /* empty */ }
   }
   async function handleEncerrar(atividadeId: string) {
@@ -846,7 +875,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
                 </div>
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">Data Fim Prevista</label>
-                  <input type="date" value={editAtivDataFimPrevista} onChange={(e) => setEditAtivDataFimPrevista(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                  <input type="date" value={editAtivDataFimPrevista} min={editAtivDataInicio || undefined} onChange={(e) => setEditAtivDataFimPrevista(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
                 </div>
                 {fases.length > 0 && (
                   <div>
@@ -1146,7 +1175,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
             <div className="flex gap-3 items-end flex-wrap">
               <input type="text" placeholder="Titulo da tarefa" value={novoTitulo} onChange={(e) => setNovoTitulo(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-48" />
               <input type="date" placeholder="Inicio" value={novaDataInicio} onChange={(e) => setNovaDataInicio(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-36" title="Data inicio" />
-              <input type="date" placeholder="Fim previsto" value={novaDataFimPrevista} onChange={(e) => setNovaDataFimPrevista(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-36" title="Data fim prevista" />
+              <input type="date" placeholder="Fim previsto" value={novaDataFimPrevista} min={novaDataInicio || undefined} onChange={(e) => setNovaDataFimPrevista(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-36" title="Data fim prevista" />
               {fases.length > 0 && (
                 <select value={novaFaseId} onChange={(e) => setNovaFaseId(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
                   <option value="">Sem fase</option>
@@ -1182,7 +1211,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
               <input type="text" placeholder="Nome da fase" value={novoNomeFase} onChange={(e) => setNovoNomeFase(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-48" />
               <input type="number" placeholder="Ordem" value={novaOrdemFase} onChange={(e) => setNovaOrdemFase(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-20" />
               <input type="date" value={novaFaseDataInicio} onChange={(e) => setNovaFaseDataInicio(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" title="Data inicio" />
-              <input type="date" value={novaFaseDataFimPrevista} onChange={(e) => setNovaFaseDataFimPrevista(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" title="Data fim prevista" />
+              <input type="date" value={novaFaseDataFimPrevista} min={novaFaseDataInicio || undefined} onChange={(e) => setNovaFaseDataFimPrevista(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" title="Data fim prevista" />
               <button onClick={handleAddFase} disabled={!novoNomeFase || saving} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">Adicionar</button>
               <button onClick={() => setShowFaseForm(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
             </div>
