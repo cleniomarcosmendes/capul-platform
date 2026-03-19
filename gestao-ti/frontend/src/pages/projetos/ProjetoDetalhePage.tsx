@@ -762,12 +762,12 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   async function handleSaveEdit(registroId: string) {
     try {
       await projetoService.ajustarRegistroTempo(projetoId, registroId, { horaInicio: editInicio ? new Date(editInicio).toISOString() : undefined, horaFim: editFim ? new Date(editFim).toISOString() : undefined, observacoes: editObs || undefined });
-      setEditingRegistro(null); if (expandedId) loadRegistros(expandedId); loadAll();
+      setEditingRegistro(null); if (expandedId) loadRegistros(expandedId);
     } catch { /* empty */ }
   }
   async function handleRemoveRegistro(registroId: string) {
     if (!await confirm('Remover Registro', 'Deseja remover este registro de tempo?')) return;
-    try { await projetoService.removerRegistroTempo(projetoId, registroId); if (expandedId) loadRegistros(expandedId); loadAll(); } catch { /* empty */ }
+    try { await projetoService.removerRegistroTempo(projetoId, registroId); if (expandedId) loadRegistros(expandedId); } catch { /* empty */ }
   }
   async function handleChangeStatus(atividadeId: string, status: string) {
     try { await projetoService.atualizarAtividade(projetoId, atividadeId, { status }); loadAll(); } catch { /* empty */ }
