@@ -944,7 +944,15 @@ export class ChamadoService {
     });
     if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
 
-    if (userId && role) this.validarEdicaoRegistroChamado(registro, userId, role);
+    if (userId && role) {
+      this.validarEdicaoRegistroChamado(registro, userId, role);
+      if (registro.usuarioId !== userId) {
+        this.prisma.$queryRawUnsafe(
+          `INSERT INTO core.system_logs (id, level, message, module, action, usuario_id, metadata, created_at) VALUES (gen_random_uuid()::text, 'AUDIT', 'REGISTRO_TEMPO_CHAMADO_EDITADO_POR_GESTOR', 'CHAMADO', 'REGISTRO_TEMPO_CHAMADO_EDITADO_POR_GESTOR', $1, $2, NOW())`,
+          userId, JSON.stringify({ registroId, donoId: registro.usuarioId, chamadoId }),
+        ).catch(() => {});
+      }
+    }
 
     const data: Record<string, unknown> = {};
     if (dto.horaInicio) data.horaInicio = new Date(dto.horaInicio);
@@ -974,7 +982,15 @@ export class ChamadoService {
       where: { id: registroId, chamadoId },
     });
     if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
-    if (userId && role) this.validarEdicaoRegistroChamado(registro, userId, role);
+    if (userId && role) {
+      this.validarEdicaoRegistroChamado(registro, userId, role);
+      if (registro.usuarioId !== userId) {
+        this.prisma.$queryRawUnsafe(
+          `INSERT INTO core.system_logs (id, level, message, module, action, usuario_id, metadata, created_at) VALUES (gen_random_uuid()::text, 'AUDIT', 'REGISTRO_TEMPO_CHAMADO_REMOVIDO_POR_GESTOR', 'CHAMADO', 'REGISTRO_TEMPO_CHAMADO_REMOVIDO_POR_GESTOR', $1, $2, NOW())`,
+          userId, JSON.stringify({ registroId, donoId: registro.usuarioId, chamadoId }),
+        ).catch(() => {});
+      }
+    }
     return this.prisma.registroTempoChamado.delete({ where: { id: registroId } });
   }
 }

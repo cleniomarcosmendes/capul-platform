@@ -841,7 +841,16 @@ export class ProjetoService {
     });
     if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
 
-    if (userId && role) this.validarEdicaoRegistro(registro, userId, role);
+    if (userId && role) {
+      this.validarEdicaoRegistro(registro, userId, role);
+      // Audit log: gestor editando registro de outro usuario
+      if (registro.usuarioId !== userId) {
+        this.prisma.$queryRawUnsafe(
+          `INSERT INTO core.system_logs (id, level, message, module, action, usuario_id, metadata, created_at) VALUES (gen_random_uuid()::text, 'AUDIT', 'REGISTRO_TEMPO_EDITADO_POR_GESTOR', 'PROJETO', 'REGISTRO_TEMPO_EDITADO_POR_GESTOR', $1, $2, NOW())`,
+          userId, JSON.stringify({ registroId, donoId: registro.usuarioId, projetoId }),
+        ).catch(() => {});
+      }
+    }
 
     const data: Record<string, unknown> = {};
     if (dto.horaInicio) data.horaInicio = new Date(dto.horaInicio);
@@ -868,7 +877,15 @@ export class ProjetoService {
       where: { id: registroId, atividade: { projetoId } },
     });
     if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
-    if (userId && role) this.validarEdicaoRegistro(registro, userId, role);
+    if (userId && role) {
+      this.validarEdicaoRegistro(registro, userId, role);
+      if (registro.usuarioId !== userId) {
+        this.prisma.$queryRawUnsafe(
+          `INSERT INTO core.system_logs (id, level, message, module, action, usuario_id, metadata, created_at) VALUES (gen_random_uuid()::text, 'AUDIT', 'REGISTRO_TEMPO_REMOVIDO_POR_GESTOR', 'PROJETO', 'REGISTRO_TEMPO_REMOVIDO_POR_GESTOR', $1, $2, NOW())`,
+          userId, JSON.stringify({ registroId, donoId: registro.usuarioId, projetoId }),
+        ).catch(() => {});
+      }
+    }
     return this.prisma.registroTempo.delete({ where: { id: registroId } });
   }
 

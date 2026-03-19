@@ -936,9 +936,14 @@ export function ChamadoDetalhePage() {
                             {['RESOLVIDO', 'FECHADO'].includes(chamado.status) && (
                             <div className="flex gap-2">
                               <button onClick={() => {
+                                const toLocal = (iso: string) => {
+                                  const d = new Date(iso);
+                                  const p = (n: number) => String(n).padStart(2, '0');
+                                  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+                                };
                                 setEditingReg(r.id);
-                                setEditRegInicio(r.horaInicio.substring(0, 16));
-                                setEditRegFim(r.horaFim ? r.horaFim.substring(0, 16) : '');
+                                setEditRegInicio(toLocal(r.horaInicio));
+                                setEditRegFim(r.horaFim ? toLocal(r.horaFim) : '');
                                 setEditRegObs(r.observacoes || '');
                               }} className="text-blue-500 hover:text-blue-700"><Edit3 className="w-4 h-4" /></button>
                               <button onClick={async () => {

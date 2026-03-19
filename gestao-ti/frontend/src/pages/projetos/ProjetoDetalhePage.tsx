@@ -747,8 +747,17 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
     if (expandedId === atividadeId) { setExpandedId(null); return; }
     setExpandedId(atividadeId); setEditingRegistro(null); loadRegistros(atividadeId); loadComentarios(atividadeId);
   }
+  function toLocalDatetimeStr(iso: string): string {
+    // Converte ISO UTC para formato datetime-local (YYYY-MM-DDTHH:MM) em hora local
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
   function startEdit(r: RegistroTempo) {
-    setEditingRegistro(r.id); setEditInicio(r.horaInicio ? r.horaInicio.substring(0, 16) : ''); setEditFim(r.horaFim ? r.horaFim.substring(0, 16) : ''); setEditObs(r.observacoes || '');
+    setEditingRegistro(r.id);
+    setEditInicio(r.horaInicio ? toLocalDatetimeStr(r.horaInicio) : '');
+    setEditFim(r.horaFim ? toLocalDatetimeStr(r.horaFim) : '');
+    setEditObs(r.observacoes || '');
   }
   async function handleSaveEdit(registroId: string) {
     try {
