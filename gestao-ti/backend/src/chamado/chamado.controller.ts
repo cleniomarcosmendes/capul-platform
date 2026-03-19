@@ -297,12 +297,23 @@ export class ChamadoController {
   }
 
   @Patch(':id/registros-tempo/:registroId')
-  ajustarRegistroTempo(@Param('id') id: string, @Param('registroId') registroId: string, @Body() dto: UpdateRegistroTempoChamadoDto) {
-    return this.service.ajustarRegistroTempoChamado(id, registroId, dto);
+  ajustarRegistroTempo(
+    @Param('id') id: string,
+    @Param('registroId') registroId: string,
+    @Body() dto: UpdateRegistroTempoChamadoDto,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.ajustarRegistroTempoChamado(id, registroId, dto, user.sub, role);
   }
 
   @Delete(':id/registros-tempo/:registroId')
-  removerRegistroTempo(@Param('id') id: string, @Param('registroId') registroId: string) {
-    return this.service.removerRegistroTempoChamado(id, registroId);
+  removerRegistroTempo(
+    @Param('id') id: string,
+    @Param('registroId') registroId: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.removerRegistroTempoChamado(id, registroId, user.sub, role);
   }
 }

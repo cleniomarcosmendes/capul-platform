@@ -911,7 +911,29 @@ export class ChamadoService {
     });
   }
 
-  async ajustarRegistroTempoChamado(chamadoId: string, registroId: string, dto: UpdateRegistroTempoChamadoDto) {
+  private validarEdicaoRegistroChamado(registro: { horaFim: Date | null; horaInicio: Date; usuarioId: string }, userId: string, role: string) {
+    const ROLES_GESTORES = ['ADMIN', 'GESTOR_TI'];
+
+    // Regra 1: nao editar registro com timer ativo
+    if (!registro.horaFim) {
+      throw new BadRequestException('Nao e possivel editar um registro com cronometro ativo. Encerre o cronometro primeiro.');
+    }
+
+    // Regra 2: apenas o dono ou gestores
+    if (registro.usuarioId !== userId && !ROLES_GESTORES.includes(role)) {
+      throw new ForbiddenException('Voce so pode editar seus proprios registros de tempo.');
+    }
+
+    // Regra 3: limite D-2
+    const limite = new Date();
+    limite.setDate(limite.getDate() - 2);
+    limite.setHours(0, 0, 0, 0);
+    if (new Date(registro.horaInicio) < limite && !ROLES_GESTORES.includes(role)) {
+      throw new BadRequestException('Nao e possivel editar registros com mais de 2 dias. Solicite ao gestor.');
+    }
+  }
+
+  async ajustarRegistroTempoChamado(chamadoId: string, registroId: string, dto: UpdateRegistroTempoChamadoDto, userId?: string, role?: string) {
     const chamado = await this.getChamadoOrFail(chamadoId);
     if (!['RESOLVIDO', 'FECHADO'].includes(chamado.status)) {
       throw new BadRequestException('O registro de tempo so pode ser editado apos a finalizacao do chamado');
@@ -921,6 +943,8 @@ export class ChamadoService {
       where: { id: registroId, chamadoId },
     });
     if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
+
+    if (userId && role) this.validarEdicaoRegistroChamado(registro, userId, role);
 
     const data: Record<string, unknown> = {};
     if (dto.horaInicio) data.horaInicio = new Date(dto.horaInicio);
@@ -940,7 +964,7 @@ export class ChamadoService {
     });
   }
 
-  async removerRegistroTempoChamado(chamadoId: string, registroId: string) {
+  async removerRegistroTempoChamado(chamadoId: string, registroId: string, userId?: string, role?: string) {
     const chamado = await this.getChamadoOrFail(chamadoId);
     if (!['RESOLVIDO', 'FECHADO'].includes(chamado.status)) {
       throw new BadRequestException('O registro de tempo so pode ser removido apos a finalizacao do chamado');
@@ -950,6 +974,7 @@ export class ChamadoService {
       where: { id: registroId, chamadoId },
     });
     if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
+    if (userId && role) this.validarEdicaoRegistroChamado(registro, userId, role);
     return this.prisma.registroTempoChamado.delete({ where: { id: registroId } });
   }
 }

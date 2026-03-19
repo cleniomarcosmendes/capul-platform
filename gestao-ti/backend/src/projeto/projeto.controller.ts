@@ -299,13 +299,24 @@ export class ProjetoController {
   }
 
   @Patch(':id/registros-tempo/:registroId')
-  ajustarRegistroTempo(@Param('id') id: string, @Param('registroId') registroId: string, @Body() dto: UpdateRegistroTempoDto) {
-    return this.service.ajustarRegistroTempo(id, registroId, dto);
+  ajustarRegistroTempo(
+    @Param('id') id: string,
+    @Param('registroId') registroId: string,
+    @Body() dto: UpdateRegistroTempoDto,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.ajustarRegistroTempo(id, registroId, dto, user.sub, role);
   }
 
   @Delete(':id/registros-tempo/:registroId')
-  removerRegistroTempo(@Param('id') id: string, @Param('registroId') registroId: string) {
-    return this.service.removerRegistroTempo(id, registroId);
+  removerRegistroTempo(
+    @Param('id') id: string,
+    @Param('registroId') registroId: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.removerRegistroTempo(id, registroId, user.sub, role);
   }
 
   // --- Chamados (vincular/desvincular) ---

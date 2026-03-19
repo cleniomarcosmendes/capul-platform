@@ -812,12 +812,36 @@ export class ProjetoService {
     });
   }
 
-  async ajustarRegistroTempo(projetoId: string, registroId: string, dto: UpdateRegistroTempoDto) {
+  private validarEdicaoRegistro(registro: { horaFim: Date | null; horaInicio: Date; usuarioId: string }, userId: string, role: string) {
+    const ROLES_GESTORES = ['ADMIN', 'GESTOR_TI'];
+
+    // Regra 1: nao editar registro com timer ativo (horaFim = null)
+    if (!registro.horaFim) {
+      throw new BadRequestException('Nao e possivel editar um registro com cronometro ativo. Encerre o cronometro primeiro.');
+    }
+
+    // Regra 2: apenas o dono do registro ou gestores podem editar
+    if (registro.usuarioId !== userId && !ROLES_GESTORES.includes(role)) {
+      throw new ForbiddenException('Voce so pode editar seus proprios registros de tempo.');
+    }
+
+    // Regra 3: limite de D-2 (maximo 2 dias atras)
+    const limite = new Date();
+    limite.setDate(limite.getDate() - 2);
+    limite.setHours(0, 0, 0, 0);
+    if (new Date(registro.horaInicio) < limite && !ROLES_GESTORES.includes(role)) {
+      throw new BadRequestException('Nao e possivel editar registros com mais de 2 dias. Solicite ao gestor.');
+    }
+  }
+
+  async ajustarRegistroTempo(projetoId: string, registroId: string, dto: UpdateRegistroTempoDto, userId?: string, role?: string) {
     await this.ensureProjetoExists(projetoId);
     const registro = await this.prisma.registroTempo.findFirst({
       where: { id: registroId, atividade: { projetoId } },
     });
     if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
+
+    if (userId && role) this.validarEdicaoRegistro(registro, userId, role);
 
     const data: Record<string, unknown> = {};
     if (dto.horaInicio) data.horaInicio = new Date(dto.horaInicio);
@@ -838,12 +862,13 @@ export class ProjetoService {
     });
   }
 
-  async removerRegistroTempo(projetoId: string, registroId: string) {
+  async removerRegistroTempo(projetoId: string, registroId: string, userId?: string, role?: string) {
     await this.ensureProjetoExists(projetoId);
     const registro = await this.prisma.registroTempo.findFirst({
       where: { id: registroId, atividade: { projetoId } },
     });
     if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
+    if (userId && role) this.validarEdicaoRegistro(registro, userId, role);
     return this.prisma.registroTempo.delete({ where: { id: registroId } });
   }
 
