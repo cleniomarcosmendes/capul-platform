@@ -5,6 +5,7 @@ import {
   IsUUID,
   IsEmail,
   MinLength,
+  Matches,
   IsArray,
   ValidateNested,
 } from 'class-validator';
@@ -35,7 +36,10 @@ export class CreateUsuarioDto {
 
   @IsNotEmpty()
   @IsString()
-  @MinLength(6)
+  @MinLength(8, { message: 'Senha deve ter no minimo 8 caracteres' })
+  @Matches(/(?=.*[a-z])/, { message: 'Senha deve conter pelo menos uma letra minuscula' })
+  @Matches(/(?=.*[A-Z])/, { message: 'Senha deve conter pelo menos uma letra maiuscula' })
+  @Matches(/(?=.*\d)/, { message: 'Senha deve conter pelo menos um numero' })
   senha: string;
 
   @IsOptional()

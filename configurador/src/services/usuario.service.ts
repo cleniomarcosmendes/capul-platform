@@ -43,6 +43,11 @@ export const usuarioService = {
     return data;
   },
 
+  async resetarSenha(id: string, novaSenha: string): Promise<{ success: boolean; message: string }> {
+    const { data } = await coreApi.patch(`/usuarios/${id}/reset-senha`, { novaSenha });
+    return data;
+  },
+
   async atualizarStatus(id: string, status: 'ATIVO' | 'INATIVO'): Promise<UsuarioDetalhe> {
     const { data } = await coreApi.patch(`/usuarios/${id}/status`, { status });
     return data;

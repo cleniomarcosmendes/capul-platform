@@ -4,10 +4,13 @@ import {
   useState,
   useCallback,
   useEffect,
+  useRef,
   type ReactNode,
 } from 'react';
 import { authService } from '../services/auth.service';
 import type { UsuarioLogado } from '../types';
+
+const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutos
 
 interface AuthContextType {
   usuario: UsuarioLogado | null;
@@ -25,6 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authService.getUsuarioLocal,
   );
   const [loading, setLoading] = useState(false);
+  const inactivityTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     if (authService.isAuthenticated() && !usuario) {
@@ -64,6 +68,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await authService.me();
     setUsuario(data);
   }, []);
+
+  // Timeout de inatividade
+  const resetInactivityTimer = useCallback(() => {
+    clearTimeout(inactivityTimer.current);
+    if (authService.isAuthenticated()) {
+      inactivityTimer.current = setTimeout(() => {
+        alert('Sessao expirada por inatividade. Faca login novamente.');
+        authService.logout();
+        setUsuario(null);
+        window.location.href = '/login';
+      }, INACTIVITY_TIMEOUT);
+    }
+  }, []);
+
+  useEffect(() => {
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+    events.forEach((e) => document.addEventListener(e, resetInactivityTimer));
+    resetInactivityTimer();
+    return () => {
+      events.forEach((e) => document.removeEventListener(e, resetInactivityTimer));
+      clearTimeout(inactivityTimer.current);
+    };
+  }, [resetInactivityTimer]);
 
   return (
     <AuthContext.Provider

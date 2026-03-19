@@ -152,6 +152,21 @@ export class UsuarioService {
     });
   }
 
+  async resetSenha(id: string, novaSenha: string) {
+    await this.findOne(id);
+    const senhaHash = await bcrypt.hash(novaSenha, 10);
+    await this.prisma.usuario.update({
+      where: { id },
+      data: { senha: senhaHash, primeiroAcesso: true },
+    });
+    // Revogar todos refresh tokens do usuario
+    await this.prisma.refreshToken.updateMany({
+      where: { usuarioId: id, revoked: false },
+      data: { revoked: true },
+    });
+    return { success: true, message: 'Senha redefinida com sucesso. O usuario devera trocar a senha no proximo login.' };
+  }
+
   async atribuirPermissao(usuarioId: string, dto: AtribuirPermissaoDto) {
     await this.findOne(usuarioId);
 

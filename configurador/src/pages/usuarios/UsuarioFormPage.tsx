@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { usuarioService } from '../../services/usuario.service';
 import { departamentoService } from '../../services/departamento.service';
-import { ArrowLeft, Save, Shield } from 'lucide-react';
+import { ArrowLeft, Save, Shield, KeyRound } from 'lucide-react';
 import type { UsuarioDetalhe, ModuloSistema, FilialOption, Departamento } from '../../types';
 
 interface PermissaoForm {
@@ -37,6 +37,9 @@ export function UsuarioFormPage() {
   const [modulos, setModulos] = useState<ModuloSistema[]>([]);
   const [permissoes, setPermissoes] = useState<PermissaoForm[]>([]);
   const [permissoesOriginais, setPermissoesOriginais] = useState<{ moduloId: string; roleModuloId: string }[]>([]);
+  const [showResetSenha, setShowResetSenha] = useState(false);
+  const [novaSenha, setNovaSenha] = useState('');
+  const [resetMsg, setResetMsg] = useState('');
 
   useEffect(() => {
     carregarDados();
@@ -200,7 +203,61 @@ export function UsuarioFormPage() {
               {!isEdicao && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Senha *</label>
-                  <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required minLength={6} className={inputClass} />
+                  <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required minLength={8} className={inputClass} />
+                  <p className="text-xs text-slate-400 mt-1">Min. 8 caracteres, 1 maiuscula, 1 minuscula, 1 numero</p>
+                </div>
+              )}
+              {isEdicao && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Senha</label>
+                  {!showResetSenha ? (
+                    <button
+                      type="button"
+                      onClick={() => { setShowResetSenha(true); setNovaSenha(''); setResetMsg(''); }}
+                      className="flex items-center gap-2 text-sm text-amber-600 hover:text-amber-700 border border-amber-300 px-3 py-2 rounded-lg hover:bg-amber-50"
+                    >
+                      <KeyRound className="w-4 h-4" />
+                      Resetar Senha
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      <input
+                        type="password"
+                        value={novaSenha}
+                        onChange={(e) => setNovaSenha(e.target.value)}
+                        placeholder="Nova senha (min. 8 caracteres)"
+                        minLength={8}
+                        className={inputClass}
+                      />
+                      <p className="text-xs text-slate-400">Min. 8 caracteres, 1 maiuscula, 1 minuscula, 1 numero</p>
+                      {resetMsg && <p className={`text-xs ${resetMsg.includes('sucesso') ? 'text-green-600' : 'text-red-600'}`}>{resetMsg}</p>}
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!novaSenha || novaSenha.length < 8) { setResetMsg('Senha deve ter no minimo 8 caracteres'); return; }
+                            if (!/(?=.*[a-z])/.test(novaSenha)) { setResetMsg('Senha deve conter letra minuscula'); return; }
+                            if (!/(?=.*[A-Z])/.test(novaSenha)) { setResetMsg('Senha deve conter letra maiuscula'); return; }
+                            if (!/(?=.*\d)/.test(novaSenha)) { setResetMsg('Senha deve conter numero'); return; }
+                            try {
+                              const res = await usuarioService.resetarSenha(id!, novaSenha);
+                              setResetMsg(res.message);
+                              setNovaSenha('');
+                              setTimeout(() => setShowResetSenha(false), 2000);
+                            } catch {
+                              setResetMsg('Erro ao resetar senha');
+                            }
+                          }}
+                          className="flex items-center gap-1 bg-amber-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-amber-700"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" /> Confirmar
+                        </button>
+                        <button type="button" onClick={() => setShowResetSenha(false)} className="text-sm text-slate-500 hover:text-slate-700">
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               <div>

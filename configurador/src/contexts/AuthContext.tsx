@@ -1,6 +1,8 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { authApi } from '../services/api';
 import type { UsuarioLogado } from '../types';
+
+const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutos
 
 interface AuthContextType {
   usuario: UsuarioLogado | null;
@@ -15,6 +17,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [loading, setLoading] = useState(true);
+  const inactivityTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const configuradorRole = usuario?.modulos.find((m) => m.codigo === 'CONFIGURADOR')?.role ?? null;
 
@@ -26,7 +29,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         return;
       }
-
       const { data } = await authApi.get('/me');
       setUsuario(data);
     } catch {
@@ -47,9 +49,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = '/login';
   }
 
+  // Timeout de inatividade
+  const resetInactivityTimer = useCallback(() => {
+    clearTimeout(inactivityTimer.current);
+    if (localStorage.getItem('accessToken')) {
+      inactivityTimer.current = setTimeout(() => {
+        alert('Sessao expirada por inatividade. Faca login novamente.');
+        logout();
+      }, INACTIVITY_TIMEOUT);
+    }
+  }, []);
+
   useEffect(() => {
     refreshUser();
-  }, []);
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+    events.forEach((e) => document.addEventListener(e, resetInactivityTimer));
+    resetInactivityTimer();
+    return () => {
+      events.forEach((e) => document.removeEventListener(e, resetInactivityTimer));
+      clearTimeout(inactivityTimer.current);
+    };
+  }, [resetInactivityTimer]);
 
   return (
     <AuthContext.Provider value={{ usuario, loading, configuradorRole, refreshUser, logout }}>

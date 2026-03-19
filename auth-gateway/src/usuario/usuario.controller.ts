@@ -48,6 +48,11 @@ export class UsuarioController {
     return this.usuarioService.updateStatus(id, dto.status);
   }
 
+  @Patch(':id/reset-senha')
+  resetSenha(@Param('id') id: string, @Body() body: { novaSenha: string }) {
+    return this.usuarioService.resetSenha(id, body.novaSenha);
+  }
+
   @Post(':id/permissoes')
   atribuirPermissao(
     @Param('id') id: string,

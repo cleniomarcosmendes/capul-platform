@@ -64,6 +64,7 @@ services:
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-7d}
       REDIS_URL: redis://redis:6379
       NODE_ENV: production
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://localhost}
     ports:
       - "3000:3000"
     depends_on:
@@ -145,6 +146,7 @@ services:
       CORE_SCHEMA: core
       REDIS_URL: redis://redis:6379
       NODE_ENV: production
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://localhost}
     ports:
       - "3001:3001"
     volumes:

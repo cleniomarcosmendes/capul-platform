@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { EquipeModule } from './equipe/equipe.module.js';
 import { CatalogoServicoModule } from './catalogo-servico/catalogo-servico.module.js';
@@ -26,6 +28,10 @@ import { JwtStrategy } from './common/strategies/jwt.strategy.js';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PassportModule.register({ defaultStrategy: 'jwt' }),
+    ThrottlerModule.forRoot([{
+      ttl: 60000,   // 1 minuto
+      limit: 60,    // 60 requisicoes por minuto (geral)
+    }]),
     PrismaModule,
     EquipeModule,
     CatalogoServicoModule,
@@ -46,6 +52,9 @@ import { JwtStrategy } from './common/strategies/jwt.strategy.js';
     HorarioModule,
     DashboardModule,
   ],
-  providers: [JwtStrategy],
+  providers: [
+    JwtStrategy,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}

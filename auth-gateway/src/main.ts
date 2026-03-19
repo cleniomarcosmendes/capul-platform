@@ -9,8 +9,12 @@ async function bootstrap() {
   app.useGlobalPipes(globalValidationPipe);
   app.useGlobalFilters(new GlobalExceptionFilter());
 
+  // CORS restritivo — apenas origens da intranet
+  const allowedOrigins = (process.env.CORS_ORIGINS || 'https://localhost')
+    .split(',')
+    .map((o) => o.trim());
   app.enableCors({
-    origin: true,
+    origin: allowedOrigins,
     credentials: true,
   });
 
