@@ -23,6 +23,7 @@ import { CreateUsuarioChaveDto } from './dto/create-usuario-chave.dto';
 import { CreatePendenciaDto } from './dto/create-pendencia.dto';
 import { UpdatePendenciaDto } from './dto/update-pendencia.dto';
 import { CreateInteracaoPendenciaDto } from './dto/create-interacao-pendencia.dto';
+import { NotificacaoService } from '../notificacao/notificacao.service.js';
 
 const PROJETO_UPLOADS_DIR = path.resolve('./uploads/projetos');
 if (!fs.existsSync(PROJETO_UPLOADS_DIR)) {
@@ -66,7 +67,7 @@ const projetoDetailInclude = {
       _count: { select: { registrosTempo: true, comentarios: true } },
       registrosTempo: {
         where: { horaFim: null },
-        select: { id: true, usuarioId: true, horaInicio: true },
+        select: { id: true, usuarioId: true, horaInicio: true, usuario: { select: { nome: true } } },
       },
     },
     orderBy: { dataAtividade: 'desc' as const },
@@ -114,7 +115,10 @@ const projetoDetailInclude = {
 
 @Injectable()
 export class ProjetoService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificacaoService: NotificacaoService,
+  ) {}
 
   async findAll(filters: {
     status?: string;
@@ -625,7 +629,7 @@ export class ProjetoService {
       if (!pendencia) throw new NotFoundException('Pendencia nao encontrada neste projeto');
     }
 
-    return this.prisma.atividadeProjeto.create({
+    const atividade = await this.prisma.atividadeProjeto.create({
       data: {
         titulo: dto.titulo,
         descricao: dto.descricao,
@@ -640,8 +644,20 @@ export class ProjetoService {
         usuario: { select: { id: true, nome: true } },
         fase: { select: { id: true, nome: true } },
         pendencia: { select: { id: true, numero: true, titulo: true, status: true } },
+        projeto: { select: { nome: true } },
       },
     });
+
+    // Notificar usuario atribuido
+    this.notificacaoService.criarParaUsuario(
+      userId,
+      'ATIVIDADE_ATRIBUIDA',
+      `Nova atividade: ${dto.titulo}`,
+      `Voce foi atribuido a atividade "${dto.titulo}" no projeto "${atividade.projeto.nome}".`,
+      { projetoId, atividadeId: atividade.id },
+    ).catch(() => {});
+
+    return atividade;
   }
 
   async updateAtividade(
@@ -1714,6 +1730,18 @@ export class ProjetoService {
       },
     });
 
+    // Notificar responsavel (se diferente do criador)
+    if (dto.responsavelId !== criadorId) {
+      const proj = await this.prisma.projeto.findUnique({ where: { id: projetoId }, select: { nome: true } });
+      this.notificacaoService.criarParaUsuario(
+        dto.responsavelId,
+        'PENDENCIA_ATRIBUIDA',
+        `Nova pendencia: ${dto.titulo}`,
+        `Voce foi atribuido como responsavel da pendencia "${dto.titulo}" no projeto "${proj?.nome}".`,
+        { projetoId, pendenciaId: pendencia.id },
+      ).catch(() => {});
+    }
+
     return pendencia;
   }
 
@@ -1754,6 +1782,15 @@ export class ProjetoService {
           usuarioId: userId,
         },
       });
+      // Notificar novo responsavel
+      const proj = await this.prisma.projeto.findUnique({ where: { id: projetoId }, select: { nome: true } });
+      this.notificacaoService.criarParaUsuario(
+        dto.responsavelId,
+        'PENDENCIA_ATRIBUIDA',
+        `Pendencia transferida: ${pendencia.titulo}`,
+        `Voce foi atribuido como responsavel da pendencia "${pendencia.titulo}" no projeto "${proj?.nome}".`,
+        { projetoId, pendenciaId },
+      ).catch(() => {});
     }
 
     if (dto.status !== undefined && dto.status !== pendencia.status) {

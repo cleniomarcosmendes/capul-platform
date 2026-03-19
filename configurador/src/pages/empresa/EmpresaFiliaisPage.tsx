@@ -71,7 +71,10 @@ export function EmpresaFiliaisPage() {
     if (!empresa) return;
     setSavingEmpresa(true);
     try {
-      const atualizada = await empresaService.atualizar(empresa.id, empresaForm);
+      const cleanEmpresa = { ...empresaForm };
+      if (!cleanEmpresa.email) delete (cleanEmpresa as Record<string, unknown>).email;
+      if (!cleanEmpresa.telefone) delete (cleanEmpresa as Record<string, unknown>).telefone;
+      const atualizada = await empresaService.atualizar(empresa.id, cleanEmpresa);
       setEmpresa({ ...empresa, ...atualizada });
       setEditEmpresa(false);
     } catch {
@@ -113,10 +116,14 @@ export function EmpresaFiliaisPage() {
     setSavingFilial(true);
     setErroFilial('');
     try {
+      // Limpar campos vazios para nao enviar email/telefone vazio ao backend
+      const clean = { ...filialForm };
+      if (!clean.email) delete (clean as Record<string, unknown>).email;
+      if (!clean.telefone) delete (clean as Record<string, unknown>).telefone;
       if (editingFilialId) {
-        await filialService.atualizar(editingFilialId, filialForm);
+        await filialService.atualizar(editingFilialId, clean);
       } else {
-        await filialService.criar({ ...filialForm, empresaId: empresa.id });
+        await filialService.criar({ ...clean, empresaId: empresa.id });
       }
       setShowFilialModal(false);
       carregar();

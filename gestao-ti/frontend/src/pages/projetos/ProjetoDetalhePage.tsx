@@ -700,7 +700,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
     setSaving(false);
   }
   async function handleIniciar(atividadeId: string) {
-    // Verificar se ha outro timer ativo (em qualquer atividade deste projeto)
+    // Verificar se ha outro timer ativo do MESMO usuario (em qualquer atividade deste projeto)
     const outraAtiva = atividades.find((a) =>
       a.id !== atividadeId && a.registrosTempo?.some((r) => r.usuarioId === userId),
     );
@@ -712,6 +712,22 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
       );
       if (!ok) return;
     }
+
+    // Verificar se OUTRO usuario esta trabalhando nesta atividade
+    const estaAtividade = atividades.find((a) => a.id === atividadeId);
+    const outrosUsuarios = (estaAtividade?.registrosTempo ?? [])
+      .filter((r) => r.usuarioId !== userId)
+      .map((r) => (r as { usuario?: { nome: string } }).usuario?.nome || 'Outro usuario');
+    if (outrosUsuarios.length > 0) {
+      const nomes = [...new Set(outrosUsuarios)].join(', ');
+      const ok = await confirm(
+        'Atividade em andamento',
+        `${nomes} ja esta trabalhando nesta atividade. Deseja iniciar mesmo assim?`,
+        { variant: 'default', confirmLabel: 'Iniciar', cancelLabel: 'Cancelar' },
+      );
+      if (!ok) return;
+    }
+
     try { await projetoService.iniciarTempo(projetoId, atividadeId); loadAll(); if (expandedId === atividadeId) loadRegistros(atividadeId); } catch { /* empty */ }
   }
   async function handleEncerrar(atividadeId: string) {
