@@ -406,7 +406,7 @@ export function ProjetoDetalhePage() {
           <TabEquipe projetoId={projeto.id} canManage={canManage} />
         )}
         {tab === 'atividades' && (
-          <TabCronograma projetoId={projeto.id} isCompleto={isCompleto} canManage={canManage} canAdd={canAddAtividade} userId={usuario?.id || ''} />
+          <TabCronograma projetoId={projeto.id} isCompleto={isCompleto} canManage={canManage} canAdd={canAddAtividade} userId={usuario?.id || ''} isGestor={gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI'} />
         )}
         {tab === 'financeiro' && (
           <TabFinanceiro projetoId={projeto.id} projeto={projeto} canManage={canManage} />
@@ -593,7 +593,7 @@ function TabEquipe({ projetoId, canManage }: { projetoId: string; canManage: boo
 }
 
 // --- Tab Atividades (Fases + Atividades + Registros de Tempo) ---
-function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { projetoId: string; isCompleto: boolean; canManage: boolean; canAdd: boolean; userId: string }) {
+function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGestor }: { projetoId: string; isCompleto: boolean; canManage: boolean; canAdd: boolean; userId: string; isGestor: boolean }) {
   const { confirm } = useToast();
   const [fases, setFases] = useState<FaseProjeto[]>([]);
   const [atividades, setAtividades] = useState<AtividadeProjeto[]>([]);
@@ -1093,14 +1093,22 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId }: { p
                         <td className="py-2 pr-2 text-slate-700 font-medium">{fmtDuracao(r.duracaoMinutos)}</td>
                         <td className="py-2 pr-2 text-slate-600">{r.usuario.nome}</td>
                         <td className="py-2 pr-2 text-slate-500">{r.observacoes || '-'}</td>
-                        {canAdd && (
-                          <td className="py-2 text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              <button onClick={() => startEdit(r)} className="text-blue-500 hover:text-blue-700" title="Ajustar"><Edit3 className="w-3.5 h-3.5" /></button>
-                              <button onClick={() => handleRemoveRegistro(r.id)} className="text-red-400 hover:text-red-600" title="Remover"><Trash2 className="w-3.5 h-3.5" /></button>
-                            </div>
-                          </td>
-                        )}
+                        {canAdd && (() => {
+                          const isMeu = r.usuarioId === userId;
+                          const timerAtivo = !r.horaFim;
+                          const limiteD2 = new Date(); limiteD2.setDate(limiteD2.getDate() - 2); limiteD2.setHours(0, 0, 0, 0);
+                          const foraDoPrazo = new Date(r.horaInicio) < limiteD2;
+                          const podeEditar = !timerAtivo && (isMeu || isGestor) && (!foraDoPrazo || isGestor);
+                          const motivo = timerAtivo ? 'Cronometro ativo' : !isMeu && !isGestor ? 'Registro de outro usuario' : foraDoPrazo && !isGestor ? 'Registro com mais de 2 dias' : '';
+                          return (
+                            <td className="py-2 text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <button onClick={() => podeEditar && startEdit(r)} disabled={!podeEditar} className={podeEditar ? 'text-blue-500 hover:text-blue-700' : 'text-slate-300 cursor-not-allowed'} title={motivo || 'Ajustar'}><Edit3 className="w-3.5 h-3.5" /></button>
+                                <button onClick={() => podeEditar && handleRemoveRegistro(r.id)} disabled={!podeEditar} className={podeEditar ? 'text-red-400 hover:text-red-600' : 'text-slate-300 cursor-not-allowed'} title={motivo || 'Remover'}><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                            </td>
+                          );
+                        })()}
                       </tr>
                     ))}
                   </tbody>

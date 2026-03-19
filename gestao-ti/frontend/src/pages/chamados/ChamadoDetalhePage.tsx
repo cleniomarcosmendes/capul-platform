@@ -933,28 +933,38 @@ export function ChamadoDetalhePage() {
                             <span className="text-sm text-slate-700 font-medium">
                               {new Date(r.horaInicio).toLocaleDateString('pt-BR')}
                             </span>
-                            {['RESOLVIDO', 'FECHADO'].includes(chamado.status) && (
-                            <div className="flex gap-2">
-                              <button onClick={() => {
-                                const toLocal = (iso: string) => {
-                                  const d = new Date(iso);
-                                  const p = (n: number) => String(n).padStart(2, '0');
-                                  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-                                };
-                                setEditingReg(r.id);
-                                setEditRegInicio(toLocal(r.horaInicio));
-                                setEditRegFim(r.horaFim ? toLocal(r.horaFim) : '');
-                                setEditRegObs(r.observacoes || '');
-                              }} className="text-blue-500 hover:text-blue-700"><Edit3 className="w-4 h-4" /></button>
-                              <button onClick={async () => {
-                                if (!(await confirm('Remover Registro', 'Deseja remover este registro de tempo?'))) return;
-                                try {
-                                  await chamadoService.removerRegistroTempo(chamado.id, r.id);
-                                  setRegistrosTempo(await chamadoService.listarRegistrosTempo(chamado.id));
-                                } catch { /* empty */ }
-                              }} className="text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
-                            </div>
-                            )}
+                            {['RESOLVIDO', 'FECHADO'].includes(chamado.status) && (() => {
+                              const isMeu = r.usuarioId === usuario?.id;
+                              const timerAtivo = !r.horaFim;
+                              const limiteD2 = new Date(); limiteD2.setDate(limiteD2.getDate() - 2); limiteD2.setHours(0, 0, 0, 0);
+                              const foraDoPrazo = new Date(r.horaInicio) < limiteD2;
+                              const podeEditar = !timerAtivo && (isMeu || isGestor) && (!foraDoPrazo || isGestor);
+                              const motivo = timerAtivo ? 'Cronometro ativo' : !isMeu && !isGestor ? 'Registro de outro usuario' : foraDoPrazo && !isGestor ? 'Registro com mais de 2 dias' : '';
+                              return (
+                                <div className="flex gap-2">
+                                  <button disabled={!podeEditar} onClick={() => {
+                                    if (!podeEditar) return;
+                                    const toLocal = (iso: string) => {
+                                      const d = new Date(iso);
+                                      const p = (n: number) => String(n).padStart(2, '0');
+                                      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+                                    };
+                                    setEditingReg(r.id);
+                                    setEditRegInicio(toLocal(r.horaInicio));
+                                    setEditRegFim(r.horaFim ? toLocal(r.horaFim) : '');
+                                    setEditRegObs(r.observacoes || '');
+                                  }} className={podeEditar ? 'text-blue-500 hover:text-blue-700' : 'text-slate-300 cursor-not-allowed'} title={motivo || 'Ajustar'}><Edit3 className="w-4 h-4" /></button>
+                                  <button disabled={!podeEditar} onClick={async () => {
+                                    if (!podeEditar) return;
+                                    if (!(await confirm('Remover Registro', 'Deseja remover este registro de tempo?'))) return;
+                                    try {
+                                      await chamadoService.removerRegistroTempo(chamado.id, r.id);
+                                      setRegistrosTempo(await chamadoService.listarRegistrosTempo(chamado.id));
+                                    } catch { /* empty */ }
+                                  }} className={podeEditar ? 'text-red-400 hover:text-red-600' : 'text-slate-300 cursor-not-allowed'} title={motivo || 'Remover'}><Trash2 className="w-4 h-4" /></button>
+                                </div>
+                              );
+                            })()}
                           </div>
                           <div className="text-sm text-slate-600">
                             {new Date(r.horaInicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
