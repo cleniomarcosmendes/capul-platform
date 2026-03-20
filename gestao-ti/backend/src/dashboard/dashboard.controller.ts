@@ -2,15 +2,21 @@ import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { DashboardService } from './dashboard.service.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { GestaoTiGuard } from '../common/guards/gestao-ti.guard.js';
+import { RolesGuard } from '../common/guards/roles.guard.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
+const STAFF = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
+const MANAGERS = ['ADMIN', 'GESTOR_TI'];
+
 @Controller('dashboard')
-@UseGuards(JwtAuthGuard, GestaoTiGuard)
+@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
 export class DashboardController {
   constructor(private readonly service: DashboardService) {}
 
   @Get()
+  @Roles(...STAFF)
   getResumo(
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
@@ -20,6 +26,7 @@ export class DashboardController {
   }
 
   @Get('executivo')
+  @Roles(...MANAGERS)
   getExecutivo(
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
@@ -28,6 +35,7 @@ export class DashboardController {
   }
 
   @Get('disponibilidade')
+  @Roles(...STAFF)
   getDisponibilidade(
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
@@ -38,6 +46,7 @@ export class DashboardController {
   }
 
   @Get('financeiro')
+  @Roles(...STAFF)
   getFinanceiro(
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
@@ -46,6 +55,7 @@ export class DashboardController {
   }
 
   @Get('ordens-servico')
+  @Roles(...MANAGERS)
   getOrdensServico(
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
@@ -55,6 +65,7 @@ export class DashboardController {
   }
 
   @Get('csat')
+  @Roles(...MANAGERS)
   getCsat(
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
@@ -64,6 +75,7 @@ export class DashboardController {
   }
 
   @Get('acompanhamento')
+  @Roles(...STAFF)
   getAcompanhamento(
     @Query('usuarioId') usuarioId?: string,
     @Query('dataInicio') dataInicio?: string,
@@ -74,21 +86,25 @@ export class DashboardController {
   }
 
   @Get('acompanhamento/tecnicos')
+  @Roles(...STAFF)
   getTecnicos() {
     return this.service.getTecnicosAtivos();
   }
 
   @Get('acompanhamento-chamado')
+  @Roles(...STAFF)
   getAcompanhamentoChamado(@Query('chamadoId') chamadoId: string) {
     return this.service.getAcompanhamentoChamado(chamadoId);
   }
 
   @Get('acompanhamento-chamado/equipes')
+  @Roles(...STAFF)
   listarEquipes() {
     return this.service.listarEquipes();
   }
 
   @Get('acompanhamento-chamado/buscar')
+  @Roles(...STAFF)
   buscarChamados(
     @Query('q') q?: string,
     @Query('status') status?: string,
@@ -100,11 +116,13 @@ export class DashboardController {
   }
 
   @Get('acompanhamento-atividade')
+  @Roles(...STAFF)
   getAcompanhamentoAtividade(@Query('atividadeId') atividadeId: string) {
     return this.service.getAcompanhamentoAtividade(atividadeId);
   }
 
   @Get('acompanhamento-atividade/buscar')
+  @Roles(...STAFF)
   buscarAtividades(
     @Query('q') q?: string,
     @Query('projetoId') projetoId?: string,
@@ -114,6 +132,7 @@ export class DashboardController {
   }
 
   @Get('acompanhamento-atividade/projetos')
+  @Roles(...STAFF)
   listarProjetosAtivos() {
     return this.service.listarProjetosAtivos();
   }

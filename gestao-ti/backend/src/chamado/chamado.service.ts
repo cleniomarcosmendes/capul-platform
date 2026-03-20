@@ -115,6 +115,12 @@ export class ChamadoService {
       if (role === 'USUARIO_FINAL') {
         where.solicitanteId = user.sub;
         where.visibilidade = 'PUBLICO';
+      } else if (['USUARIO_CHAVE', 'TERCEIRIZADO'].includes(role)) {
+        where.OR = [
+          { solicitanteId: user.sub },
+          { tecnicoId: user.sub },
+          { colaboradores: { some: { usuarioId: user.sub } } },
+        ];
       } else if (filters.meusChamados) {
         where.OR = [
           { solicitanteId: user.sub },

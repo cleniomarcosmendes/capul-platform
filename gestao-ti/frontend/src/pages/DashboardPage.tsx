@@ -69,6 +69,7 @@ type TabKey = 'suporte' | 'portfolio' | 'contratos' | 'sustentacao' | 'projetos'
 
 const STAFF_ROLES = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
 const MANAGERS = ['ADMIN', 'GESTOR_TI'];
+const END_USER_ROLES = ['USUARIO_FINAL', 'USUARIO_CHAVE', 'TERCEIRIZADO'];
 
 const tabsDef: { key: TabKey; label: string; icon: LucideIcon; roles?: string[] }[] = [
   { key: 'suporte', label: 'Suporte', icon: Ticket },
@@ -1287,7 +1288,7 @@ export function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (gestaoTiRole === 'USUARIO_FINAL') {
+    if (gestaoTiRole && END_USER_ROLES.includes(gestaoTiRole)) {
       chamadoService.listar({ pendentesAvaliacao: true })
         .then((list) => setPendentesCount(list.length))
         .catch(() => {});
@@ -1345,8 +1346,8 @@ export function DashboardPage() {
     }
   }, [tab, dataInicio, dataFim]);
 
-  // Dashboard simplificado para USUARIO_FINAL
-  if (gestaoTiRole === 'USUARIO_FINAL') {
+  // Dashboard simplificado para usuarios nao-staff
+  if (gestaoTiRole && END_USER_ROLES.includes(gestaoTiRole)) {
     return <DashboardUsuarioFinal usuario={usuario} pendentesCount={pendentesCount} />;
   }
 

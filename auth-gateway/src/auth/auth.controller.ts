@@ -24,7 +24,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
-  @Throttle({ default: { ttl: 60000, limit: 5 } }) // 5 tentativas por minuto
+  @Throttle({ default: { ttl: 60000, limit: 10 } }) // 10 tentativas por minuto
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto, @Req() req: express.Request) {
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip;
