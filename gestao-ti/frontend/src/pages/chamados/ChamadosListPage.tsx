@@ -54,8 +54,7 @@ export function ChamadosListPage() {
   const [filterEquipe, setFilterEquipe] = useState('');
   const [filterVisibilidade, setFilterVisibilidade] = useState<Visibilidade | ''>('');
   const [meusChamados, setMeusChamados] = useState(gestaoTiRole !== 'USUARIO_FINAL');
-  // 'atual' = filial do usuario, '' = todas, uuid = filial especifica
-  const [filterFilial, setFilterFilial] = useState<string>('atual');
+  const [filterFilial, setFilterFilial] = useState<string>('');
   const [filterDepartamento, setFilterDepartamento] = useState('');
   const [pendentesAvaliacao, setPendentesAvaliacao] = useState(searchParams.get('pendentes') === '1');
 
@@ -82,9 +81,7 @@ export function ChamadosListPage() {
         .catch(() => {})
         .finally(() => { if (!silent) setLoading(false); });
     } else {
-      const filialId = filterFilial === 'atual'
-        ? usuario?.filialAtual?.id
-        : filterFilial || undefined;
+      const filialId = filterFilial || undefined;
       chamadoService
         .listar({
           status: filterStatus || undefined,
@@ -167,7 +164,6 @@ export function ChamadosListPage() {
                 onChange={(e) => setFilterFilial(e.target.value)}
                 className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
               >
-                <option value="atual">Filial Atual{usuario?.filialAtual ? ` (${usuario.filialAtual.codigo})` : ''}</option>
                 <option value="">Todas as Filiais</option>
                 {filiais.map((f) => (
                   <option key={f.id} value={f.id}>{f.codigo} - {f.nomeFantasia}</option>
