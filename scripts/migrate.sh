@@ -50,7 +50,12 @@ echo "[2/5] Auth Gateway — migrations..."
 docker compose exec -T auth-gateway npx prisma migrate deploy 2>&1 | grep -v "^$" | sed 's/^/  /'
 if [ "$SKIP_SEED" = false ]; then
   echo "  Executando seed..."
-  docker compose exec -T auth-gateway npx prisma db seed 2>&1 | tail -3 | sed 's/^/  /'
+  if docker compose exec -T auth-gateway npx prisma db seed 2>&1 | sed 's/^/  /'; then
+    echo "  Seed auth-gateway concluido."
+  else
+    echo "  ERRO: Seed auth-gateway falhou! Verifique a saida acima."
+    exit 1
+  fi
 fi
 echo ""
 
@@ -59,7 +64,12 @@ echo "[3/5] Gestao TI — migrations..."
 docker compose exec -T gestao-ti-backend npx prisma migrate deploy 2>&1 | grep -v "^$" | sed 's/^/  /'
 if [ "$SKIP_SEED" = false ]; then
   echo "  Executando seed..."
-  docker compose exec -T gestao-ti-backend npx prisma db seed 2>&1 | tail -3 | sed 's/^/  /'
+  if docker compose exec -T gestao-ti-backend npx prisma db seed 2>&1 | sed 's/^/  /'; then
+    echo "  Seed gestao-ti concluido."
+  else
+    echo "  ERRO: Seed gestao-ti falhou! Verifique a saida acima."
+    exit 1
+  fi
 fi
 echo ""
 
