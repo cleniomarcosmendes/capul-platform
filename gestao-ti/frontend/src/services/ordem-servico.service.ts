@@ -83,6 +83,11 @@ export const ordemServicoService = {
     return data;
   },
 
+  async editarComentario(osId: string, historicoId: string, descricao: string): Promise<OrdemServico> {
+    const { data } = await gestaoApi.patch(`/ordens-servico/${osId}/comentarios/${historicoId}`, { descricao });
+    return data;
+  },
+
   async downloadRelatorio(osId: string, osNumero: number): Promise<void> {
     const { data } = await gestaoApi.get(`/export/ordem-servico/${osId}/relatorio`, {
       responseType: 'blob',

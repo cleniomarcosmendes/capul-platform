@@ -166,10 +166,14 @@ export function ProjetoDetalhePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { gestaoTiRole, usuario } = useAuth();
-  const canManage = gestaoTiRole !== 'USUARIO_FINAL' && Boolean(gestaoTiRole);
-  const canAddAtividade = gestaoTiRole !== 'USUARIO_FINAL' && Boolean(gestaoTiRole);
 
   const [projeto, setProjeto] = useState<Projeto | null>(null);
+  // canManage: usuario deve ser membro/responsavel do projeto (ou ADMIN/GESTOR_TI)
+  const isMembro = (projeto as unknown as Record<string, unknown>)?.isMembro === true;
+  const isGestorOrAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const canManage = (isGestorOrAdmin || isMembro) && Boolean(gestaoTiRole);
+  const canAddAtividade = canManage;
+
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('subprojetos');
   const [statusChanging, setStatusChanging] = useState(false);
@@ -945,8 +949,8 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
               <div className="flex items-center gap-2 flex-wrap mb-1.5">
                 <span className="text-[13px] text-slate-900 font-bold leading-tight">{a.titulo}</span>
                 {meuRegistroAtivo && (
-                  <span className="inline-flex items-center gap-1 text-[10px] text-green-700 font-bold bg-green-100 border border-green-200 px-2 py-0.5 rounded-full animate-pulse">
-                    <Play className="w-3 h-3" /> ATIVO
+                  <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium bg-green-50 border border-green-200 px-2.5 py-0.5 rounded-full animate-pulse">
+                    <Play className="w-3.5 h-3.5" /> Ativo
                   </span>
                 )}
               </div>
@@ -1020,13 +1024,13 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
 
               {/* Timer */}
               {canAdd && !meuRegistroAtivo && (
-                <button onClick={() => handleIniciar(a.id)} className="inline-flex items-center gap-1 text-[11px] font-medium text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 px-2.5 py-1 rounded-lg transition-colors" title="Iniciar cronometro">
-                  <Play className="w-3 h-3" /> Iniciar
+                <button onClick={() => handleIniciar(a.id)} className="inline-flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors" title="Iniciar cronometro">
+                  <Play className="w-3.5 h-3.5" /> Iniciar
                 </button>
               )}
               {canAdd && meuRegistroAtivo && (
-                <button onClick={() => handleEncerrar(a.id)} className="inline-flex items-center gap-1 text-[11px] font-medium text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-lg transition-colors" title="Encerrar cronometro">
-                  <Square className="w-3 h-3" /> Parar
+                <button onClick={() => handleEncerrar(a.id)} className="inline-flex items-center gap-1 text-sm font-medium text-red-600 bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-lg transition-colors" title="Encerrar cronometro">
+                  <Square className="w-3.5 h-3.5" /> Encerrar
                 </button>
               )}
 
@@ -1242,7 +1246,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
           {showFaseForm && (
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex gap-3 items-end flex-wrap">
               <input type="text" placeholder="Nome da fase" value={novoNomeFase} onChange={(e) => setNovoNomeFase(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-48" />
-              <input type="number" placeholder="Ordem" value={novaOrdemFase} onChange={(e) => setNovaOrdemFase(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-20" />
+              <input type="number" placeholder="Ordem" value={novaOrdemFase} onChange={(e) => setNovaOrdemFase(e.target.value)} onKeyDown={(e) => ['e','E','+','-','.'].includes(e.key) && e.preventDefault()} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-20" />
               <input type="date" value={novaFaseDataInicio} onChange={(e) => setNovaFaseDataInicio(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" title="Data inicio" />
               <input type="date" value={novaFaseDataFimPrevista} min={novaFaseDataInicio || undefined} onChange={(e) => setNovaFaseDataFimPrevista(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" title="Data fim prevista" />
               <button onClick={handleAddFase} disabled={!novoNomeFase || saving} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">Adicionar</button>
@@ -1410,7 +1414,7 @@ function TabCotacoes({ projetoId, canManage }: { projetoId: string; canManage: b
       {showForm && (
         <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex gap-3 items-end flex-wrap">
           <input type="text" placeholder="Fornecedor" value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-48" />
-          <input type="number" placeholder="Valor" value={valor} onChange={(e) => setValor(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-32" />
+          <input type="number" placeholder="Valor" value={valor} onChange={(e) => setValor(e.target.value)} onKeyDown={(e) => ['e','E','+','-'].includes(e.key) && e.preventDefault()} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-32" />
           <select value={moeda} onChange={(e) => setMoeda(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white w-20">
             <option value="BRL">BRL</option>
             <option value="USD">USD</option>
@@ -1606,8 +1610,8 @@ function TabCustosDetalhados({ projetoId, canManage }: { projetoId: string; canM
           <select value={categoria} onChange={(e) => setCategoria(e.target.value as CategoriaCusto)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
             {Object.entries(categoriaLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
-          <input type="number" placeholder="Previsto" value={valorPrevisto} onChange={(e) => setValorPrevisto(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-28" />
-          <input type="number" placeholder="Realizado" value={valorRealizado} onChange={(e) => setValorRealizado(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-28" />
+          <input type="number" placeholder="Previsto" value={valorPrevisto} onChange={(e) => setValorPrevisto(e.target.value)} onKeyDown={(e) => ['e','E','+','-'].includes(e.key) && e.preventDefault()} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-28" />
+          <input type="number" placeholder="Realizado" value={valorRealizado} onChange={(e) => setValorRealizado(e.target.value)} onKeyDown={(e) => ['e','E','+','-'].includes(e.key) && e.preventDefault()} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-28" />
           <button onClick={handleAdd} disabled={!descricao || saving} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">Adicionar</button>
           <button onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
         </div>

@@ -689,10 +689,9 @@ function TabSimulacao() {
                 <thead>
                   <tr className="bg-slate-50">
                     <th colSpan={2} className="py-2 px-3 font-medium text-slate-700 text-left border-b border-slate-200">Produto</th>
-                    <th colSpan={4} className="py-2 px-3 font-medium text-blue-700 text-center border-b border-slate-200 bg-blue-50/50">ARM. {whA}</th>
+                    <th colSpan={5} className="py-2 px-3 font-medium text-blue-700 text-center border-b border-slate-200 bg-blue-50/50">ARM. {whA}</th>
                     <th colSpan={1} className="py-2 px-3 font-medium text-purple-700 text-center border-b border-slate-200 bg-purple-50/50">Transf.</th>
-                    <th colSpan={4} className="py-2 px-3 font-medium text-orange-700 text-center border-b border-slate-200 bg-orange-50/50">ARM. {whB}</th>
-                    <th colSpan={2} className="py-2 px-3 font-medium text-green-700 text-center border-b border-slate-200 bg-green-50/50">Resultado</th>
+                    <th colSpan={5} className="py-2 px-3 font-medium text-orange-700 text-center border-b border-slate-200 bg-orange-50/50">ARM. {whB}</th>
                   </tr>
                   <tr className="bg-slate-50 text-slate-500 font-medium">
                     <th className="py-2 px-3 text-left">Codigo</th>
@@ -702,16 +701,15 @@ function TabSimulacao() {
                     <th className="py-2 px-3 text-right bg-blue-50/30">Contado</th>
                     <th className="py-2 px-3 text-right bg-blue-50/30">Diferenca</th>
                     <th className="py-2 px-3 text-right bg-blue-50/30">Ajustado</th>
+                    <th className="py-2 px-3 text-right bg-blue-50/20 border-l border-blue-100">Dif Final</th>
                     {/* Transfer */}
-                    <th className="py-2 px-3 text-right bg-purple-50/30">Qtd</th>
+                    <th className="py-2 px-3 text-center bg-purple-50/30">Qtd</th>
                     {/* ARM B */}
                     <th className="py-2 px-3 text-right bg-orange-50/30">Sistema</th>
                     <th className="py-2 px-3 text-right bg-orange-50/30">Contado</th>
                     <th className="py-2 px-3 text-right bg-orange-50/30">Diferenca</th>
                     <th className="py-2 px-3 text-right bg-orange-50/30">Ajustado</th>
-                    {/* Result */}
-                    <th className="py-2 px-3 text-right bg-green-50/30">Dif Final A</th>
-                    <th className="py-2 px-3 text-right bg-green-50/30">Dif Final B</th>
+                    <th className="py-2 px-3 text-right bg-orange-50/20 border-l border-orange-100">Dif Final</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -719,6 +717,10 @@ function TabSimulacao() {
                     const hasTransfer = r.transfer_qty > 0;
                     const hasLots = r.lots.length > 0;
                     const isExp = expandedSim.has(r.product_code);
+                    const improvedA = hasTransfer && Math.abs(r.final_diff_a) < Math.abs(r.diff_a);
+                    const improvedB = hasTransfer && Math.abs(r.final_diff_b) < Math.abs(r.diff_b);
+                    const resolvedA = Math.abs(r.final_diff_a) < 0.01;
+                    const resolvedB = Math.abs(r.final_diff_b) < 0.01;
                     return (
                       <React.Fragment key={idx}>
                       <tr
@@ -741,13 +743,16 @@ function TabSimulacao() {
                         <td className={`py-2 px-3 text-right tabular-nums font-medium bg-blue-50/10 ${r.diff_a > 0 ? 'text-blue-600' : r.diff_a < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                           {r.diff_a > 0 ? '+' : ''}{fmt(r.diff_a)}
                         </td>
-                        <td className="py-2 px-3 text-right tabular-nums bg-blue-50/10 font-medium">{fmt(r.adjusted_a)}</td>
+                        <td className={`py-2 px-3 text-right tabular-nums bg-blue-50/10 ${hasTransfer ? 'font-medium text-slate-700' : 'text-slate-400'}`}>{fmt(r.adjusted_a)}</td>
+                        <td className={`py-2 px-3 text-right tabular-nums font-bold border-l border-blue-100 ${resolvedA ? 'text-green-600 bg-green-50/30' : improvedA ? 'text-yellow-600 bg-yellow-50/20' : r.final_diff_a > 0 ? 'text-blue-600' : r.final_diff_a < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                          {resolvedA ? '0' : (r.final_diff_a > 0 ? '+' : '') + fmt(r.final_diff_a)}
+                        </td>
                         {/* Transfer */}
-                        <td className="py-2 px-3 text-right tabular-nums bg-purple-50/10">
+                        <td className="py-2 px-3 text-center tabular-nums bg-purple-50/10">
                           {hasTransfer ? (
-                            <span className="inline-flex items-center gap-1 text-purple-700 font-medium">
+                            <span className="inline-flex items-center gap-0.5 text-purple-700 font-bold">
                               {fmt(r.transfer_qty)}
-                              <ArrowRight className="w-3 h-3 inline" />
+                              <span className="text-[10px] text-purple-400 ml-0.5">{r.transfer_direction}</span>
                             </span>
                           ) : (
                             <span className="text-slate-300">-</span>
@@ -759,16 +764,15 @@ function TabSimulacao() {
                         <td className={`py-2 px-3 text-right tabular-nums font-medium bg-orange-50/10 ${r.diff_b > 0 ? 'text-blue-600' : r.diff_b < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                           {r.diff_b > 0 ? '+' : ''}{fmt(r.diff_b)}
                         </td>
-                        <td className="py-2 px-3 text-right tabular-nums bg-orange-50/10 font-medium">{fmt(r.adjusted_b)}</td>
-                        {/* Result */}
-                        <td className={`py-2 px-3 text-right tabular-nums font-medium bg-green-50/10 ${Math.abs(r.final_diff_a) < 0.01 ? 'text-green-600' : r.final_diff_a > 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                          {Math.abs(r.final_diff_a) < 0.01 ? '0' : (r.final_diff_a > 0 ? '+' : '') + fmt(r.final_diff_a)}
-                        </td>
-                        <td className={`py-2 px-3 text-right tabular-nums font-medium bg-green-50/10 ${Math.abs(r.final_diff_b) < 0.01 ? 'text-green-600' : r.final_diff_b > 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                          {Math.abs(r.final_diff_b) < 0.01 ? '0' : (r.final_diff_b > 0 ? '+' : '') + fmt(r.final_diff_b)}
+                        <td className={`py-2 px-3 text-right tabular-nums bg-orange-50/10 ${hasTransfer ? 'font-medium text-slate-700' : 'text-slate-400'}`}>{fmt(r.adjusted_b)}</td>
+                        <td className={`py-2 px-3 text-right tabular-nums font-bold border-l border-orange-100 ${resolvedB ? 'text-green-600 bg-green-50/30' : improvedB ? 'text-yellow-600 bg-yellow-50/20' : r.final_diff_b > 0 ? 'text-blue-600' : r.final_diff_b < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                          {resolvedB ? '0' : (r.final_diff_b > 0 ? '+' : '') + fmt(r.final_diff_b)}
                         </td>
                       </tr>
-                      {hasLots && isExp && r.lots.map((lot) => (
+                      {hasLots && isExp && r.lots.map((lot) => {
+                        const lotResolvedA = Math.abs(lot.final_diff_a) < 0.01;
+                        const lotResolvedB = Math.abs(lot.final_diff_b) < 0.01;
+                        return (
                         <tr key={lot.lot_number} className="bg-slate-50/60 text-[11px]">
                           <td className="py-1 px-3 pl-8 font-mono text-slate-500">{lot.lot_number}</td>
                           <td className="py-1 px-3 text-slate-400 italic">Lote</td>
@@ -779,6 +783,9 @@ function TabSimulacao() {
                             {lot.diff_a > 0 ? '+' : ''}{fmt(lot.diff_a)}
                           </td>
                           <td className="py-1 px-3 text-right tabular-nums text-slate-500">{fmt(lot.adjusted_a)}</td>
+                          <td className={`py-1 px-3 text-right tabular-nums font-medium border-l border-blue-100 ${lotResolvedA ? 'text-green-600' : lot.final_diff_a > 0 ? 'text-blue-500' : lot.final_diff_a < 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                            {lotResolvedA ? '0' : (lot.final_diff_a > 0 ? '+' : '') + fmt(lot.final_diff_a)}
+                          </td>
                           {/* Transf */}
                           <td className="py-1 px-3"></td>
                           {/* ARM B */}
@@ -788,15 +795,12 @@ function TabSimulacao() {
                             {lot.diff_b > 0 ? '+' : ''}{fmt(lot.diff_b)}
                           </td>
                           <td className="py-1 px-3 text-right tabular-nums text-slate-500">{fmt(lot.adjusted_b)}</td>
-                          {/* Resultado */}
-                          <td className={`py-1 px-3 text-right tabular-nums font-medium ${Math.abs(lot.final_diff_a) < 0.01 ? 'text-green-600' : lot.final_diff_a > 0 ? 'text-blue-500' : 'text-red-500'}`}>
-                            {Math.abs(lot.final_diff_a) < 0.01 ? '0' : (lot.final_diff_a > 0 ? '+' : '') + fmt(lot.final_diff_a)}
-                          </td>
-                          <td className={`py-1 px-3 text-right tabular-nums font-medium ${Math.abs(lot.final_diff_b) < 0.01 ? 'text-green-600' : lot.final_diff_b > 0 ? 'text-blue-500' : 'text-red-500'}`}>
-                            {Math.abs(lot.final_diff_b) < 0.01 ? '0' : (lot.final_diff_b > 0 ? '+' : '') + fmt(lot.final_diff_b)}
+                          <td className={`py-1 px-3 text-right tabular-nums font-medium border-l border-orange-100 ${lotResolvedB ? 'text-green-600' : lot.final_diff_b > 0 ? 'text-blue-500' : lot.final_diff_b < 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                            {lotResolvedB ? '0' : (lot.final_diff_b > 0 ? '+' : '') + fmt(lot.final_diff_b)}
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                       </React.Fragment>
                     );
                   })}

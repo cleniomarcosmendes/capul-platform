@@ -10,6 +10,7 @@ import { useToast } from '../../components/Toast';
 import {
   Plus, X, ArrowLeft, Play, Square, Ban, UserPlus, Link2, Unlink,
   Clock, CheckCircle, Users, FileText, Download, MessageSquare, Send,
+  Edit3, Check,
 } from 'lucide-react';
 import type { OrdemServico, StatusOS, UsuarioCore, Chamado, StatusChamado, FilialResumo } from '../../types';
 
@@ -50,6 +51,8 @@ export function OrdensServicoPage() {
   // Detail view
   const [osDetalhe, setOsDetalhe] = useState<OrdemServico | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [editingHistoricoId, setEditingHistoricoId] = useState<string | null>(null);
+  const [editingTexto, setEditingTexto] = useState('');
 
   // Create form
   const [showForm, setShowForm] = useState(false);
@@ -310,14 +313,14 @@ export function OrdensServicoPage() {
               <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100">
                 {canIniciar && (
                   <button onClick={handleIniciar} disabled={actionLoading}
-                    className="flex items-center gap-1.5 bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700 disabled:opacity-50">
-                    <Play className="w-4 h-4" /> Iniciar Execucao
+                    className="flex items-center gap-1.5 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
+                    <Play className="w-3.5 h-3.5" /> Iniciar Execucao
                   </button>
                 )}
                 {canEncerrar && (
                   <button onClick={() => setShowEncerrar(true)} disabled={actionLoading}
-                    className="flex items-center gap-1.5 bg-teal-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-teal-700 disabled:opacity-50">
-                    <Square className="w-4 h-4" /> Encerrar OS
+                    className="flex items-center gap-1.5 text-sm font-medium text-red-600 bg-red-100 hover:bg-red-200 px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
+                    <Square className="w-3.5 h-3.5" /> Encerrar OS
                   </button>
                 )}
                 {canCancelar2 && (
@@ -429,12 +432,38 @@ export function OrdensServicoPage() {
                           <span>{tipoLabel[h.tipo] || h.tipo}</span>
                           <span>{new Date(h.createdAt).toLocaleString('pt-BR')}</span>
                         </div>
-                        {h.descricao && isComentario && (
-                          <p className="text-sm text-slate-700 mt-1 whitespace-pre-wrap">{h.descricao}</p>
-                        )}
-                        {h.descricao && !isComentario && (
+                        {isComentario && editingHistoricoId === h.id ? (
+                          <div className="mt-1 space-y-2">
+                            <textarea value={editingTexto} onChange={(e) => setEditingTexto(e.target.value)} rows={3}
+                              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" autoFocus />
+                            <div className="flex items-center gap-2">
+                              <button onClick={async () => {
+                                if (!editingTexto.trim()) return;
+                                try {
+                                  const updated = await ordemServicoService.editarComentario(os.id, h.id, editingTexto);
+                                  setOsDetalhe(updated);
+                                  setEditingHistoricoId(null);
+                                } catch { /* empty */ }
+                              }} disabled={!editingTexto.trim()}
+                                className="flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+                                <Check className="w-3.5 h-3.5" /> Salvar
+                              </button>
+                              <button onClick={() => setEditingHistoricoId(null)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+                            </div>
+                          </div>
+                        ) : h.descricao && isComentario ? (
+                          <div className="flex items-start gap-2 mt-1 group/comment">
+                            <p className="text-sm text-slate-700 flex-1 whitespace-pre-wrap">{h.descricao}</p>
+                            {(h.usuario.id === usuario?.id || ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '')) && (
+                              <button onClick={() => { setEditingHistoricoId(h.id); setEditingTexto(h.descricao || ''); }}
+                                className="opacity-0 group-hover/comment:opacity-100 text-slate-300 hover:text-capul-600 transition-all p-0.5 flex-shrink-0" title="Editar comentario">
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ) : h.descricao && !isComentario ? (
                           <p className="text-xs text-slate-500 mt-0.5">{h.descricao}</p>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   );

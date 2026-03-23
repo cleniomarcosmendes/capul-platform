@@ -17,6 +17,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const inactivityTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const configuradorRole = usuario?.modulos.find((m) => m.codigo === 'CONFIGURADOR')?.role ?? null;
@@ -54,8 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearTimeout(inactivityTimer.current);
     if (localStorage.getItem('accessToken')) {
       inactivityTimer.current = setTimeout(() => {
-        alert('Sessao expirada por inatividade. Faca login novamente.');
-        logout();
+        localStorage.clear();
+        setUsuario(null);
+        setSessionExpired(true);
       }, INACTIVITY_TIMEOUT);
     }
   }, []);
@@ -74,6 +76,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{ usuario, loading, configuradorRole, refreshUser, logout }}>
       {children}
+      {sessionExpired && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center">
+            <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2 className="text-lg font-bold text-slate-800 mb-2">Sessao Expirada</h2>
+            <p className="text-sm text-slate-500 mb-6">Sua sessao expirou por inatividade. Faca login novamente para continuar.</p>
+            <button
+              onClick={() => { window.location.href = '/login'; }}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors"
+            >
+              Fazer Login
+            </button>
+          </div>
+        </div>
+      )}
     </AuthContext.Provider>
   );
 }

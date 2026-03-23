@@ -75,6 +75,11 @@ export const chamadoService = {
     return data;
   },
 
+  async editarComentario(chamadoId: string, historicoId: string, descricao: string): Promise<HistoricoChamado> {
+    const { data } = await gestaoApi.patch(`/chamados/${chamadoId}/comentarios/${historicoId}`, { descricao });
+    return data;
+  },
+
   async resolver(id: string, descricao?: string): Promise<Chamado> {
     const { data } = await gestaoApi.patch(`/chamados/${id}/resolver`, { descricao });
     return data;

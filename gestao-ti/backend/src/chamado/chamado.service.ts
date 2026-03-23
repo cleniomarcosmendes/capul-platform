@@ -482,6 +482,27 @@ export class ChamadoService {
     return historico;
   }
 
+  async editarComentario(chamadoId: string, historicoId: string, descricao: string, user: JwtPayload, role: string) {
+    const historico = await this.prisma.historicoChamado.findFirst({
+      where: { id: historicoId, chamadoId, tipo: 'COMENTARIO' },
+    });
+    if (!historico) throw new NotFoundException('Comentario nao encontrado');
+
+    // Somente o autor ou ADMIN/GESTOR_TI pode editar
+    const isAdmin = ['ADMIN', 'GESTOR_TI'].includes(role);
+    if (historico.usuarioId !== user.sub && !isAdmin) {
+      throw new ForbiddenException('Voce so pode editar seus proprios comentarios');
+    }
+
+    return this.prisma.historicoChamado.update({
+      where: { id: historicoId },
+      data: { descricao },
+      include: {
+        usuario: { select: { id: true, nome: true, username: true } },
+      },
+    });
+  }
+
   async resolver(id: string, dto: ResolverChamadoDto, user: JwtPayload, role: string) {
     await this.assertTecnicoOuColaborador(id, user.sub, role);
 

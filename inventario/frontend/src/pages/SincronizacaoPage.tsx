@@ -1,4 +1,4 @@
-import { useEffect, useState, Fragment } from 'react';
+import { useEffect, useState, useMemo, Fragment } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Header } from '../layouts/Header';
 import { syncService } from '../services/sync.service';
@@ -348,8 +348,30 @@ function TabEnvio() {
     return !integ || integ.status === 'CANCELLED' || integ.status === 'DRAFT';
   });
 
-  // Inventarios with integration (table rows)
+  // Inventarios with integration — agrupar por integration_id para COMPARATIVE
   const withIntegration = inventarios.filter((inv) => integrations.get(inv.id));
+  const integrationRows = useMemo(() => {
+    const seen = new Set<string>();
+    const rows: { integration: Integration; invA: InventoryList; invB?: InventoryList }[] = [];
+    for (const inv of withIntegration) {
+      const integ = integrations.get(inv.id);
+      if (!integ || seen.has(integ.id)) continue;
+      seen.add(integ.id);
+      // Buscar inventário B se COMPARATIVE (pelo inventory_b_id direto ou pelo match na integration)
+      let invB: InventoryList | undefined;
+      if (integ.integration_type === 'COMPARATIVE') {
+        invB = inventarios.find((i) => {
+          // Match direto pelo inventory_b_id
+          if (integ.inventory_b_id && i.id === integ.inventory_b_id) return true;
+          // Match pela mesma integração
+          const iInteg = integrations.get(i.id);
+          return iInteg?.id === integ.id && i.id !== inv.id;
+        });
+      }
+      rows.push({ integration: integ, invA: inv, invB });
+    }
+    return rows;
+  }, [withIntegration, integrations, inventarios]);
 
   if (loading) {
     return <TableSkeleton rows={4} cols={5} />;
@@ -546,7 +568,7 @@ function TabEnvio() {
       </div>
 
       {/* Existing integrations table */}
-      {withIntegration.length > 0 && (
+      {integrationRows.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
           <div className="px-5 py-3 border-b border-slate-200">
             <h3 className="font-semibold text-slate-800">Integracoes Existentes</h3>
@@ -554,28 +576,40 @@ function TabEnvio() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left py-2.5 px-4 font-medium text-slate-600">Inventario</th>
+                <th className="text-left py-2.5 px-4 font-medium text-slate-600">Tipo</th>
+                <th className="text-left py-2.5 px-4 font-medium text-slate-600">Inventario(s)</th>
                 <th className="text-left py-2.5 px-4 font-medium text-slate-600">Armazem</th>
-                <th className="text-left py-2.5 px-4 font-medium text-slate-600">Itens</th>
                 <th className="text-left py-2.5 px-4 font-medium text-slate-600">Status</th>
                 <th className="text-right py-2.5 px-4 font-medium text-slate-600">Acao</th>
               </tr>
             </thead>
             <tbody>
-              {withIntegration.map((inv) => {
-                const integration = integrations.get(inv.id)!;
-                const isLoading = sendLoading === inv.id;
+              {integrationRows.map(({ integration, invA, invB }) => {
+                const isComparative = integration.integration_type === 'COMPARATIVE';
+                const isLoading = sendLoading === invA.id;
+                const label = isComparative && invB
+                  ? `${invA.name} ↔ ${invB.name}`
+                  : invA.name;
+                const armLabel = isComparative && invB
+                  ? `${invA.warehouse} ↔ ${invB.warehouse}`
+                  : invA.warehouse;
 
                 return (
-                  <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
+                  <tr key={integration.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-2.5 px-4">
-                      <span className="font-medium text-slate-800">{inv.name}</span>
-                      {inv.status === 'CLOSED' && (
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
+                        isComparative ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {isComparative ? 'Comparativo' : 'Simples'}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-4">
+                      <span className="font-medium text-slate-800">{label}</span>
+                      {invA.status === 'CLOSED' && (
                         <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">Efetivado</span>
                       )}
                     </td>
-                    <td className="py-2.5 px-4 font-mono text-slate-600">{inv.warehouse}</td>
-                    <td className="py-2.5 px-4 text-slate-600">{inv.total_items}</td>
+                    <td className="py-2.5 px-4 font-mono text-slate-600">{armLabel}</td>
                     <td className="py-2.5 px-4">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                         integration.status === 'SENT' || integration.status === 'CONFIRMED'
@@ -601,8 +635,8 @@ function TabEnvio() {
                           <button
                             onClick={() => setConfirmSend({
                               integrationId: integration.id,
-                              inventoryId: inv.id,
-                              inventoryName: inv.name,
+                              inventoryId: invA.id,
+                              inventoryName: label,
                             })}
                             className="flex items-center gap-1 text-sm text-capul-600 hover:underline"
                           >
@@ -885,9 +919,12 @@ function LogsEnvioModal({ logsData, onClose }: { logsData: SendLogsResult; onClo
                       <span className="text-xs font-medium text-slate-600 shrink-0 w-20">{log.item_type}</span>
 
                       {/* Resumo resposta */}
-                      <span className="text-xs text-slate-500 flex-1 truncate">
+                      <span className={`text-xs flex-1 truncate ${log.status === 'ERROR' && !hasDetalhes ? 'text-red-600' : 'text-slate-500'}`}>
                         {resp?.gravados !== undefined ? `${resp.gravados} gravados, ${resp.erros || 0} erros` : log.product_code || ''}
                         {hasDetalhes ? ` — ${detalhes.length} itens` : ''}
+                        {log.status === 'ERROR' && !hasDetalhes && log.error_message && (
+                          <span className="ml-1 text-red-500 font-normal">— {log.error_message}</span>
+                        )}
                       </span>
 
                       {/* Tempo */}

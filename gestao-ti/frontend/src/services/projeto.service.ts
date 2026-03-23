@@ -414,6 +414,11 @@ export const projetoService = {
     return data;
   },
 
+  async editarInteracaoPendencia(id: string, pid: string, interacaoId: string, descricao: string): Promise<InteracaoPendencia> {
+    const { data } = await gestaoApi.patch(`/projetos/${id}/pendencias/${pid}/interacoes/${interacaoId}`, { descricao });
+    return data;
+  },
+
   async uploadAnexoPendencia(id: string, pid: string, file: File): Promise<void> {
     const formData = new FormData();
     formData.append('file', file);

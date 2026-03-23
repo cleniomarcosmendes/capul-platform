@@ -6,6 +6,7 @@ import { useToast } from '../../components/Toast';
 import { projetoService } from '../../services/projeto.service';
 import {
   ArrowLeft, ChevronRight, Paperclip, Download, Trash2, Send, ClipboardList, Clock, Plus, CheckCircle, Circle, Loader,
+  Edit3, Check,
 } from 'lucide-react';
 import type { PendenciaProjeto, StatusPendencia, AnexoPendenciaItem } from '../../types';
 
@@ -25,7 +26,7 @@ const pendenciaPrioridadeCores: Record<string, string> = {
 export function PendenciaDetalhePage() {
   const { projetoId, pendenciaId } = useParams<{ projetoId: string; pendenciaId: string }>();
   const navigate = useNavigate();
-  const { gestaoTiRole } = useAuth();
+  const { gestaoTiRole, usuario } = useAuth();
   const { toast, confirm } = useToast();
   const canManage = gestaoTiRole !== 'USUARIO_FINAL' && Boolean(gestaoTiRole);
   const canGerarAtividade = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
@@ -35,6 +36,8 @@ export function PendenciaDetalhePage() {
   const [loading, setLoading] = useState(true);
   const [comentario, setComentario] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [editingInteracaoId, setEditingInteracaoId] = useState<string | null>(null);
+  const [editingTexto, setEditingTexto] = useState('');
   const [uploading, setUploading] = useState(false);
   const [gerandoAtividade, setGerandoAtividade] = useState(false);
 
@@ -417,9 +420,37 @@ export function PendenciaDetalhePage() {
                         <span className="text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded">Interno</span>
                       )}
                     </div>
-                    {inter.descricao && (
-                      <p className="text-sm text-slate-600 whitespace-pre-wrap">{inter.descricao}</p>
-                    )}
+                    {inter.tipo === 'COMENTARIO' && editingInteracaoId === inter.id ? (
+                      <div className="mt-1 space-y-2">
+                        <textarea value={editingTexto} onChange={(e) => setEditingTexto(e.target.value)} rows={3}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" autoFocus />
+                        <div className="flex items-center gap-2">
+                          <button onClick={async () => {
+                            if (!editingTexto.trim() || !projetoId || !pendenciaId) return;
+                            try {
+                              await projetoService.editarInteracaoPendencia(projetoId, pendenciaId, inter.id, editingTexto);
+                              const updated = await projetoService.buscarPendencia(projetoId, pendenciaId);
+                              setPendencia(updated);
+                              setEditingInteracaoId(null);
+                            } catch { /* empty */ }
+                          }} disabled={!editingTexto.trim()}
+                            className="flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+                            <Check className="w-3.5 h-3.5" /> Salvar
+                          </button>
+                          <button onClick={() => setEditingInteracaoId(null)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+                        </div>
+                      </div>
+                    ) : inter.descricao ? (
+                      <div className="flex items-start gap-2 group/comment">
+                        <p className="text-sm text-slate-600 whitespace-pre-wrap flex-1">{inter.descricao}</p>
+                        {inter.tipo === 'COMENTARIO' && (inter.usuario.id === usuario?.id || ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '')) && (
+                          <button onClick={() => { setEditingInteracaoId(inter.id); setEditingTexto(inter.descricao || ''); }}
+                            className="opacity-0 group-hover/comment:opacity-100 text-slate-300 hover:text-capul-600 transition-all p-0.5 flex-shrink-0" title="Editar comentario">
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ))}

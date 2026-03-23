@@ -333,29 +333,40 @@ async def send_transferencias(
     raw_name = integration.get("inventory_a_name", "INV001")
     doc_name = f"INVENT_{raw_name}"[:20]
 
-    # Montar payload — filtrar linhas AGGREGATE sem lote e qty=0
+    # Montar payload — filtrar linhas AGGREGATE sem lote (apenas se produto tem linhas de lote) e qty=0
+    items_list = [dict(item._mapping) for item in items]
+
+    # Detectar quais produtos têm linhas com lote (são rastreáveis)
+    produtos_com_lote = set()
+    for row in items_list:
+        if (row.get("lot_number") or "").strip():
+            produtos_com_lote.add(row["product_code"])
+
     itens_payload = []
-    for item in items:
-        row = dict(item._mapping)
+    for row in items_list:
         qty = float(row["quantity"])
         lot = (row.get("lot_number") or "").strip()
+        code = row["product_code"]
 
-        # ✅ v2.19.55: Pular linhas AGGREGATE (sem lote) e qty=0
-        if not lot:
-            logger.info(f"  ⏭️ TRANSFER skip AGGREGATE sem lote: {row['product_code']} qty={qty}")
+        # Pular AGGREGATE (sem lote) APENAS se produto tem linhas de lote
+        if not lot and code in produtos_com_lote:
+            logger.info(f"  ⏭️ TRANSFER skip AGGREGATE sem lote: {code} qty={qty}")
             continue
         if qty <= 0:
-            logger.info(f"  ⏭️ TRANSFER skip qty=0: {row['product_code']} lote={lot}")
+            logger.info(f"  ⏭️ TRANSFER skip qty=0: {code} lote={lot}")
             continue
 
-        itens_payload.append({
-            "produto": row["product_code"],
+        item_payload: Dict[str, Any] = {
+            "produto": code,
             "armazemOrigem": row["source_warehouse"],
             "armazemDestino": row["target_warehouse"],
             "quantidade": qty,
-            "loteOrigem": lot,
-            "loteDestino": lot
-        })
+        }
+        # Só incluir lote se produto tem rastreio
+        if lot:
+            item_payload["loteOrigem"] = lot
+            item_payload["loteDestino"] = lot
+        itens_payload.append(item_payload)
 
     if not itens_payload:
         return {
@@ -392,33 +403,34 @@ async def send_transferencias(
                     erros += 1
 
         # Atualizar status dos items na DB baseado nos detalhes
-        for i, item in enumerate(items):
-            row = dict(item._mapping)
-            lot = (row.get("lot_number") or "").strip()
-            qty = float(row["quantity"])
+        for i, item in enumerate(items_list):
+            lot = (item.get("lot_number") or "").strip()
+            code = item["product_code"]
+            qty = float(item["quantity"])
 
-            # ✅ v2.19.56: Marcar linhas AGGREGATE/sem lote como SENT (enviado por lote individual)
-            if not lot:
+            # Marcar AGGREGATE (sem lote) de produto rastreavel como SENT (enviado por lote individual)
+            if not lot and code in produtos_com_lote:
                 db.execute(text("""
                     UPDATE inventario.protheus_integration_items
                     SET item_status = 'SENT', error_detail = 'Linha agregada - enviado por lote individual'
                     WHERE id = :id AND item_status != 'SENT'
-                """), {"id": str(row["id"])})
+                """), {"id": str(item["id"])})
                 continue
             if qty <= 0:
                 db.execute(text("""
                     UPDATE inventario.protheus_integration_items
                     SET item_status = 'SENT', error_detail = 'Quantidade zero - nao aplicavel'
                     WHERE id = :id AND item_status != 'SENT'
-                """), {"id": str(row["id"])})
+                """), {"id": str(item["id"])})
                 continue
 
             # Buscar detalhe correspondente pelo código + lote
             item_ok = False
             item_error = None
             for detalhe in detalhes:
-                if isinstance(detalhe, dict) and detalhe.get("codigo") == row["product_code"]:
-                    if detalhe.get("lote") == lot or (not detalhe.get("lote") and not lot):
+                if isinstance(detalhe, dict) and detalhe.get("codigo") == code:
+                    d_lote = (detalhe.get("lote") or "").strip()
+                    if d_lote == lot or (not d_lote and not lot):
                         item_ok = detalhe.get("status", "").upper() == "OK"
                         if not item_ok:
                             item_error = detalhe.get("mensagem", "Erro no item")
@@ -431,7 +443,7 @@ async def send_transferencias(
             """), {
                 "status": "SENT" if item_ok else "ERROR",
                 "error": item_error,
-                "id": str(row["id"])
+                "id": str(item["id"])
             })
 
         log_status = "OK" if erros == 0 else "PARTIAL"
@@ -457,13 +469,12 @@ async def send_transferencias(
         error_msg = str(e)
 
         # Marcar todos como erro
-        for item in items:
-            row = dict(item._mapping)
+        for item in items_list:
             db.execute(text("""
                 UPDATE inventario.protheus_integration_items
                 SET item_status = 'ERROR', error_detail = :error
                 WHERE id = :id
-            """), {"status": "ERROR", "error": error_msg[:500], "id": str(row["id"])})
+            """), {"error": error_msg[:500], "id": str(item["id"])})
 
         log_send(
             db, str(integration_id), "/inventario/transferencia", "TRANSFER",
@@ -560,6 +571,19 @@ async def send_digitacao(
             qty = float(row.get("counted_qty") or row.get("quantity") or 0)
             lot = (row.get("lot_number") or "").strip()
             code = row["product_code"]
+            adj_type = (row.get("adjustment_type") or "").strip()
+
+            # ✅ v2.19.57: Pular itens sem ajuste (NO_CHANGE) — nada a enviar
+            if adj_type == "NO_CHANGE":
+                logger.info(f"  ⏭️ DIGITACAO skip NO_CHANGE: {code} arm={armazem} qty={qty}")
+                # Marcar como SENT para não retentar
+                db.execute(text("""
+                    UPDATE inventario.protheus_integration_items
+                    SET item_status = 'SENT', error_detail = 'Sem ajuste necessario (NO_CHANGE)'
+                    WHERE id = :id
+                """), {"id": str(row["id"])})
+                db.commit()
+                continue
 
             # ✅ v2.19.55: Pular AGGREGATE (sem lote) se produto tem linhas de lote
             if not lot and code in produtos_com_lote:
@@ -584,6 +608,11 @@ async def send_digitacao(
             if lot:
                 item_payload["lote"] = lot
             itens_payload.append(item_payload)
+
+        # ✅ v2.19.57: Pular envio se todos os itens foram filtrados
+        if not itens_payload:
+            logger.info(f"  ⏭️ DIGITACAO skip armazem {armazem}: todos itens filtrados (0 itens restantes)")
+            continue
 
         payload = {
             "filial": filial,

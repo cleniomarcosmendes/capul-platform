@@ -133,6 +133,17 @@ export class ChamadoController {
     return this.service.comentar(id, dto, user, role);
   }
 
+  @Patch(':id/comentarios/:historicoId')
+  editarComentario(
+    @Param('id') id: string,
+    @Param('historicoId') historicoId: string,
+    @Body() body: { descricao: string },
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.editarComentario(id, historicoId, body.descricao, user, role);
+  }
+
   @Patch(':id/resolver')
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   resolver(

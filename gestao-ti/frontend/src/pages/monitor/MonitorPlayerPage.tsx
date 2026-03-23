@@ -263,20 +263,6 @@ function ChamadoCard({
         ? 'bg-green-50 border-green-300 shadow-sm shadow-green-100'
         : 'bg-white border-slate-200 hover:border-slate-300'
     }`}>
-      {/* Play/Stop */}
-      <button
-        onClick={isAtivo ? onStop : onPlay}
-        disabled={loading}
-        className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 ${
-          isAtivo
-            ? 'bg-red-500 text-white hover:bg-red-600'
-            : 'bg-slate-100 text-slate-500 hover:bg-capul-100 hover:text-capul-600'
-        }`}
-        title={isAtivo ? 'Parar timer' : 'Iniciar timer'}
-      >
-        {isAtivo ? <Square className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
-      </button>
-
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
@@ -294,13 +280,30 @@ function ChamadoCard({
         </div>
       </div>
 
-      {/* Timer */}
+      {/* Timer + Actions */}
       <div className="flex items-center gap-3 flex-shrink-0">
         {isAtivo && (
           <div className="flex items-center gap-1.5 text-sm font-mono text-green-700 bg-green-100 px-3 py-1.5 rounded-lg">
             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
             {formatElapsed(timer.horaInicio)}
           </div>
+        )}
+        {isAtivo ? (
+          <button
+            onClick={onStop}
+            disabled={loading}
+            className="flex items-center gap-1 text-sm font-medium text-red-600 bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+          >
+            <Square className="w-3.5 h-3.5" /> Encerrar
+          </button>
+        ) : (
+          <button
+            onClick={onPlay}
+            disabled={loading}
+            className="flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+          >
+            <Play className="w-3.5 h-3.5" /> Iniciar
+          </button>
         )}
         <Link
           to={`/gestao-ti/chamados/${chamado.id}`}
@@ -335,20 +338,6 @@ function AtividadeCard({
         ? 'bg-green-50 border-green-300 shadow-sm shadow-green-100'
         : 'bg-white border-slate-200 hover:border-slate-300'
     }`}>
-      {/* Play/Stop */}
-      <button
-        onClick={isAtivo ? onStop : onPlay}
-        disabled={loading}
-        className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 ${
-          isAtivo
-            ? 'bg-red-500 text-white hover:bg-red-600'
-            : 'bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-indigo-600'
-        }`}
-        title={isAtivo ? 'Parar timer' : 'Iniciar timer'}
-      >
-        {isAtivo ? <Square className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
-      </button>
-
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
@@ -362,13 +351,30 @@ function AtividadeCard({
         </div>
       </div>
 
-      {/* Timer */}
+      {/* Timer + Actions */}
       <div className="flex items-center gap-3 flex-shrink-0">
         {isAtivo && (
           <div className="flex items-center gap-1.5 text-sm font-mono text-green-700 bg-green-100 px-3 py-1.5 rounded-lg">
             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
             {formatElapsed(timer.horaInicio)}
           </div>
+        )}
+        {isAtivo ? (
+          <button
+            onClick={onStop}
+            disabled={loading}
+            className="flex items-center gap-1 text-sm font-medium text-red-600 bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+          >
+            <Square className="w-3.5 h-3.5" /> Encerrar
+          </button>
+        ) : (
+          <button
+            onClick={onPlay}
+            disabled={loading}
+            className="flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+          >
+            <Play className="w-3.5 h-3.5" /> Iniciar
+          </button>
         )}
         <Link
           to={`/gestao-ti/projetos/${atividade.projeto.id}`}

@@ -1066,7 +1066,9 @@ async def get_existing_integration_for_inventory(
             "integration_type": result[2],
             "created_at": result[3].isoformat() if result[3] else None,
             "sent_at": result[4].isoformat() if result[4] else None,
-            "confirmed_at": result[5].isoformat() if result[5] else None
+            "confirmed_at": result[5].isoformat() if result[5] else None,
+            "inventory_a_id": str(result[6]) if result[6] else None,
+            "inventory_b_id": str(result[7]) if result[7] else None
         },
         "partner_inventory": partner,
         "used_as": used_as,
@@ -1337,8 +1339,10 @@ async def save_integration(
                 "value": transfer["total_value"]
             })
 
-        # Inserir ajustes
+        # Inserir ajustes (excluir NO_CHANGE — sem ajuste necessario)
         for adj in preview.get("adjustments", []):
+            if adj.get("adjustment_type") == "NO_CHANGE":
+                continue
             db.execute(text("""
                 INSERT INTO inventario.protheus_integration_items (
                     integration_id, item_type, product_code, product_description,

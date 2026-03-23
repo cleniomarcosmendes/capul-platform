@@ -203,7 +203,19 @@ export class ProjetoService {
       }
     }
 
-    return projeto;
+    // Calcular se usuario e membro/responsavel do projeto
+    let isMembro = false;
+    if (userId) {
+      if (['ADMIN', 'GESTOR_TI'].includes(role || '')) {
+        isMembro = true;
+      } else if (projeto.responsavel?.id === userId) {
+        isMembro = true;
+      } else {
+        isMembro = projeto.membros.some((m) => m.usuarioId === userId);
+      }
+    }
+
+    return { ...projeto, isMembro };
   }
 
   /**
@@ -1522,6 +1534,32 @@ export class ProjetoService {
   // USUARIOS-CHAVE
   // ============================================================
 
+  /**
+   * Verifica se o usuario e membro do projeto, responsavel ou ADMIN/GESTOR_TI.
+   * SUPORTE_TI precisa ser membro do projeto para editar.
+   */
+  async assertMembroOuGestor(projetoId: string, userId: string, role: string) {
+    // ADMIN e GESTOR_TI podem editar qualquer projeto
+    if (['ADMIN', 'GESTOR_TI'].includes(role)) return;
+
+    const projeto = await this.prisma.projeto.findUnique({
+      where: { id: projetoId },
+      select: { responsavelId: true },
+    });
+    if (!projeto) throw new NotFoundException('Projeto nao encontrado');
+
+    // Responsavel pelo projeto
+    if (projeto.responsavelId === userId) return;
+
+    // Membro do projeto
+    const membro = await this.prisma.membroProjeto.findUnique({
+      where: { projetoId_usuarioId: { projetoId, usuarioId: userId } },
+    });
+    if (membro) return;
+
+    throw new ForbiddenException('Voce nao e membro deste projeto');
+  }
+
   private static TI_ROLES = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
 
   /**
@@ -1887,6 +1925,26 @@ export class ProjetoService {
       include: {
         usuario: { select: { id: true, nome: true, username: true } },
       },
+    });
+  }
+
+  async editarInteracaoPendencia(projetoId: string, pendenciaId: string, interacaoId: string, descricao: string, userId: string, role: string) {
+    await this.checkProjetoAccessChave(projetoId, userId, role);
+
+    const interacao = await this.prisma.interacaoPendencia.findFirst({
+      where: { id: interacaoId, pendenciaId, tipo: 'COMENTARIO' },
+    });
+    if (!interacao) throw new NotFoundException('Comentario nao encontrado');
+
+    const isAdmin = ['ADMIN', 'GESTOR_TI'].includes(role);
+    if (interacao.usuarioId !== userId && !isAdmin) {
+      throw new ForbiddenException('Voce so pode editar seus proprios comentarios');
+    }
+
+    return this.prisma.interacaoPendencia.update({
+      where: { id: interacaoId },
+      data: { descricao },
+      include: { usuario: { select: { id: true, nome: true, username: true } } },
     });
   }
 

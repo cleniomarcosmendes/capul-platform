@@ -197,6 +197,24 @@ export class OrdemServicoService {
     return this.findOne(osId);
   }
 
+  async editarComentario(osId: string, historicoId: string, descricao: string, userId: string, role: string) {
+    const historico = await this.prisma.historicoOrdemServico.findFirst({
+      where: { id: historicoId, osId, tipo: 'COMENTARIO' },
+    });
+    if (!historico) throw new NotFoundException('Comentario nao encontrado');
+
+    const isAdmin = ROLES_GESTORES.includes(role);
+    if (historico.usuarioId !== userId && !isAdmin) {
+      throw new ForbiddenException('Voce so pode editar seus proprios comentarios');
+    }
+
+    await this.prisma.historicoOrdemServico.update({
+      where: { id: historicoId },
+      data: { descricao },
+    });
+    return this.findOne(osId);
+  }
+
   async registrarHistorico(osId: string, tipo: string, descricao: string, userId: string) {
     await this.prisma.historicoOrdemServico.create({
       data: { tipo, descricao, osId, usuarioId: userId },

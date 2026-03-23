@@ -63,6 +63,17 @@ export class OrdemServicoController {
     return this.service.comentar(id, body.descricao, user.sub, role);
   }
 
+  @Patch(':id/comentarios/:historicoId')
+  editarComentario(
+    @Param('id') id: string,
+    @Param('historicoId') historicoId: string,
+    @Body() body: { descricao: string },
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.editarComentario(id, historicoId, body.descricao, user.sub, role);
+  }
+
   // Chamados N:N
   @Post(':id/chamados')
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')

@@ -86,6 +86,10 @@ export function ChamadoDetalhePage() {
   const [csatNota, setCsatNota] = useState(5);
   const [csatComentario, setCsatComentario] = useState('');
 
+  // Editar comentario
+  const [editingHistoricoId, setEditingHistoricoId] = useState<string | null>(null);
+  const [editingTexto, setEditingTexto] = useState('');
+
   // Anexos
   const [anexos, setAnexos] = useState<AnexoChamado[]>([]);
   const [uploadingAnexo, setUploadingAnexo] = useState(false);
@@ -564,7 +568,53 @@ export function ChamadoDetalhePage() {
                               <span className="text-xs text-slate-400">{new Date(h.createdAt).toLocaleString('pt-BR')}</span>
                               {!h.publico && <span className="text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">INTERNO</span>}
                             </div>
-                            <p className="text-sm text-slate-600 mt-0.5">{h.descricao}</p>
+                            {h.tipo === 'COMENTARIO' && editingHistoricoId === h.id ? (
+                              <div className="mt-1 space-y-2">
+                                <textarea
+                                  value={editingTexto}
+                                  onChange={(e) => setEditingTexto(e.target.value)}
+                                  rows={3}
+                                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                                  autoFocus
+                                />
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={async () => {
+                                      if (!editingTexto.trim()) return;
+                                      try {
+                                        await chamadoService.editarComentario(chamado.id, h.id, editingTexto);
+                                        const updated = await chamadoService.buscar(chamado.id);
+                                        setChamado(updated);
+                                        setEditingHistoricoId(null);
+                                      } catch { /* empty */ }
+                                    }}
+                                    disabled={!editingTexto.trim()}
+                                    className="flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                                  >
+                                    <Check className="w-3.5 h-3.5" /> Salvar
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingHistoricoId(null)}
+                                    className="text-sm text-slate-500 hover:text-slate-700"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-start gap-2 mt-0.5 group/comment">
+                                <p className="text-sm text-slate-600 flex-1">{h.descricao}</p>
+                                {h.tipo === 'COMENTARIO' && (h.usuarioId === usuario?.id || isGestor) && (
+                                  <button
+                                    onClick={() => { setEditingHistoricoId(h.id); setEditingTexto(h.descricao); }}
+                                    className="opacity-0 group-hover/comment:opacity-100 text-slate-300 hover:text-capul-600 transition-all p-0.5 flex-shrink-0"
+                                    title="Editar comentario"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
                             {h.equipeOrigem && h.equipeDestino && (
                               <p className="text-xs text-slate-400 mt-1">
                                 {h.equipeOrigem.sigla} → {h.equipeDestino.sigla}

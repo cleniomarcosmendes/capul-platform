@@ -24,6 +24,8 @@ export const integrationService = {
         id: data.integration_info.id,
         status: data.integration_info.status,
         integration_type: data.integration_info.integration_type,
+        inventory_a_id: data.integration_info.inventory_a_id,
+        inventory_b_id: data.integration_info.inventory_b_id,
         created_at: data.integration_info.created_at,
         sent_at: data.integration_info.sent_at,
         confirmed_at: data.integration_info.confirmed_at,
