@@ -1120,7 +1120,8 @@
       "Bash(chmod:*)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:www.prisma.io)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(xargs basename:*)"
     ]
   }
 }

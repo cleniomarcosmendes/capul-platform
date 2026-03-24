@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { contratoService } from '../../services/contrato.service';
-import { Plus, Package, Pencil, Check, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Package, Pencil, Check, X, ArrowUpDown, ArrowUp, ArrowDown, Trash2 } from 'lucide-react';
 import type { ProdutoConfig } from '../../types';
 import { useToast } from '../../components/Toast';
 
@@ -191,6 +191,13 @@ export function ProdutosPage() {
                             <div className="flex items-center gap-3">
                               <button onClick={() => startEdit(p)} className="flex items-center gap-1 text-xs text-capul-600 hover:underline"><Pencil className="w-3.5 h-3.5" /> Editar</button>
                               <button onClick={() => handleToggleStatus(p)} className="text-xs text-capul-600 hover:underline">{p.status === 'ATIVO' ? 'Inativar' : 'Ativar'}</button>
+                              <button onClick={async () => {
+                                if (!confirm(`Excluir produto "${p.descricao}"?`)) return;
+                                try { await contratoService.excluirProduto(p.id); carregar(); toast('success', 'Produto excluido'); }
+                                catch (err: unknown) { toast('error', (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir'); }
+                              }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">
+                                <Trash2 className="w-3.5 h-3.5" /> Excluir
+                              </button>
                             </div>
                           </td>
                         )}

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { SlaService } from './sla.service.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { GestaoTiGuard } from '../common/guards/gestao-ti.guard.js';
@@ -39,5 +39,11 @@ export class SlaController {
   @Roles('ADMIN', 'GESTOR_TI')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto) {
     return this.service.updateStatus(id, dto.status);
+  }
+
+  @Delete(':id')
+  @Roles('ADMIN', 'GESTOR_TI')
+  remove(@Param('id') id: string) {
+    return this.service.remove(id);
   }
 }

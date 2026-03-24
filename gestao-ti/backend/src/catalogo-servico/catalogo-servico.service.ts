@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateCatalogoDto } from './dto/create-catalogo.dto.js';
 import { UpdateCatalogoDto } from './dto/update-catalogo.dto.js';
@@ -52,5 +52,14 @@ export class CatalogoServicoService {
   async updateStatus(id: string, status: StatusGeral) {
     await this.findOne(id);
     return this.prisma.catalogoServico.update({ where: { id }, data: { status } });
+  }
+
+  async remove(id: string) {
+    const existing = await this.prisma.catalogoServico.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Servico nao encontrado no catalogo');
+    const vinculos = await this.prisma.chamado.count({ where: { catalogoServicoId: id } });
+    if (vinculos > 0) throw new BadRequestException(`Servico possui ${vinculos} chamado(s) vinculado(s). Inative-o em vez de excluir.`);
+    await this.prisma.catalogoServico.delete({ where: { id } });
+    return { success: true };
   }
 }

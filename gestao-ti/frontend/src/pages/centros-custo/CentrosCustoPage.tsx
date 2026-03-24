@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { coreService } from '../../services/core.service';
-import { Plus, Wallet, Pencil, Check, X } from 'lucide-react';
+import { Plus, Wallet, Pencil, Check, X, Trash2 } from 'lucide-react';
 import type { CentroCusto } from '../../types';
 import { useToast } from '../../components/Toast';
 
@@ -195,6 +195,13 @@ export function CentrosCustoPage() {
                               </button>
                               <button onClick={() => handleToggleStatus(cc)} className="text-xs text-capul-600 hover:underline">
                                 {cc.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
+                              </button>
+                              <button onClick={async () => {
+                                if (!confirm(`Excluir centro de custo "${cc.nome}"?`)) return;
+                                try { await coreService.excluirCentroCusto(cc.id); carregar(); toast('success', 'Centro de custo excluido'); }
+                                catch (err: unknown) { toast('error', (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir'); }
+                              }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">
+                                <Trash2 className="w-3.5 h-3.5" /> Excluir
                               </button>
                             </div>
                           </td>

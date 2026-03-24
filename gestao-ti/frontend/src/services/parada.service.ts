@@ -107,6 +107,10 @@ export const paradaService = {
     return data;
   },
 
+  async excluirMotivo(id: string): Promise<void> {
+    await gestaoApi.delete(`/paradas/motivos/${id}`);
+  },
+
   async listarColaboradores(paradaId: string): Promise<ParadaColaborador[]> {
     const { data } = await gestaoApi.get(`/paradas/${paradaId}/colaboradores`);
     return data;

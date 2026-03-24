@@ -38,4 +38,8 @@ export const catalogoService = {
     const { data } = await gestaoApi.patch(`/catalogo-servicos/${id}/status`, { status });
     return data;
   },
+
+  async excluir(id: string): Promise<void> {
+    await gestaoApi.delete(`/catalogo-servicos/${id}`);
+  },
 };

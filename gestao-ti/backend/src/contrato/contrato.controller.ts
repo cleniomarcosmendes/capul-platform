@@ -138,6 +138,12 @@ export class ContratoController {
     return this.service.updateProduto(id, dto);
   }
 
+  @Delete('produtos/:id')
+  @Roles('ADMIN', 'GESTOR_TI')
+  removeProduto(@Param('id') id: string) {
+    return this.service.removeProduto(id);
+  }
+
   // --- Contratos ---
 
   @Get('acesso')

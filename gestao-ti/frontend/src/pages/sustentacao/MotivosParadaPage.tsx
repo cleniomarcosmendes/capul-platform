@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { paradaService } from '../../services/parada.service';
-import { Plus, AlertTriangle, Pencil } from 'lucide-react';
+import { Plus, AlertTriangle, Pencil, Trash2 } from 'lucide-react';
 import type { MotivoParada } from '../../types';
 import { useToast } from '../../components/Toast';
 
@@ -200,6 +200,13 @@ export function MotivosParadaPage() {
                             className="text-xs text-capul-600 hover:underline"
                           >
                             {m.ativo ? 'Inativar' : 'Ativar'}
+                          </button>
+                          <button onClick={async () => {
+                            if (!confirm(`Excluir motivo "${m.nome}"?`)) return;
+                            try { await paradaService.excluirMotivo(m.id); carregar(); toast('success', 'Motivo excluido'); }
+                            catch (err: unknown) { toast('error', (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir'); }
+                          }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">
+                            <Trash2 className="w-3.5 h-3.5" /> Excluir
                           </button>
                         </div>
                       </td>

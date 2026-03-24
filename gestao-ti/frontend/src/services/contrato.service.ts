@@ -315,4 +315,8 @@ export const contratoService = {
     const { data } = await gestaoApi.patch(`/contratos/produtos/${id}`, payload);
     return data;
   },
+
+  async excluirProduto(id: string): Promise<void> {
+    await gestaoApi.delete(`/contratos/produtos/${id}`);
+  },
 };

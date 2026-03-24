@@ -257,6 +257,15 @@ export class ParadaService {
     return this.prisma.motivoParada.update({ where: { id }, data: dto });
   }
 
+  async removeMotivo(id: string) {
+    const existing = await this.prisma.motivoParada.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Motivo de parada nao encontrado');
+    const vinculos = await this.prisma.registroParada.count({ where: { motivoParadaId: id } });
+    if (vinculos > 0) throw new BadRequestException(`Motivo possui ${vinculos} parada(s) vinculada(s). Inative-o em vez de excluir.`);
+    await this.prisma.motivoParada.delete({ where: { id } });
+    return { success: true };
+  }
+
   async listarColaboradores(paradaId: string) {
     return this.prisma.paradaColaborador.findMany({
       where: { paradaId },

@@ -36,4 +36,8 @@ export const slaService = {
     const { data } = await gestaoApi.patch(`/sla/${id}/status`, { status });
     return data;
   },
+
+  async excluir(id: string): Promise<void> {
+    await gestaoApi.delete(`/sla/${id}`);
+  },
 };

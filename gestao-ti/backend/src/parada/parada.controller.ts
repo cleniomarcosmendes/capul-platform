@@ -46,6 +46,12 @@ export class ParadaController {
     return this.service.updateMotivo(id, dto);
   }
 
+  @Delete('motivos/:motivoId')
+  @Roles('ADMIN', 'GESTOR_TI')
+  removeMotivo(@Param('motivoId') id: string) {
+    return this.service.removeMotivo(id);
+  }
+
   // === Paradas ===
 
   @Get()

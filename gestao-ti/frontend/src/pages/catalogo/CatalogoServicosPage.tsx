@@ -3,8 +3,9 @@ import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { catalogoService } from '../../services/catalogo.service';
 import { equipeService } from '../../services/equipe.service';
-import { Plus, X, Pencil } from 'lucide-react';
+import { Plus, X, Pencil, Trash2 } from 'lucide-react';
 import type { CatalogoServico, EquipeTI, Prioridade } from '../../types';
+import { useToast } from '../../components/Toast';
 
 const prioridadeLabels: Record<Prioridade, string> = {
   CRITICA: 'Critica', ALTA: 'Alta', MEDIA: 'Media', BAIXA: 'Baixa',
@@ -13,6 +14,7 @@ const prioridadeLabels: Record<Prioridade, string> = {
 export function CatalogoServicosPage() {
   const { gestaoTiRole } = useAuth();
   const isAdmin = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
+  const { toast } = useToast();
 
   const [items, setItems] = useState<CatalogoServico[]>([]);
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);
@@ -221,6 +223,13 @@ export function CatalogoServicosPage() {
                           </button>
                           <button onClick={() => toggleStatus(item)} className="text-xs text-capul-600 hover:underline">
                             {item.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
+                          </button>
+                          <button onClick={async () => {
+                            if (!confirm(`Excluir servico "${item.nome}"?`)) return;
+                            try { await catalogoService.excluir(item.id); loadItems(); toast('success', 'Servico excluido'); }
+                            catch (err: unknown) { toast('error', (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir'); }
+                          }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">
+                            <Trash2 className="w-3.5 h-3.5" /> Excluir
                           </button>
                         </div>
                       </td>

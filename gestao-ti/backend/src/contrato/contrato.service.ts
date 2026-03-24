@@ -1232,6 +1232,15 @@ export class ContratoService {
     });
   }
 
+  async removeProduto(id: string) {
+    const existing = await this.prisma.produtoConfig.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Produto nao encontrado');
+    const vinculos = await this.prisma.contrato.count({ where: { produtoId: id } });
+    if (vinculos > 0) throw new BadRequestException(`Produto possui ${vinculos} contrato(s) vinculado(s). Inative-o em vez de excluir.`);
+    await this.prisma.produtoConfig.delete({ where: { id } });
+    return { success: true };
+  }
+
   // --- Historico ---
 
   private async criarHistorico(

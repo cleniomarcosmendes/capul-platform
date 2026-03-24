@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { coreService } from '../../services/core.service';
-import { Plus, Building2, Pencil, Check, X } from 'lucide-react';
+import { Plus, Building2, Pencil, Check, X, Trash2 } from 'lucide-react';
 import type { Departamento } from '../../types';
 import { useToast } from '../../components/Toast';
 
@@ -209,6 +209,13 @@ export function DepartamentosPage() {
                               </button>
                               <button onClick={() => handleToggleStatus(depto)} className="text-xs text-capul-600 hover:underline">
                                 {depto.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
+                              </button>
+                              <button onClick={async () => {
+                                if (!confirm(`Excluir departamento "${depto.nome}"?`)) return;
+                                try { await coreService.excluirDepartamento(depto.id); carregar(); toast('success', 'Departamento excluido'); }
+                                catch (err: unknown) { toast('error', (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir'); }
+                              }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">
+                                <Trash2 className="w-3.5 h-3.5" /> Excluir
                               </button>
                             </div>
                           </td>

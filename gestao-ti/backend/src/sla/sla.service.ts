@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateSlaDto } from './dto/create-sla.dto.js';
 import { UpdateSlaDto } from './dto/update-sla.dto.js';
@@ -49,5 +49,14 @@ export class SlaService {
   async updateStatus(id: string, status: StatusGeral) {
     await this.findOne(id);
     return this.prisma.slaDefinicao.update({ where: { id }, data: { status } });
+  }
+
+  async remove(id: string) {
+    const existing = await this.prisma.slaDefinicao.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('SLA nao encontrado');
+    const vinculos = await this.prisma.chamado.count({ where: { slaDefinicaoId: id } });
+    if (vinculos > 0) throw new BadRequestException(`SLA possui ${vinculos} chamado(s) vinculado(s). Inative-o em vez de excluir.`);
+    await this.prisma.slaDefinicao.delete({ where: { id } });
+    return { success: true };
   }
 }
