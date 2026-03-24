@@ -235,8 +235,10 @@ END $$;
 -- MIGRATION COMPLETA
 -- =================================
 
-RAISE NOTICE '========================================';
-RAISE NOTICE '✅ Migration 004 aplicada com sucesso!';
-RAISE NOTICE 'Dados existentes migrados para user_stores';
-RAISE NOTICE 'Sistema Multi-Filial v2.12.0 - Pronto para uso!';
-RAISE NOTICE '========================================';
+DO $$ BEGIN
+    RAISE NOTICE '========================================';
+    RAISE NOTICE '✅ Migration 004 aplicada com sucesso!';
+    RAISE NOTICE 'Dados existentes migrados para user_stores';
+    RAISE NOTICE 'Sistema Multi-Filial v2.12.0 - Pronto para uso!';
+    RAISE NOTICE '========================================';
+END $$;

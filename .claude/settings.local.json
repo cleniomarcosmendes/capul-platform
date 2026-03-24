@@ -1117,7 +1117,10 @@
       "Bash(npm install:*)",
       "Bash(openssl req:*)",
       "Bash(git commit:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.prisma.io)",
+      "Bash(python3:*)"
     ]
   }
 }

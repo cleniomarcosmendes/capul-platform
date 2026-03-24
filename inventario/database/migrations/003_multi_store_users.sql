@@ -66,6 +66,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Criar trigger BEFORE INSERT OR UPDATE
+DROP TRIGGER IF EXISTS trigger_enforce_single_default_store ON inventario.user_stores;
 CREATE TRIGGER trigger_enforce_single_default_store
 BEFORE INSERT OR UPDATE OF is_default ON inventario.user_stores
 FOR EACH ROW
@@ -83,6 +84,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_update_user_stores_timestamp ON inventario.user_stores;
 CREATE TRIGGER trigger_update_user_stores_timestamp
 BEFORE UPDATE ON inventario.user_stores
 FOR EACH ROW
@@ -168,7 +170,9 @@ END $$;
 -- MIGRATION COMPLETA
 -- =================================
 
-RAISE NOTICE '========================================';
-RAISE NOTICE '✅ Migration 003 aplicada com sucesso!';
-RAISE NOTICE 'Sistema Multi-Filial v2.12.0 - Estrutura criada';
-RAISE NOTICE '========================================';
+DO $$ BEGIN
+    RAISE NOTICE '========================================';
+    RAISE NOTICE '✅ Migration 003 aplicada com sucesso!';
+    RAISE NOTICE 'Sistema Multi-Filial v2.12.0 - Estrutura criada';
+    RAISE NOTICE '========================================';
+END $$;

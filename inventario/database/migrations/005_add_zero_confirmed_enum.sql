@@ -8,12 +8,13 @@
 -- ============================================
 
 -- Adicionar valor ZERO_CONFIRMED ao ENUM
-ALTER TYPE inventario.counting_status ADD VALUE IF NOT EXISTS 'ZERO_CONFIRMED';
+-- Nota: SQLAlchemy cria o tipo como public.countingstatus (nao inventario.counting_status)
+ALTER TYPE public.countingstatus ADD VALUE IF NOT EXISTS 'ZERO_CONFIRMED';
 
 -- Verificar valores do ENUM
 SELECT enumlabel
 FROM pg_enum
-WHERE enumtypid = 'inventario.counting_status'::regtype
+WHERE enumtypid = 'public.countingstatus'::regtype
 ORDER BY enumsortorder;
 
 -- ============================================

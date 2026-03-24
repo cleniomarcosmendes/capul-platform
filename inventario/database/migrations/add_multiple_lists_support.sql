@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS inventario.counting_list_items (
     count_cycle_3 NUMERIC(15,4),
 
     -- Status e controle
-    status inventario.counting_status DEFAULT 'PENDING',
+    status public.countingstatus DEFAULT 'PENDING',
     last_counted_at TIMESTAMP WITH TIME ZONE,
     last_counted_by UUID,
 
@@ -121,9 +121,9 @@ SELECT
     il.name as inventory_name,
     il.warehouse,
     il.status as inventory_status,
-    u1.name as counter_cycle_1_name,
-    u2.name as counter_cycle_2_name,
-    u3.name as counter_cycle_3_name,
+    u1.full_name as counter_cycle_1_name,
+    u2.full_name as counter_cycle_2_name,
+    u3.full_name as counter_cycle_3_name,
     COUNT(cli.id) as total_items,
     COUNT(CASE WHEN cli.status = 'COUNTED' THEN 1 END) as counted_items,
     COUNT(CASE WHEN cli.status = 'PENDING' THEN 1 END) as pending_items
@@ -136,7 +136,7 @@ LEFT JOIN inventario.counting_list_items cli ON cl.id = cli.counting_list_id
 GROUP BY
     cl.id, cl.list_name, cl.description, cl.current_cycle, cl.list_status,
     il.id, il.name, il.warehouse, il.status,
-    u1.name, u2.name, u3.name;
+    u1.full_name, u2.full_name, u3.full_name;
 
 -- 7. Função para migrar dados existentes (caso existam inventários já criados)
 CREATE OR REPLACE FUNCTION inventario.migrate_existing_inventories()

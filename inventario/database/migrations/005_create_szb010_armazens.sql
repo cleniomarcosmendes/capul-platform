@@ -38,6 +38,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_szb010_updated_at ON inventario.szb010;
 CREATE TRIGGER trigger_szb010_updated_at
     BEFORE UPDATE ON inventario.szb010
     FOR EACH ROW

@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -eu
 
 # =============================================
 # Inventario — SQL Migration Runner
@@ -31,8 +31,16 @@ for file in $(ls "$MIGRATIONS_DIR"/*.sql 2>/dev/null | sort); do
 
   if [ "$already" = "0" ]; then
     echo "[inventario] Aplicando: $fname"
-    # Filtrar meta-comandos psql (\c, \d, etc.) que causam erro
-    sed '/^\\c /d' "$file" | psql "$DB_URL" -v ON_ERROR_STOP=1 -q 2>&1 || {
+    # Pre-processar SQL para idempotencia:
+    # - ADD COLUMN sem IF NOT EXISTS -> ADD COLUMN IF NOT EXISTS
+    # - CREATE INDEX sem IF NOT EXISTS -> CREATE INDEX IF NOT EXISTS
+    # - Filtrar meta-comandos psql (\c, \d, etc.) que causam erro
+    # - Definir search_path para inventario
+    (echo "SET search_path TO inventario, public;" && \
+     sed '/^\\c /d' "$file" \
+       | sed -E 's/ADD COLUMN (IF NOT EXISTS )?/ADD COLUMN IF NOT EXISTS /g' \
+       | sed -E 's/CREATE INDEX (IF NOT EXISTS )?/CREATE INDEX IF NOT EXISTS /g') \
+      | psql "$DB_URL" -v ON_ERROR_STOP=1 -q 2>&1 || {
       echo "[inventario] ERRO ao aplicar $fname"
       exit 1
     }

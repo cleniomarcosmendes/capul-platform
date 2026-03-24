@@ -206,6 +206,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_validate_cycle_assignment ON inventario.inventory_lists;
 CREATE TRIGGER trg_validate_cycle_assignment
     BEFORE UPDATE ON inventario.inventory_lists
     FOR EACH ROW

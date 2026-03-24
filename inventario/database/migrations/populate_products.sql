@@ -4,7 +4,7 @@
 -- Limpar tabela products
 TRUNCATE TABLE inventario.products CASCADE;
 
--- Inserir produtos da sb1010
+-- Inserir produtos da sb1010 (colunas alinhadas com schema atual)
 INSERT INTO inventario.products (
     id,
     code,
@@ -18,19 +18,17 @@ INSERT INTO inventario.products (
     b1_cod,
     b1_desc,
     b1_um,
-    b1_locpad,
     b1_grupo,
-    b1_xcatgor,
-    b1_xsubcat,
-    b1_xsegmen,
+    hierarchy_category,
+    hierarchy_subcategory,
+    hierarchy_segment,
     b1_rastro,
     b1_codbar,
-    b2_lote,
     store_id,
     created_at,
     updated_at
 )
-SELECT 
+SELECT
     uuid_generate_v5(uuid_ns_url(), trim(b1_cod)) as id,
     trim(b1_cod) as code,
     trim(b1_desc) as name,
@@ -39,27 +37,22 @@ SELECT
     0.0 as cost_price,
     0.0 as sale_price,
     0.0 as current_stock,
-    is_active,
+    TRUE as is_active,   -- sb1010 nao tem is_active, usar TRUE como default
     b1_cod,
     b1_desc,
     b1_um,
-    b1_locpad,
     b1_grupo,
-    b1_xcatgor,
-    b1_xsubcat,
-    b1_xsegmen,
+    b1_xcatgor,          -- mapeia para hierarchy_category
+    b1_xsubcat,          -- mapeia para hierarchy_subcategory
+    b1_xsegmen,          -- mapeia para hierarchy_segment
     b1_rastro,
     b1_codbar,
-    CASE 
-        WHEN b1_rastro = 'L' THEN 'S'  -- Se tem rastreabilidade por lote, tem controle de lote
-        ELSE 'N'
-    END as b2_lote,
     (SELECT id FROM inventario.stores LIMIT 1) as store_id,
     COALESCE(created_at, CURRENT_TIMESTAMP) as created_at,
     COALESCE(updated_at, CURRENT_TIMESTAMP) as updated_at
-FROM 
+FROM
     inventario.sb1010
-WHERE 
+WHERE
     1=1  -- Inserir todos os produtos
 ON CONFLICT (id) DO NOTHING;
 

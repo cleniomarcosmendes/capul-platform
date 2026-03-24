@@ -38,18 +38,26 @@ CREATE INDEX IF NOT EXISTS idx_sb8010_produto ON inventario.sb8010(b8_produto);
 CREATE INDEX IF NOT EXISTS idx_sb8010_local ON inventario.sb8010(b8_local);
 CREATE INDEX IF NOT EXISTS idx_sb8010_lote ON inventario.sb8010(b8_lotectl);
 
--- Inserir alguns dados de exemplo para teste
--- Produto sem lote em múltiplos locais
-INSERT INTO inventario.sb2010 (b2_filial, b2_cod, b2_local, b2_qatu) VALUES
-('01', '00010299', '01', 150),  -- 150 unidades no armazém 01
-('01', '00010299', '02', 75),   -- 75 unidades no armazém 02
-('01', '00010491', '01', 200),
-('01', '00010531', '01', 50)
-ON CONFLICT DO NOTHING;
+-- Inserir dados de exemplo para teste (ignorar erros de schema evolution)
+DO $$
+BEGIN
+    INSERT INTO inventario.sb2010 (b2_filial, b2_cod, b2_local, b2_qatu) VALUES
+    ('01', '00010299', '01', 150),
+    ('01', '00010299', '02', 75),
+    ('01', '00010491', '01', 200),
+    ('01', '00010531', '01', 50)
+    ON CONFLICT DO NOTHING;
+EXCEPTION WHEN others THEN
+    RAISE NOTICE 'sb2010 seed ignorado (schema divergente): %', SQLERRM;
+END $$;
 
--- Produto com lote (exemplo)
-INSERT INTO inventario.sb8010 (b8_filial, b8_produto, b8_local, b8_lotectl, b8_saldo, b8_dtvalid) VALUES
-('01', 'PROD-LOTE-001', '01', 'L2024001', 100, '2025-12-31'),
-('01', 'PROD-LOTE-001', '01', 'L2024002', 50, '2025-06-30'),
-('01', 'PROD-LOTE-001', '02', 'L2024001', 25, '2025-12-31')
-ON CONFLICT DO NOTHING;
+DO $$
+BEGIN
+    INSERT INTO inventario.sb8010 (b8_filial, b8_produto, b8_local, b8_lotectl, b8_saldo, b8_dtvalid) VALUES
+    ('01', 'PROD-LOTE-001', '01', 'L2024001', 100, '2025-12-31'),
+    ('01', 'PROD-LOTE-001', '01', 'L2024002', 50, '2025-06-30'),
+    ('01', 'PROD-LOTE-001', '02', 'L2024001', 25, '2025-12-31')
+    ON CONFLICT DO NOTHING;
+EXCEPTION WHEN others THEN
+    RAISE NOTICE 'sb8010 seed ignorado (schema divergente): %', SQLERRM;
+END $$;

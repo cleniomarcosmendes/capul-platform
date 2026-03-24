@@ -16,10 +16,15 @@ COMMENT ON COLUMN inventario.inventory_lists.warehouse IS 'Código do armazém/l
 CREATE INDEX IF NOT EXISTS idx_inventory_lists_warehouse 
 ON inventario.inventory_lists(warehouse);
 
--- Adicionar constraint para validar formato do armazém (2 caracteres)
-ALTER TABLE inventario.inventory_lists 
-ADD CONSTRAINT chk_warehouse_format 
-CHECK (LENGTH(warehouse) = 2 AND warehouse ~ '^[0-9A-Z]+$');
+-- Adicionar constraint para validar formato do armazém (idempotente)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_warehouse_format') THEN
+        ALTER TABLE inventario.inventory_lists
+        ADD CONSTRAINT chk_warehouse_format
+        CHECK (LENGTH(warehouse) = 2 AND warehouse ~ '^[0-9A-Z]+$');
+    END IF;
+END $$;
 
 -- ===============================================
 -- Criar tabela de armazéns para referência
@@ -42,6 +47,16 @@ CREATE TABLE IF NOT EXISTS inventario.warehouses (
 CREATE INDEX IF NOT EXISTS idx_warehouses_code ON inventario.warehouses(code);
 CREATE INDEX IF NOT EXISTS idx_warehouses_store ON inventario.warehouses(store_id);
 CREATE INDEX IF NOT EXISTS idx_warehouses_active ON inventario.warehouses(is_active);
+
+-- ===============================================
+-- Garantir constraint única para ON CONFLICT funcionar
+-- ===============================================
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uk_warehouse_store') THEN
+        ALTER TABLE inventario.warehouses ADD CONSTRAINT uk_warehouse_store UNIQUE (code, store_id);
+    END IF;
+END $$;
 
 -- ===============================================
 -- Inserir armazéns padrão

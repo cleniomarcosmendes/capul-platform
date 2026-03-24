@@ -35,7 +35,7 @@ ALTER TABLE inventario.products
 -- 2. Atualizar campos existentes (mapeamento)
 -- NOTA: Mantém compatibilidade com estrutura antiga
 COMMENT ON COLUMN inventario.products.code IS 'Código do produto (mesmo que b1_cod) - mantido para compatibilidade';
-COMMENT ON COLUMN inventario.products.barcode IS 'Código de barras principal (mesmo que b1_codbar) - mantido para compatibilidade';
+COMMENT ON COLUMN inventario.products.b1_codbar IS 'Código de barras principal (mesmo que b1_codbar) - mantido para compatibilidade';
 COMMENT ON COLUMN inventario.products.name IS 'Nome do produto (mesmo que b1_desc) - mantido para compatibilidade';
 
 -- 3. Criar índices otimizados para performance
@@ -63,10 +63,16 @@ CREATE INDEX IF NOT EXISTS idx_products_sync_status ON inventario.products(sync_
 -- Índice para sincronização incremental (usar R_E_C_N_O_ do Protheus)
 CREATE INDEX IF NOT EXISTS idx_products_protheus_recno ON inventario.products(protheus_recno) WHERE protheus_recno IS NOT NULL;
 
--- 4. Adicionar constraints
-ALTER TABLE inventario.products
-    ADD CONSTRAINT chk_products_rastro CHECK (b1_rastro IS NULL OR b1_rastro IN ('L', 'S', 'N')),
-    ADD CONSTRAINT chk_products_sync_status CHECK (sync_status IN ('pending', 'synced', 'error'));
+-- 4. Adicionar constraints (idempotente via DO block)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_products_rastro') THEN
+        ALTER TABLE inventario.products ADD CONSTRAINT chk_products_rastro CHECK (b1_rastro IS NULL OR b1_rastro IN ('L', 'S', 'N'));
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_products_sync_status') THEN
+        ALTER TABLE inventario.products ADD CONSTRAINT chk_products_sync_status CHECK (sync_status IN ('pending', 'synced', 'error'));
+    END IF;
+END $$;
 
 -- 5. Criar função para buscar produto por código de barras (qualquer tipo)
 CREATE OR REPLACE FUNCTION inventario.find_product_by_barcode(
@@ -107,7 +113,7 @@ SELECT
     p.id,
     p.code,
     p.b1_cod,
-    p.barcode,
+    p.b1_codbar AS barcode,
     p.b1_codbar,
     p.name,
     p.b1_desc,
@@ -136,9 +142,14 @@ COMMENT ON COLUMN inventario.products.alternative_barcodes IS 'Array de códigos
 COMMENT ON COLUMN inventario.products.protheus_recno IS 'R_E_C_N_O_ do Protheus para sincronização incremental (detectar novos/alterados)';
 COMMENT ON INDEX inventario.idx_products_alt_barcodes_gin IS 'Índice GIN para busca ultra-rápida em códigos de barras alternativos (JSONB)';
 
--- 8. Grant permissions
-GRANT SELECT ON inventario.v_products_enhanced TO inventario_user;
-GRANT EXECUTE ON FUNCTION inventario.find_product_by_barcode(VARCHAR, UUID) TO inventario_user;
+-- 8. Grant permissions (condicional: apenas se o role existir)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'inventario_user') THEN
+        GRANT SELECT ON inventario.v_products_enhanced TO inventario_user;
+        GRANT EXECUTE ON FUNCTION inventario.find_product_by_barcode(VARCHAR, UUID) TO inventario_user;
+    END IF;
+END $$;
 
 -- =====================================================
 -- Estatísticas Esperadas:

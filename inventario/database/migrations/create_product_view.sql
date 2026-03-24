@@ -18,7 +18,7 @@ SELECT
     0.0 as current_stock,  -- Deve vir de SB2010.B2_QATU
     
     -- Campos de controle
-    is_active,
+    TRUE as is_active,  -- sb1010 nao tem is_active, usar TRUE como default
     
     -- Campos espelho SB1010
     b1_cod,

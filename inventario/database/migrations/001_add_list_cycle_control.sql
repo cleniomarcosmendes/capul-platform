@@ -6,7 +6,11 @@
 -- =========================================================
 
 -- 1. Criar novo tipo ENUM para status das listas de contagem
-CREATE TYPE IF NOT EXISTS list_status AS ENUM ('ABERTA', 'EM_CONTAGEM', 'ENCERRADA');
+-- Nota: PostgreSQL nao suporta CREATE TYPE IF NOT EXISTS; usar DO block para idempotencia
+DO $$ BEGIN
+    CREATE TYPE list_status AS ENUM ('ABERTA', 'EM_CONTAGEM', 'ENCERRADA');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- 2. Adicionar campos de controle de ciclo na tabela inventory_lists
 ALTER TABLE inventory_lists 

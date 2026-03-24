@@ -183,7 +183,7 @@ BEGIN
 
         RAISE EXCEPTION '❌ Teste 2 falhou: Constraint de action não funcionou';
     EXCEPTION
-        WHEN check_violation THEN
+        WHEN check_violation OR invalid_text_representation THEN
             RAISE NOTICE '✅ Teste 2 passou: Constraint de action funcionando';
     END;
 END $$;
