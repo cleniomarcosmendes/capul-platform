@@ -6,6 +6,7 @@ import { softwareService } from '../../services/software.service';
 import { KeyRound, AlertTriangle, Download } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import type { SoftwareLicenca, Software, StatusLicenca } from '../../types';
+import { formatDateBR } from '../../utils/date';
 
 const modeloLabel: Record<string, string> = {
   SUBSCRICAO: 'Subscricao',
@@ -227,13 +228,13 @@ export function LicencasPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-600">{lic.fornecedor || '-'}</td>
                       <td className="px-4 py-3 text-slate-500 text-xs">
-                        {lic.dataInicio ? new Date(lic.dataInicio).toLocaleDateString('pt-BR') : '-'}
+                        {lic.dataInicio ? formatDateBR(lic.dataInicio) : '-'}
                       </td>
                       <td className="px-4 py-3">
                         {lic.dataVencimento ? (
                           <span className="flex items-center gap-1 text-sm">
                             {isVencendo(lic) && <AlertTriangle className="w-3 h-3 text-amber-500" />}
-                            {new Date(lic.dataVencimento).toLocaleDateString('pt-BR')}
+                            {formatDateBR(lic.dataVencimento)}
                           </span>
                         ) : '-'}
                       </td>

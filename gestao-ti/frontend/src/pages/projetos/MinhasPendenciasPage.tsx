@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { dashboardService } from '../../services/dashboard.service';
 import { ListChecks, FolderKanban, AlertTriangle, Clock, ExternalLink } from 'lucide-react';
+import { formatDateBR } from '../../utils/date';
 
 type Tab = 'atividades' | 'pendencias';
 
@@ -115,7 +116,7 @@ export function MinhasPendenciasPage() {
                               <td className="px-4 py-3 text-xs">
                                 {a.dataFimPrevista ? (
                                   <span className={new Date(a.dataFimPrevista) < new Date() ? 'text-red-600 font-medium' : 'text-slate-500'}>
-                                    {new Date(a.dataFimPrevista).toLocaleDateString('pt-BR')}
+                                    {formatDateBR(a.dataFimPrevista)}
                                   </span>
                                 ) : '—'}
                               </td>
@@ -170,7 +171,7 @@ export function MinhasPendenciasPage() {
                                 <td className="px-4 py-3 text-xs">
                                   {p.dataLimite ? (
                                     <span className={vencida ? 'text-red-600 font-bold' : 'text-slate-500'}>
-                                      {new Date(p.dataLimite).toLocaleDateString('pt-BR')}
+                                      {formatDateBR(p.dataLimite)}
                                       {vencida && ' (vencida)'}
                                     </span>
                                   ) : '—'}

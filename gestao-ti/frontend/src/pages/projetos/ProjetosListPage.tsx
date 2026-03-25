@@ -7,6 +7,7 @@ import { softwareService } from '../../services/software.service';
 import { FolderKanban, Plus, Search, Download } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import type { Projeto, Software, TipoProjeto } from '../../types';
+import { formatDateBR } from '../../utils/date';
 
 const tipoLabel: Record<string, string> = {
   DESENVOLVIMENTO_INTERNO: 'Desenv. Interno',
@@ -32,7 +33,7 @@ const statusCores: Record<string, string> = {
 };
 
 export function ProjetosListPage() {
-  const { gestaoTiRole } = useAuth();
+  const { gestaoTiRole, usuario } = useAuth();
   const canManage = gestaoTiRole !== 'USUARIO_FINAL' && Boolean(gestaoTiRole);
 
   const [projetos, setProjetos] = useState<Projeto[]>([]);
@@ -50,8 +51,8 @@ export function ProjetosListPage() {
   }, []);
 
   useEffect(() => {
-    loadData();
-  }, [filtroTipo, filtroStatus, filtroSoftware, apenasRaiz, meusProjetos]);
+    if (usuario?.id) loadData();
+  }, [filtroTipo, filtroStatus, filtroSoftware, apenasRaiz, meusProjetos, usuario?.id]);
 
   async function loadData() {
     setLoading(true);
@@ -220,7 +221,7 @@ export function ProjetosListPage() {
                       <td className="px-4 py-3 text-slate-600 text-xs">{p.software?.nome || '-'}</td>
                       <td className="px-4 py-3 text-slate-600 text-xs">{p.responsavel.nome}</td>
                       <td className="px-4 py-3 text-slate-500 text-xs">
-                        {p.dataInicio ? new Date(p.dataInicio).toLocaleDateString('pt-BR') : '-'}
+                        {p.dataInicio ? formatDateBR(p.dataInicio) : '-'}
                       </td>
                       <td className="px-4 py-3 text-right text-slate-700 font-medium">
                         {p._count.subProjetos}

@@ -10,6 +10,7 @@ import {
   AlertTriangle, ExternalLink, Activity, Users, UserPlus, UserMinus,
 } from 'lucide-react';
 import { paradaService } from '../../services/parada.service';
+import { formatDateBR } from '../../utils/date';
 import { coreService } from '../../services/core.service';
 import type {
   Software, SoftwareModulo, SoftwareLicenca, SoftwareFilialItem,
@@ -838,7 +839,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                         {lic.dataVencimento ? (
                           <span className="flex items-center gap-1">
                             {isVencendo(lic) && <AlertTriangle className="w-3 h-3 text-amber-500" />}
-                            {new Date(lic.dataVencimento).toLocaleDateString('pt-BR')}
+                            {formatDateBR(lic.dataVencimento)}
                           </span>
                         ) : '-'}
                       </td>

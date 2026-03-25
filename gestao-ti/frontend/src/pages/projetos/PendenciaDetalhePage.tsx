@@ -9,6 +9,7 @@ import {
   Edit3, Check,
 } from 'lucide-react';
 import type { PendenciaProjeto, StatusPendencia, AnexoPendenciaItem } from '../../types';
+import { formatDateBR } from '../../utils/date';
 
 const pendenciaStatusLabel: Record<string, string> = {
   ABERTA: 'Aberta', EM_ANDAMENTO: 'Em Andamento', AGUARDANDO_VALIDACAO: 'Aguardando Validacao', CONCLUIDA: 'Concluida', CANCELADA: 'Cancelada',
@@ -129,21 +130,23 @@ export function PendenciaDetalhePage() {
     }
   }
 
-  async function handleGerarAtividade() {
-    if (!pendencia) return;
+  const [showGerarForm, setShowGerarForm] = useState(false);
+  const [gerarTitulo, setGerarTitulo] = useState('');
 
-    const confirmado = await confirm(
-      'Gerar Atividade',
-      `Deseja gerar uma atividade a partir da pendencia #${pendencia.numero}?\n\nVoce sera redirecionado para a aba de Atividades do projeto.`,
-      { confirmLabel: 'Gerar e Iniciar', variant: 'default' }
-    );
-    if (!confirmado) return;
+  function handleOpenGerarAtividade() {
+    if (!pendencia) return;
+    setGerarTitulo(`[PEND-#${pendencia.numero}] ${pendencia.titulo}`);
+    setShowGerarForm(true);
+  }
+
+  async function handleGerarAtividade() {
+    if (!pendencia || !gerarTitulo.trim()) return;
 
     setGerandoAtividade(true);
     try {
-      await projetoService.gerarAtividadeFromPendencia(projetoId!, pendencia.id);
+      await projetoService.gerarAtividadeFromPendencia(projetoId!, pendencia.id, { titulo: gerarTitulo.trim() });
       toast('success', 'Atividade gerada com sucesso');
-      // Redirecionar para a aba de atividades do projeto
+      setShowGerarForm(false);
       navigate(`/gestao-ti/projetos/${projetoId}?tab=atividades`);
     } catch {
       toast('error', 'Erro ao gerar atividade');
@@ -255,7 +258,7 @@ export function PendenciaDetalhePage() {
             <div>
               <p className="text-slate-500 text-xs">Data Limite</p>
               <p className={`font-medium ${isVencida ? 'text-red-600' : 'text-slate-800'}`}>
-                {pendencia.dataLimite ? new Date(pendencia.dataLimite).toLocaleDateString('pt-BR') : '-'}
+                {pendencia.dataLimite ? formatDateBR(pendencia.dataLimite) : '-'}
               </p>
             </div>
             <div>
@@ -315,17 +318,40 @@ export function PendenciaDetalhePage() {
               <Clock className="w-5 h-5 text-capul-600" />
               <h4 className="font-semibold text-slate-700">Atividades Vinculadas ({pendencia.atividades?.length || 0})</h4>
             </div>
-            {canGerarAtividade && !['CONCLUIDA', 'CANCELADA'].includes(pendencia.status) && (
+            {canGerarAtividade && !['CONCLUIDA', 'CANCELADA'].includes(pendencia.status) && !showGerarForm && (
               <button
-                onClick={handleGerarAtividade}
-                disabled={gerandoAtividade}
-                className="flex items-center gap-1.5 text-sm bg-capul-600 text-white px-3 py-1.5 rounded-lg hover:bg-capul-700 disabled:opacity-50"
+                onClick={handleOpenGerarAtividade}
+                className="flex items-center gap-1.5 text-sm bg-capul-600 text-white px-3 py-1.5 rounded-lg hover:bg-capul-700"
               >
-                {gerandoAtividade ? <Loader className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                {gerandoAtividade ? 'Gerando...' : 'Gerar Atividade'}
+                <Plus className="w-4 h-4" />
+                Gerar Atividade
               </button>
             )}
           </div>
+          {showGerarForm && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4 space-y-3">
+              <label className="block text-sm font-medium text-slate-700">Titulo da Atividade</label>
+              <input
+                type="text"
+                value={gerarTitulo}
+                onChange={(e) => setGerarTitulo(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600"
+                placeholder="Titulo da atividade"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleGerarAtividade}
+                  disabled={gerandoAtividade || !gerarTitulo.trim()}
+                  className="flex items-center gap-1.5 text-sm bg-capul-600 text-white px-4 py-2 rounded-lg hover:bg-capul-700 disabled:opacity-50"
+                >
+                  {gerandoAtividade ? <Loader className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  {gerandoAtividade ? 'Gerando...' : 'Gerar e Iniciar'}
+                </button>
+                <button onClick={() => setShowGerarForm(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+              </div>
+            </div>
+          )}
           {(pendencia.atividades || []).length === 0 ? (
             <p className="text-sm text-slate-400">Nenhuma atividade vinculada a esta pendencia</p>
           ) : (

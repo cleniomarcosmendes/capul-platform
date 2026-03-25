@@ -923,6 +923,7 @@ export interface AtividadeProjeto {
   pendencia?: { id: string; numero: number; titulo: string; status: StatusPendencia } | null;
   _count?: { registrosTempo: number; comentarios: number };
   registrosTempo?: { id: string; usuarioId: string; horaInicio: string }[];
+  responsaveis?: { id: string; usuarioId: string; usuario: { id: string; nome: string } }[];
   createdAt: string;
 }
 

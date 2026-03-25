@@ -144,7 +144,7 @@ export const projetoService = {
     return data;
   },
 
-  async adicionarAtividade(id: string, payload: { titulo: string; descricao?: string; faseId?: string; dataInicio?: string; dataFimPrevista?: string }): Promise<AtividadeProjeto> {
+  async adicionarAtividade(id: string, payload: { titulo: string; descricao?: string; faseId?: string; responsavelIds?: string[]; dataInicio?: string; dataFimPrevista?: string }): Promise<AtividadeProjeto> {
     const { data } = await gestaoApi.post(`/projetos/${id}/atividades`, payload);
     return data;
   },

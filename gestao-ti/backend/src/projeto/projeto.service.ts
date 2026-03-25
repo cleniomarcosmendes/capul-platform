@@ -482,7 +482,7 @@ export class ProjetoService {
       throw new BadRequestException('Usuario ja e membro deste projeto');
     }
 
-    return this.prisma.membroProjeto.create({
+    const membro = await this.prisma.membroProjeto.create({
       data: {
         projetoId,
         usuarioId: dto.usuarioId,
@@ -491,6 +491,21 @@ export class ProjetoService {
       },
       include: { usuario: { select: { id: true, nome: true, username: true, email: true } } },
     });
+
+    // Notificar o profissional adicionado
+    const papelLabel: Record<string, string> = {
+      RESPONSAVEL: 'Responsavel', APROVADOR: 'Aprovador',
+      CONSULTADO: 'Consultado', INFORMADO: 'Informado',
+    };
+    this.notificacaoService.criarParaUsuario(
+      dto.usuarioId,
+      'PROJETO_ATUALIZADO',
+      `Voce foi adicionado ao projeto #${projeto.numero}`,
+      `Voce foi incluido na equipe do projeto "${projeto.nome}" com o papel de ${papelLabel[dto.papel] || dto.papel}.`,
+      { projetoId, membroId: membro.id },
+    ).catch(() => {});
+
+    return membro;
   }
 
   async removeMembro(projetoId: string, membroId: string) {
@@ -614,6 +629,10 @@ export class ProjetoService {
           where: { horaFim: null },
           select: { id: true, usuarioId: true, horaInicio: true },
         },
+        responsaveis: {
+          include: { usuario: { select: { id: true, nome: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
       },
       orderBy: { dataAtividade: 'desc' },
     });
@@ -621,7 +640,7 @@ export class ProjetoService {
 
   async addAtividade(
     projetoId: string,
-    dto: { titulo: string; descricao?: string; faseId?: string; pendenciaId?: string; dataInicio?: string; dataFimPrevista?: string },
+    dto: { titulo: string; descricao?: string; faseId?: string; pendenciaId?: string; dataInicio?: string; dataFimPrevista?: string; responsavelIds?: string[] },
     userId: string,
   ) {
     await this.ensureProjetoExists(projetoId);
@@ -660,14 +679,29 @@ export class ProjetoService {
       },
     });
 
-    // Notificar usuario atribuido
-    this.notificacaoService.criarParaUsuario(
-      userId,
-      'ATIVIDADE_ATRIBUIDA',
-      `Nova atividade: ${dto.titulo}`,
-      `Voce foi atribuido a atividade "${dto.titulo}" no projeto "${atividade.projeto.nome}".`,
-      { projetoId, atividadeId: atividade.id },
-    ).catch(() => {});
+    // Criar responsaveis (se informados, senao o criador e o unico responsavel)
+    const responsavelIds = dto.responsavelIds && dto.responsavelIds.length > 0
+      ? dto.responsavelIds
+      : [userId];
+
+    if (responsavelIds.length > 0) {
+      await this.prisma.atividadeResponsavel.createMany({
+        data: responsavelIds.map((uid) => ({ atividadeId: atividade.id, usuarioId: uid })),
+        skipDuplicates: true,
+      });
+    }
+
+    // Notificar todos os responsaveis (exceto quem criou)
+    const notificarIds = responsavelIds.filter((uid) => uid !== userId);
+    if (notificarIds.length > 0) {
+      this.notificacaoService.criarParaUsuarios(
+        notificarIds,
+        'ATIVIDADE_ATRIBUIDA',
+        `Nova atividade: ${dto.titulo}`,
+        `Voce foi atribuido a atividade "${dto.titulo}" no projeto "${atividade.projeto.nome}".`,
+        { projetoId, atividadeId: atividade.id },
+      ).catch(() => {});
+    }
 
     return atividade;
   }

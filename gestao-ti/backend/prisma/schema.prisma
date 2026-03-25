@@ -51,6 +51,7 @@ model Usuario {
   projetosResponsavel  Projeto[]          @relation("ProjetoResponsavel")
   membrosProjeto       MembroProjeto[]
   atividadesProjeto    AtividadeProjeto[] @relation("AtividadeProjetoUsuario")
+  atividadeResponsavel AtividadeResponsavel[] @relation("AtividadeResponsavelUsuario")
   registrosTempo       RegistroTempo[]    @relation("RegistroTempoUsuario")
   riscosResponsavel    RiscoProjeto[]     @relation("RiscoResponsavel")
   anexosProjeto        AnexoProjeto[]     @relation("AnexoProjetoUsuario")
@@ -1444,10 +1445,26 @@ model AtividadeProjeto {
 
   registrosTempo RegistroTempo[]
   comentarios    ComentarioTarefa[]
+  responsaveis   AtividadeResponsavel[]
 
   @@index([projetoId, dataAtividade])
   @@index([pendenciaId])
   @@map("atividades_projeto")
+  @@schema("gestao_ti")
+}
+
+model AtividadeResponsavel {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  atividadeId String            @map("atividade_id")
+  atividade   AtividadeProjeto  @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("AtividadeResponsavelUsuario", fields: [usuarioId], references: [id])
+
+  @@unique([atividadeId, usuarioId])
+  @@map("atividade_responsaveis")
   @@schema("gestao_ti")
 }
 

@@ -7,6 +7,7 @@ import { softwareService } from '../../services/software.service';
 import { ArrowLeft, Server, Edit, Trash2, Plus, X, Cpu, HardDrive, Monitor, Wifi, AlertCircle } from 'lucide-react';
 import type { Ativo, AtivoSoftwareItem, StatusAtivo, TipoAtivo, Software } from '../../types';
 import { useToast } from '../../components/Toast';
+import { formatDateBR } from '../../utils/date';
 
 const tipoLabel: Record<TipoAtivo, string> = {
   SERVIDOR: 'Servidor', ESTACAO_TRABALHO: 'Estacao de Trabalho', NOTEBOOK: 'Notebook',
@@ -226,7 +227,7 @@ export function AtivoDetalhePage() {
                       <td className="px-4 py-2 text-slate-500">{s.software.tipo}</td>
                       <td className="px-4 py-2 text-slate-600">{s.versaoInstalada || '—'}</td>
                       <td className="px-4 py-2 text-slate-500">{s.software.versaoAtual || '—'}</td>
-                      <td className="px-4 py-2 text-slate-500">{s.dataInstalacao ? new Date(s.dataInstalacao).toLocaleDateString('pt-BR') : '—'}</td>
+                      <td className="px-4 py-2 text-slate-500">{s.dataInstalacao ? formatDateBR(s.dataInstalacao) : '—'}</td>
                       {canManage && (
                         <td className="px-4 py-2">
                           <button onClick={() => handleRemoveSoftware(s.softwareId)} className="text-slate-400 hover:text-red-500">
@@ -299,8 +300,8 @@ export function AtivoDetalhePage() {
                 { icon: Wifi, label: 'IP', value: ativo.ip },
                 { icon: Server, label: 'Hostname', value: ativo.hostname },
                 { icon: Server, label: 'N. Serie', value: ativo.numeroSerie },
-                { icon: Server, label: 'Data Aquisicao', value: ativo.dataAquisicao ? new Date(ativo.dataAquisicao).toLocaleDateString('pt-BR') : null },
-                { icon: Server, label: 'Data Garantia', value: ativo.dataGarantia ? new Date(ativo.dataGarantia).toLocaleDateString('pt-BR') : null },
+                { icon: Server, label: 'Data Aquisicao', value: ativo.dataAquisicao ? formatDateBR(ativo.dataAquisicao) : null },
+                { icon: Server, label: 'Data Garantia', value: ativo.dataGarantia ? formatDateBR(ativo.dataGarantia) : null },
               ].map((item) => {
                 const Icon = item.icon;
                 return (

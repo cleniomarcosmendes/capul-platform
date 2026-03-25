@@ -8,6 +8,7 @@ import { chamadoService } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
 import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare, KeyRound, ClipboardList, Download, Eye, Upload, Copy } from 'lucide-react';
+import { formatDateBR } from '../../utils/date';
 import type {
   Projeto,
   MembroProjeto,
@@ -365,12 +366,12 @@ export function ProjetoDetalhePage() {
             <div>
               <p className="text-slate-500 text-xs">Periodo</p>
               <p className="text-slate-800">
-                {projeto.dataInicio ? new Date(projeto.dataInicio).toLocaleDateString('pt-BR') : '?'}
+                {formatDateBR(projeto.dataInicio) || '?'}
                 {' — '}
                 {projeto.dataFimReal
-                  ? new Date(projeto.dataFimReal).toLocaleDateString('pt-BR')
+                  ? formatDateBR(projeto.dataFimReal)
                   : projeto.dataFimPrevista
-                  ? new Date(projeto.dataFimPrevista).toLocaleDateString('pt-BR') + ' (prev.)'
+                  ? formatDateBR(projeto.dataFimPrevista) + ' (prev.)'
                   : '?'}
               </p>
             </div>
@@ -378,6 +379,13 @@ export function ProjetoDetalhePage() {
 
           {projeto.descricao && (
             <p className="mt-4 text-sm text-slate-600">{projeto.descricao}</p>
+          )}
+
+          {projeto.observacoes && (
+            <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <span className="text-xs font-semibold text-amber-700 uppercase">Observacoes</span>
+              <p className="mt-1 text-sm text-slate-700 whitespace-pre-line">{projeto.observacoes}</p>
+            </div>
           )}
         </div>
 
@@ -614,6 +622,8 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   const [novaFaseId, setNovaFaseId] = useState('');
   const [novaDataInicio, setNovaDataInicio] = useState('');
   const [novaDataFimPrevista, setNovaDataFimPrevista] = useState('');
+  const [novosResponsavelIds, setNovosResponsavelIds] = useState<string[]>([]);
+  const [membrosEquipe, setMembrosEquipe] = useState<MembroProjeto[]>([]);
   const [saving, setSaving] = useState(false);
   // Expanded atividade
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -645,12 +655,14 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [f, a] = await Promise.all([
+      const [f, a, m] = await Promise.all([
         isCompleto ? projetoService.listarFases(projetoId) : Promise.resolve([]),
         projetoService.listarAtividades(projetoId),
+        projetoService.listarMembros(projetoId),
       ]);
       setFases(f);
       setAtividades(a);
+      setMembrosEquipe(m);
     } catch { /* empty */ }
     setLoading(false);
   }, [projetoId, isCompleto]);
@@ -694,11 +706,12 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
         titulo: novoTitulo,
         descricao: novaDescricao || undefined,
         faseId: novaFaseId || undefined,
+        responsavelIds: novosResponsavelIds.length > 0 ? novosResponsavelIds : undefined,
         dataInicio: novaDataInicio ? new Date(novaDataInicio).toISOString() : undefined,
         dataFimPrevista: novaDataFimPrevista ? new Date(novaDataFimPrevista).toISOString() : undefined,
       });
       setNovoTitulo(''); setNovaDescricao(''); setNovaFaseId('');
-      setNovaDataInicio(''); setNovaDataFimPrevista('');
+      setNovaDataInicio(''); setNovaDataFimPrevista(''); setNovosResponsavelIds([]);
       loadAll();
     } catch { /* empty */ }
     setSaving(false);
@@ -947,7 +960,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
             <div className="flex-1 min-w-0">
               {/* Titulo + badges */}
               <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                <span className="text-[13px] text-slate-900 font-bold leading-tight">{a.titulo}</span>
+                <span className={`text-[13px] font-bold leading-tight ${a.status === 'CANCELADA' ? 'text-slate-400 line-through' : a.status === 'CONCLUIDA' ? 'text-green-700' : 'text-slate-900'}`}>{a.titulo}</span>
                 {meuRegistroAtivo && (
                   <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium bg-green-50 border border-green-200 px-2.5 py-0.5 rounded-full animate-pulse">
                     <Play className="w-3.5 h-3.5" /> Ativo
@@ -958,15 +971,17 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 ${cfg.color}`}>{cfg.label}</span>
                 <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                  <Users className="w-3 h-3" /> {a.usuario.nome}
+                  <Users className="w-3 h-3" /> {a.responsaveis && a.responsaveis.length > 0
+                    ? a.responsaveis.map((r) => r.usuario.nome).join(', ')
+                    : a.usuario.nome}
                 </span>
-                <span className="text-[11px] text-slate-400">{new Date(a.dataAtividade).toLocaleDateString('pt-BR')}</span>
+                <span className="text-[11px] text-slate-400">{formatDateBR(a.dataAtividade)}</span>
                 {(a.dataInicio || a.dataFimPrevista) && (
                   <span className="text-[11px] text-slate-500 flex items-center gap-1 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5">
                     <Clock className="w-3 h-3 text-slate-400" />
-                    {a.dataInicio ? new Date(a.dataInicio).toLocaleDateString('pt-BR') : '?'}
+                    {a.dataInicio ? formatDateBR(a.dataInicio) : '?'}
                     {' → '}
-                    {a.dataFimPrevista ? new Date(a.dataFimPrevista).toLocaleDateString('pt-BR') : '?'}
+                    {a.dataFimPrevista ? formatDateBR(a.dataFimPrevista) : '?'}
                   </span>
                 )}
                 {temRegistros && !meuRegistroAtivo && (
@@ -1219,6 +1234,27 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
                   {fases.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
                 </select>
               )}
+              <div className="relative group">
+                <button type="button" className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-w-40 text-left">
+                  {novosResponsavelIds.length === 0 ? 'Responsaveis (eu)' : `${novosResponsavelIds.length} selecionado(s)`}
+                </button>
+                <div className="absolute z-10 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg p-2 hidden group-hover:block min-w-48 max-h-48 overflow-y-auto">
+                  {membrosEquipe.map((m) => (
+                    <label key={m.usuarioId} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer text-sm">
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={novosResponsavelIds.includes(m.usuarioId)}
+                        onChange={(e) => {
+                          if (e.target.checked) setNovosResponsavelIds([...novosResponsavelIds, m.usuarioId]);
+                          else setNovosResponsavelIds(novosResponsavelIds.filter((id) => id !== m.usuarioId));
+                        }}
+                      />
+                      {m.usuario.nome}
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
             <textarea
               placeholder="Descricao da tarefa (opcional) — detalhe o que precisa ser feito, parametros, configuracoes..."
@@ -1275,9 +1311,9 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
                         {(f.dataInicio || f.dataFimPrevista) && (
                           <span className="flex items-center gap-1 text-xs text-slate-500 bg-white border border-slate-200 rounded-full px-2 py-0.5">
                             <Clock className="w-3 h-3" />
-                            {f.dataInicio ? new Date(f.dataInicio).toLocaleDateString('pt-BR') : '?'}
+                            {f.dataInicio ? formatDateBR(f.dataInicio) : '?'}
                             {' → '}
-                            {f.dataFimPrevista ? new Date(f.dataFimPrevista).toLocaleDateString('pt-BR') : '?'}
+                            {f.dataFimPrevista ? formatDateBR(f.dataFimPrevista) : '?'}
                           </span>
                         )}
                       </div>
@@ -1705,12 +1741,18 @@ function TabRiscos({ projetoId, canManage }: { projetoId: string; canManage: boo
         <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 space-y-3">
           <div className="flex gap-3 items-end flex-wrap">
             <input type="text" placeholder="Titulo do risco" value={titulo} onChange={(e) => setTitulo(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-48" />
-            <select value={probabilidade} onChange={(e) => setProbabilidade(e.target.value as ProbabilidadeRisco)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-              {Object.entries(probabilidadeLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-            <select value={impacto} onChange={(e) => setImpacto(e.target.value as ImpactoRisco)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-              {Object.entries(impactoLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Probabilidade</label>
+              <select value={probabilidade} onChange={(e) => setProbabilidade(e.target.value as ProbabilidadeRisco)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                {Object.entries(probabilidadeLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Impacto</label>
+              <select value={impacto} onChange={(e) => setImpacto(e.target.value as ImpactoRisco)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                {Object.entries(impactoLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
             <select value={responsavelId} onChange={(e) => setResponsavelId(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
               <option value="">Responsavel (opcional)</option>
               {usuarios.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
@@ -2450,7 +2492,7 @@ function TabPendencias({ projetoId, projetoNumero, isSubProjeto }: {
                   </td>
                   <td className="px-6 py-3 text-slate-600">{p.responsavel.nome}</td>
                   <td className="px-6 py-3 text-slate-500">
-                    {p.dataLimite ? new Date(p.dataLimite).toLocaleDateString('pt-BR') : '-'}
+                    {p.dataLimite ? formatDateBR(p.dataLimite) : '-'}
                   </td>
                   <td className="px-6 py-3">
                     <Eye className="w-4 h-4 text-slate-400" />

@@ -6,6 +6,7 @@ import { contratoService } from '../../services/contrato.service';
 import { FileText, Plus, Search, AlertTriangle, Download } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import type { Contrato, StatusContrato, TipoContratoConfig } from '../../types';
+import { formatDateBR } from '../../utils/date';
 
 const statusCores: Record<string, string> = {
   ATIVO: 'bg-green-100 text-green-700',
@@ -201,7 +202,7 @@ export function ContratosListPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         <div className="flex items-center gap-1">
-                          {new Date(c.dataInicio).toLocaleDateString('pt-BR')} - {new Date(c.dataFim).toLocaleDateString('pt-BR')}
+                          {formatDateBR(c.dataInicio)} - {formatDateBR(c.dataFim)}
                           {vencendoEm30 && <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />}
                         </div>
                       </td>

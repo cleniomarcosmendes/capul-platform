@@ -13,6 +13,7 @@ import {
   ListChecks, CircleDot, TrendingUp, TrendingDown, Minus, Layers, BarChart3, ClipboardList,
   MapPin, PieChart, BarChart2,
 } from 'lucide-react';
+import { formatDateBR } from '../utils/date';
 import { PeriodFilter } from '../components/PeriodFilter';
 import type { DashboardResumo, DashboardExecutivo, DashboardCsat, DashboardFinanceiro, DashboardDisponibilidade, Chamado, Departamento, Software, TipoAtivo } from '../types';
 import type { LucideIcon } from 'lucide-react';
@@ -969,7 +970,7 @@ function TabFinanceiro({ data }: { data: DashboardFinanceiro }) {
                       </p>
                       <p className={`text-xs ${vencido ? 'text-red-500 font-medium' : 'text-slate-400'}`}>
                         {vencido && <AlertTriangle className="w-3 h-3 inline mr-1" />}
-                        {new Date(p.dataVencimento).toLocaleDateString('pt-BR')}
+                        {formatDateBR(p.dataVencimento)}
                       </p>
                     </div>
                   </div>
@@ -1016,7 +1017,7 @@ function TabFinanceiro({ data }: { data: DashboardFinanceiro }) {
                     <td className="px-4 py-2.5 text-right font-medium text-slate-700">
                       R$ {c.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="px-4 py-2.5 text-slate-600">{new Date(c.dataFim).toLocaleDateString('pt-BR')}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{formatDateBR(c.dataFim)}</td>
                     <td className={`px-4 py-2.5 text-right font-medium ${dias <= 30 ? 'text-red-600' : dias <= 60 ? 'text-amber-600' : 'text-slate-600'}`}>
                       {dias}d
                     </td>
