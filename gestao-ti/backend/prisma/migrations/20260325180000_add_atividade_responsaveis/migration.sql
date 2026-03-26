@@ -12,14 +12,20 @@ CREATE TABLE IF NOT EXISTS gestao_ti.atividade_responsaveis (
 CREATE UNIQUE INDEX IF NOT EXISTS atividade_responsaveis_atividade_id_usuario_id_key
     ON gestao_ti.atividade_responsaveis(atividade_id, usuario_id);
 
--- AddForeignKey
-ALTER TABLE gestao_ti.atividade_responsaveis
-    ADD CONSTRAINT atividade_responsaveis_atividade_id_fkey
-    FOREIGN KEY (atividade_id) REFERENCES gestao_ti.atividades_projeto(id)
-    ON DELETE CASCADE ON UPDATE CASCADE;
+-- AddForeignKey (idempotent)
+DO $$ BEGIN
+    ALTER TABLE gestao_ti.atividade_responsaveis
+        ADD CONSTRAINT atividade_responsaveis_atividade_id_fkey
+        FOREIGN KEY (atividade_id) REFERENCES gestao_ti.atividades_projeto(id)
+        ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
--- AddForeignKey
-ALTER TABLE gestao_ti.atividade_responsaveis
-    ADD CONSTRAINT atividade_responsaveis_usuario_id_fkey
-    FOREIGN KEY (usuario_id) REFERENCES core.usuarios(id)
-    ON DELETE RESTRICT ON UPDATE CASCADE;
+-- AddForeignKey (idempotent)
+DO $$ BEGIN
+    ALTER TABLE gestao_ti.atividade_responsaveis
+        ADD CONSTRAINT atividade_responsaveis_usuario_id_fkey
+        FOREIGN KEY (usuario_id) REFERENCES core.usuarios(id)
+        ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
