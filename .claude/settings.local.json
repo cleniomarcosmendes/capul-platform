@@ -1121,7 +1121,9 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:www.prisma.io)",
       "Bash(python3:*)",
-      "Bash(xargs basename:*)"
+      "Bash(xargs basename:*)",
+      "Bash(python3 -m json.tool)",
+      "Bash(git push:*)"
     ]
   }
 }

@@ -709,7 +709,7 @@ export class ProjetoService {
   async updateAtividade(
     projetoId: string,
     atividadeId: string,
-    dto: { titulo?: string; descricao?: string; faseId?: string; status?: string; dataInicio?: string; dataFimPrevista?: string },
+    dto: { titulo?: string; descricao?: string; faseId?: string; status?: string; dataInicio?: string; dataFimPrevista?: string; responsavelIds?: string[] },
   ) {
     const atividade = await this.prisma.atividadeProjeto.findFirst({
       where: { id: atividadeId, projetoId },
@@ -740,6 +740,45 @@ export class ProjetoService {
         pendencia: { select: { id: true, status: true } },
       },
     });
+
+    // Sync responsaveis se informados
+    if (dto.responsavelIds !== undefined) {
+      await this.prisma.atividadeResponsavel.deleteMany({ where: { atividadeId } });
+      if (dto.responsavelIds.length > 0) {
+        await this.prisma.atividadeResponsavel.createMany({
+          data: dto.responsavelIds.map((uid) => ({ atividadeId, usuarioId: uid })),
+          skipDuplicates: true,
+        });
+      }
+    }
+
+    // Registrar movimentacao na timeline da pendencia (se vinculada)
+    if (atividade.pendenciaId) {
+      const statusLabels: Record<string, string> = {
+        PENDENTE: 'Pendente', EM_ANDAMENTO: 'Em Andamento', CONCLUIDA: 'Concluida', CANCELADA: 'Cancelada',
+      };
+      const mudancas: string[] = [];
+      if (dto.status && dto.status !== atividade.status) {
+        mudancas.push(`status alterado para ${statusLabels[dto.status] || dto.status}`);
+      }
+      if (dto.titulo && dto.titulo !== atividade.titulo) {
+        mudancas.push(`titulo alterado para "${dto.titulo}"`);
+      }
+      if (dto.responsavelIds !== undefined) {
+        mudancas.push('responsaveis atualizados');
+      }
+      if (mudancas.length > 0) {
+        this.prisma.interacaoPendencia.create({
+          data: {
+            tipo: 'COMENTARIO',
+            descricao: `Tarefa "${updated.titulo}": ${mudancas.join(', ')}`,
+            pendenciaId: atividade.pendenciaId,
+            usuarioId: atividade.usuarioId,
+            publica: true,
+          },
+        }).catch(() => {});
+      }
+    }
 
     // Sync: ao concluir atividade vinculada a pendencia, verificar se pode concluir a pendencia
     if (dto.status === 'CONCLUIDA' && updated.pendencia && updated.pendencia.status !== 'CONCLUIDA' && updated.pendencia.status !== 'CANCELADA') {
@@ -780,6 +819,19 @@ export class ProjetoService {
       throw new BadRequestException(
         `Nao e possivel excluir atividade com ${atividade._count.registrosTempo} registro(s) de tempo. Remova os registros antes.`,
       );
+    }
+
+    // Registrar na timeline da pendencia antes de excluir
+    if (atividade.pendenciaId) {
+      this.prisma.interacaoPendencia.create({
+        data: {
+          tipo: 'COMENTARIO',
+          descricao: `Tarefa "${atividade.titulo}" foi excluida`,
+          pendenciaId: atividade.pendenciaId,
+          usuarioId: atividade.usuarioId,
+          publica: true,
+        },
+      }).catch(() => {});
     }
 
     await this.prisma.atividadeProjeto.delete({ where: { id: atividadeId } });
@@ -1473,7 +1525,7 @@ export class ProjetoService {
     });
     if (!atividade) throw new NotFoundException('Tarefa nao encontrada neste projeto');
 
-    return this.prisma.comentarioTarefa.create({
+    const comentario = await this.prisma.comentarioTarefa.create({
       data: {
         texto,
         atividadeId,
@@ -1481,6 +1533,11 @@ export class ProjetoService {
       },
       include: { usuario: { select: { id: true, nome: true } } },
     });
+
+    // Processar @mencoes
+    this.processarMencoes(texto, projetoId, userId, `um comentario na tarefa "${atividade.titulo}"`, { atividadeId });
+
+    return comentario;
   }
 
   async removeComentario(projetoId: string, comentarioId: string, userId: string, role?: string) {
@@ -1573,8 +1630,8 @@ export class ProjetoService {
    * SUPORTE_TI precisa ser membro do projeto para editar.
    */
   async assertMembroOuGestor(projetoId: string, userId: string, role: string) {
-    // ADMIN e GESTOR_TI podem editar qualquer projeto
-    if (['ADMIN', 'GESTOR_TI'].includes(role)) return;
+    // ADMIN, GESTOR_TI e SUPORTE_TI podem editar qualquer projeto
+    if (['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(role)) return;
 
     const projeto = await this.prisma.projeto.findUnique({
       where: { id: projetoId },
@@ -1592,6 +1649,45 @@ export class ProjetoService {
     if (membro) return;
 
     throw new ForbiddenException('Voce nao e membro deste projeto');
+  }
+
+  /**
+   * Detecta @username em texto e envia notificacao para os mencionados
+   */
+  private async processarMencoes(texto: string, projetoId: string, autorId: string, contexto: string, dadosExtras?: Record<string, unknown>) {
+    const regex = /@(\S+)/g;
+    const usernames: string[] = [];
+    let match;
+    while ((match = regex.exec(texto)) !== null) {
+      usernames.push(match[1].toLowerCase());
+    }
+    if (usernames.length === 0) return;
+
+    const usuarios = await this.prisma.usuario.findMany({
+      where: { username: { in: usernames, mode: 'insensitive' } },
+      select: { id: true, username: true },
+    });
+
+    const autor = await this.prisma.usuario.findUnique({
+      where: { id: autorId },
+      select: { nome: true },
+    });
+
+    const projeto = await this.prisma.projeto.findUnique({
+      where: { id: projetoId },
+      select: { numero: true, nome: true },
+    });
+
+    const idsParaNotificar = usuarios.map((u) => u.id).filter((id) => id !== autorId);
+    if (idsParaNotificar.length > 0 && projeto) {
+      this.notificacaoService.criarParaUsuarios(
+        idsParaNotificar,
+        'PROJETO_ATUALIZADO',
+        `${autor?.nome || 'Alguem'} mencionou voce no projeto #${projeto.numero}`,
+        `Voce foi mencionado em ${contexto} do projeto "${projeto.nome}".`,
+        { projetoId, ...dadosExtras },
+      ).catch(() => {});
+    }
   }
 
   private static TI_ROLES = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
@@ -1948,7 +2044,7 @@ export class ProjetoService {
     // USUARIO_CHAVE e TERCEIRIZADO: always public
     const publica = (role === 'USUARIO_CHAVE' || role === 'TERCEIRIZADO') ? true : (dto.publica ?? true);
 
-    return this.prisma.interacaoPendencia.create({
+    const interacao = await this.prisma.interacaoPendencia.create({
       data: {
         tipo: 'COMENTARIO',
         descricao: dto.descricao,
@@ -1960,6 +2056,13 @@ export class ProjetoService {
         usuario: { select: { id: true, nome: true, username: true } },
       },
     });
+
+    // Processar @mencoes
+    if (dto.descricao) {
+      this.processarMencoes(dto.descricao, projetoId, userId, `um comentario na pendencia #${pendencia.numero}`, { pendenciaId });
+    }
+
+    return interacao;
   }
 
   async editarInteracaoPendencia(projetoId: string, pendenciaId: string, interacaoId: string, descricao: string, userId: string, role: string) {

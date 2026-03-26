@@ -8,8 +8,9 @@ import {
   ArrowLeft, ChevronRight, Paperclip, Download, Trash2, Send, ClipboardList, Clock, Plus, CheckCircle, Circle, Loader,
   Edit3, Check,
 } from 'lucide-react';
-import type { PendenciaProjeto, StatusPendencia, AnexoPendenciaItem } from '../../types';
+import type { PendenciaProjeto, StatusPendencia, AnexoPendenciaItem, MembroProjeto } from '../../types';
 import { formatDateBR } from '../../utils/date';
+import { MentionInput } from '../../components/MentionInput';
 
 const pendenciaStatusLabel: Record<string, string> = {
   ABERTA: 'Aberta', EM_ANDAMENTO: 'Em Andamento', AGUARDANDO_VALIDACAO: 'Aguardando Validacao', CONCLUIDA: 'Concluida', CANCELADA: 'Cancelada',
@@ -41,6 +42,7 @@ export function PendenciaDetalhePage() {
   const [editingTexto, setEditingTexto] = useState('');
   const [uploading, setUploading] = useState(false);
   const [gerandoAtividade, setGerandoAtividade] = useState(false);
+  const [membrosEquipe, setMembrosEquipe] = useState<MembroProjeto[]>([]);
 
   useEffect(() => {
     if (projetoId && pendenciaId) {
@@ -51,12 +53,14 @@ export function PendenciaDetalhePage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [pend, proj] = await Promise.all([
+      const [pend, proj, membros] = await Promise.all([
         projetoService.buscarPendencia(projetoId!, pendenciaId!),
         projetoService.buscar(projetoId!),
+        projetoService.listarMembros(projetoId!),
       ]);
       setPendencia(pend);
       setProjeto({ id: proj.id, numero: proj.numero, nome: proj.nome, projetoPai: proj.projetoPai });
+      setMembrosEquipe(membros);
     } catch {
       toast('error', 'Erro ao carregar pendencia');
     }
@@ -487,12 +491,13 @@ export function PendenciaDetalhePage() {
         {/* Add comment */}
         <div className="bg-white rounded-xl border border-slate-200 p-6">
           <h4 className="font-semibold text-slate-700 mb-3">Adicionar Comentario</h4>
-          <textarea
+          <MentionInput
             value={comentario}
-            onChange={(e) => setComentario(e.target.value)}
+            onChange={setComentario}
+            usuarios={membrosEquipe.map((m) => ({ id: m.usuarioId, nome: m.usuario.nome, username: m.usuario.username }))}
             rows={3}
             className="w-full border border-slate-300 rounded-lg px-4 py-3 text-sm"
-            placeholder="Escreva seu comentario..."
+            placeholder="Escreva seu comentario... (use @usuario para mencionar)"
           />
           <div className="flex items-center justify-end mt-3">
             <button

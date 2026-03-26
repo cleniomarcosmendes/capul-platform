@@ -4,7 +4,7 @@ import { Header } from '../../layouts/Header';
 import { notificacaoService } from '../../services/notificacao.service';
 import {
   Bell, Ticket, AlertTriangle, KeyRound, FileText, DollarSign,
-  Activity, FolderKanban, Trash2, CheckCheck,
+  Activity, FolderKanban, Trash2, CheckCheck, Clock, ClipboardList,
 } from 'lucide-react';
 import type { Notificacao, TipoNotificacao } from '../../types';
 
@@ -17,6 +17,8 @@ const iconesPorTipo: Record<TipoNotificacao, React.ComponentType<{ className?: s
   PARCELA_ATRASADA: DollarSign,
   PARADA_INICIADA: Activity,
   PROJETO_ATUALIZADO: FolderKanban,
+  ATIVIDADE_ATRIBUIDA: Clock,
+  PENDENCIA_ATRIBUIDA: ClipboardList,
   GERAL: Bell,
 };
 
@@ -29,6 +31,8 @@ const coresPorTipo: Record<TipoNotificacao, string> = {
   PARCELA_ATRASADA: 'bg-rose-100 text-rose-600',
   PARADA_INICIADA: 'bg-red-100 text-red-600',
   PROJETO_ATUALIZADO: 'bg-indigo-100 text-indigo-600',
+  ATIVIDADE_ATRIBUIDA: 'bg-cyan-100 text-cyan-600',
+  PENDENCIA_ATRIBUIDA: 'bg-violet-100 text-violet-600',
   GERAL: 'bg-slate-100 text-slate-600',
 };
 
@@ -77,9 +81,17 @@ export function NotificacoesPage() {
     if (notif.dadosJson) {
       try {
         const dados = JSON.parse(notif.dadosJson);
-        if (dados.chamadoId) navigate(`/gestao-ti/chamados/${dados.chamadoId}`);
-        else if (dados.projetoId) navigate(`/gestao-ti/projetos/${dados.projetoId}`);
-        else if (dados.contratoId) navigate(`/gestao-ti/contratos/${dados.contratoId}`);
+        if (dados.chamadoId) {
+          navigate(`/gestao-ti/chamados/${dados.chamadoId}`);
+        } else if (dados.pendenciaId && dados.projetoId) {
+          navigate(`/gestao-ti/projetos/${dados.projetoId}/pendencias/${dados.pendenciaId}`);
+        } else if (dados.atividadeId && dados.projetoId) {
+          navigate(`/gestao-ti/projetos/${dados.projetoId}?tab=atividades`);
+        } else if (dados.projetoId) {
+          navigate(`/gestao-ti/projetos/${dados.projetoId}`);
+        } else if (dados.contratoId) {
+          navigate(`/gestao-ti/contratos/${dados.contratoId}`);
+        }
       } catch { /* ignore */ }
     }
   }

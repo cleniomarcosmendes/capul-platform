@@ -9,6 +9,8 @@ import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
 import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare, KeyRound, ClipboardList, Download, Eye, Upload, Copy } from 'lucide-react';
 import { formatDateBR } from '../../utils/date';
+import { MentionInput } from '../../components/MentionInput';
+import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
 import type {
   Projeto,
   MembroProjeto,
@@ -647,6 +649,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   const [editAtivDataInicio, setEditAtivDataInicio] = useState('');
   const [editAtivDataFimPrevista, setEditAtivDataFimPrevista] = useState('');
   const [editAtivFaseId, setEditAtivFaseId] = useState('');
+  const [editAtivResponsavelIds, setEditAtivResponsavelIds] = useState<string[]>([]);
   const [savingAtividade, setSavingAtividade] = useState(false);
   // Edicao de notas
   const [editingComentario, setEditingComentario] = useState<string | null>(null);
@@ -804,6 +807,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     setEditAtivDataInicio(a.dataInicio ? a.dataInicio.substring(0, 10) : '');
     setEditAtivDataFimPrevista(a.dataFimPrevista ? a.dataFimPrevista.substring(0, 10) : '');
     setEditAtivFaseId(a.faseId || '');
+    setEditAtivResponsavelIds(a.responsaveis?.map((r) => r.usuarioId) || []);
   }
 
   function closeEditAtividade() {
@@ -813,6 +817,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     setEditAtivDataInicio('');
     setEditAtivDataFimPrevista('');
     setEditAtivFaseId('');
+    setEditAtivResponsavelIds([]);
   }
 
   async function handleSaveAtividade() {
@@ -825,6 +830,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
         dataInicio: editAtivDataInicio || undefined,
         dataFimPrevista: editAtivDataFimPrevista || undefined,
         faseId: editAtivFaseId || undefined,
+        responsavelIds: editAtivResponsavelIds,
       });
       closeEditAtividade();
       loadAll();
@@ -929,6 +935,17 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
                   </div>
                 )}
               </div>
+              {membrosEquipe.length > 0 && (
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Responsaveis</label>
+                  <MultiSelectDropdown
+                    options={membrosEquipe.map((m) => ({ value: m.usuarioId, label: m.usuario.nome }))}
+                    selected={editAtivResponsavelIds}
+                    onChange={setEditAtivResponsavelIds}
+                    placeholder="Selecione os responsaveis"
+                  />
+                </div>
+              )}
               <div>
                 <label className="block text-xs text-slate-500 mb-1">Descricao</label>
                 <textarea placeholder="Descricao da tarefa (opcional) - detalhe o que precisa ser feito, parametros, configuracoes..." value={editAtivDescricao} onChange={(e) => setEditAtivDescricao(e.target.value)} rows={10} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
@@ -1143,13 +1160,16 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
 
               {/* Form novo comentario */}
               <div className="flex gap-2 mb-3">
-                <textarea
-                  value={novoComentario}
-                  onChange={(e) => setNovoComentario(e.target.value)}
-                  placeholder="Adicionar nota (documentar parametros, configuracoes, procedimentos...)..."
-                  rows={2}
-                  className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-xs resize-none"
-                />
+                <div className="flex-1">
+                  <MentionInput
+                    value={novoComentario}
+                    onChange={setNovoComentario}
+                    usuarios={membrosEquipe.map((m) => ({ id: m.usuarioId, nome: m.usuario.nome, username: m.usuario.username }))}
+                    placeholder="Adicionar nota... (use @usuario para mencionar)"
+                    rows={2}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs resize-none"
+                  />
+                </div>
                 <button
                   onClick={handleAddComentario}
                   disabled={!novoComentario.trim() || savingComentario}
@@ -1234,26 +1254,13 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
                   {fases.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
                 </select>
               )}
-              <div className="relative group">
-                <button type="button" className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-w-40 text-left">
-                  {novosResponsavelIds.length === 0 ? 'Responsaveis (eu)' : `${novosResponsavelIds.length} selecionado(s)`}
-                </button>
-                <div className="absolute z-10 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg p-2 hidden group-hover:block min-w-48 max-h-48 overflow-y-auto">
-                  {membrosEquipe.map((m) => (
-                    <label key={m.usuarioId} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer text-sm">
-                      <input
-                        type="checkbox"
-                        className="rounded"
-                        checked={novosResponsavelIds.includes(m.usuarioId)}
-                        onChange={(e) => {
-                          if (e.target.checked) setNovosResponsavelIds([...novosResponsavelIds, m.usuarioId]);
-                          else setNovosResponsavelIds(novosResponsavelIds.filter((id) => id !== m.usuarioId));
-                        }}
-                      />
-                      {m.usuario.nome}
-                    </label>
-                  ))}
-                </div>
+              <div className="min-w-48">
+                <MultiSelectDropdown
+                  options={membrosEquipe.map((m) => ({ value: m.usuarioId, label: m.usuario.nome }))}
+                  selected={novosResponsavelIds}
+                  onChange={setNovosResponsavelIds}
+                  placeholder="Responsaveis (eu)"
+                />
               </div>
             </div>
             <textarea

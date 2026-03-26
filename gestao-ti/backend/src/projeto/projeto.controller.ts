@@ -237,7 +237,7 @@ export class ProjetoController {
   async updateAtividade(
     @Param('id') id: string,
     @Param('atividadeId') atividadeId: string,
-    @Body() dto: { titulo?: string; descricao?: string; faseId?: string; status?: string; dataInicio?: string; dataFimPrevista?: string },
+    @Body() dto: { titulo?: string; descricao?: string; faseId?: string; status?: string; dataInicio?: string; dataFimPrevista?: string; responsavelIds?: string[] },
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
@@ -367,14 +367,14 @@ export class ProjetoController {
   }
 
   @Post(':id/cotacoes')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   async addCotacao(@Param('id') id: string, @Body() dto: CreateCotacaoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.addCotacao(id, dto);
   }
 
   @Patch(':id/cotacoes/:cotacaoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   async updateCotacao(
     @Param('id') id: string,
     @Param('cotacaoId') cotacaoId: string,
@@ -387,7 +387,7 @@ export class ProjetoController {
   }
 
   @Delete(':id/cotacoes/:cotacaoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   async removeCotacao(@Param('id') id: string, @Param('cotacaoId') cotacaoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeCotacao(id, cotacaoId);
@@ -401,14 +401,14 @@ export class ProjetoController {
   }
 
   @Post(':id/custos-detalhados')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   async addCusto(@Param('id') id: string, @Body() dto: CreateCustoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.addCusto(id, dto);
   }
 
   @Patch(':id/custos-detalhados/:custoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   async updateCusto(
     @Param('id') id: string,
     @Param('custoId') custoId: string,
@@ -421,7 +421,7 @@ export class ProjetoController {
   }
 
   @Delete(':id/custos-detalhados/:custoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   async removeCusto(@Param('id') id: string, @Param('custoId') custoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeCusto(id, custoId);
@@ -435,14 +435,14 @@ export class ProjetoController {
   }
 
   @Post(':id/riscos')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   async addRisco(@Param('id') id: string, @Body() dto: CreateRiscoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.addRisco(id, dto);
   }
 
   @Patch(':id/riscos/:riscoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   async updateRisco(
     @Param('id') id: string,
     @Param('riscoId') riscoId: string,
@@ -455,7 +455,7 @@ export class ProjetoController {
   }
 
   @Delete(':id/riscos/:riscoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   async removeRisco(@Param('id') id: string, @Param('riscoId') riscoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeRisco(id, riscoId);
@@ -469,14 +469,14 @@ export class ProjetoController {
   }
 
   @Post(':id/dependencias')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   async addDependencia(@Param('id') id: string, @Body() dto: CreateDependenciaDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.addDependencia(id, dto);
   }
 
   @Delete(':id/dependencias/:depId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   async removeDependencia(@Param('id') id: string, @Param('depId') depId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeDependencia(id, depId);
@@ -547,7 +547,7 @@ export class ProjetoController {
   }
 
   @Delete(':id/anexos/:anexoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   async removeAnexo(@Param('id') id: string, @Param('anexoId') anexoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeAnexo(id, anexoId);
@@ -573,7 +573,7 @@ export class ProjetoController {
   }
 
   @Delete(':id/apontamentos/:apontamentoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   async removeApontamento(
     @Param('id') id: string,
     @Param('apontamentoId') apontamentoId: string,

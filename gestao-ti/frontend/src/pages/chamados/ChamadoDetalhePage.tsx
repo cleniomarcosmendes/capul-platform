@@ -13,6 +13,7 @@ import {
 import { coreService } from '../../services/core.service';
 import { useToast } from '../../components/Toast';
 import type { Chamado, EquipeTI, AnexoChamado, StatusChamado, TipoHistorico, ChamadoColaborador, RegistroTempoChamado, UsuarioCore } from '../../types';
+import { MentionInput } from '../../components/MentionInput';
 
 const statusLabels: Record<StatusChamado, string> = {
   ABERTO: 'Aberto', EM_ATENDIMENTO: 'Em Atendimento', PENDENTE: 'Pendente',
@@ -100,6 +101,7 @@ export function ChamadoDetalhePage() {
   const [showAddColab, setShowAddColab] = useState(false);
   const [usuariosDisponiveis, setUsuariosDisponiveis] = useState<UsuarioCore[]>([]);
   const [colabSelecionado, setColabSelecionado] = useState('');
+  const [usuariosMencao, setUsuariosMencao] = useState<UsuarioCore[]>([]);
 
   // Registro de Tempo
   const [registrosTempo, setRegistrosTempo] = useState<RegistroTempoChamado[]>([]);
@@ -127,6 +129,7 @@ export function ChamadoDetalhePage() {
       if (data.colaboradores) setColaboradores(data.colaboradores);
     }).catch(() => setError('Chamado nao encontrado')).finally(() => setLoading(false));
     chamadoService.listarRegistrosTempo(id).then(setRegistrosTempo).catch(() => {});
+    coreService.listarUsuarios().then(setUsuariosMencao).catch(() => {});
   }, [id]);
 
   const [membrosEquipeDestino, setMembrosEquipeDestino] = useState<EquipeTI | null>(null);
@@ -402,8 +405,14 @@ export function ChamadoDetalhePage() {
             {showComentario && (
               <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
                 <h4 className="font-medium text-sm text-slate-700">Adicionar Comentario</h4>
-                <textarea value={comentarioTexto} onChange={(e) => setComentarioTexto(e.target.value)} rows={3}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Escreva seu comentario..." />
+                <MentionInput
+                  value={comentarioTexto}
+                  onChange={setComentarioTexto}
+                  usuarios={usuariosMencao.map((u) => ({ id: u.id, nome: u.nome, username: u.username }))}
+                  rows={3}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                  placeholder="Escreva seu comentario... (use @usuario para mencionar)"
+                />
                 {!isUsuarioFinal && (
                   <label className="flex items-center gap-2 text-sm text-slate-600">
                     <input type="checkbox" checked={comentarioPublico} onChange={(e) => setComentarioPublico(e.target.checked)} className="rounded border-slate-300" />

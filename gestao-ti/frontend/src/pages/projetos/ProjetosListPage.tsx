@@ -45,14 +45,24 @@ export function ProjetosListPage() {
   const [filtroSoftware, setFiltroSoftware] = useState('');
   const [apenasRaiz, setApenasRaiz] = useState(false);
   const [meusProjetos, setMeusProjetos] = useState(true);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     softwareService.listar().then(setSoftwares).catch(() => {});
   }, []);
 
+  // Aguardar auth estar pronto antes da primeira carga
   useEffect(() => {
-    if (usuario?.id) loadData();
-  }, [filtroTipo, filtroStatus, filtroSoftware, apenasRaiz, meusProjetos, usuario?.id]);
+    if (usuario?.id && !initialized) {
+      setInitialized(true);
+      loadData();
+    }
+  }, [usuario?.id]);
+
+  // Recarregar ao mudar filtros (somente depois de inicializado)
+  useEffect(() => {
+    if (initialized) loadData();
+  }, [filtroTipo, filtroStatus, filtroSoftware, apenasRaiz, meusProjetos]);
 
   async function loadData() {
     setLoading(true);

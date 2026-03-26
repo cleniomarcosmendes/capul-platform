@@ -479,6 +479,31 @@ export class ChamadoService {
       ).catch(() => {});
     }
 
+    // Processar @mencoes
+    if (dto.descricao) {
+      const regex = /@(\S+)/g;
+      const usernames: string[] = [];
+      let match;
+      while ((match = regex.exec(dto.descricao)) !== null) {
+        usernames.push(match[1].toLowerCase());
+      }
+      if (usernames.length > 0) {
+        const mencionados = await this.prisma.usuario.findMany({
+          where: { username: { in: usernames, mode: 'insensitive' } },
+          select: { id: true },
+        });
+        const idsNotificar = mencionados.map((u) => u.id).filter((uid) => uid !== user.sub && uid !== destinatarioId);
+        if (idsNotificar.length > 0) {
+          this.notificacaoService.criarParaUsuarios(
+            idsNotificar, 'CHAMADO_ATUALIZADO',
+            `Voce foi mencionado no chamado #${chamado.numero}`,
+            `Voce foi mencionado em um comentario no chamado "${chamado.titulo}".`,
+            { chamadoId: id },
+          ).catch(() => {});
+        }
+      }
+    }
+
     return historico;
   }
 

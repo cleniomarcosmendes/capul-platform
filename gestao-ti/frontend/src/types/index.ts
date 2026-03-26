@@ -1112,7 +1112,8 @@ export interface DashboardExecutivo {
 export type TipoNotificacao =
   | 'CHAMADO_ATRIBUIDO' | 'CHAMADO_ATUALIZADO' | 'SLA_ESTOURADO'
   | 'LICENCA_VENCENDO' | 'CONTRATO_VENCENDO' | 'PARCELA_ATRASADA'
-  | 'PARADA_INICIADA' | 'PROJETO_ATUALIZADO' | 'GERAL';
+  | 'PARADA_INICIADA' | 'PROJETO_ATUALIZADO' | 'ATIVIDADE_ATRIBUIDA'
+  | 'PENDENCIA_ATRIBUIDA' | 'GERAL';
 
 export interface Notificacao {
   id: string;
