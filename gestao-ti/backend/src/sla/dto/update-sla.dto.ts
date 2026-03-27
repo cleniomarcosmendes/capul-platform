@@ -1,9 +1,18 @@
-import { IsString, IsOptional, IsInt, Min } from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, IsEnum } from 'class-validator';
+import { Prioridade } from '@prisma/client';
 
 export class UpdateSlaDto {
   @IsOptional()
   @IsString()
   nome?: string;
+
+  @IsOptional()
+  @IsString()
+  equipeId?: string;
+
+  @IsOptional()
+  @IsEnum(Prioridade)
+  prioridade?: Prioridade;
 
   @IsOptional()
   @IsInt()

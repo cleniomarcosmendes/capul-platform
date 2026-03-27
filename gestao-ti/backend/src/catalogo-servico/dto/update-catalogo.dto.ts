@@ -9,6 +9,10 @@ export class UpdateCatalogoDto {
 
   @IsOptional()
   @IsString()
+  equipeId?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(500)
   descricao?: string;
 

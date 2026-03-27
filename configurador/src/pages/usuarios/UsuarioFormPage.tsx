@@ -28,6 +28,7 @@ export function UsuarioFormPage() {
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
   const [cargo, setCargo] = useState('');
+  const [tipo, setTipo] = useState<'INDIVIDUAL' | 'PADRAO'>('INDIVIDUAL');
   const [filialPrincipalId, setFilialPrincipalId] = useState('');
   const [departamentoId, setDepartamentoId] = useState('');
   const [filialIds, setFilialIds] = useState<string[]>([]);
@@ -73,6 +74,7 @@ export function UsuarioFormPage() {
         setEmail(usuario.email || '');
         setTelefone(usuario.telefone || '');
         setCargo(usuario.cargo || '');
+        setTipo(usuario.tipo || 'INDIVIDUAL');
         setFilialPrincipalId(usuario.filialPrincipal?.id || '');
         setDepartamentoId(usuario.departamento?.id || '');
         setFilialIds(usuario.filiais.map((f) => f.filial.id));
@@ -125,6 +127,7 @@ export function UsuarioFormPage() {
           email: email || undefined,
           telefone: telefone || undefined,
           cargo: cargo || undefined,
+          tipo,
           filialPrincipalId: filialPrincipalId || undefined,
           departamentoId: departamentoId || undefined,
           filialIds,
@@ -153,6 +156,7 @@ export function UsuarioFormPage() {
           email: email || undefined,
           telefone: telefone || undefined,
           cargo: cargo || undefined,
+          tipo,
           filialPrincipalId: filialPrincipalId || undefined,
           departamentoId,
           filialIds: filialIds.length > 0 ? filialIds : undefined,
@@ -271,6 +275,16 @@ export function UsuarioFormPage() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Cargo</label>
                 <input type="text" value={cargo} onChange={(e) => setCargo(e.target.value)} className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Usuario</label>
+                <select value={tipo} onChange={(e) => setTipo(e.target.value as 'INDIVIDUAL' | 'PADRAO')} className={inputClass}>
+                  <option value="INDIVIDUAL">Individual</option>
+                  <option value="PADRAO">Padrao (Compartilhado)</option>
+                </select>
+                {tipo === 'PADRAO' && (
+                  <p className="text-xs text-amber-600 mt-1">Usuario compartilhado — ao abrir chamado, sera solicitada a matricula do colaborador</p>
+                )}
               </div>
             </div>
           </div>

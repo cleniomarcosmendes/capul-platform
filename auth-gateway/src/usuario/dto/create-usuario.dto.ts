@@ -51,6 +51,10 @@ export class CreateUsuarioDto {
   cargo?: string;
 
   @IsOptional()
+  @IsString()
+  tipo?: 'INDIVIDUAL' | 'PADRAO';
+
+  @IsOptional()
   @IsUUID()
   filialPrincipalId?: string;
 
@@ -90,6 +94,10 @@ export class UpdateUsuarioDto {
   @IsOptional()
   @IsString()
   cargo?: string;
+
+  @IsOptional()
+  @IsString()
+  tipo?: 'INDIVIDUAL' | 'PADRAO';
 
   @IsOptional()
   @IsUUID()

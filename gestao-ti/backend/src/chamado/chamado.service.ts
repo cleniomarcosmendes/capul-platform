@@ -271,6 +271,8 @@ export class ChamadoService {
         projetoId: dto.projetoId,
         ativoId: dto.ativoId,
         ipMaquina: dto.ipMaquina,
+        matriculaColaborador: dto.matriculaColaborador,
+        nomeColaborador: dto.nomeColaborador?.trim() || undefined,
         slaDefinicaoId: sla?.id,
         dataLimiteSla,
       },

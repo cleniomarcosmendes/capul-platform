@@ -642,6 +642,13 @@ export class ContratoService {
       throw new BadRequestException('Rateio deve ter pelo menos 1 item');
     }
 
+    // Validar centros de custo duplicados
+    const ccIds = dto.itens.map((i) => i.centroCustoId);
+    const duplicados = ccIds.filter((id, idx) => ccIds.indexOf(id) !== idx);
+    if (duplicados.length > 0) {
+      throw new BadRequestException('Existem centros de custo duplicados no rateio. Remova as duplicidades antes de salvar.');
+    }
+
     await this.prisma.$transaction(async (tx) => {
       await tx.rateioTemplate.deleteMany({ where: { contratoId } });
 

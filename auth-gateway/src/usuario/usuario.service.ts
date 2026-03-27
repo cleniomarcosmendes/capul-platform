@@ -88,6 +88,7 @@ export class UsuarioService {
         senha: senhaHash,
         telefone: dto.telefone,
         cargo: dto.cargo,
+        tipo: (dto.tipo as never) || 'INDIVIDUAL',
         filialPrincipalId: dto.filialPrincipalId,
         departamentoId: dto.departamentoId,
         filiais: dto.filialIds

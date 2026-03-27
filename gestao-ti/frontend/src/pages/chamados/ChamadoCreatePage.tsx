@@ -55,6 +55,31 @@ export function ChamadoCreatePage() {
   // IP da maquina
   const [ipMaquina, setIpMaquina] = useState('');
 
+  // Usuario padrao — matricula/nome colaborador
+  const isUsuarioPadrao = usuario?.tipo === 'PADRAO';
+  const [matriculaColaborador, setMatriculaColaborador] = useState('');
+  const [nomeColaborador, setNomeColaborador] = useState('');
+  const [buscandoColaborador, setBuscandoColaborador] = useState(false);
+  const [nomeEditavel, setNomeEditavel] = useState(false);
+
+  async function buscarColaborador() {
+    if (!matriculaColaborador.trim()) return;
+    setBuscandoColaborador(true);
+    setNomeColaborador('');
+    setNomeEditavel(false);
+    try {
+      const { data } = await (await import('../../services/api')).gestaoApi.get(`/protheus/colaborador/${matriculaColaborador.trim()}`);
+      if (data.encontrado && data.nome) {
+        setNomeColaborador(data.nome);
+      } else {
+        setNomeEditavel(true);
+      }
+    } catch {
+      setNomeEditavel(true);
+    }
+    setBuscandoColaborador(false);
+  }
+
 
   // Anexos
   const [arquivos, setArquivos] = useState<File[]>([]);
@@ -159,6 +184,8 @@ export function ChamadoCreatePage() {
         departamentoId: (!isUsuarioFinal && departamentoId && departamentoId !== usuario?.departamento.id) ? departamentoId : undefined,
         ipMaquina: ipMaquina || undefined,
         ativoId: ativoId || undefined,
+        matriculaColaborador: isUsuarioPadrao && matriculaColaborador ? matriculaColaborador.trim() : undefined,
+        nomeColaborador: isUsuarioPadrao && nomeColaborador ? nomeColaborador.trim() : undefined,
       });
 
       // Upload dos anexos
@@ -209,6 +236,38 @@ export function ChamadoCreatePage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          {isUsuarioPadrao && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
+              <p className="text-sm font-medium text-amber-800">Identificacao do Colaborador</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Matricula *</label>
+                  <div className="flex gap-2">
+                    <input
+                      value={matriculaColaborador}
+                      onChange={(e) => setMatriculaColaborador(e.target.value.toUpperCase())}
+                      onBlur={buscarColaborador}
+                      placeholder="Ex: E05111"
+                      className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                      required
+                    />
+                    {buscandoColaborador && <span className="text-xs text-slate-400 self-center">Buscando...</span>}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Nome do Colaborador</label>
+                  <input
+                    value={nomeColaborador}
+                    onChange={(e) => setNomeColaborador(e.target.value)}
+                    readOnly={!nomeEditavel}
+                    placeholder={nomeEditavel ? 'Digite o nome' : 'Preenchido automaticamente'}
+                    className={`w-full border border-slate-300 rounded-lg px-3 py-2 text-sm ${!nomeEditavel ? 'bg-slate-50 text-slate-700' : ''}`}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Assunto *</label>
             <input

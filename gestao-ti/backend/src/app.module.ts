@@ -22,6 +22,7 @@ import { ExportModule } from './export/export.module.js';
 import { ImportModule } from './import/import.module.js';
 import { MonitorModule } from './monitor/monitor.module.js';
 import { HorarioModule } from './horario/horario.module.js';
+import { ProtheusModule } from './protheus/protheus.module.js';
 import { JwtStrategy } from './common/strategies/jwt.strategy.js';
 
 @Module({
@@ -50,6 +51,7 @@ import { JwtStrategy } from './common/strategies/jwt.strategy.js';
     ImportModule,
     MonitorModule,
     HorarioModule,
+    ProtheusModule,
     DashboardModule,
   ],
   providers: [

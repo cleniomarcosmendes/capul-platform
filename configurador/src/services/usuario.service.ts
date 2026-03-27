@@ -20,6 +20,7 @@ export const usuarioService = {
     email?: string;
     telefone?: string;
     cargo?: string;
+    tipo?: 'INDIVIDUAL' | 'PADRAO';
     filialPrincipalId?: string;
     departamentoId: string;
     filialIds?: string[];
@@ -35,6 +36,7 @@ export const usuarioService = {
     email?: string;
     telefone?: string;
     cargo?: string;
+    tipo?: 'INDIVIDUAL' | 'PADRAO';
     filialPrincipalId?: string;
     departamentoId?: string;
     filialIds?: string[];

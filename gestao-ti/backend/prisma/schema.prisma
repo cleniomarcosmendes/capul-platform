@@ -286,8 +286,10 @@ model Chamado {
   dataFechamento     DateTime?     @map("data_fechamento")
   notaSatisfacao     Int?          @map("nota_satisfacao")
   comentarioSatisfacao String?     @map("comentario_satisfacao")
-  ipMaquina          String?       @map("ip_maquina")
-  createdAt          DateTime      @default(now()) @map("created_at")
+  ipMaquina            String?       @map("ip_maquina")
+  matriculaColaborador String?       @map("matricula_colaborador")
+  nomeColaborador      String?       @map("nome_colaborador")
+  createdAt            DateTime      @default(now()) @map("created_at")
   updatedAt          DateTime      @updatedAt @map("updated_at")
 
   solicitanteId String  @map("solicitante_id")

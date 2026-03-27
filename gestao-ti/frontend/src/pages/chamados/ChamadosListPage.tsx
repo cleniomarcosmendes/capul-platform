@@ -329,7 +329,10 @@ export function ChamadosListPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-slate-600">{c.tecnico?.nome || '-'}</td>
-                    <td className="px-4 py-3 text-slate-600">{c.solicitante.nome}</td>
+                    <td className="px-4 py-3 text-slate-600">
+                      {c.nomeColaborador || c.solicitante.nome}
+                      {c.matriculaColaborador && <span className="text-xs text-slate-400 ml-1">({c.matriculaColaborador})</span>}
+                    </td>
                     <td className="px-4 py-3 text-slate-500 text-xs">{c.departamento?.nome || '—'}</td>
                     <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
                       {new Date(c.createdAt).toLocaleDateString('pt-BR')}

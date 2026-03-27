@@ -16,6 +16,13 @@ enum StatusGeral {
   @@schema("core")
 }
 
+enum TipoUsuario {
+  INDIVIDUAL
+  PADRAO
+
+  @@schema("core")
+}
+
 model TipoDepartamento {
   id        String      @id @default(uuid())
   nome      String      @unique
@@ -128,8 +135,9 @@ model Usuario {
   telefone       String?
   cargo          String?
   avatarUrl      String?     @map("avatar_url")
-  status         StatusGeral @default(ATIVO)
-  primeiroAcesso Boolean     @default(true) @map("primeiro_acesso")
+  status         StatusGeral  @default(ATIVO)
+  tipo           TipoUsuario  @default(INDIVIDUAL) @map("tipo")
+  primeiroAcesso Boolean      @default(true) @map("primeiro_acesso")
   mfaSecret      String?     @map("mfa_secret")
   mfaEnabled     Boolean     @default(false) @map("mfa_enabled")
   ultimoLogin    DateTime?   @map("ultimo_login")

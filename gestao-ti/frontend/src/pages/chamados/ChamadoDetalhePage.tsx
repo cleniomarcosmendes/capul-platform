@@ -665,6 +665,13 @@ export function ChamadoDetalhePage() {
                 <span className="text-xs text-slate-600">{chamado.solicitante.nome}</span>
               </InfoRow>
 
+              {chamado.nomeColaborador && (
+                <InfoRow label="Colaborador">
+                  <span className="text-xs text-slate-600 font-medium">{chamado.nomeColaborador}</span>
+                  {chamado.matriculaColaborador && <span className="text-xs text-slate-400 ml-1">({chamado.matriculaColaborador})</span>}
+                </InfoRow>
+              )}
+
               <InfoRow label="Tecnico">
                 <span className="text-xs text-slate-600">{chamado.tecnico?.nome || 'Nao atribuido'}</span>
               </InfoRow>

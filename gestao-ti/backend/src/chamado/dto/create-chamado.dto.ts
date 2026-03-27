@@ -63,4 +63,13 @@ export class CreateChamadoDto {
   @IsString()
   ativoId?: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  matriculaColaborador?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  nomeColaborador?: string;
 }

@@ -28,6 +28,8 @@ interface CreateChamadoPayload {
   departamentoId?: string;
   ipMaquina?: string;
   ativoId?: string;
+  matriculaColaborador?: string;
+  nomeColaborador?: string;
 }
 
 export const chamadoService = {

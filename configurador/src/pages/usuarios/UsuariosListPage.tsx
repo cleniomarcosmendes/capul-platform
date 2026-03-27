@@ -115,6 +115,7 @@ export function UsuariosListPage() {
                     <th className="text-left px-4 py-3 font-medium text-slate-600">Usuario</th>
                     <th className="text-left px-4 py-3 font-medium text-slate-600">Email</th>
                     <th className="text-left px-4 py-3 font-medium text-slate-600">Cargo</th>
+                    <th className="text-center px-4 py-3 font-medium text-slate-600">Tipo</th>
                     <th className="text-left px-4 py-3 font-medium text-slate-600">Filial</th>
                     <th className="text-left px-4 py-3 font-medium text-slate-600">Modulos</th>
                     <th className="text-center px-4 py-3 font-medium text-slate-600">Status</th>
@@ -130,6 +131,13 @@ export function UsuariosListPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-600">{user.email || '—'}</td>
                       <td className="px-4 py-3 text-slate-600">{user.cargo || '—'}</td>
+                      <td className="px-4 py-3 text-center">
+                        {user.tipo === 'PADRAO' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700">Padrao</span>
+                        ) : (
+                          <span className="text-xs text-slate-400">Individual</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-slate-600">
                         {user.filialPrincipal ? `${user.filialPrincipal.codigo} - ${user.filialPrincipal.nomeFantasia}` : '—'}
                       </td>

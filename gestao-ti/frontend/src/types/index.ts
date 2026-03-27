@@ -19,6 +19,7 @@ export interface UsuarioLogado {
   username: string;
   nome: string;
   email: string | null;
+  tipo: 'INDIVIDUAL' | 'PADRAO';
   departamento: { id: string; nome: string };
   filialAtual: FilialUsuario | null;
   filiais: (FilialUsuario & { isDefault: boolean })[];
@@ -226,6 +227,8 @@ export interface Chamado {
   notaSatisfacao: number | null;
   comentarioSatisfacao: string | null;
   ipMaquina: string | null;
+  matriculaColaborador: string | null;
+  nomeColaborador: string | null;
   createdAt: string;
   updatedAt: string;
   historicos?: HistoricoChamado[];
