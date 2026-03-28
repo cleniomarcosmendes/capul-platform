@@ -38,7 +38,7 @@ router = APIRouter()
 
 PROTHEUS_INVENTARIO_URL = os.getenv(
     "PROTHEUS_INVENTARIO_URL",
-    "https://192.168.7.63:8115/rest/api/INFOCLIENTES"
+    "https://apiportal.capul.com.br:8104/rest/api/INFOCLIENTES"
 )
 PROTHEUS_INVENTARIO_AUTH = os.getenv(
     "PROTHEUS_INVENTARIO_AUTH",

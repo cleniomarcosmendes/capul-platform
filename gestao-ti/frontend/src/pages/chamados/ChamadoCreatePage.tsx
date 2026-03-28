@@ -255,11 +255,12 @@ export function ChamadoCreatePage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Nome do Colaborador</label>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Nome do Colaborador {nomeEditavel && '*'}</label>
                   <input
                     value={nomeColaborador}
                     onChange={(e) => setNomeColaborador(e.target.value)}
                     readOnly={!nomeEditavel}
+                    required={nomeEditavel}
                     placeholder={nomeEditavel ? 'Digite o nome' : 'Preenchido automaticamente'}
                     className={`w-full border border-slate-300 rounded-lg px-3 py-2 text-sm ${!nomeEditavel ? 'bg-slate-50 text-slate-700' : ''}`}
                   />

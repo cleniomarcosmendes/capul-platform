@@ -6,8 +6,7 @@ import httpx
 import json
 import time
 
-# ✅ v2.19.55: Atualizado endpoint para IP interno 192.168.7.63:8115
-PROTHEUS_API_URL = "https://192.168.7.63:8115/rest/api/INFOCLIENTES/inventario/produtos"
+PROTHEUS_API_URL = "https://apiportal.capul.com.br:8104/rest/api/INFOCLIENTES/inventario/produtos"
 PROTHEUS_AUTH = "QVBJQ0FQVUw6QXAxQzRwdTFQUkQ="
 
 def test_api(filial, armazem):

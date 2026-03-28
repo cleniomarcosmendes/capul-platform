@@ -1123,7 +1123,9 @@
       "Bash(python3:*)",
       "Bash(xargs basename:*)",
       "Bash(python3 -m json.tool)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(node:*)",
+      "Bash(find /mnt/c/meus_projetos/capul-platform/inventario/frontend/src -type f \\\\\\(-name *.ts -o -name *.tsx -o -name *.js -o -name *.jsx \\\\\\))"
     ]
   }
 }
