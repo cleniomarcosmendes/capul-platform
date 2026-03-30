@@ -27,25 +27,11 @@ from uuid import UUID
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.exceptions import safe_error_response
+from app.core.protheus_config import get_protheus_config
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# =====================================================
-# CONFIGURACAO
-# =====================================================
-
-PROTHEUS_INVENTARIO_URL = os.getenv(
-    "PROTHEUS_INVENTARIO_URL",
-    "https://apiportal.capul.com.br:8104/rest/api/INFOCLIENTES"
-)
-PROTHEUS_INVENTARIO_AUTH = os.getenv(
-    "PROTHEUS_INVENTARIO_AUTH",
-    "Basic QVBJQ0FQVUw6QXAxQzRwdTFQUkQ="
-)
-PROTHEUS_INVENTARIO_TIMEOUT = int(os.getenv("PROTHEUS_INVENTARIO_TIMEOUT", "60"))
-PROTHEUS_INVENTARIO_VERIFY_SSL = os.getenv("PROTHEUS_INVENTARIO_VERIFY_SSL", "false").lower() == "true"
 
 
 # =====================================================
@@ -92,12 +78,13 @@ def ensure_logs_table(db: Session):
 # CLIENTE HTTP
 # =====================================================
 
-async def call_protheus(endpoint: str, payload: dict, method: str = "POST") -> dict:
+async def call_protheus(operacao: str, payload: dict, method: str = "POST") -> dict:
     """
     Faz chamada HTTP ao Protheus com retry em 5xx.
+    Usa configuracao centralizada (API Auth Gateway ou fallback .env).
 
     Args:
-        endpoint: Caminho relativo (ex: /inventario/transferencia)
+        operacao: Codigo da operacao (ex: TRANSFERENCIA, DIGITACAO, HISTORICO)
         payload: Corpo JSON da requisicao
         method: Metodo HTTP (default POST)
 
@@ -107,12 +94,18 @@ async def call_protheus(endpoint: str, payload: dict, method: str = "POST") -> d
     Raises:
         Exception com detalhes do erro
     """
-    url = f"{PROTHEUS_INVENTARIO_URL.rstrip('/')}{endpoint}"
+    config = await get_protheus_config()
+
+    url = config.get_url(operacao)
+    if not url:
+        raise Exception(f"Endpoint {operacao} nao configurado na integracao Protheus")
+
     headers = {
-        "Authorization": PROTHEUS_INVENTARIO_AUTH,
+        "Authorization": config.auth_header,
         "Content-Type": "application/json"
     }
-    timeout = httpx.Timeout(float(PROTHEUS_INVENTARIO_TIMEOUT))
+    timeout_seconds = config.get_timeout_seconds(operacao)
+    timeout = httpx.Timeout(float(timeout_seconds))
 
     max_attempts = 2  # 1 tentativa + 1 retry em 5xx
     last_error = None
@@ -120,7 +113,7 @@ async def call_protheus(endpoint: str, payload: dict, method: str = "POST") -> d
     for attempt in range(max_attempts):
         try:
             async with httpx.AsyncClient(
-                verify=PROTHEUS_INVENTARIO_VERIFY_SSL,
+                verify=False,
                 timeout=timeout
             ) as client:
                 response = await client.request(
@@ -153,7 +146,7 @@ async def call_protheus(endpoint: str, payload: dict, method: str = "POST") -> d
                     return {"raw_response": response.text[:2000]}
 
         except httpx.TimeoutException:
-            last_error = f"Timeout apos {PROTHEUS_INVENTARIO_TIMEOUT}s"
+            last_error = f"Timeout apos {timeout_seconds}s"
             if attempt < max_attempts - 1:
                 logger.warning(f"Timeout na chamada Protheus, tentando retry...")
                 continue
@@ -384,7 +377,7 @@ async def send_transferencias(
     # Enviar para Protheus
     start_time = time.time()
     try:
-        response = await call_protheus("/inventario/transferencia", payload)
+        response = await call_protheus("TRANSFERENCIA", payload)
         duration_ms = int((time.time() - start_time) * 1000)
 
         # Processar resposta usando detalhes do Protheus
@@ -624,7 +617,7 @@ async def send_digitacao(
 
         start_time = time.time()
         try:
-            response = await call_protheus("/inventario/digitacao", payload)
+            response = await call_protheus("DIGITACAO", payload)
             duration_ms = int((time.time() - start_time) * 1000)
 
             detalhes = response.get("detalhes", [])
@@ -889,7 +882,7 @@ async def send_historico(
 
         start_time = time.time()
         try:
-            response = await call_protheus("/INVENTARIO/historico", payload)
+            response = await call_protheus("HISTORICO", payload)
             duration_ms = int((time.time() - start_time) * 1000)
 
             gravacao = response.get("gravacao", False)

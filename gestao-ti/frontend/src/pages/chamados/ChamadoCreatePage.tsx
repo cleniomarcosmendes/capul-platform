@@ -62,8 +62,17 @@ export function ChamadoCreatePage() {
   const [buscandoColaborador, setBuscandoColaborador] = useState(false);
   const [nomeEditavel, setNomeEditavel] = useState(false);
 
+  const [erroMatricula, setErroMatricula] = useState('');
+
   async function buscarColaborador() {
-    if (!matriculaColaborador.trim()) return;
+    const valor = matriculaColaborador.trim();
+    if (!valor) return;
+    if (!valor.startsWith('E')) {
+      setErroMatricula('Matricula deve iniciar com a letra E');
+      setNomeColaborador('');
+      return;
+    }
+    setErroMatricula('');
     setBuscandoColaborador(true);
     setNomeColaborador('');
     setNomeEditavel(false);
@@ -245,14 +254,24 @@ export function ChamadoCreatePage() {
                   <div className="flex gap-2">
                     <input
                       value={matriculaColaborador}
-                      onChange={(e) => setMatriculaColaborador(e.target.value.toUpperCase())}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        setMatriculaColaborador(val);
+                        if (val && !val.startsWith('E')) {
+                          setErroMatricula('Matricula deve iniciar com a letra E');
+                        } else {
+                          setErroMatricula('');
+                        }
+                      }}
                       onBlur={buscarColaborador}
                       placeholder="Ex: E05111"
-                      className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                      className={`flex-1 border rounded-lg px-3 py-2 text-sm ${erroMatricula ? 'border-red-400 bg-red-50' : 'border-slate-300'}`}
                       required
+                      maxLength={10}
                     />
                     {buscandoColaborador && <span className="text-xs text-slate-400 self-center">Buscando...</span>}
                   </div>
+                  {erroMatricula && <p className="text-xs text-red-600 mt-1">{erroMatricula}</p>}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Nome do Colaborador {nomeEditavel && '*'}</label>

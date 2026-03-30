@@ -754,6 +754,18 @@ async def get_current_user_info_temp(current_user=Depends(get_current_user), db:
         "is_active": current_user.is_active
     }
 
+def _resolve_location(sbz, szb):
+    """Resolve localização dinâmica baseada em szb010.zb_xsbzlcz"""
+    if not sbz:
+        return ""
+    campo = szb.zb_xsbzlcz.strip() if szb and hasattr(szb, 'zb_xsbzlcz') and szb.zb_xsbzlcz else '1'
+    if campo == '2' and sbz.bz_xlocal2:
+        return sbz.bz_xlocal2.strip()
+    if campo == '3' and sbz.bz_xlocal3:
+        return sbz.bz_xlocal3.strip()
+    return sbz.bz_xlocal1.strip() if sbz.bz_xlocal1 else ""
+
+
 # LOGIN REMOVIDO - Usar app.api.auth.py
 
 @app.get("/api/v1/inventory/lists/{inventory_id}/items", tags=["Inventory"])
@@ -795,7 +807,7 @@ async def get_inventory_items(
             )
         
         # Buscar itens com atribuições do usuário E dados do produto
-        from app.models.models import SB1010, SB2010, SBZ010
+        from app.models.models import SB1010, SB2010, SBZ010, SZB010, Store
         from sqlalchemy import func
         
         # ✅ NOVA ABORDAGEM: Buscar itens únicos primeiro, depois buscar dados adicionais
@@ -837,6 +849,14 @@ async def get_inventory_items(
             ).all()
             for sbz in sbz_rows:
                 sbz_lookup[sbz.bz_cod.strip()] = sbz
+
+        # Batch fetch SZB010 (config de localização por armazém)
+        store = db.query(Store).filter(Store.id == inventory.store_id).first()
+        filial_code = store.code.strip() if store and store.code else '01'
+        szb_lookup = {}
+        szb_rows = db.query(SZB010).filter(SZB010.zb_filial == filial_code).all()
+        for szb in szb_rows:
+            szb_lookup[szb.zb_xlocal.strip()] = szb
 
         items_with_assignments = []
         for item in unique_items:
@@ -886,6 +906,7 @@ async def get_inventory_items(
                 "product_local1": sbz.bz_xlocal1.strip() if sbz and sbz.bz_xlocal1 else "",
                 "product_local2": sbz.bz_xlocal2.strip() if sbz and sbz.bz_xlocal2 else "",
                 "product_local3": sbz.bz_xlocal3.strip() if sbz and sbz.bz_xlocal3 else "",
+                "product_location": _resolve_location(sbz, szb_lookup.get(wh)),
                 "sequence": item.sequence,
                 "expected_quantity": float(item.expected_quantity) if item.expected_quantity else 0.0,
                 "warehouse": item.warehouse,

@@ -19,16 +19,10 @@ from app.core.exceptions import safe_error_response
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.models import User
+from app.core.protheus_config import get_protheus_config
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-# Configurações da API Protheus
-# Usa PROTHEUS_INVENTARIO_URL (base) + path /inventario/produtos
-import os
-_PROTHEUS_BASE = os.getenv("PROTHEUS_INVENTARIO_URL", "https://apiportal.capul.com.br:8104/rest/api/INFOCLIENTES")
-PROTHEUS_API_URL = f"{_PROTHEUS_BASE.rstrip('/')}/inventario/produtos"
-PROTHEUS_AUTH = os.getenv("PROTHEUS_INVENTARIO_AUTH", "Basic QVBJQ0FQVUw6QXAxQzRwdTFQUkQ=").replace("Basic ", "")
 
 
 @router.post("/import-produtos")
@@ -66,8 +60,14 @@ async def import_produtos_protheus(
         # ========================================
         # 1. CHAMAR API PROTHEUS EM PARALELO (v2.19.55)
         # ========================================
+        protheus_cfg = await get_protheus_config()
+        _PROTHEUS_PRODUTOS_URL = protheus_cfg.get_url("PRODUTOS")
+        if not _PROTHEUS_PRODUTOS_URL:
+            raise HTTPException(status_code=500, detail="Endpoint PRODUTOS nao configurado na integracao Protheus")
+        _PROTHEUS_TIMEOUT = protheus_cfg.get_timeout_seconds("PRODUTOS")
+
         headers = {
-            "Authorization": f"Basic {PROTHEUS_AUTH}",
+            "Authorization": protheus_cfg.auth_header,
             "Content-Type": "application/json"
         }
 
@@ -82,7 +82,7 @@ async def import_produtos_protheus(
             logger.info(f"📦 [PAYLOAD {idx}] {json.dumps(payload)}")
 
             api_start = time.time()
-            response = await client.post(PROTHEUS_API_URL, json=payload, headers=headers)
+            response = await client.post(_PROTHEUS_PRODUTOS_URL, json=payload, headers=headers)
             api_duration = time.time() - api_start
             response.raise_for_status()
 
@@ -106,7 +106,7 @@ async def import_produtos_protheus(
 
         # ✅ v2.19.55: Processar armazéns EM PARALELO (asyncio.gather)
         import asyncio
-        async with httpx.AsyncClient(verify=False, timeout=900.0) as client:
+        async with httpx.AsyncClient(verify=False, timeout=float(_PROTHEUS_TIMEOUT)) as client:
             tasks = [_fetch_armazem(client, arm, idx) for idx, arm in enumerate(armazem, 1)]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 

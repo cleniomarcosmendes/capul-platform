@@ -10,6 +10,7 @@ import {
   ArrowLeft,
   LogOut,
   Settings,
+  Plug,
 } from 'lucide-react';
 
 type MenuItem =
@@ -27,6 +28,8 @@ const menuItems: MenuItem[] = [
   { label: 'Centros de Custo', icon: Wallet, path: '/configurador/centros-custo' },
   { section: 'ACESSOS', roles: [...ADMINS, 'GESTOR'] },
   { label: 'Usuarios', icon: Users, path: '/configurador/usuarios', roles: [...ADMINS, 'GESTOR'] },
+  { section: 'SISTEMA', roles: ADMINS },
+  { label: 'Integracoes API', icon: Plug, path: '/configurador/integracoes', roles: ADMINS },
 ];
 
 function filterMenuByRole(items: MenuItem[], role: string | null): MenuItem[] {

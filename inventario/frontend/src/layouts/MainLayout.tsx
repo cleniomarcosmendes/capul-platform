@@ -26,10 +26,10 @@ export function MainLayout() {
   }, [pathname]);
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <Sidebar open={sidebarOpen} onClose={closeSidebar} />
       <main
-        className={`flex-1 flex flex-col min-w-0 transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`}
+        className={`flex-1 flex flex-col min-w-0 overflow-y-auto transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`}
       >
         <Outlet context={{ toggleSidebar } satisfies SidebarContext} />
       </main>

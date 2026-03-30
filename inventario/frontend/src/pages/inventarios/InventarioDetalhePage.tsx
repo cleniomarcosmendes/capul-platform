@@ -530,7 +530,8 @@ function TabItens({ itens, page, totalPages, statusFilter, inventoryStatus, inve
                 <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] w-10">SEQ</th>
                 <th className="text-left py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Codigo</th>
                 <th className="text-left py-2 px-2 font-medium text-slate-600 text-[11px]">Descricao</th>
-                <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Local</th>
+                <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Arm.</th>
+                <th className="text-left py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Localizacao</th>
                 <th className="text-right py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Saldo Est.</th>
                 <th className="text-right py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Ent. Post.</th>
                 <th className="text-left py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Grupo</th>
@@ -564,6 +565,7 @@ function TabItens({ itens, page, totalPages, statusFilter, inventoryStatus, inve
                     <td className="py-2 px-2 font-mono text-[11px] text-slate-700 whitespace-nowrap">{item.product_code}</td>
                     <td className="py-2 px-2 text-[11px] text-slate-800 truncate max-w-[180px]" title={item.product_name}>{item.product_name}</td>
                     <td className="py-2 px-1 text-center text-[11px] font-mono text-slate-600">{item.warehouse || '—'}</td>
+                    <td className="py-2 px-1 text-[11px] text-slate-600">{item.product_location || '—'}</td>
                     <td className="py-2 px-2 text-right text-[11px] font-mono tabular-nums text-slate-700 whitespace-nowrap">
                       {(item.product_estoque ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
@@ -962,7 +964,7 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
                             </button>
                           )}
 
-                          {isPrepOrAberta && (
+                          {isPrepOrAberta && (lista.total_items ?? 0) > 0 && (
                             <button
                               onClick={() => handleLiberar(lista.id)}
                               title="Liberar para Contagem"

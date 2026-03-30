@@ -20,63 +20,55 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.config import settings
 from app.core.constants import VALID_SYNC_TABLES
+from app.core.protheus_config import get_protheus_config
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Configurações da API Protheus
-PROTHEUS_API_URL = getattr(settings, 'PROTHEUS_API_URL',
-    "https://apiportal.capul.com.br:8104/rest/api/INFOCLIENTES/hierarquiaMercadologica")
-PROTHEUS_API_AUTH = getattr(settings, 'PROTHEUS_API_AUTH',
-    "Basic QVBJQ0FQVUw6QXAxQzRwdTFQUkQ=")
-PROTHEUS_API_TIMEOUT = getattr(settings, 'PROTHEUS_API_TIMEOUT', 30)
 
-
-def fetch_protheus_hierarchy() -> Dict[str, List[Dict]]:
+async def fetch_protheus_hierarchy() -> Dict[str, List[Dict]]:
     """
-    Busca dados da API Protheus (hierarquia mercadológica + armazéns).
-
-    Returns:
-        Dict com:
-        - grupos: Lista de grupos com categorias/subcategorias/segmentos aninhados
-        - armazens: Lista de armazéns (SZB010) - v2.18.4
-
-    Raises:
-        requests.exceptions.Timeout: Timeout ao conectar
-        requests.exceptions.HTTPError: Erro HTTP (401, 403, 500, etc)
-        requests.exceptions.RequestException: Outros erros de conexão
+    Busca dados da API Protheus (hierarquia mercadologica + armazens).
+    Usa configuracao centralizada (API Auth Gateway ou fallback .env).
     """
-    logger.info(f"🔄 Buscando dados da API Protheus: {PROTHEUS_API_URL}")
+    config = await get_protheus_config()
+
+    url = config.get_url("HIERARQUIA")
+    if not url:
+        raise Exception("Endpoint HIERARQUIA nao configurado na integracao Protheus")
+
+    timeout = config.get_timeout_seconds("HIERARQUIA")
+    auth = config.auth_header
+
+    logger.info(f"Buscando dados da API Protheus: {url} (ambiente: {config.ambiente})")
 
     try:
         response = requests.get(
-            PROTHEUS_API_URL,
-            headers={"Authorization": PROTHEUS_API_AUTH},
-            timeout=PROTHEUS_API_TIMEOUT,
-            verify=True  # Validar certificado SSL
+            url,
+            headers={"Authorization": auth},
+            timeout=timeout,
+            verify=False
         )
         response.raise_for_status()
 
         data = response.json()
-
-        # v2.18.4: Suporta nova estrutura da API (grupos + armazens) e legada (resultado)
         grupos = data.get("grupos", data.get("resultado", []))
         armazens = data.get("armazens", [])
 
-        logger.info(f"✅ API retornou {len(grupos)} grupos e {len(armazens)} armazéns")
+        logger.info(f"API retornou {len(grupos)} grupos e {len(armazens)} armazens")
         return {"grupos": grupos, "armazens": armazens}
 
     except requests.exceptions.Timeout:
-        logger.error("❌ Timeout ao conectar com API Protheus")
+        logger.error("Timeout ao conectar com API Protheus")
         raise
     except requests.exceptions.HTTPError as e:
-        logger.error(f"❌ Erro HTTP ao buscar dados: {e.response.status_code}")
+        logger.error(f"Erro HTTP ao buscar dados: {e.response.status_code}")
         raise
     except requests.exceptions.RequestException as e:
-        logger.error(f"❌ Erro de conexão com API Protheus: {str(e)}")
+        logger.error(f"Erro de conexao com API Protheus: {str(e)}")
         raise
     except Exception as e:
-        logger.error(f"❌ Erro inesperado ao buscar dados: {str(e)}")
+        logger.error(f"Erro inesperado ao buscar dados: {str(e)}")
         raise
 
 
@@ -422,8 +414,8 @@ async def sync_protheus_hierarchy(
     start_time = datetime.now()
 
     try:
-        # 1. Buscar dados da API Protheus (grupos + armazéns)
-        protheus_data = fetch_protheus_hierarchy()
+        # 1. Buscar dados da API Protheus (grupos + armazens)
+        protheus_data = await fetch_protheus_hierarchy()
         grupos_data = protheus_data.get("grupos", [])
         armazens_data = protheus_data.get("armazens", [])
 

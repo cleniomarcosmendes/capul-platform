@@ -243,6 +243,71 @@ model RefreshToken {
   @@schema("core")
 }
 
+enum AmbienteIntegracao {
+  PRODUCAO
+  HOMOLOGACAO
+
+  @@schema("core")
+}
+
+enum MetodoHttp {
+  GET
+  POST
+  PUT
+  PATCH
+  DELETE
+
+  @@schema("core")
+}
+
+enum TipoAuth {
+  BASIC
+  BEARER
+  API_KEY
+  NONE
+
+  @@schema("core")
+}
+
+model IntegracaoApi {
+  id          String              @id @default(uuid())
+  codigo      String              @unique
+  nome        String
+  descricao   String?
+  ambiente    AmbienteIntegracao  @default(HOMOLOGACAO)
+  tipoAuth    TipoAuth            @default(BASIC) @map("tipo_auth")
+  authConfig  String?             @map("auth_config")
+  ativo       Boolean             @default(true)
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  endpoints IntegracaoApiEndpoint[]
+
+  @@map("integracoes_api")
+  @@schema("core")
+}
+
+model IntegracaoApiEndpoint {
+  id            String              @id @default(uuid())
+  ambiente      AmbienteIntegracao
+  operacao      String
+  descricao     String?
+  url           String
+  metodo        MetodoHttp          @default(GET)
+  timeoutMs     Int                 @default(30000) @map("timeout_ms")
+  headers       Json?
+  ativo         Boolean             @default(true)
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+
+  integracaoId  String              @map("integracao_id")
+  integracao    IntegracaoApi       @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+
+  @@unique([integracaoId, ambiente, operacao])
+  @@map("integracoes_api_endpoints")
+  @@schema("core")
+}
+
 model SystemConfig {
   id        String   @id @default(uuid())
   key       String   @unique

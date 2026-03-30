@@ -109,6 +109,7 @@ export interface InventoryItem {
   product_local1?: string;
   product_local2?: string;
   product_local3?: string;
+  product_location?: string;
   warehouse?: string;
   counted_quantity: number;
   variance: number;

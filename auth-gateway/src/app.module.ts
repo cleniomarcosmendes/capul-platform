@@ -12,6 +12,7 @@ import { TipoDepartamentoModule } from './tipo-departamento/tipo-departamento.mo
 import { CentroCustoModule } from './centro-custo/centro-custo.module';
 import { ModuloModule } from './modulo/modulo.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
+import { IntegracaoModule } from './integracao/integracao.module';
 
 @Injectable()
 class ProxyAwareThrottlerGuard extends ThrottlerGuard {
@@ -41,6 +42,7 @@ class ProxyAwareThrottlerGuard extends ThrottlerGuard {
     TipoDepartamentoModule,
     CentroCustoModule,
     ModuloModule,
+    IntegracaoModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ProxyAwareThrottlerGuard },
