@@ -89,6 +89,12 @@ export class EquipeController {
     return this.equipeService.updateMembro(id, membroId, dto);
   }
 
+  @Delete(':id')
+  @Roles('ADMIN', 'GESTOR_TI')
+  remove(@Param('id') id: string) {
+    return this.equipeService.remove(id);
+  }
+
   @Delete(':id/membros/:membroId')
   @Roles('ADMIN', 'GESTOR_TI')
   removeMembro(

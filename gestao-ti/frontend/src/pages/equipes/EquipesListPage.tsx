@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { equipeService } from '../../services/equipe.service';
-import { Plus, Pencil, Users } from 'lucide-react';
+import { Plus, Pencil, Users, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { EquipeTI } from '../../types';
 import { useToast } from '../../components/Toast';
+
+type SortKey = 'nome' | 'sigla' | 'membros' | 'status';
+type SortDir = 'asc' | 'desc';
 
 export function EquipesListPage() {
   const navigate = useNavigate();
@@ -16,6 +19,30 @@ export function EquipesListPage() {
 
   const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
   const { toast } = useToast();
+
+  const [sortKey, setSortKey] = useState<SortKey>('nome');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('asc'); }
+  }
+  function SortIcon({ col }: { col: SortKey }) {
+    if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300" />;
+    return sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-capul-600" /> : <ArrowDown className="w-3 h-3 text-capul-600" />;
+  }
+  const sorted = useMemo(() => {
+    return [...equipes].sort((a, b) => {
+      if (sortKey === 'membros') {
+        const cmp = (a.membros?.length || 0) - (b.membros?.length || 0);
+        return sortDir === 'asc' ? cmp : -cmp;
+      }
+      const va = (a[sortKey] || '').toString().toLowerCase();
+      const vb = (b[sortKey] || '').toString().toLowerCase();
+      const cmp = va.localeCompare(vb);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [equipes, sortKey, sortDir]);
 
   useEffect(() => {
     carregarEquipes();
@@ -90,16 +117,16 @@ export function EquipesListPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  <th className="px-6 py-3">Equipe</th>
-                  <th className="px-6 py-3">Sigla</th>
-                  <th className="px-6 py-3">Membros</th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('nome')} className="flex items-center gap-1 hover:text-slate-700">Equipe <SortIcon col="nome" /></button></th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('sigla')} className="flex items-center gap-1 hover:text-slate-700">Sigla <SortIcon col="sigla" /></button></th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('membros')} className="flex items-center gap-1 hover:text-slate-700">Membros <SortIcon col="membros" /></button></th>
                   <th className="px-6 py-3">Chamados Externos</th>
-                  <th className="px-6 py-3">Status</th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-slate-700">Status <SortIcon col="status" /></button></th>
                   {isAdmin && <th className="px-6 py-3">Acoes</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {equipes.map((equipe) => (
+                {sorted.map((equipe) => (
                   <tr
                     key={equipe.id}
                     className="hover:bg-slate-50 transition-colors"
@@ -154,6 +181,13 @@ export function EquipesListPage() {
                             className="text-xs text-capul-600 hover:underline"
                           >
                             {equipe.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
+                          </button>
+                          <button onClick={async () => {
+                            if (!confirm(`Excluir equipe "${equipe.nome}"?`)) return;
+                            try { await equipeService.excluir(equipe.id); carregarEquipes(); toast('success', 'Equipe excluida'); }
+                            catch (err: unknown) { toast('error', (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir'); }
+                          }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">
+                            <Trash2 className="w-3.5 h-3.5" /> Excluir
                           </button>
                         </div>
                       </td>

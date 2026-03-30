@@ -1,10 +1,13 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, useMemo, type FormEvent } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { empresaService } from '../../services/empresa.service';
 import { filialService } from '../../services/filial.service';
-import { Building2, Plus, Pencil, X, Save, Star } from 'lucide-react';
+import { Building2, Plus, Pencil, X, Save, Star, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { Empresa, Filial } from '../../types';
+
+type SortKey = 'codigo' | 'nomeFantasia' | 'cidade' | 'status';
+type SortDir = 'asc' | 'desc';
 
 export function EmpresaFiliaisPage() {
   const { configuradorRole } = useAuth();
@@ -29,6 +32,32 @@ export function EmpresaFiliaisPage() {
   });
   const [savingFilial, setSavingFilial] = useState(false);
   const [erroFilial, setErroFilial] = useState('');
+
+  const [sortKey, setSortKey] = useState<SortKey>('codigo');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('asc'); }
+  }
+  function SortIcon({ col }: { col: SortKey }) {
+    if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300" />;
+    return sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-emerald-600" /> : <ArrowDown className="w-3 h-3 text-emerald-600" />;
+  }
+  const sortedFiliais = useMemo(() => {
+    return [...filiais].sort((a, b) => {
+      let va: string, vb: string;
+      if (sortKey === 'cidade') {
+        va = [a.cidade, a.estado].filter(Boolean).join(' ').toLowerCase();
+        vb = [b.cidade, b.estado].filter(Boolean).join(' ').toLowerCase();
+      } else {
+        va = (a[sortKey] || '').toString().toLowerCase();
+        vb = (b[sortKey] || '').toString().toLowerCase();
+      }
+      const cmp = va.localeCompare(vb);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [filiais, sortKey, sortDir]);
 
   useEffect(() => {
     carregar();
@@ -263,16 +292,16 @@ export function EmpresaFiliaisPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      <th className="px-6 py-3">Codigo</th>
-                      <th className="px-6 py-3">Nome Fantasia</th>
+                      <th className="px-6 py-3"><button onClick={() => toggleSort('codigo')} className="flex items-center gap-1 hover:text-slate-700">Codigo <SortIcon col="codigo" /></button></th>
+                      <th className="px-6 py-3"><button onClick={() => toggleSort('nomeFantasia')} className="flex items-center gap-1 hover:text-slate-700">Nome Fantasia <SortIcon col="nomeFantasia" /></button></th>
                       <th className="px-6 py-3">CNPJ</th>
-                      <th className="px-6 py-3">Cidade/UF</th>
-                      <th className="px-6 py-3">Status</th>
+                      <th className="px-6 py-3"><button onClick={() => toggleSort('cidade')} className="flex items-center gap-1 hover:text-slate-700">Cidade/UF <SortIcon col="cidade" /></button></th>
+                      <th className="px-6 py-3"><button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-slate-700">Status <SortIcon col="status" /></button></th>
                       {canEdit && <th className="px-6 py-3">Acoes</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filiais.map((filial) => (
+                    {sortedFiliais.map((filial) => (
                       <tr key={filial.id} className="hover:bg-slate-50">
                         <td className="px-6 py-4 text-sm font-medium text-slate-700">
                           <div className="flex items-center gap-2">

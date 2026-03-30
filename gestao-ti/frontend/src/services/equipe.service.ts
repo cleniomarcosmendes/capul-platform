@@ -38,6 +38,10 @@ export const equipeService = {
     return data;
   },
 
+  async excluir(id: string): Promise<void> {
+    await gestaoApi.delete(`/equipes/${id}`);
+  },
+
   async removerMembro(equipeId: string, membroId: string): Promise<void> {
     await gestaoApi.delete(`/equipes/${equipeId}/membros/${membroId}`);
   },

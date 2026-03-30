@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { slaService } from '../../services/sla.service';
 import { equipeService } from '../../services/equipe.service';
-import { Plus, X, Pencil, Trash2 } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { SlaDefinicao, EquipeTI, Prioridade } from '../../types';
 import { useToast } from '../../components/Toast';
+
+type SortKey = 'nome' | 'equipe' | 'prioridade' | 'horasResposta' | 'horasResolucao' | 'status';
+type SortDir = 'asc' | 'desc';
 
 const prioridadeLabels: Record<Prioridade, string> = {
   CRITICA: 'Critica', ALTA: 'Alta', MEDIA: 'Media', BAIXA: 'Baixa',
@@ -31,6 +34,36 @@ export function SlaPage() {
   const [horasResposta, setHorasResposta] = useState('');
   const [horasResolucao, setHorasResolucao] = useState('');
   const [equipeId, setEquipeId] = useState('');
+
+  const [sortKey, setSortKey] = useState<SortKey>('nome');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('asc'); }
+  }
+  function SortIcon({ col }: { col: SortKey }) {
+    if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300" />;
+    return sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-capul-600" /> : <ArrowDown className="w-3 h-3 text-capul-600" />;
+  }
+  const sorted = useMemo(() => {
+    return [...items].sort((a, b) => {
+      if (sortKey === 'horasResposta' || sortKey === 'horasResolucao') {
+        const cmp = (a[sortKey] || 0) - (b[sortKey] || 0);
+        return sortDir === 'asc' ? cmp : -cmp;
+      }
+      let va: string, vb: string;
+      if (sortKey === 'equipe') {
+        va = (a.equipe?.sigla || '').toLowerCase();
+        vb = (b.equipe?.sigla || '').toLowerCase();
+      } else {
+        va = (a[sortKey] || '').toString().toLowerCase();
+        vb = (b[sortKey] || '').toString().toLowerCase();
+      }
+      const cmp = va.localeCompare(vb);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [items, sortKey, sortDir]);
 
   function loadItems() {
     setLoading(true);
@@ -173,17 +206,17 @@ export function SlaPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Nome</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Equipe</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Prioridade</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Resposta (h)</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Resolucao (h)</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Status</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600"><button onClick={() => toggleSort('nome')} className="flex items-center gap-1 hover:text-slate-800">Nome <SortIcon col="nome" /></button></th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600"><button onClick={() => toggleSort('equipe')} className="flex items-center gap-1 hover:text-slate-800">Equipe <SortIcon col="equipe" /></button></th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600"><button onClick={() => toggleSort('prioridade')} className="flex items-center gap-1 hover:text-slate-800">Prioridade <SortIcon col="prioridade" /></button></th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600"><button onClick={() => toggleSort('horasResposta')} className="flex items-center gap-1 hover:text-slate-800">Resposta (h) <SortIcon col="horasResposta" /></button></th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600"><button onClick={() => toggleSort('horasResolucao')} className="flex items-center gap-1 hover:text-slate-800">Resolucao (h) <SortIcon col="horasResolucao" /></button></th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600"><button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-slate-800">Status <SortIcon col="status" /></button></th>
                   {isAdmin && <th className="px-4 py-3"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {items.map((item) => (
+                {sorted.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <button onClick={() => openEdit(item)} className="font-medium text-capul-600 hover:underline text-left">{item.nome}</button>

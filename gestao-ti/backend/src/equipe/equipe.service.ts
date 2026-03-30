@@ -168,6 +168,18 @@ export class EquipeService {
     });
   }
 
+  async remove(id: string) {
+    const equipe = await this.prisma.equipeTI.findUnique({ where: { id } });
+    if (!equipe) throw new NotFoundException('Equipe nao encontrada');
+
+    try {
+      await this.prisma.equipeTI.delete({ where: { id } });
+      return { success: true, message: 'Equipe excluida com sucesso' };
+    } catch {
+      throw new NotFoundException('Equipe possui vinculos (chamados, catalogo, SLA, etc). Inative-a em vez de excluir.');
+    }
+  }
+
   async removeMembro(equipeId: string, membroId: string) {
     const membro = await this.prisma.membroEquipe.findFirst({
       where: { id: membroId, equipeId },

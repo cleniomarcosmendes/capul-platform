@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Header } from '../../layouts/Header';
 import { horarioService } from '../../services/horario.service';
 import { dashboardService } from '../../services/dashboard.service';
-import { Clock, Save, Trash2, Plus, Settings } from 'lucide-react';
+import { Clock, Save, Trash2, Plus, Settings, Pencil, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { HorarioTrabalho, TecnicoResumo } from '../../types';
+
+type SortKey = 'nome' | 'expediente' | 'almoco';
+type SortDir = 'asc' | 'desc';
 
 export function HorariosTrabalhoPage() {
   const [, setDefaultHorario] = useState<HorarioTrabalho | null>(null);
@@ -19,13 +22,44 @@ export function HorariosTrabalhoPage() {
   const [defAlmIni, setDefAlmIni] = useState('12:00');
   const [defAlmFim, setDefAlmFim] = useState('13:00');
 
-  // Form novo personalizado
+  // Form novo/editar personalizado
   const [showForm, setShowForm] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [novoUsuarioId, setNovoUsuarioId] = useState('');
   const [novoIni, setNovoIni] = useState('08:00');
   const [novoFim, setNovoFim] = useState('17:00');
   const [novoAlmIni, setNovoAlmIni] = useState('12:00');
   const [novoAlmFim, setNovoAlmFim] = useState('13:00');
+
+  // Ordenacao
+  const [sortKey, setSortKey] = useState<SortKey>('nome');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('asc'); }
+  }
+  function SortIcon({ col }: { col: SortKey }) {
+    if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300" />;
+    return sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-capul-600" /> : <ArrowDown className="w-3 h-3 text-capul-600" />;
+  }
+  const sortedPersonalizados = useMemo(() => {
+    return [...personalizados].sort((a, b) => {
+      let va: string, vb: string;
+      if (sortKey === 'nome') {
+        va = (a.usuario?.nome || '').toLowerCase();
+        vb = (b.usuario?.nome || '').toLowerCase();
+      } else if (sortKey === 'expediente') {
+        va = a.horaInicioExpediente;
+        vb = b.horaInicioExpediente;
+      } else {
+        va = a.horaInicioAlmoco;
+        vb = b.horaInicioAlmoco;
+      }
+      const cmp = va.localeCompare(vb);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [personalizados, sortKey, sortDir]);
 
   const carregar = () => {
     setLoading(true);
@@ -64,6 +98,26 @@ export function HorariosTrabalhoPage() {
     setSaving(false);
   };
 
+  const iniciarEdicao = (h: HorarioTrabalho) => {
+    setEditingUserId(h.usuarioId);
+    setNovoUsuarioId(h.usuarioId || '');
+    setNovoIni(h.horaInicioExpediente);
+    setNovoFim(h.horaFimExpediente);
+    setNovoAlmIni(h.horaInicioAlmoco);
+    setNovoAlmFim(h.horaFimAlmoco);
+    setShowForm(true);
+  };
+
+  const cancelarForm = () => {
+    setShowForm(false);
+    setEditingUserId(null);
+    setNovoUsuarioId('');
+    setNovoIni('08:00');
+    setNovoFim('17:00');
+    setNovoAlmIni('12:00');
+    setNovoAlmFim('13:00');
+  };
+
   const salvarPersonalizado = async () => {
     if (!novoUsuarioId) return;
     setSaving(true);
@@ -75,8 +129,7 @@ export function HorariosTrabalhoPage() {
         horaInicioAlmoco: novoAlmIni,
         horaFimAlmoco: novoAlmFim,
       });
-      setShowForm(false);
-      setNovoUsuarioId('');
+      cancelarForm();
       carregar();
       setMsg('Horario personalizado salvo!');
       setTimeout(() => setMsg(''), 3000);
@@ -191,9 +244,9 @@ export function HorariosTrabalhoPage() {
               <Clock className="w-5 h-5 text-purple-600" />
               <h2 className="text-base font-semibold text-slate-800">Horarios Personalizados</h2>
             </div>
-            {tecnicosDisponiveis.length > 0 && (
+            {(tecnicosDisponiveis.length > 0 || editingUserId) && (
               <button
-                onClick={() => setShowForm(true)}
+                onClick={() => { cancelarForm(); setShowForm(true); }}
                 className="flex items-center gap-1 text-sm text-capul-600 hover:text-capul-800"
               >
                 <Plus className="w-4 h-4" />
@@ -205,19 +258,26 @@ export function HorariosTrabalhoPage() {
           {/* Form novo */}
           {showForm && (
             <div className="bg-slate-50 rounded-lg p-4 mb-4 border border-slate-200">
+              <h4 className="text-xs font-semibold text-slate-600 mb-3">{editingUserId ? 'Editar Horario' : 'Novo Horario Personalizado'}</h4>
               <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Tecnico</label>
-                  <select
-                    value={novoUsuarioId}
-                    onChange={(e) => setNovoUsuarioId(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-capul-500"
-                  >
-                    <option value="">Selecione...</option>
-                    {tecnicosDisponiveis.map((t) => (
-                      <option key={t.id} value={t.id}>{t.nome}</option>
-                    ))}
-                  </select>
+                  {editingUserId ? (
+                    <div className="w-full border border-slate-200 bg-slate-100 rounded-lg px-3 py-2 text-sm text-slate-700">
+                      {personalizados.find((p) => p.usuarioId === editingUserId)?.usuario?.nome || 'Tecnico'}
+                    </div>
+                  ) : (
+                    <select
+                      value={novoUsuarioId}
+                      onChange={(e) => setNovoUsuarioId(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-capul-500"
+                    >
+                      <option value="">Selecione...</option>
+                      {tecnicosDisponiveis.map((t) => (
+                        <option key={t.id} value={t.id}>{t.nome}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Inicio</label>
@@ -241,7 +301,7 @@ export function HorariosTrabalhoPage() {
                 </div>
               </div>
               <div className="flex gap-2 mt-3 justify-end">
-                <button onClick={() => setShowForm(false)}
+                <button onClick={cancelarForm}
                   className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-200 rounded-lg">
                   Cancelar
                 </button>
@@ -259,34 +319,51 @@ export function HorariosTrabalhoPage() {
               Nenhum horario personalizado. Todos os tecnicos usam o padrao do sistema.
             </p>
           ) : (
-            <div className="space-y-2">
-              {personalizados.map((h) => (
-                <div key={h.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
-                      <Clock className="w-4 h-4 text-purple-600" />
+            <>
+              <div className="flex items-center gap-4 mb-2 px-3 text-xs font-medium text-slate-500 uppercase tracking-wider">
+                <div className="flex-1"><button onClick={() => toggleSort('nome')} className="flex items-center gap-1 hover:text-slate-700">Tecnico <SortIcon col="nome" /></button></div>
+                <div className="w-48"><button onClick={() => toggleSort('expediente')} className="flex items-center gap-1 hover:text-slate-700">Expediente <SortIcon col="expediente" /></button></div>
+                <div className="w-40"><button onClick={() => toggleSort('almoco')} className="flex items-center gap-1 hover:text-slate-700">Almoco <SortIcon col="almoco" /></button></div>
+                <div className="w-20 text-right">Acoes</div>
+              </div>
+              <div className="space-y-2">
+                {sortedPersonalizados.map((h) => (
+                  <div key={h.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                        <Clock className="w-4 h-4 text-purple-600" />
+                      </div>
+                      <div>
+                        <button onClick={() => iniciarEdicao(h)} className="text-sm font-medium text-capul-600 hover:underline text-left">{h.usuario?.nome || 'Usuario'}</button>
+                        <p className="text-xs text-slate-400">{h.usuario?.username}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-700">{h.usuario?.nome || 'Usuario'}</p>
-                      <p className="text-xs text-slate-400">{h.usuario?.username}</p>
+                    <div className="flex items-center gap-4">
+                      <div className="text-xs text-slate-600 space-x-3">
+                        <span>Expediente: <strong>{h.horaInicioExpediente}–{h.horaFimExpediente}</strong></span>
+                        <span>Almoco: <strong>{h.horaInicioAlmoco}–{h.horaFimAlmoco}</strong></span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => iniciarEdicao(h)}
+                          className="text-slate-400 hover:text-capul-600 transition-colors"
+                          title="Editar horario"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => h.usuarioId && remover(h.usuarioId)}
+                          className="text-slate-400 hover:text-red-500 transition-colors"
+                          title="Remover (voltar ao padrao)"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-xs text-slate-600 space-x-3">
-                      <span>Expediente: <strong>{h.horaInicioExpediente}–{h.horaFimExpediente}</strong></span>
-                      <span>Almoco: <strong>{h.horaInicioAlmoco}–{h.horaFimAlmoco}</strong></span>
-                    </div>
-                    <button
-                      onClick={() => h.usuarioId && remover(h.usuarioId)}
-                      className="text-slate-400 hover:text-red-500 transition-colors"
-                      title="Remover (voltar ao padrao)"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
       </main>
