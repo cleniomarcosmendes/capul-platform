@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { departamentoService } from '../../services/departamento.service';
 import { filialService } from '../../services/filial.service';
 import { tipoDepartamentoService } from '../../services/tipo-departamento.service';
-import { Plus, Building, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Building, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { Departamento, FilialOption, TipoDepartamento } from '../../types';
+
+type SortKey = 'nome' | 'tipo' | 'status';
+type SortDir = 'asc' | 'desc';
 
 export function DepartamentosPage() {
   const { configuradorRole } = useAuth();
@@ -23,6 +26,38 @@ export function DepartamentosPage() {
   const [descricao, setDescricao] = useState('');
   const [tipoDepartamentoId, setTipoDepartamentoId] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const [sortKey, setSortKey] = useState<SortKey>('nome');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
+
+  function SortIcon({ col }: { col: SortKey }) {
+    if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300" />;
+    return sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-emerald-600" /> : <ArrowDown className="w-3 h-3 text-emerald-600" />;
+  }
+
+  const sorted = useMemo(() => {
+    return [...departamentos].sort((a, b) => {
+      let va: string, vb: string;
+      if (sortKey === 'tipo') {
+        va = (a.tipoDepartamento?.nome || '').toLowerCase();
+        vb = (b.tipoDepartamento?.nome || '').toLowerCase();
+      } else {
+        va = (a[sortKey] || '').toString().toLowerCase();
+        vb = (b[sortKey] || '').toString().toLowerCase();
+      }
+      const cmp = va.localeCompare(vb);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [departamentos, sortKey, sortDir]);
 
   useEffect(() => {
     filialService.listar().then((data) => {
@@ -173,15 +208,15 @@ export function DepartamentosPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  <th className="px-6 py-3">Nome</th>
-                  <th className="px-6 py-3">Tipo</th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('nome')} className="flex items-center gap-1 hover:text-slate-700">Nome <SortIcon col="nome" /></button></th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('tipo')} className="flex items-center gap-1 hover:text-slate-700">Tipo <SortIcon col="tipo" /></button></th>
                   <th className="px-6 py-3">Descricao</th>
-                  <th className="px-6 py-3">Status</th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-slate-700">Status <SortIcon col="status" /></button></th>
                   {canEdit && <th className="px-6 py-3">Acoes</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {departamentos.map((depto) => (
+                {sorted.map((depto) => (
                   <tr key={depto.id} className="hover:bg-slate-50">
                     <td className="px-6 py-4 text-sm font-medium">
                       {canEdit ? (

@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { tipoDepartamentoService } from '../../services/tipo-departamento.service';
-import { Plus, Pencil, Trash2, Layers } from 'lucide-react';
+import { Plus, Pencil, Trash2, Layers, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { TipoDepartamento } from '../../types';
+
+type SortKey = 'ordem' | 'nome' | 'status';
+type SortDir = 'asc' | 'desc';
 
 export function TiposDepartamentoPage() {
   const { configuradorRole } = useAuth();
@@ -18,6 +21,9 @@ export function TiposDepartamentoPage() {
   const [ordem, setOrdem] = useState(0);
   const [saving, setSaving] = useState(false);
 
+  const [sortKey, setSortKey] = useState<SortKey>('ordem');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
   useEffect(() => { carregar(); }, []);
 
   async function carregar() {
@@ -28,6 +34,33 @@ export function TiposDepartamentoPage() {
     } catch { /* */ }
     setLoading(false);
   }
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
+
+  function SortIcon({ col }: { col: SortKey }) {
+    if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300" />;
+    return sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-emerald-600" /> : <ArrowDown className="w-3 h-3 text-emerald-600" />;
+  }
+
+  const sorted = useMemo(() => {
+    return [...tipos].sort((a, b) => {
+      if (sortKey === 'ordem') {
+        const cmp = (a.ordem || 0) - (b.ordem || 0);
+        return sortDir === 'asc' ? cmp : -cmp;
+      }
+      const va = (a[sortKey] || '').toString().toLowerCase();
+      const vb = (b[sortKey] || '').toString().toLowerCase();
+      const cmp = va.localeCompare(vb);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [tipos, sortKey, sortDir]);
 
   function iniciarNovo() {
     setEditingId(null);
@@ -134,19 +167,25 @@ export function TiposDepartamentoPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  <th className="px-6 py-3">Ordem</th>
-                  <th className="px-6 py-3">Nome</th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('ordem')} className="flex items-center gap-1 hover:text-slate-700">Ordem <SortIcon col="ordem" /></button></th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('nome')} className="flex items-center gap-1 hover:text-slate-700">Nome <SortIcon col="nome" /></button></th>
                   <th className="px-6 py-3">Descricao</th>
                   <th className="px-6 py-3">Deptos</th>
-                  <th className="px-6 py-3">Status</th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-slate-700">Status <SortIcon col="status" /></button></th>
                   {canEdit && <th className="px-6 py-3">Acoes</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {tipos.map((tipo) => (
+                {sorted.map((tipo) => (
                   <tr key={tipo.id} className="hover:bg-slate-50">
                     <td className="px-6 py-4 text-sm text-slate-500">{tipo.ordem}</td>
-                    <td className="px-6 py-4 text-sm font-medium text-slate-700">{tipo.nome}</td>
+                    <td className="px-6 py-4 text-sm font-medium">
+                      {canEdit ? (
+                        <button onClick={() => iniciarEdicao(tipo)} className="text-emerald-600 hover:underline text-left">{tipo.nome}</button>
+                      ) : (
+                        <span className="text-slate-700">{tipo.nome}</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-sm text-slate-600">{tipo.descricao || '—'}</td>
                     <td className="px-6 py-4 text-sm text-slate-500">{tipo._count?.departamentos || 0}</td>
                     <td className="px-6 py-4">

@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { centroCustoService } from '../../services/centro-custo.service';
 import { filialService } from '../../services/filial.service';
-import { Plus, Wallet, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Wallet, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { CentroCusto, FilialOption } from '../../types';
+
+type SortKey = 'codigo' | 'nome' | 'status';
+type SortDir = 'asc' | 'desc';
 
 export function CentrosCustoPage() {
   const { configuradorRole } = useAuth();
@@ -21,6 +24,32 @@ export function CentrosCustoPage() {
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const [sortKey, setSortKey] = useState<SortKey>('codigo');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
+
+  function SortIcon({ col }: { col: SortKey }) {
+    if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300" />;
+    return sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-emerald-600" /> : <ArrowDown className="w-3 h-3 text-emerald-600" />;
+  }
+
+  const sorted = useMemo(() => {
+    return [...centrosCusto].sort((a, b) => {
+      const va = (a[sortKey] || '').toString().toLowerCase();
+      const vb = (b[sortKey] || '').toString().toLowerCase();
+      const cmp = va.localeCompare(vb);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [centrosCusto, sortKey, sortDir]);
 
   useEffect(() => {
     filialService.listar().then((data) => {
@@ -163,15 +192,15 @@ export function CentrosCustoPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  <th className="px-6 py-3">Codigo</th>
-                  <th className="px-6 py-3">Nome</th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('codigo')} className="flex items-center gap-1 hover:text-slate-700">Codigo <SortIcon col="codigo" /></button></th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('nome')} className="flex items-center gap-1 hover:text-slate-700">Nome <SortIcon col="nome" /></button></th>
                   <th className="px-6 py-3">Descricao</th>
-                  <th className="px-6 py-3">Status</th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-slate-700">Status <SortIcon col="status" /></button></th>
                   {canEdit && <th className="px-6 py-3">Acoes</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {centrosCusto.map((cc) => (
+                {sorted.map((cc) => (
                   <tr key={cc.id} className="hover:bg-slate-50">
                     <td className="px-6 py-4 text-sm font-medium text-slate-700">{cc.codigo}</td>
                     <td className="px-6 py-4 text-sm">
