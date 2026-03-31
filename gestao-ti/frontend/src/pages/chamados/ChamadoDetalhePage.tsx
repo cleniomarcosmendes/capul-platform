@@ -999,7 +999,7 @@ export function ChamadoDetalhePage() {
                             <span className="text-sm text-slate-700 font-medium">
                               {new Date(r.horaInicio).toLocaleDateString('pt-BR')}
                             </span>
-                            {['RESOLVIDO', 'FECHADO'].includes(chamado.status) && (() => {
+                            {chamado.status !== 'CANCELADO' && (() => {
                               const isMeu = r.usuarioId === usuario?.id;
                               const timerAtivo = !r.horaFim;
                               const limiteD2 = new Date(); limiteD2.setDate(limiteD2.getDate() - 2); limiteD2.setHours(0, 0, 0, 0);

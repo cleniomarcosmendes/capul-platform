@@ -1855,6 +1855,10 @@ export class ProjetoService {
     if (!pendencia) throw new NotFoundException('Pendencia nao encontrada neste projeto');
 
     // Cria atividade com dados da pendencia (permite override)
+    // Responsaveis: quem gerou + responsavel da pendencia (se diferente)
+    const responsaveisIds = new Set([userId]);
+    if (pendencia.responsavelId) responsaveisIds.add(pendencia.responsavelId);
+
     const atividade = await this.prisma.atividadeProjeto.create({
       data: {
         titulo: dto.titulo || `[P#${pendencia.numero}] ${pendencia.titulo}`,
@@ -1865,11 +1869,17 @@ export class ProjetoService {
         pendenciaId: pendencia.id,
         dataInicio: new Date(),
         dataFimPrevista: dto.dataFimPrevista ? new Date(dto.dataFimPrevista) : pendencia.dataLimite,
+        responsaveis: {
+          createMany: {
+            data: Array.from(responsaveisIds).map((uid) => ({ usuarioId: uid })),
+          },
+        },
       },
       include: {
         usuario: { select: { id: true, nome: true } },
         fase: { select: { id: true, nome: true } },
         pendencia: { select: { id: true, numero: true, titulo: true, status: true } },
+        responsaveis: { include: { usuario: { select: { id: true, nome: true } } } },
       },
     });
 

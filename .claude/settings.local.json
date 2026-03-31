@@ -1129,7 +1129,9 @@
       "Bash(find /mnt/c/meus_projetos/capul-platform/inventario -type f \\\\\\(-name .env* -o -name docker-compose* \\\\\\))",
       "Bash(find /mnt/c/meus_projetos/capul-platform -type f \\\\\\(-name *.env* -o -name .env \\\\\\) ! -path */node_modules/* ! -path */.git/*)",
       "Bash(find /mnt/c/meus_projetos/capul-platform -type f \\\\\\(-name *.yml -o -name *.yaml \\\\\\) ! -path */node_modules/* ! -path */.git/*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(docker volume:*)"
     ]
   }
 }

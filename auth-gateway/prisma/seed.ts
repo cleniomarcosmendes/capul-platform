@@ -229,6 +229,49 @@ async function main() {
     console.log(`Admin existente: ${admin.username}`);
   }
 
+  // 7. Integracao PROTHEUS (upsert por codigo unico)
+  const endpointsPrd = [
+    { ambiente: 'PRODUCAO' as const, operacao: 'HIERARQUIA', url: 'https://apiportal.capul.com.br:443/rest/api/INFOCLIENTES/INVENTARIO/hierarquiaMercadologica', metodo: 'GET' as const, timeoutMs: 30000 },
+    { ambiente: 'PRODUCAO' as const, operacao: 'PRODUTOS', url: 'https://apiportal.capul.com.br:443/rest/api/INFOCLIENTES/INVENTARIO/produtos', metodo: 'POST' as const, timeoutMs: 900000 },
+    { ambiente: 'PRODUCAO' as const, operacao: 'DIGITACAO', url: 'https://apiportal.capul.com.br:443/rest/api/INFOCLIENTES/INVENTARIO/digitacao', metodo: 'POST' as const, timeoutMs: 60000 },
+    { ambiente: 'PRODUCAO' as const, operacao: 'TRANSFERENCIA', url: 'https://apiportal.capul.com.br:443/rest/api/INFOCLIENTES/INVENTARIO/transferencia', metodo: 'POST' as const, timeoutMs: 60000 },
+    { ambiente: 'PRODUCAO' as const, operacao: 'HISTORICO', url: 'https://apiportal.capul.com.br:443/rest/api/INFOCLIENTES/INVENTARIO/historico', metodo: 'POST' as const, timeoutMs: 60000 },
+    { ambiente: 'PRODUCAO' as const, operacao: 'INFOCLIENTES', url: 'https://apiportal.capul.com.br:443/rest/api/INFOCLIENTES/getLimite', metodo: 'GET' as const, timeoutMs: 60000 },
+  ];
+
+  const endpointsHlg = [
+    { ambiente: 'HOMOLOGACAO' as const, operacao: 'HIERARQUIA', url: 'https://192.168.7.63:8115/rest/api/INFOCLIENTES/INVENTARIO/hierarquiaMercadologica', metodo: 'GET' as const, timeoutMs: 30000 },
+    { ambiente: 'HOMOLOGACAO' as const, operacao: 'PRODUTOS', url: 'https://192.168.7.63:8115/rest/api/INFOCLIENTES/INVENTARIO/produtos', metodo: 'POST' as const, timeoutMs: 900000 },
+    { ambiente: 'HOMOLOGACAO' as const, operacao: 'DIGITACAO', url: 'https://192.168.7.63:8115/rest/api/INFOCLIENTES/INVENTARIO/digitacao', metodo: 'POST' as const, timeoutMs: 60000 },
+    { ambiente: 'HOMOLOGACAO' as const, operacao: 'TRANSFERENCIA', url: 'https://192.168.7.63:8115/rest/api/INFOCLIENTES/INVENTARIO/transferencia', metodo: 'POST' as const, timeoutMs: 60000 },
+    { ambiente: 'HOMOLOGACAO' as const, operacao: 'HISTORICO', url: 'https://192.168.7.63:8115/rest/api/INFOCLIENTES/INVENTARIO/historico', metodo: 'POST' as const, timeoutMs: 60000 },
+    { ambiente: 'HOMOLOGACAO' as const, operacao: 'INFOCLIENTES', url: 'https://192.168.7.63:8115/rest/api/INFOCLIENTES/getLimite', metodo: 'GET' as const, timeoutMs: 60000 },
+  ];
+
+  let integracao = await prisma.integracaoApi.findUnique({
+    where: { codigo: 'PROTHEUS' },
+  });
+  if (!integracao) {
+    integracao = await prisma.integracaoApi.create({
+      data: {
+        codigo: 'PROTHEUS',
+        nome: 'Protheus ERP',
+        descricao: 'Integracao com ERP Protheus (Totvs) — hierarquia, produtos, digitacao, transferencia, historico, colaboradores',
+        ambiente: 'HOMOLOGACAO',
+        tipoAuth: 'BASIC',
+        authConfig: 'QVBJQ0FQVUw6QXAxQzRwdTFQUkQ=',
+        endpoints: {
+          createMany: {
+            data: [...endpointsPrd, ...endpointsHlg],
+          },
+        },
+      },
+    });
+    console.log(`Integracao PROTHEUS criada: ${integracao.nome} (12 endpoints: 6 PRD + 6 HLG)`);
+  } else {
+    console.log(`Integracao PROTHEUS existente: ${integracao.nome}`);
+  }
+
   console.log('\nSeed executado com sucesso!');
 }
 

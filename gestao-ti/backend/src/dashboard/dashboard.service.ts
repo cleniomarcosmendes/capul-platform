@@ -1703,8 +1703,11 @@ export class DashboardService {
     const [atividades, pendencias] = await Promise.all([
       this.prisma.atividadeProjeto.findMany({
         where: {
-          usuarioId: userId,
           status: { in: ['PENDENTE', 'EM_ANDAMENTO'] },
+          OR: [
+            { usuarioId: userId },
+            { responsaveis: { some: { usuarioId: userId } } },
+          ],
         },
         include: {
           projeto: { select: { id: true, numero: true, nome: true } },

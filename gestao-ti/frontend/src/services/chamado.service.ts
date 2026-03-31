@@ -10,6 +10,9 @@ interface ListFilters {
   departamentoId?: string;
   pendentesAvaliacao?: boolean;
   search?: string;
+  tecnicoId?: string;
+  dataInicio?: string;
+  dataFim?: string;
 }
 
 interface CreateChamadoPayload {
@@ -43,6 +46,9 @@ export const chamadoService = {
     if (filters.departamentoId) params.departamentoId = filters.departamentoId;
     if (filters.pendentesAvaliacao) params.pendentesAvaliacao = 'true';
     if (filters.search) params.search = filters.search;
+    if (filters.tecnicoId) params.tecnicoId = filters.tecnicoId;
+    if (filters.dataInicio) params.dataInicio = filters.dataInicio;
+    if (filters.dataFim) params.dataFim = filters.dataFim;
     const { data } = await gestaoApi.get('/chamados', { params });
     return data;
   },

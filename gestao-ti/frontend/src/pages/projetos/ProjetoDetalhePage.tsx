@@ -204,8 +204,8 @@ export function ProjetoDetalhePage() {
     if (!projeto || statusChanging) return;
     setStatusChanging(true);
     try {
-      const updated = await projetoService.atualizar(projeto.id, { status: newStatus });
-      setProjeto(updated);
+      await projetoService.atualizar(projeto.id, { status: newStatus });
+      await loadProjeto();
     } catch { /* empty */ }
     setStatusChanging(false);
   }
@@ -618,6 +618,11 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   const [novaOrdemFase, setNovaOrdemFase] = useState('');
   const [novaFaseDataInicio, setNovaFaseDataInicio] = useState('');
   const [novaFaseDataFimPrevista, setNovaFaseDataFimPrevista] = useState('');
+  const [editingFaseId, setEditingFaseId] = useState<string | null>(null);
+  const [editFaseNome, setEditFaseNome] = useState('');
+  const [editFaseOrdem, setEditFaseOrdem] = useState('');
+  const [editFaseDataInicio, setEditFaseDataInicio] = useState('');
+  const [editFaseDataFimPrevista, setEditFaseDataFimPrevista] = useState('');
   // Atividade form
   const [novoTitulo, setNovoTitulo] = useState('');
   const [novaDescricao, setNovaDescricao] = useState('');
@@ -691,6 +696,28 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   }
   async function handleFaseStatusChange(faseId: string, status: StatusFase) {
     try { await projetoService.atualizarFase(projetoId, faseId, { status } as never); loadAll(); } catch { /* empty */ }
+  }
+  function startEditFase(f: FaseProjeto) {
+    setEditingFaseId(f.id);
+    setEditFaseNome(f.nome);
+    setEditFaseOrdem(String(f.ordem));
+    setEditFaseDataInicio(f.dataInicio ? f.dataInicio.substring(0, 10) : '');
+    setEditFaseDataFimPrevista(f.dataFimPrevista ? f.dataFimPrevista.substring(0, 10) : '');
+  }
+  async function handleSaveEditFase() {
+    if (!editingFaseId || !editFaseNome || saving) return;
+    setSaving(true);
+    try {
+      await projetoService.atualizarFase(projetoId, editingFaseId, {
+        nome: editFaseNome,
+        ordem: Number(editFaseOrdem) || undefined,
+        dataInicio: editFaseDataInicio ? new Date(editFaseDataInicio).toISOString() : undefined,
+        dataFimPrevista: editFaseDataFimPrevista ? new Date(editFaseDataFimPrevista).toISOString() : undefined,
+      } as never);
+      setEditingFaseId(null);
+      loadAll();
+    } catch { /* empty */ }
+    setSaving(false);
   }
   async function handleRemoveFase(faseId: string) {
     if (!await confirm('Remover Fase', 'Deseja remover esta fase e desassociar suas atividades?', { variant: 'danger' })) return;
@@ -1336,9 +1363,21 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
                         ) : (
                           <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${faseStatusCores[f.status]}`}>{faseStatusLabel[f.status]}</span>
                         )}
+                        {canManage && <button onClick={() => startEditFase(f)} className="text-slate-400 hover:text-capul-600" title="Editar fase"><Pencil className="w-4 h-4" /></button>}
                         {canManage && <button onClick={() => handleRemoveFase(f.id)} className="text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>}
                       </div>
                     </div>
+                    {/* Form edição inline da fase */}
+                    {editingFaseId === f.id && (
+                      <div className="px-6 py-4 bg-amber-50 border-b border-amber-200 flex gap-3 items-end flex-wrap">
+                        <input type="text" placeholder="Nome da fase" value={editFaseNome} onChange={(e) => setEditFaseNome(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-48" />
+                        <input type="number" placeholder="Ordem" value={editFaseOrdem} onChange={(e) => setEditFaseOrdem(e.target.value)} onKeyDown={(e) => ['e','E','+','-','.'].includes(e.key) && e.preventDefault()} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-20" />
+                        <input type="date" value={editFaseDataInicio} onChange={(e) => setEditFaseDataInicio(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" title="Data inicio" />
+                        <input type="date" value={editFaseDataFimPrevista} min={editFaseDataInicio || undefined} onChange={(e) => setEditFaseDataFimPrevista(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" title="Data fim prevista" />
+                        <button onClick={handleSaveEditFase} disabled={!editFaseNome || saving} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">Salvar</button>
+                        <button onClick={() => setEditingFaseId(null)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+                      </div>
+                    )}
                     {/* Atividades da Fase — com indentação */}
                     {!isCollapsed && (
                       <div className="ml-6">

@@ -43,6 +43,14 @@ export function PendenciaDetalhePage() {
   const [uploading, setUploading] = useState(false);
   const [gerandoAtividade, setGerandoAtividade] = useState(false);
   const [membrosEquipe, setMembrosEquipe] = useState<MembroProjeto[]>([]);
+  const [editing, setEditing] = useState(false);
+  const [editTitulo, setEditTitulo] = useState('');
+  const [editDescricao, setEditDescricao] = useState('');
+  const [editPrioridade, setEditPrioridade] = useState('');
+  const [editResponsavelId, setEditResponsavelId] = useState('');
+  const [editDataLimite, setEditDataLimite] = useState('');
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [responsaveis, setResponsaveis] = useState<{ id: string; nome: string }[]>([]);
 
   useEffect(() => {
     if (projetoId && pendenciaId) {
@@ -53,18 +61,54 @@ export function PendenciaDetalhePage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [pend, proj, membros] = await Promise.all([
+      const [pend, proj, membros, chaves] = await Promise.all([
         projetoService.buscarPendencia(projetoId!, pendenciaId!),
         projetoService.buscar(projetoId!),
         projetoService.listarMembros(projetoId!),
+        projetoService.listarUsuariosChave(projetoId!),
       ]);
       setPendencia(pend);
       setProjeto({ id: proj.id, numero: proj.numero, nome: proj.nome, projetoPai: proj.projetoPai });
       setMembrosEquipe(membros);
+      const map = new Map<string, string>();
+      if (proj.responsavel) map.set(proj.responsavel.id, proj.responsavel.nome);
+      membros.forEach((m) => map.set(m.usuario.id, m.usuario.nome));
+      chaves.filter((c) => c.ativo).forEach((c) => map.set(c.usuarioId, c.usuario.nome));
+      setResponsaveis(Array.from(map, ([id, nome]) => ({ id, nome })));
     } catch {
       toast('error', 'Erro ao carregar pendencia');
     }
     setLoading(false);
+  }
+
+  function startEdit() {
+    if (!pendencia) return;
+    setEditTitulo(pendencia.titulo);
+    setEditDescricao(pendencia.descricao || '');
+    setEditPrioridade(pendencia.prioridade);
+    setEditResponsavelId(pendencia.responsavel.id);
+    setEditDataLimite(pendencia.dataLimite ? pendencia.dataLimite.substring(0, 10) : '');
+    setEditing(true);
+  }
+
+  async function handleSaveEdit() {
+    if (!pendencia || !editTitulo.trim() || !editResponsavelId) return;
+    setSalvandoEdicao(true);
+    try {
+      await projetoService.atualizarPendencia(projetoId!, pendencia.id, {
+        titulo: editTitulo.trim(),
+        descricao: editDescricao.trim() || undefined,
+        prioridade: editPrioridade as any,
+        responsavelId: editResponsavelId,
+        dataLimite: editDataLimite || undefined,
+      });
+      toast('success', 'Pendencia atualizada');
+      setEditing(false);
+      loadData();
+    } catch {
+      toast('error', 'Erro ao atualizar pendencia');
+    }
+    setSalvandoEdicao(false);
   }
 
   async function handleStatusChange(newStatus: StatusPendencia) {
@@ -247,36 +291,84 @@ export function PendenciaDetalhePage() {
                 )}
               </div>
             </div>
+            {canManage && !editing && !['CONCLUIDA', 'CANCELADA'].includes(pendencia.status) && (
+              <button onClick={startEdit} className="flex items-center gap-1 text-sm text-slate-600 bg-slate-100 px-3 py-2 rounded-lg hover:bg-slate-200">
+                <Edit3 className="w-4 h-4" /> Editar
+              </button>
+            )}
           </div>
 
-          {/* Info grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <p className="text-slate-500 text-xs">Responsavel</p>
-              <p className="text-slate-800 font-medium">{pendencia.responsavel.nome}</p>
+          {/* Edit form */}
+          {editing ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                <div className="md:col-span-2">
+                  <label className="text-xs text-slate-500 mb-1 block">Titulo *</label>
+                  <input value={editTitulo} onChange={(e) => setEditTitulo(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs text-slate-500 mb-1 block">Descricao</label>
+                  <textarea value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)} rows={3} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Responsavel *</label>
+                  <select value={editResponsavelId} onChange={(e) => setEditResponsavelId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                    <option value="">Selecione...</option>
+                    {responsaveis.map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Prioridade</label>
+                  <select value={editPrioridade} onChange={(e) => setEditPrioridade(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                    {Object.entries(pendenciaPrioridadeLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Data Limite</label>
+                  <input type="date" value={editDataLimite} onChange={(e) => setEditDataLimite(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleSaveEdit} disabled={salvandoEdicao || !editTitulo.trim() || !editResponsavelId} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50">
+                  {salvandoEdicao ? 'Salvando...' : 'Salvar'}
+                </button>
+                <button onClick={() => setEditing(false)} className="border border-slate-300 text-slate-600 px-4 py-2 rounded-lg text-sm hover:bg-slate-100">
+                  Cancelar
+                </button>
+              </div>
             </div>
-            <div>
-              <p className="text-slate-500 text-xs">Criador</p>
-              <p className="text-slate-800">{pendencia.criador.nome}</p>
-            </div>
-            <div>
-              <p className="text-slate-500 text-xs">Data Limite</p>
-              <p className={`font-medium ${isVencida ? 'text-red-600' : 'text-slate-800'}`}>
-                {pendencia.dataLimite ? formatDateBR(pendencia.dataLimite) : '-'}
-              </p>
-            </div>
-            <div>
-              <p className="text-slate-500 text-xs">Fase</p>
-              <p className="text-slate-800">{pendencia.fase?.nome || '-'}</p>
-            </div>
-          </div>
+          ) : (
+            <>
+              {/* Info grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <p className="text-slate-500 text-xs">Responsavel</p>
+                  <p className="text-slate-800 font-medium">{pendencia.responsavel.nome}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs">Criador</p>
+                  <p className="text-slate-800">{pendencia.criador.nome}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs">Data Limite</p>
+                  <p className={`font-medium ${isVencida ? 'text-red-600' : 'text-slate-800'}`}>
+                    {pendencia.dataLimite ? formatDateBR(pendencia.dataLimite) : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs">Fase</p>
+                  <p className="text-slate-800">{pendencia.fase?.nome || '-'}</p>
+                </div>
+              </div>
 
-          {/* Description */}
-          {pendencia.descricao && (
-            <div className="mt-4">
-              <p className="text-xs text-slate-500 mb-1">Descricao</p>
-              <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 whitespace-pre-wrap">{pendencia.descricao}</p>
-            </div>
+              {/* Description */}
+              {pendencia.descricao && (
+                <div className="mt-4">
+                  <p className="text-xs text-slate-500 mb-1">Descricao</p>
+                  <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 whitespace-pre-wrap">{pendencia.descricao}</p>
+                </div>
+              )}
+            </>
           )}
 
           {/* Status change */}

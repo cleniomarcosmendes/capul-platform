@@ -7,7 +7,7 @@ import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
 import { Plus, Eye, Download, Star } from 'lucide-react';
 import { exportService } from '../../services/export.service';
-import type { Chamado, EquipeTI, Departamento, StatusChamado, Visibilidade } from '../../types';
+import type { Chamado, EquipeTI, Departamento, StatusChamado, Visibilidade, UsuarioCore } from '../../types';
 
 interface FilialOption {
   id: string;
@@ -49,6 +49,7 @@ export function ChamadosListPage() {
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [filiais, setFiliais] = useState<FilialOption[]>([]);
+  const [tecnicos, setTecnicos] = useState<UsuarioCore[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<StatusChamado | ''>('');
   const [filterEquipe, setFilterEquipe] = useState('');
@@ -56,6 +57,9 @@ export function ChamadosListPage() {
   const [meusChamados, setMeusChamados] = useState(gestaoTiRole !== 'USUARIO_FINAL');
   const [filterFilial, setFilterFilial] = useState<string>('');
   const [filterDepartamento, setFilterDepartamento] = useState('');
+  const [filterTecnico, setFilterTecnico] = useState('');
+  const [filterDataInicio, setFilterDataInicio] = useState('');
+  const [filterDataFim, setFilterDataFim] = useState('');
   const [pendentesAvaliacao, setPendentesAvaliacao] = useState(searchParams.get('pendentes') === '1');
 
   const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
@@ -70,6 +74,9 @@ export function ChamadosListPage() {
       setFiliais(usuario.filiais.map((f) => ({ id: f.id, codigo: f.codigo, nomeFantasia: f.nome })));
     }
     coreService.listarDepartamentos().then(setDepartamentos).catch(() => {});
+    if (!isUsuarioFinal) {
+      coreService.listarUsuarios().then(setTecnicos).catch(() => {});
+    }
   }, [gestaoTiRole, usuario]);
 
   const carregarChamados = useCallback((silent = false) => {
@@ -90,12 +97,15 @@ export function ChamadosListPage() {
           meusChamados: meusChamados || undefined,
           filialId,
           departamentoId: filterDepartamento || undefined,
+          tecnicoId: filterTecnico || undefined,
+          dataInicio: filterDataInicio || undefined,
+          dataFim: filterDataFim || undefined,
         })
         .then(setChamados)
         .catch(() => {})
         .finally(() => { if (!silent) setLoading(false); });
     }
-  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, filterDepartamento, usuario, pendentesAvaliacao]);
+  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, filterDepartamento, filterTecnico, filterDataInicio, filterDataFim, usuario, pendentesAvaliacao]);
 
   useEffect(() => {
     carregarChamados();
@@ -226,6 +236,34 @@ export function ChamadosListPage() {
                       });
                     })()}
                   </select>
+
+                  <select
+                    value={filterTecnico}
+                    onChange={(e) => setFilterTecnico(e.target.value)}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                  >
+                    <option value="">Todos os Tecnicos</option>
+                    {tecnicos.map((t) => (
+                      <option key={t.id} value={t.id}>{t.nome}</option>
+                    ))}
+                  </select>
+
+                  <input
+                    type="date"
+                    value={filterDataInicio}
+                    onChange={(e) => setFilterDataInicio(e.target.value)}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                    title="Data inicio"
+                    placeholder="Data inicio"
+                  />
+                  <input
+                    type="date"
+                    value={filterDataFim}
+                    onChange={(e) => setFilterDataFim(e.target.value)}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                    title="Data fim"
+                    placeholder="Data fim"
+                  />
 
                   <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
                     <input

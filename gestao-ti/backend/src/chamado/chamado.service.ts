@@ -81,6 +81,9 @@ export class ChamadoService {
     departamentoId?: string;
     pendentesAvaliacao?: boolean;
     search?: string;
+    tecnicoId?: string;
+    dataInicio?: string;
+    dataFim?: string;
   }) {
     const where: Record<string, unknown> = {};
 
@@ -95,6 +98,18 @@ export class ChamadoService {
       if (filters.projetoId) where.projetoId = filters.projetoId;
       if (filters.filialId) where.filialId = filters.filialId;
       if (filters.departamentoId) where.departamentoId = filters.departamentoId;
+      if (filters.tecnicoId) where.tecnicoId = filters.tecnicoId;
+
+      if (filters.dataInicio || filters.dataFim) {
+        const createdAt: Record<string, Date> = {};
+        if (filters.dataInicio) createdAt.gte = new Date(filters.dataInicio);
+        if (filters.dataFim) {
+          const fim = new Date(filters.dataFim);
+          fim.setHours(23, 59, 59, 999);
+          createdAt.lte = fim;
+        }
+        where.createdAt = createdAt;
+      }
 
       // Para roles nao-staff, restringir as filiais vinculadas ao usuario
       const isStaff = ['ADMIN', 'GESTOR_TI'].includes(role);
@@ -989,8 +1004,8 @@ export class ChamadoService {
 
   async ajustarRegistroTempoChamado(chamadoId: string, registroId: string, dto: UpdateRegistroTempoChamadoDto, userId?: string, role?: string) {
     const chamado = await this.getChamadoOrFail(chamadoId);
-    if (!['RESOLVIDO', 'FECHADO'].includes(chamado.status)) {
-      throw new BadRequestException('O registro de tempo so pode ser editado apos a finalizacao do chamado');
+    if (chamado.status === 'CANCELADO') {
+      throw new BadRequestException('Nao e possivel editar registros de tempo em chamado cancelado');
     }
 
     const registro = await this.prisma.registroTempoChamado.findFirst({
@@ -1028,8 +1043,8 @@ export class ChamadoService {
 
   async removerRegistroTempoChamado(chamadoId: string, registroId: string, userId?: string, role?: string) {
     const chamado = await this.getChamadoOrFail(chamadoId);
-    if (!['RESOLVIDO', 'FECHADO'].includes(chamado.status)) {
-      throw new BadRequestException('O registro de tempo so pode ser removido apos a finalizacao do chamado');
+    if (chamado.status === 'CANCELADO') {
+      throw new BadRequestException('Nao e possivel remover registros de tempo em chamado cancelado');
     }
 
     const registro = await this.prisma.registroTempoChamado.findFirst({
