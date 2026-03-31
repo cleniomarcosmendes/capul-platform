@@ -75,7 +75,13 @@ export function ChamadosListPage() {
     }
     coreService.listarDepartamentos().then(setDepartamentos).catch(() => {});
     if (!isUsuarioFinal) {
-      coreService.listarUsuarios().then(setTecnicos).catch(() => {});
+      coreService.listarUsuarios().then((users: any[]) => {
+        const rolesStaff = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
+        const tecnicos = users.filter((u) =>
+          u.permissoes?.some((p: any) => p.modulo?.codigo === 'GESTAO_TI' && rolesStaff.includes(p.roleModulo?.codigo))
+        );
+        setTecnicos(tecnicos);
+      }).catch(() => {});
     }
   }, [gestaoTiRole, usuario]);
 
