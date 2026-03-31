@@ -1518,7 +1518,7 @@ export class ProjetoService {
     });
   }
 
-  async addComentario(projetoId: string, atividadeId: string, texto: string, userId: string) {
+  async addComentario(projetoId: string, atividadeId: string, texto: string, userId: string, visivelPendencia?: boolean) {
     await this.ensureProjetoExists(projetoId);
     const atividade = await this.prisma.atividadeProjeto.findFirst({
       where: { id: atividadeId, projetoId },
@@ -1530,6 +1530,7 @@ export class ProjetoService {
         texto,
         atividadeId,
         usuarioId: userId,
+        visivelPendencia: atividade.pendenciaId ? (visivelPendencia ?? false) : false,
       },
       include: { usuario: { select: { id: true, nome: true } } },
     });
@@ -1554,19 +1555,24 @@ export class ProjetoService {
     return { deleted: true };
   }
 
-  async updateComentario(projetoId: string, comentarioId: string, texto: string, userId: string, role?: string) {
+  async updateComentario(projetoId: string, comentarioId: string, texto: string, userId: string, role?: string, visivelPendencia?: boolean) {
     await this.ensureProjetoExists(projetoId);
     const comentario = await this.prisma.comentarioTarefa.findFirst({
       where: { id: comentarioId, atividade: { projetoId } },
+      include: { atividade: { select: { pendenciaId: true } } },
     });
     if (!comentario) throw new NotFoundException('Comentario nao encontrado');
     const isAdmin = ['ADMIN', 'GESTOR_TI'].includes(role || '');
     if (comentario.usuarioId !== userId && !isAdmin) {
       throw new ForbiddenException('Somente o autor pode editar esta nota');
     }
+    const data: Record<string, unknown> = { texto };
+    if (visivelPendencia !== undefined && comentario.atividade?.pendenciaId) {
+      data.visivelPendencia = visivelPendencia;
+    }
     return this.prisma.comentarioTarefa.update({
       where: { id: comentarioId },
-      data: { texto },
+      data,
       include: { usuario: { select: { id: true, nome: true } } },
     });
   }
@@ -1826,6 +1832,11 @@ export class ProjetoService {
         atividades: {
           include: {
             usuario: { select: { id: true, nome: true } },
+            comentarios: {
+              where: { visivelPendencia: true },
+              include: { usuario: { select: { id: true, nome: true } } },
+              orderBy: { createdAt: 'asc' },
+            },
           },
           orderBy: { createdAt: 'desc' },
         },
@@ -1972,6 +1983,14 @@ export class ProjetoService {
       where: { id: pendenciaId, projetoId },
     });
     if (!pendencia) throw new NotFoundException('Pendencia nao encontrada');
+
+    // Apenas responsavel ou gestor pode editar dados da pendencia
+    const isGestor = ['ADMIN', 'GESTOR_TI'].includes(role);
+    const isResponsavel = pendencia.responsavelId === userId;
+    const hasDadosAlterados = dto.titulo !== undefined || dto.descricao !== undefined || dto.prioridade !== undefined || dto.responsavelId !== undefined || dto.dataLimite !== undefined || dto.faseId !== undefined;
+    if (hasDadosAlterados && !isGestor && !isResponsavel) {
+      throw new ForbiddenException('Apenas o responsavel pela pendencia ou gestores podem editar os dados');
+    }
 
     if (['CONCLUIDA', 'CANCELADA'].includes(pendencia.status) && !dto.status) {
       throw new BadRequestException('Pendencia finalizada nao pode ser alterada');

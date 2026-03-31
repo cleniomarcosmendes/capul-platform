@@ -264,12 +264,12 @@ export class ProjetoController {
   async addComentario(
     @Param('id') id: string,
     @Param('atividadeId') atividadeId: string,
-    @Body() body: { texto: string },
+    @Body() body: { texto: string; visivelPendencia?: boolean },
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
-    return this.service.addComentario(id, atividadeId, body.texto, user.sub);
+    return this.service.addComentario(id, atividadeId, body.texto, user.sub, body.visivelPendencia);
   }
 
   @Delete(':id/comentarios/:comentarioId')
@@ -288,12 +288,12 @@ export class ProjetoController {
   async updateComentario(
     @Param('id') id: string,
     @Param('comentarioId') comentarioId: string,
-    @Body() body: { texto: string },
+    @Body() body: { texto: string; visivelPendencia?: boolean },
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
-    return this.service.updateComentario(id, comentarioId, body.texto, user.sub, role);
+    return this.service.updateComentario(id, comentarioId, body.texto, user.sub, role, body.visivelPendencia);
   }
 
   // --- Registro de Tempo ---

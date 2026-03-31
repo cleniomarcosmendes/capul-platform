@@ -644,6 +644,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   const [comentarios, setComentarios] = useState<ComentarioTarefa[]>([]);
   const [loadingComentarios, setLoadingComentarios] = useState(false);
   const [novoComentario, setNovoComentario] = useState('');
+  const [novoComentarioVisivel, setNovoComentarioVisivel] = useState(false);
   const [savingComentario, setSavingComentario] = useState(false);
   // Fases colapsadas
   const [collapsedFases, setCollapsedFases] = useState<Set<string>>(new Set());
@@ -659,6 +660,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   // Edicao de notas
   const [editingComentario, setEditingComentario] = useState<string | null>(null);
   const [editComentarioTexto, setEditComentarioTexto] = useState('');
+  const [editComentarioVisivel, setEditComentarioVisivel] = useState(false);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -869,8 +871,9 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     if (!novoComentario.trim() || !expandedId || savingComentario) return;
     setSavingComentario(true);
     try {
-      await projetoService.adicionarComentario(projetoId, expandedId, novoComentario.trim());
+      await projetoService.adicionarComentario(projetoId, expandedId, novoComentario.trim(), novoComentarioVisivel || undefined);
       setNovoComentario('');
+      setNovoComentarioVisivel(false);
       loadComentarios(expandedId);
       loadAll();
     } catch { /* empty */ }
@@ -886,19 +889,22 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     } catch { /* empty */ }
   }
 
-  function startEditComentario(c: { id: string; texto: string }) {
+  function startEditComentario(c: { id: string; texto: string; visivelPendencia?: boolean }) {
     setEditingComentario(c.id);
     setEditComentarioTexto(c.texto);
+    setEditComentarioVisivel(c.visivelPendencia ?? false);
   }
 
   async function handleSaveComentario(comentarioId: string) {
     if (!editComentarioTexto.trim() || savingComentario) return;
     setSavingComentario(true);
     try {
-      await projetoService.atualizarComentario(projetoId, comentarioId, editComentarioTexto.trim());
+      await projetoService.atualizarComentario(projetoId, comentarioId, editComentarioTexto.trim(), editComentarioVisivel || undefined);
       setEditingComentario(null);
       setEditComentarioTexto('');
+      setEditComentarioVisivel(false);
       if (expandedId) loadComentarios(expandedId);
+      loadAll();
     } catch { /* empty */ }
     setSavingComentario(false);
   }
@@ -1044,10 +1050,6 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
                   </span>
                 )}
               </div>
-              {/* Descricao */}
-              {a.descricao && (
-                <p className="mt-2 text-xs text-slate-500 leading-relaxed line-clamp-2 border-t border-slate-100 pt-2">{a.descricao}</p>
-              )}
             </div>
 
             {/* Acoes compactas (direita) */}
@@ -1111,6 +1113,12 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
               {isExpanded ? <ChevronDown className="w-4 h-4 text-slate-300" /> : <ChevronRight className="w-4 h-4 text-slate-300" />}
             </div>
           </div>
+          {/* Descricao — largura total, fora do flex row */}
+          {a.descricao && (
+            <div className="px-4 pb-3">
+              <p className="text-xs text-slate-500 leading-relaxed border-t border-slate-100 pt-2" style={{ textAlign: 'justify', whiteSpace: 'pre-wrap' }}>{a.descricao}</p>
+            </div>
+          )}
         </div>
 
         {/* Registros de Tempo (expandido) */}
@@ -1186,24 +1194,37 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
               </h5>
 
               {/* Form novo comentario */}
-              <div className="flex gap-2 mb-3">
-                <div className="flex-1">
-                  <MentionInput
-                    value={novoComentario}
-                    onChange={setNovoComentario}
-                    usuarios={membrosEquipe.map((m) => ({ id: m.usuarioId, nome: m.usuario.nome, username: m.usuario.username }))}
-                    placeholder="Adicionar nota... (use @usuario para mencionar)"
-                    rows={2}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs resize-none"
-                  />
+              <div className="mb-3">
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <MentionInput
+                      value={novoComentario}
+                      onChange={setNovoComentario}
+                      usuarios={membrosEquipe.map((m) => ({ id: m.usuarioId, nome: m.usuario.nome, username: m.usuario.username }))}
+                      placeholder="Adicionar nota... (use @usuario para mencionar)"
+                      rows={2}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs resize-none"
+                    />
+                  </div>
+                  <button
+                    onClick={handleAddComentario}
+                    disabled={!novoComentario.trim() || savingComentario}
+                    className="self-end bg-capul-600 text-white px-3 py-2 rounded-lg text-xs hover:bg-capul-700 disabled:opacity-50"
+                  >
+                    {savingComentario ? '...' : 'Enviar'}
+                  </button>
                 </div>
-                <button
-                  onClick={handleAddComentario}
-                  disabled={!novoComentario.trim() || savingComentario}
-                  className="self-end bg-capul-600 text-white px-3 py-2 rounded-lg text-xs hover:bg-capul-700 disabled:opacity-50"
-                >
-                  {savingComentario ? '...' : 'Enviar'}
-                </button>
+                {a.pendencia && (
+                  <label className="flex items-center gap-2 text-xs text-slate-500 mt-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={novoComentarioVisivel}
+                      onChange={(e) => setNovoComentarioVisivel(e.target.checked)}
+                      className="rounded border-slate-300"
+                    />
+                    Visivel na Pendencia #{a.pendencia.numero}
+                  </label>
+                )}
               </div>
 
               {loadingComentarios ? (
@@ -1218,12 +1239,25 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
                         <span className="font-medium text-slate-700">{c.usuario.nome}</span>
                         <span className="text-slate-400">{new Date(c.createdAt).toLocaleDateString('pt-BR')} {new Date(c.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
-                      <textarea
+                      <MentionInput
                         value={editComentarioTexto}
-                        onChange={(e) => setEditComentarioTexto(e.target.value)}
-                        rows={30}
+                        onChange={setEditComentarioTexto}
+                        usuarios={membrosEquipe.map((m) => ({ id: m.usuarioId, nome: m.usuario.nome, username: m.usuario.username }))}
+                        rows={4}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs mb-3"
+                        placeholder="Editar nota... (use @usuario para mencionar)"
                       />
+                      {a.pendencia && (
+                        <label className="flex items-center gap-2 text-xs text-slate-500 mb-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={editComentarioVisivel}
+                            onChange={(e) => setEditComentarioVisivel(e.target.checked)}
+                            className="rounded border-slate-300"
+                          />
+                          Visivel na Pendencia #{a.pendencia.numero}
+                        </label>
+                      )}
                       <div className="flex justify-end gap-3">
                         <button onClick={() => { setEditingComentario(null); setEditComentarioTexto(''); }} className="text-xs text-slate-500 hover:text-slate-700 px-3 py-1.5">Cancelar</button>
                         <button onClick={() => handleSaveComentario(c.id)} disabled={!editComentarioTexto.trim() || savingComentario} className="bg-capul-600 text-white px-4 py-1.5 rounded-lg text-xs hover:bg-capul-700 disabled:opacity-50">

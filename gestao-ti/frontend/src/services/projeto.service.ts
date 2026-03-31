@@ -343,8 +343,8 @@ export const projetoService = {
     return data;
   },
 
-  async adicionarComentario(id: string, atividadeId: string, texto: string): Promise<ComentarioTarefa> {
-    const { data } = await gestaoApi.post(`/projetos/${id}/atividades/${atividadeId}/comentarios`, { texto });
+  async adicionarComentario(id: string, atividadeId: string, texto: string, visivelPendencia?: boolean): Promise<ComentarioTarefa> {
+    const { data } = await gestaoApi.post(`/projetos/${id}/atividades/${atividadeId}/comentarios`, { texto, visivelPendencia });
     return data;
   },
 
@@ -352,8 +352,8 @@ export const projetoService = {
     await gestaoApi.delete(`/projetos/${id}/comentarios/${comentarioId}`);
   },
 
-  async atualizarComentario(id: string, comentarioId: string, texto: string): Promise<ComentarioTarefa> {
-    const { data } = await gestaoApi.patch(`/projetos/${id}/comentarios/${comentarioId}`, { texto });
+  async atualizarComentario(id: string, comentarioId: string, texto: string, visivelPendencia?: boolean): Promise<ComentarioTarefa> {
+    const { data } = await gestaoApi.patch(`/projetos/${id}/comentarios/${comentarioId}`, { texto, visivelPendencia });
     return data;
   },
 

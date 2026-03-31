@@ -1492,10 +1492,11 @@ model RegistroTempo {
 }
 
 model ComentarioTarefa {
-  id        String   @id @default(uuid())
-  texto     String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id                String   @id @default(uuid())
+  texto             String
+  visivelPendencia  Boolean  @default(false) @map("visivel_pendencia")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   atividadeId String            @map("atividade_id")
   atividade   AtividadeProjeto  @relation(fields: [atividadeId], references: [id], onDelete: Cascade)

@@ -683,6 +683,7 @@ export interface AtividadeVinculada {
   titulo: string;
   status: StatusAtividade;
   usuario: { id: string; nome: string };
+  comentarios?: { id: string; texto: string; visivelPendencia: boolean; usuario: { id: string; nome: string }; createdAt: string }[];
   createdAt: string;
 }
 
@@ -933,6 +934,7 @@ export interface AtividadeProjeto {
 export interface ComentarioTarefa {
   id: string;
   texto: string;
+  visivelPendencia?: boolean;
   atividadeId: string;
   usuarioId: string;
   usuario: { id: string; nome: string };
