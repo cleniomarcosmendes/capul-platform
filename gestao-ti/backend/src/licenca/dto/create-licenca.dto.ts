@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsInt, IsNumber, Min, IsDateString } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsInt, IsNumber, Min, IsDateString, MaxLength } from 'class-validator';
 import { ModeloLicenca } from '@prisma/client';
 
 export class CreateLicencaDto {
@@ -35,13 +35,16 @@ export class CreateLicencaDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   chaveSerial?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   fornecedor?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   observacoes?: string;
 }

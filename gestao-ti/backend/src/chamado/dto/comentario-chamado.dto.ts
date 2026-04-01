@@ -1,8 +1,9 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, MaxLength } from 'class-validator';
 
 export class ComentarioChamadoDto {
   @IsString()
   @IsNotEmpty({ message: 'Comentario e obrigatorio' })
+  @MaxLength(5000)
   descricao: string;
 
   @IsOptional()

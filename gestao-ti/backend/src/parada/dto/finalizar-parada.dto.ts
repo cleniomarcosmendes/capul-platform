@@ -1,4 +1,4 @@
-import { IsOptional, IsDateString, IsString } from 'class-validator';
+import { IsOptional, IsDateString, IsString, MaxLength } from 'class-validator';
 
 export class FinalizarParadaDto {
   @IsOptional()
@@ -7,5 +7,6 @@ export class FinalizarParadaDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   observacoes?: string;
 }

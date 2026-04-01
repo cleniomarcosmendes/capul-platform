@@ -12,6 +12,7 @@ import { ResolverChamadoDto, ReabrirChamadoDto, CsatDto } from './dto/resolver-c
 import { UpdateRegistroTempoChamadoDto } from './dto/update-registro-tempo-chamado.dto.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { NotificacaoService } from '../notificacao/notificacao.service.js';
+import { isGestor } from '../common/constants/roles.constant.js';
 import { StatusChamado, Visibilidade } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -36,14 +37,36 @@ const chamadoInclude = {
 
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads', 'chamados');
 
-const ROLES_GESTORES = ['ADMIN', 'GESTOR_TI'];
-
 @Injectable()
 export class ChamadoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificacaoService: NotificacaoService,
   ) {}
+
+  // ─── Coletar todos os envolvidos no chamado (para notificacoes) ───
+  private async getDestinatariosChamado(
+    chamadoId: string,
+    excluirIds: string[],
+  ): Promise<string[]> {
+    const chamado = await this.prisma.chamado.findUnique({
+      where: { id: chamadoId },
+      select: {
+        solicitanteId: true,
+        tecnicoId: true,
+        colaboradores: { select: { usuarioId: true } },
+      },
+    });
+    if (!chamado) return [];
+
+    const ids = new Set<string>();
+    ids.add(chamado.solicitanteId);
+    if (chamado.tecnicoId) ids.add(chamado.tecnicoId);
+    for (const c of chamado.colaboradores) ids.add(c.usuarioId);
+
+    for (const id of excluirIds) ids.delete(id);
+    return Array.from(ids);
+  }
 
   // ─── Validacao: usuario e tecnico atribuido ou colaborador ───
   private async assertTecnicoOuColaborador(
@@ -52,7 +75,7 @@ export class ChamadoService {
     role: string,
     { permitirSolicitante = false }: { permitirSolicitante?: boolean } = {},
   ) {
-    if (ROLES_GESTORES.includes(role)) return;
+    if (isGestor(role)) return;
 
     const chamado = await this.prisma.chamado.findUnique({
       where: { id: chamadoId },
@@ -112,12 +135,11 @@ export class ChamadoService {
       }
 
       // Para roles nao-staff, restringir as filiais vinculadas ao usuario
-      const isStaff = ['ADMIN', 'GESTOR_TI'].includes(role);
+      const isStaff = isGestor(role);
       if (!isStaff && !filters.filialId) {
-        const userFiliais = await this.prisma.$queryRawUnsafe<{ filial_id: string }[]>(
-          `SELECT filial_id FROM core.usuario_filiais WHERE usuario_id = $1`,
-          user.sub,
-        );
+        const userFiliais = await this.prisma.$queryRaw<{ filial_id: string }[]>`
+          SELECT filial_id FROM core.usuario_filiais WHERE usuario_id = ${user.sub}
+        `;
         const filialIds = userFiliais.map((f) => f.filial_id);
         if (filialIds.length > 0) {
           where.filialId = { in: filialIds };
@@ -336,13 +358,17 @@ export class ChamadoService {
       data: { horaInicio: new Date(), chamadoId: id, usuarioId: user.sub },
     });
 
-    // Notificar solicitante
-    this.notificacaoService.criarParaUsuario(
-      chamado.solicitanteId, 'CHAMADO_ATUALIZADO',
-      `Chamado #${chamado.numero} assumido`,
-      `Seu chamado "${chamado.titulo}" foi assumido por um tecnico.`,
-      { chamadoId: id },
-    ).catch(() => {});
+    // Notificar envolvidos (solicitante + colaboradores)
+    this.getDestinatariosChamado(id, [user.sub]).then((ids) => {
+      if (ids.length > 0) {
+        this.notificacaoService.criarParaUsuarios(
+          ids, 'CHAMADO_ATUALIZADO',
+          `Chamado #${chamado.numero} assumido`,
+          `O chamado "${chamado.titulo}" foi assumido por um tecnico.`,
+          { chamadoId: id },
+        ).catch((err) => console.error('Notificacao error:', err.message));
+      }
+    }).catch((err) => console.error('Notificacao error:', err.message));
 
     return updated;
   }
@@ -398,16 +424,28 @@ export class ChamadoService {
       where: { equipeId: dto.equipeDestinoId, isLider: true, status: 'ATIVO' },
       select: { usuarioId: true },
     }).then((lideres) => {
-      const ids = lideres.map((l) => l.usuarioId);
+      const ids = lideres.map((l) => l.usuarioId).filter((uid) => uid !== user.sub);
       if (ids.length > 0) {
         this.notificacaoService.criarParaUsuarios(
           ids, 'CHAMADO_ATRIBUIDO',
           `Chamado #${chamado.numero} transferido`,
           `Chamado "${chamado.titulo}" foi transferido para sua equipe.`,
           { chamadoId: id },
-        ).catch(() => {});
+        ).catch((err) => console.error('Notificacao error:', err.message));
       }
-    }).catch(() => {});
+    }).catch((err) => console.error('Notificacao error:', err.message));
+
+    // Notificar envolvidos (solicitante + tecnico anterior + colaboradores)
+    this.getDestinatariosChamado(id, [user.sub]).then((ids) => {
+      if (ids.length > 0) {
+        this.notificacaoService.criarParaUsuarios(
+          ids, 'CHAMADO_ATUALIZADO',
+          `Chamado #${chamado.numero} transferido de equipe`,
+          `O chamado "${chamado.titulo}" foi transferido para a equipe ${equipeDestino.nome}.`,
+          { chamadoId: id },
+        ).catch((err) => console.error('Notificacao error:', err.message));
+      }
+    }).catch((err) => console.error('Notificacao error:', err.message));
 
     return updated;
   }
@@ -450,7 +488,19 @@ export class ChamadoService {
       `Chamado #${chamado.numero} atribuido a voce`,
       `O chamado "${chamado.titulo}" foi atribuido a voce.`,
       { chamadoId: id },
-    ).catch(() => {});
+    ).catch((err) => console.error('Notificacao error:', err.message));
+
+    // Notificar demais envolvidos (solicitante + colaboradores)
+    this.getDestinatariosChamado(id, [user.sub, dto.tecnicoId]).then((ids) => {
+      if (ids.length > 0) {
+        this.notificacaoService.criarParaUsuarios(
+          ids, 'CHAMADO_ATUALIZADO',
+          `Chamado #${chamado.numero} transferido`,
+          `O chamado "${chamado.titulo}" foi transferido para ${tecnico.nome}.`,
+          { chamadoId: id },
+        ).catch((err) => console.error('Notificacao error:', err.message));
+      }
+    }).catch((err) => console.error('Notificacao error:', err.message));
 
     return updated;
   }
@@ -466,7 +516,7 @@ export class ChamadoService {
     }
 
     // Se chamado nao tem tecnico atribuido, apenas solicitante pode comentar
-    if (!chamado.tecnicoId && chamado.solicitanteId !== user.sub && !ROLES_GESTORES.includes(role)) {
+    if (!chamado.tecnicoId && chamado.solicitanteId !== user.sub && !isGestor(role)) {
       throw new BadRequestException('E necessario assumir o chamado antes de comentar');
     }
 
@@ -483,20 +533,11 @@ export class ChamadoService {
       },
     });
 
-    // Notificar a outra parte (solicitante ou tecnico)
-    const destinatarioId = user.sub === chamado.solicitanteId
-      ? chamado.tecnicoId
-      : chamado.solicitanteId;
-    if (destinatarioId) {
-      this.notificacaoService.criarParaUsuario(
-        destinatarioId, 'CHAMADO_ATUALIZADO',
-        `Novo comentario no chamado #${chamado.numero}`,
-        `Novo comentario no chamado "${chamado.titulo}".`,
-        { chamadoId: id },
-      ).catch(() => {});
-    }
+    // Notificar todos os envolvidos (solicitante + tecnico + colaboradores)
+    const destinatarios = await this.getDestinatariosChamado(id, [user.sub]);
 
-    // Processar @mencoes
+    // Processar @mencoes para notificacao diferenciada
+    const mencionadoIds = new Set<string>();
     if (dto.descricao) {
       const regex = /@(\S+)/g;
       const usernames: string[] = [];
@@ -509,16 +550,31 @@ export class ChamadoService {
           where: { username: { in: usernames, mode: 'insensitive' } },
           select: { id: true },
         });
-        const idsNotificar = mencionados.map((u) => u.id).filter((uid) => uid !== user.sub && uid !== destinatarioId);
-        if (idsNotificar.length > 0) {
-          this.notificacaoService.criarParaUsuarios(
-            idsNotificar, 'CHAMADO_ATUALIZADO',
-            `Voce foi mencionado no chamado #${chamado.numero}`,
-            `Voce foi mencionado em um comentario no chamado "${chamado.titulo}".`,
-            { chamadoId: id },
-          ).catch(() => {});
+        for (const m of mencionados) {
+          if (m.id !== user.sub) mencionadoIds.add(m.id);
         }
       }
+    }
+
+    // Mencionados recebem notificacao de mencao
+    if (mencionadoIds.size > 0) {
+      this.notificacaoService.criarParaUsuarios(
+        Array.from(mencionadoIds), 'CHAMADO_ATUALIZADO',
+        `Voce foi mencionado no chamado #${chamado.numero}`,
+        `Voce foi mencionado em um comentario no chamado "${chamado.titulo}".`,
+        { chamadoId: id },
+      ).catch((err) => console.error('Notificacao error:', err.message));
+    }
+
+    // Demais envolvidos (que nao foram mencionados) recebem notificacao de comentario
+    const idsComentario = destinatarios.filter((uid) => !mencionadoIds.has(uid));
+    if (idsComentario.length > 0) {
+      this.notificacaoService.criarParaUsuarios(
+        idsComentario, 'CHAMADO_ATUALIZADO',
+        `Novo comentario no chamado #${chamado.numero}`,
+        `Novo comentario no chamado "${chamado.titulo}".`,
+        { chamadoId: id },
+      ).catch((err) => console.error('Notificacao error:', err.message));
     }
 
     return historico;
@@ -530,9 +586,8 @@ export class ChamadoService {
     });
     if (!historico) throw new NotFoundException('Comentario nao encontrado');
 
-    // Somente o autor ou ADMIN/GESTOR_TI pode editar
-    const isAdmin = ['ADMIN', 'GESTOR_TI'].includes(role);
-    if (historico.usuarioId !== user.sub && !isAdmin) {
+    // Somente o autor ou gestores pode editar
+    if (historico.usuarioId !== user.sub && !isGestor(role)) {
       throw new ForbiddenException('Voce so pode editar seus proprios comentarios');
     }
 
@@ -595,13 +650,17 @@ export class ChamadoService {
       },
     });
 
-    // Notificar solicitante
-    this.notificacaoService.criarParaUsuario(
-      chamado.solicitanteId, 'CHAMADO_ATUALIZADO',
-      `Chamado #${chamado.numero} finalizado`,
-      `Seu chamado "${chamado.titulo}" foi finalizado.`,
-      { chamadoId: id },
-    ).catch(() => {});
+    // Notificar envolvidos (solicitante + tecnico + colaboradores)
+    this.getDestinatariosChamado(id, [user.sub]).then((ids) => {
+      if (ids.length > 0) {
+        this.notificacaoService.criarParaUsuarios(
+          ids, 'CHAMADO_ATUALIZADO',
+          `Chamado #${chamado.numero} finalizado`,
+          `O chamado "${chamado.titulo}" foi finalizado.`,
+          { chamadoId: id },
+        ).catch((err) => console.error('Notificacao error:', err.message));
+      }
+    }).catch((err) => console.error('Notificacao error:', err.message));
 
     return updated;
   }
@@ -631,13 +690,17 @@ export class ChamadoService {
       },
     });
 
-    // Notificar solicitante
-    this.notificacaoService.criarParaUsuario(
-      chamado.solicitanteId, 'CHAMADO_ATUALIZADO',
-      `Chamado #${chamado.numero} fechado`,
-      `Seu chamado "${chamado.titulo}" foi fechado.`,
-      { chamadoId: id },
-    ).catch(() => {});
+    // Notificar envolvidos (solicitante + tecnico + colaboradores)
+    this.getDestinatariosChamado(id, [user.sub]).then((ids) => {
+      if (ids.length > 0) {
+        this.notificacaoService.criarParaUsuarios(
+          ids, 'CHAMADO_ATUALIZADO',
+          `Chamado #${chamado.numero} fechado`,
+          `O chamado "${chamado.titulo}" foi fechado.`,
+          { chamadoId: id },
+        ).catch((err) => console.error('Notificacao error:', err.message));
+      }
+    }).catch((err) => console.error('Notificacao error:', err.message));
 
     return updated;
   }
@@ -700,6 +763,18 @@ export class ChamadoService {
       });
     }
 
+    // Notificar envolvidos (solicitante + tecnico anterior + colaboradores)
+    this.getDestinatariosChamado(id, [user.sub]).then((ids) => {
+      if (ids.length > 0) {
+        this.notificacaoService.criarParaUsuarios(
+          ids, 'CHAMADO_ATUALIZADO',
+          `Chamado #${chamado.numero} reaberto`,
+          `O chamado "${chamado.titulo}" foi reaberto.`,
+          { chamadoId: id },
+        ).catch((err) => console.error('Notificacao error:', err.message));
+      }
+    }).catch((err) => console.error('Notificacao error:', err.message));
+
     return updated;
   }
 
@@ -736,6 +811,18 @@ export class ChamadoService {
       },
     });
 
+    // Notificar envolvidos (solicitante + tecnico + colaboradores)
+    this.getDestinatariosChamado(id, [user.sub]).then((ids) => {
+      if (ids.length > 0) {
+        this.notificacaoService.criarParaUsuarios(
+          ids, 'CHAMADO_ATUALIZADO',
+          `Chamado #${chamado.numero} cancelado`,
+          `O chamado "${chamado.titulo}" foi cancelado.`,
+          { chamadoId: id },
+        ).catch((err) => console.error('Notificacao error:', err.message));
+      }
+    }).catch((err) => console.error('Notificacao error:', err.message));
+
     return updated;
   }
 
@@ -770,16 +857,17 @@ export class ChamadoService {
       },
     });
 
-    // Notificar tecnico (fire-and-forget)
-    if (chamado.tecnicoId) {
-      this.notificacaoService.criarParaUsuario(
-        chamado.tecnicoId,
-        'CHAMADO_ATUALIZADO',
-        `Chamado #${chamado.numero} avaliado`,
-        `O chamado "${chamado.titulo}" recebeu avaliacao ${dto.nota}/5.`,
-        { chamadoId: id },
-      ).catch(() => {});
-    }
+    // Notificar envolvidos (tecnico + colaboradores)
+    this.getDestinatariosChamado(id, [user.sub]).then((ids) => {
+      if (ids.length > 0) {
+        this.notificacaoService.criarParaUsuarios(
+          ids, 'CHAMADO_ATUALIZADO',
+          `Chamado #${chamado.numero} avaliado`,
+          `O chamado "${chamado.titulo}" recebeu avaliacao ${dto.nota}/5.`,
+          { chamadoId: id },
+        ).catch((err) => console.error('Notificacao error:', err.message));
+      }
+    }).catch((err) => console.error('Notificacao error:', err.message));
 
     return updated;
   }
@@ -883,10 +971,20 @@ export class ChamadoService {
     if (jaExiste) {
       throw new BadRequestException('Usuario ja e colaborador deste chamado');
     }
-    return this.prisma.chamadoColaborador.create({
+    const colaborador = await this.prisma.chamadoColaborador.create({
       data: { chamadoId, usuarioId },
       include: { usuario: { select: { id: true, nome: true, username: true } } },
     });
+
+    // Notificar o colaborador adicionado
+    this.notificacaoService.criarParaUsuario(
+      usuarioId, 'CHAMADO_ATRIBUIDO',
+      `Voce foi adicionado ao chamado #${chamado.numero}`,
+      `Voce foi adicionado como colaborador no chamado "${chamado.titulo}".`,
+      { chamadoId },
+    ).catch((err) => console.error('Notificacao error:', err.message));
+
+    return colaborador;
   }
 
   async removerColaborador(chamadoId: string, colaboradorId: string, user: JwtPayload, role: string) {
@@ -907,7 +1005,18 @@ export class ChamadoService {
     if (temRegistros > 0) {
       throw new BadRequestException('Colaborador possui registros de tempo neste chamado e nao pode ser removido');
     }
-    return this.prisma.chamadoColaborador.delete({ where: { id: colaboradorId } });
+
+    await this.prisma.chamadoColaborador.delete({ where: { id: colaboradorId } });
+
+    // Notificar o colaborador removido
+    this.notificacaoService.criarParaUsuario(
+      reg.usuarioId, 'CHAMADO_ATUALIZADO',
+      `Voce foi removido do chamado #${chamado.numero}`,
+      `Voce foi removido como colaborador do chamado "${chamado.titulo}".`,
+      { chamadoId },
+    ).catch((err) => console.error('Notificacao error:', err.message));
+
+    return { deleted: true };
   }
 
   // --- Registro de Tempo (Chamado) ---
@@ -981,15 +1090,13 @@ export class ChamadoService {
   }
 
   private validarEdicaoRegistroChamado(registro: { horaFim: Date | null; horaInicio: Date; usuarioId: string }, userId: string, role: string) {
-    const ROLES_GESTORES = ['ADMIN', 'GESTOR_TI'];
-
     // Regra 1: nao editar registro com timer ativo
     if (!registro.horaFim) {
       throw new BadRequestException('Nao e possivel editar um registro com cronometro ativo. Encerre o cronometro primeiro.');
     }
 
     // Regra 2: apenas o dono ou gestores
-    if (registro.usuarioId !== userId && !ROLES_GESTORES.includes(role)) {
+    if (registro.usuarioId !== userId && !isGestor(role)) {
       throw new ForbiddenException('Voce so pode editar seus proprios registros de tempo.');
     }
 
@@ -997,7 +1104,7 @@ export class ChamadoService {
     const limite = new Date();
     limite.setDate(limite.getDate() - 2);
     limite.setHours(0, 0, 0, 0);
-    if (new Date(registro.horaInicio) < limite && !ROLES_GESTORES.includes(role)) {
+    if (new Date(registro.horaInicio) < limite && !isGestor(role)) {
       throw new BadRequestException('Nao e possivel editar registros com mais de 2 dias. Solicite ao gestor.');
     }
   }
@@ -1016,10 +1123,10 @@ export class ChamadoService {
     if (userId && role) {
       this.validarEdicaoRegistroChamado(registro, userId, role);
       if (registro.usuarioId !== userId) {
-        this.prisma.$queryRawUnsafe(
-          `INSERT INTO core.system_logs (id, level, message, module, action, usuario_id, metadata, created_at) VALUES (gen_random_uuid()::text, 'AUDIT', 'REGISTRO_TEMPO_CHAMADO_EDITADO_POR_GESTOR', 'CHAMADO', 'REGISTRO_TEMPO_CHAMADO_EDITADO_POR_GESTOR', $1, $2, NOW())`,
-          userId, JSON.stringify({ registroId, donoId: registro.usuarioId, chamadoId }),
-        ).catch(() => {});
+        this.prisma.$queryRaw`
+          INSERT INTO core.system_logs (id, level, message, module, action, usuario_id, metadata, created_at)
+          VALUES (gen_random_uuid()::text, 'AUDIT', 'REGISTRO_TEMPO_CHAMADO_EDITADO_POR_GESTOR', 'CHAMADO', 'REGISTRO_TEMPO_CHAMADO_EDITADO_POR_GESTOR', ${userId}, ${JSON.stringify({ registroId, donoId: registro.usuarioId, chamadoId })}, NOW())
+        `.catch((err) => console.error('Audit log error:', err.message));
       }
     }
 
@@ -1054,10 +1161,10 @@ export class ChamadoService {
     if (userId && role) {
       this.validarEdicaoRegistroChamado(registro, userId, role);
       if (registro.usuarioId !== userId) {
-        this.prisma.$queryRawUnsafe(
-          `INSERT INTO core.system_logs (id, level, message, module, action, usuario_id, metadata, created_at) VALUES (gen_random_uuid()::text, 'AUDIT', 'REGISTRO_TEMPO_CHAMADO_REMOVIDO_POR_GESTOR', 'CHAMADO', 'REGISTRO_TEMPO_CHAMADO_REMOVIDO_POR_GESTOR', $1, $2, NOW())`,
-          userId, JSON.stringify({ registroId, donoId: registro.usuarioId, chamadoId }),
-        ).catch(() => {});
+        this.prisma.$queryRaw`
+          INSERT INTO core.system_logs (id, level, message, module, action, usuario_id, metadata, created_at)
+          VALUES (gen_random_uuid()::text, 'AUDIT', 'REGISTRO_TEMPO_CHAMADO_REMOVIDO_POR_GESTOR', 'CHAMADO', 'REGISTRO_TEMPO_CHAMADO_REMOVIDO_POR_GESTOR', ${userId}, ${JSON.stringify({ registroId, donoId: registro.usuarioId, chamadoId })}, NOW())
+        `.catch((err) => console.error('Audit log error:', err.message));
       }
     }
     return this.prisma.registroTempoChamado.delete({ where: { id: registroId } });

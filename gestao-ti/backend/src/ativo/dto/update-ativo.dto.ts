@@ -10,7 +10,7 @@ export class UpdateAtivoDto {
   @IsOptional() @IsString() @MaxLength(200)
   nome?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional() @IsString() @MaxLength(5000)
   descricao?: string;
 
   @IsOptional() @IsEnum(TipoAtivo)
@@ -40,7 +40,7 @@ export class UpdateAtivoDto {
   @IsOptional() @IsDateString()
   dataGarantia?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional() @IsString() @MaxLength(200)
   processador?: string;
 
   @IsOptional() @IsInt()
@@ -49,7 +49,7 @@ export class UpdateAtivoDto {
   @IsOptional() @IsInt()
   discoGB?: number;
 
-  @IsOptional() @IsString()
+  @IsOptional() @IsString() @MaxLength(200)
   sistemaOperacional?: string;
 
   @IsOptional() @IsString() @MaxLength(45)
@@ -58,10 +58,10 @@ export class UpdateAtivoDto {
   @IsOptional() @IsString() @MaxLength(100)
   hostname?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional() @IsString() @MaxLength(2000)
   observacoes?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional() @IsString() @MaxLength(500)
   glpiId?: string;
 
   @IsOptional() @IsUUID()

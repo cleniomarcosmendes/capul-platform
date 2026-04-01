@@ -32,5 +32,6 @@ export class CreateParcelaDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   observacoes?: string;
 }

@@ -7,7 +7,7 @@ export class UpdateArtigoDto {
   @IsOptional() @IsString() @MaxLength(300)
   titulo?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional() @IsString() @MaxLength(50000)
   conteudo?: string;
 
   @IsOptional() @IsString() @MaxLength(500)

@@ -5,12 +5,14 @@ import {
   IsOptional,
   IsUUID,
   IsNumber,
+  MaxLength,
 } from 'class-validator';
 import { TipoProjeto, ModoProjeto, StatusProjeto } from '@prisma/client';
 
 export class UpdateProjetoDto {
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   nome?: string;
 
   @IsOptional()
@@ -39,6 +41,7 @@ export class UpdateProjetoDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(5000)
   descricao?: string;
 
   @IsOptional()
@@ -59,5 +62,6 @@ export class UpdateProjetoDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   observacoes?: string;
 }

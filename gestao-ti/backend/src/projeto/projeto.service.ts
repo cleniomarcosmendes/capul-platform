@@ -24,6 +24,7 @@ import { CreatePendenciaDto } from './dto/create-pendencia.dto';
 import { UpdatePendenciaDto } from './dto/update-pendencia.dto';
 import { CreateInteracaoPendenciaDto } from './dto/create-interacao-pendencia.dto';
 import { NotificacaoService } from '../notificacao/notificacao.service.js';
+import { isGestor, isTI } from '../common/constants/roles.constant.js';
 
 const PROJETO_UPLOADS_DIR = path.resolve('./uploads/projetos');
 if (!fs.existsSync(PROJETO_UPLOADS_DIR)) {
@@ -206,7 +207,7 @@ export class ProjetoService {
     // Calcular se usuario e membro/responsavel do projeto
     let isMembro = false;
     if (userId) {
-      if (['ADMIN', 'GESTOR_TI'].includes(role || '')) {
+      if (isGestor(role || '')) {
         isMembro = true;
       } else if (projeto.responsavel?.id === userId) {
         isMembro = true;
@@ -503,7 +504,7 @@ export class ProjetoService {
       `Voce foi adicionado ao projeto #${projeto.numero}`,
       `Voce foi incluido na equipe do projeto "${projeto.nome}" com o papel de ${papelLabel[dto.papel] || dto.papel}.`,
       { projetoId, membroId: membro.id },
-    ).catch(() => {});
+    ).catch((err) => console.error('Notificacao error:', err.message));
 
     return membro;
   }
@@ -700,7 +701,7 @@ export class ProjetoService {
         `Nova atividade: ${dto.titulo}`,
         `Voce foi atribuido a atividade "${dto.titulo}" no projeto "${atividade.projeto.nome}".`,
         { projetoId, atividadeId: atividade.id },
-      ).catch(() => {});
+      ).catch((err) => console.error('Notificacao error:', err.message));
     }
 
     return atividade;
@@ -742,6 +743,12 @@ export class ProjetoService {
     });
 
     // Sync responsaveis se informados
+    const responsaveisAntigos = await this.prisma.atividadeResponsavel.findMany({
+      where: { atividadeId },
+      select: { usuarioId: true },
+    });
+    const idsAntigos = responsaveisAntigos.map((r) => r.usuarioId);
+
     if (dto.responsavelIds !== undefined) {
       await this.prisma.atividadeResponsavel.deleteMany({ where: { atividadeId } });
       if (dto.responsavelIds.length > 0) {
@@ -749,6 +756,35 @@ export class ProjetoService {
           data: dto.responsavelIds.map((uid) => ({ atividadeId, usuarioId: uid })),
           skipDuplicates: true,
         });
+      }
+
+      // Notificar novos responsaveis atribuidos
+      const novos = dto.responsavelIds.filter((uid) => !idsAntigos.includes(uid) && uid !== atividade.usuarioId);
+      if (novos.length > 0) {
+        const proj = await this.prisma.projeto.findUnique({ where: { id: projetoId }, select: { nome: true } });
+        this.notificacaoService.criarParaUsuarios(
+          novos, 'ATIVIDADE_ATRIBUIDA',
+          `Voce foi atribuido a atividade "${updated.titulo}"`,
+          `Voce foi atribuido a atividade "${updated.titulo}" no projeto "${proj?.nome}".`,
+          { projetoId, atividadeId },
+        ).catch((err) => console.error('Notificacao error:', err.message));
+      }
+    }
+
+    // Notificar responsaveis sobre mudanca de status
+    if (dto.status && dto.status !== atividade.status) {
+      const statusLabelsNotif: Record<string, string> = {
+        PENDENTE: 'Pendente', EM_ANDAMENTO: 'Em Andamento', CONCLUIDA: 'Concluida', CANCELADA: 'Cancelada',
+      };
+      const idsResponsaveis = (dto.responsavelIds ?? idsAntigos).filter((uid) => uid !== atividade.usuarioId);
+      if (idsResponsaveis.length > 0) {
+        const proj = await this.prisma.projeto.findUnique({ where: { id: projetoId }, select: { nome: true } });
+        this.notificacaoService.criarParaUsuarios(
+          idsResponsaveis, 'PROJETO_ATUALIZADO',
+          `Atividade "${updated.titulo}" — ${statusLabelsNotif[dto.status] || dto.status}`,
+          `A atividade "${updated.titulo}" do projeto "${proj?.nome}" teve o status alterado para ${statusLabelsNotif[dto.status] || dto.status}.`,
+          { projetoId, atividadeId },
+        ).catch((err) => console.error('Notificacao error:', err.message));
       }
     }
 
@@ -776,7 +812,7 @@ export class ProjetoService {
             usuarioId: atividade.usuarioId,
             publica: true,
           },
-        }).catch(() => {});
+        }).catch((err) => console.error('Notificacao error:', err.message));
       }
     }
 
@@ -831,7 +867,7 @@ export class ProjetoService {
           usuarioId: atividade.usuarioId,
           publica: true,
         },
-      }).catch(() => {});
+      }).catch((err) => console.error('Notificacao error:', err.message));
     }
 
     await this.prisma.atividadeProjeto.delete({ where: { id: atividadeId } });
@@ -911,15 +947,13 @@ export class ProjetoService {
   }
 
   private validarEdicaoRegistro(registro: { horaFim: Date | null; horaInicio: Date; usuarioId: string }, userId: string, role: string) {
-    const ROLES_GESTORES = ['ADMIN', 'GESTOR_TI'];
-
     // Regra 1: nao editar registro com timer ativo (horaFim = null)
     if (!registro.horaFim) {
       throw new BadRequestException('Nao e possivel editar um registro com cronometro ativo. Encerre o cronometro primeiro.');
     }
 
     // Regra 2: apenas o dono do registro ou gestores podem editar
-    if (registro.usuarioId !== userId && !ROLES_GESTORES.includes(role)) {
+    if (registro.usuarioId !== userId && !isGestor(role)) {
       throw new ForbiddenException('Voce so pode editar seus proprios registros de tempo.');
     }
 
@@ -927,7 +961,7 @@ export class ProjetoService {
     const limite = new Date();
     limite.setDate(limite.getDate() - 2);
     limite.setHours(0, 0, 0, 0);
-    if (new Date(registro.horaInicio) < limite && !ROLES_GESTORES.includes(role)) {
+    if (new Date(registro.horaInicio) < limite && !isGestor(role)) {
       throw new BadRequestException('Nao e possivel editar registros com mais de 2 dias. Solicite ao gestor.');
     }
   }
@@ -943,10 +977,10 @@ export class ProjetoService {
       this.validarEdicaoRegistro(registro, userId, role);
       // Audit log: gestor editando registro de outro usuario
       if (registro.usuarioId !== userId) {
-        this.prisma.$queryRawUnsafe(
-          `INSERT INTO core.system_logs (id, level, message, module, action, usuario_id, metadata, created_at) VALUES (gen_random_uuid()::text, 'AUDIT', 'REGISTRO_TEMPO_EDITADO_POR_GESTOR', 'PROJETO', 'REGISTRO_TEMPO_EDITADO_POR_GESTOR', $1, $2, NOW())`,
-          userId, JSON.stringify({ registroId, donoId: registro.usuarioId, projetoId }),
-        ).catch(() => {});
+        this.prisma.$queryRaw`
+          INSERT INTO core.system_logs (id, level, message, module, action, usuario_id, metadata, created_at)
+          VALUES (gen_random_uuid()::text, 'AUDIT', 'REGISTRO_TEMPO_EDITADO_POR_GESTOR', 'PROJETO', 'REGISTRO_TEMPO_EDITADO_POR_GESTOR', ${userId}, ${JSON.stringify({ registroId, donoId: registro.usuarioId, projetoId })}, NOW())
+        `.catch((err) => console.error('Audit log error:', err.message));
       }
     }
 
@@ -978,10 +1012,10 @@ export class ProjetoService {
     if (userId && role) {
       this.validarEdicaoRegistro(registro, userId, role);
       if (registro.usuarioId !== userId) {
-        this.prisma.$queryRawUnsafe(
-          `INSERT INTO core.system_logs (id, level, message, module, action, usuario_id, metadata, created_at) VALUES (gen_random_uuid()::text, 'AUDIT', 'REGISTRO_TEMPO_REMOVIDO_POR_GESTOR', 'PROJETO', 'REGISTRO_TEMPO_REMOVIDO_POR_GESTOR', $1, $2, NOW())`,
-          userId, JSON.stringify({ registroId, donoId: registro.usuarioId, projetoId }),
-        ).catch(() => {});
+        this.prisma.$queryRaw`
+          INSERT INTO core.system_logs (id, level, message, module, action, usuario_id, metadata, created_at)
+          VALUES (gen_random_uuid()::text, 'AUDIT', 'REGISTRO_TEMPO_REMOVIDO_POR_GESTOR', 'PROJETO', 'REGISTRO_TEMPO_REMOVIDO_POR_GESTOR', ${userId}, ${JSON.stringify({ registroId, donoId: registro.usuarioId, projetoId })}, NOW())
+        `.catch((err) => console.error('Audit log error:', err.message));
       }
     }
     return this.prisma.registroTempo.delete({ where: { id: registroId } });
@@ -1536,7 +1570,25 @@ export class ProjetoService {
     });
 
     // Processar @mencoes
-    this.processarMencoes(texto, projetoId, userId, `um comentario na tarefa "${atividade.titulo}"`, { atividadeId });
+    const mencionadoIds = await this.processarMencoes(texto, projetoId, userId, `um comentario na tarefa "${atividade.titulo}"`, { atividadeId });
+
+    // Notificar responsaveis da atividade (exceto autor e ja mencionados)
+    const responsaveis = await this.prisma.atividadeResponsavel.findMany({
+      where: { atividadeId },
+      select: { usuarioId: true },
+    });
+    const idsNotificar = responsaveis
+      .map((r) => r.usuarioId)
+      .filter((uid) => uid !== userId && !mencionadoIds.includes(uid));
+    if (idsNotificar.length > 0) {
+      const proj = await this.prisma.projeto.findUnique({ where: { id: projetoId }, select: { nome: true } });
+      this.notificacaoService.criarParaUsuarios(
+        idsNotificar, 'PROJETO_ATUALIZADO',
+        `Nova nota na atividade "${atividade.titulo}"`,
+        `Nova nota na atividade "${atividade.titulo}" do projeto "${proj?.nome}".`,
+        { projetoId, atividadeId },
+      ).catch((err) => console.error('Notificacao error:', err.message));
+    }
 
     return comentario;
   }
@@ -1547,7 +1599,7 @@ export class ProjetoService {
       where: { id: comentarioId, atividade: { projetoId } },
     });
     if (!comentario) throw new NotFoundException('Comentario nao encontrado');
-    const isAdmin = ['ADMIN', 'GESTOR_TI'].includes(role || '');
+    const isAdmin = isGestor(role || '');
     if (comentario.usuarioId !== userId && !isAdmin) {
       throw new ForbiddenException('Somente o autor pode remover esta nota');
     }
@@ -1562,7 +1614,7 @@ export class ProjetoService {
       include: { atividade: { select: { pendenciaId: true } } },
     });
     if (!comentario) throw new NotFoundException('Comentario nao encontrado');
-    const isAdmin = ['ADMIN', 'GESTOR_TI'].includes(role || '');
+    const isAdmin = isGestor(role || '');
     if (comentario.usuarioId !== userId && !isAdmin) {
       throw new ForbiddenException('Somente o autor pode editar esta nota');
     }
@@ -1637,7 +1689,7 @@ export class ProjetoService {
    */
   async assertMembroOuGestor(projetoId: string, userId: string, role: string) {
     // ADMIN, GESTOR_TI e SUPORTE_TI podem editar qualquer projeto
-    if (['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(role)) return;
+    if (isTI(role)) return;
 
     const projeto = await this.prisma.projeto.findUnique({
       where: { id: projetoId },
@@ -1660,14 +1712,14 @@ export class ProjetoService {
   /**
    * Detecta @username em texto e envia notificacao para os mencionados
    */
-  private async processarMencoes(texto: string, projetoId: string, autorId: string, contexto: string, dadosExtras?: Record<string, unknown>) {
+  private async processarMencoes(texto: string, projetoId: string, autorId: string, contexto: string, dadosExtras?: Record<string, unknown>): Promise<string[]> {
     const regex = /@(\S+)/g;
     const usernames: string[] = [];
     let match;
     while ((match = regex.exec(texto)) !== null) {
       usernames.push(match[1].toLowerCase());
     }
-    if (usernames.length === 0) return;
+    if (usernames.length === 0) return [];
 
     const usuarios = await this.prisma.usuario.findMany({
       where: { username: { in: usernames, mode: 'insensitive' } },
@@ -1692,17 +1744,16 @@ export class ProjetoService {
         `${autor?.nome || 'Alguem'} mencionou voce no projeto #${projeto.numero}`,
         `Voce foi mencionado em ${contexto} do projeto "${projeto.nome}".`,
         { projetoId, ...dadosExtras },
-      ).catch(() => {});
+      ).catch((err) => console.error('Notificacao error:', err.message));
     }
+    return idsParaNotificar;
   }
-
-  private static TI_ROLES = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
 
   /**
    * Verifica se usuario tem acesso ao projeto (USUARIO_CHAVE ou TERCEIRIZADO)
    */
   async checkProjetoAccessChave(projetoId: string, userId: string, role: string) {
-    if (ProjetoService.TI_ROLES.includes(role)) return;
+    if (isTI(role)) return;
 
     if (role === 'USUARIO_CHAVE') {
       const uc = await this.prisma.usuarioChaveProjeto.findUnique({
@@ -1905,6 +1956,18 @@ export class ProjetoService {
       },
     });
 
+    // Notificar responsaveis atribuidos (exceto o criador)
+    const idsNotificar = Array.from(responsaveisIds).filter((uid) => uid !== userId);
+    if (idsNotificar.length > 0) {
+      const proj = await this.prisma.projeto.findUnique({ where: { id: projetoId }, select: { nome: true } });
+      this.notificacaoService.criarParaUsuarios(
+        idsNotificar, 'ATIVIDADE_ATRIBUIDA',
+        `Nova atividade: ${atividade.titulo}`,
+        `Voce foi atribuido a atividade "${atividade.titulo}" no projeto "${proj?.nome}".`,
+        { projetoId, atividadeId: atividade.id },
+      ).catch((err) => console.error('Notificacao error:', err.message));
+    }
+
     return atividade;
   }
 
@@ -1970,7 +2033,7 @@ export class ProjetoService {
         `Nova pendencia: ${dto.titulo}`,
         `Voce foi atribuido como responsavel da pendencia "${dto.titulo}" no projeto "${proj?.nome}".`,
         { projetoId, pendenciaId: pendencia.id },
-      ).catch(() => {});
+      ).catch((err) => console.error('Notificacao error:', err.message));
     }
 
     return pendencia;
@@ -1985,10 +2048,9 @@ export class ProjetoService {
     if (!pendencia) throw new NotFoundException('Pendencia nao encontrada');
 
     // Apenas responsavel ou gestor pode editar dados da pendencia
-    const isGestor = ['ADMIN', 'GESTOR_TI'].includes(role);
     const isResponsavel = pendencia.responsavelId === userId;
     const hasDadosAlterados = dto.titulo !== undefined || dto.descricao !== undefined || dto.prioridade !== undefined || dto.responsavelId !== undefined || dto.dataLimite !== undefined || dto.faseId !== undefined;
-    if (hasDadosAlterados && !isGestor && !isResponsavel) {
+    if (hasDadosAlterados && !isGestor(role) && !isResponsavel) {
       throw new ForbiddenException('Apenas o responsavel pela pendencia ou gestores podem editar os dados');
     }
 
@@ -2029,7 +2091,7 @@ export class ProjetoService {
         `Pendencia transferida: ${pendencia.titulo}`,
         `Voce foi atribuido como responsavel da pendencia "${pendencia.titulo}" no projeto "${proj?.nome}".`,
         { projetoId, pendenciaId },
-      ).catch(() => {});
+      ).catch((err) => console.error('Notificacao error:', err.message));
     }
 
     if (dto.status !== undefined && dto.status !== pendencia.status) {
@@ -2042,6 +2104,24 @@ export class ProjetoService {
           usuarioId: userId,
         },
       });
+
+      // Notificar envolvidos sobre mudanca de status
+      const statusLabels: Record<string, string> = {
+        ABERTA: 'Aberta', EM_ANDAMENTO: 'Em Andamento', AGUARDANDO_VALIDACAO: 'Aguardando Validacao',
+        CONCLUIDA: 'Concluida', CANCELADA: 'Cancelada',
+      };
+      const idsNotificar = new Set<string>();
+      if (pendencia.responsavelId && pendencia.responsavelId !== userId) idsNotificar.add(pendencia.responsavelId);
+      if (pendencia.criadorId && pendencia.criadorId !== userId) idsNotificar.add(pendencia.criadorId);
+      if (idsNotificar.size > 0) {
+        const proj = await this.prisma.projeto.findUnique({ where: { id: projetoId }, select: { nome: true } });
+        this.notificacaoService.criarParaUsuarios(
+          Array.from(idsNotificar), 'PROJETO_ATUALIZADO',
+          `Pendencia "${pendencia.titulo}" — ${statusLabels[dto.status] || dto.status}`,
+          `A pendencia "${pendencia.titulo}" do projeto "${proj?.nome}" teve o status alterado para ${statusLabels[dto.status] || dto.status}.`,
+          { projetoId, pendenciaId },
+        ).catch((err) => console.error('Notificacao error:', err.message));
+      }
     }
 
     return this.prisma.pendenciaProjeto.update({
@@ -2087,8 +2167,32 @@ export class ProjetoService {
     });
 
     // Processar @mencoes
+    const mencionadoIds: string[] = [];
     if (dto.descricao) {
-      this.processarMencoes(dto.descricao, projetoId, userId, `um comentario na pendencia #${pendencia.numero}`, { pendenciaId });
+      const ids = await this.processarMencoes(dto.descricao, projetoId, userId, `um comentario na pendencia #${pendencia.numero}`, { pendenciaId });
+      mencionadoIds.push(...ids);
+    }
+
+    // Notificar responsavel e criador da pendencia (exceto autor e ja mencionados)
+    const idsNotificar = new Set<string>();
+    if (pendencia.responsavelId && pendencia.responsavelId !== userId && !mencionadoIds.includes(pendencia.responsavelId)) {
+      idsNotificar.add(pendencia.responsavelId);
+    }
+    const pendenciaFull = await this.prisma.pendenciaProjeto.findUnique({
+      where: { id: pendenciaId },
+      select: { criadorId: true },
+    });
+    if (pendenciaFull?.criadorId && pendenciaFull.criadorId !== userId && !mencionadoIds.includes(pendenciaFull.criadorId)) {
+      idsNotificar.add(pendenciaFull.criadorId);
+    }
+    if (idsNotificar.size > 0) {
+      const proj = await this.prisma.projeto.findUnique({ where: { id: projetoId }, select: { nome: true } });
+      this.notificacaoService.criarParaUsuarios(
+        Array.from(idsNotificar), 'PROJETO_ATUALIZADO',
+        `Novo comentario na pendencia #${pendencia.numero}`,
+        `Novo comentario na pendencia "${pendencia.titulo}" do projeto "${proj?.nome}".`,
+        { projetoId, pendenciaId },
+      ).catch((err) => console.error('Notificacao error:', err.message));
     }
 
     return interacao;
@@ -2102,8 +2206,7 @@ export class ProjetoService {
     });
     if (!interacao) throw new NotFoundException('Comentario nao encontrado');
 
-    const isAdmin = ['ADMIN', 'GESTOR_TI'].includes(role);
-    if (interacao.usuarioId !== userId && !isAdmin) {
+    if (interacao.usuarioId !== userId && !isGestor(role)) {
       throw new ForbiddenException('Voce so pode editar seus proprios comentarios');
     }
 

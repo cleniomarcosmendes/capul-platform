@@ -40,6 +40,7 @@ export class CreateEquipeDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   emailEquipe?: string;
 
   @IsOptional()

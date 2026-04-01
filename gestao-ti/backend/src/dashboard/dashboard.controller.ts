@@ -6,9 +6,10 @@ import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
+import { ROLES_GESTORES, ROLES_TI } from '../common/constants/roles.constant.js';
 
-const STAFF = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
-const MANAGERS = ['ADMIN', 'GESTOR_TI'];
+const STAFF = [...ROLES_TI];
+const MANAGERS = [...ROLES_GESTORES];
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)

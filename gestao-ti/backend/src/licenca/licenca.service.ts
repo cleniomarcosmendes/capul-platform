@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateLicencaDto } from './dto/create-licenca.dto.js';
 import { UpdateLicencaDto } from './dto/update-licenca.dto.js';
 import { StatusLicenca, ModeloLicenca } from '@prisma/client';
+import { isGestor } from '../common/constants/roles.constant.js';
 
 const MODELOS_POR_USUARIO: ModeloLicenca[] = ['POR_USUARIO', 'SUBSCRICAO', 'SAAS'];
 
@@ -207,12 +208,12 @@ export class LicencaService {
   }
 
   private filterSensitiveFields(licencas: unknown[], role: string) {
-    if (['ADMIN', 'GESTOR_TI'].includes(role)) return licencas;
+    if (isGestor(role)) return licencas;
     return licencas.map((l) => this.filterSensitiveField(l, role));
   }
 
   private filterSensitiveField(licenca: unknown, role: string) {
-    if (['ADMIN', 'GESTOR_TI'].includes(role)) return licenca;
+    if (isGestor(role)) return licenca;
     const obj = { ...(licenca as Record<string, unknown>) };
     obj.chaveSerial = null;
     return obj;

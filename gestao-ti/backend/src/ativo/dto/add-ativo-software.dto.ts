@@ -1,15 +1,15 @@
-import { IsUUID, IsOptional, IsString, IsDateString } from 'class-validator';
+import { IsUUID, IsOptional, IsString, IsDateString, MaxLength } from 'class-validator';
 
 export class AddAtivoSoftwareDto {
   @IsUUID()
   softwareId: string;
 
-  @IsOptional() @IsString()
+  @IsOptional() @IsString() @MaxLength(50)
   versaoInstalada?: string;
 
   @IsOptional() @IsDateString()
   dataInstalacao?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional() @IsString() @MaxLength(2000)
   observacoes?: string;
 }

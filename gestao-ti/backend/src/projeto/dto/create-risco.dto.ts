@@ -1,8 +1,9 @@
-import { IsString, IsOptional, IsEnum, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsUUID, MaxLength } from 'class-validator';
 import { ProbabilidadeRisco, ImpactoRisco, StatusRisco } from '@prisma/client';
 
 export class CreateRiscoDto {
   @IsString()
+  @MaxLength(200)
   titulo: string;
 
   @IsEnum(ProbabilidadeRisco)
@@ -13,6 +14,7 @@ export class CreateRiscoDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(5000)
   descricao?: string;
 
   @IsOptional()
@@ -21,6 +23,7 @@ export class CreateRiscoDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(5000)
   planoMitigacao?: string;
 
   @IsOptional()
@@ -29,5 +32,6 @@ export class CreateRiscoDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   observacoes?: string;
 }

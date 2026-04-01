@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsArray,
   IsUUID,
+  MaxLength,
 } from 'class-validator';
 
 import { TipoParada, ImpactoParada } from '@prisma/client';
@@ -12,6 +13,7 @@ import { TipoParada, ImpactoParada } from '@prisma/client';
 export class UpdateParadaDto {
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   titulo?: string;
 
   @IsOptional()
@@ -45,9 +47,11 @@ export class UpdateParadaDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(5000)
   descricao?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   observacoes?: string;
 }

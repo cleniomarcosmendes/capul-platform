@@ -12,6 +12,7 @@ export class CreateCotacaoDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(5000)
   descricao?: string;
 
   @IsOptional()
@@ -33,5 +34,6 @@ export class CreateCotacaoDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   observacoes?: string;
 }

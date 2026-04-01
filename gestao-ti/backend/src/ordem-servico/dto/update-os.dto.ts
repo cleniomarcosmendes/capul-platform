@@ -8,6 +8,7 @@ export class UpdateOsDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(5000)
   descricao?: string;
 
   @IsOptional()
@@ -16,5 +17,6 @@ export class UpdateOsDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   observacoes?: string;
 }

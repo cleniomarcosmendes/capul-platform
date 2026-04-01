@@ -39,6 +39,7 @@ export class UpdateEquipeDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   emailEquipe?: string;
 
   @IsOptional()

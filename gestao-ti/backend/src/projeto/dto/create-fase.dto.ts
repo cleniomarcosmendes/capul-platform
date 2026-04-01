@@ -4,15 +4,18 @@ import {
   IsNumber,
   IsDateString,
   IsEnum,
+  MaxLength,
 } from 'class-validator';
 import { StatusFase } from '@prisma/client';
 
 export class CreateFaseDto {
   @IsString()
+  @MaxLength(200)
   nome: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(5000)
   descricao?: string;
 
   @IsNumber()
@@ -36,5 +39,6 @@ export class CreateFaseDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   observacoes?: string;
 }

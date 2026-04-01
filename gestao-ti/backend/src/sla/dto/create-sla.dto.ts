@@ -1,9 +1,10 @@
-import { IsString, IsNotEmpty, IsInt, Min, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsInt, Min, IsEnum, MaxLength } from 'class-validator';
 import { Prioridade } from '@prisma/client';
 
 export class CreateSlaDto {
   @IsString()
   @IsNotEmpty()
+  @MaxLength(200)
   nome: string;
 
   @IsEnum(Prioridade)

@@ -40,5 +40,6 @@ export class CreateSoftwareDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   observacoes?: string;
 }

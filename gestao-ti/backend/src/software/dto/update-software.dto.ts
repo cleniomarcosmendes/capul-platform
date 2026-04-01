@@ -40,6 +40,7 @@ export class UpdateSoftwareDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   observacoes?: string;
 }
 

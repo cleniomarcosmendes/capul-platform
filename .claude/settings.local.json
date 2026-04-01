@@ -1131,7 +1131,17 @@
       "Bash(find /mnt/c/meus_projetos/capul-platform -type f \\\\\\(-name *.yml -o -name *.yaml \\\\\\) ! -path */node_modules/* ! -path */.git/*)",
       "Bash(git:*)",
       "Bash(echo \"EXIT:$?\")",
-      "Bash(docker volume:*)"
+      "Bash(docker volume:*)",
+      "Bash(find /mnt/c/meus_projetos/capul-platform/auth-gateway -type f \\\\\\(-name *.ts -o -name *.js \\\\\\))",
+      "Bash(find /mnt/c/meus_projetos/capul-platform/auth-gateway -type f \\\\\\(-name *.ts -o -name *.js \\\\\\) ! -path */dist/* ! -path */node_modules/*)",
+      "Bash(sed -n '1680,1690p' /mnt/c/meus_projetos/capul-platform/gestao-ti/backend/src/projeto/projeto.service.ts)",
+      "Bash(sed -n '1820,1830p' /mnt/c/meus_projetos/capul-platform/gestao-ti/backend/src/projeto/projeto.service.ts)",
+      "Bash(sed -n '2138,2145p' /mnt/c/meus_projetos/capul-platform/gestao-ti/backend/src/projeto/projeto.service.ts)",
+      "Bash(sed -n '1682,1690p' /mnt/c/meus_projetos/capul-platform/gestao-ti/backend/src/projeto/projeto.service.ts)",
+      "Bash(sed -n '1820,1825p' /mnt/c/meus_projetos/capul-platform/gestao-ti/backend/src/projeto/projeto.service.ts)",
+      "Bash(sed -n '2220,2228p' /mnt/c/meus_projetos/capul-platform/gestao-ti/backend/src/projeto/projeto.service.ts)",
+      "Bash(sed -n '2283,2290p' /mnt/c/meus_projetos/capul-platform/gestao-ti/backend/src/projeto/projeto.service.ts)",
+      "Bash(sort -k2 -rn)"
     ]
   }
 }

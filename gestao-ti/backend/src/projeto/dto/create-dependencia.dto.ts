@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsUUID, MaxLength } from 'class-validator';
 import { TipoDependencia } from '@prisma/client';
 
 export class CreateDependenciaDto {
@@ -10,5 +10,6 @@ export class CreateDependenciaDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(5000)
   descricao?: string;
 }

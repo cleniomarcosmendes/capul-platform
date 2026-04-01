@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsDateString, IsUUID, Min, Max } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsDateString, IsUUID, Min, Max, MaxLength } from 'class-validator';
 
 export class CreateApontamentoDto {
   @IsDateString()
@@ -10,10 +10,12 @@ export class CreateApontamentoDto {
   horas: number;
 
   @IsString()
+  @MaxLength(5000)
   descricao: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   observacoes?: string;
 
   @IsOptional()

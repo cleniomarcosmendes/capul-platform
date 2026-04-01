@@ -250,9 +250,25 @@ export class ChamadoController {
     @Res() res: express.Response,
   ) {
     const { filePath, anexo } = await this.service.getAnexoFile(id, anexoId);
-    res.setHeader('Content-Type', anexo.mimeType);
+
+    // Protecao contra path traversal
+    const normalizedPath = path.resolve(filePath);
+    const uploadsDir = path.resolve(UPLOADS_DIR);
+    if (!normalizedPath.startsWith(uploadsDir)) {
+      throw new BadRequestException('Caminho de arquivo invalido');
+    }
+
+    // Validar MIME type contra whitelist
+    const mimeType = ALLOWED_MIMES.includes(anexo.mimeType)
+      ? anexo.mimeType
+      : 'application/octet-stream';
+
+    res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(anexo.nomeOriginal)}"`);
-    const stream = fs.createReadStream(filePath);
+    const stream = fs.createReadStream(normalizedPath);
+    stream.on('error', () => {
+      if (!res.headersSent) res.status(404).send('Arquivo nao encontrado');
+    });
     stream.pipe(res);
   }
 

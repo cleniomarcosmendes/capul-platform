@@ -7,6 +7,7 @@ export class CreateAnexoDto {
   titulo: string;
 
   @IsString()
+  @MaxLength(500)
   url: string;
 
   @IsOptional()
@@ -15,9 +16,11 @@ export class CreateAnexoDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(50)
   tamanho?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(5000)
   descricao?: string;
 }

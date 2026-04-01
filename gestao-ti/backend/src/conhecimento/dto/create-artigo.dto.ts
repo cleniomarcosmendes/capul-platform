@@ -7,7 +7,7 @@ export class CreateArtigoDto {
   @IsString() @IsNotEmpty() @MaxLength(300)
   titulo: string;
 
-  @IsString() @IsNotEmpty()
+  @IsString() @IsNotEmpty() @MaxLength(50000)
   conteudo: string;
 
   @IsOptional() @IsString() @MaxLength(500)

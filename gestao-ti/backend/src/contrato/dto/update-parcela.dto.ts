@@ -35,6 +35,7 @@ export class UpdateParcelaDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   observacoes?: string;
 
   @IsOptional()

@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
 
 export class TransferirEquipeDto {
   @IsString()
@@ -11,6 +11,7 @@ export class TransferirEquipeDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(1000)
   motivo?: string;
 }
 
@@ -21,5 +22,6 @@ export class TransferirTecnicoDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(1000)
   motivo?: string;
 }

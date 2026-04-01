@@ -1,9 +1,10 @@
-import { IsString, IsOptional, IsInt, Min, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, IsEnum, MaxLength } from 'class-validator';
 import { Prioridade } from '@prisma/client';
 
 export class UpdateSlaDto {
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   nome?: string;
 
   @IsOptional()

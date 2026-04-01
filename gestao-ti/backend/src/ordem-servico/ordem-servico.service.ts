@@ -4,8 +4,7 @@ import { CreateOsDto } from './dto/create-os.dto.js';
 import { UpdateOsDto } from './dto/update-os.dto.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { StatusOS } from '@prisma/client';
-
-const ROLES_GESTORES = ['ADMIN', 'GESTOR_TI'];
+import { isGestor } from '../common/constants/roles.constant.js';
 
 const osListInclude = {
   filial: { select: { id: true, codigo: true, nomeFantasia: true } },
@@ -203,7 +202,7 @@ export class OrdemServicoService {
     });
     if (!historico) throw new NotFoundException('Comentario nao encontrado');
 
-    const isAdmin = ROLES_GESTORES.includes(role);
+    const isAdmin = isGestor(role);
     if (historico.usuarioId !== userId && !isAdmin) {
       throw new ForbiddenException('Voce so pode editar seus proprios comentarios');
     }
@@ -229,7 +228,7 @@ export class OrdemServicoService {
 
   /** Verifica se o usuario esta alocado na OS (tecnico ou solicitante) ou e gestor */
   private async assertAlocadoOuGestor(osId: string, userId: string, role: string) {
-    if (ROLES_GESTORES.includes(role)) return; // gestores podem tudo
+    if (isGestor(role)) return; // gestores podem tudo
 
     const os = await this.prisma.ordemServico.findUnique({
       where: { id: osId },

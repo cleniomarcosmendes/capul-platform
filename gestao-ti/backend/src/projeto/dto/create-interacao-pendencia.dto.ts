@@ -1,7 +1,8 @@
-import { IsString, IsOptional, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, MaxLength } from 'class-validator';
 
 export class CreateInteracaoPendenciaDto {
   @IsString()
+  @MaxLength(5000)
   descricao: string;
 
   @IsOptional()

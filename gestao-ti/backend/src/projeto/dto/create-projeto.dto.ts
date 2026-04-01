@@ -5,11 +5,13 @@ import {
   IsOptional,
   IsUUID,
   IsNumber,
+  MaxLength,
 } from 'class-validator';
 import { TipoProjeto, ModoProjeto } from '@prisma/client';
 
 export class CreateProjetoDto {
   @IsString()
+  @MaxLength(200)
   nome: string;
 
   @IsEnum(TipoProjeto)
@@ -36,6 +38,7 @@ export class CreateProjetoDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(5000)
   descricao?: string;
 
   @IsOptional()
@@ -52,5 +55,6 @@ export class CreateProjetoDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   observacoes?: string;
 }

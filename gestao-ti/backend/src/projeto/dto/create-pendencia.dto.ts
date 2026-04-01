@@ -8,6 +8,7 @@ export class CreatePendenciaDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(5000)
   descricao?: string;
 
   @IsOptional()

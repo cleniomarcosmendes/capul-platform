@@ -9,6 +9,7 @@ export class CreateChamadoDto {
 
   @IsString()
   @IsNotEmpty({ message: 'Descricao e obrigatoria' })
+  @MaxLength(5000)
   descricao: string;
 
   @IsString()
@@ -25,10 +26,12 @@ export class CreateChamadoDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   softwareNome?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   moduloNome?: string;
 
   @IsOptional()
@@ -57,6 +60,7 @@ export class CreateChamadoDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(45)
   ipMaquina?: string;
 
   @IsOptional()
