@@ -187,7 +187,7 @@ export class ExportService {
       orderBy: { createdAt: 'desc' },
     });
     dados.forEach((d) => sheet.addRow({
-      software: d.software.nome, modelo: d.modeloLicenca || '',
+      software: d.software?.nome || d.nome || 'Avulsa', modelo: d.modeloLicenca || '',
       quantidade: d.quantidade ?? '', valorTotal: d.valorTotal ? Number(d.valorTotal) : '',
       dataInicio: d.dataInicio ? new Date(d.dataInicio).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '',
       dataVencimento: d.dataVencimento ? new Date(d.dataVencimento).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '',

@@ -26,7 +26,7 @@ function showAlert(message, type = 'info', duration = 5000) {
     alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
     alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px; max-width: 500px;';
     alertDiv.innerHTML = `
-        ${message}
+        ${escapeHtml(message)}
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
     `;
 
@@ -170,7 +170,7 @@ function getStatusText(status) {
 function createStatusBadge(status, text = null) {
     const className = getStatusClass(status);
     const displayText = text || getStatusText(status);
-    return `<span class="badge ${className}">${displayText}</span>`;
+    return `<span class="badge ${escapeHtml(className)}">${escapeHtml(displayText)}</span>`;
 }
 
 // =================================
@@ -333,7 +333,7 @@ function showLoading(message = 'Carregando...') {
             <div class="spinner-border text-primary mb-3" role="status">
                 <span class="visually-hidden">Carregando...</span>
             </div>
-            <div class="text-dark">${message}</div>
+            <div class="text-dark">${escapeHtml(message)}</div>
         </div>
     `;
 
@@ -379,15 +379,15 @@ function showConfirm(options = {}) {
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
                         <div class="modal-header">
-                            <h5 class="modal-title">${title}</h5>
+                            <h5 class="modal-title">${escapeHtml(title)}</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            <p>${message}</p>
+                            <p>${escapeHtml(message)}</p>
                         </div>
                         <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${cancelText}</button>
-                            <button type="button" class="btn ${confirmClass}" id="${modalId}-confirm">${confirmText}</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${escapeHtml(cancelText)}</button>
+                            <button type="button" class="btn ${escapeHtml(confirmClass)}" id="${modalId}-confirm">${escapeHtml(confirmText)}</button>
                         </div>
                     </div>
                 </div>
@@ -419,20 +419,15 @@ function showConfirm(options = {}) {
 // UTILITÁRIOS DE DOM
 // =================================
 
-/**
- * Escapa HTML para prevenir XSS.
- * Alias para sanitizeHTML do utils.js.
- */
-function escapeHtml(str) {
-    if (typeof sanitizeHTML === 'function') {
-        return sanitizeHTML(str);
+// escapeHtml() é fornecido por security.js (carregado antes).
+// Fallback caso security.js não esteja disponível.
+if (typeof escapeHtml !== 'function') {
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+        return String(str).replace(/[&<>"']/g, function(m) { return map[m]; });
     }
-
-    if (str === null || str === undefined) return '';
-
-    const div = document.createElement('div');
-    div.textContent = String(str);
-    return div.innerHTML;
+    window.escapeHtml = escapeHtml;
 }
 
 /**

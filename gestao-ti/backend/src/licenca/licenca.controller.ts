@@ -10,6 +10,7 @@ import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { CreateLicencaDto } from './dto/create-licenca.dto.js';
 import { UpdateLicencaDto } from './dto/update-licenca.dto.js';
 import { AtribuirUsuarioDto } from './dto/atribuir-usuario.dto.js';
+import { CreateCategoriaLicencaDto, UpdateCategoriaLicencaDto } from './dto/create-categoria-licenca.dto.js';
 import { StatusLicenca } from '@prisma/client';
 
 @Controller('licencas')
@@ -17,18 +18,49 @@ import { StatusLicenca } from '@prisma/client';
 export class LicencaController {
   constructor(private readonly service: LicencaService) {}
 
+  // ─── Categorias de Licenca ────────────────────────────────
+
+  @Get('categorias')
+  findAllCategorias(@Query('status') status?: string) {
+    return this.service.findAllCategorias(status);
+  }
+
+  @Post('categorias')
+  @Roles('ADMIN', 'GESTOR_TI')
+  createCategoria(@Body() dto: CreateCategoriaLicencaDto) {
+    return this.service.createCategoria(dto);
+  }
+
+  @Patch('categorias/:id')
+  @Roles('ADMIN', 'GESTOR_TI')
+  updateCategoria(@Param('id') id: string, @Body() dto: UpdateCategoriaLicencaDto) {
+    return this.service.updateCategoria(id, dto);
+  }
+
+  @Delete('categorias/:id')
+  @Roles('ADMIN', 'GESTOR_TI')
+  removeCategoria(@Param('id') id: string) {
+    return this.service.removeCategoria(id);
+  }
+
+  // ─── Licencas ───────────────────────────────────────────
+
   @Get()
   findAll(
     @GestaoTiRole() role: string,
     @Query('softwareId') softwareId?: string,
     @Query('status') status?: StatusLicenca,
     @Query('vencendoEm') vencendoEm?: string,
+    @Query('categoriaId') categoriaId?: string,
+    @Query('avulsas') avulsas?: string,
   ) {
     return this.service.findAll(
       {
         softwareId,
         status,
         vencendoEm: vencendoEm ? parseInt(vencendoEm) : undefined,
+        categoriaId,
+        avulsas: avulsas === 'true',
       },
       role,
     );

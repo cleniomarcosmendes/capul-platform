@@ -422,10 +422,21 @@ export interface LicencaUsuario {
   createdAt: string;
 }
 
+export interface CategoriaLicenca {
+  id: string;
+  codigo: string;
+  nome: string;
+  descricao?: string;
+  status: string;
+}
+
 export interface SoftwareLicenca {
   id: string;
-  softwareId: string;
-  software: { id: string; nome: string; fabricante: string | null; tipo: TipoSoftware | null };
+  softwareId: string | null;
+  software: { id: string; nome: string; fabricante: string | null; tipo: TipoSoftware | null } | null;
+  nome: string | null;
+  categoriaId: string | null;
+  categoria: { id: string; codigo: string; nome: string } | null;
   contratoId: string | null;
   contrato: { id: string; titulo: string; numero: number } | null;
   modeloLicenca: ModeloLicenca | null;

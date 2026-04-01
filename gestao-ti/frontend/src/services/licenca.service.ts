@@ -1,14 +1,18 @@
 import { gestaoApi } from './api';
-import type { SoftwareLicenca, LicencaUsuario, StatusLicenca } from '../types';
+import type { SoftwareLicenca, LicencaUsuario, StatusLicenca, CategoriaLicenca } from '../types';
 
 interface LicencaFilters {
   softwareId?: string;
   status?: StatusLicenca;
   vencendoEm?: number;
+  categoriaId?: string;
+  avulsas?: boolean;
 }
 
 interface CreateLicencaPayload {
-  softwareId: string;
+  softwareId?: string;
+  nome?: string;
+  categoriaId?: string;
   modeloLicenca?: string;
   quantidade?: number;
   valorTotal?: number;
@@ -26,6 +30,8 @@ export const licencaService = {
     if (filters.softwareId) params.softwareId = filters.softwareId;
     if (filters.status) params.status = filters.status;
     if (filters.vencendoEm) params.vencendoEm = String(filters.vencendoEm);
+    if (filters.categoriaId) params.categoriaId = filters.categoriaId;
+    if (filters.avulsas) params.avulsas = 'true';
     const { data } = await gestaoApi.get('/licencas', { params });
     return data;
   },
@@ -70,5 +76,25 @@ export const licencaService = {
   async desatribuirUsuario(licencaId: string, usuarioId: string): Promise<SoftwareLicenca> {
     const { data } = await gestaoApi.delete(`/licencas/${licencaId}/usuarios/${usuarioId}`);
     return data;
+  },
+
+  // ─── Categorias ────────────────────────────────
+  async listarCategorias(): Promise<CategoriaLicenca[]> {
+    const { data } = await gestaoApi.get('/licencas/categorias');
+    return data;
+  },
+
+  async criarCategoria(payload: { codigo: string; nome: string; descricao?: string }): Promise<CategoriaLicenca> {
+    const { data } = await gestaoApi.post('/licencas/categorias', payload);
+    return data;
+  },
+
+  async atualizarCategoria(id: string, payload: Record<string, unknown>): Promise<CategoriaLicenca> {
+    const { data } = await gestaoApi.patch(`/licencas/categorias/${id}`, payload);
+    return data;
+  },
+
+  async excluirCategoria(id: string): Promise<void> {
+    await gestaoApi.delete(`/licencas/categorias/${id}`);
   },
 };

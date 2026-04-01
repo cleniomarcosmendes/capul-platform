@@ -550,6 +550,7 @@
     <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- JS Consolidados v2.19.13 -->
+    <script src="/js/security.js"></script>
     <script src="/js/utils.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/ui.js"></script>
@@ -1203,8 +1204,12 @@
             modalElement.removeAttribute('aria-hidden');
 
             modal.show();
+
+            // Protecao contra perda de dados nao salvos
+            if (window._userFormGuard) window._userFormGuard.destroy();
+            window._userFormGuard = new UnsavedChangesGuard('userForm');
         }
-        
+
         function saveUser() {
             const form = document.getElementById('userForm');
             if (!form.checkValidity()) {
@@ -1635,16 +1640,19 @@
                 
                 if (response.ok && result.success) {
                     showAlert('success', '✅ Usuário criado com sucesso!');
-                    
+
+                    // Reset guard antes de fechar modal
+                    if (window._userFormGuard) window._userFormGuard.reset();
+
                     // Close modal (remove focus to avoid aria-hidden warning)
                     document.activeElement?.blur();
                     const modal = bootstrap.Modal.getInstance(document.getElementById('userModal'));
                     modal.hide();
-                    
+
                     // Reset form
                     document.getElementById('userForm').reset();
                     editingUserId = null;
-                    
+
                     // Reload user list from API
                     await loadLocalUsers(); // Recarregar lista de usuários
                     applyFilters(); // Aplicar filtros
@@ -1714,16 +1722,19 @@
                 
                 if (response.ok && result.success) {
                     showAlert('success', '✅ Usuário atualizado com sucesso!');
-                    
+
+                    // Reset guard antes de fechar modal
+                    if (window._userFormGuard) window._userFormGuard.reset();
+
                     // Close modal (remove focus to avoid aria-hidden warning)
                     document.activeElement?.blur();
                     const modal = bootstrap.Modal.getInstance(document.getElementById('userModal'));
                     modal.hide();
-                    
+
                     // Reset form
                     document.getElementById('userForm').reset();
                     editingUserId = null;
-                    
+
                     // Reload user list
                     await loadLocalUsers();
                     applyFilters();

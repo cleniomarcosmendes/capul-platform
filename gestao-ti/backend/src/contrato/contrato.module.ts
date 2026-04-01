@@ -6,6 +6,11 @@ import { extname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { ContratoController } from './contrato.controller';
 import { ContratoService } from './contrato.service';
+import { ContratoCoreService } from './services/contrato-core.service';
+import { ContratoParcelaService } from './services/contrato-parcela.service';
+import { ContratoRateioService } from './services/contrato-rateio.service';
+import { ContratoConfigService } from './services/contrato-config.service';
+import { ContratoAnexoService } from './services/contrato-anexo.service';
 
 const UPLOADS_DIR = './uploads/contratos';
 if (!existsSync(UPLOADS_DIR)) {
@@ -25,7 +30,14 @@ if (!existsSync(UPLOADS_DIR)) {
     }),
   ],
   controllers: [ContratoController],
-  providers: [ContratoService],
+  providers: [
+    ContratoCoreService,
+    ContratoParcelaService,
+    ContratoRateioService,
+    ContratoConfigService,
+    ContratoAnexoService,
+    ContratoService,
+  ],
   exports: [ContratoService],
 })
 export class ContratoModule {}

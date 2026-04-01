@@ -382,6 +382,13 @@
 
     <!-- Tabela de Resultados -->
     <div class="table-container" id="table-container">
+        <div class="mb-3" id="comparisonSearchContainer" style="display: none; padding: 0 1rem;">
+            <div style="position: relative; display: inline-block;">
+                <input type="text" id="comparisonSearchInput" placeholder="Buscar por codigo ou descricao..."
+                       class="form-control" style="width: 300px; padding-left: 35px;">
+                <i class="bi bi-search" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #6c757d;"></i>
+            </div>
+        </div>
         <!-- Tabela será inserida aqui via JavaScript -->
     </div>
 
@@ -408,6 +415,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <!-- JS Consolidados v2.19.13 -->
+    <script src="/js/security.js"></script>
     <script src="/js/utils.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/ui.js"></script>
@@ -562,6 +570,16 @@
         // Iniciar carregamento
         loadComparisonData();
 
+        // Filtro de busca na tabela de comparacao
+        document.getElementById('comparisonSearchInput')?.addEventListener('input', function() {
+            const term = this.value.toLowerCase();
+            const rows = document.querySelectorAll('#table-container table tbody tr');
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(term) ? '' : 'none';
+            });
+        });
+
         // ✅ v2.18.1: Função para forçar atualização de dados (ignorar cache)
         function forceReloadData() {
             console.log('🔄 Forçando atualização de dados...');
@@ -671,6 +689,10 @@
             if (type !== 'transfers' && type !== 'matches') {
                 renderSummaryCards(data, invA, invB);
             }
+
+            // Mostrar campo de busca
+            const searchContainer = document.getElementById('comparisonSearchContainer');
+            if (searchContainer) searchContainer.style.display = 'block';
 
             // Renderizar tabela
             renderTable(type, data, invA, invB);

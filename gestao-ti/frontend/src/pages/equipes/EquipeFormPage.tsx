@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { equipeService } from '../../services/equipe.service';
 import { Save, ArrowLeft } from 'lucide-react';
 
@@ -35,6 +36,8 @@ export function EquipeFormPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [dirty, setDirty] = useState(false);
+  const { ConfirmDialog } = useUnsavedChanges(dirty);
 
   useEffect(() => {
     if (isEdit) {
@@ -75,6 +78,7 @@ export function EquipeFormPage() {
       } else {
         await equipeService.criar(payload);
       }
+      setDirty(false);
       navigate('/gestao-ti/equipes');
     } catch (err: unknown) {
       const message =
@@ -100,8 +104,9 @@ export function EquipeFormPage() {
 
   return (
     <>
+      {ConfirmDialog}
       <Header title={isEdit ? 'Editar Equipe' : 'Nova Equipe'} />
-      <div className="p-6 max-w-2xl">
+      <div className="p-6 max-w-2xl" onChange={() => setDirty(true)}>
         <button
           onClick={() => navigate('/gestao-ti/equipes')}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-6"

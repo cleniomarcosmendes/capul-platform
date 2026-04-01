@@ -10,7 +10,7 @@ import { useToast } from '../../components/Toast';
 import {
   Plus, X, ArrowLeft, Play, Square, Ban, UserPlus, Link2, Unlink,
   Clock, CheckCircle, Users, FileText, Download, MessageSquare, Send,
-  Edit3, Check,
+  Edit3, Check, Search,
 } from 'lucide-react';
 import type { OrdemServico, StatusOS, UsuarioCore, Chamado, StatusChamado, FilialResumo } from '../../types';
 
@@ -47,6 +47,7 @@ export function OrdensServicoPage() {
   const [ordens, setOrdens] = useState<OrdemServico[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<StatusOS | ''>('');
+  const [busca, setBusca] = useState('');
 
   // Detail view
   const [osDetalhe, setOsDetalhe] = useState<OrdemServico | null>(null);
@@ -250,6 +251,12 @@ export function OrdensServicoPage() {
       return c.titulo.toLowerCase().includes(t) || String(c.numero).includes(t);
     }
     return true;
+  });
+
+  const ordensFiltradas = ordens.filter((o) => {
+    if (!busca.trim()) return true;
+    const termo = busca.toLowerCase();
+    return (o.titulo?.toLowerCase().includes(termo)) || (o.descricao?.toLowerCase().includes(termo));
   });
 
   // ============ DETAIL VIEW ============
@@ -649,11 +656,23 @@ export function OrdensServicoPage() {
       <Header title="Ordens de Servico" />
       <div className="p-6">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as StatusOS | '')}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-            <option value="">Todos os Status</option>
-            {Object.entries(statusLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
+          <div className="flex flex-wrap gap-3">
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Buscar por titulo ou descricao..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm bg-white w-64"
+              />
+            </div>
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as StatusOS | '')}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+              <option value="">Todos os Status</option>
+              {Object.entries(statusLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
 
           <div className="flex items-center gap-2">
             <button onClick={() => exportService.exportar('ordens-servico')}
@@ -726,7 +745,7 @@ export function OrdensServicoPage() {
 
         {loading ? (
           <p className="text-slate-500">Carregando...</p>
-        ) : ordens.length === 0 ? (
+        ) : ordensFiltradas.length === 0 ? (
           <div className="text-center py-12 text-slate-400">Nenhuma ordem de servico encontrada</div>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -745,7 +764,7 @@ export function OrdensServicoPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {ordens.map((os) => (
+                {ordensFiltradas.map((os) => (
                   <tr key={os.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => openDetalhe(os)}>
                     <td className="px-4 py-3 text-slate-500 font-mono">#{os.numero}</td>
                     <td className="px-4 py-3 text-slate-500 text-xs font-medium">{os.filial?.codigo || '—'}</td>

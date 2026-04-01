@@ -815,6 +815,7 @@
     <!-- Bootstrap Bundle JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- JS Consolidados v2.19.13 -->
+    <script src="/js/security.js"></script>
     <script src="/js/utils.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/ui.js"></script>
@@ -987,6 +988,9 @@
         // ⭐ Inicialização ao carregar página
         document.addEventListener('DOMContentLoaded', async function() {
             console.log('📱 [MOBILE] Página de contagem mobile carregada');
+
+            // Protecao contra perda de dados nao salvos (contagem mobile)
+            window._countingMobileGuard = new UnsavedChangesGuard(document.body);
 
             // Recuperar parâmetros da URL
             const urlParams = new URLSearchParams(window.location.search);
@@ -1734,6 +1738,9 @@
 
                 const result = await response.json();
                 console.log(`✅ [SAVE] Contagem salva com sucesso:`, result);
+
+                // Reset guard — contagem salva
+                if (window._countingMobileGuard) window._countingMobileGuard.reset();
 
                 // Atualizar produto localmente
                 const fieldName = `count_${currentCycle}`;

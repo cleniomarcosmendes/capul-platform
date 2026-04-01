@@ -1509,6 +1509,7 @@
     <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
     <!-- JS Consolidados v2.19.13 -->
+    <script src="/js/security.js"></script>
     <script src="/js/utils.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/ui.js"></script>
@@ -1754,6 +1755,10 @@
             if (!checkAccess()) {
                 return;  // Se não tem acesso, para execução
             }
+
+            // Protecao contra perda de dados nao salvos (contagem)
+            // Usa document.body como container — inputs sao gerados dinamicamente
+            window._countingGuard = new UnsavedChangesGuard(document.body);
 
             // 🏢 CARREGAR INFORMAÇÕES DA FILIAL NO HEADER
             loadCurrentStoreInfo();
@@ -3886,6 +3891,9 @@
                 const result = await response.json();
                 console.log('✅ Contagem salva com sucesso:', result);
 
+                // Reset guard — contagem salva
+                if (window._countingGuard) window._countingGuard.reset();
+
                 // ✅ Mostrar mensagem de sucesso padronizada
                 showAlert(`✅ Produto ${product.code}: ${quantity} unidades salvas!`, 'success');
 
@@ -5332,9 +5340,12 @@
                 }
                 
                 showAlert(`${lotsToSave.length} lote(s) contado(s) com sucesso!`, 'success');
-                
+
+                // Reset guard — lotes salvos
+                if (window._countingGuard) window._countingGuard.reset();
+
                 // ✅ NÃO LIMPAR DADOS - Permitir revisões futuras
-                
+
                 // ✅ NÃO limpar lotCountData - manter para revisões
                 // ✅ NÃO limpar currentLotProduct - manter contexto
 

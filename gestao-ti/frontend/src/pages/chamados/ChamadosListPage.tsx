@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { chamadoService } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
-import { Plus, Eye, Download, Star } from 'lucide-react';
+import { Plus, Eye, Download, Star, Search } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import type { Chamado, EquipeTI, Departamento, StatusChamado, Visibilidade, UsuarioCore } from '../../types';
 
@@ -51,16 +51,32 @@ export function ChamadosListPage() {
   const [filiais, setFiliais] = useState<FilialOption[]>([]);
   const [tecnicos, setTecnicos] = useState<UsuarioCore[]>([]);
   const [loading, setLoading] = useState(true);
+  const [defaultsApplied, setDefaultsApplied] = useState(false);
+  const isStaffTI = gestaoTiRole && ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'TECNICO', 'DESENVOLVEDOR', 'INFRAESTRUTURA', 'MANUTENCAO'].includes(gestaoTiRole);
   const [filterStatus, setFilterStatus] = useState<StatusChamado | ''>('');
   const [filterEquipe, setFilterEquipe] = useState('');
   const [filterVisibilidade, setFilterVisibilidade] = useState<Visibilidade | ''>('');
-  const [meusChamados, setMeusChamados] = useState(gestaoTiRole !== 'USUARIO_FINAL');
+  const [meusChamados, setMeusChamados] = useState(false);
+
+  // Aplicar defaults de filtro quando o role estiver disponivel
+  useEffect(() => {
+    if (gestaoTiRole && !defaultsApplied) {
+      if (isStaffTI) {
+        setFilterStatus('ATIVOS' as StatusChamado | '');
+        setMeusChamados(false);
+      } else if (gestaoTiRole !== 'USUARIO_FINAL') {
+        setMeusChamados(true);
+      }
+      setDefaultsApplied(true);
+    }
+  }, [gestaoTiRole, isStaffTI, defaultsApplied]);
   const [filterFilial, setFilterFilial] = useState<string>('');
   const [filterDepartamento, setFilterDepartamento] = useState('');
   const [filterTecnico, setFilterTecnico] = useState('');
   const [filterDataInicio, setFilterDataInicio] = useState('');
   const [filterDataFim, setFilterDataFim] = useState('');
   const [pendentesAvaliacao, setPendentesAvaliacao] = useState(searchParams.get('pendentes') === '1');
+  const [busca, setBusca] = useState('');
 
   const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
 
@@ -86,6 +102,7 @@ export function ChamadosListPage() {
   }, [gestaoTiRole, usuario]);
 
   const carregarChamados = useCallback((silent = false) => {
+    if (!usuario) return; // Aguardar auth estar pronto
     if (!silent) setLoading(true);
     if (pendentesAvaliacao) {
       chamadoService
@@ -125,6 +142,12 @@ export function ChamadosListPage() {
     return () => clearInterval(poll);
   }, []);
 
+  const chamadosFiltrados = chamados.filter((c) => {
+    if (!busca.trim()) return true;
+    const termo = busca.toLowerCase();
+    return (c.titulo?.toLowerCase().includes(termo)) || (c.descricao?.toLowerCase().includes(termo));
+  });
+
   return (
     <>
       <Header title="Chamados" />
@@ -157,12 +180,12 @@ export function ChamadosListPage() {
         )}
 
         {/* Banner de pendentes */}
-        {pendentesAvaliacao && !loading && chamados.length > 0 && (
+        {pendentesAvaliacao && !loading && chamadosFiltrados.length > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4 flex items-center gap-3">
             <Star className="w-5 h-5 text-amber-500 flex-shrink-0" />
             <div>
               <p className="text-sm font-medium text-amber-800">
-                Voce tem {chamados.length} chamado(s) pendente(s) de avaliacao
+                Voce tem {chamadosFiltrados.length} chamado(s) pendente(s) de avaliacao
               </p>
               <p className="text-xs text-amber-600 mt-0.5">
                 Sua avaliacao ajuda a melhorar nosso atendimento!
@@ -175,6 +198,16 @@ export function ChamadosListPage() {
         {!pendentesAvaliacao && (
           <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
             <div className="flex flex-wrap gap-3">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Buscar por titulo ou descricao..."
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  className="border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm bg-white w-64"
+                />
+              </div>
               <select
                 value={filterFilial}
                 onChange={(e) => setFilterFilial(e.target.value)}
@@ -192,6 +225,7 @@ export function ChamadosListPage() {
                 className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
               >
                 <option value="">Todos os Status</option>
+                <option value="ATIVOS">Ativos (Aberto, Em Atendimento, Pendente, Reaberto)</option>
                 {Object.entries(statusLabels).map(([k, v]) => (
                   <option key={k} value={k}>{v}</option>
                 ))}
@@ -319,7 +353,7 @@ export function ChamadosListPage() {
 
         {loading ? (
           <p className="text-slate-500">Carregando...</p>
-        ) : chamados.length === 0 ? (
+        ) : chamadosFiltrados.length === 0 ? (
           <div className="text-center py-12 text-slate-400">
             {pendentesAvaliacao
               ? 'Nenhum chamado pendente de avaliacao. Tudo em dia!'
@@ -344,7 +378,7 @@ export function ChamadosListPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {chamados.map((c) => (
+                {chamadosFiltrados.map((c) => (
                   <tr key={c.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 text-slate-500 font-mono">#{c.numero}</td>
                     <td className="px-4 py-3 text-slate-500 text-xs font-medium">{c.filial?.codigo || '—'}</td>

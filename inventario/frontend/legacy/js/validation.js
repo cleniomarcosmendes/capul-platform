@@ -167,19 +167,19 @@ const ValidationSystem = {
                 <h5 class="alert-heading">
                     <i class="fas fa-exclamation-triangle"></i> Dessincronização Detectada!
                 </h5>
-                <p class="mb-2"><strong>${result.message}</strong></p>
+                <p class="mb-2"><strong>${typeof escapeHtml === 'function' ? escapeHtml(result.message) : result.message}</strong></p>
                 <hr>
                 <div class="small">
-                    <p class="mb-1"><strong>Backend:</strong> ${result.backendTotal} produtos</p>
-                    <p class="mb-1"><strong>Frontend:</strong> ${result.frontendTotal} produtos</p>
+                    <p class="mb-1"><strong>Backend:</strong> ${Number(result.backendTotal)} produtos</p>
+                    <p class="mb-1"><strong>Frontend:</strong> ${Number(result.frontendTotal)} produtos</p>
                     ${result.missing.length > 0 ? `
                         <p class="mb-1 text-danger">
-                            <strong>Faltando:</strong> ${result.missing.join(', ')}
+                            <strong>Faltando:</strong> ${typeof escapeHtml === 'function' ? result.missing.map(escapeHtml).join(', ') : result.missing.join(', ')}
                         </p>
                     ` : ''}
                     ${result.extra.length > 0 ? `
                         <p class="mb-1 text-warning">
-                            <strong>Extras:</strong> ${result.extra.join(', ')}
+                            <strong>Extras:</strong> ${typeof escapeHtml === 'function' ? result.extra.map(escapeHtml).join(', ') : result.extra.join(', ')}
                         </p>
                     ` : ''}
                 </div>

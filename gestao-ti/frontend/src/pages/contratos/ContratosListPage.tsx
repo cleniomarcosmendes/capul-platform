@@ -65,6 +65,7 @@ export function ContratosListPage() {
     const s = search.toLowerCase();
     return (
       c.titulo.toLowerCase().includes(s) ||
+      (c.descricao?.toLowerCase().includes(s)) ||
       c.fornecedor.toLowerCase().includes(s) ||
       String(c.numero).includes(s) ||
       (c.numeroContrato && c.numeroContrato.toLowerCase().includes(s)) ||
@@ -119,7 +120,7 @@ export function ContratosListPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por titulo, fornecedor, numero..."
+              placeholder="Buscar por titulo, descricao ou fornecedor..."
               className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm"
             />
           </div>

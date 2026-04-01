@@ -129,13 +129,17 @@ class UserBase(BaseSchema):
 
 class UserCreate(UserBase):
     """Schema para criar usuário"""
-    password: str = Field(..., min_length=6, max_length=50)
-    
+    password: str = Field(..., min_length=8, max_length=50)
+
     @validator('password')
     def validate_password(cls, v):
         """Validar força da senha"""
-        if len(v) < 6:
-            raise ValueError('Password must be at least 6 characters long')
+        if len(v) < 8:
+            raise ValueError('Senha deve ter pelo menos 8 caracteres')
+        if not any(c.isupper() for c in v):
+            raise ValueError('Senha deve conter pelo menos uma letra maiuscula')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('Senha deve conter pelo menos um numero')
         return v
 
 

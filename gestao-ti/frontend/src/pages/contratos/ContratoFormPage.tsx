@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { contratoService } from '../../services/contrato.service';
 import { softwareService } from '../../services/software.service';
 import { equipeService } from '../../services/equipe.service';
@@ -26,6 +27,8 @@ export function ContratoFormPage() {
   const [saving, setSaving] = useState(false);
   const [loadingData, setLoadingData] = useState(isEdit);
   const [error, setError] = useState('');
+  const [dirty, setDirty] = useState(false);
+  const { ConfirmDialog } = useUnsavedChanges(dirty);
 
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
@@ -135,9 +138,11 @@ export function ContratoFormPage() {
     try {
       if (isEdit && id) {
         await contratoService.atualizar(id, payload);
+        setDirty(false);
         navigate(`/gestao-ti/contratos/${id}`);
       } else {
         const contrato = await contratoService.criar(payload);
+        setDirty(false);
         navigate(`/gestao-ti/contratos/${contrato.id}`);
       }
     } catch (err: unknown) {
@@ -152,8 +157,9 @@ export function ContratoFormPage() {
 
   return (
     <>
+      {ConfirmDialog}
       <Header title={isEdit ? 'Editar Contrato' : 'Novo Contrato'} />
-      <div className="p-6 max-w-3xl">
+      <div className="p-6 max-w-3xl" onChange={() => setDirty(true)}>
         <button
           onClick={() => navigate(isEdit ? `/gestao-ti/contratos/${id}` : '/gestao-ti/contratos')}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-6"

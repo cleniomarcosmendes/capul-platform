@@ -311,7 +311,7 @@ function printElement(elementId, options = {}) {
         <!DOCTYPE html>
         <html>
         <head>
-            <title>${title}</title>
+            <title>${typeof escapeHtml === 'function' ? escapeHtml(title) : title}</title>
             <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
             <style>
                 body { padding: 20px; }
@@ -356,7 +356,7 @@ function printTable(tableId, title = 'Relatório') {
         <!DOCTYPE html>
         <html>
         <head>
-            <title>${title}</title>
+            <title>${typeof escapeHtml === 'function' ? escapeHtml(title) : title}</title>
             <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
             <style>
                 body { padding: 20px; }
@@ -370,7 +370,7 @@ function printTable(tableId, title = 'Relatório') {
             </style>
         </head>
         <body>
-            <h1>${title}</h1>
+            <h1>${typeof escapeHtml === 'function' ? escapeHtml(title) : title}</h1>
             <p>Data: ${new Date().toLocaleString('pt-BR')}</p>
             ${table.outerHTML}
         </body>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { paradaService } from '../../services/parada.service';
 import { softwareService } from '../../services/software.service';
 import { coreApi } from '../../services/api';
@@ -36,6 +37,8 @@ export function ParadaFormPage() {
   const [saving, setSaving] = useState(false);
   const [loadingData, setLoadingData] = useState(isEdit);
   const [error, setError] = useState('');
+  const [dirty, setDirty] = useState(false);
+  const { ConfirmDialog } = useUnsavedChanges(dirty);
 
   const [titulo, setTitulo] = useState('');
   const [tipo, setTipo] = useState<TipoParada>('PARADA_NAO_PROGRAMADA');
@@ -104,7 +107,6 @@ export function ParadaFormPage() {
         tipo,
         impacto,
         inicio: new Date(inicio).toISOString(),
-        fim: fim ? new Date(fim).toISOString() : undefined,
         softwareId,
         softwareModuloId: softwareModuloId || undefined,
         motivoParadaId: motivoParadaId || undefined,
@@ -116,8 +118,11 @@ export function ParadaFormPage() {
       if (isEdit && id) {
         await paradaService.atualizar(id, payload);
       } else {
-        await paradaService.criar(payload);
+        // Campo fim so entra na criacao (se preenchido)
+        const createPayload = { ...payload, fim: fim ? new Date(fim).toISOString() : undefined };
+        await paradaService.criar(createPayload);
       }
+      setDirty(false);
       navigate('/gestao-ti/paradas');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -137,8 +142,9 @@ export function ParadaFormPage() {
 
   return (
     <>
+      {ConfirmDialog}
       <Header title={isEdit ? 'Editar Parada' : 'Nova Parada'} />
-      <div className="p-6 max-w-3xl">
+      <div className="p-6 max-w-3xl" onChange={() => setDirty(true)}>
         <button
           onClick={() => navigate(-1)}
           className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 mb-4"
@@ -199,17 +205,19 @@ export function ParadaFormPage() {
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Fim</label>
-              <input
-                type="datetime-local"
-                value={fim}
-                min={inicio || undefined}
-                onChange={(e) => setFim(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-              />
-              <p className="text-xs text-slate-400 mt-1">Se informado, a parada sera criada como finalizada</p>
-            </div>
+            {!isEdit && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Fim</label>
+                <input
+                  type="datetime-local"
+                  value={fim}
+                  min={inicio || undefined}
+                  onChange={(e) => setFim(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                />
+                <p className="text-xs text-slate-400 mt-1">Se informado, a parada sera criada como finalizada</p>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

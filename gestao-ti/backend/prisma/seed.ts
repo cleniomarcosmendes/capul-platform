@@ -272,7 +272,26 @@ async function main() {
     create: { codigo: 'C01', nome: 'Licenciamento' },
   });
 
-  console.log('Cadastros: 2 naturezas + 2 tipos contrato');
+  // ── 10b. Categorias de Licenca ───────────────────────────────────────
+
+  const categoriasLicenca = [
+    { codigo: 'CERT_DIGITAL', nome: 'Certificado Digital', descricao: 'Certificados digitais e-CPF, e-CNPJ, etc.' },
+    { codigo: 'DOMINIO', nome: 'Dominio', descricao: 'Registro de dominios de internet' },
+    { codigo: 'SSL_TLS', nome: 'SSL/TLS', descricao: 'Certificados SSL/TLS para websites' },
+    { codigo: 'CLOUD', nome: 'Servico Cloud', descricao: 'Servicos de nuvem (AWS, Azure, GCP)' },
+    { codigo: 'ASSINATURA', nome: 'Assinatura Eletronica', descricao: 'Servicos de assinatura eletronica/digital' },
+    { codigo: 'OUTRO', nome: 'Outro', descricao: 'Outras categorias' },
+  ];
+
+  for (const cat of categoriasLicenca) {
+    await prisma.categoriaLicenca.upsert({
+      where: { codigo: cat.codigo },
+      update: {},
+      create: cat,
+    });
+  }
+
+  console.log('Cadastros: 2 naturezas + 2 tipos contrato + 6 categorias licenca');
 
   // ── 11. Contratos + Parcelas ────────────────────────────────────────
 

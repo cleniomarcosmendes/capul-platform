@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { ativoService } from '../../services/ativo.service';
 import { coreService } from '../../services/core.service';
 import { coreApi } from '../../services/api';
@@ -32,6 +33,8 @@ export function AtivoFormPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [erro, setErro] = useState('');
+  const [dirty, setDirty] = useState(false);
+  const { ConfirmDialog } = useUnsavedChanges(dirty);
 
   const [form, setForm] = useState({
     tag: '',
@@ -131,9 +134,11 @@ export function AtivoFormPage() {
     try {
       if (isEdit) {
         await ativoService.atualizar(id, payload);
+        setDirty(false);
         navigate(`/gestao-ti/ativos/${id}`);
       } else {
         const created = await ativoService.criar(payload);
+        setDirty(false);
         navigate(`/gestao-ti/ativos/${created.id}`);
       }
     } catch (err: unknown) {
@@ -148,8 +153,9 @@ export function AtivoFormPage() {
 
   return (
     <>
+      {ConfirmDialog}
       <Header title={isEdit ? 'Editar Ativo' : 'Novo Ativo'} />
-      <div className="p-6 max-w-4xl">
+      <div className="p-6 max-w-4xl" onChange={() => setDirty(true)}>
         <button onClick={() => navigate(isEdit ? `/gestao-ti/ativos/${id}` : '/gestao-ti/ativos')} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4">
           <ArrowLeft className="w-4 h-4" /> Voltar
         </button>

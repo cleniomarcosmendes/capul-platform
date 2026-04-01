@@ -566,6 +566,21 @@ enum StatusLicenca {
   @@schema("gestao_ti")
 }
 
+model CategoriaLicenca {
+  id        String      @id @default(uuid())
+  codigo    String      @unique
+  nome      String
+  descricao String?
+  status    StatusGeral @default(ATIVO)
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  licencas SoftwareLicenca[]
+
+  @@map("categorias_licenca")
+  @@schema("gestao_ti")
+}
+
 // ============================================================
 // MODELOS DO GESTAO_TI — Fase 3 (Contratos)
 // ============================================================
@@ -991,11 +1006,15 @@ model SoftwareLicenca {
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
 
-  softwareId String   @map("software_id")
-  software   Software @relation(fields: [softwareId], references: [id])
+  softwareId String?   @map("software_id")
+  software   Software? @relation(fields: [softwareId], references: [id])
 
   contratoId String?   @map("contrato_id")
   contrato   Contrato? @relation(fields: [contratoId], references: [id])
+
+  nome          String?
+  categoriaId   String?    @map("categoria_id")
+  categoria     CategoriaLicenca? @relation(fields: [categoriaId], references: [id])
 
   usuarios LicencaUsuario[]
 

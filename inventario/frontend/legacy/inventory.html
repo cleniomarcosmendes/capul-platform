@@ -1174,6 +1174,7 @@
     <!-- Select2 JS (dropdowns pesquisáveis) -->
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <!-- JS Consolidados v2.19.13 -->
+    <script src="/js/security.js"></script>
     <script src="/js/utils.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/ui.js"></script>
@@ -2612,6 +2613,9 @@
                 }
 
                 const result = await response.json();
+
+                // Reset guard antes de fechar modal
+                if (window._inventoryFormGuard) window._inventoryFormGuard.reset();
 
                 const modal = bootstrap.Modal.getInstance(document.getElementById('inventoryModal'));
                 modal.hide();
@@ -22638,6 +22642,10 @@
                 loadWarehouses();
 
                 modal.show();
+
+                // Protecao contra perda de dados nao salvos
+                if (window._inventoryFormGuard) window._inventoryFormGuard.destroy();
+                window._inventoryFormGuard = new UnsavedChangesGuard('inventoryForm');
 
                 // ✅ Focar automaticamente no campo nome após modal abrir
                 setTimeout(() => {

@@ -3,7 +3,10 @@
 Configurações do Sistema de Inventário Protheus
 """
 import os
+import logging
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 class Settings:
     """Configurações da aplicação"""
@@ -12,7 +15,7 @@ class Settings:
     APP_NAME: str = "Sistema de Inventário Protheus"
     APP_VERSION: str = "1.0.0"
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
-    DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"
+    DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
     
     # Servidor
     HOST: str = os.getenv("HOST", "0.0.0.0")
@@ -41,7 +44,7 @@ class Settings:
         return "inventario_protheus"
     
     # Seguranca — JWT_SECRET da plataforma tem prioridade sobre SECRET_KEY local
-    SECRET_KEY: str = os.getenv("JWT_SECRET", os.getenv("SECRET_KEY", "your-secret-key-change-in-production-256-bits"))
+    SECRET_KEY: str = os.getenv("JWT_SECRET", os.getenv("SECRET_KEY", ""))
     # ✅ v2.19.8: Aumentado de 60 para 480 minutos (8 horas) para evitar expiração durante uso
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 480))
     ALGORITHM: str = "HS256"
@@ -73,7 +76,16 @@ class Settings:
         if self.ENVIRONMENT == "production":
             return ["https://localhost:8443"]
         # Em desenvolvimento, permitir localhost e IPs de rede local
-        return ["*"]  # Permite todas as origens em desenvolvimento (necessário para acesso mobile via IP)
+        return [
+            "http://localhost:3000",
+            "http://localhost:8000",
+            "http://localhost:8443",
+            "https://localhost:8443",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:8000",
+            "http://127.0.0.1:8443",
+            "https://127.0.0.1:8443",
+        ]
     
     # Logs
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
@@ -106,13 +118,15 @@ def validate_settings():
     default_secret_keys = [
         "your-secret-key-change-in-production-256-bits",
         "your-secret-key-here-should-be-very-secure",
-        "gerar-chave-256-bits-aqui-usando-openssl-rand-hex-32"
+        "gerar-chave-256-bits-aqui-usando-openssl-rand-hex-32",
+        "dev-only-secret-key-not-for-production"
     ]
     if not settings.SECRET_KEY or settings.SECRET_KEY in default_secret_keys:
         if settings.ENVIRONMENT == "production":
-            errors.append("SECRET_KEY deve ser uma chave segura em produção (use: openssl rand -hex 32)")
+            raise RuntimeError("CRITICAL: JWT_SECRET or SECRET_KEY must be set in production!")
         else:
-            warnings.append("SECRET_KEY usando valor padrão - altere em produção!")
+            settings.SECRET_KEY = "dev-only-secret-key-not-for-production"
+            logger.warning("Using default dev JWT secret - NOT SAFE FOR PRODUCTION")
 
     # Validar DATABASE_URL
     if not settings.DATABASE_URL:

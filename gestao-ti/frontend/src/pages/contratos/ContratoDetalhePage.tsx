@@ -1421,7 +1421,7 @@ function TabLicencas({ contrato, canManage, onReload, toast, confirm }: TabProps
               <option value="">Selecione...</option>
               {disponiveis.map((l) => (
                 <option key={l.id} value={l.id}>
-                  {l.software.nome} - {l.modeloLicenca || 'S/M'} ({fmtCurrency(l.valorTotal)})
+                  {l.software?.nome || l.nome || 'Licenca'} - {l.modeloLicenca || 'S/M'} ({fmtCurrency(l.valorTotal)})
                 </option>
               ))}
             </select>
@@ -1448,7 +1448,7 @@ function TabLicencas({ contrato, canManage, onReload, toast, confirm }: TabProps
           <tbody className="divide-y divide-slate-100">
             {licencas.map((l) => (
               <tr key={l.id} className="hover:bg-slate-50">
-                <td className="px-4 py-2.5"><a href={`/gestao-ti/softwares/${l.software.id}`} target="_blank" rel="noopener noreferrer" className="text-capul-600 hover:underline">{l.software.nome}</a></td>
+                <td className="px-4 py-2.5">{l.software ? <a href={`/gestao-ti/softwares/${l.software.id}`} target="_blank" rel="noopener noreferrer" className="text-capul-600 hover:underline">{l.software.nome}</a> : <span className="text-slate-700">{l.nome || 'Licenca avulsa'}</span>}</td>
                 <td className="px-4 py-2.5 text-slate-600">{l.modeloLicenca || '-'}</td>
                 <td className="px-4 py-2.5 text-right text-slate-700">{fmtCurrency(l.valorTotal)}</td>
                 <td className="px-4 py-2.5 text-slate-600">{fmtDate(l.dataVencimento)}</td>

@@ -11,6 +11,7 @@ from sqlalchemy import text
 from typing import Dict, Any, List
 import httpx
 import logging
+import os
 from datetime import datetime
 import base64
 import json
@@ -20,6 +21,9 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.models import User
 from app.core.protheus_config import get_protheus_config
+
+# Controle de verificacao SSL via variavel de ambiente
+SSL_VERIFY = os.getenv("SSL_VERIFY", "true").lower() != "false"
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -106,7 +110,7 @@ async def import_produtos_protheus(
 
         # ✅ v2.19.55: Processar armazéns EM PARALELO (asyncio.gather)
         import asyncio
-        async with httpx.AsyncClient(verify=False, timeout=float(_PROTHEUS_TIMEOUT)) as client:
+        async with httpx.AsyncClient(verify=SSL_VERIFY, timeout=float(_PROTHEUS_TIMEOUT)) as client:
             tasks = [_fetch_armazem(client, arm, idx) for idx, arm in enumerate(armazem, 1)]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 

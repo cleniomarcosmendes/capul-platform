@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { projetoService } from '../../services/projeto.service';
 import { chamadoService } from '../../services/chamado.service';
 import { softwareService } from '../../services/software.service';
@@ -29,9 +30,12 @@ export function ProjetoFormPage() {
   const [saving, setSaving] = useState(false);
   const [loadingData, setLoadingData] = useState(isEdit);
   const [error, setError] = useState('');
+  const [dirty, setDirty] = useState(false);
+  const { ConfirmDialog } = useUnsavedChanges(dirty);
 
   const chamadoId = searchParams.get('chamadoId') || '';
   const chamadoNumero = searchParams.get('chamadoNumero') || '';
+  const solicitanteId = searchParams.get('solicitanteId') || '';
 
   const [nome, setNome] = useState(searchParams.get('nome') || '');
   const [descricao, setDescricao] = useState(searchParams.get('descricao') || '');
@@ -103,9 +107,17 @@ export function ProjetoFormPage() {
         // Vincular chamado ao projeto se veio de um chamado
         if (chamadoId && novoProjeto?.id) {
           await chamadoService.vincularProjeto(chamadoId, novoProjeto.id).catch(() => {});
+          // Se o solicitante do chamado existe, adiciona-lo como usuario-chave do projeto
+          if (solicitanteId && solicitanteId !== responsavelId) {
+            await projetoService.adicionarUsuarioChave(novoProjeto.id, {
+              usuarioId: solicitanteId,
+              funcao: 'Solicitante do chamado',
+            }).catch(() => {});
+          }
         }
       }
       // Se veio de um chamado, voltar para o chamado
+      setDirty(false);
       if (chamadoId) {
         navigate(`/gestao-ti/chamados/${chamadoId}`);
       } else {
@@ -130,8 +142,9 @@ export function ProjetoFormPage() {
 
   return (
     <>
+      {ConfirmDialog}
       <Header title={isEdit ? 'Editar Projeto' : 'Novo Projeto'} />
-      <div className="p-6">
+      <div className="p-6" onChange={() => setDirty(true)}>
         <button
           onClick={() => navigate(-1)}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4"

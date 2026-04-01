@@ -29,6 +29,9 @@ from app.core.security import get_current_user
 from app.core.exceptions import safe_error_response
 from app.core.protheus_config import get_protheus_config
 
+# Controle de verificacao SSL via variavel de ambiente
+SSL_VERIFY = os.getenv("SSL_VERIFY", "true").lower() != "false"
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -113,7 +116,7 @@ async def call_protheus(operacao: str, payload: dict, method: str = "POST") -> d
     for attempt in range(max_attempts):
         try:
             async with httpx.AsyncClient(
-                verify=False,
+                verify=SSL_VERIFY,
                 timeout=timeout
             ) as client:
                 response = await client.request(

@@ -2,9 +2,18 @@ import { IsString, IsNotEmpty, IsOptional, IsEnum, IsInt, IsNumber, Min, IsDateS
 import { ModeloLicenca } from '@prisma/client';
 
 export class CreateLicencaDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Software e obrigatorio' })
-  softwareId: string;
+  softwareId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  nome?: string;
+
+  @IsOptional()
+  @IsString()
+  categoriaId?: string;
 
   @IsOptional()
   @IsEnum(ModeloLicenca)

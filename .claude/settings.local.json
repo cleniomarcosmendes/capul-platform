@@ -1141,7 +1141,13 @@
       "Bash(sed -n '1820,1825p' /mnt/c/meus_projetos/capul-platform/gestao-ti/backend/src/projeto/projeto.service.ts)",
       "Bash(sed -n '2220,2228p' /mnt/c/meus_projetos/capul-platform/gestao-ti/backend/src/projeto/projeto.service.ts)",
       "Bash(sed -n '2283,2290p' /mnt/c/meus_projetos/capul-platform/gestao-ti/backend/src/projeto/projeto.service.ts)",
-      "Bash(sort -k2 -rn)"
+      "Bash(sort -k2 -rn)",
+      "Bash(2)",
+      "Bash(python3 -c \"import sys,json; [print\\(json.loads\\(l\\).get\\(''''message'''',{}\\).get\\(''''content'''',[{}]\\)[-1].get\\(''''text'''',''''''''\\)[:200]\\) for l in sys.stdin if ''''stop_reason'''' in l]\")",
+      "Bash(wc -l /mnt/c/meus_projetos/capul-platform/inventario/backend/app/api/v1/endpoints/*.py)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//mnt/c/meus_projetos/capul-platform/**)"
     ]
   }
 }

@@ -40,6 +40,7 @@ export function ProjetosListPage() {
   const [softwares, setSoftwares] = useState<Software[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [busca, setBusca] = useState('');
   const [filtroTipo, setFiltroTipo] = useState<TipoProjeto | ''>('');
   const [filtroStatus, setFiltroStatus] = useState<string>('EM_ANDAMENTO,PLANEJAMENTO');
   const [filtroSoftware, setFiltroSoftware] = useState('');
@@ -85,12 +86,18 @@ export function ProjetosListPage() {
     loadData();
   }
 
-  const totalAtivos = projetos.filter((p) =>
+  const projetosFiltrados = projetos.filter((p) => {
+    if (!busca.trim()) return true;
+    const termo = busca.toLowerCase();
+    return (p.nome?.toLowerCase().includes(termo)) || (p.descricao?.toLowerCase().includes(termo));
+  });
+
+  const totalAtivos = projetosFiltrados.filter((p) =>
     ['PLANEJAMENTO', 'EM_ANDAMENTO', 'PAUSADO'].includes(p.status),
   ).length;
-  const emAndamento = projetos.filter((p) => p.status === 'EM_ANDAMENTO').length;
-  const planejamento = projetos.filter((p) => p.status === 'PLANEJAMENTO').length;
-  const concluidos = projetos.filter((p) => p.status === 'CONCLUIDO').length;
+  const emAndamento = projetosFiltrados.filter((p) => p.status === 'EM_ANDAMENTO').length;
+  const planejamento = projetosFiltrados.filter((p) => p.status === 'PLANEJAMENTO').length;
+  const concluidos = projetosFiltrados.filter((p) => p.status === 'CONCLUIDO').length;
 
   return (
     <>
@@ -140,6 +147,16 @@ export function ProjetosListPage() {
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 flex flex-wrap gap-3 items-end">
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Buscar por nome ou descricao..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              className="border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm bg-white w-64"
+            />
+          </div>
           <form onSubmit={handleSearch} className="flex gap-2">
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -190,7 +207,7 @@ export function ProjetosListPage() {
 
         {loading ? (
           <p className="text-slate-500">Carregando...</p>
-        ) : projetos.length === 0 ? (
+        ) : projetosFiltrados.length === 0 ? (
           <p className="text-slate-500">Nenhum projeto encontrado</p>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -209,7 +226,7 @@ export function ProjetosListPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {projetos.map((p) => (
+                  {projetosFiltrados.map((p) => (
                     <tr key={p.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3 text-slate-500">{p.numero}</td>
                       <td className="px-4 py-3">

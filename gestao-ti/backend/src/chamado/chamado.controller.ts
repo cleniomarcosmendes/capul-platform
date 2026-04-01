@@ -52,7 +52,7 @@ export class ChamadoController {
   findAll(
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
-    @Query('status') status?: StatusChamado,
+    @Query('status') status?: string,
     @Query('equipeId') equipeId?: string,
     @Query('visibilidade') visibilidade?: Visibilidade,
     @Query('meusChamados') meusChamados?: string,

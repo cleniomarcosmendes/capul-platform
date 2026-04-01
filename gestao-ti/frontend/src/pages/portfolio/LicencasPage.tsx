@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { licencaService } from '../../services/licenca.service';
 import { softwareService } from '../../services/software.service';
-import { KeyRound, AlertTriangle, Download } from 'lucide-react';
+import { KeyRound, AlertTriangle, Download, Plus, X, Search } from 'lucide-react';
 import { exportService } from '../../services/export.service';
-import type { SoftwareLicenca, Software, StatusLicenca } from '../../types';
+import type { SoftwareLicenca, Software, StatusLicenca, CategoriaLicenca } from '../../types';
+
 import { formatDateBR } from '../../utils/date';
 
 const modeloLabel: Record<string, string> = {
@@ -36,29 +37,56 @@ export function LicencasPage() {
   const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
 
   const [licencas, setLicencas] = useState<SoftwareLicenca[]>([]);
+  const [categorias, setCategorias] = useState<CategoriaLicenca[]>([]);
   const [softwares, setSoftwares] = useState<Software[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
 
+  const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState<StatusLicenca | ''>('');
   const [filtroSoftware, setFiltroSoftware] = useState('');
   const [filtroVencendo, setFiltroVencendo] = useState('');
+  const [filtroCategoria, setFiltroCategoria] = useState('');
+
+  // Form fields
+  const [formTipo, setFormTipo] = useState<'software' | 'avulsa'>('avulsa');
+  const [formSoftwareId, setFormSoftwareId] = useState('');
+  const [formNome, setFormNome] = useState('');
+  const [formCategoria, setFormCategoria] = useState('');
+  const [formModelo, setFormModelo] = useState('');
+  const [formQtd, setFormQtd] = useState('');
+  const [formFornecedor, setFormFornecedor] = useState('');
+  const [formValorTotal, setFormValorTotal] = useState('');
+  const [formValorUnitario, setFormValorUnitario] = useState('');
+  const [formDataInicio, setFormDataInicio] = useState('');
+  const [formDataVencimento, setFormDataVencimento] = useState('');
+  const [formChaveSerial, setFormChaveSerial] = useState('');
+  const [formObservacoes, setFormObservacoes] = useState('');
 
   useEffect(() => {
     softwareService.listar().then(setSoftwares).catch(() => {});
+    licencaService.listarCategorias().then(setCategorias).catch(() => {});
   }, []);
 
-  useEffect(() => {
+  const carregarLicencas = useCallback(() => {
     setLoading(true);
     licencaService
       .listar({
         status: filtroStatus || undefined,
         softwareId: filtroSoftware || undefined,
         vencendoEm: filtroVencendo ? parseInt(filtroVencendo) : undefined,
+        categoriaId: filtroCategoria || undefined,
       })
       .then(setLicencas)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [filtroStatus, filtroSoftware, filtroVencendo]);
+  }, [filtroStatus, filtroSoftware, filtroVencendo, filtroCategoria]);
+
+  useEffect(() => {
+    carregarLicencas();
+  }, [carregarLicencas]);
 
   function isVencendo(lic: SoftwareLicenca) {
     if (!lic.dataVencimento || lic.status !== 'ATIVA') return false;
@@ -66,33 +94,88 @@ export function LicencasPage() {
     return diff > 0 && diff < 30 * 24 * 60 * 60 * 1000;
   }
 
+  function getNomeLicenca(lic: SoftwareLicenca) {
+    if (lic.software) return lic.software.nome;
+    return lic.nome || 'Licenca avulsa';
+  }
+
+  function getSubtitle(lic: SoftwareLicenca) {
+    if (lic.software?.fabricante) return lic.software.fabricante;
+    if (lic.categoria) return lic.categoria.nome;
+    return null;
+  }
+
   async function handleRenovar(licId: string) {
     await licencaService.renovar(licId);
-    setLoading(true);
-    licencaService
-      .listar({
-        status: filtroStatus || undefined,
-        softwareId: filtroSoftware || undefined,
-        vencendoEm: filtroVencendo ? parseInt(filtroVencendo) : undefined,
-      })
-      .then(setLicencas)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    carregarLicencas();
   }
 
   async function handleInativar(licId: string) {
     await licencaService.inativar(licId);
-    setLoading(true);
-    licencaService
-      .listar({
-        status: filtroStatus || undefined,
-        softwareId: filtroSoftware || undefined,
-        vencendoEm: filtroVencendo ? parseInt(filtroVencendo) : undefined,
-      })
-      .then(setLicencas)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    carregarLicencas();
   }
+
+  function resetForm() {
+    setFormTipo('avulsa');
+    setFormSoftwareId('');
+    setFormNome('');
+    setFormCategoria('');
+    setFormModelo('');
+    setFormQtd('');
+    setFormFornecedor('');
+    setFormValorTotal('');
+    setFormValorUnitario('');
+    setFormDataInicio('');
+    setFormDataVencimento('');
+    setFormChaveSerial('');
+    setFormObservacoes('');
+    setFormError('');
+  }
+
+  async function handleCriar() {
+    setFormError('');
+    if (formTipo === 'software' && !formSoftwareId) {
+      setFormError('Selecione o software');
+      return;
+    }
+    if (formTipo === 'avulsa' && !formNome.trim()) {
+      setFormError('Informe o nome da licenca');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await licencaService.criar({
+        softwareId: formTipo === 'software' ? formSoftwareId : undefined,
+        nome: formTipo === 'avulsa' ? formNome.trim() : undefined,
+        categoriaId: formTipo === 'avulsa' && formCategoria ? formCategoria : undefined,
+        modeloLicenca: formModelo || undefined,
+        quantidade: formQtd ? parseInt(formQtd) : undefined,
+        fornecedor: formFornecedor || undefined,
+        valorTotal: formValorTotal ? parseFloat(formValorTotal) : undefined,
+        valorUnitario: formValorUnitario ? parseFloat(formValorUnitario) : undefined,
+        dataInicio: formDataInicio || undefined,
+        dataVencimento: formDataVencimento || undefined,
+        chaveSerial: formChaveSerial || undefined,
+        observacoes: formObservacoes || undefined,
+      });
+      setShowForm(false);
+      resetForm();
+      carregarLicencas();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setFormError(msg || 'Erro ao criar licenca');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const licencasFiltradas = licencas.filter((l) => {
+    if (!busca.trim()) return true;
+    const termo = busca.toLowerCase();
+    const nomeLic = l.software?.nome || l.nome || '';
+    return nomeLic.toLowerCase().includes(termo) || (l.fornecedor?.toLowerCase().includes(termo));
+  });
 
   const custoTotal = licencas
     .filter((l) => l.status === 'ATIVA' && l.valorTotal != null)
@@ -107,13 +190,96 @@ export function LicencasPage() {
             <KeyRound className="w-6 h-6 text-capul-500" />
             <h3 className="text-lg font-semibold text-slate-800">Gestao de Licencas</h3>
           </div>
-          <button
-            onClick={() => exportService.exportar('licencas')}
-            className="flex items-center gap-2 bg-slate-100 text-slate-600 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors"
-          >
-            <Download className="w-4 h-4" /> Exportar
-          </button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                onClick={() => { setShowForm(!showForm); if (!showForm) resetForm(); }}
+                className="flex items-center gap-2 bg-capul-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" /> Nova Licenca
+              </button>
+            )}
+            <button
+              onClick={() => exportService.exportar('licencas')}
+              className="flex items-center gap-2 bg-slate-100 text-slate-600 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors"
+            >
+              <Download className="w-4 h-4" /> Exportar
+            </button>
+          </div>
         </div>
+
+        {/* Formulario Nova Licenca */}
+        {showForm && (
+          <div className="bg-white rounded-xl border border-capul-200 p-5 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-sm font-semibold text-slate-700">Nova Licenca</h4>
+              <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Tipo: Software ou Avulsa */}
+            <div className="flex gap-4 mb-4">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" checked={formTipo === 'avulsa'} onChange={() => setFormTipo('avulsa')} className="accent-capul-600" />
+                Licenca Avulsa (Certificado, Dominio, etc.)
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" checked={formTipo === 'software'} onChange={() => setFormTipo('software')} className="accent-capul-600" />
+                Vinculada a Software
+              </label>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+              {formTipo === 'software' ? (
+                <select value={formSoftwareId} onChange={(e) => setFormSoftwareId(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                  <option value="">Selecione o software *</option>
+                  {softwares.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
+                </select>
+              ) : (
+                <>
+                  <input type="text" placeholder="Nome da licenca *" value={formNome} onChange={(e) => setFormNome(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                  <select value={formCategoria} onChange={(e) => setFormCategoria(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                    <option value="">Categoria</option>
+                    {categorias.filter(c => c.status === 'ATIVO').map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                  </select>
+                </>
+              )}
+              <select value={formModelo} onChange={(e) => setFormModelo(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                <option value="">Modelo</option>
+                {Object.entries(modeloLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+              <input type="number" min="1" placeholder="Quantidade" value={formQtd} onChange={(e) => setFormQtd(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              <input type="text" placeholder="Fornecedor" value={formFornecedor} onChange={(e) => setFormFornecedor(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              <input type="number" step="0.01" min="0" placeholder="Valor Total" value={formValorTotal} onChange={(e) => setFormValorTotal(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              <input type="number" step="0.01" min="0" placeholder="Valor Unitario" value={formValorUnitario} onChange={(e) => setFormValorUnitario(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Inicio</label>
+                <input type="date" value={formDataInicio} onChange={(e) => setFormDataInicio(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Vencimento</label>
+                <input type="date" value={formDataVencimento} onChange={(e) => setFormDataVencimento(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
+              </div>
+              <input type="text" placeholder="Chave Serial" value={formChaveSerial} onChange={(e) => setFormChaveSerial(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              <input type="text" placeholder="Observacoes" value={formObservacoes} onChange={(e) => setFormObservacoes(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+
+            {formError && <p className="text-xs text-red-600 mb-2">{formError}</p>}
+
+            <div className="flex justify-end">
+              <button onClick={handleCriar} disabled={saving} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50">
+                {saving ? 'Salvando...' : 'Criar Licenca'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Resumo */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -139,6 +305,16 @@ export function LicencasPage() {
 
         {/* Filtros */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4 flex flex-wrap gap-3">
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Buscar por licenca ou fornecedor..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              className="border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm bg-white w-64"
+            />
+          </div>
           <select
             value={filtroStatus}
             onChange={(e) => { setFiltroStatus(e.target.value as StatusLicenca | ''); setFiltroVencendo(''); }}
@@ -160,6 +336,16 @@ export function LicencasPage() {
             ))}
           </select>
           <select
+            value={filtroCategoria}
+            onChange={(e) => setFiltroCategoria(e.target.value)}
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+          >
+            <option value="">Todas as categorias</option>
+            {categorias.map((c) => (
+              <option key={c.id} value={c.id}>{c.nome}</option>
+            ))}
+          </select>
+          <select
             value={filtroVencendo}
             onChange={(e) => { setFiltroVencendo(e.target.value); setFiltroStatus(''); }}
             className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
@@ -173,7 +359,7 @@ export function LicencasPage() {
 
         {loading ? (
           <p className="text-slate-500">Carregando...</p>
-        ) : licencas.length === 0 ? (
+        ) : licencasFiltradas.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
             <KeyRound className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500">Nenhuma licenca encontrada</p>
@@ -184,7 +370,7 @@ export function LicencasPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 text-left">
-                    <th className="px-4 py-3 font-medium text-slate-600">Software</th>
+                    <th className="px-4 py-3 font-medium text-slate-600">Licenca</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Modelo</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Qtd</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Usuarios</th>
@@ -198,18 +384,22 @@ export function LicencasPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {licencas.map((lic) => (
+                  {licencasFiltradas.map((lic) => (
                     <tr key={lic.id} className={`hover:bg-slate-50 ${isVencendo(lic) ? 'bg-amber-50' : ''}`}>
                       <td className="px-4 py-3">
-                        <a
-                          href={`/gestao-ti/softwares/${lic.softwareId}`}
-                          target="_blank" rel="noopener noreferrer"
-                          className="text-capul-600 hover:underline font-medium"
-                        >
-                          {lic.software.nome}
-                        </a>
-                        {lic.software.fabricante && (
-                          <p className="text-xs text-slate-400">{lic.software.fabricante}</p>
+                        {lic.software ? (
+                          <a
+                            href={`/gestao-ti/softwares/${lic.softwareId}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="text-capul-600 hover:underline font-medium"
+                          >
+                            {lic.software.nome}
+                          </a>
+                        ) : (
+                          <span className="font-medium text-slate-700">{getNomeLicenca(lic)}</span>
+                        )}
+                        {getSubtitle(lic) && (
+                          <p className="text-xs text-slate-400">{getSubtitle(lic)}</p>
                         )}
                       </td>
                       <td className="px-4 py-3 text-slate-600">
@@ -218,7 +408,7 @@ export function LicencasPage() {
                       <td className="px-4 py-3 text-slate-600">{lic.quantidade ?? '-'}</td>
                       <td className="px-4 py-3 text-slate-600">
                         {lic.modeloLicenca && ['POR_USUARIO', 'SUBSCRICAO', 'SAAS'].includes(lic.modeloLicenca)
-                          ? <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">{lic._count?.usuarios ?? 0}/{lic.quantidade ?? '∞'}</span>
+                          ? <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">{lic._count?.usuarios ?? 0}/{lic.quantidade ?? '\u221E'}</span>
                           : '-'}
                       </td>
                       <td className="px-4 py-3 text-slate-600">

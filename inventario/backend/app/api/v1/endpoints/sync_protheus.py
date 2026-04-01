@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 import requests
 import logging
+import os
+import re
 from datetime import datetime
 from typing import Dict, List, Tuple, Any
 from app.core.exceptions import safe_error_response
@@ -22,8 +24,18 @@ from app.core.config import settings
 from app.core.constants import VALID_SYNC_TABLES
 from app.core.protheus_config import get_protheus_config
 
+# Controle de verificacao SSL via variavel de ambiente
+SSL_VERIFY = os.getenv("SSL_VERIFY", "true").lower() != "false"
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def validate_sql_identifier(name: str) -> str:
+    """Validate that a string is a safe SQL identifier (table/column name)."""
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', name):
+        raise HTTPException(status_code=400, detail=f"Nome de identificador SQL invalido: {name}")
+    return name
 
 
 async def fetch_protheus_hierarchy() -> Dict[str, List[Dict]]:
@@ -47,7 +59,7 @@ async def fetch_protheus_hierarchy() -> Dict[str, List[Dict]]:
             url,
             headers={"Authorization": auth},
             timeout=timeout,
-            verify=False
+            verify=SSL_VERIFY
         )
         response.raise_for_status()
 
@@ -185,7 +197,13 @@ def sync_table(
     if desc_field != valid_table["desc_field"]:
         raise ValueError(f"Campo descrição inválido para tabela {table_name}: {desc_field}")
 
+    # ✅ SEGURANÇA: Validar identificadores SQL adicionalmente
+    validate_sql_identifier(table_name)
+    validate_sql_identifier(code_field)
+    validate_sql_identifier(desc_field)
+
     filial_field = f"{valid_table['filial_prefix']}_filial"
+    validate_sql_identifier(filial_field)
 
     logger.info(f"🔄 Sincronizando tabela inventario.{table_name}...")
 

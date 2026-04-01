@@ -3,6 +3,15 @@ import { ModeloLicenca } from '@prisma/client';
 
 export class UpdateLicencaDto {
   @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  nome?: string;
+
+  @IsOptional()
+  @IsString()
+  categoriaId?: string;
+
+  @IsOptional()
   @IsEnum(ModeloLicenca)
   modeloLicenca?: ModeloLicenca;
 

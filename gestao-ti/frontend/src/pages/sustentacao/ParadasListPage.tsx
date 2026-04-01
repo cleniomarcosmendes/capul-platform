@@ -90,6 +90,7 @@ export function ParadasListPage() {
     ? paradas.filter(
         (p) =>
           p.titulo.toLowerCase().includes(search.toLowerCase()) ||
+          (p.descricao?.toLowerCase().includes(search.toLowerCase())) ||
           p.software.nome.toLowerCase().includes(search.toLowerCase()),
       )
     : paradas;
@@ -153,10 +154,10 @@ export function ParadasListPage() {
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Buscar..."
+              placeholder="Buscar por titulo ou descricao..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white w-56"
+              className="pl-9 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white w-64"
             />
           </div>
           <select

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { softwareService } from '../../services/software.service';
 import { equipeService } from '../../services/equipe.service';
 import { ArrowLeft } from 'lucide-react';
@@ -15,6 +16,8 @@ export function SoftwareFormPage() {
   const [saving, setSaving] = useState(false);
   const [loadingData, setLoadingData] = useState(isEdit);
   const [error, setError] = useState('');
+  const [dirty, setDirty] = useState(false);
+  const { ConfirmDialog } = useUnsavedChanges(dirty);
 
   const [nome, setNome] = useState('');
   const [fabricante, setFabricante] = useState('');
@@ -70,9 +73,11 @@ export function SoftwareFormPage() {
     try {
       if (isEdit) {
         await softwareService.atualizar(id, payload);
+        setDirty(false);
         navigate(`/gestao-ti/softwares/${id}`);
       } else {
         const sw = await softwareService.criar(payload);
+        setDirty(false);
         navigate(`/gestao-ti/softwares/${sw.id}`);
       }
     } catch (err: unknown) {
@@ -94,8 +99,9 @@ export function SoftwareFormPage() {
 
   return (
     <>
+      {ConfirmDialog}
       <Header title={isEdit ? 'Editar Software' : 'Novo Software'} />
-      <div className="p-6 max-w-3xl">
+      <div className="p-6 max-w-3xl" onChange={() => setDirty(true)}>
         <button
           onClick={() => navigate(isEdit ? `/gestao-ti/softwares/${id}` : '/gestao-ti/softwares')}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-6"

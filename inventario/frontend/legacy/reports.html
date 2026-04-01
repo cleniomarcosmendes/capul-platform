@@ -452,6 +452,7 @@
     <!-- ✅ v2.17.4: Utilitários globais (sessão, loading, erros) -->
     <script src="/js/global_utils.js"></script>
     <!-- JS Consolidados v2.19.13 -->
+    <script src="/js/security.js"></script>
     <script src="/js/utils.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/ui.js"></script>
@@ -561,6 +562,13 @@
 
         <!-- Relatório Detalhado -->
         <div class="card" id="reportCard" style="display: none;">
+            <div class="mb-3" id="reportSearchContainer" style="display: none;">
+                <div style="position: relative; display: inline-block;">
+                    <input type="text" id="reportSearchInput" placeholder="Buscar por codigo ou descricao..."
+                           class="form-control" style="width: 300px; padding-left: 35px;">
+                    <i class="bi bi-search" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #6c757d;"></i>
+                </div>
+            </div>
             <div id="reportContent"></div>
         </div>
     </div>
@@ -672,6 +680,16 @@
             if (inventoryId) {
                 loadReport(inventoryId);
             }
+
+            // Filtro de busca na tabela do relatorio
+            document.getElementById('reportSearchInput')?.addEventListener('input', function() {
+                const term = this.value.toLowerCase();
+                const rows = document.querySelectorAll('#reportContent .item-table tbody tr');
+                rows.forEach(row => {
+                    const text = row.textContent.toLowerCase();
+                    row.style.display = text.includes(term) ? '' : 'none';
+                });
+            });
         });
 
         function checkAuth() {
@@ -835,6 +853,10 @@
         }
 
         function displayReport(data) {
+            // Mostrar campo de busca
+            const searchContainer = document.getElementById('reportSearchContainer');
+            if (searchContainer) searchContainer.style.display = 'block';
+
             // Armazenar dados para exportação
             currentReportData = data;
 

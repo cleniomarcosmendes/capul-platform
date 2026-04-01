@@ -12,6 +12,8 @@ from app.core.exceptions import safe_error_response
 
 router = APIRouter(prefix="/import", tags=["import"])
 
+MAX_IMPORT_RECORDS = 50000
+
 class ImportRecord(BaseModel):
     """Modelo para um registro de importação"""
     data: Dict[str, Any] = Field(..., description="Dados do registro")
@@ -38,6 +40,12 @@ async def import_bulk_data(
     """
     Importa dados em lote para as tabelas do sistema
     """
+    if len(request.records) > MAX_IMPORT_RECORDS:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Limite de registros excedido (maximo: {MAX_IMPORT_RECORDS})"
+        )
+
     success_count = 0
     error_count = 0
     errors = []

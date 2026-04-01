@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { chamadoService } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
 import { catalogoService } from '../../services/catalogo.service';
@@ -61,6 +62,9 @@ export function ChamadoCreatePage() {
   const [nomeColaborador, setNomeColaborador] = useState('');
   const [buscandoColaborador, setBuscandoColaborador] = useState(false);
   const [nomeEditavel, setNomeEditavel] = useState(false);
+
+  const [dirty, setDirty] = useState(false);
+  const { ConfirmDialog } = useUnsavedChanges(dirty);
 
   const [erroMatricula, setErroMatricula] = useState('');
 
@@ -210,6 +214,7 @@ export function ChamadoCreatePage() {
         await ordemServicoService.vincularChamado(osIdParam, chamado.id).catch(() => {});
       }
 
+      setDirty(false);
       navigate(paradaIdParam ? `/gestao-ti/paradas/${paradaIdParam}` : osIdParam ? `/gestao-ti/ordens-servico` : `/gestao-ti/chamados/${chamado.id}`);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -221,8 +226,9 @@ export function ChamadoCreatePage() {
 
   return (
     <>
+      {ConfirmDialog}
       <Header title="Novo Chamado" />
-      <div className="p-6 max-w-3xl">
+      <div className="p-6 max-w-3xl" onChange={() => setDirty(true)}>
         <button
           onClick={() => navigate('/gestao-ti/chamados')}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-6"

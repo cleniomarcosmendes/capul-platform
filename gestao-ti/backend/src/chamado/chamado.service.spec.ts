@@ -1,6 +1,11 @@
 import { Test } from '@nestjs/testing';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ChamadoService } from './chamado.service';
+import { ChamadoHelpersService } from './services/chamado-helpers.service';
+import { ChamadoTempoService } from './services/chamado-tempo.service';
+import { ChamadoCoreService } from './services/chamado-core.service';
+import { ChamadoColaboradorService } from './services/chamado-colaborador.service';
+import { ChamadoAnexoService } from './services/chamado-anexo.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificacaoService } from '../notificacao/notificacao.service';
 import { createPrismaMock } from '../common/testing/prisma-mock';
@@ -35,6 +40,11 @@ describe('ChamadoService', () => {
 
     const module = await Test.createTestingModule({
       providers: [
+        ChamadoHelpersService,
+        ChamadoTempoService,
+        ChamadoCoreService,
+        ChamadoColaboradorService,
+        ChamadoAnexoService,
         ChamadoService,
         { provide: PrismaService, useValue: prisma },
         { provide: NotificacaoService, useValue: notificacaoService },

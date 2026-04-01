@@ -76,6 +76,7 @@ const menuItems: MenuItem[] = [
   { label: 'Tipos de Contrato', icon: Layers, path: '/gestao-ti/tipos-contrato', roles: MANAGERS },
   { label: 'Fornecedores', icon: Truck, path: '/gestao-ti/fornecedores', roles: MANAGERS },
   { label: 'Produtos', icon: Package, path: '/gestao-ti/produtos', roles: MANAGERS },
+  { label: 'Cat. Licencas', icon: Tag, path: '/gestao-ti/categorias-licenca', roles: MANAGERS },
 ];
 
 function filterMenuByRole(items: MenuItem[], role: string | null): MenuItem[] {

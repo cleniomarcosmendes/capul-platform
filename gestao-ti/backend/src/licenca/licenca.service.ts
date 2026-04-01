@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateLicencaDto } from './dto/create-licenca.dto.js';
 import { UpdateLicencaDto } from './dto/update-licenca.dto.js';
+import { CreateCategoriaLicencaDto, UpdateCategoriaLicencaDto } from './dto/create-categoria-licenca.dto.js';
 import { StatusLicenca, ModeloLicenca } from '@prisma/client';
 import { isGestor } from '../common/constants/roles.constant.js';
 
@@ -14,6 +15,7 @@ const MODELOS_POR_USUARIO: ModeloLicenca[] = ['POR_USUARIO', 'SUBSCRICAO', 'SAAS
 const licencaInclude = {
   software: { select: { id: true, nome: true, fabricante: true, tipo: true } },
   contrato: { select: { id: true, titulo: true, numero: true } },
+  categoria: { select: { id: true, codigo: true, nome: true } },
 };
 
 const licencaIncludeComUsuarios = {
@@ -35,11 +37,15 @@ export class LicencaService {
     softwareId?: string;
     status?: StatusLicenca;
     vencendoEm?: number; // dias
+    categoriaId?: string;
+    avulsas?: boolean;
   }, role: string) {
     const where: Record<string, unknown> = {};
 
     if (filters.softwareId) where.softwareId = filters.softwareId;
     if (filters.status) where.status = filters.status;
+    if (filters.categoriaId) where.categoriaId = filters.categoriaId;
+    if (filters.avulsas) where.softwareId = null;
 
     if (filters.vencendoEm) {
       const limite = new Date();
@@ -71,12 +77,21 @@ export class LicencaService {
   }
 
   async create(dto: CreateLicencaDto) {
-    const software = await this.prisma.software.findUnique({ where: { id: dto.softwareId } });
-    if (!software) throw new BadRequestException('Software nao encontrado');
+    // Validar: deve ter softwareId OU (nome + categoria) para licenca avulsa
+    if (!dto.softwareId && !dto.nome) {
+      throw new BadRequestException('Informe o software ou o nome da licenca avulsa');
+    }
+
+    if (dto.softwareId) {
+      const software = await this.prisma.software.findUnique({ where: { id: dto.softwareId } });
+      if (!software) throw new BadRequestException('Software nao encontrado');
+    }
 
     return this.prisma.softwareLicenca.create({
       data: {
-        softwareId: dto.softwareId,
+        softwareId: dto.softwareId || null,
+        nome: dto.nome,
+        categoriaId: dto.categoriaId || null,
         modeloLicenca: dto.modeloLicenca,
         quantidade: dto.quantidade,
         valorTotal: dto.valorTotal,
@@ -117,6 +132,8 @@ export class LicencaService {
     const nova = await this.prisma.softwareLicenca.create({
       data: {
         softwareId: anterior.softwareId,
+        nome: anterior.nome,
+        categoriaId: anterior.categoriaId,
         modeloLicenca: anterior.modeloLicenca,
         quantidade: anterior.quantidade,
         valorTotal: anterior.valorTotal,
@@ -197,6 +214,52 @@ export class LicencaService {
     await this.prisma.licencaUsuario.delete({ where: { id: vinculo.id } });
 
     return this.findOne(licencaId, 'ADMIN');
+  }
+
+  // ─── Categorias de Licenca ───────────────────────────────
+
+  async findAllCategorias(status?: string) {
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
+    return this.prisma.categoriaLicenca.findMany({
+      where,
+      orderBy: { nome: 'asc' },
+    });
+  }
+
+  async createCategoria(dto: CreateCategoriaLicencaDto) {
+    return this.prisma.categoriaLicenca.create({
+      data: {
+        codigo: dto.codigo,
+        nome: dto.nome,
+        descricao: dto.descricao,
+      },
+    });
+  }
+
+  async updateCategoria(id: string, dto: UpdateCategoriaLicencaDto) {
+    const existing = await this.prisma.categoriaLicenca.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Categoria de licenca nao encontrada');
+
+    const data: Record<string, unknown> = {};
+    if (dto.codigo !== undefined) data.codigo = dto.codigo;
+    if (dto.nome !== undefined) data.nome = dto.nome;
+    if (dto.descricao !== undefined) data.descricao = dto.descricao;
+    if (dto.status !== undefined) data.status = dto.status;
+
+    return this.prisma.categoriaLicenca.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async removeCategoria(id: string) {
+    const existing = await this.prisma.categoriaLicenca.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Categoria de licenca nao encontrada');
+    const vinculos = await this.prisma.softwareLicenca.count({ where: { categoriaId: id } });
+    if (vinculos > 0) throw new BadRequestException(`Categoria possui ${vinculos} licenca(s) vinculada(s). Inative-a em vez de excluir.`);
+    await this.prisma.categoriaLicenca.delete({ where: { id } });
+    return { success: true };
   }
 
   // ─── Helpers ──────────────────────────────────────────────

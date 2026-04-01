@@ -701,7 +701,7 @@ export function ChamadoDetalhePage() {
                   </a>
                 ) : isTecnico ? (
                   <a
-                    href={`/gestao-ti/projetos/novo?chamadoId=${chamado.id}&chamadoNumero=${chamado.numero}&nome=${encodeURIComponent(`Chamado #${chamado.numero} - ${chamado.titulo}`)}&descricao=${encodeURIComponent(chamado.descricao || '')}&softwareId=${chamado.softwareId || ''}&responsavelId=${chamado.tecnicoId || ''}`}
+                    href={`/gestao-ti/projetos/novo?chamadoId=${chamado.id}&chamadoNumero=${chamado.numero}&nome=${encodeURIComponent(`Chamado #${chamado.numero} - ${chamado.titulo}`)}&descricao=${encodeURIComponent(chamado.descricao || '')}&softwareId=${chamado.softwareId || ''}&responsavelId=${chamado.tecnicoId || ''}&solicitanteId=${chamado.solicitante?.id || ''}`}
                     className="text-xs text-capul-600 hover:underline"
                   >
                     + Gerar Projeto
