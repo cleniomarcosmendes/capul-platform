@@ -37,7 +37,7 @@ export function EquipeFormPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [dirty, setDirty] = useState(false);
-  const { ConfirmDialog } = useUnsavedChanges(dirty);
+  const { ConfirmDialog, guardedNavigate } = useUnsavedChanges(dirty);
 
   useEffect(() => {
     if (isEdit) {
@@ -108,7 +108,7 @@ export function EquipeFormPage() {
       <Header title={isEdit ? 'Editar Equipe' : 'Nova Equipe'} />
       <div className="p-6 max-w-2xl" onChange={() => setDirty(true)}>
         <button
-          onClick={() => navigate('/gestao-ti/equipes')}
+          onClick={() => guardedNavigate('/gestao-ti/equipes')}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-6"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -234,7 +234,7 @@ export function EquipeFormPage() {
             </button>
             <button
               type="button"
-              onClick={() => navigate('/gestao-ti/equipes')}
+              onClick={() => guardedNavigate('/gestao-ti/equipes')}
               className="text-sm text-slate-500 hover:text-slate-700"
             >
               Cancelar

@@ -61,6 +61,10 @@ export const licencaService = {
     return data;
   },
 
+  async excluir(id: string): Promise<void> {
+    await gestaoApi.delete(`/licencas/${id}`);
+  },
+
   // ─── Usuarios da Licenca ────────────────────────────────
 
   async listarUsuarios(licencaId: string): Promise<LicencaUsuario[]> {

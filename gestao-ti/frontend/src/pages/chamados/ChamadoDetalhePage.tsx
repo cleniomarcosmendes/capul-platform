@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { chamadoService } from '../../services/chamado.service';
@@ -14,6 +14,7 @@ import { coreService } from '../../services/core.service';
 import { useToast } from '../../components/Toast';
 import type { Chamado, EquipeTI, AnexoChamado, StatusChamado, TipoHistorico, ChamadoColaborador, RegistroTempoChamado, UsuarioCore } from '../../types';
 import { MentionInput } from '../../components/MentionInput';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 
 const statusLabels: Record<StatusChamado, string> = {
   ABERTO: 'Aberto', EM_ATENDIMENTO: 'Em Atendimento', PENDENTE: 'Pendente',
@@ -57,7 +58,6 @@ function formatFileSize(bytes: number) {
 
 export function ChamadoDetalhePage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const { usuario, gestaoTiRole } = useAuth();
   const { toast, confirm } = useToast();
 
@@ -110,6 +110,14 @@ export function ChamadoDetalhePage() {
   const [editRegInicio, setEditRegInicio] = useState('');
   const [editRegFim, setEditRegFim] = useState('');
   const [editRegObs, setEditRegObs] = useState('');
+
+  // Unsaved changes protection
+  const isEditing = Boolean(
+    (showComentario && comentarioTexto.trim()) ||
+    showTransferir || showResolver || showReabrir || showAvaliar ||
+    editingHistoricoId || editingReg || showAddColab
+  );
+  const { ConfirmDialog, guardedNavigate } = useUnsavedChanges(isEditing);
 
   const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
   const isTecnico = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
@@ -235,9 +243,10 @@ export function ChamadoDetalhePage() {
 
   return (
     <>
+      {ConfirmDialog}
       <Header title={`Chamado #${chamado.numero}`} />
       <div className="p-6">
-        <button onClick={() => navigate('/gestao-ti/chamados')} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4">
+        <button onClick={() => guardedNavigate('/gestao-ti/chamados')} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4">
           <ArrowLeft className="w-4 h-4" /> Voltar
         </button>
 

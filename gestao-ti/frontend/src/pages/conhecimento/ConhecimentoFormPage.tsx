@@ -27,7 +27,7 @@ export function ConhecimentoFormPage() {
   const [saving, setSaving] = useState(false);
   const [erro, setErro] = useState('');
   const [dirty, setDirty] = useState(false);
-  const { ConfirmDialog } = useUnsavedChanges(dirty);
+  const { ConfirmDialog, guardedNavigate } = useUnsavedChanges(dirty);
 
   const [form, setForm] = useState({
     titulo: '',
@@ -108,7 +108,7 @@ export function ConhecimentoFormPage() {
       {ConfirmDialog}
       <Header title={isEdit ? 'Editar Artigo' : 'Novo Artigo'} />
       <div className="p-6 max-w-4xl" onChange={() => setDirty(true)}>
-        <button onClick={() => navigate(isEdit ? `/gestao-ti/conhecimento/${id}` : '/gestao-ti/conhecimento')} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4">
+        <button onClick={() => guardedNavigate(isEdit ? `/gestao-ti/conhecimento/${id}` : '/gestao-ti/conhecimento')} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4">
           <ArrowLeft className="w-4 h-4" /> Voltar
         </button>
 
@@ -175,7 +175,7 @@ export function ConhecimentoFormPage() {
             <button type="submit" disabled={saving} className="bg-amber-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors">
               {saving ? 'Salvando...' : isEdit ? 'Salvar Alteracoes' : 'Criar Artigo'}
             </button>
-            <button type="button" onClick={() => navigate(isEdit ? `/gestao-ti/conhecimento/${id}` : '/gestao-ti/conhecimento')} className="bg-slate-100 text-slate-700 px-6 py-2 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors">
+            <button type="button" onClick={() => guardedNavigate(isEdit ? `/gestao-ti/conhecimento/${id}` : '/gestao-ti/conhecimento')} className="bg-slate-100 text-slate-700 px-6 py-2 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors">
               Cancelar
             </button>
           </div>

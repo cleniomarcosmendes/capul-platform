@@ -28,7 +28,7 @@ export function ContratoFormPage() {
   const [loadingData, setLoadingData] = useState(isEdit);
   const [error, setError] = useState('');
   const [dirty, setDirty] = useState(false);
-  const { ConfirmDialog } = useUnsavedChanges(dirty);
+  const { ConfirmDialog, guardedNavigate } = useUnsavedChanges(dirty);
 
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
@@ -161,7 +161,7 @@ export function ContratoFormPage() {
       <Header title={isEdit ? 'Editar Contrato' : 'Novo Contrato'} />
       <div className="p-6 max-w-3xl" onChange={() => setDirty(true)}>
         <button
-          onClick={() => navigate(isEdit ? `/gestao-ti/contratos/${id}` : '/gestao-ti/contratos')}
+          onClick={() => guardedNavigate(isEdit ? `/gestao-ti/contratos/${id}` : '/gestao-ti/contratos')}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-6"
         >
           <ArrowLeft className="w-4 h-4" />

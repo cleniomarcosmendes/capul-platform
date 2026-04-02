@@ -95,6 +95,12 @@ export class LicencaController {
     return this.service.inativar(id);
   }
 
+  @Delete(':id')
+  @Roles('ADMIN', 'GESTOR_TI')
+  remove(@Param('id') id: string) {
+    return this.service.remove(id);
+  }
+
   // ─── Usuarios da Licenca ────────────────────────────────
 
   @Get(':id/usuarios')

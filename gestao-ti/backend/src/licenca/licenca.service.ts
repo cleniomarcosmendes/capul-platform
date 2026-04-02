@@ -157,6 +157,19 @@ export class LicencaService {
     });
   }
 
+  async remove(id: string) {
+    const licenca = await this.getLicencaOrFail(id);
+    const usuarios = await this.prisma.licencaUsuario.count({ where: { licencaId: id } });
+    if (usuarios > 0) {
+      throw new BadRequestException(`Licenca possui ${usuarios} usuario(s) vinculado(s). Remova os usuarios antes de excluir.`);
+    }
+    if (licenca.contratoId) {
+      throw new BadRequestException('Licenca esta vinculada a um contrato. Desvincule antes de excluir.');
+    }
+    await this.prisma.softwareLicenca.delete({ where: { id } });
+    return { success: true };
+  }
+
   // ─── Usuarios da Licenca ────────────────────────────────────
 
   async listarUsuariosLicenca(licencaId: string) {

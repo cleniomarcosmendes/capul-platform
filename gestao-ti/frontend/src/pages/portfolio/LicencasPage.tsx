@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { licencaService } from '../../services/licenca.service';
@@ -65,6 +65,20 @@ export function LicencasPage() {
   const [formChaveSerial, setFormChaveSerial] = useState('');
   const [formObservacoes, setFormObservacoes] = useState('');
 
+  // Edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editModelo, setEditModelo] = useState('');
+  const [editQtd, setEditQtd] = useState('');
+  const [editFornecedor, setEditFornecedor] = useState('');
+  const [editValorTotal, setEditValorTotal] = useState('');
+  const [editValorUnitario, setEditValorUnitario] = useState('');
+  const [editDataInicio, setEditDataInicio] = useState('');
+  const [editDataVencimento, setEditDataVencimento] = useState('');
+  const [editChaveSerial, setEditChaveSerial] = useState('');
+  const [editObservacoes, setEditObservacoes] = useState('');
+  const [editNome, setEditNome] = useState('');
+  const [editCategoriaId, setEditCategoriaId] = useState('');
+
   useEffect(() => {
     softwareService.listar().then(setSoftwares).catch(() => {});
     licencaService.listarCategorias().then(setCategorias).catch(() => {});
@@ -103,6 +117,59 @@ export function LicencasPage() {
     if (lic.software?.fabricante) return lic.software.fabricante;
     if (lic.categoria) return lic.categoria.nome;
     return null;
+  }
+
+  function startEdit(lic: SoftwareLicenca) {
+    setEditingId(lic.id);
+    setEditModelo(lic.modeloLicenca || '');
+    setEditQtd(lic.quantidade != null ? String(lic.quantidade) : '');
+    setEditFornecedor(lic.fornecedor || '');
+    setEditValorTotal(lic.valorTotal != null ? String(lic.valorTotal) : '');
+    setEditValorUnitario(lic.valorUnitario != null ? String(lic.valorUnitario) : '');
+    setEditDataInicio(lic.dataInicio ? lic.dataInicio.slice(0, 10) : '');
+    setEditDataVencimento(lic.dataVencimento ? lic.dataVencimento.slice(0, 10) : '');
+    setEditChaveSerial(lic.chaveSerial || '');
+    setEditObservacoes(lic.observacoes || '');
+    setEditNome(lic.nome || '');
+    setEditCategoriaId(lic.categoriaId || '');
+  }
+
+  async function handleSaveEdit() {
+    if (!editingId) return;
+    setSaving(true);
+    try {
+      await licencaService.atualizar(editingId, {
+        nome: editNome || undefined,
+        categoriaId: editCategoriaId || undefined,
+        modeloLicenca: editModelo || undefined,
+        quantidade: editQtd ? parseInt(editQtd) : undefined,
+        fornecedor: editFornecedor || undefined,
+        valorTotal: editValorTotal ? parseFloat(editValorTotal) : undefined,
+        valorUnitario: editValorUnitario ? parseFloat(editValorUnitario) : undefined,
+        dataInicio: editDataInicio || undefined,
+        dataVencimento: editDataVencimento || undefined,
+        chaveSerial: editChaveSerial || undefined,
+        observacoes: editObservacoes || undefined,
+      });
+      setEditingId(null);
+      carregarLicencas();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setFormError(msg || 'Erro ao salvar');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleExcluir(licId: string) {
+    if (!confirm('Deseja realmente excluir esta licenca?')) return;
+    try {
+      await licencaService.excluir(licId);
+      carregarLicencas();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      alert(msg || 'Erro ao excluir licenca');
+    }
   }
 
   async function handleRenovar(licId: string) {
@@ -385,7 +452,8 @@ export function LicencasPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {licencasFiltradas.map((lic) => (
-                    <tr key={lic.id} className={`hover:bg-slate-50 ${isVencendo(lic) ? 'bg-amber-50' : ''}`}>
+                    <React.Fragment key={lic.id}>
+                    <tr className={`hover:bg-slate-50 ${isVencendo(lic) ? 'bg-amber-50' : ''}`}>
                       <td className="px-4 py-3">
                         {lic.software ? (
                           <a
@@ -445,26 +513,65 @@ export function LicencasPage() {
                       {isAdmin && (
                         <td className="px-4 py-3">
                           <div className="flex gap-2">
+                            <button onClick={() => startEdit(lic)} className="text-xs text-capul-600 hover:underline">Editar</button>
                             {lic.status === 'ATIVA' && (
                               <>
-                                <button
-                                  onClick={() => handleRenovar(lic.id)}
-                                  className="text-xs text-capul-600 hover:underline"
-                                >
-                                  Renovar
-                                </button>
-                                <button
-                                  onClick={() => handleInativar(lic.id)}
-                                  className="text-xs text-slate-500 hover:underline"
-                                >
-                                  Inativar
-                                </button>
+                                <button onClick={() => handleRenovar(lic.id)} className="text-xs text-capul-600 hover:underline">Renovar</button>
+                                <button onClick={() => handleInativar(lic.id)} className="text-xs text-slate-500 hover:underline">Inativar</button>
                               </>
                             )}
+                            <button onClick={() => handleExcluir(lic.id)} className="text-xs text-red-500 hover:underline">Excluir</button>
                           </div>
                         </td>
                       )}
                     </tr>
+                    {editingId === lic.id && (
+                      <tr className="bg-amber-50">
+                        <td colSpan={isAdmin ? 11 : 10} className="px-4 py-4">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                            {!lic.software && (
+                              <>
+                                <input type="text" placeholder="Nome" value={editNome} onChange={(e) => setEditNome(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                                <select value={editCategoriaId} onChange={(e) => setEditCategoriaId(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                                  <option value="">Categoria</option>
+                                  {categorias.filter(c => c.status === 'ATIVO').map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                                </select>
+                              </>
+                            )}
+                            <select value={editModelo} onChange={(e) => setEditModelo(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                              <option value="">Modelo</option>
+                              {Object.entries(modeloLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                            </select>
+                            <input type="number" min="1" placeholder="Quantidade" value={editQtd} onChange={(e) => setEditQtd(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                            <input type="text" placeholder="Fornecedor" value={editFornecedor} onChange={(e) => setEditFornecedor(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                            <input type="number" step="0.01" min="0" placeholder="Valor Total" value={editValorTotal} onChange={(e) => setEditValorTotal(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                            <input type="number" step="0.01" min="0" placeholder="Valor Unitario" value={editValorUnitario} onChange={(e) => setEditValorUnitario(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                            <input type="text" placeholder="Chave Serial" value={editChaveSerial} onChange={(e) => setEditChaveSerial(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                            <div>
+                              <label className="text-xs text-slate-500 mb-1 block">Inicio</label>
+                              <input type="date" value={editDataInicio} onChange={(e) => setEditDataInicio(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
+                            </div>
+                            <div>
+                              <label className="text-xs text-slate-500 mb-1 block">Vencimento</label>
+                              <input type="date" value={editDataVencimento} onChange={(e) => setEditDataVencimento(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
+                            </div>
+                            <input type="text" placeholder="Observacoes" value={editObservacoes} onChange={(e) => setEditObservacoes(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm col-span-2" />
+                          </div>
+                          {formError && <p className="text-xs text-red-600 mb-2">{formError}</p>}
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => { setEditingId(null); setFormError(''); }} className="text-xs text-slate-500 hover:underline">Cancelar</button>
+                            <button onClick={handleSaveEdit} disabled={saving} className="bg-capul-600 text-white px-4 py-1.5 rounded-lg text-xs hover:bg-capul-700 disabled:opacity-50">
+                              {saving ? 'Salvando...' : 'Salvar'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>

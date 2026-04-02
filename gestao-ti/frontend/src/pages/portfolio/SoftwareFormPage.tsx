@@ -17,7 +17,7 @@ export function SoftwareFormPage() {
   const [loadingData, setLoadingData] = useState(isEdit);
   const [error, setError] = useState('');
   const [dirty, setDirty] = useState(false);
-  const { ConfirmDialog } = useUnsavedChanges(dirty);
+  const { ConfirmDialog, guardedNavigate } = useUnsavedChanges(dirty);
 
   const [nome, setNome] = useState('');
   const [fabricante, setFabricante] = useState('');
@@ -103,7 +103,7 @@ export function SoftwareFormPage() {
       <Header title={isEdit ? 'Editar Software' : 'Novo Software'} />
       <div className="p-6 max-w-3xl" onChange={() => setDirty(true)}>
         <button
-          onClick={() => navigate(isEdit ? `/gestao-ti/softwares/${id}` : '/gestao-ti/softwares')}
+          onClick={() => guardedNavigate(isEdit ? `/gestao-ti/softwares/${id}` : '/gestao-ti/softwares')}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-6"
         >
           <ArrowLeft className="w-4 h-4" />

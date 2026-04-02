@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { useAuth } from '../../contexts/AuthContext';
 import { contratoService } from '../../services/contrato.service';
 import { coreService } from '../../services/core.service';
@@ -175,6 +176,7 @@ export function ContratoDetalhePage() {
     quantidadeParcelas: '', primeiroVencimento: '',
   });
   const [renovando, setRenovando] = useState(false);
+  const { ConfirmDialog, guardedNavigate } = useUnsavedChanges(showRenovar);
 
   async function load() {
     if (!id) return;
@@ -246,6 +248,7 @@ export function ContratoDetalhePage() {
 
   return (
     <>
+      {ConfirmDialog}
       <Header title={`Contrato #${contrato.numero}`} />
       {toast.el}
       <ConfirmModal
@@ -342,7 +345,7 @@ export function ContratoDetalhePage() {
       )}
 
       <div className="p-6">
-        <button onClick={() => navigate('/gestao-ti/contratos')}
+        <button onClick={() => guardedNavigate('/gestao-ti/contratos')}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4">
           <ArrowLeft className="w-4 h-4" /> Voltar
         </button>
@@ -637,6 +640,8 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
 
   // Editing parcela
   const [editingId, setEditingId] = useState<string | null>(null);
+  const isEditingParcelas = Boolean(showForm || editingId || pagarModal);
+  const { ConfirmDialog: ConfirmDialogParcelas } = useUnsavedChanges(isEditingParcelas);
 
   async function handleSaveEdit(p: ParcelaContrato, campos: { descricao?: string; notaFiscal?: string; observacoes?: string; valor?: number; dataVencimento?: string; dataPagamento?: string }) {
     try {
@@ -771,6 +776,8 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
   }
 
   return (
+    <>
+    {ConfirmDialogParcelas}
     <div className="bg-white rounded-xl border border-slate-200">
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
         <h4 className="font-semibold text-slate-700">Parcelas ({parcelas.length})</h4>
@@ -905,6 +912,7 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
         </div>
       )}
     </div>
+    </>
   );
 }
 
@@ -1135,6 +1143,7 @@ function TabRateioTemplate({ contrato, canManage, onReload, toast }: TabProps) {
   const [itens, setItens] = useState<{ centroCustoId: string; naturezaId: string; percentual: string; valorFixo: string; parametro: string }[]>([]);
   const [simulacao, setSimulacao] = useState<{ centroCustoId: string; valorCalculado: number }[] | null>(null);
   const [saving, setSaving] = useState(false);
+  const { ConfirmDialog: ConfirmDialogRateio } = useUnsavedChanges(showForm);
 
   useEffect(() => {
     coreService.listarCentrosCusto().then(setCentrosCusto).catch(() => {});
@@ -1234,6 +1243,8 @@ function TabRateioTemplate({ contrato, canManage, onReload, toast }: TabProps) {
   const ccMap = Object.fromEntries(centrosCusto.map((c) => [c.id, c]));
 
   return (
+    <>
+    {ConfirmDialogRateio}
     <div className="bg-white rounded-xl border border-slate-200">
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
         <h4 className="font-semibold text-slate-700">Rateio Template</h4>
@@ -1356,6 +1367,7 @@ function TabRateioTemplate({ contrato, canManage, onReload, toast }: TabProps) {
         </div>
       )}
     </div>
+    </>
   );
 }
 
@@ -1368,6 +1380,7 @@ function TabLicencas({ contrato, canManage, onReload, toast, confirm }: TabProps
   const [disponiveis, setDisponiveis] = useState<SoftwareLicenca[]>([]);
   const [showVincular, setShowVincular] = useState(false);
   const [selectedLicId, setSelectedLicId] = useState('');
+  const { ConfirmDialog: ConfirmDialogLicencas } = useUnsavedChanges(showVincular);
 
   async function loadDisponiveis() {
     try {
@@ -1403,6 +1416,8 @@ function TabLicencas({ contrato, canManage, onReload, toast, confirm }: TabProps
   }
 
   return (
+    <>
+    {ConfirmDialogLicencas}
     <div className="bg-white rounded-xl border border-slate-200">
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
         <h4 className="font-semibold text-slate-700">Licencas Vinculadas ({licencas.length})</h4>
@@ -1468,6 +1483,7 @@ function TabLicencas({ contrato, canManage, onReload, toast, confirm }: TabProps
         </table>
       )}
     </div>
+    </>
   );
 }
 

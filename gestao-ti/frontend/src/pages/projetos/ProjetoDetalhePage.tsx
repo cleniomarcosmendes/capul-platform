@@ -11,6 +11,7 @@ import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2
 import { formatDateBR } from '../../utils/date';
 import { MentionInput } from '../../components/MentionInput';
 import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import type {
   Projeto,
   MembroProjeto,
@@ -181,6 +182,10 @@ export function ProjetoDetalhePage() {
   const [tab, setTab] = useState<Tab>('subprojetos');
   const [statusChanging, setStatusChanging] = useState(false);
 
+  // Rastrear estado de edicao dos sub-componentes
+  const [childEditing, setChildEditing] = useState(false);
+  const { ConfirmDialog: ParentConfirmDialog, guardedNavigate } = useUnsavedChanges(childEditing);
+
   // Ler aba da URL se especificada (ex: ?tab=atividades)
   useEffect(() => {
     const tabParam = searchParams.get('tab') as Tab | null;
@@ -251,15 +256,15 @@ export function ProjetoDetalhePage() {
 
   // Navegacao: voltar para projeto pai se existir, senao para lista
   const handleVoltar = () => {
-    if (projeto.projetoPai) {
-      navigate(`/gestao-ti/projetos/${projeto.projetoPai.id}`);
-    } else {
-      navigate('/gestao-ti/projetos');
-    }
+    const dest = projeto.projetoPai
+      ? `/gestao-ti/projetos/${projeto.projetoPai.id}`
+      : '/gestao-ti/projetos';
+    guardedNavigate(dest);
   };
 
   return (
     <>
+      {ParentConfirmDialog}
       <Header title={`Projeto #${projeto.numero}`} />
       <div className="p-6">
         {/* Breadcrumbs - Navegacao Hierarquica */}
@@ -417,19 +422,19 @@ export function ProjetoDetalhePage() {
           <TabSubProjetos projeto={projeto} canManage={canManage} isRestrictedRole={isRestrictedRole} />
         )}
         {tab === 'equipe' && showEquipeTab && (
-          <TabEquipe projetoId={projeto.id} canManage={canManage} />
+          <TabEquipe projetoId={projeto.id} canManage={canManage} onEditingChange={setChildEditing} />
         )}
         {tab === 'atividades' && (
-          <TabCronograma projetoId={projeto.id} isCompleto={isCompleto} canManage={canManage} canAdd={canAddAtividade} userId={usuario?.id || ''} isGestor={gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI'} />
+          <TabCronograma projetoId={projeto.id} isCompleto={isCompleto} canManage={canManage} canAdd={canAddAtividade} userId={usuario?.id || ''} isGestor={gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI'} onEditingChange={setChildEditing} />
         )}
         {tab === 'financeiro' && (
-          <TabFinanceiro projetoId={projeto.id} projeto={projeto} canManage={canManage} />
+          <TabFinanceiro projetoId={projeto.id} projeto={projeto} canManage={canManage} onEditingChange={setChildEditing} />
         )}
         {tab === 'riscos' && isCompleto && (
-          <TabRiscos projetoId={projeto.id} canManage={canManage} />
+          <TabRiscos projetoId={projeto.id} canManage={canManage} onEditingChange={setChildEditing} />
         )}
         {tab === 'dependencias' && isCompleto && (
-          <TabDependencias projetoId={projeto.id} canManage={canManage} />
+          <TabDependencias projetoId={projeto.id} canManage={canManage} onEditingChange={setChildEditing} />
         )}
         {tab === 'anexos' && (
           <TabAnexos projetoId={projeto.id} canAdd={canAddAtividade} canManage={canManage} />
@@ -438,13 +443,14 @@ export function ProjetoDetalhePage() {
           <TabChamados projetoId={projeto.id} canManage={canManage} />
         )}
         {tab === 'usuariosChave' && (
-          <TabUsuariosChave projetoId={projeto.id} canManage={canManage} />
+          <TabUsuariosChave projetoId={projeto.id} canManage={canManage} onEditingChange={setChildEditing} />
         )}
         {tab === 'pendencias' && (
           <TabPendencias
             projetoId={projeto.id}
             projetoNumero={projeto.numero}
             isSubProjeto={!!projeto.projetoPai}
+            onEditingChange={setChildEditing}
           />
         )}
       </div>
@@ -501,7 +507,7 @@ function TabSubProjetos({ projeto, canManage, isRestrictedRole }: { projeto: Pro
 }
 
 // --- Tab Equipe ---
-function TabEquipe({ projetoId, canManage }: { projetoId: string; canManage: boolean }) {
+function TabEquipe({ projetoId, canManage, onEditingChange }: { projetoId: string; canManage: boolean; onEditingChange?: (editing: boolean) => void }) {
   const { confirm } = useToast();
   const [membros, setMembros] = useState<MembroProjeto[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioCore[]>([]);
@@ -510,6 +516,12 @@ function TabEquipe({ projetoId, canManage }: { projetoId: string; canManage: boo
   const [novoUsuarioId, setNovoUsuarioId] = useState('');
   const [novoPapel, setNovoPapel] = useState<PapelRaci>('RESPONSAVEL');
   const [saving, setSaving] = useState(false);
+  // Protecao de edicao delegada ao pai via onEditingChange
+
+  useEffect(() => {
+    onEditingChange?.(showForm);
+    return () => onEditingChange?.(false);
+  }, [showForm, onEditingChange]);
 
   useEffect(() => {
     loadMembros();
@@ -549,6 +561,8 @@ function TabEquipe({ projetoId, canManage }: { projetoId: string; canManage: boo
   const availableUsers = usuarios.filter((u) => !membrosIds.has(u.id));
 
   return (
+    <>
+    {/* protecao via pai */}
     <div className="bg-white rounded-xl border border-slate-200">
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
         <h4 className="font-semibold text-slate-700">Equipe RACI ({membros.length})</h4>
@@ -603,11 +617,12 @@ function TabEquipe({ projetoId, canManage }: { projetoId: string; canManage: boo
         </div>
       )}
     </div>
+    </>
   );
 }
 
 // --- Tab Atividades (Fases + Atividades + Registros de Tempo) ---
-function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGestor }: { projetoId: string; isCompleto: boolean; canManage: boolean; canAdd: boolean; userId: string; isGestor: boolean }) {
+function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGestor, onEditingChange }: { projetoId: string; isCompleto: boolean; canManage: boolean; canAdd: boolean; userId: string; isGestor: boolean; onEditingChange?: (editing: boolean) => void }) {
   const { confirm } = useToast();
   const [fases, setFases] = useState<FaseProjeto[]>([]);
   const [atividades, setAtividades] = useState<AtividadeProjeto[]>([]);
@@ -661,6 +676,16 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   const [editingComentario, setEditingComentario] = useState<string | null>(null);
   const [editComentarioTexto, setEditComentarioTexto] = useState('');
   const [editComentarioVisivel, setEditComentarioVisivel] = useState(false);
+  const isEditingCronograma = Boolean(
+    showFaseForm || editingFaseId || editingAtividade || editingRegistro ||
+    (novoComentario && novoComentario.trim()) || editingComentario ||
+    novoTitulo.trim() || novaDescricao.trim()
+  );
+
+  useEffect(() => {
+    onEditingChange?.(isEditingCronograma);
+    return () => onEditingChange?.(false);
+  }, [isEditingCronograma, onEditingChange]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -1202,8 +1227,8 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
                       onChange={setNovoComentario}
                       usuarios={membrosEquipe.map((m) => ({ id: m.usuarioId, nome: m.usuario.nome, username: m.usuario.username }))}
                       placeholder="Adicionar nota... (use @usuario para mencionar)"
-                      rows={2}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs resize-none"
+                      rows={8}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs"
                     />
                   </div>
                   <button
@@ -1243,7 +1268,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
                         value={editComentarioTexto}
                         onChange={setEditComentarioTexto}
                         usuarios={membrosEquipe.map((m) => ({ id: m.usuarioId, nome: m.usuario.nome, username: m.usuario.username }))}
-                        rows={4}
+                        rows={8}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs mb-3"
                         placeholder="Editar nota... (use @usuario para mencionar)"
                       />
@@ -1299,6 +1324,8 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   if (loading) return <p className="text-slate-500 text-sm">Carregando...</p>;
 
   return (
+    <>
+    {/* protecao via pai */}
     <div className="space-y-4">
       {/* Nova Atividade */}
       {canAdd && (
@@ -1451,6 +1478,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
       )}
 
     </div>
+    </>
   );
 }
 
@@ -1468,7 +1496,7 @@ function fmtHora(dt: string | null): string {
 
 
 // --- Tab Cotacoes ---
-function TabCotacoes({ projetoId, canManage }: { projetoId: string; canManage: boolean }) {
+function TabCotacoes({ projetoId, canManage, onEditingChange }: { projetoId: string; canManage: boolean; onEditingChange?: (editing: boolean) => void }) {
   const { confirm } = useToast();
   const [itens, setItens] = useState<CotacaoProjeto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1478,6 +1506,12 @@ function TabCotacoes({ projetoId, canManage }: { projetoId: string; canManage: b
   const [valor, setValor] = useState('');
   const [descricao, setDescricao] = useState('');
   const [moeda, setMoeda] = useState('BRL');
+  // Protecao de edicao delegada ao pai via onEditingChange
+
+  useEffect(() => {
+    onEditingChange?.(showForm);
+    return () => onEditingChange?.(false);
+  }, [showForm, onEditingChange]);
 
   useEffect(() => { load(); }, [projetoId]);
 
@@ -1516,6 +1550,8 @@ function TabCotacoes({ projetoId, canManage }: { projetoId: string; canManage: b
   }
 
   return (
+    <>
+    {/* protecao via pai */}
     <div className="bg-white rounded-xl border border-slate-200">
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
         <h4 className="font-semibold text-slate-700">Cotacoes ({itens.length})</h4>
@@ -1578,11 +1614,12 @@ function TabCotacoes({ projetoId, canManage }: { projetoId: string; canManage: b
         </div>
       )}
     </div>
+    </>
   );
 }
 
 // --- Tab Financeiro (Cotações + Custos mesclados) ---
-function TabFinanceiro({ projetoId, projeto, canManage }: { projetoId: string; projeto: Projeto; canManage: boolean }) {
+function TabFinanceiro({ projetoId, projeto, canManage, onEditingChange }: { projetoId: string; projeto: Projeto; canManage: boolean; onEditingChange?: (editing: boolean) => void }) {
   const [subTab, setSubTab] = useState<'resumo' | 'cotacoes' | 'custos'>('resumo');
   return (
     <div className="space-y-4">
@@ -1601,8 +1638,8 @@ function TabFinanceiro({ projetoId, projeto, canManage }: { projetoId: string; p
         </div>
       </div>
       {subTab === 'resumo' && <TabCustosResumo projetoId={projetoId} projeto={projeto} />}
-      {subTab === 'cotacoes' && <TabCotacoes projetoId={projetoId} canManage={canManage} />}
-      {subTab === 'custos' && <TabCustosDetalhados projetoId={projetoId} canManage={canManage} />}
+      {subTab === 'cotacoes' && <TabCotacoes projetoId={projetoId} canManage={canManage} onEditingChange={onEditingChange} />}
+      {subTab === 'custos' && <TabCustosDetalhados projetoId={projetoId} canManage={canManage} onEditingChange={onEditingChange} />}
     </div>
   );
 }
@@ -1673,7 +1710,7 @@ function TabCustosResumo({ projetoId, projeto: _projeto }: { projetoId: string; 
   );
 }
 
-function TabCustosDetalhados({ projetoId, canManage }: { projetoId: string; canManage: boolean }) {
+function TabCustosDetalhados({ projetoId, canManage, onEditingChange }: { projetoId: string; canManage: boolean; onEditingChange?: (editing: boolean) => void }) {
   const { confirm } = useToast();
   const [itens, setItens] = useState<CustoProjeto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1683,6 +1720,12 @@ function TabCustosDetalhados({ projetoId, canManage }: { projetoId: string; canM
   const [categoria, setCategoria] = useState<CategoriaCusto>('MAO_DE_OBRA');
   const [valorPrevisto, setValorPrevisto] = useState('');
   const [valorRealizado, setValorRealizado] = useState('');
+  // Protecao de edicao delegada ao pai via onEditingChange
+
+  useEffect(() => {
+    onEditingChange?.(showForm);
+    return () => onEditingChange?.(false);
+  }, [showForm, onEditingChange]);
 
   useEffect(() => { load(); }, [projetoId]);
 
@@ -1713,6 +1756,8 @@ function TabCustosDetalhados({ projetoId, canManage }: { projetoId: string; canM
   }
 
   return (
+    <>
+    {/* protecao via pai */}
     <div className="bg-white rounded-xl border border-slate-200">
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
         <h4 className="font-semibold text-slate-700">Custos Detalhados ({itens.length})</h4>
@@ -1752,11 +1797,12 @@ function TabCustosDetalhados({ projetoId, canManage }: { projetoId: string; canM
         </div>
       )}
     </div>
+    </>
   );
 }
 
 // --- Tab Riscos ---
-function TabRiscos({ projetoId, canManage }: { projetoId: string; canManage: boolean }) {
+function TabRiscos({ projetoId, canManage, onEditingChange }: { projetoId: string; canManage: boolean; onEditingChange?: (editing: boolean) => void }) {
   const { confirm } = useToast();
   const [itens, setItens] = useState<RiscoProjeto[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioCore[]>([]);
@@ -1768,6 +1814,12 @@ function TabRiscos({ projetoId, canManage }: { projetoId: string; canManage: boo
   const [impacto, setImpacto] = useState<ImpactoRisco>('MEDIO');
   const [planoMitigacao, setPlanoMitigacao] = useState('');
   const [responsavelId, setResponsavelId] = useState('');
+  // Protecao de edicao delegada ao pai via onEditingChange
+
+  useEffect(() => {
+    onEditingChange?.(showForm);
+    return () => onEditingChange?.(false);
+  }, [showForm, onEditingChange]);
 
   useEffect(() => {
     load();
@@ -1806,6 +1858,8 @@ function TabRiscos({ projetoId, canManage }: { projetoId: string; canManage: boo
   }
 
   return (
+    <>
+    {/* protecao via pai */}
     <div className="bg-white rounded-xl border border-slate-200">
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
         <h4 className="font-semibold text-slate-700">Riscos ({itens.length})</h4>
@@ -1884,11 +1938,12 @@ function TabRiscos({ projetoId, canManage }: { projetoId: string; canManage: boo
         </div>
       )}
     </div>
+    </>
   );
 }
 
 // --- Tab Dependencias ---
-function TabDependencias({ projetoId, canManage }: { projetoId: string; canManage: boolean }) {
+function TabDependencias({ projetoId, canManage, onEditingChange }: { projetoId: string; canManage: boolean; onEditingChange?: (editing: boolean) => void }) {
   const { confirm } = useToast();
   const [projetos, setProjetos] = useState<Projeto[]>([]);
   const [origem, setOrigem] = useState<DependenciaProjeto[]>([]);
@@ -1899,6 +1954,12 @@ function TabDependencias({ projetoId, canManage }: { projetoId: string; canManag
   const [projetoDestinoId, setProjetoDestinoId] = useState('');
   const [tipo, setTipo] = useState<TipoDependencia>('BLOQUEIO');
   const [descricao, setDescricao] = useState('');
+  // Protecao de edicao delegada ao pai via onEditingChange
+
+  useEffect(() => {
+    onEditingChange?.(showForm);
+    return () => onEditingChange?.(false);
+  }, [showForm, onEditingChange]);
 
   useEffect(() => {
     load();
@@ -1937,6 +1998,8 @@ function TabDependencias({ projetoId, canManage }: { projetoId: string; canManag
   const available = projetos.filter((p) => p.id !== projetoId);
 
   return (
+    <>
+    {/* protecao via pai */}
     <div className="space-y-4">
       <div className="bg-white rounded-xl border border-slate-200">
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
@@ -2020,6 +2083,7 @@ function TabDependencias({ projetoId, canManage }: { projetoId: string; canManag
         )}
       </div>
     </div>
+    </>
   );
 }
 
@@ -2216,7 +2280,7 @@ function TabChamados({ projetoId, canManage }: { projetoId: string; canManage: b
 }
 
 // --- Tab Usuarios-Chave ---
-function TabUsuariosChave({ projetoId, canManage }: { projetoId: string; canManage: boolean }) {
+function TabUsuariosChave({ projetoId, canManage, onEditingChange }: { projetoId: string; canManage: boolean; onEditingChange?: (editing: boolean) => void }) {
   const { toast } = useToast();
   const [itens, setItens] = useState<UsuarioChaveProjeto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2225,6 +2289,12 @@ function TabUsuariosChave({ projetoId, canManage }: { projetoId: string; canMana
   const [formUsuarioId, setFormUsuarioId] = useState('');
   const [formFuncao, setFormFuncao] = useState('');
   const [salvando, setSalvando] = useState(false);
+  // Protecao de edicao delegada ao pai via onEditingChange
+
+  useEffect(() => {
+    onEditingChange?.(showForm);
+    return () => onEditingChange?.(false);
+  }, [showForm, onEditingChange]);
 
   useEffect(() => { load(); }, [projetoId]);
 
@@ -2273,6 +2343,8 @@ function TabUsuariosChave({ projetoId, canManage }: { projetoId: string; canMana
   const usuariosDisponiveis = usuarios.filter((u) => !idsExistentes.has(u.id));
 
   return (
+    <>
+    {/* protecao via pai */}
     <div className="bg-white rounded-xl border border-slate-200">
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
         <h4 className="font-semibold text-slate-700">
@@ -2347,14 +2419,16 @@ function TabUsuariosChave({ projetoId, canManage }: { projetoId: string; canMana
         </table>
       )}
     </div>
+    </>
   );
 }
 
 // --- Tab Pendencias ---
-function TabPendencias({ projetoId, projetoNumero, isSubProjeto }: {
+function TabPendencias({ projetoId, projetoNumero, isSubProjeto, onEditingChange }: {
   projetoId: string;
   projetoNumero?: number;
   isSubProjeto?: boolean;
+  onEditingChange?: (editing: boolean) => void;
 }) {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -2372,6 +2446,12 @@ function TabPendencias({ projetoId, projetoNumero, isSubProjeto }: {
   const [formResponsavelId, setFormResponsavelId] = useState('');
   const [formDataLimite, setFormDataLimite] = useState('');
   const [salvando, setSalvando] = useState(false);
+  // Protecao de edicao delegada ao pai via onEditingChange
+
+  useEffect(() => {
+    onEditingChange?.(showForm);
+    return () => onEditingChange?.(false);
+  }, [showForm, onEditingChange]);
 
   // Membros + Usuarios-chave para select de responsavel
   const [responsaveis, setResponsaveis] = useState<{ id: string; nome: string }[]>([]);
@@ -2451,6 +2531,7 @@ function TabPendencias({ projetoId, projetoNumero, isSubProjeto }: {
 
   return (
     <>
+      {/* protecao via pai */}
       <div className="bg-white rounded-xl border border-slate-200">
         {/* Indicador de Contexto */}
         <div className={`px-6 py-3 border-b ${isSubProjeto ? 'bg-blue-50 border-blue-200' : 'bg-capul-50 border-capul-200'}`}>
