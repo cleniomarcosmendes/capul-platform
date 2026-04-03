@@ -132,11 +132,11 @@ export class ParadaService {
     });
   }
 
-  async update(id: string, dto: UpdateParadaDto) {
+  async update(id: string, dto: UpdateParadaDto, userId?: string) {
     const parada = await this.prisma.registroParada.findUnique({ where: { id } });
     if (!parada) throw new NotFoundException('Parada nao encontrada');
-    if (parada.status !== 'EM_ANDAMENTO') {
-      throw new BadRequestException('So e possivel editar paradas em andamento');
+    if (parada.status === 'CANCELADA') {
+      throw new BadRequestException('Nao e possivel editar paradas canceladas');
     }
 
     if (dto.softwareId) {
@@ -152,9 +152,24 @@ export class ParadaService {
       if (!modulo) throw new BadRequestException('Modulo nao pertence ao software informado');
     }
 
-    const { filialIds, ...data } = dto;
+    const { filialIds, fim, ...data } = dto;
     const updateData: Record<string, unknown> = { ...data };
     if (data.inicio) updateData.inicio = new Date(data.inicio);
+
+    // Tratar campo fim: se preenchido, finalizar a parada
+    if (fim) {
+      const fimDate = new Date(fim);
+      const inicioDate = data.inicio ? new Date(data.inicio) : parada.inicio;
+      if (fimDate <= inicioDate) {
+        throw new BadRequestException('Data fim deve ser posterior ao inicio');
+      }
+      updateData.fim = fimDate;
+      updateData.duracaoMinutos = Math.round((fimDate.getTime() - inicioDate.getTime()) / 60000);
+      if (parada.status === 'EM_ANDAMENTO') {
+        updateData.status = 'FINALIZADA';
+        if (userId) updateData.finalizadoPorId = userId;
+      }
+    }
 
     if (filialIds) {
       return this.prisma.$transaction(async (tx) => {

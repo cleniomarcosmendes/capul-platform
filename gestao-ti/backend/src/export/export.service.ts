@@ -4,7 +4,7 @@ import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
 import type { Response } from 'express';
 
-const ENTIDADES_VALIDAS = ['ativos', 'chamados', 'contratos', 'softwares', 'licencas', 'paradas', 'projetos', 'ordens-servico'] as const;
+const ENTIDADES_VALIDAS = ['ativos', 'chamados', 'contratos', 'softwares', 'licencas', 'paradas', 'projetos', 'ordens-servico', 'notas-fiscais'] as const;
 type Entidade = (typeof ENTIDADES_VALIDAS)[number];
 
 @Injectable()
@@ -28,6 +28,7 @@ export class ExportService {
       case 'paradas': await this.exportParadas(sheet); break;
       case 'projetos': await this.exportProjetos(sheet); break;
       case 'ordens-servico': await this.exportOrdensServico(sheet); break;
+      case 'notas-fiscais': await this.exportNotasFiscais(sheet); break;
     }
 
     // Estilizar header
@@ -767,5 +768,53 @@ export class ExportService {
       custoPrevisto: d.custoPrevisto ? Number(d.custoPrevisto) : '',
       custoRealizado: d.custoRealizado ? Number(d.custoRealizado) : '',
     }));
+  }
+
+  private async exportNotasFiscais(sheet: ExcelJS.Worksheet) {
+    sheet.columns = [
+      { header: 'NF', key: 'numero' },
+      { header: 'Data Lancamento', key: 'dataLancamento' },
+      { header: 'Fornecedor', key: 'fornecedor' },
+      { header: 'Status', key: 'status' },
+      { header: 'Produto', key: 'produto' },
+      { header: 'Tipo Produto', key: 'tipoProduto' },
+      { header: 'Qtde', key: 'quantidade' },
+      { header: 'Valor Unitario', key: 'valorUnitario' },
+      { header: 'Valor Total Item', key: 'valorTotalItem' },
+      { header: 'Departamento', key: 'departamento' },
+      { header: 'Projeto', key: 'projeto' },
+      { header: 'Valor Total NF', key: 'valorTotalNF' },
+    ];
+    const dados = await this.prisma.notaFiscal.findMany({
+      include: {
+        fornecedor: true,
+        itens: {
+          include: {
+            produto: { include: { tipoProduto: true } },
+            departamento: true,
+            projeto: { select: { numero: true, nome: true } },
+          },
+        },
+      },
+      orderBy: { dataLancamento: 'desc' },
+    });
+    dados.forEach((nf) => {
+      nf.itens.forEach((item) => {
+        sheet.addRow({
+          numero: nf.numero,
+          dataLancamento: new Date(nf.dataLancamento).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+          fornecedor: `${nf.fornecedor.codigo} - ${nf.fornecedor.nome}`,
+          status: nf.status,
+          produto: `${item.produto.codigo} - ${item.produto.descricao}`,
+          tipoProduto: item.produto.tipoProduto?.descricao || '',
+          quantidade: item.quantidade,
+          valorUnitario: Number(item.valorUnitario),
+          valorTotalItem: Number(item.valorTotal),
+          departamento: item.departamento.nome,
+          projeto: item.projeto ? `#${item.projeto.numero} - ${item.projeto.nome}` : '',
+          valorTotalNF: Number(nf.valorTotal),
+        });
+      });
+    });
   }
 }

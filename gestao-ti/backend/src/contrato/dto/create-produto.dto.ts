@@ -10,6 +10,10 @@ export class CreateProdutoDto {
   @IsNotEmpty()
   @MaxLength(50)
   descricao: string;
+
+  @IsOptional()
+  @IsString()
+  tipoProdutoId?: string;
 }
 
 export class UpdateProdutoDto {
@@ -22,6 +26,10 @@ export class UpdateProdutoDto {
   @IsString()
   @MaxLength(50)
   descricao?: string;
+
+  @IsOptional()
+  @IsString()
+  tipoProdutoId?: string;
 
   @IsOptional()
   @IsString()

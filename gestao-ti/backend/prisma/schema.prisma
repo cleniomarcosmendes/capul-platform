@@ -27,6 +27,7 @@ model Filial {
   departamentos   Departamento[]
   ativos          Ativo[]
   contratos       Contrato[]        @relation("ContratoFilial")
+  notasFiscais    NotaFiscal[]      @relation("NotaFiscalFilial")
 
   @@map("filiais")
   @@schema("core")
@@ -73,6 +74,7 @@ model Usuario {
   licencaUsuarios        LicencaUsuario[]        @relation("LicencaUsuario")
   anexosConhecimento     AnexoConhecimento[]     @relation("AnexoConhecimentoUsuario")
   horarioTrabalho        HorarioTrabalho?        @relation("HorarioTrabalho")
+  notasFiscaisCriadas    NotaFiscal[]            @relation("NotaFiscalCriadaPor")
 
   @@map("usuarios")
   @@schema("core")
@@ -110,8 +112,9 @@ model Departamento {
   tipoDepartamentoId String           @map("tipo_departamento_id")
   tipoDepartamento   TipoDepartamento @relation(fields: [tipoDepartamentoId], references: [id])
 
-  ativos   Ativo[]
-  chamados Chamado[]
+  ativos          Ativo[]
+  chamados        Chamado[]
+  notaFiscalItens NotaFiscalItem[]
 
   @@map("departamentos")
   @@schema("core")
@@ -623,22 +626,40 @@ model FornecedorConfig {
   createdAt DateTime    @default(now()) @map("created_at")
   updatedAt DateTime    @updatedAt @map("updated_at")
 
-  contratos Contrato[]
+  contratos     Contrato[]
+  notasFiscais  NotaFiscal[]
 
   @@unique([codigo, loja])
   @@map("fornecedores")
   @@schema("gestao_ti")
 }
 
-model ProdutoConfig {
+model TipoProduto {
   id        String      @id @default(uuid())
-  codigo    String      @unique @db.VarChar(15)
-  descricao String      @db.VarChar(50)
+  codigo    String      @unique @db.VarChar(10)
+  descricao String      @db.VarChar(100)
   status    StatusGeral @default(ATIVO)
   createdAt DateTime    @default(now()) @map("created_at")
   updatedAt DateTime    @updatedAt @map("updated_at")
 
-  contratos Contrato[]
+  produtos ProdutoConfig[]
+
+  @@map("tipos_produto")
+  @@schema("gestao_ti")
+}
+
+model ProdutoConfig {
+  id             String       @id @default(uuid())
+  codigo         String       @unique @db.VarChar(15)
+  descricao      String       @db.VarChar(50)
+  tipoProdutoId  String?      @map("tipo_produto_id")
+  tipoProduto    TipoProduto? @relation(fields: [tipoProdutoId], references: [id])
+  status         StatusGeral  @default(ATIVO)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  contratos       Contrato[]
+  notaFiscalItens NotaFiscalItem[]
 
   @@map("produtos")
   @@schema("gestao_ti")
@@ -729,6 +750,20 @@ enum TipoProjeto {
   INFRAESTRUTURA
   OUTRO
 
+  @@schema("gestao_ti")
+}
+
+model TipoProjetoConfig {
+  id        String      @id @default(uuid())
+  codigo    String      @unique @db.VarChar(30)
+  descricao String      @db.VarChar(100)
+  status    StatusGeral @default(ATIVO)
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  projetos Projeto[]
+
+  @@map("tipos_projeto")
   @@schema("gestao_ti")
 }
 
@@ -1123,7 +1158,8 @@ model ParcelaContrato {
   contratoId String   @map("contrato_id")
   contrato   Contrato @relation(fields: [contratoId], references: [id])
 
-  rateioItens ParcelaRateioItem[]
+  rateioItens        ParcelaRateioItem[]
+  rateioProjetos     ParcelaRateioProjeto[]
 
   @@unique([contratoId, numero])
   @@index([dataVencimento])
@@ -1186,6 +1222,24 @@ model ParcelaRateioItem {
 
   @@unique([parcelaId, centroCustoId])
   @@map("parcela_rateio_itens")
+  @@schema("gestao_ti")
+}
+
+model ParcelaRateioProjeto {
+  id             String   @id @default(uuid())
+  percentual     Decimal? @db.Decimal(7, 4)
+  valorCalculado Decimal  @map("valor_calculado") @db.Decimal(12, 2)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  parcelaId String          @map("parcela_id")
+  parcela   ParcelaContrato @relation(fields: [parcelaId], references: [id], onDelete: Cascade)
+
+  projetoId String  @map("projeto_id")
+  projeto   Projeto @relation(fields: [projetoId], references: [id])
+
+  @@unique([parcelaId, projetoId])
+  @@index([projetoId])
+  @@map("parcela_rateio_projetos")
   @@schema("gestao_ti")
 }
 
@@ -1350,6 +1404,8 @@ model Projeto {
   nome            String
   descricao       String?
   tipo            TipoProjeto
+  tipoProjetoId   String?            @map("tipo_projeto_id")
+  tipoProjeto     TipoProjetoConfig? @relation(fields: [tipoProjetoId], references: [id])
   modo            ModoProjeto   @default(COMPLETO)
   status          StatusProjeto @default(PLANEJAMENTO)
   nivel           Int           @default(1)
@@ -1390,6 +1446,8 @@ model Projeto {
   usuariosChave       UsuarioChaveProjeto[]
   terceirizados       TerceirizadoProjeto[]
   pendencias          PendenciaProjeto[]
+  notaFiscalItens     NotaFiscalItem[]
+  parcelaRateios      ParcelaRateioProjeto[]
 
   @@index([status])
   @@index([projetoPaiId])
@@ -1972,5 +2030,70 @@ model HorarioTrabalho {
   usuario   Usuario? @relation("HorarioTrabalho", fields: [usuarioId], references: [id])
 
   @@map("horarios_trabalho")
+  @@schema("gestao_ti")
+}
+
+// ── Fase 7: Compras de TI — Notas Fiscais ──
+
+enum StatusNotaFiscal {
+  REGISTRADA
+  CONFERIDA
+  CANCELADA
+
+  @@schema("gestao_ti")
+}
+
+model NotaFiscal {
+  id           String            @id @default(uuid())
+  numero       String            @db.VarChar(20)
+  dataLancamento  DateTime          @map("data_lancamento")
+  status       StatusNotaFiscal  @default(REGISTRADA)
+  observacao   String?
+  valorTotal   Decimal           @default(0) @map("valor_total") @db.Decimal(12, 2)
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+
+  fornecedorId String          @map("fornecedor_id")
+  fornecedor   FornecedorConfig @relation(fields: [fornecedorId], references: [id])
+
+  filialId String @map("filial_id")
+  filial   Filial @relation("NotaFiscalFilial", fields: [filialId], references: [id])
+
+  criadoPorId String  @map("criado_por_id")
+  criadoPor   Usuario @relation("NotaFiscalCriadaPor", fields: [criadoPorId], references: [id])
+
+  itens NotaFiscalItem[]
+
+  @@unique([numero, fornecedorId])
+  @@index([fornecedorId])
+  @@index([filialId])
+  @@index([dataLancamento])
+  @@map("notas_fiscais")
+  @@schema("gestao_ti")
+}
+
+model NotaFiscalItem {
+  id            String  @id @default(uuid())
+  quantidade    Int
+  valorUnitario Decimal @map("valor_unitario") @db.Decimal(12, 2)
+  valorTotal    Decimal @map("valor_total") @db.Decimal(12, 2)
+  observacao    String?
+
+  notaFiscalId String     @map("nota_fiscal_id")
+  notaFiscal   NotaFiscal @relation(fields: [notaFiscalId], references: [id], onDelete: Cascade)
+
+  produtoId String        @map("produto_id")
+  produto   ProdutoConfig @relation(fields: [produtoId], references: [id])
+
+  departamentoId String       @map("departamento_id")
+  departamento   Departamento @relation(fields: [departamentoId], references: [id])
+
+  projetoId String?  @map("projeto_id")
+  projeto   Projeto? @relation(fields: [projetoId], references: [id])
+
+  @@index([notaFiscalId])
+  @@index([projetoId])
+  @@index([departamentoId])
+  @@map("nota_fiscal_itens")
   @@schema("gestao_ti")
 }

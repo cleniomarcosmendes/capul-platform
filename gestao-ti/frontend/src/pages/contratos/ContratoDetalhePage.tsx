@@ -9,8 +9,12 @@ import { licencaService } from '../../services/licenca.service';
 import {
   ArrowLeft, Edit3, RefreshCw, Receipt, PieChart, KeyRound, Clock,
   X, FileText, Upload, Download, Trash2, Printer,
-  ChevronDown, ChevronRight, Copy, Zap, Pencil, Check,
+  ChevronDown, ChevronRight, Copy, Zap, Pencil, Check, FolderKanban,
+  Plus,
 } from 'lucide-react';
+import { projetoService } from '../../services/projeto.service';
+import { SearchSelect } from '../../components/SearchSelect';
+import type { SearchSelectOption } from '../../components/SearchSelect';
 import type {
   Contrato,
   StatusContrato,
@@ -132,7 +136,7 @@ const TRANSICOES: Record<string, StatusContrato[]> = {
   CANCELADO: ['ATIVO'],
 };
 
-type Tab = 'geral' | 'parcelas' | 'rateio' | 'licencas' | 'renovacoes' | 'historico';
+type Tab = 'geral' | 'parcelas' | 'rateio' | 'rateioProjeto' | 'licencas' | 'renovacoes' | 'historico';
 
 // ─── Main Page ──────────────────────────────────────────────
 
@@ -241,6 +245,7 @@ export function ContratoDetalhePage() {
     { key: 'geral', label: 'Geral', icon: FileText },
     { key: 'parcelas', label: 'Parcelas', icon: Receipt },
     { key: 'rateio', label: 'Rateio Template', icon: PieChart },
+    { key: 'rateioProjeto', label: 'Rateio Projeto', icon: FolderKanban },
     { key: 'licencas', label: 'Licencas', icon: KeyRound },
     { key: 'renovacoes', label: 'Renovacoes', icon: RefreshCw },
     { key: 'historico', label: 'Historico', icon: Clock },
@@ -450,6 +455,7 @@ export function ContratoDetalhePage() {
         {tab === 'geral' && <TabGeral contrato={contrato} canManage={canManage} onReload={load} toast={toast} confirm={confirm} />}
         {tab === 'parcelas' && <TabParcelas contrato={contrato} canManage={canManage} onReload={load} toast={toast} confirm={confirm} />}
         {tab === 'rateio' && <TabRateioTemplate contrato={contrato} canManage={canManage} onReload={load} toast={toast} />}
+        {tab === 'rateioProjeto' && <TabRateioProjeto contrato={contrato} canManage={canManage} toast={toast} />}
         {tab === 'licencas' && <TabLicencas contrato={contrato} canManage={canManage} onReload={load} toast={toast} confirm={confirm} />}
         {tab === 'renovacoes' && <TabRenovacoes contrato={contrato} />}
         {tab === 'historico' && <TabHistorico historicos={contrato.historicos || []} />}
@@ -1701,6 +1707,304 @@ function TabHistorico({ historicos }: { historicos: ContratoHistorico[] }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Tab Rateio Projeto ─────────────────────────────────────
+
+interface RateioProjetoItem {
+  id: string;
+  percentual: number | null;
+  valorCalculado: number;
+  projeto: { id: string; numero: number; nome: string; status: string };
+}
+
+function TabRateioProjeto({ contrato, canManage, toast }: Omit<TabProps, 'onReload'>) {
+  const [parcelas, setParcelas] = useState<ParcelaContrato[]>([]);
+  const [selectedParcelaId, setSelectedParcelaId] = useState<string>('');
+  const [rateioItens, setRateioItens] = useState<RateioProjetoItem[]>([]);
+  const [projetos, setProjetos] = useState<{ id: string; numero: number; nome: string; status: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // Form state
+  const [editing, setEditing] = useState(false);
+  const [editItens, setEditItens] = useState<{ projetoId: string; percentual: string; valorCalculado: string }[]>([]);
+
+  useEffect(() => {
+    const ps = contrato.parcelas || [];
+    setParcelas(ps);
+    if (ps.length > 0) setSelectedParcelaId(ps[0].id);
+
+    projetoService.listar().then((all: { id: string; numero: number; nome: string; status: string }[]) => {
+      setProjetos(all.filter((p: { status: string }) => p.status !== 'CANCELADO'));
+    }).catch(() => {});
+    setLoading(false);
+  }, [contrato]);
+
+  useEffect(() => {
+    if (selectedParcelaId) carregarRateio();
+  }, [selectedParcelaId]);
+
+  async function carregarRateio() {
+    try {
+      const data = await contratoService.obterRateioProjeto(contrato.id, selectedParcelaId) as RateioProjetoItem[];
+      setRateioItens(data);
+    } catch { setRateioItens([]); }
+  }
+
+  const selectedParcela = parcelas.find((p) => p.id === selectedParcelaId);
+  const valorParcela = selectedParcela ? Number(selectedParcela.valor) : 0;
+  const valorRateado = rateioItens.reduce((s, i) => s + Number(i.valorCalculado), 0);
+  const valorNaoRateado = valorParcela - valorRateado;
+
+  const projetoOptions: SearchSelectOption[] = projetos
+    .filter((p) => !editItens.some((ei) => ei.projetoId === p.id))
+    .map((p) => ({
+      value: p.id,
+      label: `#${p.numero} - ${p.nome}`,
+      sublabel: p.status,
+    }));
+
+  function startEdit() {
+    setEditItens(rateioItens.map((i) => ({
+      projetoId: i.projeto.id,
+      percentual: i.percentual !== null ? String(i.percentual) : '',
+      valorCalculado: String(Number(i.valorCalculado)),
+    })));
+    setEditing(true);
+  }
+
+  function addEditItem() {
+    setEditItens([...editItens, { projetoId: '', percentual: '', valorCalculado: '' }]);
+  }
+
+  function removeEditItem(idx: number) {
+    setEditItens(editItens.filter((_, i) => i !== idx));
+  }
+
+  function updateEditItem(idx: number, field: string, value: string) {
+    const updated = [...editItens];
+    updated[idx] = { ...updated[idx], [field]: value };
+
+    // Auto-calcular valor quando muda percentual
+    if (field === 'percentual' && value) {
+      const pct = parseFloat(value);
+      if (!isNaN(pct)) {
+        updated[idx].valorCalculado = String(Number((valorParcela * pct / 100).toFixed(2)));
+      }
+    }
+
+    setEditItens(updated);
+  }
+
+  async function handleSave() {
+    if (editItens.some((i) => !i.projetoId)) {
+      toast.show('error', 'Selecione o projeto em todos os itens');
+      return;
+    }
+    if (editItens.some((i) => !i.valorCalculado || Number(i.valorCalculado) <= 0)) {
+      toast.show('error', 'Valor deve ser maior que zero em todos os itens');
+      return;
+    }
+
+    const somaValores = editItens.reduce((s, i) => s + Number(i.valorCalculado || 0), 0);
+    if (somaValores > valorParcela + 0.01) {
+      toast.show('error', `Soma (${fmtCurrency(somaValores)}) excede o valor da parcela (${fmtCurrency(valorParcela)})`);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await contratoService.configurarRateioProjeto(contrato.id, selectedParcelaId, editItens.map((i) => ({
+        projetoId: i.projetoId,
+        percentual: i.percentual ? parseFloat(i.percentual) : undefined,
+        valorCalculado: Number(i.valorCalculado),
+      })));
+      toast.show('success', 'Rateio por projeto salvo');
+      setEditing(false);
+      carregarRateio();
+    } catch (err) {
+      toast.show('error', extractErrorMsg(err, 'Erro ao salvar rateio'));
+    }
+    setSaving(false);
+  }
+
+  async function handleRemover() {
+    try {
+      await contratoService.removerRateioProjeto(contrato.id, selectedParcelaId);
+      toast.show('success', 'Rateio removido');
+      setEditing(false);
+      carregarRateio();
+    } catch (err) {
+      toast.show('error', extractErrorMsg(err, 'Erro ao remover'));
+    }
+  }
+
+  const editSoma = editItens.reduce((s, i) => s + Number(i.valorCalculado || 0), 0);
+
+  if (loading) return <div className="text-center py-8 text-slate-500">Carregando...</div>;
+
+  return (
+    <div>
+      <p className="text-sm text-slate-500 mb-4">
+        Distribua o valor de cada parcela entre os projetos vinculados a este contrato.
+      </p>
+
+      {/* Seletor de parcela */}
+      <div className="flex items-center gap-4 mb-6">
+        <div className="flex-1">
+          <label className="block text-xs font-medium text-slate-600 mb-1">Parcela</label>
+          <select value={selectedParcelaId} onChange={(e) => { setSelectedParcelaId(e.target.value); setEditing(false); }}
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            {parcelas.map((p) => (
+              <option key={p.id} value={p.id}>
+                #{p.numero} - {fmtCurrency(Number(p.valor))} - Venc: {fmtDate(p.dataVencimento)} [{p.status}]
+              </option>
+            ))}
+          </select>
+        </div>
+        {selectedParcela && (
+          <div className="text-right">
+            <p className="text-xs text-slate-500">Valor da Parcela</p>
+            <p className="text-lg font-bold text-slate-800">{fmtCurrency(valorParcela)}</p>
+          </div>
+        )}
+      </div>
+
+      {!selectedParcelaId ? (
+        <div className="text-center py-8 text-slate-500">Selecione uma parcela</div>
+      ) : !editing ? (
+        /* Visualizacao */
+        <div>
+          {rateioItens.length === 0 ? (
+            <div className="text-center py-8">
+              <FolderKanban className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+              <p className="text-slate-500 text-sm">Nenhum rateio por projeto configurado para esta parcela</p>
+              {canManage && selectedParcela?.status !== 'CANCELADA' && (
+                <button onClick={startEdit} className="mt-3 text-sm text-capul-600 hover:text-capul-700">
+                  Configurar Rateio
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-4">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase">
+                      <th className="px-6 py-3">Projeto</th>
+                      <th className="px-6 py-3 text-right">%</th>
+                      <th className="px-6 py-3 text-right">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {rateioItens.map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-50">
+                        <td className="px-6 py-3 text-sm">
+                          <Link to={`/gestao-ti/projetos/${item.projeto.id}`} className="text-capul-600 hover:underline">
+                            #{item.projeto.numero} - {item.projeto.nome}
+                          </Link>
+                        </td>
+                        <td className="px-6 py-3 text-sm text-right text-slate-600">
+                          {item.percentual !== null ? `${Number(item.percentual).toFixed(2)}%` : '-'}
+                        </td>
+                        <td className="px-6 py-3 text-sm text-right font-medium">{fmtCurrency(Number(item.valorCalculado))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-50 border-t">
+                      <td className="px-6 py-3 text-sm font-semibold text-right" colSpan={2}>Total Rateado:</td>
+                      <td className="px-6 py-3 text-sm font-bold text-right">{fmtCurrency(valorRateado)}</td>
+                    </tr>
+                    {valorNaoRateado > 0.01 && (
+                      <tr className="bg-amber-50">
+                        <td className="px-6 py-2 text-xs text-amber-700 text-right" colSpan={2}>Nao rateado:</td>
+                        <td className="px-6 py-2 text-xs text-amber-700 text-right font-medium">{fmtCurrency(valorNaoRateado)}</td>
+                      </tr>
+                    )}
+                  </tfoot>
+                </table>
+              </div>
+              {canManage && selectedParcela?.status !== 'CANCELADA' && (
+                <div className="flex gap-2">
+                  <button onClick={startEdit} className="text-sm text-capul-600 hover:text-capul-700">Editar Rateio</button>
+                  <button onClick={handleRemover} className="text-sm text-red-600 hover:text-red-700">Remover Rateio</button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      ) : (
+        /* Edicao */
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-sm font-semibold text-slate-700">Configurar Rateio por Projeto</h4>
+            <button type="button" onClick={addEditItem} className="flex items-center gap-1 text-sm text-capul-600 hover:text-capul-700">
+              <Plus className="w-4 h-4" /> Adicionar Projeto
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {editItens.map((item, idx) => (
+              <div key={idx} className="grid grid-cols-12 gap-3 items-end">
+                <div className="col-span-6">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Projeto</label>
+                  <SearchSelect
+                    options={[
+                      ...projetoOptions,
+                      ...(item.projetoId ? [{
+                        value: item.projetoId,
+                        label: (() => { const p = projetos.find(p => p.id === item.projetoId); return p ? `#${p.numero} - ${p.nome}` : item.projetoId; })(),
+                      }] : []),
+                    ]}
+                    value={item.projetoId}
+                    onChange={(v) => updateEditItem(idx, 'projetoId', v)}
+                    placeholder="Buscar projeto..."
+                    required
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">% (opcional)</label>
+                  <input type="number" min={0} max={100} step={0.01} value={item.percentual}
+                    onChange={(e) => updateEditItem(idx, 'percentual', e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="%" />
+                </div>
+                <div className="col-span-3">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Valor (R$)</label>
+                  <input type="number" min={0.01} step={0.01} value={item.valorCalculado}
+                    onChange={(e) => updateEditItem(idx, 'valorCalculado', e.target.value)}
+                    required
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div className="col-span-1">
+                  <button onClick={() => removeEditItem(idx)} className="text-red-500 hover:text-red-700 p-2" title="Remover">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {editItens.length > 0 && (
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-sm text-slate-600">
+                Total: <span className={`font-bold ${editSoma > valorParcela + 0.01 ? 'text-red-600' : 'text-capul-700'}`}>{fmtCurrency(editSoma)}</span>
+                <span className="text-slate-400"> / {fmtCurrency(valorParcela)}</span>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setEditing(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+                <button onClick={handleSave} disabled={saving || editItens.length === 0}
+                  className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50">
+                  {saving ? 'Salvando...' : 'Salvar Rateio'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

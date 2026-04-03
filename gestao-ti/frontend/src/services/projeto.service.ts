@@ -437,4 +437,15 @@ export const projetoService = {
   async removerAnexoPendencia(id: string, pid: string, anexoId: string): Promise<void> {
     await gestaoApi.delete(`/projetos/${id}/pendencias/${pid}/anexos/${anexoId}`);
   },
+
+  // NFs e Parcelas vinculadas ao projeto
+  async listarNFsProjeto(projetoId: string): Promise<unknown[]> {
+    const { data } = await gestaoApi.get(`/projetos/${projetoId}/notas-fiscais`);
+    return data;
+  },
+
+  async listarParcelasRateioProjeto(projetoId: string): Promise<unknown[]> {
+    const { data } = await gestaoApi.get(`/projetos/${projetoId}/parcelas-contrato`);
+    return data;
+  },
 };

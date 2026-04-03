@@ -13,6 +13,7 @@ export const projetoListInclude = {
   contrato: { select: { id: true, numero: true, titulo: true } },
   responsavel: { select: { id: true, nome: true, username: true } },
   projetoPai: { select: { id: true, numero: true, nome: true } },
+  tipoProjeto: { select: { id: true, codigo: true, descricao: true } },
   _count: {
     select: {
       subProjetos: true, membros: true, fases: true, atividades: true,
@@ -27,6 +28,7 @@ export const projetoDetailInclude = {
   software: { select: { id: true, nome: true, tipo: true } },
   contrato: { select: { id: true, numero: true, titulo: true } },
   responsavel: { select: { id: true, nome: true, username: true } },
+  tipoProjeto: { select: { id: true, codigo: true, descricao: true } },
   subProjetos: {
     select: { id: true, numero: true, nome: true, status: true, modo: true, nivel: true },
     orderBy: { numero: 'asc' as const },

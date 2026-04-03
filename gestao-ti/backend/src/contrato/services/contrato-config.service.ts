@@ -151,7 +151,9 @@ export class ContratoConfigService {
     const existing = await this.prisma.fornecedorConfig.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Fornecedor nao encontrado');
     const vinculos = await this.prisma.contrato.count({ where: { fornecedorId: id } });
-    if (vinculos > 0) throw new BadRequestException(`Fornecedor possui ${vinculos} contrato(s) vinculado(s). Inative-o em vez de excluir.`);
+    const vinculosNF = await this.prisma.notaFiscal.count({ where: { fornecedorId: id } });
+    const total = vinculos + vinculosNF;
+    if (total > 0) throw new BadRequestException(`Fornecedor possui ${total} vinculo(s). Inative-o em vez de excluir.`);
     await this.prisma.fornecedorConfig.delete({ where: { id } });
     return { success: true };
   }
@@ -163,6 +165,7 @@ export class ContratoConfigService {
     if (status) where.status = status;
     return this.prisma.produtoConfig.findMany({
       where,
+      include: { tipoProduto: true },
       orderBy: { descricao: 'asc' },
     });
   }
@@ -172,7 +175,9 @@ export class ContratoConfigService {
       data: {
         codigo: dto.codigo,
         descricao: dto.descricao,
+        tipoProdutoId: dto.tipoProdutoId || null,
       },
+      include: { tipoProduto: true },
     });
   }
 
@@ -183,11 +188,13 @@ export class ContratoConfigService {
     const data: Record<string, unknown> = {};
     if (dto.codigo !== undefined) data.codigo = dto.codigo;
     if (dto.descricao !== undefined) data.descricao = dto.descricao;
+    if (dto.tipoProdutoId !== undefined) data.tipoProdutoId = dto.tipoProdutoId || null;
     if (dto.status !== undefined) data.status = dto.status;
 
     return this.prisma.produtoConfig.update({
       where: { id },
       data,
+      include: { tipoProduto: true },
     });
   }
 
@@ -195,7 +202,9 @@ export class ContratoConfigService {
     const existing = await this.prisma.produtoConfig.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Produto nao encontrado');
     const vinculos = await this.prisma.contrato.count({ where: { produtoId: id } });
-    if (vinculos > 0) throw new BadRequestException(`Produto possui ${vinculos} contrato(s) vinculado(s). Inative-o em vez de excluir.`);
+    const vinculosNF = await this.prisma.notaFiscalItem.count({ where: { produtoId: id } });
+    const total = vinculos + vinculosNF;
+    if (total > 0) throw new BadRequestException(`Produto possui ${total} vinculo(s). Inative-o em vez de excluir.`);
     await this.prisma.produtoConfig.delete({ where: { id } });
     return { success: true };
   }

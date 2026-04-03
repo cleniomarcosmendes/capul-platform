@@ -6,16 +6,10 @@ import { projetoService } from '../../services/projeto.service';
 import { chamadoService } from '../../services/chamado.service';
 import { softwareService } from '../../services/software.service';
 import { contratoService } from '../../services/contrato.service';
+import { compraService } from '../../services/compra.service';
 import { coreService } from '../../services/core.service';
 import { ArrowLeft } from 'lucide-react';
-import type { Software, Contrato, UsuarioCore, TipoProjeto, Projeto } from '../../types';
-
-const tipoOptions: { value: TipoProjeto; label: string }[] = [
-  { value: 'DESENVOLVIMENTO_INTERNO', label: 'Desenvolvimento Interno' },
-  { value: 'IMPLANTACAO_TERCEIRO', label: 'Implantacao Terceiro' },
-  { value: 'INFRAESTRUTURA', label: 'Infraestrutura' },
-  { value: 'OUTRO', label: 'Outro' },
-];
+import type { Software, Contrato, UsuarioCore, Projeto, TipoProjetoConfig } from '../../types';
 
 export function ProjetoFormPage() {
   const { id } = useParams();
@@ -27,6 +21,7 @@ export function ProjetoFormPage() {
   const [contratos, setContratos] = useState<Contrato[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioCore[]>([]);
   const [projetosRaiz, setProjetosRaiz] = useState<Projeto[]>([]);
+  const [tiposProjeto, setTiposProjeto] = useState<TipoProjetoConfig[]>([]);
   const [saving, setSaving] = useState(false);
   const [loadingData, setLoadingData] = useState(isEdit);
   const [error, setError] = useState('');
@@ -39,7 +34,7 @@ export function ProjetoFormPage() {
 
   const [nome, setNome] = useState(searchParams.get('nome') || '');
   const [descricao, setDescricao] = useState(searchParams.get('descricao') || '');
-  const [tipo, setTipo] = useState<TipoProjeto>((searchParams.get('tipo') as TipoProjeto) || 'DESENVOLVIMENTO_INTERNO');
+  const [tipoProjetoId, setTipoProjetoId] = useState('');
   const [projetoPaiId, setProjetoPaiId] = useState(searchParams.get('projetoPaiId') || '');
   const [softwareId, setSoftwareId] = useState(searchParams.get('softwareId') || '');
   const [contratoId, setContratoId] = useState('');
@@ -54,12 +49,13 @@ export function ProjetoFormPage() {
     contratoService.listar({ status: 'ATIVO' }).then(setContratos).catch(() => {});
     coreService.listarUsuarios().then(setUsuarios).catch(() => {});
     projetoService.listar({ apenasRaiz: true }).then(setProjetosRaiz).catch(() => {});
+    compraService.listarTiposProjeto('ATIVO').then(setTiposProjeto).catch(() => {});
 
     if (isEdit && id) {
       projetoService.buscar(id).then((p) => {
         setNome(p.nome);
         setDescricao(p.descricao || '');
-        setTipo(p.tipo);
+        setTipoProjetoId(p.tipoProjetoId || '');
         setProjetoPaiId(p.projetoPaiId || '');
         setSoftwareId(p.softwareId || '');
         setContratoId(p.contratoId || '');
@@ -85,7 +81,8 @@ export function ProjetoFormPage() {
 
     const payload = {
       nome,
-      tipo,
+      tipo: 'OUTRO' as const,
+      tipoProjetoId: tipoProjetoId || undefined,
       modo: 'COMPLETO' as const,
       projetoPaiId: projetoPaiId || undefined,
       softwareId: softwareId || undefined,
@@ -179,14 +176,14 @@ export function ProjetoFormPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Tipo *</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Projeto</label>
               <select
-                required
-                value={tipo}
-                onChange={(e) => setTipo(e.target.value as TipoProjeto)}
+                value={tipoProjetoId}
+                onChange={(e) => setTipoProjetoId(e.target.value)}
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
               >
-                {tipoOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                <option value="">Selecione...</option>
+                {tiposProjeto.map((t) => <option key={t.id} value={t.id}>{t.descricao}</option>)}
               </select>
             </div>
 

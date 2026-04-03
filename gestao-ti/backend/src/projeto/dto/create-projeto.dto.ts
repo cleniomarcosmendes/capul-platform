@@ -57,4 +57,8 @@ export class CreateProjetoDto {
   @IsString()
   @MaxLength(2000)
   observacoes?: string;
+
+  @IsOptional()
+  @IsUUID()
+  tipoProjetoId?: string;
 }

@@ -3,6 +3,7 @@ import { DashboardResumoService } from './services/dashboard-resumo.service.js';
 import { DashboardOperacionalService } from './services/dashboard-operacional.service.js';
 import { DashboardFinanceiroService } from './services/dashboard-financeiro.service.js';
 import { DashboardAcompanhamentoService } from './services/dashboard-acompanhamento.service.js';
+import { DashboardIndicadoresService } from './services/dashboard-indicadores.service.js';
 
 @Injectable()
 export class DashboardService {
@@ -11,6 +12,7 @@ export class DashboardService {
     private readonly operacional: DashboardOperacionalService,
     private readonly financeiro: DashboardFinanceiroService,
     private readonly acompanhamento: DashboardAcompanhamentoService,
+    private readonly indicadores: DashboardIndicadoresService,
   ) {}
 
   async getResumo(filters?: { dataInicio?: string; dataFim?: string; departamentoId?: string }) {
@@ -81,5 +83,9 @@ export class DashboardService {
 
   async getMinhasPendencias(userId: string) {
     return this.acompanhamento.getMinhasPendencias(userId);
+  }
+
+  getIndicadores(mes: number, ano: number, tiposParada?: string[]) {
+    return this.indicadores.getIndicadores(mes, ano, tiposParada);
   }
 }

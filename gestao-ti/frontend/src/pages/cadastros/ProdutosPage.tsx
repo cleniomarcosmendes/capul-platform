@@ -2,11 +2,12 @@ import { useEffect, useState, useMemo } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { contratoService } from '../../services/contrato.service';
+import { compraService } from '../../services/compra.service';
 import { Plus, Package, Pencil, Check, X, ArrowUpDown, ArrowUp, ArrowDown, Trash2 } from 'lucide-react';
-import type { ProdutoConfig } from '../../types';
+import type { ProdutoConfig, TipoProduto } from '../../types';
 import { useToast } from '../../components/Toast';
 
-type SortKey = 'codigo' | 'descricao' | 'status';
+type SortKey = 'codigo' | 'descricao' | 'tipoProduto' | 'status';
 type SortDir = 'asc' | 'desc';
 
 export function ProdutosPage() {
@@ -15,26 +16,33 @@ export function ProdutosPage() {
   const { toast } = useToast();
 
   const [produtos, setProdutos] = useState<ProdutoConfig[]>([]);
+  const [tiposProduto, setTiposProduto] = useState<TipoProduto[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [codigo, setCodigo] = useState('');
   const [descricao, setDescricao] = useState('');
+  const [tipoProdutoId, setTipoProdutoId] = useState('');
   const [saving, setSaving] = useState(false);
 
   const [editId, setEditId] = useState<string | null>(null);
   const [editCodigo, setEditCodigo] = useState('');
   const [editDescricao, setEditDescricao] = useState('');
+  const [editTipoProdutoId, setEditTipoProdutoId] = useState('');
   const [editSaving, setEditSaving] = useState(false);
 
   const [sortKey, setSortKey] = useState<SortKey>('codigo');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
-  useEffect(() => { carregar(); }, []);
+  useEffect(() => { carregar(); carregarTipos(); }, []);
 
   async function carregar() {
     setLoading(true);
     try { setProdutos(await contratoService.listarTodosProdutos()); } catch { /* empty */ }
     setLoading(false);
+  }
+
+  async function carregarTipos() {
+    try { setTiposProduto(await compraService.listarTiposProduto('ATIVO')); } catch { /* empty */ }
   }
 
   function toggleSort(key: SortKey) {
@@ -48,8 +56,14 @@ export function ProdutosPage() {
 
   const sorted = useMemo(() => {
     return [...produtos].sort((a, b) => {
-      const va = (a[sortKey] || '').toString().toLowerCase();
-      const vb = (b[sortKey] || '').toString().toLowerCase();
+      let va: string, vb: string;
+      if (sortKey === 'tipoProduto') {
+        va = (a.tipoProduto?.descricao || '').toLowerCase();
+        vb = (b.tipoProduto?.descricao || '').toLowerCase();
+      } else {
+        va = (a[sortKey] || '').toString().toLowerCase();
+        vb = (b[sortKey] || '').toString().toLowerCase();
+      }
       const cmp = va.localeCompare(vb);
       return sortDir === 'asc' ? cmp : -cmp;
     });
@@ -64,8 +78,8 @@ export function ProdutosPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      await contratoService.criarProduto({ codigo, descricao });
-      setCodigo(''); setDescricao('');
+      await contratoService.criarProduto({ codigo, descricao, tipoProdutoId: tipoProdutoId || undefined });
+      setCodigo(''); setDescricao(''); setTipoProdutoId('');
       setShowForm(false);
       toast('success', 'Produto criado');
       carregar();
@@ -74,14 +88,14 @@ export function ProdutosPage() {
   }
 
   function startEdit(p: ProdutoConfig) {
-    setEditId(p.id); setEditCodigo(p.codigo); setEditDescricao(p.descricao);
+    setEditId(p.id); setEditCodigo(p.codigo); setEditDescricao(p.descricao); setEditTipoProdutoId(p.tipoProdutoId || '');
   }
 
   async function saveEdit() {
     if (!editId) return;
     setEditSaving(true);
     try {
-      await contratoService.atualizarProduto(editId, { codigo: editCodigo, descricao: editDescricao });
+      await contratoService.atualizarProduto(editId, { codigo: editCodigo, descricao: editDescricao, tipoProdutoId: editTipoProdutoId || undefined });
       toast('success', 'Produto atualizado');
       setEditId(null);
       carregar();
@@ -114,7 +128,7 @@ export function ProdutosPage() {
 
         {showForm && (
           <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-3 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Codigo *</label>
                 <input type="text" value={codigo} onChange={(e) => setCodigo(e.target.value)} required maxLength={15}
@@ -124,6 +138,16 @@ export function ProdutosPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Descricao *</label>
                 <input type="text" value={descricao} onChange={(e) => setDescricao(e.target.value)} required maxLength={50}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" placeholder="Servico de Licenciamento" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Produto</label>
+                <select value={tipoProdutoId} onChange={(e) => setTipoProdutoId(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600">
+                  <option value="">Sem tipo</option>
+                  {tiposProduto.map((tp) => (
+                    <option key={tp.id} value={tp.id}>{tp.descricao}</option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className="flex gap-3">
@@ -150,6 +174,7 @@ export function ProdutosPage() {
                 <tr className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   <th className="px-6 py-3"><button onClick={() => toggleSort('codigo')} className="flex items-center gap-1 hover:text-slate-700">Codigo <SortIcon col="codigo" /></button></th>
                   <th className="px-6 py-3"><button onClick={() => toggleSort('descricao')} className="flex items-center gap-1 hover:text-slate-700">Descricao <SortIcon col="descricao" /></button></th>
+                  <th className="px-6 py-3"><button onClick={() => toggleSort('tipoProduto')} className="flex items-center gap-1 hover:text-slate-700">Tipo <SortIcon col="tipoProduto" /></button></th>
                   <th className="px-6 py-3"><button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-slate-700">Status <SortIcon col="status" /></button></th>
                   {canManage && <th className="px-6 py-3">Acoes</th>}
                 </tr>
@@ -168,6 +193,15 @@ export function ProdutosPage() {
                             className="w-full border border-slate-300 rounded px-2 py-1 text-sm" />
                         </td>
                         <td className="px-6 py-3">
+                          <select value={editTipoProdutoId} onChange={(e) => setEditTipoProdutoId(e.target.value)}
+                            className="w-full border border-slate-300 rounded px-2 py-1 text-sm">
+                            <option value="">Sem tipo</option>
+                            {tiposProduto.map((tp) => (
+                              <option key={tp.id} value={tp.id}>{tp.descricao}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-6 py-3">
                           <span className={`text-xs px-2 py-1 rounded-full ${p.status === 'ATIVO' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{p.status}</span>
                         </td>
                         <td className="px-6 py-3">
@@ -183,6 +217,7 @@ export function ProdutosPage() {
                         <td className="px-6 py-4 text-sm">
                           <button onClick={() => startEdit(p)} className="text-capul-600 hover:underline text-left">{p.descricao}</button>
                         </td>
+                        <td className="px-6 py-4 text-sm text-slate-600">{p.tipoProduto?.descricao || '-'}</td>
                         <td className="px-6 py-4">
                           <span className={`text-xs px-2 py-1 rounded-full ${p.status === 'ATIVO' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{p.status}</span>
                         </td>

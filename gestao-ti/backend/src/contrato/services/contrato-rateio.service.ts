@@ -250,6 +250,107 @@ export class ContratoRateioService {
     return { parcelasCopied: parcelasPendentes.length };
   }
 
+  // --- Rateio por Projeto ---
+
+  async obterRateioProjeto(contratoId: string, parcelaId: string) {
+    const parcela = await this.prisma.parcelaContrato.findFirst({
+      where: { id: parcelaId, contratoId },
+    });
+    if (!parcela) throw new NotFoundException('Parcela nao encontrada neste contrato');
+
+    return this.prisma.parcelaRateioProjeto.findMany({
+      where: { parcelaId },
+      include: {
+        projeto: { select: { id: true, numero: true, nome: true, status: true } },
+      },
+      orderBy: { projeto: { numero: 'asc' } },
+    });
+  }
+
+  async configurarRateioProjeto(
+    contratoId: string,
+    parcelaId: string,
+    itens: { projetoId: string; percentual?: number; valorCalculado: number }[],
+    usuarioId: string,
+    role: string = 'ADMIN',
+  ) {
+    const contrato = await this.core.findOne(contratoId);
+    await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+
+    const parcela = await this.prisma.parcelaContrato.findFirst({
+      where: { id: parcelaId, contratoId },
+    });
+    if (!parcela) throw new NotFoundException('Parcela nao encontrada neste contrato');
+    if (parcela.status === 'CANCELADA') {
+      throw new BadRequestException('Nao e possivel alterar rateio de parcela cancelada');
+    }
+
+    if (itens.length === 0) {
+      throw new BadRequestException('Rateio deve ter pelo menos 1 item');
+    }
+
+    // Validar projetos duplicados
+    const projetoIds = itens.map((i) => i.projetoId);
+    const duplicados = projetoIds.filter((id, idx) => projetoIds.indexOf(id) !== idx);
+    if (duplicados.length > 0) {
+      throw new BadRequestException('Existem projetos duplicados no rateio');
+    }
+
+    // Validar soma <= valor da parcela
+    const somaValores = itens.reduce((s, i) => s + i.valorCalculado, 0);
+    const valorParcela = Number(parcela.valor);
+    if (somaValores > valorParcela + 0.01) {
+      throw new BadRequestException(
+        `Soma dos valores (R$ ${somaValores.toFixed(2)}) excede o valor da parcela (R$ ${valorParcela.toFixed(2)})`,
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.parcelaRateioProjeto.deleteMany({ where: { parcelaId } });
+
+      for (const item of itens) {
+        await tx.parcelaRateioProjeto.create({
+          data: {
+            parcelaId,
+            projetoId: item.projetoId,
+            percentual: item.percentual ?? null,
+            valorCalculado: item.valorCalculado,
+          },
+        });
+      }
+    });
+
+    await this.core.criarHistorico(
+      contratoId,
+      'RATEIO_ALTERADO',
+      `Rateio por projeto configurado para parcela #${parcela.numero} (${itens.length} projeto(s))`,
+      usuarioId,
+    );
+
+    return this.obterRateioProjeto(contratoId, parcelaId);
+  }
+
+  async removerRateioProjeto(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN') {
+    const contrato = await this.core.findOne(contratoId);
+    await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+
+    const parcela = await this.prisma.parcelaContrato.findFirst({
+      where: { id: parcelaId, contratoId },
+    });
+    if (!parcela) throw new NotFoundException('Parcela nao encontrada neste contrato');
+
+    await this.prisma.parcelaRateioProjeto.deleteMany({ where: { parcelaId } });
+
+    await this.core.criarHistorico(
+      contratoId,
+      'RATEIO_ALTERADO',
+      `Rateio por projeto removido da parcela #${parcela.numero}`,
+      usuarioId,
+    );
+
+    return { success: true };
+  }
+
   private computeRateio(
     modalidade: ModalidadeRateio,
     itens: RateioItemDto[],

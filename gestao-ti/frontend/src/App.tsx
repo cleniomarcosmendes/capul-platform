@@ -48,6 +48,12 @@ import { TiposContratoPage } from './pages/cadastros/TiposContratoPage';
 import { FornecedoresPage } from './pages/cadastros/FornecedoresPage';
 import { ProdutosPage } from './pages/cadastros/ProdutosPage';
 import { CategoriaLicencaPage } from './pages/cadastros/CategoriaLicencaPage';
+import { TiposProdutoPage } from './pages/cadastros/TiposProdutoPage';
+import { TiposProjetoPage } from './pages/cadastros/TiposProjetoPage';
+import { IndicadoresPage } from './pages/indicadores/IndicadoresPage';
+import { NotasFiscaisListPage } from './pages/compras/NotasFiscaisListPage';
+import { NotaFiscalFormPage } from './pages/compras/NotaFiscalFormPage';
+import { NotaFiscalDetalhePage } from './pages/compras/NotaFiscalDetalhePage';
 import { ToastProvider } from './components/Toast';
 import type { ReactNode } from 'react';
 
@@ -94,6 +100,7 @@ function AppRoutes() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="indicadores" element={<IndicadoresPage />} />
         <Route path="monitor" element={<MonitorPlayerPage />} />
         <Route path="acompanhamento" element={<AcompanhamentoPage />} />
         <Route path="acompanhamento-item" element={<AcompanhamentoItemPage />} />
@@ -146,7 +153,13 @@ function AppRoutes() {
         <Route path="tipos-contrato" element={<TiposContratoPage />} />
         <Route path="fornecedores" element={<FornecedoresPage />} />
         <Route path="produtos" element={<ProdutosPage />} />
+        <Route path="tipos-produto" element={<TiposProdutoPage />} />
+        <Route path="tipos-projeto" element={<TiposProjetoPage />} />
         <Route path="categorias-licenca" element={<CategoriaLicencaPage />} />
+        <Route path="notas-fiscais" element={<NotasFiscaisListPage />} />
+        <Route path="notas-fiscais/nova" element={<NotaFiscalFormPage />} />
+        <Route path="notas-fiscais/:id" element={<NotaFiscalDetalhePage />} />
+        <Route path="notas-fiscais/:id/editar" element={<NotaFiscalFormPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/gestao-ti" replace />} />
     </Routes>

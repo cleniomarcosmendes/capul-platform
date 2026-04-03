@@ -307,7 +307,7 @@ export const contratoService = {
     const { data } = await gestaoApi.get('/contratos/produtos');
     return data;
   },
-  async criarProduto(payload: { codigo: string; descricao: string }): Promise<ProdutoConfig> {
+  async criarProduto(payload: { codigo: string; descricao: string; tipoProdutoId?: string }): Promise<ProdutoConfig> {
     const { data } = await gestaoApi.post('/contratos/produtos', payload);
     return data;
   },
@@ -318,5 +318,20 @@ export const contratoService = {
 
   async excluirProduto(id: string): Promise<void> {
     await gestaoApi.delete(`/contratos/produtos/${id}`);
+  },
+
+  // Rateio Projeto
+  async obterRateioProjeto(contratoId: string, parcelaId: string): Promise<unknown[]> {
+    const { data } = await gestaoApi.get(`/contratos/${contratoId}/parcelas/${parcelaId}/rateio-projeto`);
+    return data;
+  },
+
+  async configurarRateioProjeto(contratoId: string, parcelaId: string, itens: { projetoId: string; percentual?: number; valorCalculado: number }[]): Promise<unknown[]> {
+    const { data } = await gestaoApi.post(`/contratos/${contratoId}/parcelas/${parcelaId}/rateio-projeto`, { itens });
+    return data;
+  },
+
+  async removerRateioProjeto(contratoId: string, parcelaId: string): Promise<void> {
+    await gestaoApi.delete(`/contratos/${contratoId}/parcelas/${parcelaId}/rateio-projeto`);
   },
 };

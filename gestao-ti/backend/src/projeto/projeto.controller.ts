@@ -598,6 +598,20 @@ export class ProjetoController {
     return this.service.getCustosConsolidados(id);
   }
 
+  // --- Notas Fiscais do Projeto ---
+
+  @Get(':id/notas-fiscais')
+  listarNFsProjeto(@Param('id') id: string) {
+    return this.service.listarNFsProjeto(id);
+  }
+
+  // --- Parcelas Contrato do Projeto ---
+
+  @Get(':id/parcelas-contrato')
+  listarParcelasRateioProjeto(@Param('id') id: string) {
+    return this.service.listarParcelasRateioProjeto(id);
+  }
+
   // --- Usuarios-Chave ---
 
   @Get(':id/usuarios-chave')

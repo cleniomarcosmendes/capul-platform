@@ -119,6 +119,26 @@ export class ContratoService {
     return this.rateio.copiarRateioParaPendentes(contratoId, parcelaId, usuarioId);
   }
 
+  // --- Rateio Projeto ---
+
+  async obterRateioProjeto(contratoId: string, parcelaId: string) {
+    return this.rateio.obterRateioProjeto(contratoId, parcelaId);
+  }
+
+  async configurarRateioProjeto(
+    contratoId: string,
+    parcelaId: string,
+    itens: { projetoId: string; percentual?: number; valorCalculado: number }[],
+    usuarioId: string,
+    role: string = 'ADMIN',
+  ) {
+    return this.rateio.configurarRateioProjeto(contratoId, parcelaId, itens, usuarioId, role);
+  }
+
+  async removerRateioProjeto(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN') {
+    return this.rateio.removerRateioProjeto(contratoId, parcelaId, usuarioId, role);
+  }
+
   // --- Config (Naturezas, Tipos, Fornecedores, Produtos) ---
 
   async findAllNaturezas(status?: string) {

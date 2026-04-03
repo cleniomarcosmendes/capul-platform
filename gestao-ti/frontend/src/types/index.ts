@@ -136,10 +136,26 @@ export interface FornecedorConfig {
   status: string;
 }
 
+export interface TipoProduto {
+  id: string;
+  codigo: string;
+  descricao: string;
+  status: string;
+}
+
+export interface TipoProjetoConfig {
+  id: string;
+  codigo: string;
+  descricao: string;
+  status: string;
+}
+
 export interface ProdutoConfig {
   id: string;
   codigo: string;
   descricao: string;
+  tipoProdutoId: string | null;
+  tipoProduto: TipoProduto | null;
   status: string;
 }
 
@@ -871,6 +887,8 @@ export interface Projeto {
   software: { id: string; nome: string; tipo: string } | null;
   contratoId: string | null;
   contrato: { id: string; numero: number; titulo: string } | null;
+  tipoProjetoId: string | null;
+  tipoProjeto: TipoProjetoConfig | null;
   responsavelId: string;
   responsavel: { id: string; nome: string; username: string };
   subProjetos?: { id: string; numero: number; nome: string; status: StatusProjeto; modo: ModoProjeto; nivel: number }[];
@@ -986,6 +1004,39 @@ export interface CustosConsolidados {
   custosDetalhados: number;
   totalHoras: number;
   totalApontamentos: number;
+  valorNotasFiscais: number;
+  qtdNotasFiscais: number;
+  valorParcelasContrato: number;
+  qtdParcelasContrato: number;
+}
+
+export interface ParcelaRateioProjeto {
+  id: string;
+  percentual: number | null;
+  valorCalculado: number;
+  parcelaId: string;
+  projetoId: string;
+  projeto: { id: string; numero: number; nome: string; status: string };
+}
+
+export interface ParcelaRateioProjetoView {
+  id: string;
+  percentual: number | null;
+  valorCalculado: number;
+  parcela: {
+    id: string;
+    numero: number;
+    valor: number;
+    dataVencimento: string;
+    dataPagamento: string | null;
+    status: string;
+    contrato: {
+      id: string;
+      numero: number;
+      titulo: string;
+      fornecedor: string | null;
+    };
+  };
 }
 
 // === Ativo (CMDB) interfaces ===
@@ -1358,4 +1409,57 @@ export interface AcompanhamentoAtividadeData {
   comentarios: { id: string; texto: string; createdAt: string; usuario: { id: string; nome: string } }[];
   chamadosVinculados: { id: string; numero: number; titulo: string; status: string; prioridade: string; tecnico: { id: string; nome: string } | null }[];
   porParticipante: { usuarioId: string; nome: string; minutos: number; horas: number; sessoes: number; tempoMedioSessao: number }[];
+}
+
+// === Fase 7 — Compras types ===
+
+export type StatusNotaFiscal = 'REGISTRADA' | 'CONFERIDA' | 'CANCELADA';
+
+export interface NotaFiscalItem {
+  id: string;
+  quantidade: number;
+  valorUnitario: number;
+  valorTotal: number;
+  observacao: string | null;
+  produtoId: string;
+  produto: ProdutoConfig;
+  departamentoId: string;
+  departamento: { id: string; nome: string };
+  projetoId: string | null;
+  projeto: { id: string; numero: number; nome: string } | null;
+}
+
+export interface NotaFiscal {
+  id: string;
+  numero: string;
+  dataLancamento: string;
+  status: StatusNotaFiscal;
+  observacao: string | null;
+  valorTotal: number;
+  createdAt: string;
+  updatedAt: string;
+  fornecedorId: string;
+  fornecedor: FornecedorConfig;
+  filialId: string;
+  filial: { id: string; codigo: string; nomeFantasia: string };
+  criadoPorId: string;
+  criadoPor: { id: string; nome: string; username: string };
+  itens: NotaFiscalItem[];
+}
+
+export interface NotaFiscalItemProjeto {
+  id: string;
+  quantidade: number;
+  valorUnitario: number;
+  valorTotal: number;
+  observacao: string | null;
+  produto: ProdutoConfig;
+  departamento: { id: string; nome: string };
+  notaFiscal: {
+    id: string;
+    numero: string;
+    dataLancamento: string;
+    status: StatusNotaFiscal;
+    fornecedor: FornecedorConfig;
+  };
 }

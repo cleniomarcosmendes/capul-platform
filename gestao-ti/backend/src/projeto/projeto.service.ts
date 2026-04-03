@@ -314,6 +314,14 @@ export class ProjetoService {
     return this.financeiroService.getCustosConsolidados(id);
   }
 
+  listarNFsProjeto(projetoId: string) {
+    return this.financeiroService.listarNFsProjeto(projetoId);
+  }
+
+  listarParcelasRateioProjeto(projetoId: string) {
+    return this.financeiroService.listarParcelasRateioProjeto(projetoId);
+  }
+
   // ============================================================
   // RISCOS
   // ============================================================

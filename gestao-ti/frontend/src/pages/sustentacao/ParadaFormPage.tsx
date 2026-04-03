@@ -8,6 +8,17 @@ import { coreApi } from '../../services/api';
 import { ArrowLeft } from 'lucide-react';
 import type { Software, SoftwareModulo, MotivoParada, TipoParada, ImpactoParada } from '../../types';
 
+// Converte ISO UTC string para formato datetime-local (hora local do browser)
+function toLocalDateTimeString(iso: string): string {
+  const d = new Date(iso);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 const tipoOptions: { value: TipoParada; label: string }[] = [
   { value: 'PARADA_PROGRAMADA', label: 'Parada Programada' },
   { value: 'PARADA_NAO_PROGRAMADA', label: 'Parada Nao Programada' },
@@ -62,8 +73,9 @@ export function ParadaFormPage() {
         setTitulo(p.titulo);
         setTipo(p.tipo);
         setImpacto(p.impacto);
-        setInicio(p.inicio.slice(0, 16));
-        setFim(p.fim ? p.fim.slice(0, 16) : '');
+        // Converter UTC -> hora local para datetime-local input
+        setInicio(toLocalDateTimeString(p.inicio));
+        setFim(p.fim ? toLocalDateTimeString(p.fim) : '');
         setSoftwareId(p.softwareId);
         setSoftwareModuloId(p.softwareModuloId || '');
         setMotivoParadaId(p.motivoParadaId || '');
@@ -107,6 +119,7 @@ export function ParadaFormPage() {
         tipo,
         impacto,
         inicio: new Date(inicio).toISOString(),
+        fim: fim ? new Date(fim).toISOString() : undefined,
         softwareId,
         softwareModuloId: softwareModuloId || undefined,
         motivoParadaId: motivoParadaId || undefined,
@@ -118,9 +131,7 @@ export function ParadaFormPage() {
       if (isEdit && id) {
         await paradaService.atualizar(id, payload);
       } else {
-        // Campo fim so entra na criacao (se preenchido)
-        const createPayload = { ...payload, fim: fim ? new Date(fim).toISOString() : undefined };
-        await paradaService.criar(createPayload);
+        await paradaService.criar(payload);
       }
       setDirty(false);
       navigate('/gestao-ti/paradas');
@@ -205,19 +216,19 @@ export function ParadaFormPage() {
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
               />
             </div>
-            {!isEdit && (
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Fim</label>
-                <input
-                  type="datetime-local"
-                  value={fim}
-                  min={inicio || undefined}
-                  onChange={(e) => setFim(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                />
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Fim</label>
+              <input
+                type="datetime-local"
+                value={fim}
+                min={inicio || undefined}
+                onChange={(e) => setFim(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              />
+              {!isEdit && (
                 <p className="text-xs text-slate-400 mt-1">Se informado, a parada sera criada como finalizada</p>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

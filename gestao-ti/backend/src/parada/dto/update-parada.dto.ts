@@ -29,6 +29,10 @@ export class UpdateParadaDto {
   inicio?: string;
 
   @IsOptional()
+  @IsDateString()
+  fim?: string;
+
+  @IsOptional()
   @IsUUID()
   softwareId?: string;
 

@@ -332,6 +332,36 @@ export class ContratoController {
     return this.service.copiarRateioParaPendentes(id, pid, user.sub);
   }
 
+  // --- Rateio Projeto ---
+
+  @Get(':id/parcelas/:pid/rateio-projeto')
+  obterRateioProjeto(@Param('id') id: string, @Param('pid') pid: string) {
+    return this.service.obterRateioProjeto(id, pid);
+  }
+
+  @Post(':id/parcelas/:pid/rateio-projeto')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  configurarRateioProjeto(
+    @Param('id') id: string,
+    @Param('pid') pid: string,
+    @Body('itens') itens: { projetoId: string; percentual?: number; valorCalculado: number }[],
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.configurarRateioProjeto(id, pid, itens, user.sub, role);
+  }
+
+  @Delete(':id/parcelas/:pid/rateio-projeto')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  removerRateioProjeto(
+    @Param('id') id: string,
+    @Param('pid') pid: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.removerRateioProjeto(id, pid, user.sub, role);
+  }
+
   // --- Anexos ---
 
   @Get(':id/anexos')

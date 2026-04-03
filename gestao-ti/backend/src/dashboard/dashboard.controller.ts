@@ -142,4 +142,17 @@ export class DashboardController {
   getMinhasPendencias(@CurrentUser() user: JwtPayload) {
     return this.service.getMinhasPendencias(user.sub);
   }
+
+  @Get('indicadores-estrategicos')
+  @Roles(...MANAGERS)
+  getIndicadores(
+    @Query('mes') mes: string,
+    @Query('ano') ano: string,
+    @Query('tiposParada') tiposParada?: string,
+  ) {
+    const m = parseInt(mes, 10) || new Date().getMonth() + 1;
+    const a = parseInt(ano, 10) || new Date().getFullYear();
+    const tipos = tiposParada ? tiposParada.split(',') : undefined;
+    return this.service.getIndicadores(m, a, tipos);
+  }
 }

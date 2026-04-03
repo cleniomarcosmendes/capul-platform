@@ -64,4 +64,8 @@ export class UpdateProjetoDto {
   @IsString()
   @MaxLength(2000)
   observacoes?: string;
+
+  @IsOptional()
+  @IsUUID()
+  tipoProjetoId?: string;
 }

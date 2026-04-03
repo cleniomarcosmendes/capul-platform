@@ -184,6 +184,7 @@ export class ProjetoCoreService {
         softwareId: dto.softwareId,
         contratoId,
         responsavelId: dto.responsavelId,
+        tipoProjetoId: dto.tipoProjetoId || undefined,
       },
       include: projetoDetailInclude,
     });
@@ -213,6 +214,7 @@ export class ProjetoCoreService {
     if (dto.contratoId !== undefined) data.contratoId = dto.contratoId;
     if (dto.responsavelId !== undefined) data.responsavelId = dto.responsavelId;
     if (dto.observacoes !== undefined) data.observacoes = dto.observacoes;
+    if (dto.tipoProjetoId !== undefined) data.tipoProjetoId = dto.tipoProjetoId || null;
     if (dto.custoPrevisto !== undefined) data.custoPrevisto = dto.custoPrevisto;
     if (dto.custoRealizado !== undefined) data.custoRealizado = dto.custoRealizado;
     if (dto.dataInicio !== undefined) data.dataInicio = new Date(dto.dataInicio);
@@ -380,6 +382,7 @@ export class ProjetoCoreService {
         nome: `${original.nome} (Copia)`,
         descricao: original.descricao,
         tipo: original.tipo,
+        tipoProjetoId: original.tipoProjetoId,
         modo: original.modo,
         status: 'PLANEJAMENTO',
         nivel: original.nivel,

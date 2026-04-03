@@ -5,9 +5,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/Toast';
 import { projetoService } from '../../services/projeto.service';
 import { chamadoService } from '../../services/chamado.service';
+import { compraService } from '../../services/compra.service';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
-import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare, KeyRound, ClipboardList, Download, Eye, Upload, Copy } from 'lucide-react';
+import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare, KeyRound, ClipboardList, Download, Eye, Upload, Copy, FileText } from 'lucide-react';
 import { formatDateBR } from '../../utils/date';
 import { MentionInput } from '../../components/MentionInput';
 import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
@@ -40,6 +41,8 @@ import type {
   UsuarioChaveProjeto,
   PendenciaProjeto,
   PrioridadePendencia,
+  NotaFiscalItemProjeto,
+  ParcelaRateioProjetoView,
 } from '../../types';
 
 const statusLabel: Record<string, string> = {
@@ -58,7 +61,7 @@ const statusCores: Record<string, string> = {
   CANCELADO: 'bg-slate-100 text-slate-600',
 };
 
-const tipoLabel: Record<string, string> = {
+const tipoLabelLegacy: Record<string, string> = {
   DESENVOLVIMENTO_INTERNO: 'Desenv. Interno',
   IMPLANTACAO_TERCEIRO: 'Implantacao',
   INFRAESTRUTURA: 'Infraestrutura',
@@ -300,7 +303,7 @@ export function ProjetoDetalhePage() {
                 </span>
               </div>
               <div className="flex items-center gap-2 text-sm text-slate-500">
-                <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs">{tipoLabel[projeto.tipo]}</span>
+                <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs">{projeto.tipoProjeto?.descricao || tipoLabelLegacy[projeto.tipo] || projeto.tipo}</span>
                 <span className="text-xs">Nivel {projeto.nivel}</span>
               </div>
             </div>
@@ -1618,15 +1621,17 @@ function TabCotacoes({ projetoId, canManage, onEditingChange }: { projetoId: str
   );
 }
 
-// --- Tab Financeiro (Cotações + Custos mesclados) ---
+// --- Tab Financeiro (Cotações + Custos mesclados + NFs + Contratos) ---
 function TabFinanceiro({ projetoId, projeto, canManage, onEditingChange }: { projetoId: string; projeto: Projeto; canManage: boolean; onEditingChange?: (editing: boolean) => void }) {
-  const [subTab, setSubTab] = useState<'resumo' | 'cotacoes' | 'custos'>('resumo');
+  const [subTab, setSubTab] = useState<'resumo' | 'notasFiscais' | 'contratos' | 'cotacoes' | 'custos'>('resumo');
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-xl border border-slate-200">
         <div className="flex gap-1 px-6 border-b border-slate-200">
           {[
             { key: 'resumo' as const, label: 'Resumo' },
+            { key: 'notasFiscais' as const, label: 'Notas Fiscais' },
+            { key: 'contratos' as const, label: 'Contratos' },
             { key: 'cotacoes' as const, label: 'Cotacoes' },
             { key: 'custos' as const, label: 'Custos Detalhados' },
           ].map((t) => (
@@ -1638,6 +1643,8 @@ function TabFinanceiro({ projetoId, projeto, canManage, onEditingChange }: { pro
         </div>
       </div>
       {subTab === 'resumo' && <TabCustosResumo projetoId={projetoId} projeto={projeto} />}
+      {subTab === 'notasFiscais' && <TabNFsProjeto projetoId={projetoId} />}
+      {subTab === 'contratos' && <TabContratosProjeto projetoId={projetoId} />}
       {subTab === 'cotacoes' && <TabCotacoes projetoId={projetoId} canManage={canManage} onEditingChange={onEditingChange} />}
       {subTab === 'custos' && <TabCustosDetalhados projetoId={projetoId} canManage={canManage} onEditingChange={onEditingChange} />}
     </div>
@@ -1666,11 +1673,11 @@ function TabCustosResumo({ projetoId, projeto: _projeto }: { projetoId: string; 
     <div className="bg-white rounded-xl border border-slate-200 p-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
         <div>
-          <p className="text-xs text-slate-500 mb-1">Previsto (proprio)</p>
+          <p className="text-xs text-slate-500 mb-1">Previsto</p>
           <p className="text-lg font-bold text-slate-800">{formatCurrency(custos.custoPrevistoProprio)}</p>
         </div>
         <div>
-          <p className="text-xs text-slate-500 mb-1">Realizado (proprio)</p>
+          <p className="text-xs text-slate-500 mb-1">Realizado</p>
           <p className="text-lg font-bold text-slate-800">{formatCurrency(custos.custoRealizadoProprio)}</p>
         </div>
         <div>
@@ -1684,6 +1691,29 @@ function TabCustosResumo({ projetoId, projeto: _projeto }: { projetoId: string; 
           </p>
         </div>
       </div>
+
+      {/* Composicao do Realizado */}
+      {(custos.valorNotasFiscais > 0 || custos.valorParcelasContrato > 0) && (
+        <>
+          <hr className="my-4 border-slate-200" />
+          <p className="text-xs text-slate-500 uppercase tracking-wider mb-3">Composicao do Realizado</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {custos.valorNotasFiscais > 0 && (
+              <div className="bg-blue-50 rounded-lg p-3">
+                <p className="text-xs text-blue-600 mb-1">Notas Fiscais ({custos.qtdNotasFiscais} itens)</p>
+                <p className="text-sm font-bold text-blue-800">{formatCurrency(custos.valorNotasFiscais)}</p>
+              </div>
+            )}
+            {custos.valorParcelasContrato > 0 && (
+              <div className="bg-green-50 rounded-lg p-3">
+                <p className="text-xs text-green-600 mb-1">Parcelas Contrato ({custos.qtdParcelasContrato})</p>
+                <p className="text-sm font-bold text-green-800">{formatCurrency(custos.valorParcelasContrato)}</p>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
       {hasSubProjetos && (
         <>
           <hr className="my-6 border-slate-200" />
@@ -2860,6 +2890,202 @@ function ModalVincularChamadosProjeto({ projetoId, itensVinculados, onDone, onCl
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// === Sub-aba Notas Fiscais (dentro do Financeiro) ===
+
+function TabNFsProjeto({ projetoId }: { projetoId: string }) {
+  const [itens, setItens] = useState<NotaFiscalItemProjeto[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    compraService.buscarNotasFiscaisPorProjeto(projetoId)
+      .then(setItens)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [projetoId]);
+
+  if (loading) return <div className="text-center py-8 text-slate-500">Carregando...</div>;
+
+  if (itens.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <FileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+        <p className="text-slate-500 text-sm">Nenhuma nota fiscal vinculada a este projeto</p>
+      </div>
+    );
+  }
+
+  // Agrupar por NF
+  const nfMap = new Map<string, { nf: NotaFiscalItemProjeto['notaFiscal']; itens: NotaFiscalItemProjeto[] }>();
+  itens.forEach((item) => {
+    const key = item.notaFiscal.id;
+    if (!nfMap.has(key)) {
+      nfMap.set(key, { nf: item.notaFiscal, itens: [] });
+    }
+    nfMap.get(key)!.itens.push(item);
+  });
+
+  const valorTotal = itens.reduce((sum, i) => sum + Number(i.valorTotal), 0);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-slate-600">
+          {nfMap.size} nota(s) fiscal(is) | {itens.length} item(ns) vinculado(s) ao projeto
+        </p>
+        <div className="bg-capul-50 border border-capul-200 rounded-lg px-4 py-2">
+          <span className="text-sm text-slate-600">Total: </span>
+          <span className="text-sm font-bold text-capul-700">
+            R$ {valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </span>
+        </div>
+      </div>
+
+      {Array.from(nfMap.entries()).map(([nfId, { nf, itens: nfItens }]) => (
+        <div key={nfId} className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-4">
+          <div className="px-6 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Link to={`/gestao-ti/notas-fiscais/${nfId}`} className="text-sm font-semibold text-capul-600 hover:underline">
+                NF {nf.numero}
+              </Link>
+              <span className="text-xs text-slate-500">{formatDateBR(nf.dataLancamento)}</span>
+              <span className="text-xs text-slate-500">{nf.fornecedor.codigo} - {nf.fornecedor.nome}</span>
+            </div>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${
+              nf.status === 'CONFERIDA' ? 'bg-green-100 text-green-700' :
+              nf.status === 'CANCELADA' ? 'bg-red-100 text-red-700' :
+              'bg-blue-100 text-blue-700'
+            }`}>{nf.status}</span>
+          </div>
+          <table className="w-full">
+            <thead>
+              <tr className="text-left text-xs font-medium text-slate-500 uppercase">
+                <th className="px-6 py-2">Produto</th>
+                <th className="px-6 py-2 text-center">Qtde</th>
+                <th className="px-6 py-2 text-right">Valor Unit.</th>
+                <th className="px-6 py-2 text-right">Valor Total</th>
+                <th className="px-6 py-2">Departamento</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {nfItens.map((item) => (
+                <tr key={item.id} className="hover:bg-slate-50">
+                  <td className="px-6 py-2 text-sm">
+                    <span className="font-medium text-slate-700">{item.produto.descricao}</span>
+                    <span className="text-xs text-slate-400 ml-2">{item.produto.codigo}</span>
+                  </td>
+                  <td className="px-6 py-2 text-sm text-center">{item.quantidade}</td>
+                  <td className="px-6 py-2 text-sm text-right">R$ {Number(item.valorUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                  <td className="px-6 py-2 text-sm font-medium text-right">R$ {Number(item.valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                  <td className="px-6 py-2 text-sm text-slate-600">{item.departamento.nome}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// === Sub-aba Contratos (dentro do Financeiro) ===
+
+function TabContratosProjeto({ projetoId }: { projetoId: string }) {
+  const [itens, setItens] = useState<ParcelaRateioProjetoView[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    projetoService.listarParcelasRateioProjeto(projetoId)
+      .then((data) => setItens(data as ParcelaRateioProjetoView[]))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [projetoId]);
+
+  if (loading) return <div className="text-center py-8 text-slate-500">Carregando...</div>;
+
+  if (itens.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <FileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+        <p className="text-slate-500 text-sm">Nenhuma parcela de contrato vinculada a este projeto</p>
+        <p className="text-slate-400 text-xs mt-1">Configure o rateio por projeto na tela do Contrato</p>
+      </div>
+    );
+  }
+
+  const valorTotal = itens.reduce((sum, i) => sum + Number(i.valorCalculado), 0);
+  const valorPago = itens.filter(i => i.parcela.status === 'PAGA').reduce((sum, i) => sum + Number(i.valorCalculado), 0);
+
+  const statusCores: Record<string, string> = {
+    PENDENTE: 'bg-yellow-100 text-yellow-700',
+    PAGA: 'bg-green-100 text-green-700',
+    ATRASADA: 'bg-red-100 text-red-700',
+    CANCELADA: 'bg-slate-100 text-slate-500',
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-slate-600">{itens.length} parcela(s) vinculada(s)</p>
+        <div className="flex gap-4">
+          <div className="bg-capul-50 border border-capul-200 rounded-lg px-4 py-2">
+            <span className="text-xs text-slate-500">Total: </span>
+            <span className="text-sm font-bold text-capul-700">
+              R$ {valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2">
+            <span className="text-xs text-slate-500">Pago: </span>
+            <span className="text-sm font-bold text-green-700">
+              R$ {valorPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase">
+              <th className="px-6 py-3">Contrato</th>
+              <th className="px-6 py-3">Parcela</th>
+              <th className="px-6 py-3">Vencimento</th>
+              <th className="px-6 py-3">Pagamento</th>
+              <th className="px-6 py-3">Status</th>
+              <th className="px-6 py-3 text-right">% Rateio</th>
+              <th className="px-6 py-3 text-right">Valor Projeto</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {itens.map((item) => (
+              <tr key={item.id} className="hover:bg-slate-50">
+                <td className="px-6 py-3 text-sm">
+                  <Link to={`/gestao-ti/contratos/${item.parcela.contrato.id}`} className="text-capul-600 hover:underline">
+                    #{item.parcela.contrato.numero} - {item.parcela.contrato.titulo}
+                  </Link>
+                </td>
+                <td className="px-6 py-3 text-sm text-slate-700">#{item.parcela.numero}</td>
+                <td className="px-6 py-3 text-sm text-slate-700">{formatDateBR(item.parcela.dataVencimento)}</td>
+                <td className="px-6 py-3 text-sm text-slate-700">{item.parcela.dataPagamento ? formatDateBR(item.parcela.dataPagamento) : '-'}</td>
+                <td className="px-6 py-3">
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${statusCores[item.parcela.status] || 'bg-slate-100'}`}>
+                    {item.parcela.status}
+                  </span>
+                </td>
+                <td className="px-6 py-3 text-sm text-right text-slate-600">
+                  {item.percentual !== null ? `${Number(item.percentual).toFixed(2)}%` : '-'}
+                </td>
+                <td className="px-6 py-3 text-sm text-right font-medium">
+                  R$ {Number(item.valorCalculado).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

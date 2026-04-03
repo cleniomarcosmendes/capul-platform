@@ -31,6 +31,8 @@ import {
   Package,
   Search,
   ListChecks,
+  Receipt,
+  BarChart3,
 } from 'lucide-react';
 
 type MenuItem =
@@ -44,6 +46,7 @@ const CONTRATO_ROLES_DYNAMIC = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
 
 const menuItems: MenuItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/gestao-ti/' },
+  { label: 'Indicadores', icon: BarChart3, path: '/gestao-ti/indicadores', roles: MANAGERS },
   { label: 'Monitor', icon: Gauge, path: '/gestao-ti/monitor', roles: STAFF },
   { label: 'Acompanhamento', icon: Timer, path: '/gestao-ti/acompanhamento', roles: STAFF },
   { label: 'Acomp. por Item', icon: Search, path: '/gestao-ti/acompanhamento-item', roles: STAFF },
@@ -55,6 +58,7 @@ const menuItems: MenuItem[] = [
   { label: 'Softwares', icon: AppWindow, path: '/gestao-ti/softwares', roles: STAFF },
   { label: 'Licencas', icon: KeyRound, path: '/gestao-ti/licencas', roles: STAFF },
   { label: 'Contratos', icon: FileText, path: '/gestao-ti/contratos', roles: CONTRATO_ROLES_STATIC },
+  { label: 'Notas Fiscais', icon: Receipt, path: '/gestao-ti/notas-fiscais', roles: STAFF },
   { section: 'SUSTENTACAO', roles: STAFF },
   { label: 'Paradas', icon: Activity, path: '/gestao-ti/paradas', roles: STAFF },
   { label: 'Motivos de Parada', icon: AlertTriangle, path: '/gestao-ti/motivos-parada', roles: MANAGERS },
@@ -76,6 +80,8 @@ const menuItems: MenuItem[] = [
   { label: 'Tipos de Contrato', icon: Layers, path: '/gestao-ti/tipos-contrato', roles: MANAGERS },
   { label: 'Fornecedores', icon: Truck, path: '/gestao-ti/fornecedores', roles: MANAGERS },
   { label: 'Produtos', icon: Package, path: '/gestao-ti/produtos', roles: MANAGERS },
+  { label: 'Tipos de Produto', icon: Tag, path: '/gestao-ti/tipos-produto', roles: MANAGERS },
+  { label: 'Tipos de Projeto', icon: FolderKanban, path: '/gestao-ti/tipos-projeto', roles: MANAGERS },
   { label: 'Cat. Licencas', icon: Tag, path: '/gestao-ti/categorias-licenca', roles: MANAGERS },
 ];
 

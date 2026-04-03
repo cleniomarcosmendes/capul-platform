@@ -4,17 +4,11 @@ import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { projetoService } from '../../services/projeto.service';
 import { softwareService } from '../../services/software.service';
+import { compraService } from '../../services/compra.service';
 import { FolderKanban, Plus, Search, Download } from 'lucide-react';
 import { exportService } from '../../services/export.service';
-import type { Projeto, Software, TipoProjeto } from '../../types';
+import type { Projeto, Software, TipoProjetoConfig } from '../../types';
 import { formatDateBR } from '../../utils/date';
-
-const tipoLabel: Record<string, string> = {
-  DESENVOLVIMENTO_INTERNO: 'Desenv. Interno',
-  IMPLANTACAO_TERCEIRO: 'Implantacao',
-  INFRAESTRUTURA: 'Infraestrutura',
-  OUTRO: 'Outro',
-};
 
 const statusLabel: Record<string, string> = {
   PLANEJAMENTO: 'Planejamento',
@@ -38,10 +32,11 @@ export function ProjetosListPage() {
 
   const [projetos, setProjetos] = useState<Projeto[]>([]);
   const [softwares, setSoftwares] = useState<Software[]>([]);
+  const [tiposProjeto, setTiposProjeto] = useState<TipoProjetoConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [busca, setBusca] = useState('');
-  const [filtroTipo, setFiltroTipo] = useState<TipoProjeto | ''>('');
+  const [filtroTipo, setFiltroTipo] = useState('');
   const [filtroStatus, setFiltroStatus] = useState<string>('EM_ANDAMENTO,PLANEJAMENTO');
   const [filtroSoftware, setFiltroSoftware] = useState('');
   const [apenasRaiz, setApenasRaiz] = useState(false);
@@ -49,19 +44,19 @@ export function ProjetosListPage() {
 
   useEffect(() => {
     softwareService.listar().then(setSoftwares).catch(() => {});
+    compraService.listarTiposProjeto('ATIVO').then(setTiposProjeto).catch(() => {});
   }, []);
 
   // Carregar projetos quando auth estiver pronto e quando filtros mudarem
   useEffect(() => {
     if (!usuario?.id) return; // Aguardar auth
     loadData();
-  }, [usuario?.id, filtroTipo, filtroStatus, filtroSoftware, apenasRaiz, meusProjetos]);
+  }, [usuario?.id, filtroStatus, filtroSoftware, apenasRaiz, meusProjetos]);
 
   async function loadData() {
     setLoading(true);
     try {
       const data = await projetoService.listar({
-        tipo: filtroTipo || undefined,
         status: filtroStatus || undefined,
         softwareId: filtroSoftware || undefined,
         search: search || undefined,
@@ -79,6 +74,7 @@ export function ProjetosListPage() {
   }
 
   const projetosFiltrados = projetos.filter((p) => {
+    if (filtroTipo && p.tipoProjetoId !== filtroTipo) return false;
     if (!busca.trim()) return true;
     const termo = busca.toLowerCase();
     return (p.nome?.toLowerCase().includes(termo)) || (p.descricao?.toLowerCase().includes(termo));
@@ -164,9 +160,9 @@ export function ProjetosListPage() {
               Buscar
             </button>
           </form>
-          <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value as TipoProjeto | '')} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+          <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
             <option value="">Todos Tipos</option>
-            {Object.entries(tipoLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            {tiposProjeto.map((t) => <option key={t.id} value={t.id}>{t.descricao}</option>)}
           </select>
           <select value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
             <option value="">Todos Status</option>
@@ -231,7 +227,7 @@ export function ProjetosListPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-slate-600 text-xs">{tipoLabel[p.tipo] || p.tipo}</td>
+                      <td className="px-4 py-3 text-slate-600 text-xs">{p.tipoProjeto?.descricao || p.tipo}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusCores[p.status]}`}>
                           {statusLabel[p.status]}

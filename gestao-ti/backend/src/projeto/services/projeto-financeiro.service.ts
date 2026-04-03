@@ -135,7 +135,7 @@ export class ProjetoFinanceiroService {
     });
     if (!projeto) throw new NotFoundException('Projeto nao encontrado');
 
-    const [custosDetalhados, totalHoras, subProjetos] = await Promise.all([
+    const [custosDetalhados, totalHoras, subProjetos, nfAggregate, parcelaRateioAggregate] = await Promise.all([
       this.prisma.custoProjeto.aggregate({
         where: { projetoId: id },
         _sum: { valorPrevisto: true, valorRealizado: true },
@@ -147,6 +147,24 @@ export class ProjetoFinanceiroService {
         _count: true,
       }),
       this.helpers.getSubProjetosRecursivo(id),
+      // Soma dos itens de NF vinculados a este projeto
+      this.prisma.notaFiscalItem.aggregate({
+        where: {
+          projetoId: id,
+          notaFiscal: { status: { not: 'CANCELADA' } },
+        },
+        _sum: { valorTotal: true },
+        _count: true,
+      }),
+      // Soma dos rateios de parcela vinculados a este projeto (apenas parcelas pagas)
+      this.prisma.parcelaRateioProjeto.aggregate({
+        where: {
+          projetoId: id,
+          parcela: { status: 'PAGA' },
+        },
+        _sum: { valorCalculado: true },
+        _count: true,
+      }),
     ]);
 
     let custoPrevistoFilhos = 0;
@@ -166,10 +184,13 @@ export class ProjetoFinanceiroService {
       custoRealizadoFilhos += Number(aggrFilhos._sum.valorRealizado || 0);
     }
 
+    const valorNFs = Number(nfAggregate._sum.valorTotal || 0);
+    const valorParcelas = Number(parcelaRateioAggregate._sum.valorCalculado || 0);
+
     const custoPrevistoProprio =
       Number(projeto.custoPrevisto || 0) + Number(custosDetalhados._sum.valorPrevisto || 0);
     const custoRealizadoProprio =
-      Number(projeto.custoRealizado || 0) + Number(custosDetalhados._sum.valorRealizado || 0);
+      Number(projeto.custoRealizado || 0) + Number(custosDetalhados._sum.valorRealizado || 0) + valorNFs + valorParcelas;
 
     return {
       projeto: { id: projeto.id, nome: projeto.nome, nivel: projeto.nivel },
@@ -183,6 +204,46 @@ export class ProjetoFinanceiroService {
       custosDetalhados: custosDetalhados._count,
       totalHoras: Number(totalHoras._sum.horas || 0),
       totalApontamentos: totalHoras._count,
+      // New financial data
+      valorNotasFiscais: valorNFs,
+      qtdNotasFiscais: nfAggregate._count,
+      valorParcelasContrato: valorParcelas,
+      qtdParcelasContrato: parcelaRateioAggregate._count,
     };
+  }
+
+  async listarNFsProjeto(projetoId: string) {
+    await this.helpers.ensureProjetoExists(projetoId);
+    return this.prisma.notaFiscalItem.findMany({
+      where: {
+        projetoId,
+        notaFiscal: { status: { not: 'CANCELADA' } },
+      },
+      include: {
+        notaFiscal: {
+          include: { fornecedor: true },
+        },
+        produto: { include: { tipoProduto: true } },
+        departamento: true,
+      },
+      orderBy: { notaFiscal: { dataLancamento: 'desc' } },
+    });
+  }
+
+  async listarParcelasRateioProjeto(projetoId: string) {
+    await this.helpers.ensureProjetoExists(projetoId);
+    return this.prisma.parcelaRateioProjeto.findMany({
+      where: { projetoId },
+      include: {
+        parcela: {
+          include: {
+            contrato: {
+              select: { id: true, numero: true, titulo: true, fornecedor: true, fornecedorId: true },
+            },
+          },
+        },
+      },
+      orderBy: { parcela: { dataVencimento: 'desc' } },
+    });
   }
 }
