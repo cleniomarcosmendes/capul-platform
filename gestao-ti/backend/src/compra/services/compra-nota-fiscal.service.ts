@@ -137,9 +137,6 @@ export class CompraNotaFiscalService {
         throw new BadRequestException('A nota fiscal deve ter pelo menos um item');
       }
 
-      // Remove itens antigos e recria
-      await this.prisma.notaFiscalItem.deleteMany({ where: { notaFiscalId: id } });
-
       const itensData = dto.itens.map((item) => {
         const valorTotal = Number((item.quantidade * item.valorUnitario).toFixed(2));
         return {
@@ -154,8 +151,18 @@ export class CompraNotaFiscalService {
         };
       });
 
-      await this.prisma.notaFiscalItem.createMany({ data: itensData });
       data.valorTotal = itensData.reduce((sum, i) => sum + i.valorTotal, 0);
+
+      // Atomico: delete itens + recria + atualiza NF
+      return this.prisma.$transaction(async (tx) => {
+        await tx.notaFiscalItem.deleteMany({ where: { notaFiscalId: id } });
+        await tx.notaFiscalItem.createMany({ data: itensData });
+        return tx.notaFiscal.update({
+          where: { id },
+          data,
+          include: NF_INCLUDE,
+        });
+      });
     }
 
     return this.prisma.notaFiscal.update({

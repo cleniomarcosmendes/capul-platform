@@ -130,7 +130,7 @@ export function IndicadoresPage() {
             </button>
             <div className="text-center min-w-[180px]">
               <p className="text-lg font-bold text-slate-800">{meses[mes - 1]} {ano}</p>
-              <p className="text-xs text-slate-500">Modernizacao da Infra de TI</p>
+              <p className="text-xs text-slate-500">Planejamento Estrategico - Depto. T.I.</p>
             </div>
             <button onClick={nextMes} className="p-1.5 rounded-lg border border-slate-300 hover:bg-slate-50">
               <ChevronRight className="w-4 h-4" />

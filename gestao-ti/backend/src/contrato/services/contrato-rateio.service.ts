@@ -143,18 +143,15 @@ export class ContratoRateioService {
 
       await this.prisma.$transaction(async (tx) => {
         await tx.parcelaRateioItem.deleteMany({ where: { parcelaId } });
-
-        for (const item of itensCalculados) {
-          await tx.parcelaRateioItem.create({
-            data: {
-              parcelaId,
-              centroCustoId: item.centroCustoId,
-              percentual: item.percentual,
-              valorCalculado: item.valorCalculado,
-              naturezaId: item.naturezaId,
-            },
-          });
-        }
+        await tx.parcelaRateioItem.createMany({
+          data: itensCalculados.map((item) => ({
+            parcelaId,
+            centroCustoId: item.centroCustoId,
+            percentual: item.percentual,
+            valorCalculado: item.valorCalculado,
+            naturezaId: item.naturezaId,
+          })),
+        });
       });
 
       await this.core.criarHistorico(contratoId, 'RATEIO_ALTERADO', `Rateio gerado para parcela #${parcela.numero} via template`, usuarioId);
@@ -182,18 +179,15 @@ export class ContratoRateioService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.parcelaRateioItem.deleteMany({ where: { parcelaId } });
-
-      for (const item of itensCalculados) {
-        await tx.parcelaRateioItem.create({
-          data: {
-            parcelaId,
-            centroCustoId: item.centroCustoId,
-            percentual: item.percentual,
-            valorCalculado: item.valorCalculado,
-            naturezaId: item.naturezaId,
-          },
-        });
-      }
+      await tx.parcelaRateioItem.createMany({
+        data: itensCalculados.map((item) => ({
+          parcelaId,
+          centroCustoId: item.centroCustoId,
+          percentual: item.percentual,
+          valorCalculado: item.valorCalculado,
+          naturezaId: item.naturezaId,
+        })),
+      });
     });
 
     await this.core.criarHistorico(contratoId, 'RATEIO_ALTERADO', `Rateio manual configurado para parcela #${parcela.numero}`, usuarioId);
@@ -225,23 +219,21 @@ export class ContratoRateioService {
 
       await this.prisma.$transaction(async (tx) => {
         await tx.parcelaRateioItem.deleteMany({ where: { parcelaId: parcela.id } });
-
-        for (const item of itensOrigem) {
-          const percentual = item.percentual ? Number(item.percentual) : null;
-          const valorCalculado = percentual !== null
-            ? valorParcela * percentual / 100
-            : Number(item.valorCalculado);
-
-          await tx.parcelaRateioItem.create({
-            data: {
+        await tx.parcelaRateioItem.createMany({
+          data: itensOrigem.map((item) => {
+            const percentual = item.percentual ? Number(item.percentual) : null;
+            const valorCalculado = percentual !== null
+              ? valorParcela * percentual / 100
+              : Number(item.valorCalculado);
+            return {
               parcelaId: parcela.id,
               centroCustoId: item.centroCustoId,
               percentual: item.percentual,
               valorCalculado,
               naturezaId: item.naturezaId,
-            },
-          });
-        }
+            };
+          }),
+        });
       });
     }
 

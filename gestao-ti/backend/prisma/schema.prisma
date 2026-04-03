@@ -2092,6 +2092,7 @@ model NotaFiscalItem {
   projeto   Projeto? @relation(fields: [projetoId], references: [id])
 
   @@index([notaFiscalId])
+  @@index([produtoId])
   @@index([projetoId])
   @@index([departamentoId])
   @@map("nota_fiscal_itens")
