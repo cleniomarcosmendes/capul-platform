@@ -57,8 +57,9 @@ export class CompraService {
     projetoId?: string;
     dataInicio?: string;
     dataFim?: string;
-  }, filialId?: string) {
-    return this.notaFiscalService.findAll(filters, filialId);
+    equipeId?: string;
+  }, filialId?: string, usuarioId?: string, role?: string) {
+    return this.notaFiscalService.findAll(filters, filialId, usuarioId, role);
   }
 
   findOneNotaFiscal(id: string) {
@@ -69,19 +70,23 @@ export class CompraService {
     return this.notaFiscalService.findByProjeto(projetoId);
   }
 
-  createNotaFiscal(dto: CreateNotaFiscalDto, userId: string, filialId: string) {
-    return this.notaFiscalService.create(dto, userId, filialId);
+  findEquipesParaCompras(usuarioId: string, role: string) {
+    return this.notaFiscalService.findEquipesParaCompras(usuarioId, role);
   }
 
-  updateNotaFiscal(id: string, dto: UpdateNotaFiscalDto) {
-    return this.notaFiscalService.update(id, dto);
+  createNotaFiscal(dto: CreateNotaFiscalDto, userId: string, filialId: string, role: string) {
+    return this.notaFiscalService.create(dto, userId, filialId, role);
   }
 
-  removeNotaFiscal(id: string) {
-    return this.notaFiscalService.remove(id);
+  updateNotaFiscal(id: string, dto: UpdateNotaFiscalDto, usuarioId: string, role: string) {
+    return this.notaFiscalService.update(id, dto, usuarioId, role);
   }
 
-  duplicarNotaFiscal(id: string, userId: string, filialId: string) {
-    return this.notaFiscalService.duplicar(id, userId, filialId);
+  removeNotaFiscal(id: string, usuarioId: string, role: string) {
+    return this.notaFiscalService.remove(id, usuarioId, role);
+  }
+
+  duplicarNotaFiscal(id: string, userId: string, filialId: string, role: string) {
+    return this.notaFiscalService.duplicar(id, userId, filialId, role);
   }
 }

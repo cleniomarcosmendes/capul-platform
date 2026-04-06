@@ -48,7 +48,7 @@ export function NotaFiscalDetalhePage() {
   async function handleAlterarStatus(status: string) {
     if (!nf) return;
     const label = status === 'CONFERIDA' ? 'conferir' : status === 'CANCELADA' ? 'cancelar' : 'reabrir';
-    const ok = await confirm(`Deseja ${label} esta nota fiscal?`, status === 'CANCELADA' ? 'danger' : 'default');
+    const ok = await confirm('Alterar Status', `Deseja ${label} esta nota fiscal?`, { variant: status === 'CANCELADA' ? 'danger' : 'default' });
     if (!ok) return;
     try {
       await compraService.atualizarNotaFiscal(nf.id, { status });
@@ -72,7 +72,7 @@ export function NotaFiscalDetalhePage() {
 
   async function handleExcluir() {
     if (!nf) return;
-    const ok = await confirm('Deseja excluir esta nota fiscal permanentemente?', 'danger');
+    const ok = await confirm('Excluir NF', 'Deseja excluir esta nota fiscal permanentemente?', { variant: 'danger' });
     if (!ok) return;
     try {
       await compraService.excluirNotaFiscal(nf.id);
@@ -178,6 +178,19 @@ export function NotaFiscalDetalhePage() {
           </div>
 
           <div className="grid grid-cols-4 gap-4 text-sm mt-4">
+            <div>
+              <p className="text-slate-500 text-xs">Equipe</p>
+              {nf.equipe ? (
+                <span
+                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full text-white font-medium mt-0.5"
+                  style={{ backgroundColor: nf.equipe.cor || '#64748b' }}
+                >
+                  {nf.equipe.sigla} - {nf.equipe.nome}
+                </span>
+              ) : (
+                <p className="text-slate-400">Nao definida</p>
+              )}
+            </div>
             <div>
               <p className="text-slate-500 text-xs">Filial</p>
               <p className="text-slate-800">{nf.filial.codigo} - {nf.filial.nomeFantasia}</p>

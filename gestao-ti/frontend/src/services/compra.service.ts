@@ -20,6 +20,7 @@ interface CreateNotaFiscalPayload {
   dataLancamento: string;
   fornecedorId: string;
   observacao?: string;
+  equipeId?: string;
   itens: NotaFiscalItemPayload[];
 }
 
@@ -29,6 +30,7 @@ interface UpdateNotaFiscalPayload {
   fornecedorId?: string;
   observacao?: string;
   status?: string;
+  equipeId?: string;
   itens?: NotaFiscalItemPayload[];
 }
 
@@ -39,6 +41,14 @@ interface ListFilters {
   projetoId?: string;
   dataInicio?: string;
   dataFim?: string;
+  equipeId?: string;
+}
+
+interface EquipeResumo {
+  id: string;
+  nome: string;
+  sigla: string;
+  cor: string | null;
 }
 
 export const compraService = {
@@ -98,6 +108,7 @@ export const compraService = {
     if (filters.projetoId) params.projetoId = filters.projetoId;
     if (filters.dataInicio) params.dataInicio = filters.dataInicio;
     if (filters.dataFim) params.dataFim = filters.dataFim;
+    if (filters.equipeId) params.equipeId = filters.equipeId;
     const { data } = await gestaoApi.get('/compras/notas-fiscais', { params });
     return data;
   },
@@ -128,6 +139,11 @@ export const compraService = {
 
   async duplicarNotaFiscal(id: string): Promise<NotaFiscal> {
     const { data } = await gestaoApi.post(`/compras/notas-fiscais/${id}/duplicar`);
+    return data;
+  },
+
+  async listarEquipesParaCompras(): Promise<EquipeResumo[]> {
+    const { data } = await gestaoApi.get('/compras/notas-fiscais/equipes-disponiveis');
     return data;
   },
 };

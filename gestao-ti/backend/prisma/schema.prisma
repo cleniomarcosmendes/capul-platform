@@ -154,6 +154,7 @@ model EquipeTI {
   softwaresResponsavel Software[]
   artigos              ArtigoConhecimento[]
   contratos            Contrato[]
+  notasFiscais         NotaFiscal[]
 
   @@map("equipes_ti")
   @@schema("gestao_ti")
@@ -163,6 +164,7 @@ model MembroEquipe {
   id                  String      @id @default(uuid())
   isLider             Boolean     @default(false) @map("is_lider")
   podeGerirContratos  Boolean     @default(false) @map("pode_gerir_contratos")
+  podeGerirCompras    Boolean     @default(false) @map("pode_gerir_compras")
   status              StatusGeral @default(ATIVO)
   createdAt           DateTime    @default(now()) @map("created_at")
   updatedAt           DateTime    @updatedAt @map("updated_at")
@@ -2062,11 +2064,15 @@ model NotaFiscal {
   criadoPorId String  @map("criado_por_id")
   criadoPor   Usuario @relation("NotaFiscalCriadaPor", fields: [criadoPorId], references: [id])
 
+  equipeId String?   @map("equipe_id")
+  equipe   EquipeTI? @relation(fields: [equipeId], references: [id])
+
   itens NotaFiscalItem[]
 
   @@unique([numero, fornecedorId])
   @@index([fornecedorId])
   @@index([filialId])
+  @@index([equipeId])
   @@index([dataLancamento])
   @@map("notas_fiscais")
   @@schema("gestao_ti")

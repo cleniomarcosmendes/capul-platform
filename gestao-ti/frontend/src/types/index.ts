@@ -46,6 +46,7 @@ export interface MembroEquipe {
   id: string;
   isLider: boolean;
   podeGerirContratos: boolean;
+  podeGerirCompras: boolean;
   status: 'ATIVO' | 'INATIVO';
   usuarioId: string;
   equipeId: string;
@@ -1444,6 +1445,8 @@ export interface NotaFiscal {
   filial: { id: string; codigo: string; nomeFantasia: string };
   criadoPorId: string;
   criadoPor: { id: string; nome: string; username: string };
+  equipeId: string | null;
+  equipe: { id: string; nome: string; sigla: string; cor: string | null } | null;
   itens: NotaFiscalItem[];
 }
 

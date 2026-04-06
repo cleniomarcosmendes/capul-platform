@@ -56,6 +56,10 @@ export class CreateNotaFiscalDto {
   @IsString()
   observacao?: string;
 
+  @IsOptional()
+  @IsString()
+  equipeId?: string;
+
   @IsArray({ message: 'Itens obrigatorios' })
   @ValidateNested({ each: true })
   @Type(() => NotaFiscalItemDto)
@@ -84,6 +88,10 @@ export class UpdateNotaFiscalDto {
   @IsString()
   @IsIn(['REGISTRADA', 'CONFERIDA', 'CANCELADA'])
   status?: string;
+
+  @IsOptional()
+  @IsString()
+  equipeId?: string;
 
   @IsOptional()
   @IsArray()

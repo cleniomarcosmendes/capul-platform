@@ -10,6 +10,7 @@ import { useToast } from '../../components/Toast';
 import { SearchSelect } from '../../components/SearchSelect';
 import type { SearchSelectOption } from '../../components/SearchSelect';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 import type { FornecedorConfig, ProdutoConfig, Departamento } from '../../types';
 
 interface ItemForm {
@@ -43,10 +44,18 @@ function newItem(): ItemForm {
   };
 }
 
+interface EquipeResumo {
+  id: string;
+  nome: string;
+  sigla: string;
+  cor: string | null;
+}
+
 export function NotaFiscalFormPage() {
   const { id } = useParams();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  const { gestaoTiRole } = useAuth();
   const { toast } = useToast();
   const [dirty, setDirty] = useState(false);
   const { ConfirmDialog, guardedNavigate } = useUnsavedChanges(dirty);
@@ -54,6 +63,7 @@ export function NotaFiscalFormPage() {
   const [numero, setNumero] = useState('');
   const [dataLancamento, setDataEmissao] = useState(new Date().toISOString().slice(0, 10));
   const [fornecedorId, setFornecedorId] = useState('');
+  const [equipeId, setEquipeId] = useState('');
   const [observacao, setObservacao] = useState('');
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
 
@@ -61,8 +71,10 @@ export function NotaFiscalFormPage() {
   const [produtos, setProdutos] = useState<ProdutoConfig[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [projetos, setProjetos] = useState<ProjetoResumo[]>([]);
+  const [equipes, setEquipes] = useState<EquipeResumo[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
 
   useEffect(() => {
     // Chamadas independentes — uma falha nao impede as outras
@@ -72,6 +84,11 @@ export function NotaFiscalFormPage() {
     projetoService.listar().then((all: ProjetoResumo[]) =>
       setProjetos(all.filter(p => p.status !== 'CANCELADO'))
     ).catch(() => {});
+    compraService.listarEquipesParaCompras().then((eqs) => {
+      setEquipes(eqs);
+      // Auto-selecionar se usuario pertence a uma unica equipe
+      if (eqs.length === 1 && !isEdit) setEquipeId(eqs[0].id);
+    }).catch(() => {});
 
     if (isEdit && id) {
       setLoading(true);
@@ -79,6 +96,7 @@ export function NotaFiscalFormPage() {
         setNumero(nf.numero);
         setDataEmissao(nf.dataLancamento.slice(0, 10));
         setFornecedorId(nf.fornecedorId);
+        setEquipeId(nf.equipeId || '');
         setObservacao(nf.observacao || '');
         setItens(nf.itens.map((i) => ({
           key: ++keyCounter,
@@ -160,6 +178,7 @@ export function NotaFiscalFormPage() {
         numero,
         dataLancamento,
         fornecedorId,
+        equipeId: equipeId || undefined,
         observacao: observacao || undefined,
         itens: itens.map(i => ({
           produtoId: i.produtoId,
@@ -226,7 +245,21 @@ export function NotaFiscalFormPage() {
                   required
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" />
               </div>
-              <div className="col-span-2">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Equipe {!isAdmin && '*'}</label>
+                <select
+                  value={equipeId}
+                  onChange={(e) => { setEquipeId(e.target.value); setDirty(true); }}
+                  required={!isAdmin}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-capul-600"
+                >
+                  <option value="">Selecione a equipe...</option>
+                  {equipes.map((eq) => (
+                    <option key={eq.id} value={eq.id}>{eq.sigla} - {eq.nome}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Fornecedor *</label>
                 <SearchSelect
                   options={fornecedorOptions}

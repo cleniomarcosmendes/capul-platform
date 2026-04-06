@@ -34,11 +34,13 @@ export function NotasFiscaisListPage() {
   const [notas, setNotas] = useState<NotaFiscal[]>([]);
   const [fornecedores, setFornecedores] = useState<FornecedorConfig[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
+  const [equipes, setEquipes] = useState<{ id: string; nome: string; sigla: string; cor: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterFornecedorId, setFilterFornecedorId] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterDepartamentoId, setFilterDepartamentoId] = useState('');
+  const [filterEquipeId, setFilterEquipeId] = useState('');
   const [filterDataInicio, setFilterDataInicio] = useState('');
   const [filterDataFim, setFilterDataFim] = useState('');
 
@@ -48,11 +50,12 @@ export function NotasFiscaisListPage() {
   useEffect(() => {
     contratoService.listarFornecedores().then(setFornecedores).catch(() => {});
     coreService.listarDepartamentos().then(setDepartamentos).catch(() => {});
+    compraService.listarEquipesParaCompras().then(setEquipes).catch(() => {});
   }, []);
 
   useEffect(() => {
     loadNotas();
-  }, [filterFornecedorId, filterStatus, filterDepartamentoId, filterDataInicio, filterDataFim]);
+  }, [filterFornecedorId, filterStatus, filterDepartamentoId, filterEquipeId, filterDataInicio, filterDataFim]);
 
   async function loadNotas() {
     setLoading(true);
@@ -61,6 +64,7 @@ export function NotasFiscaisListPage() {
         fornecedorId: filterFornecedorId || undefined,
         status: filterStatus || undefined,
         departamentoId: filterDepartamentoId || undefined,
+        equipeId: filterEquipeId || undefined,
         dataInicio: filterDataInicio || undefined,
         dataFim: filterDataFim || undefined,
       });
@@ -163,6 +167,11 @@ export function NotasFiscaisListPage() {
             <option value="">Todos os deptos</option>
             {departamentos.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
           </select>
+          <select value={filterEquipeId} onChange={(e) => setFilterEquipeId(e.target.value)}
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">Todas as equipes</option>
+            {equipes.map((eq) => <option key={eq.id} value={eq.id}>{eq.sigla} - {eq.nome}</option>)}
+          </select>
           <input type="date" value={filterDataInicio} onChange={(e) => setFilterDataInicio(e.target.value)}
             className="border border-slate-300 rounded-lg px-3 py-2 text-sm" title="Data inicio" />
           <input type="date" value={filterDataFim} onChange={(e) => setFilterDataFim(e.target.value)}
@@ -195,6 +204,7 @@ export function NotasFiscaisListPage() {
                   <th className="px-4 py-3"><button onClick={() => toggleSort('numero')} className="flex items-center gap-1 hover:text-slate-700">NF <SortIcon col="numero" /></button></th>
                   <th className="px-4 py-3"><button onClick={() => toggleSort('dataLancamento')} className="flex items-center gap-1 hover:text-slate-700">Data Lancamento <SortIcon col="dataLancamento" /></button></th>
                   <th className="px-4 py-3"><button onClick={() => toggleSort('fornecedor')} className="flex items-center gap-1 hover:text-slate-700">Fornecedor <SortIcon col="fornecedor" /></button></th>
+                  <th className="px-4 py-3">Equipe</th>
                   <th className="px-4 py-3">Itens</th>
                   <th className="px-4 py-3 text-right"><button onClick={() => toggleSort('valorTotal')} className="flex items-center gap-1 hover:text-slate-700 ml-auto">Valor Total <SortIcon col="valorTotal" /></button></th>
                   <th className="px-4 py-3"><button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-slate-700">Status <SortIcon col="status" /></button></th>
@@ -212,6 +222,18 @@ export function NotasFiscaisListPage() {
                     <td className="px-4 py-3">
                       <div className="text-sm font-medium text-slate-700">{nf.fornecedor.nome}</div>
                       <div className="text-xs text-slate-400">{nf.fornecedor.codigo}{nf.fornecedor.loja ? ` / ${nf.fornecedor.loja}` : ''}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {nf.equipe ? (
+                        <span
+                          className="text-xs px-2 py-1 rounded-full text-white font-medium"
+                          style={{ backgroundColor: nf.equipe.cor || '#64748b' }}
+                        >
+                          {nf.equipe.sigla}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">-</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-600">{nf.itens.length} {nf.itens.length === 1 ? 'item' : 'itens'}</td>
                     <td className="px-4 py-3 text-sm text-slate-800 font-medium text-right">

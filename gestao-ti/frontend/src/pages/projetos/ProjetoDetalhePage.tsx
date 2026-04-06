@@ -181,6 +181,7 @@ export function ProjetoDetalhePage() {
   const canManage = (isGestorOrAdmin || isMembro) && Boolean(gestaoTiRole);
   const canAddAtividade = canManage;
 
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('subprojetos');
   const [statusChanging, setStatusChanging] = useState(false);
@@ -214,7 +215,10 @@ export function ProjetoDetalhePage() {
     try {
       await projetoService.atualizar(projeto.id, { status: newStatus });
       await loadProjeto();
-    } catch { /* empty */ }
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+      toast('error', Array.isArray(msg) ? msg.join('. ') : msg || 'Erro ao alterar status do projeto');
+    }
     setStatusChanging(false);
   }
 

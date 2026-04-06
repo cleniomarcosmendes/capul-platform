@@ -12,4 +12,8 @@ export class AddMembroDto {
   @IsOptional()
   @IsBoolean()
   podeGerirContratos?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  podeGerirCompras?: boolean;
 }

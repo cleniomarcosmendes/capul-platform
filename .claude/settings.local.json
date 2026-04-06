@@ -1147,7 +1147,10 @@
       "Bash(wc -l /mnt/c/meus_projetos/capul-platform/inventario/backend/app/api/v1/endpoints/*.py)",
       "Bash(for f:*)",
       "Bash(do echo:*)",
-      "Read(//mnt/c/meus_projetos/capul-platform/**)"
+      "Read(//mnt/c/meus_projetos/capul-platform/**)",
+      "Bash(netstat -tlnp)",
+      "Bash(docker stop:*)",
+      "Bash(docker rm:*)"
     ]
   }
 }

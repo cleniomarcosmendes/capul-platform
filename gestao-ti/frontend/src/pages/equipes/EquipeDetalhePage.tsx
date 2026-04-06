@@ -4,7 +4,7 @@ import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
-import { ArrowLeft, Pencil, UserPlus, Trash2, Star, StarOff, FileText } from 'lucide-react';
+import { ArrowLeft, Pencil, UserPlus, Trash2, Star, StarOff, FileText, ShoppingCart } from 'lucide-react';
 import type { EquipeTI, UsuarioCore } from '../../types';
 import { useToast } from '../../components/Toast';
 
@@ -23,6 +23,7 @@ export function EquipeDetalhePage() {
   const [selectedUsuarioId, setSelectedUsuarioId] = useState('');
   const [isLider, setIsLider] = useState(false);
   const [podeGerirContratos, setPodeGerirContratos] = useState(false);
+  const [podeGerirCompras, setPodeGerirCompras] = useState(false);
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
@@ -56,11 +57,12 @@ export function EquipeDetalhePage() {
     if (!selectedUsuarioId) return;
     setAdding(true);
     try {
-      await equipeService.adicionarMembro(id!, { usuarioId: selectedUsuarioId, isLider, podeGerirContratos });
+      await equipeService.adicionarMembro(id!, { usuarioId: selectedUsuarioId, isLider, podeGerirContratos, podeGerirCompras });
       setShowAddMembro(false);
       setSelectedUsuarioId('');
       setIsLider(false);
       setPodeGerirContratos(false);
+      setPodeGerirCompras(false);
       carregarEquipe();
     } catch (err: unknown) {
       const message =
@@ -83,6 +85,15 @@ export function EquipeDetalhePage() {
   async function toggleContratos(membroId: string, current: boolean) {
     try {
       await equipeService.atualizarMembro(id!, membroId, { podeGerirContratos: !current });
+      carregarEquipe();
+    } catch {
+      toast('error', 'Erro ao atualizar permissao');
+    }
+  }
+
+  async function toggleCompras(membroId: string, current: boolean) {
+    try {
+      await equipeService.atualizarMembro(id!, membroId, { podeGerirCompras: !current });
       carregarEquipe();
     } catch {
       toast('error', 'Erro ao atualizar permissao');
@@ -234,6 +245,15 @@ export function EquipeDetalhePage() {
                     />
                     Contratos
                   </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-600 pb-2">
+                    <input
+                      type="checkbox"
+                      checked={podeGerirCompras}
+                      onChange={(e) => setPodeGerirCompras(e.target.checked)}
+                      className="rounded border-slate-300"
+                    />
+                    Compras
+                  </label>
                   <button
                     onClick={handleAddMembro}
                     disabled={!selectedUsuarioId || adding}
@@ -280,6 +300,11 @@ export function EquipeDetalhePage() {
                             Contratos
                           </span>
                         )}
+                        {membro.podeGerirCompras && (
+                          <span className="ml-1 text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                            Compras
+                          </span>
+                        )}
                       </div>
                     </div>
                     {isAdmin && (
@@ -301,6 +326,13 @@ export function EquipeDetalhePage() {
                           title={membro.podeGerirContratos ? 'Remover permissao de contratos' : 'Permitir gerir contratos'}
                         >
                           <FileText className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => toggleCompras(membro.id, membro.podeGerirCompras)}
+                          className={`p-1.5 transition-colors ${membro.podeGerirCompras ? 'text-blue-500 hover:text-blue-700' : 'text-slate-400 hover:text-blue-500'}`}
+                          title={membro.podeGerirCompras ? 'Remover permissao de compras' : 'Permitir gerir compras/NFs'}
+                        >
+                          <ShoppingCart className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => removerMembro(membro.id, membro.usuario.nome)}

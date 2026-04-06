@@ -15,6 +15,7 @@ import { GestaoTiGuard } from '../common/guards/gestao-ti.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 import { CreateTipoProdutoDto, UpdateTipoProdutoDto } from './dto/create-tipo-produto.dto';
 import { CreateTipoProjetoDto, UpdateTipoProjetoDto } from './dto/create-tipo-projeto.dto';
@@ -85,12 +86,24 @@ export class CompraController {
     @Query('projetoId') projetoId?: string,
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
+    @Query('equipeId') equipeId?: string,
     @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
   ) {
     return this.service.findAllNotasFiscais(
-      { fornecedorId, status, departamentoId, projetoId, dataInicio, dataFim },
+      { fornecedorId, status, departamentoId, projetoId, dataInicio, dataFim, equipeId },
       user?.filialId,
+      user?.sub,
+      role,
     );
+  }
+
+  @Get('notas-fiscais/equipes-disponiveis')
+  findEquipesParaCompras(
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.findEquipesParaCompras(user.sub, role);
   }
 
   @Get('notas-fiscais/por-projeto/:projetoId')
@@ -108,8 +121,9 @@ export class CompraController {
   createNotaFiscal(
     @Body() dto: CreateNotaFiscalDto,
     @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
   ) {
-    return this.service.createNotaFiscal(dto, user.sub, user.filialId);
+    return this.service.createNotaFiscal(dto, user.sub, user.filialId, role);
   }
 
   @Patch('notas-fiscais/:id')
@@ -117,14 +131,20 @@ export class CompraController {
   updateNotaFiscal(
     @Param('id') id: string,
     @Body() dto: UpdateNotaFiscalDto,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
   ) {
-    return this.service.updateNotaFiscal(id, dto);
+    return this.service.updateNotaFiscal(id, dto, user.sub, role);
   }
 
   @Delete('notas-fiscais/:id')
   @Roles('ADMIN', 'GESTOR_TI')
-  removeNotaFiscal(@Param('id') id: string) {
-    return this.service.removeNotaFiscal(id);
+  removeNotaFiscal(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.removeNotaFiscal(id, user.sub, role);
   }
 
   @Post('notas-fiscais/:id/duplicar')
@@ -132,7 +152,8 @@ export class CompraController {
   duplicarNotaFiscal(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
   ) {
-    return this.service.duplicarNotaFiscal(id, user.sub, user.filialId);
+    return this.service.duplicarNotaFiscal(id, user.sub, user.filialId, role);
   }
 }
