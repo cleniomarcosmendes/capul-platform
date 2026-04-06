@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { paradaService } from '../../services/parada.service';
 import { softwareService } from '../../services/software.service';
-import { Activity, Plus, AlertTriangle, Search, Download } from 'lucide-react';
+import { Activity, Plus, AlertTriangle, Search, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import type { RegistroParada, Software, MotivoParada, TipoParada, ImpactoParada, StatusParada } from '../../types';
 
@@ -62,6 +62,19 @@ export function ParadasListPage() {
   const [filtroStatus, setFiltroStatus] = useState('');
   const [filtroMotivo, setFiltroMotivo] = useState('');
 
+  type SortKey = 'titulo' | 'software' | 'tipo' | 'impacto' | 'status' | 'inicio' | 'duracao';
+  type SortDir = 'asc' | 'desc';
+  const [sortKey, setSortKey] = useState<SortKey>('inicio');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir(key === 'inicio' ? 'desc' : 'asc'); }
+  }
+  function SortIcon({ col }: { col: SortKey }) {
+    if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300" />;
+    return sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-capul-600" /> : <ArrowDown className="w-3 h-3 text-capul-600" />;
+  }
+
   useEffect(() => {
     softwareService.listar().then(setSoftwares).catch(() => {});
     paradaService.listarMotivos().then(setMotivos).catch(() => {});
@@ -86,14 +99,33 @@ export function ParadasListPage() {
     setLoading(false);
   }
 
-  const filtered = search
-    ? paradas.filter(
-        (p) =>
-          p.titulo.toLowerCase().includes(search.toLowerCase()) ||
-          (p.descricao?.toLowerCase().includes(search.toLowerCase())) ||
-          p.software.nome.toLowerCase().includes(search.toLowerCase()),
-      )
-    : paradas;
+  const filtered = useMemo(() => {
+    if (!search) return paradas;
+    const s = search.toLowerCase();
+    return paradas.filter((p) =>
+      p.titulo.toLowerCase().includes(s) ||
+      (p.descricao?.toLowerCase().includes(s)) ||
+      p.software.nome.toLowerCase().includes(s)
+    );
+  }, [paradas, search]);
+
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let va: string | number, vb: string | number;
+      switch (sortKey) {
+        case 'titulo': va = a.titulo.toLowerCase(); vb = b.titulo.toLowerCase(); break;
+        case 'software': va = a.software.nome.toLowerCase(); vb = b.software.nome.toLowerCase(); break;
+        case 'tipo': va = a.tipo; vb = b.tipo; break;
+        case 'impacto': va = a.impacto; vb = b.impacto; break;
+        case 'status': va = a.status; vb = b.status; break;
+        case 'inicio': va = a.inicio; vb = b.inicio; break;
+        case 'duracao': va = a.duracaoMinutos ?? 999999; vb = b.duracaoMinutos ?? 999999; break;
+        default: va = ''; vb = '';
+      }
+      const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [filtered, sortKey, sortDir]);
 
   const emAndamento = paradas.filter((p) => p.status === 'EM_ANDAMENTO').length;
   const finalizadas = paradas.filter((p) => p.status === 'FINALIZADA').length;
@@ -224,22 +256,22 @@ export function ParadasListPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-50 text-left">
-                    <th className="px-4 py-3 font-medium text-slate-600">Titulo</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Software</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Modulo</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Motivo</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Tipo</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Impacto</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Status</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Inicio</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Fim</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Duracao</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Filiais</th>
+                  <tr className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    <th className="px-4 py-3"><button onClick={() => toggleSort('titulo')} className="flex items-center gap-1 hover:text-slate-700">Titulo <SortIcon col="titulo" /></button></th>
+                    <th className="px-4 py-3"><button onClick={() => toggleSort('software')} className="flex items-center gap-1 hover:text-slate-700">Software <SortIcon col="software" /></button></th>
+                    <th className="px-4 py-3">Modulo</th>
+                    <th className="px-4 py-3">Motivo</th>
+                    <th className="px-4 py-3"><button onClick={() => toggleSort('tipo')} className="flex items-center gap-1 hover:text-slate-700">Tipo <SortIcon col="tipo" /></button></th>
+                    <th className="px-4 py-3"><button onClick={() => toggleSort('impacto')} className="flex items-center gap-1 hover:text-slate-700">Impacto <SortIcon col="impacto" /></button></th>
+                    <th className="px-4 py-3"><button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-slate-700">Status <SortIcon col="status" /></button></th>
+                    <th className="px-4 py-3"><button onClick={() => toggleSort('inicio')} className="flex items-center gap-1 hover:text-slate-700">Inicio <SortIcon col="inicio" /></button></th>
+                    <th className="px-4 py-3">Fim</th>
+                    <th className="px-4 py-3"><button onClick={() => toggleSort('duracao')} className="flex items-center gap-1 hover:text-slate-700">Duracao <SortIcon col="duracao" /></button></th>
+                    <th className="px-4 py-3">Filiais</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filtered.map((p) => (
+                  {sorted.map((p) => (
                     <tr key={p.id} className={`hover:bg-slate-50 ${p.status === 'EM_ANDAMENTO' ? 'bg-red-50' : ''}`}>
                       <td className="px-4 py-3">
                         <Link

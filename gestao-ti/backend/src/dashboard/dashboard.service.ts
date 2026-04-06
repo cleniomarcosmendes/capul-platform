@@ -61,7 +61,7 @@ export class DashboardService {
     return this.acompanhamento.listarEquipes();
   }
 
-  async buscarChamados(filters: { q?: string; status?: string; prioridade?: string; equipeId?: string; tecnicoId?: string }) {
+  async buscarChamados(filters: { q?: string; status?: string; prioridade?: string; equipeId?: string; tecnicoId?: string; dataInicio?: string; dataFim?: string }) {
     return this.acompanhamento.buscarChamados(filters);
   }
 
@@ -73,8 +73,8 @@ export class DashboardService {
     return this.acompanhamento.listarProjetosAtivos();
   }
 
-  async buscarAtividades(q?: string, projetoId?: string, status?: string) {
-    return this.acompanhamento.buscarAtividades(q, projetoId, status);
+  async buscarAtividades(q?: string, projetoId?: string, status?: string, dataInicio?: string, dataFim?: string) {
+    return this.acompanhamento.buscarAtividades(q, projetoId, status, dataInicio, dataFim);
   }
 
   async getAcompanhamentoAtividade(atividadeId: string) {

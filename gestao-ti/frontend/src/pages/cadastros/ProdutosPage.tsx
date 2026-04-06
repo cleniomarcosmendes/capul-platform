@@ -13,7 +13,7 @@ type SortDir = 'asc' | 'desc';
 export function ProdutosPage() {
   const { gestaoTiRole } = useAuth();
   const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
 
   const [produtos, setProdutos] = useState<ProdutoConfig[]>([]);
   const [tiposProduto, setTiposProduto] = useState<TipoProduto[]>([]);
@@ -227,7 +227,7 @@ export function ProdutosPage() {
                               <button onClick={() => startEdit(p)} className="flex items-center gap-1 text-xs text-capul-600 hover:underline"><Pencil className="w-3.5 h-3.5" /> Editar</button>
                               <button onClick={() => handleToggleStatus(p)} className="text-xs text-capul-600 hover:underline">{p.status === 'ATIVO' ? 'Inativar' : 'Ativar'}</button>
                               <button onClick={async () => {
-                                if (!confirm(`Excluir produto "${p.descricao}"?`)) return;
+                                if (!await confirm('Excluir Produto', `Excluir produto "${p.descricao}"?`, { variant: 'danger' })) return;
                                 try { await contratoService.excluirProduto(p.id); carregar(); toast('success', 'Produto excluido'); }
                                 catch (err: unknown) { toast('error', (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir'); }
                               }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">

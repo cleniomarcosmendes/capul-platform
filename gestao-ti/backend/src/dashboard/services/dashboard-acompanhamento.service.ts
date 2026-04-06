@@ -421,7 +421,7 @@ export class DashboardAcompanhamentoService {
     });
   }
 
-  async buscarChamados(filters: { q?: string; status?: string; prioridade?: string; equipeId?: string; tecnicoId?: string }) {
+  async buscarChamados(filters: { q?: string; status?: string; prioridade?: string; equipeId?: string; tecnicoId?: string; dataInicio?: string; dataFim?: string }) {
     const where: Record<string, unknown> = {};
     if (filters.q) {
       const num = parseInt(filters.q, 10);
@@ -435,6 +435,12 @@ export class DashboardAcompanhamentoService {
     if (filters.prioridade) where.prioridade = filters.prioridade;
     if (filters.equipeId) where.equipeAtualId = filters.equipeId;
     if (filters.tecnicoId) where.tecnicoId = filters.tecnicoId;
+    if (filters.dataInicio || filters.dataFim) {
+      const createdAt: Record<string, unknown> = {};
+      if (filters.dataInicio) createdAt.gte = new Date(filters.dataInicio);
+      if (filters.dataFim) createdAt.lte = new Date(filters.dataFim + 'T23:59:59');
+      where.createdAt = createdAt;
+    }
     return this.prisma.chamado.findMany({
       where,
       select: {
@@ -636,12 +642,18 @@ export class DashboardAcompanhamentoService {
     });
   }
 
-  async buscarAtividades(q?: string, projetoId?: string, status?: string) {
+  async buscarAtividades(q?: string, projetoId?: string, status?: string, dataInicio?: string, dataFim?: string) {
     const where: Record<string, unknown> = {};
     if (projetoId) where.projetoId = projetoId;
     if (status) where.status = status;
     if (q) {
       where.titulo = { contains: q, mode: 'insensitive' };
+    }
+    if (dataInicio || dataFim) {
+      const createdAt: Record<string, unknown> = {};
+      if (dataInicio) createdAt.gte = new Date(dataInicio);
+      if (dataFim) createdAt.lte = new Date(dataFim + 'T23:59:59');
+      where.createdAt = createdAt;
     }
     return this.prisma.atividadeProjeto.findMany({
       where,

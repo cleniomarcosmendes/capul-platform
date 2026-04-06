@@ -224,7 +224,7 @@ export class ProjetoFinanceiroService {
           include: { fornecedor: true },
         },
         produto: { include: { tipoProduto: true } },
-        departamento: true,
+        centroCusto: true,
       },
       orderBy: { notaFiscal: { dataLancamento: 'desc' } },
     });

@@ -10,7 +10,7 @@ interface NotaFiscalItemPayload {
   produtoId: string;
   quantidade: number;
   valorUnitario: number;
-  departamentoId: string;
+  centroCustoId: string;
   projetoId?: string;
   observacao?: string;
 }
@@ -18,6 +18,7 @@ interface NotaFiscalItemPayload {
 interface CreateNotaFiscalPayload {
   numero: string;
   dataLancamento: string;
+  dataVencimento?: string;
   fornecedorId: string;
   observacao?: string;
   equipeId?: string;
@@ -27,6 +28,7 @@ interface CreateNotaFiscalPayload {
 interface UpdateNotaFiscalPayload {
   numero?: string;
   dataLancamento?: string;
+  dataVencimento?: string;
   fornecedorId?: string;
   observacao?: string;
   status?: string;
@@ -37,7 +39,7 @@ interface UpdateNotaFiscalPayload {
 interface ListFilters {
   fornecedorId?: string;
   status?: string;
-  departamentoId?: string;
+  centroCustoId?: string;
   projetoId?: string;
   dataInicio?: string;
   dataFim?: string;
@@ -104,7 +106,7 @@ export const compraService = {
     const params: Record<string, string> = {};
     if (filters.fornecedorId) params.fornecedorId = filters.fornecedorId;
     if (filters.status) params.status = filters.status;
-    if (filters.departamentoId) params.departamentoId = filters.departamentoId;
+    if (filters.centroCustoId) params.centroCustoId = filters.centroCustoId;
     if (filters.projetoId) params.projetoId = filters.projetoId;
     if (filters.dataInicio) params.dataInicio = filters.dataInicio;
     if (filters.dataFim) params.dataFim = filters.dataFim;

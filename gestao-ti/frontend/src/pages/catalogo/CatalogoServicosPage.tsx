@@ -17,7 +17,7 @@ const prioridadeLabels: Record<Prioridade, string> = {
 export function CatalogoServicosPage() {
   const { gestaoTiRole } = useAuth();
   const isAdmin = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
 
   const [items, setItems] = useState<CatalogoServico[]>([]);
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);
@@ -258,7 +258,7 @@ export function CatalogoServicosPage() {
                             {item.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
                           </button>
                           <button onClick={async () => {
-                            if (!confirm(`Excluir servico "${item.nome}"?`)) return;
+                            if (!await confirm('Excluir Servico', `Excluir servico "${item.nome}"?`, { variant: 'danger' })) return;
                             try { await catalogoService.excluir(item.id); loadItems(); toast('success', 'Servico excluido'); }
                             catch (err: unknown) { toast('error', (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir'); }
                           }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">

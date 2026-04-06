@@ -7,7 +7,7 @@ import { contratoService } from '../../services/contrato.service';
 import { coreService } from '../../services/core.service';
 import { exportService } from '../../services/export.service';
 import { FileText, Plus, Search, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
-import type { NotaFiscal, FornecedorConfig, Departamento } from '../../types';
+import type { NotaFiscal, FornecedorConfig } from '../../types';
 import { formatDateBR } from '../../utils/date';
 import { useToast } from '../../components/Toast';
 
@@ -33,13 +33,13 @@ export function NotasFiscaisListPage() {
 
   const [notas, setNotas] = useState<NotaFiscal[]>([]);
   const [fornecedores, setFornecedores] = useState<FornecedorConfig[]>([]);
-  const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
+  const [centrosCusto, setCentrosCusto] = useState<{ id: string; codigo: string; nome: string }[]>([]);
   const [equipes, setEquipes] = useState<{ id: string; nome: string; sigla: string; cor: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterFornecedorId, setFilterFornecedorId] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [filterDepartamentoId, setFilterDepartamentoId] = useState('');
+  const [filterCentroCustoId, setFilterCentroCustoId] = useState('');
   const [filterEquipeId, setFilterEquipeId] = useState('');
   const [filterDataInicio, setFilterDataInicio] = useState('');
   const [filterDataFim, setFilterDataFim] = useState('');
@@ -49,13 +49,13 @@ export function NotasFiscaisListPage() {
 
   useEffect(() => {
     contratoService.listarFornecedores().then(setFornecedores).catch(() => {});
-    coreService.listarDepartamentos().then(setDepartamentos).catch(() => {});
+    coreService.listarCentrosCusto().then(setCentrosCusto).catch(() => {});
     compraService.listarEquipesParaCompras().then(setEquipes).catch(() => {});
   }, []);
 
   useEffect(() => {
     loadNotas();
-  }, [filterFornecedorId, filterStatus, filterDepartamentoId, filterEquipeId, filterDataInicio, filterDataFim]);
+  }, [filterFornecedorId, filterStatus, filterCentroCustoId, filterEquipeId, filterDataInicio, filterDataFim]);
 
   async function loadNotas() {
     setLoading(true);
@@ -63,7 +63,7 @@ export function NotasFiscaisListPage() {
       const data = await compraService.listarNotasFiscais({
         fornecedorId: filterFornecedorId || undefined,
         status: filterStatus || undefined,
-        departamentoId: filterDepartamentoId || undefined,
+        centroCustoId: filterCentroCustoId || undefined,
         equipeId: filterEquipeId || undefined,
         dataInicio: filterDataInicio || undefined,
         dataFim: filterDataFim || undefined,
@@ -92,7 +92,7 @@ export function NotasFiscaisListPage() {
       nf.numero.toLowerCase().includes(s) ||
       nf.fornecedor.nome.toLowerCase().includes(s) ||
       nf.fornecedor.codigo.toLowerCase().includes(s) ||
-      nf.itens.some(i => i.produto.descricao.toLowerCase().includes(s) || i.departamento.nome.toLowerCase().includes(s))
+      nf.itens.some(i => i.produto.descricao.toLowerCase().includes(s) || (i.centroCusto?.nome.toLowerCase().includes(s)))
     );
   }, [notas, search]);
 
@@ -147,7 +147,7 @@ export function NotasFiscaisListPage() {
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por numero, fornecedor, produto, departamento..."
+              placeholder="Buscar por numero, fornecedor, produto, centro custo..."
               className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" />
           </div>
           <select value={filterFornecedorId} onChange={(e) => setFilterFornecedorId(e.target.value)}
@@ -162,10 +162,10 @@ export function NotasFiscaisListPage() {
             <option value="CONFERIDA">Conferida</option>
             <option value="CANCELADA">Cancelada</option>
           </select>
-          <select value={filterDepartamentoId} onChange={(e) => setFilterDepartamentoId(e.target.value)}
+          <select value={filterCentroCustoId} onChange={(e) => setFilterCentroCustoId(e.target.value)}
             className="border border-slate-300 rounded-lg px-3 py-2 text-sm">
-            <option value="">Todos os deptos</option>
-            {departamentos.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
+            <option value="">Todos os C.Custo</option>
+            {centrosCusto.map((cc) => <option key={cc.id} value={cc.id}>{cc.codigo} - {cc.nome}</option>)}
           </select>
           <select value={filterEquipeId} onChange={(e) => setFilterEquipeId(e.target.value)}
             className="border border-slate-300 rounded-lg px-3 py-2 text-sm">

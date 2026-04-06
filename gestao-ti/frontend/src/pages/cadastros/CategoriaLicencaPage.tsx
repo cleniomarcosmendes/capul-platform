@@ -12,7 +12,7 @@ type SortDir = 'asc' | 'desc';
 export function CategoriaLicencaPage() {
   const { gestaoTiRole } = useAuth();
   const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
 
   const [categorias, setCategorias] = useState<CategoriaLicenca[]>([]);
   const [loading, setLoading] = useState(true);
@@ -240,7 +240,7 @@ export function CategoriaLicencaPage() {
                                 {cat.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
                               </button>
                               <button onClick={async () => {
-                                if (!confirm(`Excluir categoria "${cat.nome}"?`)) return;
+                                if (!await confirm('Excluir Categoria', `Excluir categoria "${cat.nome}"?`, { variant: 'danger' })) return;
                                 try { await licencaService.excluirCategoria(cat.id); carregar(); toast('success', 'Categoria excluida'); }
                                 catch (err: unknown) { toast('error',(err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir'); }
                               }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">

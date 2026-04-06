@@ -781,7 +781,7 @@ export class ExportService {
       { header: 'Qtde', key: 'quantidade' },
       { header: 'Valor Unitario', key: 'valorUnitario' },
       { header: 'Valor Total Item', key: 'valorTotalItem' },
-      { header: 'Departamento', key: 'departamento' },
+      { header: 'Centro de Custo', key: 'centroCusto' },
       { header: 'Projeto', key: 'projeto' },
       { header: 'Valor Total NF', key: 'valorTotalNF' },
     ];
@@ -791,7 +791,7 @@ export class ExportService {
         itens: {
           include: {
             produto: { include: { tipoProduto: true } },
-            departamento: true,
+            centroCusto: true,
             projeto: { select: { numero: true, nome: true } },
           },
         },
@@ -810,7 +810,7 @@ export class ExportService {
           quantidade: item.quantidade,
           valorUnitario: Number(item.valorUnitario),
           valorTotalItem: Number(item.valorTotal),
-          departamento: item.departamento.nome,
+          centroCusto: item.centroCusto ? `${item.centroCusto.codigo} - ${item.centroCusto.nome}` : '',
           projeto: item.projeto ? `#${item.projeto.numero} - ${item.projeto.nome}` : '',
           valorTotalNF: Number(nf.valorTotal),
         });

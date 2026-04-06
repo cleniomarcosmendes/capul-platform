@@ -85,6 +85,10 @@ export class ContratoService {
     return this.parcela.pagarParcela(contratoId, parcelaId, dto, usuarioId, role);
   }
 
+  async estornarParcela(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN') {
+    return this.parcela.estornarParcela(contratoId, parcelaId, usuarioId, role);
+  }
+
   async cancelarParcela(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN') {
     return this.parcela.cancelarParcela(contratoId, parcelaId, usuarioId, role);
   }

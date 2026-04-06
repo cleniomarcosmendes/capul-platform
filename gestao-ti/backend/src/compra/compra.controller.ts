@@ -82,7 +82,7 @@ export class CompraController {
   findAllNotasFiscais(
     @Query('fornecedorId') fornecedorId?: string,
     @Query('status') status?: string,
-    @Query('departamentoId') departamentoId?: string,
+    @Query('centroCustoId') centroCustoId?: string,
     @Query('projetoId') projetoId?: string,
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
@@ -91,7 +91,7 @@ export class CompraController {
     @GestaoTiRole() role?: string,
   ) {
     return this.service.findAllNotasFiscais(
-      { fornecedorId, status, departamentoId, projetoId, dataInicio, dataFim, equipeId },
+      { fornecedorId, status, centroCustoId, projetoId, dataInicio, dataFim, equipeId },
       user?.filialId,
       user?.sub,
       role,

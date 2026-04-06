@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { contratoService } from '../../services/contrato.service';
-import { FileText, Plus, Search, AlertTriangle, Download } from 'lucide-react';
+import { FileText, Plus, Search, AlertTriangle, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import type { Contrato, StatusContrato, TipoContratoConfig } from '../../types';
 import { formatDateBR } from '../../utils/date';
+
+type SortKey = 'numero' | 'titulo' | 'fornecedor' | 'valorTotal' | 'dataFim' | 'status';
+type SortDir = 'asc' | 'desc';
 
 const statusCores: Record<string, string> = {
   ATIVO: 'bg-green-100 text-green-700',
@@ -35,6 +38,17 @@ export function ContratosListPage() {
   const [filterTipoContratoId, setFilterTipoContratoId] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterVencendo, setFilterVencendo] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('numero');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir(key === 'numero' || key === 'dataFim' ? 'desc' : 'asc'); }
+  }
+  function SortIcon({ col }: { col: SortKey }) {
+    if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300" />;
+    return sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-capul-600" /> : <ArrowDown className="w-3 h-3 text-capul-600" />;
+  }
 
   useEffect(() => {
     contratoService.listarTiposContrato().then(setTiposContrato).catch(() => {});
@@ -60,10 +74,10 @@ export function ContratosListPage() {
     }
   }
 
-  const filtered = contratos.filter((c) => {
-    if (!search) return true;
+  const filtered = useMemo(() => {
+    if (!search) return contratos;
     const s = search.toLowerCase();
-    return (
+    return contratos.filter((c) =>
       c.titulo.toLowerCase().includes(s) ||
       (c.descricao?.toLowerCase().includes(s)) ||
       c.fornecedor.toLowerCase().includes(s) ||
@@ -71,7 +85,24 @@ export function ContratosListPage() {
       (c.numeroContrato && c.numeroContrato.toLowerCase().includes(s)) ||
       (c.codigoFornecedor && c.codigoFornecedor.toLowerCase().includes(s))
     );
-  });
+  }, [contratos, search]);
+
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let va: string | number, vb: string | number;
+      switch (sortKey) {
+        case 'numero': va = a.numero; vb = b.numero; break;
+        case 'titulo': va = a.titulo.toLowerCase(); vb = b.titulo.toLowerCase(); break;
+        case 'fornecedor': va = a.fornecedor.toLowerCase(); vb = b.fornecedor.toLowerCase(); break;
+        case 'valorTotal': va = Number(a.valorTotal); vb = Number(b.valorTotal); break;
+        case 'dataFim': va = a.dataFim; vb = b.dataFim; break;
+        case 'status': va = a.status; vb = b.status; break;
+        default: va = ''; vb = '';
+      }
+      const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [filtered, sortKey, sortDir]);
 
   const totalAtivos = contratos.filter((c) => c.status === 'ATIVO').length;
   const valorTotal = contratos
@@ -166,23 +197,23 @@ export function ContratosListPage() {
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
+              <thead className="bg-slate-50 border-b border-slate-200 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">#</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Titulo</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Tipo</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Fornecedor</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Filial</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Nro Contrato</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600">Valor</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Vigencia</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Software</th>
-                  <th className="text-center px-4 py-3 font-medium text-slate-600">Status</th>
-                  <th className="text-center px-4 py-3 font-medium text-slate-600">Parcelas</th>
+                  <th className="px-4 py-3"><button onClick={() => toggleSort('numero')} className="flex items-center gap-1 hover:text-slate-700"># <SortIcon col="numero" /></button></th>
+                  <th className="px-4 py-3"><button onClick={() => toggleSort('titulo')} className="flex items-center gap-1 hover:text-slate-700">Titulo <SortIcon col="titulo" /></button></th>
+                  <th className="px-4 py-3">Tipo</th>
+                  <th className="px-4 py-3"><button onClick={() => toggleSort('fornecedor')} className="flex items-center gap-1 hover:text-slate-700">Fornecedor <SortIcon col="fornecedor" /></button></th>
+                  <th className="px-4 py-3">Filial</th>
+                  <th className="px-4 py-3">Nro Contrato</th>
+                  <th className="px-4 py-3 text-right"><button onClick={() => toggleSort('valorTotal')} className="flex items-center gap-1 hover:text-slate-700 ml-auto">Valor <SortIcon col="valorTotal" /></button></th>
+                  <th className="px-4 py-3"><button onClick={() => toggleSort('dataFim')} className="flex items-center gap-1 hover:text-slate-700">Vigencia <SortIcon col="dataFim" /></button></th>
+                  <th className="px-4 py-3">Software</th>
+                  <th className="px-4 py-3 text-center"><button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-slate-700">Status <SortIcon col="status" /></button></th>
+                  <th className="px-4 py-3 text-center">Parcelas</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map((c) => {
+                {sorted.map((c) => {
                   const diasVencimento = Math.ceil((new Date(c.dataFim).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
                   const vencendoEm30 = c.status === 'ATIVO' && diasVencimento <= 30 && diasVencimento >= 0;
 

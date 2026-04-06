@@ -12,7 +12,7 @@ type SortDir = 'asc' | 'desc';
 export function NaturezasPage() {
   const { gestaoTiRole } = useAuth();
   const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
 
   const [naturezas, setNaturezas] = useState<NaturezaContrato[]>([]);
   const [loading, setLoading] = useState(true);
@@ -226,7 +226,7 @@ export function NaturezasPage() {
                                 {nat.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
                               </button>
                               <button onClick={async () => {
-                                if (!confirm(`Excluir natureza "${nat.nome}"?`)) return;
+                                if (!await confirm('Excluir Natureza', `Excluir natureza "${nat.nome}"?`, { variant: 'danger' })) return;
                                 try { await contratoService.excluirNatureza(nat.id); carregar(); toast('success', 'Natureza excluida'); }
                                 catch (err: unknown) { toast('error',(err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir'); }
                               }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">

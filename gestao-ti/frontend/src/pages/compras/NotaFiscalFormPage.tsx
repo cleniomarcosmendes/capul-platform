@@ -11,14 +11,20 @@ import { SearchSelect } from '../../components/SearchSelect';
 import type { SearchSelectOption } from '../../components/SearchSelect';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import type { FornecedorConfig, ProdutoConfig, Departamento } from '../../types';
+import type { FornecedorConfig, ProdutoConfig } from '../../types';
+
+interface CentroCustoResumo {
+  id: string;
+  codigo: string;
+  nome: string;
+}
 
 interface ItemForm {
   key: number;
   produtoId: string;
   quantidade: number;
   valorUnitario: number;
-  departamentoId: string;
+  centroCustoId: string;
   projetoId: string;
   observacao: string;
 }
@@ -38,7 +44,7 @@ function newItem(): ItemForm {
     produtoId: '',
     quantidade: 1,
     valorUnitario: 0,
-    departamentoId: '',
+    centroCustoId: '',
     projetoId: '',
     observacao: '',
   };
@@ -62,6 +68,7 @@ export function NotaFiscalFormPage() {
 
   const [numero, setNumero] = useState('');
   const [dataLancamento, setDataEmissao] = useState(new Date().toISOString().slice(0, 10));
+  const [dataVencimento, setDataVencimento] = useState('');
   const [fornecedorId, setFornecedorId] = useState('');
   const [equipeId, setEquipeId] = useState('');
   const [observacao, setObservacao] = useState('');
@@ -69,7 +76,7 @@ export function NotaFiscalFormPage() {
 
   const [fornecedores, setFornecedores] = useState<FornecedorConfig[]>([]);
   const [produtos, setProdutos] = useState<ProdutoConfig[]>([]);
-  const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
+  const [centrosCusto, setCentrosCusto] = useState<CentroCustoResumo[]>([]);
   const [projetos, setProjetos] = useState<ProjetoResumo[]>([]);
   const [equipes, setEquipes] = useState<EquipeResumo[]>([]);
   const [saving, setSaving] = useState(false);
@@ -80,7 +87,7 @@ export function NotaFiscalFormPage() {
     // Chamadas independentes — uma falha nao impede as outras
     contratoService.listarFornecedores().then(setFornecedores).catch(() => {});
     contratoService.listarProdutos().then(setProdutos).catch(() => {});
-    coreService.listarDepartamentos().then(setDepartamentos).catch(() => {});
+    coreService.listarCentrosCusto().then(setCentrosCusto).catch(() => {});
     projetoService.listar().then((all: ProjetoResumo[]) =>
       setProjetos(all.filter(p => p.status !== 'CANCELADO'))
     ).catch(() => {});
@@ -95,6 +102,7 @@ export function NotaFiscalFormPage() {
       compraService.buscarNotaFiscal(id).then((nf) => {
         setNumero(nf.numero);
         setDataEmissao(nf.dataLancamento.slice(0, 10));
+        setDataVencimento(nf.dataVencimento ? nf.dataVencimento.slice(0, 10) : '');
         setFornecedorId(nf.fornecedorId);
         setEquipeId(nf.equipeId || '');
         setObservacao(nf.observacao || '');
@@ -103,7 +111,7 @@ export function NotaFiscalFormPage() {
           produtoId: i.produtoId,
           quantidade: i.quantidade,
           valorUnitario: Number(i.valorUnitario),
-          departamentoId: i.departamentoId,
+          centroCustoId: i.centroCustoId || '',
           projetoId: i.projetoId || '',
           observacao: i.observacao || '',
         })));
@@ -127,11 +135,11 @@ export function NotaFiscalFormPage() {
       sublabel: p.tipoProduto ? `Tipo: ${p.tipoProduto.descricao}` : undefined,
     })), [produtos]);
 
-  const departamentoOptions: SearchSelectOption[] = useMemo(() =>
-    departamentos.map((d) => ({
-      value: d.id,
-      label: d.nome,
-    })), [departamentos]);
+  const centroCustoOptions: SearchSelectOption[] = useMemo(() =>
+    centrosCusto.map((cc) => ({
+      value: cc.id,
+      label: `${cc.codigo} - ${cc.nome}`,
+    })), [centrosCusto]);
 
   const projetoOptions: SearchSelectOption[] = useMemo(() =>
     projetos.map((p) => ({
@@ -169,7 +177,7 @@ export function NotaFiscalFormPage() {
 
     if (!fornecedorId) { toast('error', 'Selecione o fornecedor'); return; }
     if (itens.some(i => !i.produtoId)) { toast('error', 'Selecione o produto em todos os itens'); return; }
-    if (itens.some(i => !i.departamentoId)) { toast('error', 'Selecione o departamento em todos os itens'); return; }
+    if (itens.some(i => !i.centroCustoId)) { toast('error', 'Selecione o centro de custo em todos os itens'); return; }
     if (itens.some(i => i.valorUnitario <= 0)) { toast('error', 'Valor unitario deve ser maior que zero em todos os itens'); return; }
 
     setSaving(true);
@@ -177,6 +185,7 @@ export function NotaFiscalFormPage() {
       const payload = {
         numero,
         dataLancamento,
+        dataVencimento: dataVencimento || undefined,
         fornecedorId,
         equipeId: equipeId || undefined,
         observacao: observacao || undefined,
@@ -184,7 +193,7 @@ export function NotaFiscalFormPage() {
           produtoId: i.produtoId,
           quantidade: i.quantidade,
           valorUnitario: i.valorUnitario,
-          departamentoId: i.departamentoId,
+          centroCustoId: i.centroCustoId,
           projetoId: i.projetoId || undefined,
           observacao: i.observacao || undefined,
         })),
@@ -232,7 +241,7 @@ export function NotaFiscalFormPage() {
           {/* Cabecalho da NF */}
           <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
             <h3 className="text-sm font-semibold text-slate-700 uppercase mb-4">Dados da Nota Fiscal</h3>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-5 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Numero NF *</label>
                 <input type="text" value={numero} onChange={(e) => { setNumero(e.target.value); setDirty(true); }}
@@ -243,6 +252,11 @@ export function NotaFiscalFormPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Data Lancamento *</label>
                 <input type="date" value={dataLancamento} onChange={(e) => { setDataEmissao(e.target.value); setDirty(true); }}
                   required
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Data Vencimento</label>
+                <input type="date" value={dataVencimento} onChange={(e) => { setDataVencimento(e.target.value); setDirty(true); }}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" />
               </div>
               <div>
@@ -300,7 +314,7 @@ export function NotaFiscalFormPage() {
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-6 gap-3">
+                  <div className="grid grid-cols-5 gap-3">
                     <div className="col-span-2">
                       <label className="block text-xs font-medium text-slate-600 mb-1">Produto *</label>
                       <SearchSelect
@@ -331,18 +345,18 @@ export function NotaFiscalFormPage() {
                         R$ {calcularValorTotalItem(item).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Departamento *</label>
+                  </div>
+                  <div className="grid grid-cols-6 gap-3 mt-3">
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Centro de Custo *</label>
                       <SearchSelect
-                        options={departamentoOptions}
-                        value={item.departamentoId}
-                        onChange={(v) => updateItem(item.key, 'departamentoId', v)}
-                        placeholder="Buscar depto..."
+                        options={centroCustoOptions}
+                        value={item.centroCustoId}
+                        onChange={(v) => updateItem(item.key, 'centroCustoId', v)}
+                        placeholder="Buscar centro custo..."
                         required
                       />
                     </div>
-                  </div>
-                  <div className="grid grid-cols-6 gap-3 mt-3">
                     <div className="col-span-2">
                       <label className="block text-xs font-medium text-slate-600 mb-1">Projeto (opcional)</label>
                       <SearchSelect

@@ -12,7 +12,7 @@ type SortDir = 'asc' | 'desc';
 export function TiposContratoPage() {
   const { gestaoTiRole } = useAuth();
   const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
 
   const [tipos, setTipos] = useState<TipoContratoConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -226,7 +226,7 @@ export function TiposContratoPage() {
                                 {tipo.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
                               </button>
                               <button onClick={async () => {
-                                if (!confirm(`Excluir tipo "${tipo.nome}"?`)) return;
+                                if (!await confirm('Excluir Tipo de Contrato', `Excluir tipo "${tipo.nome}"?`, { variant: 'danger' })) return;
                                 try { await contratoService.excluirTipoContrato(tipo.id); carregar(); toast('success', 'Tipo excluido'); }
                                 catch (err: unknown) { toast('error',(err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir'); }
                               }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">

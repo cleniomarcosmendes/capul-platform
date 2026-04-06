@@ -12,7 +12,7 @@ type SortDir = 'asc' | 'desc';
 export function FornecedoresPage() {
   const { gestaoTiRole } = useAuth();
   const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
 
   const [fornecedores, setFornecedores] = useState<FornecedorConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -208,7 +208,7 @@ export function FornecedoresPage() {
                               <button onClick={() => startEdit(f)} className="flex items-center gap-1 text-xs text-capul-600 hover:underline"><Pencil className="w-3.5 h-3.5" /> Editar</button>
                               <button onClick={() => handleToggleStatus(f)} className="text-xs text-capul-600 hover:underline">{f.status === 'ATIVO' ? 'Inativar' : 'Ativar'}</button>
                               <button onClick={async () => {
-                                if (!confirm(`Excluir fornecedor "${f.nome}"?`)) return;
+                                if (!await confirm('Excluir Fornecedor', `Excluir fornecedor "${f.nome}"?`, { variant: 'danger' })) return;
                                 try { await contratoService.excluirFornecedor(f.id); carregar(); toast('success', 'Fornecedor excluido'); }
                                 catch (err: unknown) { toast('error',(err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir'); }
                               }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">

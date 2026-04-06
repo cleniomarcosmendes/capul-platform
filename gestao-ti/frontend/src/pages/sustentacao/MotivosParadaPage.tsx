@@ -9,7 +9,7 @@ import { useToast } from '../../components/Toast';
 export function MotivosParadaPage() {
   const { gestaoTiRole } = useAuth();
   const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
 
   const [motivos, setMotivos] = useState<MotivoParada[]>([]);
   const [loading, setLoading] = useState(true);
@@ -202,7 +202,7 @@ export function MotivosParadaPage() {
                             {m.ativo ? 'Inativar' : 'Ativar'}
                           </button>
                           <button onClick={async () => {
-                            if (!confirm(`Excluir motivo "${m.nome}"?`)) return;
+                            if (!await confirm('Excluir Motivo', `Excluir motivo "${m.nome}"?`, { variant: 'danger' })) return;
                             try { await paradaService.excluirMotivo(m.id); carregar(); toast('success', 'Motivo excluido'); }
                             catch (err: unknown) { toast('error', (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir'); }
                           }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">

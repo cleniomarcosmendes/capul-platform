@@ -138,6 +138,38 @@ export class ContratoParcelaService {
     return updated;
   }
 
+  async estornarParcela(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN') {
+    const contrato = await this.core.findOne(contratoId);
+    await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+
+    const parcela = await this.prisma.parcelaContrato.findFirst({
+      where: { id: parcelaId, contratoId },
+    });
+    if (!parcela) {
+      throw new NotFoundException('Parcela nao encontrada neste contrato');
+    }
+    if (parcela.status !== 'PAGA') {
+      throw new BadRequestException('Somente parcelas pagas podem ser estornadas');
+    }
+
+    const updated = await this.prisma.parcelaContrato.update({
+      where: { id: parcelaId },
+      data: {
+        status: 'PENDENTE',
+        dataPagamento: null,
+      },
+    });
+
+    await this.core.criarHistorico(
+      contratoId,
+      'OBSERVACAO',
+      `Parcela #${parcela.numero} estornada (voltou para pendente)`,
+      usuarioId,
+    );
+
+    return updated;
+  }
+
   async cancelarParcela(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN') {
     const contrato = await this.core.findOne(contratoId);
     await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);

@@ -112,8 +112,10 @@ export class DashboardController {
     @Query('prioridade') prioridade?: string,
     @Query('equipeId') equipeId?: string,
     @Query('tecnicoId') tecnicoId?: string,
+    @Query('dataInicio') dataInicio?: string,
+    @Query('dataFim') dataFim?: string,
   ) {
-    return this.service.buscarChamados({ q, status, prioridade, equipeId, tecnicoId });
+    return this.service.buscarChamados({ q, status, prioridade, equipeId, tecnicoId, dataInicio, dataFim });
   }
 
   @Get('acompanhamento-atividade')
@@ -128,8 +130,10 @@ export class DashboardController {
     @Query('q') q?: string,
     @Query('projetoId') projetoId?: string,
     @Query('status') status?: string,
+    @Query('dataInicio') dataInicio?: string,
+    @Query('dataFim') dataFim?: string,
   ) {
-    return this.service.buscarAtividades(q, projetoId, status);
+    return this.service.buscarAtividades(q, projetoId, status, dataInicio, dataFim);
   }
 
   @Get('acompanhamento-atividade/projetos')

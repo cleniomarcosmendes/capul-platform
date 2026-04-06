@@ -85,44 +85,51 @@ export class DashboardIndicadoresService {
   }
 
   private async getLicencas() {
-    const [licencasAtivas, totalSoftwares, licencasVencendo30, licencasVencendo60, licencasVencendo90] = await Promise.all([
-      this.prisma.softwareLicenca.count({ where: { status: 'ATIVA' } }),
-      this.prisma.software.count({ where: { status: 'ATIVO' } }),
-      this.prisma.softwareLicenca.count({
-        where: {
-          status: 'ATIVA',
-          dataVencimento: {
-            gte: new Date(),
-            lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          },
-        },
+    const licSelect = {
+      id: true, nome: true, modeloLicenca: true, quantidade: true, dataVencimento: true, status: true,
+      software: { select: { id: true, nome: true } },
+      categoria: { select: { id: true, nome: true } },
+    };
+
+    const [licencasAtivasList, softwaresAtivosList, licencasVencendo30List, licencasVencendo90List] = await Promise.all([
+      this.prisma.softwareLicenca.findMany({
+        where: { status: 'ATIVA' },
+        select: licSelect,
+        orderBy: [{ software: { nome: 'asc' } }, { nome: 'asc' }],
       }),
-      this.prisma.softwareLicenca.count({
-        where: {
-          status: 'ATIVA',
-          dataVencimento: {
-            gte: new Date(),
-            lte: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
-          },
-        },
+      this.prisma.software.findMany({
+        where: { status: 'ATIVO' },
+        select: { id: true, nome: true, fabricante: true, tipo: true, criticidade: true, versaoAtual: true, _count: { select: { licencas: true, modulos: true } } },
+        orderBy: { nome: 'asc' },
       }),
-      this.prisma.softwareLicenca.count({
+      this.prisma.softwareLicenca.findMany({
         where: {
           status: 'ATIVA',
-          dataVencimento: {
-            gte: new Date(),
-            lte: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
-          },
+          dataVencimento: { gte: new Date(), lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
         },
+        select: licSelect,
+        orderBy: { dataVencimento: 'asc' },
+      }),
+      this.prisma.softwareLicenca.findMany({
+        where: {
+          status: 'ATIVA',
+          dataVencimento: { gte: new Date(), lte: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) },
+        },
+        select: licSelect,
+        orderBy: { dataVencimento: 'asc' },
       }),
     ]);
 
     return {
-      licencasAtivas,
-      totalSoftwares,
-      licencasVencendo30,
-      licencasVencendo60,
-      licencasVencendo90,
+      licencasAtivas: licencasAtivasList.length,
+      totalSoftwares: softwaresAtivosList.length,
+      licencasVencendo30: licencasVencendo30List.length,
+      licencasVencendo60: 0,
+      licencasVencendo90: licencasVencendo90List.length,
+      detalheSoftwares: softwaresAtivosList,
+      detalheLicencasAtivas: licencasAtivasList,
+      detalheLicencasVencendo30: licencasVencendo30List,
+      detalheLicencasVencendo90: licencasVencendo90List,
     };
   }
 
@@ -237,48 +244,51 @@ export class DashboardIndicadoresService {
   }
 
   private async getChamados(dataInicio: Date, dataFim: Date) {
-    // Chamados resolvidos/fechados no periodo
-    const resolvidos = await this.prisma.chamado.count({
-      where: {
-        status: { in: ['RESOLVIDO', 'FECHADO'] },
-        updatedAt: { gte: dataInicio, lte: dataFim },
-      },
-    });
+    const chamadoSelect = {
+      id: true, numero: true, titulo: true, status: true, prioridade: true,
+      createdAt: true, updatedAt: true,
+      solicitante: { select: { id: true, nome: true } },
+      tecnico: { select: { id: true, nome: true } },
+      equipeAtual: { select: { id: true, sigla: true } },
+    };
 
-    const abertos = await this.prisma.chamado.count({
-      where: {
-        createdAt: { gte: dataInicio, lte: dataFim },
-      },
-    });
-
-    const emAberto = await this.prisma.chamado.count({
-      where: {
-        status: { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE', 'REABERTO'] },
-      },
-    });
-
-    // Tempo medio de resolucao (chamados fechados no periodo)
-    const chamadosFechados = await this.prisma.chamado.findMany({
-      where: {
-        status: { in: ['RESOLVIDO', 'FECHADO'] },
-        updatedAt: { gte: dataInicio, lte: dataFim },
-      },
-      select: { createdAt: true, updatedAt: true },
-    });
+    const [abertosList, resolvidosList, emAbertoList] = await Promise.all([
+      this.prisma.chamado.findMany({
+        where: { createdAt: { gte: dataInicio, lte: dataFim } },
+        select: chamadoSelect,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.chamado.findMany({
+        where: {
+          status: { in: ['RESOLVIDO', 'FECHADO'] },
+          updatedAt: { gte: dataInicio, lte: dataFim },
+        },
+        select: chamadoSelect,
+        orderBy: { updatedAt: 'desc' },
+      }),
+      this.prisma.chamado.findMany({
+        where: { status: { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE', 'REABERTO'] } },
+        select: chamadoSelect,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
 
     let tempoMedioHoras = 0;
-    if (chamadosFechados.length > 0) {
-      const totalMinutos = chamadosFechados.reduce((sum, c) => {
+    if (resolvidosList.length > 0) {
+      const totalMinutos = resolvidosList.reduce((sum, c) => {
         return sum + (c.updatedAt.getTime() - c.createdAt.getTime()) / (1000 * 60);
       }, 0);
-      tempoMedioHoras = Number((totalMinutos / chamadosFechados.length / 60).toFixed(1));
+      tempoMedioHoras = Number((totalMinutos / resolvidosList.length / 60).toFixed(1));
     }
 
     return {
-      abertosNoPeriodo: abertos,
-      resolvidosNoPeriodo: resolvidos,
-      emAbertoAtual: emAberto,
+      abertosNoPeriodo: abertosList.length,
+      resolvidosNoPeriodo: resolvidosList.length,
+      emAbertoAtual: emAbertoList.length,
       tempoMedioResolucaoHoras: tempoMedioHoras,
+      detalheAbertos: abertosList,
+      detalheResolvidos: resolvidosList,
+      detalheEmAberto: emAbertoList,
     };
   }
 
@@ -288,50 +298,64 @@ export class DashboardIndicadoresService {
       where: { codigo: 'DESENVOLVIMENTO_INTERNO' },
     });
 
+    // Buscar registros de tempo (player) das atividades de projetos do tipo Desenvolvimento Interno
     const where: Record<string, unknown> = {
-      data: { gte: dataInicio, lte: dataFim },
+      horaInicio: { gte: dataInicio, lte: dataFim },
+      horaFim: { not: null },
+      duracaoMinutos: { not: null, gt: 0 },
     };
 
     if (tipoDesenv) {
-      where.projeto = { tipoProjetoId: tipoDesenv.id };
+      where.atividade = { projeto: { tipoProjetoId: tipoDesenv.id } };
     }
 
-    const apontamentos = await this.prisma.apontamentoHoras.findMany({
+    const registros = await this.prisma.registroTempo.findMany({
       where,
       include: {
-        projeto: { select: { id: true, numero: true, nome: true } },
+        atividade: {
+          select: {
+            id: true,
+            projeto: { select: { id: true, numero: true, nome: true } },
+          },
+        },
         usuario: { select: { id: true, nome: true } },
       },
-      orderBy: { data: 'asc' },
+      orderBy: { horaInicio: 'asc' },
     });
 
-    const totalHoras = apontamentos.reduce((sum, a) => sum + Number(a.horas), 0);
+    const totalMinutos = registros.reduce((sum, r) => sum + (r.duracaoMinutos || 0), 0);
+    const totalHoras = totalMinutos / 60;
 
     // Agrupar por projeto
     const porProjeto = new Map<string, { projeto: { id: string; numero: number; nome: string }; horas: number }>();
-    for (const a of apontamentos) {
-      const key = a.projeto.id;
+    for (const r of registros) {
+      const proj = r.atividade.projeto;
+      const key = proj.id;
       if (!porProjeto.has(key)) {
-        porProjeto.set(key, { projeto: a.projeto, horas: 0 });
+        porProjeto.set(key, { projeto: proj, horas: 0 });
       }
-      porProjeto.get(key)!.horas += Number(a.horas);
+      porProjeto.get(key)!.horas += (r.duracaoMinutos || 0) / 60;
     }
 
     // Agrupar por analista
     const porAnalista = new Map<string, { usuario: { id: string; nome: string }; horas: number }>();
-    for (const a of apontamentos) {
-      const key = a.usuario.id;
+    for (const r of registros) {
+      const key = r.usuario.id;
       if (!porAnalista.has(key)) {
-        porAnalista.set(key, { usuario: a.usuario, horas: 0 });
+        porAnalista.set(key, { usuario: r.usuario, horas: 0 });
       }
-      porAnalista.get(key)!.horas += Number(a.horas);
+      porAnalista.get(key)!.horas += (r.duracaoMinutos || 0) / 60;
     }
 
     return {
       totalHoras: Number(totalHoras.toFixed(1)),
-      totalApontamentos: apontamentos.length,
-      porProjeto: Array.from(porProjeto.values()).sort((a, b) => b.horas - a.horas),
-      porAnalista: Array.from(porAnalista.values()).sort((a, b) => b.horas - a.horas),
+      totalApontamentos: registros.length,
+      porProjeto: Array.from(porProjeto.values())
+        .map(p => ({ ...p, horas: Number(p.horas.toFixed(1)) }))
+        .sort((a, b) => b.horas - a.horas),
+      porAnalista: Array.from(porAnalista.values())
+        .map(a => ({ ...a, horas: Number(a.horas.toFixed(1)) }))
+        .sort((a, b) => b.horas - a.horas),
     };
   }
 }

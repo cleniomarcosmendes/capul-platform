@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { softwareService } from '../../services/software.service';
 import { equipeService } from '../../services/equipe.service';
-import { Plus, Search, AppWindow, Download } from 'lucide-react';
+import { Plus, Search, AppWindow, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import type { Software, EquipeTI, TipoSoftware, Criticidade, StatusSoftware } from '../../types';
 
@@ -60,6 +60,19 @@ export function SoftwaresListPage() {
   const [filtroStatus, setFiltroStatus] = useState<StatusSoftware | ''>('');
   const [filtroEquipe, setFiltroEquipe] = useState('');
 
+  type SortKey = 'nome' | 'tipo' | 'criticidade' | 'status';
+  type SortDir = 'asc' | 'desc';
+  const [sortKey, setSortKey] = useState<SortKey>('nome');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('asc'); }
+  }
+  function SortIcon({ col }: { col: SortKey }) {
+    if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300" />;
+    return sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-capul-600" /> : <ArrowDown className="w-3 h-3 text-capul-600" />;
+  }
+
   useEffect(() => {
     equipeService.listar('ATIVO').then(setEquipes).catch(() => {});
   }, []);
@@ -78,13 +91,26 @@ export function SoftwaresListPage() {
       .finally(() => setLoading(false));
   }, [filtroTipo, filtroCriticidade, filtroStatus, filtroEquipe]);
 
-  const filtered = busca
-    ? softwares.filter(
-        (s) =>
-          s.nome.toLowerCase().includes(busca.toLowerCase()) ||
-          s.fabricante?.toLowerCase().includes(busca.toLowerCase()),
-      )
-    : softwares;
+  const filtered = useMemo(() => {
+    if (!busca) return softwares;
+    const s = busca.toLowerCase();
+    return softwares.filter((sw) => sw.nome.toLowerCase().includes(s) || sw.fabricante?.toLowerCase().includes(s));
+  }, [softwares, busca]);
+
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let va: string, vb: string;
+      switch (sortKey) {
+        case 'nome': va = a.nome.toLowerCase(); vb = b.nome.toLowerCase(); break;
+        case 'tipo': va = a.tipo || ''; vb = b.tipo || ''; break;
+        case 'criticidade': va = a.criticidade || ''; vb = b.criticidade || ''; break;
+        case 'status': va = a.status; vb = b.status; break;
+        default: va = ''; vb = '';
+      }
+      const cmp = va.localeCompare(vb);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [filtered, sortKey, sortDir]);
 
   return (
     <>
@@ -180,19 +206,19 @@ export function SoftwaresListPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-50 text-left">
-                    <th className="px-4 py-3 font-medium text-slate-600">Nome</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Tipo</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Criticidade</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Equipe</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Versao</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Status</th>
-                    <th className="px-4 py-3 font-medium text-slate-600 text-center">Modulos</th>
-                    <th className="px-4 py-3 font-medium text-slate-600 text-center">Licencas</th>
+                  <tr className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    <th className="px-4 py-3"><button onClick={() => toggleSort('nome')} className="flex items-center gap-1 hover:text-slate-700">Nome <SortIcon col="nome" /></button></th>
+                    <th className="px-4 py-3"><button onClick={() => toggleSort('tipo')} className="flex items-center gap-1 hover:text-slate-700">Tipo <SortIcon col="tipo" /></button></th>
+                    <th className="px-4 py-3"><button onClick={() => toggleSort('criticidade')} className="flex items-center gap-1 hover:text-slate-700">Criticidade <SortIcon col="criticidade" /></button></th>
+                    <th className="px-4 py-3">Equipe</th>
+                    <th className="px-4 py-3">Versao</th>
+                    <th className="px-4 py-3"><button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-slate-700">Status <SortIcon col="status" /></button></th>
+                    <th className="px-4 py-3 text-center">Modulos</th>
+                    <th className="px-4 py-3 text-center">Licencas</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filtered.map((sw) => (
+                  {sorted.map((sw) => (
                     <tr key={sw.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3">
                         <Link to={`/gestao-ti/softwares/${sw.id}`} className="text-capul-600 hover:underline font-medium">

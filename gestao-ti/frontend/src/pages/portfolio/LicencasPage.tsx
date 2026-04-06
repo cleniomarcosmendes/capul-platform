@@ -8,6 +8,7 @@ import { exportService } from '../../services/export.service';
 import type { SoftwareLicenca, Software, StatusLicenca, CategoriaLicenca } from '../../types';
 
 import { formatDateBR } from '../../utils/date';
+import { useToast } from '../../components/Toast';
 
 const modeloLabel: Record<string, string> = {
   SUBSCRICAO: 'Subscricao',
@@ -35,6 +36,7 @@ const statusCores: Record<string, string> = {
 export function LicencasPage() {
   const { gestaoTiRole } = useAuth();
   const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const { confirm } = useToast();
 
   const [licencas, setLicencas] = useState<SoftwareLicenca[]>([]);
   const [categorias, setCategorias] = useState<CategoriaLicenca[]>([]);
@@ -162,7 +164,7 @@ export function LicencasPage() {
   }
 
   async function handleExcluir(licId: string) {
-    if (!confirm('Deseja realmente excluir esta licenca?')) return;
+    if (!await confirm('Excluir Licenca', 'Deseja realmente excluir esta licenca?', { variant: 'danger' })) return;
     try {
       await licencaService.excluir(licId);
       carregarLicencas();

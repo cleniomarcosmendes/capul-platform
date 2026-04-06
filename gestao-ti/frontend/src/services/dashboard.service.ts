@@ -56,7 +56,7 @@ export const dashboardService = {
     return data;
   },
 
-  async buscarChamados(params?: { q?: string; status?: string; prioridade?: string; equipeId?: string; tecnicoId?: string }): Promise<ChamadoBusca[]> {
+  async buscarChamados(params?: { q?: string; status?: string; prioridade?: string; equipeId?: string; tecnicoId?: string; dataInicio?: string; dataFim?: string }): Promise<ChamadoBusca[]> {
     const { data } = await gestaoApi.get('/dashboard/acompanhamento-chamado/buscar', { params });
     return data;
   },
@@ -72,7 +72,7 @@ export const dashboardService = {
     return data;
   },
 
-  async buscarAtividades(params?: { q?: string; projetoId?: string; status?: string }): Promise<AtividadeBusca[]> {
+  async buscarAtividades(params?: { q?: string; projetoId?: string; status?: string; dataInicio?: string; dataFim?: string }): Promise<AtividadeBusca[]> {
     const { data } = await gestaoApi.get('/dashboard/acompanhamento-atividade/buscar', { params });
     return data;
   },

@@ -10,6 +10,7 @@ import {
   AlertTriangle, ExternalLink, Activity, Users, UserPlus, UserMinus,
 } from 'lucide-react';
 import { paradaService } from '../../services/parada.service';
+import { useToast } from '../../components/Toast';
 import { formatDateBR } from '../../utils/date';
 import { coreService } from '../../services/core.service';
 import type {
@@ -68,6 +69,7 @@ export function SoftwareDetalhePage() {
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
   const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const { confirm } = useToast();
 
   const [software, setSoftware] = useState<Software | null>(null);
   const [loading, setLoading] = useState(true);
@@ -179,7 +181,7 @@ export function SoftwareDetalhePage() {
                 />
                 <button
                   onClick={async () => {
-                    if (!confirm(`Excluir software "${software.nome}"? Esta acao nao pode ser desfeita.`)) return;
+                    if (!await confirm('Excluir Software', `Excluir software "${software.nome}"? Esta acao nao pode ser desfeita.`, { variant: 'danger' })) return;
                     try {
                       await softwareService.excluir(id!);
                       navigate('/gestao-ti/softwares');

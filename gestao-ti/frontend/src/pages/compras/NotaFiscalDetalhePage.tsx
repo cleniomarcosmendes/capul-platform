@@ -160,10 +160,14 @@ export function NotaFiscalDetalhePage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-4 text-sm">
+          <div className="grid grid-cols-5 gap-4 text-sm">
             <div>
               <p className="text-slate-500 text-xs">Data Lancamento</p>
               <p className="text-slate-800 font-medium">{formatDateBR(nf.dataLancamento)}</p>
+            </div>
+            <div>
+              <p className="text-slate-500 text-xs">Data Vencimento</p>
+              <p className="text-slate-800 font-medium">{nf.dataVencimento ? formatDateBR(nf.dataVencimento) : '-'}</p>
             </div>
             <div className="col-span-2">
               <p className="text-slate-500 text-xs">Fornecedor</p>
@@ -228,7 +232,7 @@ export function NotaFiscalDetalhePage() {
                 <th className="px-6 py-3 text-center">Qtde</th>
                 <th className="px-6 py-3 text-right">Valor Unit.</th>
                 <th className="px-6 py-3 text-right">Valor Total</th>
-                <th className="px-6 py-3">Departamento</th>
+                <th className="px-6 py-3">Centro de Custo</th>
                 <th className="px-6 py-3">Projeto</th>
               </tr>
             </thead>
@@ -249,7 +253,7 @@ export function NotaFiscalDetalhePage() {
                   <td className="px-6 py-3 text-sm font-medium text-slate-800 text-right">
                     R$ {Number(item.valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </td>
-                  <td className="px-6 py-3 text-sm text-slate-700">{item.departamento.nome}</td>
+                  <td className="px-6 py-3 text-sm text-slate-700">{item.centroCusto ? `${item.centroCusto.codigo} - ${item.centroCusto.nome}` : '-'}</td>
                   <td className="px-6 py-3 text-sm">
                     {item.projeto ? (
                       <Link to={`/gestao-ti/projetos/${item.projeto.id}`}

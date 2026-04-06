@@ -139,6 +139,11 @@ export const contratoService = {
     return data;
   },
 
+  async estornarParcela(contratoId: string, parcelaId: string): Promise<ParcelaContrato> {
+    const { data } = await gestaoApi.post(`/contratos/${contratoId}/parcelas/${parcelaId}/estornar`);
+    return data;
+  },
+
   async cancelarParcela(contratoId: string, parcelaId: string): Promise<ParcelaContrato> {
     const { data } = await gestaoApi.post(`/contratos/${contratoId}/parcelas/${parcelaId}/cancelar`);
     return data;

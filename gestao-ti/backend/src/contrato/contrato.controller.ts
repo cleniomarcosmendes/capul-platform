@@ -256,6 +256,17 @@ export class ContratoController {
     return this.service.pagarParcela(id, pid, dto, user.sub, role);
   }
 
+  @Post(':id/parcelas/:pid/estornar')
+  @Roles('ADMIN', 'GESTOR_TI')
+  estornarParcela(
+    @Param('id') id: string,
+    @Param('pid') pid: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.estornarParcela(id, pid, user.sub, role);
+  }
+
   @Post(':id/parcelas/:pid/cancelar')
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   cancelarParcela(

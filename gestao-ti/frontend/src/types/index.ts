@@ -1424,8 +1424,8 @@ export interface NotaFiscalItem {
   observacao: string | null;
   produtoId: string;
   produto: ProdutoConfig;
-  departamentoId: string;
-  departamento: { id: string; nome: string };
+  centroCustoId: string | null;
+  centroCusto: { id: string; codigo: string; nome: string } | null;
   projetoId: string | null;
   projeto: { id: string; numero: number; nome: string } | null;
 }
@@ -1434,6 +1434,7 @@ export interface NotaFiscal {
   id: string;
   numero: string;
   dataLancamento: string;
+  dataVencimento: string | null;
   status: StatusNotaFiscal;
   observacao: string | null;
   valorTotal: number;
@@ -1457,7 +1458,7 @@ export interface NotaFiscalItemProjeto {
   valorTotal: number;
   observacao: string | null;
   produto: ProdutoConfig;
-  departamento: { id: string; nome: string };
+  centroCusto: { id: string; codigo: string; nome: string } | null;
   notaFiscal: {
     id: string;
     numero: string;

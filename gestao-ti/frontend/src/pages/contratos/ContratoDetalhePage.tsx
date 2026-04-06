@@ -717,6 +717,18 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
     }
   }
 
+  async function handleEstornar(p: ParcelaContrato) {
+    const ok = await confirm('Estornar Parcela', `Deseja estornar a parcela #${p.numero}? O status voltara para PENDENTE e a data de pagamento sera removida.`);
+    if (!ok) return;
+    try {
+      await contratoService.estornarParcela(contrato.id, p.id);
+      toast.show('success', `Parcela #${p.numero} estornada`);
+      onReload();
+    } catch (err) {
+      toast.show('error', extractErrorMsg(err, 'Erro ao estornar parcela'));
+    }
+  }
+
   async function handleCancelar(p: ParcelaContrato) {
     const ok = await confirm('Cancelar Parcela', `Deseja cancelar a parcela #${p.numero}? Esta acao nao pode ser desfeita.`);
     if (!ok) return;
@@ -856,6 +868,7 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
                 editing={editingId === p.id}
                 onToggle={() => toggleExpand(p.id)}
                 onPagar={() => handlePagar(p)}
+                onEstornar={() => handleEstornar(p)}
                 onCancelar={() => handleCancelar(p)}
                 onEdit={() => setEditingId(p.id)}
                 onCancelEdit={() => setEditingId(null)}
@@ -922,7 +935,7 @@ function TabParcelas({ contrato, canManage, onReload, toast, confirm }: TabProps
   );
 }
 
-function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManage, editing, onToggle, onPagar, onCancelar, onEdit, onCancelEdit, onSaveEdit, onGerarTemplate, onCopiarPendentes, onImprimirRateio }: {
+function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManage, editing, onToggle, onPagar, onEstornar, onCancelar, onEdit, onCancelEdit, onSaveEdit, onGerarTemplate, onCopiarPendentes, onImprimirRateio }: {
   parcela: ParcelaContrato;
   expanded: boolean;
   rateioItens: ParcelaRateioItem[];
@@ -931,6 +944,7 @@ function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManag
   editing: boolean;
   onToggle: () => void;
   onPagar: () => void;
+  onEstornar: () => void;
   onCancelar: () => void;
   onEdit: () => void;
   onCancelEdit: () => void;
@@ -1064,6 +1078,7 @@ function ParcelaRow({ parcela: p, expanded, rateioItens, loadingRateio, canManag
                 <button onClick={onEdit} className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
                   <Pencil className="w-3 h-3" /> Editar
                 </button>
+                <button onClick={onEstornar} className="text-xs text-amber-600 hover:underline">Estornar</button>
               </div>
             )}
           </td>
@@ -1320,16 +1335,22 @@ function TabRateioTemplate({ contrato, canManage, onReload, toast }: TabProps) {
           <div className="space-y-2">
             {itens.map((item, idx) => (
               <div key={idx} className="flex items-center gap-2 flex-wrap">
-                <select value={item.centroCustoId} onChange={(e) => updateItem(idx, 'centroCustoId', e.target.value)}
-                  className="flex-[3] min-w-[180px] border border-slate-300 rounded px-2 py-1.5 text-sm bg-white">
-                  <option value="">Selecione CC...</option>
-                  {centrosCusto.map((cc) => <option key={cc.id} value={cc.id}>{cc.codigo} - {cc.nome}</option>)}
-                </select>
-                <select value={item.naturezaId} onChange={(e) => updateItem(idx, 'naturezaId', e.target.value)}
-                  className="flex-[2] min-w-[200px] border border-slate-300 rounded px-2 py-1.5 text-sm bg-white">
-                  <option value="">Natureza...</option>
-                  {naturezas.map((n) => <option key={n.id} value={n.id}>{n.codigo} - {n.nome}</option>)}
-                </select>
+                <div className="flex-[3] min-w-[220px]">
+                  <SearchSelect
+                    options={centrosCusto.map((cc) => ({ value: cc.id, label: `${cc.codigo} - ${cc.nome}` }))}
+                    value={item.centroCustoId}
+                    onChange={(v) => updateItem(idx, 'centroCustoId', v)}
+                    placeholder="Buscar centro custo..."
+                  />
+                </div>
+                <div className="flex-[2] min-w-[220px]">
+                  <SearchSelect
+                    options={naturezas.map((n) => ({ value: n.id, label: `${n.codigo} - ${n.nome}` }))}
+                    value={item.naturezaId}
+                    onChange={(v) => updateItem(idx, 'naturezaId', v)}
+                    placeholder="Buscar natureza..."
+                  />
+                </div>
                 {modalidade === 'PERCENTUAL_CUSTOMIZADO' && (
                   <input type="number" step="0.01" placeholder="%" value={item.percentual} onChange={(e) => updateItem(idx, 'percentual', e.target.value)}
                     className="w-24 border border-slate-300 rounded px-2 py-1.5 text-sm" />

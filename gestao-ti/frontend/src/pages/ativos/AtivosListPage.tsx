@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { ativoService } from '../../services/ativo.service';
 import { coreApi } from '../../services/api';
-import { Plus, Search, Server, Monitor, Laptop, Printer, Network, HardDrive, Box, Download } from 'lucide-react';
+import { Plus, Search, Server, Monitor, Laptop, Printer, Network, HardDrive, Box, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import type { Ativo, TipoAtivo, StatusAtivo, FilialResumo } from '../../types';
 
@@ -55,6 +55,34 @@ export function AtivosListPage() {
   const [filtroTipo, setFiltroTipo] = useState<TipoAtivo | ''>('');
   const [filtroStatus, setFiltroStatus] = useState<StatusAtivo | ''>('');
   const [filtroFilial, setFiltroFilial] = useState('');
+
+  type SortKey = 'tag' | 'nome' | 'tipo' | 'status';
+  type SortDir = 'asc' | 'desc';
+  const [sortKey, setSortKey] = useState<SortKey>('tag');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('asc'); }
+  }
+  function SortIcon({ col }: { col: SortKey }) {
+    if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300" />;
+    return sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600" /> : <ArrowDown className="w-3 h-3 text-teal-600" />;
+  }
+
+  const sorted = useMemo(() => {
+    return [...ativos].sort((a, b) => {
+      let va: string, vb: string;
+      switch (sortKey) {
+        case 'tag': va = a.tag.toLowerCase(); vb = b.tag.toLowerCase(); break;
+        case 'nome': va = a.nome.toLowerCase(); vb = b.nome.toLowerCase(); break;
+        case 'tipo': va = a.tipo; vb = b.tipo; break;
+        case 'status': va = a.status; vb = b.status; break;
+        default: va = ''; vb = '';
+      }
+      const cmp = va.localeCompare(vb);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [ativos, sortKey, sortDir]);
 
   useEffect(() => {
     coreApi.get('/filiais').then(({ data }) => setFiliais(data)).catch(() => {});
@@ -154,12 +182,12 @@ export function AtivosListPage() {
         ) : (
           <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-xs text-slate-500 uppercase">
+              <thead className="bg-slate-50 text-left text-xs text-slate-500 uppercase tracking-wider">
                 <tr>
-                  <th className="px-4 py-3">Tag</th>
-                  <th className="px-4 py-3">Nome</th>
-                  <th className="px-4 py-3">Tipo</th>
-                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3"><button onClick={() => toggleSort('tag')} className="flex items-center gap-1 hover:text-slate-700">Tag <SortIcon col="tag" /></button></th>
+                  <th className="px-4 py-3"><button onClick={() => toggleSort('nome')} className="flex items-center gap-1 hover:text-slate-700">Nome <SortIcon col="nome" /></button></th>
+                  <th className="px-4 py-3"><button onClick={() => toggleSort('tipo')} className="flex items-center gap-1 hover:text-slate-700">Tipo <SortIcon col="tipo" /></button></th>
+                  <th className="px-4 py-3"><button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-slate-700">Status <SortIcon col="status" /></button></th>
                   <th className="px-4 py-3">Filial</th>
                   <th className="px-4 py-3">Responsavel</th>
                   <th className="px-4 py-3">SO</th>
@@ -168,7 +196,7 @@ export function AtivosListPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {ativos.map((a) => {
+                {sorted.map((a) => {
                   const Icone = tipoIcone[a.tipo] || Box;
                   return (
                     <tr key={a.id} className="hover:bg-slate-50">

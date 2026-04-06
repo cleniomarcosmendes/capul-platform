@@ -18,7 +18,7 @@ export function EquipesListPage() {
   const [filtroStatus, setFiltroStatus] = useState<string>('');
 
   const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
 
   const [sortKey, setSortKey] = useState<SortKey>('nome');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -183,7 +183,7 @@ export function EquipesListPage() {
                             {equipe.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
                           </button>
                           <button onClick={async () => {
-                            if (!confirm(`Excluir equipe "${equipe.nome}"?`)) return;
+                            if (!await confirm('Excluir Equipe', `Excluir equipe "${equipe.nome}"?`, { variant: 'danger' })) return;
                             try { await equipeService.excluir(equipe.id); carregarEquipes(); toast('success', 'Equipe excluida'); }
                             catch (err: unknown) { toast('error', (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir'); }
                           }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">

@@ -4,6 +4,21 @@ import { gestaoApi } from '../../services/api';
 import { formatDateBR } from '../../utils/date';
 import { DollarSign, KeyRound, Activity, Ticket, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 
+interface LicencaDetalhe {
+  id: string; nome: string | null; modeloLicenca: string | null; quantidade: number | null;
+  dataVencimento: string | null; status: string;
+  software: { id: string; nome: string } | null;
+  categoria: { id: string; nome: string } | null;
+}
+
+interface ChamadoDetalhe {
+  id: string; numero: number; titulo: string; status: string; prioridade: string;
+  createdAt: string; updatedAt: string;
+  solicitante: { id: string; nome: string } | null;
+  tecnico: { id: string; nome: string } | null;
+  equipeAtual: { id: string; sigla: string } | null;
+}
+
 interface IndicadoresData {
   periodo: { mes: number; ano: number; diasNoMes: number };
   investimentos: {
@@ -21,6 +36,10 @@ interface IndicadoresData {
     licencasVencendo30: number;
     licencasVencendo60: number;
     licencasVencendo90: number;
+    detalheSoftwares: { id: string; nome: string; fabricante: string | null; tipo: string | null; criticidade: string | null; versaoAtual: string | null; _count: { licencas: number; modulos: number } }[];
+    detalheLicencasAtivas: LicencaDetalhe[];
+    detalheLicencasVencendo30: LicencaDetalhe[];
+    detalheLicencasVencendo90: LicencaDetalhe[];
   };
   disponibilidade: {
     horasTotais: number;
@@ -45,6 +64,9 @@ interface IndicadoresData {
     resolvidosNoPeriodo: number;
     emAbertoAtual: number;
     tempoMedioResolucaoHoras: number;
+    detalheAbertos: ChamadoDetalhe[];
+    detalheResolvidos: ChamadoDetalhe[];
+    detalheEmAberto: ChamadoDetalhe[];
   };
   horasDesenvolvimento: {
     totalHoras: number;
@@ -86,6 +108,7 @@ export function IndicadoresPage() {
   const [data, setData] = useState<IndicadoresData | null>(null);
   const [loading, setLoading] = useState(true);
   const [detalhe, setDetalhe] = useState<Detalhe>(null);
+  const [subDetalhe, setSubDetalhe] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -158,7 +181,7 @@ export function IndicadoresPage() {
             {/* Cards dos indicadores */}
             <div className="grid grid-cols-5 gap-4 mb-6">
               {/* 1. Investimentos */}
-              <button onClick={() => setDetalhe(detalhe === 'investimentos' ? null : 'investimentos')}
+              <button onClick={() => { setDetalhe(detalhe === 'investimentos' ? null : 'investimentos'); setSubDetalhe(null); }}
                 className={`bg-white rounded-xl border p-5 text-left transition-all hover:shadow-md ${detalhe === 'investimentos' ? 'border-capul-500 ring-2 ring-capul-200' : 'border-slate-200'}`}>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="p-2 rounded-lg bg-emerald-100"><DollarSign className="w-4 h-4 text-emerald-600" /></div>
@@ -171,7 +194,7 @@ export function IndicadoresPage() {
               </button>
 
               {/* 2. Licencas */}
-              <button onClick={() => setDetalhe(detalhe === 'licencas' ? null : 'licencas')}
+              <button onClick={() => { setDetalhe(detalhe === 'licencas' ? null : 'licencas'); setSubDetalhe(null); }}
                 className={`bg-white rounded-xl border p-5 text-left transition-all hover:shadow-md ${detalhe === 'licencas' ? 'border-capul-500 ring-2 ring-capul-200' : 'border-slate-200'}`}>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="p-2 rounded-lg bg-blue-100"><KeyRound className="w-4 h-4 text-blue-600" /></div>
@@ -187,7 +210,7 @@ export function IndicadoresPage() {
               </button>
 
               {/* 3. Disponibilidade */}
-              <button onClick={() => setDetalhe(detalhe === 'disponibilidade' ? null : 'disponibilidade')}
+              <button onClick={() => { setDetalhe(detalhe === 'disponibilidade' ? null : 'disponibilidade'); setSubDetalhe(null); }}
                 className={`bg-white rounded-xl border p-5 text-left transition-all hover:shadow-md ${detalhe === 'disponibilidade' ? 'border-capul-500 ring-2 ring-capul-200' : 'border-slate-200'}`}>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="p-2 rounded-lg bg-purple-100"><Activity className="w-4 h-4 text-purple-600" /></div>
@@ -202,7 +225,7 @@ export function IndicadoresPage() {
               </button>
 
               {/* 4. Chamados */}
-              <button onClick={() => setDetalhe(detalhe === 'chamados' ? null : 'chamados')}
+              <button onClick={() => { setDetalhe(detalhe === 'chamados' ? null : 'chamados'); setSubDetalhe(null); }}
                 className={`bg-white rounded-xl border p-5 text-left transition-all hover:shadow-md ${detalhe === 'chamados' ? 'border-capul-500 ring-2 ring-capul-200' : 'border-slate-200'}`}>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="p-2 rounded-lg bg-orange-100"><Ticket className="w-4 h-4 text-orange-600" /></div>
@@ -215,7 +238,7 @@ export function IndicadoresPage() {
               </button>
 
               {/* 5. Horas Desenvolvimento */}
-              <button onClick={() => setDetalhe(detalhe === 'horas' ? null : 'horas')}
+              <button onClick={() => { setDetalhe(detalhe === 'horas' ? null : 'horas'); setSubDetalhe(null); }}
                 className={`bg-white rounded-xl border p-5 text-left transition-all hover:shadow-md ${detalhe === 'horas' ? 'border-capul-500 ring-2 ring-capul-200' : 'border-slate-200'}`}>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="p-2 rounded-lg bg-indigo-100"><Clock className="w-4 h-4 text-indigo-600" /></div>
@@ -278,24 +301,99 @@ export function IndicadoresPage() {
             {detalhe === 'licencas' && (
               <div className="bg-white rounded-xl border border-slate-200 p-6">
                 <h3 className="text-sm font-semibold text-slate-700 uppercase mb-4">Detalhamento - Licencas e Softwares</h3>
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="bg-blue-50 rounded-lg p-4 text-center">
+                <div className="grid grid-cols-4 gap-4 mb-4">
+                  <button onClick={() => setSubDetalhe(subDetalhe === 'softwares' ? null : 'softwares')}
+                    className={`rounded-lg p-4 text-center transition-all hover:shadow-md ${subDetalhe === 'softwares' ? 'bg-blue-100 ring-2 ring-blue-300' : 'bg-blue-50'}`}>
                     <p className="text-2xl font-bold text-blue-800">{data.licencas.totalSoftwares}</p>
                     <p className="text-xs text-blue-600 mt-1">Softwares Ativos</p>
-                  </div>
-                  <div className="bg-green-50 rounded-lg p-4 text-center">
+                  </button>
+                  <button onClick={() => setSubDetalhe(subDetalhe === 'lic-ativas' ? null : 'lic-ativas')}
+                    className={`rounded-lg p-4 text-center transition-all hover:shadow-md ${subDetalhe === 'lic-ativas' ? 'bg-green-100 ring-2 ring-green-300' : 'bg-green-50'}`}>
                     <p className="text-2xl font-bold text-green-800">{data.licencas.licencasAtivas}</p>
                     <p className="text-xs text-green-600 mt-1">Licencas Ativas</p>
-                  </div>
-                  <div className={`rounded-lg p-4 text-center ${data.licencas.licencasVencendo30 > 0 ? 'bg-red-50' : 'bg-slate-50'}`}>
+                  </button>
+                  <button onClick={() => setSubDetalhe(subDetalhe === 'lic-30' ? null : 'lic-30')}
+                    className={`rounded-lg p-4 text-center transition-all hover:shadow-md ${subDetalhe === 'lic-30' ? 'ring-2 ring-red-300 bg-red-100' : data.licencas.licencasVencendo30 > 0 ? 'bg-red-50' : 'bg-slate-50'}`}>
                     <p className={`text-2xl font-bold ${data.licencas.licencasVencendo30 > 0 ? 'text-red-800' : 'text-slate-600'}`}>{data.licencas.licencasVencendo30}</p>
                     <p className="text-xs text-slate-600 mt-1">Vencendo em 30 dias</p>
-                  </div>
-                  <div className={`rounded-lg p-4 text-center ${data.licencas.licencasVencendo90 > 0 ? 'bg-amber-50' : 'bg-slate-50'}`}>
+                  </button>
+                  <button onClick={() => setSubDetalhe(subDetalhe === 'lic-90' ? null : 'lic-90')}
+                    className={`rounded-lg p-4 text-center transition-all hover:shadow-md ${subDetalhe === 'lic-90' ? 'ring-2 ring-amber-300 bg-amber-100' : data.licencas.licencasVencendo90 > 0 ? 'bg-amber-50' : 'bg-slate-50'}`}>
                     <p className={`text-2xl font-bold ${data.licencas.licencasVencendo90 > 0 ? 'text-amber-800' : 'text-slate-600'}`}>{data.licencas.licencasVencendo90}</p>
                     <p className="text-xs text-slate-600 mt-1">Vencendo em 90 dias</p>
-                  </div>
+                  </button>
                 </div>
+                {subDetalhe === 'softwares' && (
+                  <div className="mt-2">
+                    <h4 className="text-xs font-medium text-slate-500 mb-2 uppercase">Softwares Ativos ({data.licencas.detalheSoftwares.length})</h4>
+                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                          <tr>
+                            <th className="px-4 py-2 text-left">Nome</th>
+                            <th className="px-4 py-2 text-left">Fabricante</th>
+                            <th className="px-4 py-2 text-left">Tipo</th>
+                            <th className="px-4 py-2 text-left">Criticidade</th>
+                            <th className="px-4 py-2 text-left">Versao</th>
+                            <th className="px-4 py-2 text-center">Modulos</th>
+                            <th className="px-4 py-2 text-center">Licencas</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {data.licencas.detalheSoftwares.map((sw) => (
+                            <tr key={sw.id} className="hover:bg-slate-50">
+                              <td className="px-4 py-2 font-medium text-slate-700">{sw.nome}</td>
+                              <td className="px-4 py-2 text-slate-600">{sw.fabricante || '-'}</td>
+                              <td className="px-4 py-2 text-slate-600">{sw.tipo || '-'}</td>
+                              <td className="px-4 py-2 text-slate-600">{sw.criticidade || '-'}</td>
+                              <td className="px-4 py-2 text-slate-600">{sw.versaoAtual || '-'}</td>
+                              <td className="px-4 py-2 text-center text-slate-600">{sw._count.modulos}</td>
+                              <td className="px-4 py-2 text-center text-slate-600">{sw._count.licencas}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                {(subDetalhe === 'lic-ativas' || subDetalhe === 'lic-30' || subDetalhe === 'lic-90') && (() => {
+                  const lista = subDetalhe === 'lic-ativas' ? data.licencas.detalheLicencasAtivas
+                    : subDetalhe === 'lic-30' ? data.licencas.detalheLicencasVencendo30
+                    : data.licencas.detalheLicencasVencendo90;
+                  const titulo = subDetalhe === 'lic-ativas' ? 'Licencas Ativas' : subDetalhe === 'lic-30' ? 'Vencendo em 30 dias' : 'Vencendo em 90 dias';
+                  return (
+                    <div className="mt-2">
+                      <h4 className="text-xs font-medium text-slate-500 mb-2 uppercase">{titulo} ({lista.length})</h4>
+                      {lista.length === 0 ? <p className="text-sm text-slate-400">Nenhuma licenca</p> : (
+                        <div className="border border-slate-200 rounded-lg overflow-hidden">
+                          <table className="w-full text-sm">
+                            <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                              <tr>
+                                <th className="px-4 py-2 text-left">Software / Licenca</th>
+                                <th className="px-4 py-2 text-left">Categoria</th>
+                                <th className="px-4 py-2 text-center">Qtde</th>
+                                <th className="px-4 py-2 text-left">Vencimento</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {lista.map((lic) => (
+                                <tr key={lic.id} className="hover:bg-slate-50">
+                                  <td className="px-4 py-2">
+                                    <p className="font-medium text-slate-700">{lic.software?.nome || '-'}</p>
+                                    {lic.nome && <p className="text-xs text-slate-400">{lic.nome}</p>}
+                                  </td>
+                                  <td className="px-4 py-2 text-slate-600">{lic.categoria?.nome || '-'}</td>
+                                  <td className="px-4 py-2 text-center text-slate-600">{lic.quantidade || '-'}</td>
+                                  <td className="px-4 py-2 text-slate-600">{lic.dataVencimento ? formatDateBR(lic.dataVencimento) : 'Sem vencimento'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -328,7 +426,13 @@ export function IndicadoresPage() {
                         <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
                           <h4 className="text-sm font-semibold text-slate-700">{sw.softwareNome}</h4>
                         </div>
-                        <table className="w-full">
+                        <table className="w-full table-fixed">
+                          <colgroup>
+                            <col className="w-[35%]" />
+                            <col className="w-[25%]" />
+                            <col className="w-[20%]" />
+                            <col className="w-[20%]" />
+                          </colgroup>
                           <thead>
                             <tr className="text-left text-xs font-medium text-slate-500 uppercase">
                               <th className="px-4 py-2">Tipo</th>
@@ -378,24 +482,82 @@ export function IndicadoresPage() {
             {detalhe === 'chamados' && (
               <div className="bg-white rounded-xl border border-slate-200 p-6">
                 <h3 className="text-sm font-semibold text-slate-700 uppercase mb-4">Detalhamento - Chamados Internos</h3>
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="bg-blue-50 rounded-lg p-4 text-center">
+                <div className="grid grid-cols-4 gap-4 mb-4">
+                  <button onClick={() => setSubDetalhe(subDetalhe === 'ch-abertos' ? null : 'ch-abertos')}
+                    className={`rounded-lg p-4 text-center transition-all hover:shadow-md ${subDetalhe === 'ch-abertos' ? 'bg-blue-100 ring-2 ring-blue-300' : 'bg-blue-50'}`}>
                     <p className="text-2xl font-bold text-blue-800">{data.chamados.abertosNoPeriodo}</p>
                     <p className="text-xs text-blue-600 mt-1">Abertos no Periodo</p>
-                  </div>
-                  <div className="bg-green-50 rounded-lg p-4 text-center">
+                  </button>
+                  <button onClick={() => setSubDetalhe(subDetalhe === 'ch-resolvidos' ? null : 'ch-resolvidos')}
+                    className={`rounded-lg p-4 text-center transition-all hover:shadow-md ${subDetalhe === 'ch-resolvidos' ? 'bg-green-100 ring-2 ring-green-300' : 'bg-green-50'}`}>
                     <p className="text-2xl font-bold text-green-800">{data.chamados.resolvidosNoPeriodo}</p>
                     <p className="text-xs text-green-600 mt-1">Resolvidos no Periodo</p>
-                  </div>
-                  <div className={`rounded-lg p-4 text-center ${data.chamados.emAbertoAtual > 10 ? 'bg-amber-50' : 'bg-slate-50'}`}>
+                  </button>
+                  <button onClick={() => setSubDetalhe(subDetalhe === 'ch-aberto' ? null : 'ch-aberto')}
+                    className={`rounded-lg p-4 text-center transition-all hover:shadow-md ${subDetalhe === 'ch-aberto' ? 'ring-2 ring-amber-300 bg-amber-100' : data.chamados.emAbertoAtual > 10 ? 'bg-amber-50' : 'bg-slate-50'}`}>
                     <p className="text-2xl font-bold text-slate-800">{data.chamados.emAbertoAtual}</p>
                     <p className="text-xs text-slate-600 mt-1">Em Aberto (atual)</p>
-                  </div>
+                  </button>
                   <div className="bg-slate-50 rounded-lg p-4 text-center">
                     <p className="text-2xl font-bold text-slate-800">{data.chamados.tempoMedioResolucaoHoras}h</p>
                     <p className="text-xs text-slate-600 mt-1">Tempo Medio Resolucao</p>
                   </div>
                 </div>
+                {(subDetalhe === 'ch-abertos' || subDetalhe === 'ch-resolvidos' || subDetalhe === 'ch-aberto') && (() => {
+                  const lista = subDetalhe === 'ch-abertos' ? data.chamados.detalheAbertos
+                    : subDetalhe === 'ch-resolvidos' ? data.chamados.detalheResolvidos
+                    : data.chamados.detalheEmAberto;
+                  const titulo = subDetalhe === 'ch-abertos' ? 'Abertos no Periodo' : subDetalhe === 'ch-resolvidos' ? 'Resolvidos no Periodo' : 'Em Aberto (atual)';
+                  const prioridadeCores: Record<string, string> = {
+                    CRITICA: 'bg-red-100 text-red-700', ALTA: 'bg-orange-100 text-orange-700',
+                    MEDIA: 'bg-yellow-100 text-yellow-700', BAIXA: 'bg-green-100 text-green-700',
+                  };
+                  const statusCoresCh: Record<string, string> = {
+                    ABERTO: 'bg-blue-100 text-blue-700', EM_ATENDIMENTO: 'bg-yellow-100 text-yellow-700',
+                    PENDENTE: 'bg-orange-100 text-orange-700', RESOLVIDO: 'bg-green-100 text-green-700',
+                    FECHADO: 'bg-slate-100 text-slate-600', CANCELADO: 'bg-red-100 text-red-600',
+                    REABERTO: 'bg-purple-100 text-purple-700',
+                  };
+                  return (
+                    <div className="mt-2">
+                      <h4 className="text-xs font-medium text-slate-500 mb-2 uppercase">{titulo} ({lista.length})</h4>
+                      {lista.length === 0 ? <p className="text-sm text-slate-400">Nenhum chamado</p> : (
+                        <div className="border border-slate-200 rounded-lg overflow-hidden">
+                          <table className="w-full text-sm">
+                            <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                              <tr>
+                                <th className="px-4 py-2 text-left">#</th>
+                                <th className="px-4 py-2 text-left">Titulo</th>
+                                <th className="px-4 py-2 text-left">Equipe</th>
+                                <th className="px-4 py-2 text-left">Tecnico</th>
+                                <th className="px-4 py-2 text-center">Prioridade</th>
+                                <th className="px-4 py-2 text-center">Status</th>
+                                <th className="px-4 py-2 text-left">Data</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {lista.map((ch) => (
+                                <tr key={ch.id} className="hover:bg-slate-50">
+                                  <td className="px-4 py-2 text-slate-500">{ch.numero}</td>
+                                  <td className="px-4 py-2 font-medium text-slate-700 max-w-[300px] truncate">{ch.titulo}</td>
+                                  <td className="px-4 py-2 text-slate-600">{ch.equipeAtual?.sigla || '-'}</td>
+                                  <td className="px-4 py-2 text-slate-600">{ch.tecnico?.nome || '-'}</td>
+                                  <td className="px-4 py-2 text-center">
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${prioridadeCores[ch.prioridade] || 'bg-slate-100 text-slate-600'}`}>{ch.prioridade}</span>
+                                  </td>
+                                  <td className="px-4 py-2 text-center">
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${statusCoresCh[ch.status] || 'bg-slate-100 text-slate-600'}`}>{ch.status}</span>
+                                  </td>
+                                  <td className="px-4 py-2 text-xs text-slate-500">{formatDateBR(ch.createdAt)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 

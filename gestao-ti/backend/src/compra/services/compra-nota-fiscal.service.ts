@@ -15,7 +15,7 @@ const NF_INCLUDE = {
   itens: {
     include: {
       produto: { include: { tipoProduto: true } },
-      departamento: true,
+      centroCusto: true,
       projeto: { select: { id: true, numero: true, nome: true } },
     },
     orderBy: { produto: { descricao: 'asc' as const } },
@@ -66,7 +66,7 @@ export class CompraNotaFiscalService {
   async findAll(filters: {
     fornecedorId?: string;
     status?: string;
-    departamentoId?: string;
+    centroCustoId?: string;
     projetoId?: string;
     dataInicio?: string;
     dataFim?: string;
@@ -83,8 +83,8 @@ export class CompraNotaFiscalService {
       if (filters.dataFim) dataLancamento.lte = new Date(filters.dataFim);
       where.dataLancamento = dataLancamento;
     }
-    if (filters.departamentoId) {
-      where.itens = { some: { departamentoId: filters.departamentoId } };
+    if (filters.centroCustoId) {
+      where.itens = { some: { centroCustoId: filters.centroCustoId } };
     }
     if (filters.projetoId) {
       where.itens = { ...((where.itens as Record<string, unknown>) || {}), some: { ...((where.itens as { some?: Record<string, unknown> })?.some || {}), projetoId: filters.projetoId } };
@@ -129,7 +129,7 @@ export class CompraNotaFiscalService {
           },
         },
         produto: { include: { tipoProduto: true } },
-        departamento: true,
+        centroCusto: true,
       },
       orderBy: { notaFiscal: { dataLancamento: 'desc' } },
     });
@@ -150,7 +150,7 @@ export class CompraNotaFiscalService {
         quantidade: item.quantidade,
         valorUnitario: item.valorUnitario,
         valorTotal,
-        departamentoId: item.departamentoId,
+        centroCustoId: item.centroCustoId,
         projetoId: item.projetoId || null,
         observacao: item.observacao || null,
       };
@@ -162,6 +162,7 @@ export class CompraNotaFiscalService {
       data: {
         numero: dto.numero,
         dataLancamento: new Date(dto.dataLancamento),
+        dataVencimento: dto.dataVencimento ? new Date(dto.dataVencimento) : null,
         fornecedorId: dto.fornecedorId,
         filialId,
         criadoPorId: userId,
@@ -189,6 +190,7 @@ export class CompraNotaFiscalService {
     const data: Record<string, unknown> = {};
     if (dto.numero !== undefined) data.numero = dto.numero;
     if (dto.dataLancamento !== undefined) data.dataLancamento = new Date(dto.dataLancamento);
+    if (dto.dataVencimento !== undefined) data.dataVencimento = dto.dataVencimento ? new Date(dto.dataVencimento) : null;
     if (dto.fornecedorId !== undefined) data.fornecedorId = dto.fornecedorId;
     if (dto.observacao !== undefined) data.observacao = dto.observacao;
     if (dto.status !== undefined) data.status = dto.status;
@@ -207,7 +209,7 @@ export class CompraNotaFiscalService {
           quantidade: item.quantidade,
           valorUnitario: item.valorUnitario,
           valorTotal,
-          departamentoId: item.departamentoId,
+          centroCustoId: item.centroCustoId,
           projetoId: item.projetoId || null,
           observacao: item.observacao || null,
         };
@@ -255,7 +257,7 @@ export class CompraNotaFiscalService {
       quantidade: item.quantidade,
       valorUnitario: Number(item.valorUnitario),
       valorTotal: Number(item.valorTotal),
-      departamentoId: item.departamentoId,
+      centroCustoId: item.centroCustoId,
       projetoId: item.projetoId,
       observacao: item.observacao,
     }));

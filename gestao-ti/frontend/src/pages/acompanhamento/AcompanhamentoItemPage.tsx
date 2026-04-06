@@ -133,6 +133,8 @@ export function AcompanhamentoItemPage() {
   const [filterPrioridade, setFilterPrioridade] = useState('');
   const [filterEquipe, setFilterEquipe] = useState('');
   const [filterTecnico, setFilterTecnico] = useState('');
+  const [filterDataInicio, setFilterDataInicio] = useState('');
+  const [filterDataFim, setFilterDataFim] = useState('');
   const [equipes, setEquipes] = useState<{ id: string; nome: string; sigla: string }[]>([]);
   const [tecnicos, setTecnicos] = useState<{ id: string; nome: string; username: string }[]>([]);
   const [chamadosResultado, setChamadosResultado] = useState<ChamadoBusca[]>([]);
@@ -144,6 +146,8 @@ export function AcompanhamentoItemPage() {
   const [projetoId, setProjetoId] = useState('');
   const [buscaAtividade, setBuscaAtividade] = useState('');
   const [filterStatusAtiv, setFilterStatusAtiv] = useState('');
+  const [filterDataInicioAtiv, setFilterDataInicioAtiv] = useState('');
+  const [filterDataFimAtiv, setFilterDataFimAtiv] = useState('');
   const [atividadesResultado, setAtividadesResultado] = useState<AtividadeBusca[]>([]);
   const [atividadeData, setAtividadeData] = useState<AcompanhamentoAtividadeData | null>(null);
   const [loadingAtividade, setLoadingAtividade] = useState(false);
@@ -174,8 +178,10 @@ export function AcompanhamentoItemPage() {
       prioridade: filterPrioridade || undefined,
       equipeId: filterEquipe || undefined,
       tecnicoId: tecnico,
+      dataInicio: filterDataInicio || undefined,
+      dataFim: filterDataFim || undefined,
     }).then(setChamadosResultado).catch(() => {});
-  }, [buscaChamado, filterStatus, filterPrioridade, filterEquipe, filterTecnico, isManager, usuario]);
+  }, [buscaChamado, filterStatus, filterPrioridade, filterEquipe, filterTecnico, filterDataInicio, filterDataFim, isManager, usuario]);
 
   useEffect(() => {
     if (tab === 'chamado') buscarChamados();
@@ -192,8 +198,10 @@ export function AcompanhamentoItemPage() {
       q: buscaAtividade || undefined,
       projetoId: projetoId || undefined,
       status: filterStatusAtiv || undefined,
+      dataInicio: filterDataInicioAtiv || undefined,
+      dataFim: filterDataFimAtiv || undefined,
     }).then(setAtividadesResultado).catch(() => {});
-  }, [buscaAtividade, projetoId, filterStatusAtiv]);
+  }, [buscaAtividade, projetoId, filterStatusAtiv, filterDataInicioAtiv, filterDataFimAtiv]);
 
   useEffect(() => {
     if (tab === 'atividade') buscarAtividades();
@@ -294,6 +302,16 @@ export function AcompanhamentoItemPage() {
                       <option key={t.id} value={t.id}>{t.nome}</option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Data Inicio</label>
+                  <input type="date" value={filterDataInicio} onChange={(e) => setFilterDataInicio(e.target.value)}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Data Fim</label>
+                  <input type="date" value={filterDataFim} onChange={(e) => setFilterDataFim(e.target.value)}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
                 </div>
               </div>
 
@@ -550,6 +568,16 @@ export function AcompanhamentoItemPage() {
                     <option value="CONCLUIDA">Concluida</option>
                     <option value="CANCELADA">Cancelada</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Data Inicio</label>
+                  <input type="date" value={filterDataInicioAtiv} onChange={(e) => setFilterDataInicioAtiv(e.target.value)}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Data Fim</label>
+                  <input type="date" value={filterDataFimAtiv} onChange={(e) => setFilterDataFimAtiv(e.target.value)}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
                 </div>
                 <div className="flex-1 min-w-[200px]">
                   <label className="block text-xs font-medium text-slate-500 mb-1">Buscar atividade</label>

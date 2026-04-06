@@ -4,11 +4,13 @@ import { horarioService } from '../../services/horario.service';
 import { dashboardService } from '../../services/dashboard.service';
 import { Clock, Save, Trash2, Plus, Settings, Pencil, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { HorarioTrabalho, TecnicoResumo } from '../../types';
+import { useToast } from '../../components/Toast';
 
 type SortKey = 'nome' | 'expediente' | 'almoco';
 type SortDir = 'asc' | 'desc';
 
 export function HorariosTrabalhoPage() {
+  const { confirm } = useToast();
   const [, setDefaultHorario] = useState<HorarioTrabalho | null>(null);
   const [personalizados, setPersonalizados] = useState<HorarioTrabalho[]>([]);
   const [tecnicos, setTecnicos] = useState<TecnicoResumo[]>([]);
@@ -138,7 +140,7 @@ export function HorariosTrabalhoPage() {
   };
 
   const remover = async (usuarioId: string) => {
-    if (!confirm('Remover horario personalizado? O tecnico usara o padrao do sistema.')) return;
+    if (!await confirm('Remover Horario', 'Remover horario personalizado? O tecnico usara o padrao do sistema.', { variant: 'danger' })) return;
     try {
       await horarioService.remove(usuarioId);
       carregar();

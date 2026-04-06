@@ -53,7 +53,7 @@ export class CompraService {
   findAllNotasFiscais(filters: {
     fornecedorId?: string;
     status?: string;
-    departamentoId?: string;
+    centroCustoId?: string;
     projetoId?: string;
     dataInicio?: string;
     dataFim?: string;

@@ -181,7 +181,7 @@ export function ProjetoDetalhePage() {
   const canManage = (isGestorOrAdmin || isMembro) && Boolean(gestaoTiRole);
   const canAddAtividade = canManage;
 
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('subprojetos');
   const [statusChanging, setStatusChanging] = useState(false);
@@ -338,7 +338,7 @@ export function ProjetoDetalhePage() {
                   </Link>
                   <button
                     onClick={async () => {
-                      if (!window.confirm(`Duplicar projeto "${projeto.nome}"?\n\nSera criada uma copia com equipe, fases, custos, riscos e cotacoes. Status sera PLANEJAMENTO.`)) return;
+                      if (!await confirm('Duplicar Projeto', `Duplicar projeto "${projeto.nome}"?\n\nSera criada uma copia com equipe, fases, custos, riscos e cotacoes. Status sera PLANEJAMENTO.`)) return;
                       try {
                         const novo = await projetoService.duplicar(projeto.id);
                         navigate(`/gestao-ti/projetos/${novo.id}`);
@@ -2223,7 +2223,7 @@ function TabAnexos({ projetoId, canAdd, canManage }: { projetoId: string; canAdd
 
 // --- Tab Chamados ---
 function TabChamados({ projetoId, canManage }: { projetoId: string; canManage: boolean }) {
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
   const [itens, setItens] = useState<Chamado[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -2237,7 +2237,7 @@ function TabChamados({ projetoId, canManage }: { projetoId: string; canManage: b
   }
 
   async function handleDesvincular(chamadoId: string) {
-    if (!confirm('Desvincular este chamado do projeto?')) return;
+    if (!await confirm('Desvincular Chamado', 'Desvincular este chamado do projeto?', { variant: 'warning' })) return;
     try {
       await projetoService.desvincularChamado(projetoId, chamadoId);
       toast('success', 'Chamado desvinculado');
@@ -2315,7 +2315,7 @@ function TabChamados({ projetoId, canManage }: { projetoId: string; canManage: b
 
 // --- Tab Usuarios-Chave ---
 function TabUsuariosChave({ projetoId, canManage, onEditingChange }: { projetoId: string; canManage: boolean; onEditingChange?: (editing: boolean) => void }) {
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
   const [itens, setItens] = useState<UsuarioChaveProjeto[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -2362,7 +2362,7 @@ function TabUsuariosChave({ projetoId, canManage, onEditingChange }: { projetoId
   }
 
   async function handleRemove(ucId: string) {
-    if (!confirm('Desativar este usuario-chave?')) return;
+    if (!await confirm('Desativar Usuario-Chave', 'Desativar este usuario-chave?', { variant: 'warning' })) return;
     try {
       await projetoService.removerUsuarioChave(projetoId, ucId);
       toast('success', 'Usuario-chave desativado');
@@ -2972,7 +2972,7 @@ function TabNFsProjeto({ projetoId }: { projetoId: string }) {
                 <th className="px-6 py-2 text-center">Qtde</th>
                 <th className="px-6 py-2 text-right">Valor Unit.</th>
                 <th className="px-6 py-2 text-right">Valor Total</th>
-                <th className="px-6 py-2">Departamento</th>
+                <th className="px-6 py-2">Centro de Custo</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -2985,7 +2985,7 @@ function TabNFsProjeto({ projetoId }: { projetoId: string }) {
                   <td className="px-6 py-2 text-sm text-center">{item.quantidade}</td>
                   <td className="px-6 py-2 text-sm text-right">R$ {Number(item.valorUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                   <td className="px-6 py-2 text-sm font-medium text-right">R$ {Number(item.valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                  <td className="px-6 py-2 text-sm text-slate-600">{item.departamento.nome}</td>
+                  <td className="px-6 py-2 text-sm text-slate-600">{item.centroCusto ? `${item.centroCusto.codigo} - ${item.centroCusto.nome}` : '-'}</td>
                 </tr>
               ))}
             </tbody>

@@ -26,9 +26,9 @@ export class NotaFiscalItemDto {
   @Min(0.01, { message: 'Valor unitario deve ser maior que zero' })
   valorUnitario: number;
 
-  @IsString({ message: 'Departamento obrigatorio' })
-  @IsNotEmpty({ message: 'Departamento obrigatorio' })
-  departamentoId: string;
+  @IsString({ message: 'Centro de custo obrigatorio' })
+  @IsNotEmpty({ message: 'Centro de custo obrigatorio' })
+  centroCustoId: string;
 
   @IsOptional()
   @IsString()
@@ -47,6 +47,10 @@ export class CreateNotaFiscalDto {
 
   @IsDateString({}, { message: 'Data de lancamento invalida' })
   dataLancamento: string;
+
+  @IsOptional()
+  @IsDateString({}, { message: 'Data de vencimento invalida' })
+  dataVencimento?: string;
 
   @IsString({ message: 'Fornecedor obrigatorio' })
   @IsNotEmpty({ message: 'Fornecedor obrigatorio' })
@@ -75,6 +79,10 @@ export class UpdateNotaFiscalDto {
   @IsOptional()
   @IsDateString()
   dataLancamento?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dataVencimento?: string;
 
   @IsOptional()
   @IsString()

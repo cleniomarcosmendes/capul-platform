@@ -87,6 +87,7 @@ model CentroCusto {
 
   rateioTemplateItens RateioTemplateItem[]
   parcelaRateioItens  ParcelaRateioItem[]
+  notaFiscalItens     NotaFiscalItem[]
 
   @@map("centros_custo")
   @@schema("core")
@@ -114,7 +115,6 @@ model Departamento {
 
   ativos          Ativo[]
   chamados        Chamado[]
-  notaFiscalItens NotaFiscalItem[]
 
   @@map("departamentos")
   @@schema("core")
@@ -2049,6 +2049,7 @@ model NotaFiscal {
   id           String            @id @default(uuid())
   numero       String            @db.VarChar(20)
   dataLancamento  DateTime          @map("data_lancamento")
+  dataVencimento  DateTime?         @map("data_vencimento")
   status       StatusNotaFiscal  @default(REGISTRADA)
   observacao   String?
   valorTotal   Decimal           @default(0) @map("valor_total") @db.Decimal(12, 2)
@@ -2091,8 +2092,8 @@ model NotaFiscalItem {
   produtoId String        @map("produto_id")
   produto   ProdutoConfig @relation(fields: [produtoId], references: [id])
 
-  departamentoId String       @map("departamento_id")
-  departamento   Departamento @relation(fields: [departamentoId], references: [id])
+  centroCustoId String      @map("centro_custo_id")
+  centroCusto   CentroCusto @relation(fields: [centroCustoId], references: [id])
 
   projetoId String?  @map("projeto_id")
   projeto   Projeto? @relation(fields: [projetoId], references: [id])
@@ -2100,7 +2101,7 @@ model NotaFiscalItem {
   @@index([notaFiscalId])
   @@index([produtoId])
   @@index([projetoId])
-  @@index([departamentoId])
+  @@index([centroCustoId])
   @@map("nota_fiscal_itens")
   @@schema("gestao_ti")
 }

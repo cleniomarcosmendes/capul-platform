@@ -12,7 +12,7 @@ type SortDir = 'asc' | 'desc';
 export function DepartamentosPage() {
   const { usuario, gestaoTiRole } = useAuth();
   const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
 
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [loading, setLoading] = useState(true);
@@ -240,7 +240,7 @@ export function DepartamentosPage() {
                                 {depto.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
                               </button>
                               <button onClick={async () => {
-                                if (!confirm(`Excluir departamento "${depto.nome}"?`)) return;
+                                if (!await confirm('Excluir Departamento', `Excluir departamento "${depto.nome}"?`, { variant: 'danger' })) return;
                                 try { await coreService.excluirDepartamento(depto.id); carregar(); toast('success', 'Departamento excluido'); }
                                 catch (err: unknown) { toast('error', (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir'); }
                               }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">
