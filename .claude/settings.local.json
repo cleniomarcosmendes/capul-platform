@@ -1150,7 +1150,8 @@
       "Read(//mnt/c/meus_projetos/capul-platform/**)",
       "Bash(netstat -tlnp)",
       "Bash(docker stop:*)",
-      "Bash(docker rm:*)"
+      "Bash(docker rm:*)",
+      "Bash(timeout 30 npm run build)"
     ]
   }
 }

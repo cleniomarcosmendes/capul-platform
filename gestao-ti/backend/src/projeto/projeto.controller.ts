@@ -144,6 +144,13 @@ export class ProjetoController {
     return this.service.duplicar(id, user.sub);
   }
 
+  // --- Visao Geral ---
+
+  @Get(':id/visao-geral')
+  visaoGeral(@Param('id') id: string) {
+    return this.service.visaoGeral(id);
+  }
+
   // --- Membros ---
 
   @Get(':id/membros')
@@ -537,12 +544,20 @@ export class ProjetoController {
   async downloadAnexo(
     @Param('id') id: string,
     @Param('anexoId') anexoId: string,
+    @Query('inline') inline: string,
     @Res() res: express.Response,
   ) {
     const { filePath, anexo } = await this.service.getAnexoFile(id, anexoId);
+    const normalizedPath = path.resolve(filePath);
+    if (!normalizedPath.startsWith(path.resolve(PROJETO_UPLOADS_DIR))) {
+      throw new BadRequestException('Caminho de arquivo invalido');
+    }
+    const inlineMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+    const canInline = inline === '1' && inlineMimes.includes(anexo.mimeType || '');
     res.setHeader('Content-Type', anexo.mimeType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(anexo.nomeOriginal || anexo.titulo)}"`);
-    const stream = fs.createReadStream(filePath);
+    res.setHeader('Content-Disposition', `${canInline ? 'inline' : 'attachment'}; filename="${encodeURIComponent(anexo.nomeOriginal || anexo.titulo)}"`);
+    const stream = fs.createReadStream(normalizedPath);
+    stream.on('error', () => { if (!res.headersSent) res.status(404).send('Arquivo nao encontrado'); });
     stream.pipe(res);
   }
 
@@ -786,14 +801,21 @@ export class ProjetoController {
     @Param('id') id: string,
     @Param('pid') pid: string,
     @Param('anexoId') anexoId: string,
+    @Query('inline') inline: string,
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
     @Res() res: express.Response,
   ) {
     const { anexo, filePath } = await this.service.downloadAnexoPendencia(id, pid, anexoId, user.sub, role);
-    res.setHeader('Content-Type', anexo.mimeType);
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(anexo.nomeOriginal)}"`);
-    res.sendFile(filePath);
+    const normalizedPath = path.resolve(filePath);
+    if (!normalizedPath.startsWith(path.resolve(PENDENCIA_UPLOADS_DIR))) {
+      throw new BadRequestException('Caminho de arquivo invalido');
+    }
+    const inlineMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+    const canInline = inline === '1' && inlineMimes.includes(anexo.mimeType);
+    res.setHeader('Content-Type', anexo.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `${canInline ? 'inline' : 'attachment'}; filename="${encodeURIComponent(anexo.nomeOriginal)}"`);
+    res.sendFile(normalizedPath);
   }
 
   @Delete(':id/pendencias/:pid/anexos/:anexoId')

@@ -23,6 +23,7 @@ import type {
   InteracaoPendencia,
   StatusPendencia,
   PrioridadePendencia,
+  VisaoGeralProjeto,
 } from '../types';
 
 interface ProjetoFilters {
@@ -116,6 +117,12 @@ export const projetoService = {
 
   async removerMembro(id: string, membroId: string): Promise<void> {
     await gestaoApi.delete(`/projetos/${id}/membros/${membroId}`);
+  },
+
+  // Visao Geral
+  async visaoGeral(id: string): Promise<VisaoGeralProjeto> {
+    const { data } = await gestaoApi.get(`/projetos/${id}/visao-geral`);
+    return data;
   },
 
   // Fases
@@ -304,6 +311,12 @@ export const projetoService = {
     document.body.removeChild(a);
   },
 
+  async abrirAnexo(id: string, anexoId: string, mimeType: string): Promise<void> {
+    const { data } = await gestaoApi.get(`/projetos/${id}/anexos/${anexoId}/download`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([data], { type: mimeType }));
+    window.open(url, '_blank');
+  },
+
   async removerAnexo(id: string, anexoId: string): Promise<void> {
     await gestaoApi.delete(`/projetos/${id}/anexos/${anexoId}`);
   },
@@ -432,6 +445,12 @@ export const projetoService = {
       responseType: 'blob',
     });
     return data;
+  },
+
+  async abrirAnexoPendencia(id: string, pid: string, anexoId: string, mimeType: string): Promise<void> {
+    const { data } = await gestaoApi.get(`/projetos/${id}/pendencias/${pid}/anexos/${anexoId}/download`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([data], { type: mimeType }));
+    window.open(url, '_blank');
   },
 
   async removerAnexoPendencia(id: string, pid: string, anexoId: string): Promise<void> {

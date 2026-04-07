@@ -157,6 +157,7 @@ export class ContratoParcelaService {
       data: {
         status: 'PENDENTE',
         dataPagamento: null,
+        notaFiscal: '-',
       },
     });
 

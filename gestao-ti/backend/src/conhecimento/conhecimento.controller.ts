@@ -117,12 +117,21 @@ export class ConhecimentoController {
   async downloadAnexo(
     @Param('id') id: string,
     @Param('anexoId') anexoId: string,
+    @Query('inline') inline: string,
     @Res() res: express.Response,
   ) {
     const { filePath, anexo } = await this.service.getAnexoFile(id, anexoId);
-    res.setHeader('Content-Type', anexo.mimeType);
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(anexo.nomeOriginal)}"`);
-    const stream = fs.createReadStream(filePath);
+    // Protecao contra path traversal
+    const normalizedPath = path.resolve(filePath);
+    if (!normalizedPath.startsWith(path.resolve(UPLOADS_DIR))) {
+      throw new BadRequestException('Caminho de arquivo invalido');
+    }
+    const inlineMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+    const canInline = inline === '1' && inlineMimes.includes(anexo.mimeType);
+    res.setHeader('Content-Type', anexo.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `${canInline ? 'inline' : 'attachment'}; filename="${encodeURIComponent(anexo.nomeOriginal)}"`);
+    const stream = fs.createReadStream(normalizedPath);
+    stream.on('error', () => { if (!res.headersSent) res.status(404).send('Arquivo nao encontrado'); });
     stream.pipe(res);
   }
 

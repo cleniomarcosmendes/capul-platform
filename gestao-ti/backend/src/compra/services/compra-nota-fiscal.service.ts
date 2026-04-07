@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CreateNotaFiscalDto, UpdateNotaFiscalDto } from '../dto/create-nota-fiscal.dto.js';
+import * as path from 'path';
+import * as fs from 'fs';
 
 const NF_INCLUDE = {
   fornecedor: true,
@@ -276,5 +278,52 @@ export class CompraNotaFiscalService {
       },
       include: NF_INCLUDE,
     });
+  }
+
+  // --- Anexos ---
+
+  async listAnexos(nfId: string) {
+    return this.prisma.anexoNotaFiscal.findMany({
+      where: { notaFiscalId: nfId },
+      include: { usuario: { select: { id: true, nome: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async addAnexo(nfId: string, file: Express.Multer.File, userId: string) {
+    const nf = await this.prisma.notaFiscal.findUnique({ where: { id: nfId } });
+    if (!nf) throw new NotFoundException('Nota fiscal nao encontrada');
+    return this.prisma.anexoNotaFiscal.create({
+      data: {
+        nomeOriginal: file.originalname,
+        nomeArquivo: file.filename,
+        mimeType: file.mimetype,
+        tamanho: file.size,
+        notaFiscalId: nfId,
+        usuarioId: userId,
+      },
+      include: { usuario: { select: { id: true, nome: true } } },
+    });
+  }
+
+  async getAnexoFile(nfId: string, anexoId: string) {
+    const anexo = await this.prisma.anexoNotaFiscal.findFirst({
+      where: { id: anexoId, notaFiscalId: nfId },
+    });
+    if (!anexo) throw new NotFoundException('Anexo nao encontrado');
+    const filePath = path.join(process.cwd(), 'uploads', 'notas-fiscais', anexo.nomeArquivo);
+    if (!fs.existsSync(filePath)) throw new NotFoundException('Arquivo nao encontrado no disco');
+    return { filePath, anexo };
+  }
+
+  async removeAnexo(nfId: string, anexoId: string) {
+    const anexo = await this.prisma.anexoNotaFiscal.findFirst({
+      where: { id: anexoId, notaFiscalId: nfId },
+    });
+    if (!anexo) throw new NotFoundException('Anexo nao encontrado');
+    const filePath = path.join(process.cwd(), 'uploads', 'notas-fiscais', anexo.nomeArquivo);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    await this.prisma.anexoNotaFiscal.delete({ where: { id: anexoId } });
+    return { deleted: true };
   }
 }

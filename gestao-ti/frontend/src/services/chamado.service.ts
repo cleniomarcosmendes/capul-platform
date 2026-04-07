@@ -113,6 +113,10 @@ export const chamadoService = {
     return data;
   },
 
+  async excluir(id: string): Promise<void> {
+    await gestaoApi.delete(`/chamados/${id}`);
+  },
+
   async avaliar(id: string, nota: number, comentario?: string): Promise<Chamado> {
     const { data } = await gestaoApi.post(`/chamados/${id}/avaliar`, { nota, comentario });
     return data;
@@ -143,6 +147,15 @@ export const chamadoService = {
     a.download = nomeOriginal;
     a.click();
     window.URL.revokeObjectURL(url);
+  },
+
+  async abrirAnexo(id: string, anexoId: string, mimeType: string): Promise<void> {
+    const { data } = await gestaoApi.get(`/chamados/${id}/anexos/${anexoId}/download?inline=1`, {
+      responseType: 'blob',
+    });
+    const blob = new Blob([data], { type: mimeType });
+    const url = window.URL.createObjectURL(blob);
+    window.open(url, '_blank');
   },
 
   async removerAnexo(id: string, anexoId: string): Promise<void> {

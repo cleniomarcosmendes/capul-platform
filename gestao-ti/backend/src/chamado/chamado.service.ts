@@ -87,6 +87,10 @@ export class ChamadoService {
     return this.core.cancelar(id, user, role);
   }
 
+  async excluir(id: string, user: JwtPayload, role: string) {
+    return this.core.excluir(id, user, role);
+  }
+
   async avaliar(id: string, dto: CsatDto, user: JwtPayload) {
     return this.core.avaliar(id, dto, user);
   }

@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { compraService } from '../../services/compra.service';
 import { useToast } from '../../components/Toast';
-import { ArrowLeft, Pencil, Copy, FileText, FolderKanban } from 'lucide-react';
+import { ArrowLeft, Pencil, Copy, FileText, FolderKanban, Paperclip, Download, Trash2, Upload } from 'lucide-react';
 import { formatDateBR, formatDateTimeBR } from '../../utils/date';
 import type { NotaFiscal } from '../../types';
 
@@ -30,6 +30,9 @@ export function NotaFiscalDetalhePage() {
 
   const [nf, setNf] = useState<NotaFiscal | null>(null);
   const [loading, setLoading] = useState(true);
+  const [anexos, setAnexos] = useState<{ id: string; nomeOriginal: string; mimeType: string; tamanho: number; createdAt: string; usuario: { id: string; nome: string } }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (id) carregar();
@@ -38,11 +41,41 @@ export function NotaFiscalDetalhePage() {
   async function carregar() {
     setLoading(true);
     try {
-      setNf(await compraService.buscarNotaFiscal(id!));
+      const [nfData, anexosData] = await Promise.all([
+        compraService.buscarNotaFiscal(id!),
+        compraService.listarAnexosNF(id!),
+      ]);
+      setNf(nfData);
+      setAnexos(anexosData);
     } catch {
       toast('error', 'Erro ao carregar nota fiscal');
     }
     setLoading(false);
+  }
+
+  async function handleUploadAnexo(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files?.length || !nf) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(e.target.files)) {
+        const novo = await compraService.uploadAnexoNF(nf.id, file);
+        setAnexos((prev) => [novo, ...prev]);
+      }
+      toast('success', 'Arquivo(s) anexado(s)');
+    } catch { toast('error', 'Erro ao anexar arquivo'); }
+    setUploading(false);
+    e.target.value = '';
+  }
+
+  async function handleRemoveAnexo(anexoId: string) {
+    if (!nf) return;
+    const ok = await confirm('Remover Anexo', 'Deseja remover este anexo?', { variant: 'danger' });
+    if (!ok) return;
+    try {
+      await compraService.removerAnexoNF(nf.id, anexoId);
+      setAnexos((prev) => prev.filter((a) => a.id !== anexoId));
+      toast('success', 'Anexo removido');
+    } catch { toast('error', 'Erro ao remover anexo'); }
   }
 
   async function handleAlterarStatus(status: string) {
@@ -278,6 +311,62 @@ export function NotaFiscalDetalhePage() {
               </tr>
             </tfoot>
           </table>
+        </div>
+
+        {/* Anexos */}
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mt-6">
+          <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-700 uppercase flex items-center gap-2">
+              <Paperclip className="w-4 h-4" /> Anexos ({anexos.length})
+            </h3>
+            {canManage && nf.status !== 'CANCELADA' && (
+              <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                className="flex items-center gap-1 text-sm text-capul-600 hover:text-capul-700 disabled:opacity-50">
+                <Upload className="w-4 h-4" /> {uploading ? 'Enviando...' : 'Anexar Arquivo'}
+              </button>
+            )}
+            <input ref={fileInputRef} type="file" className="hidden" multiple onChange={handleUploadAnexo} disabled={uploading} />
+          </div>
+          {anexos.length === 0 ? (
+            <p className="px-6 py-8 text-sm text-slate-400 text-center">Nenhum anexo</p>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {anexos.map((a) => (
+                <div key={a.id} className="px-6 py-3 flex items-center gap-3">
+                  <Paperclip className="w-4 h-4 text-slate-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <button
+                      onClick={() => {
+                        const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+                        if (viewable.includes(a.mimeType)) {
+                          compraService.abrirAnexoNF(nf.id, a.id, a.mimeType);
+                        } else {
+                          compraService.downloadAnexoNF(nf.id, a.id, a.nomeOriginal);
+                        }
+                      }}
+                      className="text-sm text-capul-700 hover:text-capul-900 hover:underline truncate text-left"
+                      title="Clique para abrir"
+                    >
+                      {a.nomeOriginal}
+                    </button>
+                    <p className="text-xs text-slate-400">
+                      {(a.tamanho / 1024).toFixed(0)} KB — {a.usuario.nome} — {new Date(a.createdAt).toLocaleString('pt-BR')}
+                    </p>
+                  </div>
+                  <button onClick={() => compraService.downloadAnexoNF(nf.id, a.id, a.nomeOriginal)}
+                    className="text-slate-400 hover:text-capul-600" title="Download">
+                    <Download className="w-4 h-4" />
+                  </button>
+                  {canManage && nf.status !== 'CANCELADA' && (
+                    <button onClick={() => handleRemoveAnexo(a.id)}
+                      className="text-slate-400 hover:text-red-500" title="Excluir">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </>

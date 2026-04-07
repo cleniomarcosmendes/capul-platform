@@ -527,11 +527,24 @@ export function PendenciaDetalhePage() {
                 <div key={a.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-4 py-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <Paperclip className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                    <span className="truncate text-sm text-slate-700">{a.nomeOriginal}</span>
+                    <button
+                      onClick={() => {
+                        const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+                        if (a.mimeType && viewable.includes(a.mimeType)) {
+                          projetoService.abrirAnexoPendencia(projetoId!, pendencia!.id, a.id, a.mimeType);
+                        } else {
+                          handleDownloadAnexo(a);
+                        }
+                      }}
+                      className="truncate text-sm text-capul-700 hover:text-capul-900 hover:underline text-left"
+                      title="Clique para abrir"
+                    >
+                      {a.nomeOriginal}
+                    </button>
                     <span className="text-xs text-slate-400 flex-shrink-0">({(a.tamanho / 1024).toFixed(0)} KB)</span>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
-                    <button onClick={() => handleDownloadAnexo(a)} className="text-capul-600 hover:text-capul-700">
+                    <button onClick={() => handleDownloadAnexo(a)} className="text-capul-600 hover:text-capul-700" title="Download">
                       <Download className="w-4 h-4" />
                     </button>
                     {canManage && (

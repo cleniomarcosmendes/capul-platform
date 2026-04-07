@@ -641,10 +641,8 @@ export class ExportService {
     const camposContrato: [string, string][] = [
       ['Contrato', `#${contrato.numero} — ${contrato.titulo}`],
       ['Fornecedor', fornecedorStr],
-      ['Produto', produtoStr],
       ['Tipo', contrato.tipoContrato ? contrato.tipoContrato.nome : '-'],
       ['Filial', contrato.filial ? `${contrato.filial.codigo} - ${contrato.filial.nomeFantasia}` : '-'],
-      ['Software', contrato.software?.nome || '-'],
       ['Valor Total', fmtCurrency(Number(contrato.valorTotal))],
       ['Vigencia', `${fmtDate(contrato.dataInicio)} a ${fmtDate(contrato.dataFim)}`],
     ];
@@ -666,12 +664,8 @@ export class ExportService {
       ['Descricao', parcela.descricao || '-'],
       ['Valor', fmtCurrency(Number(parcela.valor))],
       ['Vencimento', fmtDate(parcela.dataVencimento)],
-      ['Status', parcela.status],
       ['Nota Fiscal', parcela.notaFiscal || '-'],
     ];
-    if (parcela.dataPagamento) {
-      camposParcela.push(['Pago em', fmtDate(parcela.dataPagamento)]);
-    }
 
     camposParcela.forEach(([label, value]) => {
       doc.font('Helvetica-Bold').fontSize(9).fillColor(MUTED).text(label, 50, y, { width: 100 });

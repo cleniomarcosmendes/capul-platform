@@ -34,6 +34,8 @@ const ALLOWED_MIMES = [
   'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'text/plain', 'text/csv',
   'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
+  'application/x-pkcs12', 'application/pkcs12',
+  'application/octet-stream',
 ];
 
 @Controller('chamados')
@@ -191,6 +193,16 @@ export class ChamadoController {
     return this.service.cancelar(id, user, role);
   }
 
+  @Delete(':id')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  excluir(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.excluir(id, user, role);
+  }
+
   @Patch(':id/vincular-projeto')
   @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
   vincularProjeto(
@@ -247,6 +259,7 @@ export class ChamadoController {
   async downloadAnexo(
     @Param('id') id: string,
     @Param('anexoId') anexoId: string,
+    @Query('inline') inline: string,
     @Res() res: express.Response,
   ) {
     const { filePath, anexo } = await this.service.getAnexoFile(id, anexoId);
@@ -263,8 +276,12 @@ export class ChamadoController {
       ? anexo.mimeType
       : 'application/octet-stream';
 
+    // Tipos que podem ser visualizados inline no browser
+    const inlineMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+    const canInline = inline === '1' && inlineMimes.includes(mimeType);
+
     res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(anexo.nomeOriginal)}"`);
+    res.setHeader('Content-Disposition', `${canInline ? 'inline' : 'attachment'}; filename="${encodeURIComponent(anexo.nomeOriginal)}"`);
     const stream = fs.createReadStream(normalizedPath);
     stream.on('error', () => {
       if (!res.headersSent) res.status(404).send('Arquivo nao encontrado');

@@ -1040,6 +1040,35 @@ export interface ParcelaRateioProjetoView {
   };
 }
 
+// === Visao Geral Projeto ===
+
+export interface VisaoGeralAtividade {
+  id: string;
+  titulo: string;
+  status: StatusAtividade;
+  faseId: string | null;
+  dataInicio: string | null;
+  dataFimPrevista: string | null;
+  responsaveis: { usuario: { id: string; nome: string } }[];
+}
+
+export interface VisaoGeralPendencia {
+  id: string;
+  numero: number;
+  titulo: string;
+  status: string;
+  prioridade: string;
+  dataLimite: string | null;
+  faseId: string | null;
+  responsavel: { id: string; nome: string };
+}
+
+export interface VisaoGeralProjeto {
+  fases: FaseProjeto[];
+  atividades: VisaoGeralAtividade[];
+  pendencias: VisaoGeralPendencia[];
+}
+
 // === Ativo (CMDB) interfaces ===
 
 export interface Ativo {

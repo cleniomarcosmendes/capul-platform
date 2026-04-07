@@ -21,6 +21,7 @@ export function ChamadoCreatePage() {
   const projetoIdParam = searchParams.get('projetoId');
   const paradaIdParam = searchParams.get('paradaId');
   const osIdParam = searchParams.get('osId');
+  const duplicarDeParam = searchParams.get('duplicarDe');
   const { usuario, gestaoTiRole } = useAuth();
   const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
   const [projetoVinculado, setProjetoVinculado] = useState<Projeto | null>(null);
@@ -125,6 +126,25 @@ export function ChamadoCreatePage() {
       setDepartamentoId(usuario.departamento.id);
     }
   }, [isUsuarioFinal, usuario]);
+
+  // Duplicar chamado: carregar dados do chamado original
+  useEffect(() => {
+    if (!duplicarDeParam) return;
+    chamadoService.buscar(duplicarDeParam).then((c) => {
+      setTitulo(c.titulo);
+      setDescricao(c.descricao || '');
+      setEquipeAtualId(c.equipeAtualId);
+      setPrioridade(c.prioridade as Prioridade);
+      setVisibilidade(c.visibilidade as Visibilidade);
+      if (c.softwareId) setSoftwareId(c.softwareId);
+      if (c.softwareModuloId) setSoftwareModuloId(c.softwareModuloId);
+      if (c.softwareNome) setSoftwareNome(c.softwareNome);
+      if (c.moduloNome) setModuloNome(c.moduloNome);
+      if (c.catalogoServicoId) setCatalogoServicoId(c.catalogoServicoId);
+      if (c.ativoId) setAtivoId(c.ativoId);
+      if (c.ipMaquina) setIpMaquina(c.ipMaquina);
+    }).catch(() => {});
+  }, [duplicarDeParam]);
 
   // Recarregar departamentos quando filial muda
   useEffect(() => {

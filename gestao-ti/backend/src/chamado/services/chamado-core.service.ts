@@ -16,6 +16,8 @@ import { ChamadoTempoService } from './chamado-tempo.service.js';
 import { chamadoInclude } from './chamado.constants.js';
 import { isGestor } from '../../common/constants/roles.constant.js';
 import { StatusChamado, Visibilidade } from '@prisma/client';
+import * as path from 'path';
+import * as fs from 'fs';
 
 @Injectable()
 export class ChamadoCoreService {
@@ -851,5 +853,33 @@ export class ChamadoCoreService {
     }).catch((err) => console.error('Notificacao error:', err.message));
 
     return updated;
+  }
+
+  async excluir(id: string, user: JwtPayload, role: string) {
+    const rolesPermitidas = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
+    if (!rolesPermitidas.includes(role)) {
+      throw new ForbiddenException('Sem permissao para excluir chamados');
+    }
+
+    const chamado = await this.helpers.getChamadoOrFail(id);
+
+    if (chamado.status !== 'ABERTO') {
+      throw new BadRequestException('Somente chamados com status ABERTO podem ser excluidos');
+    }
+
+    // Remover anexos do disco
+    const anexos = await this.prisma.anexoChamado.findMany({ where: { chamadoId: id } });
+    const uploadsDir = path.join(process.cwd(), 'uploads', 'chamados');
+    for (const anexo of anexos) {
+      const filePath = path.join(uploadsDir, anexo.nomeArquivo);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
+    // Deletar registros dependentes e o chamado (cascade cuida de historicos, anexos, colaboradores, registros tempo)
+    await this.prisma.chamado.delete({ where: { id } });
+
+    return { deleted: true, numero: chamado.numero };
   }
 }

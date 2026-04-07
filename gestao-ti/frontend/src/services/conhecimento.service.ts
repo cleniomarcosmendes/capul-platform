@@ -66,6 +66,12 @@ export const conhecimentoService = {
     window.URL.revokeObjectURL(url);
   },
 
+  async abrirAnexo(artigoId: string, anexoId: string, mimeType: string): Promise<void> {
+    const { data } = await gestaoApi.get(`/conhecimento/${artigoId}/anexos/${anexoId}/download`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([data], { type: mimeType }));
+    window.open(url, '_blank');
+  },
+
   async removerAnexo(artigoId: string, anexoId: string): Promise<void> {
     await gestaoApi.delete(`/conhecimento/${artigoId}/anexos/${anexoId}`);
   },

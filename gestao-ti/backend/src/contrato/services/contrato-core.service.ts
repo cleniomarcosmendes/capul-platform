@@ -147,6 +147,10 @@ export class ContratoCoreService {
         fornecedor: dto.fornecedor,
         codigoFornecedor: dto.codigoFornecedor,
         lojaFornecedor: dto.lojaFornecedor,
+        fornecedorId: dto.fornecedorId,
+        codigoProduto: dto.codigoProduto,
+        descricaoProduto: dto.descricaoProduto,
+        produtoId: dto.produtoId,
         valorTotal: dto.valorTotal ?? 0,
         valorMensal: dto.valorMensal,
         dataInicio: this.parseDate(dto.dataInicio),
@@ -194,6 +198,10 @@ export class ContratoCoreService {
     if (dto.fornecedor !== undefined) data.fornecedor = dto.fornecedor;
     if (dto.codigoFornecedor !== undefined) data.codigoFornecedor = dto.codigoFornecedor;
     if (dto.lojaFornecedor !== undefined) data.lojaFornecedor = dto.lojaFornecedor;
+    if (dto.fornecedorId !== undefined) data.fornecedorId = dto.fornecedorId || null;
+    if (dto.codigoProduto !== undefined) data.codigoProduto = dto.codigoProduto;
+    if (dto.descricaoProduto !== undefined) data.descricaoProduto = dto.descricaoProduto;
+    if (dto.produtoId !== undefined) data.produtoId = dto.produtoId || null;
     if (dto.valorTotal !== undefined) data.valorTotal = dto.valorTotal;
     if (dto.valorMensal !== undefined) data.valorMensal = dto.valorMensal;
     if (dto.dataInicio !== undefined) data.dataInicio = this.parseDate(dto.dataInicio);

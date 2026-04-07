@@ -89,4 +89,18 @@ export class CompraService {
   duplicarNotaFiscal(id: string, userId: string, filialId: string, role: string) {
     return this.notaFiscalService.duplicar(id, userId, filialId, role);
   }
+
+  // Anexos NF
+  listAnexosNF(nfId: string) {
+    return this.notaFiscalService.listAnexos(nfId);
+  }
+  addAnexoNF(nfId: string, file: Express.Multer.File, userId: string) {
+    return this.notaFiscalService.addAnexo(nfId, file, userId);
+  }
+  getAnexoFileNF(nfId: string, anexoId: string) {
+    return this.notaFiscalService.getAnexoFile(nfId, anexoId);
+  }
+  removeAnexoNF(nfId: string, anexoId: string) {
+    return this.notaFiscalService.removeAnexo(nfId, anexoId);
+  }
 }

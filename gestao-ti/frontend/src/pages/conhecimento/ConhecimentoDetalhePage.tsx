@@ -219,7 +219,20 @@ export function ConhecimentoDetalhePage() {
                       <div key={a.id} className="flex items-center gap-3 bg-slate-50 rounded-lg px-4 py-3">
                         <Icon className="w-5 h-5 text-slate-400 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-slate-700 truncate">{a.nomeOriginal}</p>
+                          <button
+                            onClick={() => {
+                              const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+                              if (viewable.includes(a.mimeType)) {
+                                conhecimentoService.abrirAnexo(id!, a.id, a.mimeType);
+                              } else {
+                                conhecimentoService.downloadAnexo(id!, a.id, a.nomeOriginal);
+                              }
+                            }}
+                            className="text-sm text-amber-700 hover:text-amber-900 hover:underline truncate text-left"
+                            title="Clique para abrir"
+                          >
+                            {a.nomeOriginal}
+                          </button>
                           <p className="text-xs text-slate-400">
                             {formatFileSize(a.tamanho)} — {a.usuario?.nome || 'Usuario'} — {new Date(a.createdAt).toLocaleString('pt-BR')}
                           </p>

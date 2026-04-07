@@ -53,30 +53,46 @@ export function ChamadosListPage() {
   const [loading, setLoading] = useState(true);
   const [defaultsApplied, setDefaultsApplied] = useState(false);
   const isStaffTI = gestaoTiRole && ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'TECNICO', 'DESENVOLVEDOR', 'INFRAESTRUTURA', 'MANUTENCAO'].includes(gestaoTiRole);
-  const [filterStatus, setFilterStatus] = useState<StatusChamado | ''>('');
-  const [filterEquipe, setFilterEquipe] = useState('');
-  const [filterVisibilidade, setFilterVisibilidade] = useState<Visibilidade | ''>('');
-  const [meusChamados, setMeusChamados] = useState(false);
 
-  // Aplicar defaults de filtro quando o role estiver disponivel
+  // Restaurar filtros de sessionStorage (persistem ao navegar entre paginas)
+  const saved = sessionStorage.getItem('chamados_filtros');
+  const savedFilters = saved ? JSON.parse(saved) : null;
+
+  const [filterStatus, setFilterStatus] = useState<StatusChamado | ''>(savedFilters?.filterStatus ?? '');
+  const [filterEquipe, setFilterEquipe] = useState(savedFilters?.filterEquipe ?? '');
+  const [filterVisibilidade, setFilterVisibilidade] = useState<Visibilidade | ''>(savedFilters?.filterVisibilidade ?? '');
+  const [meusChamados, setMeusChamados] = useState(savedFilters?.meusChamados ?? false);
+
+  // Aplicar defaults de filtro quando o role estiver disponivel (somente se nao tem filtros salvos)
   useEffect(() => {
     if (gestaoTiRole && !defaultsApplied) {
-      if (isStaffTI) {
-        setFilterStatus('ATIVOS' as StatusChamado | '');
-        setMeusChamados(false);
-      } else if (gestaoTiRole !== 'USUARIO_FINAL') {
-        setMeusChamados(true);
+      if (!savedFilters) {
+        if (isStaffTI) {
+          setFilterStatus('ATIVOS' as StatusChamado | '');
+          setMeusChamados(false);
+        } else if (gestaoTiRole !== 'USUARIO_FINAL') {
+          setMeusChamados(true);
+        }
       }
       setDefaultsApplied(true);
     }
   }, [gestaoTiRole, isStaffTI, defaultsApplied]);
-  const [filterFilial, setFilterFilial] = useState<string>('');
-  const [filterDepartamento, setFilterDepartamento] = useState('');
-  const [filterTecnico, setFilterTecnico] = useState('');
-  const [filterDataInicio, setFilterDataInicio] = useState('');
-  const [filterDataFim, setFilterDataFim] = useState('');
-  const [pendentesAvaliacao, setPendentesAvaliacao] = useState(searchParams.get('pendentes') === '1');
-  const [busca, setBusca] = useState('');
+  const [filterFilial, setFilterFilial] = useState<string>(savedFilters?.filterFilial ?? '');
+  const [filterDepartamento, setFilterDepartamento] = useState(savedFilters?.filterDepartamento ?? '');
+  const [filterTecnico, setFilterTecnico] = useState(savedFilters?.filterTecnico ?? '');
+  const [filterDataInicio, setFilterDataInicio] = useState(savedFilters?.filterDataInicio ?? '');
+  const [filterDataFim, setFilterDataFim] = useState(savedFilters?.filterDataFim ?? '');
+  const [pendentesAvaliacao, setPendentesAvaliacao] = useState(searchParams.get('pendentes') === '1' || (savedFilters?.pendentesAvaliacao ?? false));
+  const [busca, setBusca] = useState(savedFilters?.busca ?? '');
+
+  // Salvar filtros no sessionStorage ao alterar
+  useEffect(() => {
+    sessionStorage.setItem('chamados_filtros', JSON.stringify({
+      filterStatus, filterEquipe, filterVisibilidade, meusChamados,
+      filterFilial, filterDepartamento, filterTecnico, filterDataInicio, filterDataFim,
+      pendentesAvaliacao, busca,
+    }));
+  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, filterDepartamento, filterTecnico, filterDataInicio, filterDataFim, pendentesAvaliacao, busca]);
 
   const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
 

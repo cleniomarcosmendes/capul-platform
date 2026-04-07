@@ -43,6 +43,9 @@ import type {
   PrioridadePendencia,
   NotaFiscalItemProjeto,
   ParcelaRateioProjetoView,
+  VisaoGeralProjeto,
+  VisaoGeralAtividade,
+  VisaoGeralPendencia,
 } from '../../types';
 
 const statusLabel: Record<string, string> = {
@@ -153,7 +156,7 @@ const prioridadeLabel: Record<string, string> = {
   BAIXA: 'Baixa', MEDIA: 'Media', ALTA: 'Alta', CRITICA: 'Critica',
 };
 
-type Tab = 'subprojetos' | 'equipe' | 'atividades' | 'financeiro' | 'riscos' | 'dependencias' | 'anexos' | 'chamados' | 'usuariosChave' | 'pendencias';
+type Tab = 'visaoGeral' | 'subprojetos' | 'equipe' | 'atividades' | 'financeiro' | 'riscos' | 'dependencias' | 'anexos' | 'chamados' | 'usuariosChave' | 'pendencias';
 
 const pendenciaStatusLabel: Record<string, string> = {
   ABERTA: 'Aberta', EM_ANDAMENTO: 'Em Andamento', AGUARDANDO_VALIDACAO: 'Aguardando Validacao', CONCLUIDA: 'Concluida', CANCELADA: 'Cancelada',
@@ -245,6 +248,7 @@ export function ProjetoDetalhePage() {
   const isRestrictedRole = gestaoTiRole === 'USUARIO_CHAVE' || gestaoTiRole === 'TERCEIRIZADO';
 
   const allTabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { key: 'visaoGeral', label: 'Visao Geral', icon: Eye },
     { key: 'subprojetos', label: 'Sub-projetos', icon: FolderKanban },
     ...(showEquipeTab ? [{ key: 'equipe' as Tab, label: 'Equipe', icon: Users }] : []),
     { key: 'atividades', label: 'Atividades', icon: Clock },
@@ -425,6 +429,9 @@ export function ProjetoDetalhePage() {
         </div>
 
         {/* Tab Content */}
+        {tab === 'visaoGeral' && (
+          <TabVisaoGeral projetoId={projeto.id} />
+        )}
         {tab === 'subprojetos' && (
           <TabSubProjetos projeto={projeto} canManage={canManage} isRestrictedRole={isRestrictedRole} />
         )}
@@ -630,7 +637,7 @@ function TabEquipe({ projetoId, canManage, onEditingChange }: { projetoId: strin
 
 // --- Tab Atividades (Fases + Atividades + Registros de Tempo) ---
 function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGestor, onEditingChange }: { projetoId: string; isCompleto: boolean; canManage: boolean; canAdd: boolean; userId: string; isGestor: boolean; onEditingChange?: (editing: boolean) => void }) {
-  const { confirm } = useToast();
+  const { confirm, toast } = useToast();
   const [fases, setFases] = useState<FaseProjeto[]>([]);
   const [atividades, setAtividades] = useState<AtividadeProjeto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -679,6 +686,9 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   const [editAtivFaseId, setEditAtivFaseId] = useState('');
   const [editAtivResponsavelIds, setEditAtivResponsavelIds] = useState<string[]>([]);
   const [savingAtividade, setSavingAtividade] = useState(false);
+  // Modal resumo fase (ao alterar status de tarefa)
+  const [faseResumoModal, setFaseResumoModal] = useState<{ faseId: string; faseNome: string; faseStatus: string; todasFinalizadas: boolean; tarefas: { titulo: string; status: string; dataFimPrevista: string | null; responsaveis: string[] }[] } | null>(null);
+  const [aprovandoFase, setAprovandoFase] = useState(false);
   // Edicao de notas
   const [editingComentario, setEditingComentario] = useState<string | null>(null);
   const [editComentarioTexto, setEditComentarioTexto] = useState('');
@@ -851,7 +861,24 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     try { await projetoService.removerRegistroTempo(projetoId, registroId); if (expandedId) loadRegistros(expandedId); } catch { /* empty */ }
   }
   async function handleChangeStatus(atividadeId: string, status: string) {
-    try { await projetoService.atualizarAtividade(projetoId, atividadeId, { status }); loadAll(); } catch { /* empty */ }
+    try {
+      const result = await projetoService.atualizarAtividade(projetoId, atividadeId, { status });
+      loadAll();
+      if ((result as unknown as Record<string, unknown>).faseResumo) {
+        setFaseResumoModal((result as unknown as Record<string, unknown>).faseResumo as typeof faseResumoModal);
+      }
+    } catch { /* empty */ }
+  }
+  async function handleAprovarFaseFromResumo() {
+    if (!faseResumoModal) return;
+    setAprovandoFase(true);
+    try {
+      await projetoService.atualizarFase(projetoId, faseResumoModal.faseId, { status: 'APROVADA' as StatusFase });
+      toast('success', `Fase "${faseResumoModal.faseNome}" aprovada com sucesso`);
+      setFaseResumoModal(null);
+      loadAll();
+    } catch { toast('error', 'Erro ao aprovar fase'); }
+    setAprovandoFase(false);
   }
   async function handleChangeFase(atividadeId: string, faseId: string) {
     try { await projetoService.atualizarAtividade(projetoId, atividadeId, { faseId }); loadAll(); } catch { /* empty */ }
@@ -1485,7 +1512,351 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
       )}
 
     </div>
+
+    {/* Modal: Status da Fase ao alterar status de tarefa */}
+    {faseResumoModal && (() => {
+      const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+      const totalTarefas = faseResumoModal.tarefas.length;
+      const concluidas = faseResumoModal.tarefas.filter((t) => t.status === 'CONCLUIDA' || t.status === 'CANCELADA').length;
+      const progresso = totalTarefas > 0 ? Math.round((concluidas / totalTarefas) * 100) : 0;
+      const emAtraso = faseResumoModal.tarefas.filter((t) => t.dataFimPrevista && new Date(t.dataFimPrevista) < hoje && t.status !== 'CONCLUIDA' && t.status !== 'CANCELADA');
+      const headerBg = faseResumoModal.todasFinalizadas ? 'bg-green-50 border-green-200' : emAtraso.length > 0 ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200';
+      const headerIcon = faseResumoModal.todasFinalizadas ? <Check className="w-5 h-5 text-green-600" /> : emAtraso.length > 0 ? <AlertTriangle className="w-5 h-5 text-red-500" /> : <FolderKanban className="w-5 h-5 text-blue-600" />;
+      const headerText = faseResumoModal.todasFinalizadas ? 'Todas as tarefas da fase foram finalizadas!' : emAtraso.length > 0 ? `${emAtraso.length} tarefa(s) em atraso nesta fase` : 'Status da Fase';
+      return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setFaseResumoModal(null)}>
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl mx-4" onClick={(e) => e.stopPropagation()}>
+          <div className={`px-6 py-4 border-b rounded-t-xl ${headerBg}`}>
+            <div className="flex items-center gap-2">
+              {headerIcon}
+              <h3 className="text-base font-semibold text-slate-800">{headerText}</h3>
+            </div>
+            <div className="mt-2 flex items-center gap-3">
+              <p className="text-sm text-slate-600">Fase: <strong>{faseResumoModal.faseNome}</strong></p>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${faseStatusCores[faseResumoModal.faseStatus] || 'bg-slate-100 text-slate-600'}`}>{faseStatusLabel[faseResumoModal.faseStatus] || faseResumoModal.faseStatus}</span>
+            </div>
+            <div className="mt-3">
+              <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                <span>Progresso: {concluidas} de {totalTarefas} tarefas</span>
+                <span className="font-semibold">{progresso}%</span>
+              </div>
+              <div className="w-full bg-slate-200 rounded-full h-2">
+                <div className={`h-2 rounded-full transition-all ${progresso === 100 ? 'bg-green-500' : progresso > 50 ? 'bg-blue-500' : 'bg-amber-500'}`} style={{ width: `${progresso}%` }} />
+              </div>
+            </div>
+          </div>
+          <div className="px-6 py-4 max-h-80 overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-500 border-b">
+                  <th className="pb-2">Tarefa</th>
+                  <th className="pb-2">Responsavel</th>
+                  <th className="pb-2 text-center">Status</th>
+                  <th className="pb-2 text-right">Previsao</th>
+                </tr>
+              </thead>
+              <tbody>
+                {faseResumoModal.tarefas.map((t, i) => {
+                  const cfg = statusAtividadeConfig[t.status] || statusAtividadeConfig.PENDENTE;
+                  const atrasada = t.dataFimPrevista && new Date(t.dataFimPrevista) < hoje && t.status !== 'CONCLUIDA' && t.status !== 'CANCELADA';
+                  return (
+                    <tr key={i} className={`border-b border-slate-100 last:border-0 ${atrasada ? 'bg-red-50' : ''}`}>
+                      <td className="py-2 pr-2">
+                        <span className={atrasada ? 'text-red-700 font-medium' : 'text-slate-700'}>{t.titulo}</span>
+                      </td>
+                      <td className="py-2 pr-2 text-xs text-slate-500 max-w-[120px] truncate">{t.responsaveis.length > 0 ? t.responsaveis.join(', ') : '-'}</td>
+                      <td className="py-2 text-center">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                          {cfg.label}
+                        </span>
+                      </td>
+                      <td className="py-2 text-right">
+                        <span className={atrasada ? 'text-red-600 font-semibold' : 'text-slate-500'}>
+                          {t.dataFimPrevista ? formatDateBR(t.dataFimPrevista) : '-'}
+                        </span>
+                        {atrasada && <span className="ml-1 text-xs text-red-500" title="Em atraso">⚠</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+            <div className="text-xs text-slate-400">
+              {emAtraso.length > 0 && !faseResumoModal.todasFinalizadas && <span className="text-red-500 font-medium">{emAtraso.length} em atraso</span>}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setFaseResumoModal(null)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                Fechar
+              </button>
+              {canManage && faseResumoModal.todasFinalizadas && (
+                <button onClick={handleAprovarFaseFromResumo} disabled={aprovandoFase} className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg transition-colors flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  {aprovandoFase ? 'Aprovando...' : 'Aprovar Fase'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+      );
+    })()}
+
     </>
+  );
+}
+
+// --- Tab Visao Geral do Projeto ---
+function TabVisaoGeral({ projetoId }: { projetoId: string }) {
+  const [data, setData] = useState<VisaoGeralProjeto | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try { setData(await projetoService.visaoGeral(projetoId)); } catch { /* empty */ }
+      setLoading(false);
+    })();
+  }, [projetoId]);
+
+  if (loading) return <p className="text-slate-500 text-sm py-4">Carregando...</p>;
+  if (!data) return <p className="text-slate-500 text-sm py-4">Erro ao carregar visao geral</p>;
+
+  const { fases, atividades, pendencias } = data;
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+
+  // Agrupar atividades e pendencias por fase
+  const atividadesPorFase = new Map<string, VisaoGeralAtividade[]>();
+  const atividadesSemFase: VisaoGeralAtividade[] = [];
+  for (const a of atividades) {
+    if (a.faseId) {
+      const arr = atividadesPorFase.get(a.faseId) || [];
+      arr.push(a);
+      atividadesPorFase.set(a.faseId, arr);
+    } else {
+      atividadesSemFase.push(a);
+    }
+  }
+  const pendenciasPorFase = new Map<string, VisaoGeralPendencia[]>();
+  const pendenciasSemFase: VisaoGeralPendencia[] = [];
+  for (const p of pendencias) {
+    if (p.faseId) {
+      const arr = pendenciasPorFase.get(p.faseId) || [];
+      arr.push(p);
+      pendenciasPorFase.set(p.faseId, arr);
+    } else {
+      pendenciasSemFase.push(p);
+    }
+  }
+
+  // Totais gerais
+  const totalAtiv = atividades.length;
+  const concluidasAtiv = atividades.filter((a) => a.status === 'CONCLUIDA' || a.status === 'CANCELADA').length;
+  const progressoGeral = totalAtiv > 0 ? Math.round((concluidasAtiv / totalAtiv) * 100) : 0;
+  const atrasadas = atividades.filter((a) => a.dataFimPrevista && new Date(a.dataFimPrevista) < hoje && a.status !== 'CONCLUIDA' && a.status !== 'CANCELADA');
+  const pendenciasAbertas = pendencias.length;
+
+  const statusCfg: Record<string, { label: string; color: string; dot: string }> = {
+    PENDENTE: { label: 'Pendente', color: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
+    EM_ANDAMENTO: { label: 'Em Andamento', color: 'bg-blue-100 text-blue-700', dot: 'bg-blue-500' },
+    CONCLUIDA: { label: 'Concluida', color: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
+    CANCELADA: { label: 'Cancelada', color: 'bg-red-100 text-red-600', dot: 'bg-red-500' },
+  };
+
+  const pendStatusCfg: Record<string, string> = {
+    ABERTA: 'bg-blue-100 text-blue-700', EM_ANDAMENTO: 'bg-yellow-100 text-yellow-700',
+    AGUARDANDO_VALIDACAO: 'bg-orange-100 text-orange-700',
+  };
+  const pendPrioCfg: Record<string, string> = {
+    BAIXA: 'bg-green-100 text-green-700', MEDIA: 'bg-yellow-100 text-yellow-700',
+    ALTA: 'bg-orange-100 text-orange-700', URGENTE: 'bg-red-100 text-red-700',
+  };
+
+  function renderAtividadeRow(a: VisaoGeralAtividade) {
+    const cfg = statusCfg[a.status] || statusCfg.PENDENTE;
+    const atrasada = a.dataFimPrevista && new Date(a.dataFimPrevista) < hoje && a.status !== 'CONCLUIDA' && a.status !== 'CANCELADA';
+    return (
+      <tr key={a.id} className={`border-b border-slate-100 last:border-0 ${atrasada ? 'bg-red-50' : ''}`}>
+        <td className="py-1.5 pr-2">
+          <span className={atrasada ? 'text-red-700 font-medium text-sm' : 'text-slate-700 text-sm'}>{a.titulo}</span>
+        </td>
+        <td className="py-1.5 text-xs text-slate-500 max-w-[100px] truncate">{a.responsaveis.map((r) => r.usuario.nome).join(', ') || '-'}</td>
+        <td className="py-1.5 text-center">
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />{cfg.label}
+          </span>
+        </td>
+        <td className="py-1.5 text-right">
+          <span className={atrasada ? 'text-red-600 font-semibold text-xs' : 'text-slate-500 text-xs'}>
+            {a.dataFimPrevista ? formatDateBR(a.dataFimPrevista) : '-'}
+          </span>
+          {atrasada && <span className="ml-1 text-xs text-red-500">⚠</span>}
+        </td>
+      </tr>
+    );
+  }
+
+  function renderFaseCard(fase: FaseProjeto) {
+    const faseTarefas = atividadesPorFase.get(fase.id) || [];
+    const fasePendencias = pendenciasPorFase.get(fase.id) || [];
+    const faseConc = faseTarefas.filter((a) => a.status === 'CONCLUIDA' || a.status === 'CANCELADA').length;
+    const faseTotal = faseTarefas.length;
+    const faseProg = faseTotal > 0 ? Math.round((faseConc / faseTotal) * 100) : 0;
+    const faseAtrasadas = faseTarefas.filter((a) => a.dataFimPrevista && new Date(a.dataFimPrevista) < hoje && a.status !== 'CONCLUIDA' && a.status !== 'CANCELADA').length;
+
+    return (
+      <div key={fase.id} className="border border-slate-200 rounded-lg overflow-hidden">
+        {/* Fase header */}
+        <div className={`px-4 py-3 ${fase.status === 'APROVADA' ? 'bg-green-50' : fase.status === 'REJEITADA' ? 'bg-red-50' : faseAtrasadas > 0 ? 'bg-red-50' : 'bg-slate-50'} border-b border-slate-200`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-slate-800">{fase.ordem}. {fase.nome}</span>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${faseStatusCores[fase.status] || 'bg-slate-100 text-slate-600'}`}>{faseStatusLabel[fase.status] || fase.status}</span>
+            </div>
+            <div className="flex items-center gap-3 text-xs text-slate-500">
+              {fase.dataFimPrevista && <span>Prev: {formatDateBR(fase.dataFimPrevista)}</span>}
+              {faseAtrasadas > 0 && <span className="text-red-600 font-semibold">{faseAtrasadas} em atraso</span>}
+            </div>
+          </div>
+          {faseTotal > 0 && (
+            <div className="mt-2">
+              <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                <span>{faseConc}/{faseTotal} tarefas</span>
+                <span className="font-semibold">{faseProg}%</span>
+              </div>
+              <div className="w-full bg-slate-200 rounded-full h-1.5">
+                <div className={`h-1.5 rounded-full transition-all ${faseProg === 100 ? 'bg-green-500' : faseProg > 50 ? 'bg-blue-500' : 'bg-amber-500'}`} style={{ width: `${faseProg}%` }} />
+              </div>
+            </div>
+          )}
+        </div>
+        {/* Tarefas */}
+        {faseTarefas.length > 0 ? (
+          <div className="px-4 py-2">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left text-xs text-slate-400">
+                  <th className="pb-1 font-medium">Tarefa</th>
+                  <th className="pb-1 font-medium">Responsavel</th>
+                  <th className="pb-1 font-medium text-center">Status</th>
+                  <th className="pb-1 font-medium text-right">Previsao</th>
+                </tr>
+              </thead>
+              <tbody>{faseTarefas.map(renderAtividadeRow)}</tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="px-4 py-3 text-xs text-slate-400">Nenhuma tarefa nesta fase</p>
+        )}
+        {/* Pendencias da fase */}
+        {fasePendencias.length > 0 && (
+          <div className="px-4 py-2 border-t border-slate-100 bg-amber-50/50">
+            <p className="text-xs font-medium text-slate-500 mb-1">Pendencias abertas ({fasePendencias.length})</p>
+            {fasePendencias.map((p) => (
+              <div key={p.id} className="flex items-center gap-2 py-1 text-xs">
+                <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${pendPrioCfg[p.prioridade] || 'bg-slate-100'}`}>{p.prioridade}</span>
+                <span className="text-slate-700 flex-1 truncate">#{p.numero} {p.titulo}</span>
+                <span className="text-slate-500">{p.responsavel.nome}</span>
+                {p.dataLimite && new Date(p.dataLimite) < hoje && <span className="text-red-500 font-medium">⚠ Atrasada</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Resumo geral */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-200 rounded-lg p-4 text-center">
+          <p className="text-2xl font-bold text-slate-800">{totalAtiv}</p>
+          <p className="text-xs text-slate-500 mt-1">Total de Tarefas</p>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-lg p-4 text-center">
+          <p className={`text-2xl font-bold ${progressoGeral === 100 ? 'text-green-600' : 'text-blue-600'}`}>{progressoGeral}%</p>
+          <p className="text-xs text-slate-500 mt-1">Progresso Geral</p>
+        </div>
+        <div className={`bg-white border rounded-lg p-4 text-center ${atrasadas.length > 0 ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}>
+          <p className={`text-2xl font-bold ${atrasadas.length > 0 ? 'text-red-600' : 'text-slate-800'}`}>{atrasadas.length}</p>
+          <p className="text-xs text-slate-500 mt-1">Em Atraso</p>
+        </div>
+        <div className={`bg-white border rounded-lg p-4 text-center ${pendenciasAbertas > 0 ? 'border-amber-300 bg-amber-50' : 'border-slate-200'}`}>
+          <p className={`text-2xl font-bold ${pendenciasAbertas > 0 ? 'text-amber-600' : 'text-slate-800'}`}>{pendenciasAbertas}</p>
+          <p className="text-xs text-slate-500 mt-1">Pendencias Abertas</p>
+        </div>
+      </div>
+
+      {/* Barra de progresso geral */}
+      <div className="bg-white border border-slate-200 rounded-lg p-4">
+        <div className="flex items-center justify-between text-sm text-slate-600 mb-2">
+          <span className="font-medium">Progresso Geral do Projeto</span>
+          <span>{concluidasAtiv} de {totalAtiv} tarefas finalizadas</span>
+        </div>
+        <div className="w-full bg-slate-200 rounded-full h-3">
+          <div className={`h-3 rounded-full transition-all ${progressoGeral === 100 ? 'bg-green-500' : progressoGeral > 50 ? 'bg-blue-500' : 'bg-amber-500'}`} style={{ width: `${progressoGeral}%` }} />
+        </div>
+      </div>
+
+      {/* Fases */}
+      {fases.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-slate-700 mb-3">Fases do Projeto ({fases.length})</h3>
+          <div className="space-y-4">
+            {fases.map(renderFaseCard)}
+          </div>
+        </div>
+      )}
+
+      {/* Tarefas sem fase */}
+      {atividadesSemFase.length > 0 && (
+        <div className="border border-slate-200 rounded-lg overflow-hidden">
+          <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+            <span className="text-sm font-semibold text-slate-800">Tarefas sem fase ({atividadesSemFase.length})</span>
+          </div>
+          <div className="px-4 py-2">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left text-xs text-slate-400">
+                  <th className="pb-1 font-medium">Tarefa</th>
+                  <th className="pb-1 font-medium">Responsavel</th>
+                  <th className="pb-1 font-medium text-center">Status</th>
+                  <th className="pb-1 font-medium text-right">Previsao</th>
+                </tr>
+              </thead>
+              <tbody>{atividadesSemFase.map(renderAtividadeRow)}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Pendencias sem fase */}
+      {pendenciasSemFase.length > 0 && (
+        <div className="border border-amber-200 rounded-lg overflow-hidden">
+          <div className="px-4 py-3 bg-amber-50 border-b border-amber-200">
+            <span className="text-sm font-semibold text-slate-800">Pendencias sem fase vinculada ({pendenciasSemFase.length})</span>
+          </div>
+          <div className="px-4 py-2">
+            {pendenciasSemFase.map((p) => (
+              <div key={p.id} className="flex items-center gap-2 py-1.5 border-b border-slate-100 last:border-0 text-sm">
+                <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${pendPrioCfg[p.prioridade] || 'bg-slate-100'}`}>{p.prioridade}</span>
+                <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${pendStatusCfg[p.status] || 'bg-slate-100'}`}>{pendenciaStatusLabel[p.status] || p.status}</span>
+                <span className="text-slate-700 flex-1 truncate">#{p.numero} {p.titulo}</span>
+                <span className="text-xs text-slate-500">{p.responsavel.nome}</span>
+                {p.dataLimite && <span className={`text-xs ${new Date(p.dataLimite) < hoje ? 'text-red-600 font-semibold' : 'text-slate-500'}`}>{formatDateBR(p.dataLimite)}{new Date(p.dataLimite) < hoje && ' ⚠'}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {totalAtiv === 0 && pendenciasAbertas === 0 && (
+        <div className="text-center py-8 text-slate-400 text-sm">Nenhuma atividade ou pendencia registrada neste projeto</div>
+      )}
+    </div>
   );
 }
 
@@ -2191,7 +2562,14 @@ function TabAnexos({ projetoId, canAdd, canManage }: { projetoId: string; canAdd
               <div className="flex items-center gap-3">
                 <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{anexoTipoLabel[a.tipo]}</span>
                 {a.tipo === 'ARQUIVO' ? (
-                  <button onClick={() => handleDownload(a)} className="text-sm text-capul-600 hover:underline font-medium flex items-center gap-1">
+                  <button onClick={() => {
+                    const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+                    if (a.mimeType && viewable.includes(a.mimeType)) {
+                      projetoService.abrirAnexo(projetoId, a.id, a.mimeType);
+                    } else {
+                      handleDownload(a);
+                    }
+                  }} className="text-sm text-capul-600 hover:underline font-medium flex items-center gap-1">
                     <Download className="w-3 h-3" />
                     {a.nomeOriginal || a.titulo}
                   </button>

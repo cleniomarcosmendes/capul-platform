@@ -595,7 +595,20 @@ function TabGeral({ contrato, canManage, onReload, toast, confirm }: TabPropsWit
               <div key={a.id} className="px-6 py-3 flex items-center gap-3">
                 <FileText className="w-4 h-4 text-slate-400 shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-slate-700 truncate">{a.nomeOriginal}</p>
+                  <button
+                    onClick={() => {
+                      const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+                      if (viewable.includes(a.mimeType)) {
+                        contratoService.abrirAnexo(contrato.id, a.id, a.mimeType);
+                      } else {
+                        handleDownload(a);
+                      }
+                    }}
+                    className="text-sm text-capul-700 hover:text-capul-900 hover:underline truncate text-left"
+                    title="Clique para abrir"
+                  >
+                    {a.nomeOriginal}
+                  </button>
                   <p className="text-xs text-slate-400">{fmtFileSize(a.tamanho)} | {fmtDateTime(a.createdAt)}</p>
                 </div>
                 <button onClick={() => handleDownload(a)} className="text-slate-400 hover:text-capul-600" title="Download">

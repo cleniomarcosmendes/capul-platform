@@ -46,6 +46,16 @@ interface ListFilters {
   equipeId?: string;
 }
 
+interface AnexoNF {
+  id: string;
+  nomeOriginal: string;
+  nomeArquivo: string;
+  mimeType: string;
+  tamanho: number;
+  createdAt: string;
+  usuario: { id: string; nome: string };
+}
+
 interface EquipeResumo {
   id: string;
   nome: string;
@@ -147,5 +157,40 @@ export const compraService = {
   async listarEquipesParaCompras(): Promise<EquipeResumo[]> {
     const { data } = await gestaoApi.get('/compras/notas-fiscais/equipes-disponiveis');
     return data;
+  },
+
+  // Anexos NF
+  async listarAnexosNF(nfId: string): Promise<AnexoNF[]> {
+    const { data } = await gestaoApi.get(`/compras/notas-fiscais/${nfId}/anexos`);
+    return data;
+  },
+
+  async uploadAnexoNF(nfId: string, file: File): Promise<AnexoNF> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const { data } = await gestaoApi.post(`/compras/notas-fiscais/${nfId}/anexos`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
+
+  async downloadAnexoNF(nfId: string, anexoId: string, nomeOriginal: string): Promise<void> {
+    const { data } = await gestaoApi.get(`/compras/notas-fiscais/${nfId}/anexos/${anexoId}/download`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeOriginal;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  },
+
+  async abrirAnexoNF(nfId: string, anexoId: string, mimeType: string): Promise<void> {
+    const { data } = await gestaoApi.get(`/compras/notas-fiscais/${nfId}/anexos/${anexoId}/download?inline=1`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([data], { type: mimeType }));
+    window.open(url, '_blank');
+  },
+
+  async removerAnexoNF(nfId: string, anexoId: string): Promise<void> {
+    await gestaoApi.delete(`/compras/notas-fiscais/${nfId}/anexos/${anexoId}`);
   },
 };

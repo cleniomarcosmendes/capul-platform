@@ -115,6 +115,38 @@ export class ProjetoCoreService {
     return { ...projeto, isMembro };
   }
 
+  async visaoGeral(projetoId: string) {
+    await this.helpers.ensureProjetoExists(projetoId);
+
+    const [fases, atividades, pendencias] = await Promise.all([
+      this.prisma.faseProjeto.findMany({
+        where: { projetoId },
+        select: { id: true, nome: true, ordem: true, status: true, dataInicio: true, dataFimPrevista: true, dataFimReal: true },
+        orderBy: { ordem: 'asc' },
+      }),
+      this.prisma.atividadeProjeto.findMany({
+        where: { projetoId },
+        select: {
+          id: true, titulo: true, status: true, faseId: true,
+          dataInicio: true, dataFimPrevista: true,
+          responsaveis: { include: { usuario: { select: { id: true, nome: true } } } },
+        },
+        orderBy: { dataAtividade: 'asc' },
+      }),
+      this.prisma.pendenciaProjeto.findMany({
+        where: { projetoId, status: { notIn: ['CONCLUIDA', 'CANCELADA'] } },
+        select: {
+          id: true, numero: true, titulo: true, status: true, prioridade: true,
+          dataLimite: true, faseId: true,
+          responsavel: { select: { id: true, nome: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return { fases, atividades, pendencias };
+  }
+
   /**
    * Retorna IDs dos sub-projetos aos quais o usuario esta vinculado
    */

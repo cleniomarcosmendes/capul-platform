@@ -216,6 +216,12 @@ export const contratoService = {
     return data;
   },
 
+  async abrirAnexo(contratoId: string, anexoId: string, mimeType: string): Promise<void> {
+    const { data } = await gestaoApi.get(`/contratos/${contratoId}/anexos/${anexoId}/download`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([data], { type: mimeType }));
+    window.open(url, '_blank');
+  },
+
   async excluirAnexo(contratoId: string, anexoId: string): Promise<void> {
     await gestaoApi.delete(`/contratos/${contratoId}/anexos/${anexoId}`);
   },

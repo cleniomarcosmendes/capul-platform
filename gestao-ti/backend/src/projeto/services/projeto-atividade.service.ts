@@ -241,7 +241,48 @@ export class ProjetoAtividadeService {
       }
     }
 
-    return updated;
+    // Resumo da fase: retornar sempre que houver mudanca de status em tarefa vinculada a fase
+    let faseResumo: {
+      faseId: string;
+      faseNome: string;
+      faseStatus: string;
+      todasFinalizadas: boolean;
+      tarefas: { titulo: string; status: string; dataFimPrevista: string | null; responsaveis: string[] }[];
+    } | null = null;
+    if (dto.status && dto.status !== atividade.status && atividade.faseId) {
+      const fase = await this.prisma.faseProjeto.findUnique({ where: { id: atividade.faseId } });
+      if (fase) {
+        const todasTarefas = await this.prisma.atividadeProjeto.findMany({
+          where: { faseId: atividade.faseId },
+          select: {
+            titulo: true,
+            status: true,
+            dataFimPrevista: true,
+            responsaveis: { include: { usuario: { select: { nome: true } } } },
+          },
+          orderBy: { dataAtividade: 'asc' },
+        });
+        // Considerar a tarefa atual com o novo status (pois o update ja ocorreu)
+        const pendentes = todasTarefas.filter((t) =>
+          t.status === 'PENDENTE' || t.status === 'EM_ANDAMENTO',
+        ).length;
+        const todasFinalizadas = pendentes === 0 && fase.status !== 'APROVADA' && fase.status !== 'REJEITADA';
+        faseResumo = {
+          faseId: fase.id,
+          faseNome: fase.nome,
+          faseStatus: fase.status,
+          todasFinalizadas,
+          tarefas: todasTarefas.map((t) => ({
+            titulo: t.titulo,
+            status: t.status,
+            dataFimPrevista: t.dataFimPrevista ? t.dataFimPrevista.toISOString() : null,
+            responsaveis: t.responsaveis.map((r) => r.usuario.nome),
+          })),
+        };
+      }
+    }
+
+    return { ...updated, faseResumo };
   }
 
   async removeAtividade(projetoId: string, atividadeId: string) {

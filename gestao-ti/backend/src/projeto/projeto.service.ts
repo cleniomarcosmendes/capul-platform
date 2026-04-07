@@ -78,6 +78,10 @@ export class ProjetoService {
     return this.core.duplicar(id, userId);
   }
 
+  visaoGeral(projetoId: string) {
+    return this.core.visaoGeral(projetoId);
+  }
+
   // ============================================================
   // FASES
   // ============================================================

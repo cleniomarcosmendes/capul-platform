@@ -75,6 +75,7 @@ model Usuario {
   anexosConhecimento     AnexoConhecimento[]     @relation("AnexoConhecimentoUsuario")
   horarioTrabalho        HorarioTrabalho?        @relation("HorarioTrabalho")
   notasFiscaisCriadas    NotaFiscal[]            @relation("NotaFiscalCriadaPor")
+  anexosNotaFiscal       AnexoNotaFiscal[]       @relation("AnexoNFUsuario")
 
   @@map("usuarios")
   @@schema("core")
@@ -2068,7 +2069,8 @@ model NotaFiscal {
   equipeId String?   @map("equipe_id")
   equipe   EquipeTI? @relation(fields: [equipeId], references: [id])
 
-  itens NotaFiscalItem[]
+  itens  NotaFiscalItem[]
+  anexos AnexoNotaFiscal[]
 
   @@unique([numero, fornecedorId])
   @@index([fornecedorId])
@@ -2076,6 +2078,25 @@ model NotaFiscal {
   @@index([equipeId])
   @@index([dataLancamento])
   @@map("notas_fiscais")
+  @@schema("gestao_ti")
+}
+
+model AnexoNotaFiscal {
+  id           String   @id @default(uuid())
+  nomeOriginal String   @map("nome_original")
+  nomeArquivo  String   @map("nome_arquivo")
+  mimeType     String   @map("mime_type")
+  tamanho      Int
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  notaFiscalId String     @map("nota_fiscal_id")
+  notaFiscal   NotaFiscal @relation(fields: [notaFiscalId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("AnexoNFUsuario", fields: [usuarioId], references: [id])
+
+  @@index([notaFiscalId])
+  @@map("anexos_nota_fiscal")
   @@schema("gestao_ti")
 }
 

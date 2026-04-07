@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { chamadoService } from '../../services/chamado.service';
@@ -8,7 +8,7 @@ import {
   ArrowLeft, UserPlus, ArrowRightLeft, Send, CheckCircle,
   XCircle, RotateCcw, Lock, Star, Users, MessageSquare,
   Paperclip, Download, Trash2, FileText, Image, FileSpreadsheet, File,
-  Play, Square, Edit3, Check, X, Clock,
+  Play, Square, Edit3, Check, X, Clock, Copy,
 } from 'lucide-react';
 import { coreService } from '../../services/core.service';
 import { useToast } from '../../components/Toast';
@@ -58,6 +58,7 @@ function formatFileSize(bytes: number) {
 
 export function ChamadoDetalhePage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { usuario, gestaoTiRole } = useAuth();
   const { toast, confirm } = useToast();
 
@@ -237,6 +238,8 @@ export function ChamadoDetalhePage() {
   const canFechar = podeMovimentar && chamado.status === 'RESOLVIDO';
   const canReabrir = (podeMovimentar || isSolicitante) && (chamado.status === 'RESOLVIDO' || chamado.status === 'FECHADO');
   const canCancelar = isGestor && emAndamento;
+  const canExcluir = isTecnico && chamado.status === 'ABERTO';
+  const canDuplicar = isTecnico || isSolicitante;
   const canAvaliar = isSolicitante && (chamado.status === 'RESOLVIDO' || chamado.status === 'FECHADO') && !chamado.notaSatisfacao;
   const canComentar = !finalizado && (isSolicitante || (podeMovimentar && temTecnico));
   const canAnexar = !finalizado && (isSolicitante || podeMovimentar);
@@ -320,7 +323,20 @@ export function ChamadoDetalhePage() {
                           <div key={a.id} className="flex items-center gap-3 bg-slate-50 rounded-lg px-4 py-3">
                             <Icon className="w-5 h-5 text-slate-400 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm text-slate-700 truncate">{a.nomeOriginal}</p>
+                              <button
+                                onClick={() => {
+                                  const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+                                  if (viewable.includes(a.mimeType)) {
+                                    chamadoService.abrirAnexo(chamado.id, a.id, a.mimeType);
+                                  } else {
+                                    chamadoService.downloadAnexo(chamado.id, a.id, a.nomeOriginal);
+                                  }
+                                }}
+                                className="text-sm text-capul-700 hover:text-capul-900 hover:underline truncate text-left"
+                                title="Clique para abrir"
+                              >
+                                {a.nomeOriginal}
+                              </button>
                               <p className="text-xs text-slate-400">
                                 {formatFileSize(a.tamanho)} — {a.usuario.nome} — {new Date(a.createdAt).toLocaleString('pt-BR')}
                               </p>
@@ -400,6 +416,26 @@ export function ChamadoDetalhePage() {
                 <button onClick={async () => { if (await confirm('Cancelar Chamado', 'Tem certeza que deseja cancelar este chamado?', { variant: 'danger', confirmLabel: 'Sim, cancelar' })) runAction(() => chamadoService.cancelar(chamado.id)); }} disabled={actionLoading}
                   className="flex items-center gap-1.5 bg-red-100 text-red-700 px-3 py-2 rounded-lg text-sm hover:bg-red-200 disabled:opacity-50">
                   <XCircle className="w-4 h-4" /> Cancelar
+                </button>
+              )}
+              {canExcluir && (
+                <button onClick={async () => {
+                  if (await confirm('Excluir Chamado', `Deseja excluir permanentemente o chamado #${chamado.numero}? Esta acao nao pode ser desfeita.`, { variant: 'danger', confirmLabel: 'Sim, excluir' })) {
+                    try { await chamadoService.excluir(chamado.id); toast('success', `Chamado #${chamado.numero} excluido`); navigate('/gestao-ti/chamados'); } catch { toast('error', 'Erro ao excluir chamado'); }
+                  }
+                }} disabled={actionLoading}
+                  className="flex items-center gap-1.5 bg-red-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50">
+                  <Trash2 className="w-4 h-4" /> Excluir
+                </button>
+              )}
+              {canDuplicar && (
+                <button onClick={() => {
+                  const params = new URLSearchParams();
+                  params.set('duplicarDe', chamado.id);
+                  navigate(`/gestao-ti/chamados/novo?${params.toString()}`);
+                }}
+                  className="flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm hover:bg-slate-200">
+                  <Copy className="w-4 h-4" /> Duplicar
                 </button>
               )}
               {canAvaliar && (
