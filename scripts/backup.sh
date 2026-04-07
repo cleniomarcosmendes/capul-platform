@@ -4,14 +4,15 @@
 # SCRIPT DE BACKUP — CAPUL PLATFORM
 # =============================================================================
 # Uso: ./backup.sh [tipo]
-#   Tipos: full | app | db
+#   Tipos: full | app | db | uploads
 #   Sem argumento: executa backup completo (full)
 #
 # Exemplos:
 #   ./backup.sh           → backup completo
-#   ./backup.sh full      → backup completo
+#   ./backup.sh full      → backup completo (app + banco + uploads)
 #   ./backup.sh app       → somente aplicação
 #   ./backup.sh db        → somente banco de dados
+#   ./backup.sh uploads   → somente arquivos de upload (anexos)
 # =============================================================================
 
 set -e
@@ -26,7 +27,10 @@ LOG_DIR="/var/log/capul-platform"
 ENV_FILE="${APP_DIR}/.env"
 
 DB_CONTAINER="capul-db"
+APP_CONTAINER="capul-gestao-ti-api"
 DB_NAME="capul_platform"
+UPLOADS_VOLUME="uploads_data"
+UPLOADS_PATH="/app/uploads"
 
 BACKUP_RETENTION_DAYS=30
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
@@ -72,6 +76,7 @@ cleanup_old_backups() {
     log_info "Removendo backups com mais de ${BACKUP_RETENTION_DAYS} dias..."
     find "$BACKUP_DIR" -name "backup_*.tar.gz" -mtime +${BACKUP_RETENTION_DAYS} -delete 2>/dev/null || true
     find "$BACKUP_DIR" -name "backup_*.dump" -mtime +${BACKUP_RETENTION_DAYS} -delete 2>/dev/null || true
+    find "$BACKUP_DIR" -name "backup_uploads_*.tar.gz" -mtime +${BACKUP_RETENTION_DAYS} -delete 2>/dev/null || true
     log_success "Limpeza concluída"
 }
 
@@ -118,11 +123,42 @@ backup_app() {
     echo "$backup_file"
 }
 
+backup_uploads() {
+    local backup_file="${BACKUP_DIR}/backup_uploads_${TIMESTAMP}.tar.gz"
+
+    log_info "Iniciando backup dos arquivos de upload (anexos)..."
+
+    # Verificar se o container esta rodando
+    if ! docker ps --format "{{.Names}}" | grep -q "^${APP_CONTAINER}$"; then
+        log_warning "Container $APP_CONTAINER não está em execução. Tentando via volume direto..."
+        # Fallback: copiar via container temporário usando o volume
+        docker run --rm \
+            -v "${UPLOADS_VOLUME}:/data:ro" \
+            -v "${BACKUP_DIR}:/backup" \
+            alpine tar -czf "/backup/backup_uploads_${TIMESTAMP}.tar.gz" -C /data .
+    else
+        # Copiar via container em execução
+        docker exec "$APP_CONTAINER" tar -czf /tmp/uploads_backup.tar.gz -C "$UPLOADS_PATH" .
+        docker cp "${APP_CONTAINER}:/tmp/uploads_backup.tar.gz" "$backup_file"
+        docker exec "$APP_CONTAINER" rm -f /tmp/uploads_backup.tar.gz
+    fi
+
+    if [ -f "$backup_file" ]; then
+        local size
+        size=$(du -sh "$backup_file" | cut -f1)
+        log_success "Backup de uploads salvo: $backup_file ($size)"
+    else
+        log_warning "Nenhum arquivo de upload encontrado ou backup vazio"
+    fi
+    echo "$backup_file"
+}
+
 backup_full() {
     local backup_file="${BACKUP_DIR}/backup_full_${TIMESTAMP}.tar.gz"
     local db_dump_tmp="/tmp/capul_db_dump_${TIMESTAMP}.dump"
+    local uploads_tmp="/tmp/capul_uploads_${TIMESTAMP}.tar.gz"
 
-    log_info "Iniciando backup completo (aplicação + banco)..."
+    log_info "Iniciando backup completo (aplicação + banco + uploads)..."
 
     # Dump do banco
     log_info "  → Exportando banco de dados..."
@@ -135,18 +171,37 @@ backup_full() {
     docker cp "${DB_CONTAINER}:/tmp/capul_db_dump.dump" "$db_dump_tmp"
     docker exec "$DB_CONTAINER" rm -f /tmp/capul_db_dump.dump
 
-    # Tarball com aplicação + dump
-    log_info "  → Comprimindo aplicação e banco..."
-    tar -czf "$backup_file" \
-        --exclude="capul-platform/.git" \
-        --exclude="capul-platform/node_modules" \
-        --exclude="capul-platform/*/node_modules" \
-        --exclude="capul-platform/backups" \
-        -C /opt capul-platform \
-        -C /tmp "capul_db_dump_${TIMESTAMP}.dump"
+    # Backup dos uploads (anexos)
+    log_info "  → Exportando arquivos de upload (anexos)..."
+    if docker ps --format "{{.Names}}" | grep -q "^${APP_CONTAINER}$"; then
+        docker exec "$APP_CONTAINER" tar -czf /tmp/uploads_backup.tar.gz -C "$UPLOADS_PATH" . 2>/dev/null || true
+        docker cp "${APP_CONTAINER}:/tmp/uploads_backup.tar.gz" "$uploads_tmp" 2>/dev/null || true
+        docker exec "$APP_CONTAINER" rm -f /tmp/uploads_backup.tar.gz 2>/dev/null || true
+    else
+        docker run --rm -v "${UPLOADS_VOLUME}:/data:ro" -v /tmp:/backup \
+            alpine tar -czf "/backup/capul_uploads_${TIMESTAMP}.tar.gz" -C /data . 2>/dev/null || true
+    fi
 
-    # Limpar dump temporário
-    rm -f "$db_dump_tmp"
+    # Tarball com aplicação + dump + uploads
+    log_info "  → Comprimindo aplicação, banco e uploads..."
+    local tar_args=(
+        --exclude="capul-platform/.git"
+        --exclude="capul-platform/node_modules"
+        --exclude="capul-platform/*/node_modules"
+        --exclude="capul-platform/backups"
+        -C /opt capul-platform
+        -C /tmp "capul_db_dump_${TIMESTAMP}.dump"
+    )
+
+    # Incluir uploads se existir
+    if [ -f "$uploads_tmp" ]; then
+        tar_args+=(-C /tmp "capul_uploads_${TIMESTAMP}.tar.gz")
+    fi
+
+    tar -czf "$backup_file" "${tar_args[@]}"
+
+    # Limpar temporários
+    rm -f "$db_dump_tmp" "$uploads_tmp"
 
     local size
     size=$(du -sh "$backup_file" | cut -f1)
@@ -164,21 +219,23 @@ select_tipo() {
     echo "" >/dev/tty
     echo -e "${BOLD}  Selecione o tipo de backup:${NC}" >/dev/tty
     echo "" >/dev/tty
-    echo -e "  ${CYAN}1)${NC} full  — aplicação + banco de dados ${BOLD}(recomendado)${NC}" >/dev/tty
-    echo -e "  ${CYAN}2)${NC} app   — somente aplicação (código)" >/dev/tty
-    echo -e "  ${CYAN}3)${NC} db    — somente banco de dados" >/dev/tty
+    echo -e "  ${CYAN}1)${NC} full    — aplicação + banco + uploads ${BOLD}(recomendado)${NC}" >/dev/tty
+    echo -e "  ${CYAN}2)${NC} app     — somente aplicação (código)" >/dev/tty
+    echo -e "  ${CYAN}3)${NC} db      — somente banco de dados" >/dev/tty
+    echo -e "  ${CYAN}4)${NC} uploads — somente arquivos de upload (anexos)" >/dev/tty
     echo -e "  ${CYAN}0)${NC} sair" >/dev/tty
     echo "" >/dev/tty
 
     while true; do
-        read -r -p "  Opção [1/2/3/0]: " opcao </dev/tty
+        read -r -p "  Opção [1/2/3/4/0]: " opcao </dev/tty
         case "$opcao" in
-            1|full)  TIPO_SELECIONADO="full"; return ;;
-            2|app)   TIPO_SELECIONADO="app";  return ;;
-            3|db)    TIPO_SELECIONADO="db";   return ;;
-            0|sair)  echo -e "\n  Operação cancelada.\n" >/dev/tty; exit 0 ;;
+            1|full)    TIPO_SELECIONADO="full";    return ;;
+            2|app)     TIPO_SELECIONADO="app";     return ;;
+            3|db)      TIPO_SELECIONADO="db";      return ;;
+            4|uploads) TIPO_SELECIONADO="uploads"; return ;;
+            0|sair)    echo -e "\n  Operação cancelada.\n" >/dev/tty; exit 0 ;;
             *)
-                echo -e "  ${YELLOW}Opção inválida. Digite 1, 2, 3 ou 0 para sair.${NC}" >/dev/tty
+                echo -e "  ${YELLOW}Opção inválida. Digite 1, 2, 3, 4 ou 0 para sair.${NC}" >/dev/tty
                 ;;
         esac
     done
@@ -228,10 +285,13 @@ main() {
         db)
             backup_db
             ;;
+        uploads)
+            backup_uploads
+            ;;
         *)
-            log_error "Tipo inválido: '$tipo'. Use: full | app | db"
+            log_error "Tipo inválido: '$tipo'. Use: full | app | db | uploads"
             echo ""
-            echo "Uso: $0 [full|app|db]"
+            echo "Uso: $0 [full|app|db|uploads]"
             exit 1
             ;;
     esac
