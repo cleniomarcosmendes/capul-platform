@@ -39,6 +39,7 @@ import { ConhecimentoDetalhePage } from './pages/conhecimento/ConhecimentoDetalh
 
 import { AcompanhamentoPage } from './pages/acompanhamento/AcompanhamentoPage';
 import { AcompanhamentoItemPage } from './pages/acompanhamento/AcompanhamentoItemPage';
+import { RelatorioOsPage } from './pages/acompanhamento/RelatorioOsPage';
 import { HorariosTrabalhoPage } from './pages/horarios/HorariosTrabalhoPage';
 import { MonitorPlayerPage } from './pages/monitor/MonitorPlayerPage';
 import { NotificacoesPage } from './pages/notificacoes/NotificacoesPage';
@@ -104,6 +105,7 @@ function AppRoutes() {
         <Route path="monitor" element={<MonitorPlayerPage />} />
         <Route path="acompanhamento" element={<AcompanhamentoPage />} />
         <Route path="acompanhamento-item" element={<AcompanhamentoItemPage />} />
+        <Route path="relatorio-os" element={<RelatorioOsPage />} />
         <Route path="chamados" element={<ChamadosListPage />} />
         <Route path="chamados/novo" element={<ChamadoCreatePage />} />
         <Route path="chamados/:id" element={<ChamadoDetalhePage />} />

@@ -132,8 +132,10 @@ export class DashboardController {
     @Query('status') status?: string,
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
+    @Query('responsavelId') responsavelId?: string,
+    @Query('faseId') faseId?: string,
   ) {
-    return this.service.buscarAtividades(q, projetoId, status, dataInicio, dataFim);
+    return this.service.buscarAtividades(q, projetoId, status, dataInicio, dataFim, responsavelId, faseId);
   }
 
   @Get('acompanhamento-atividade/projetos')
@@ -142,9 +144,29 @@ export class DashboardController {
     return this.service.listarProjetosAtivos();
   }
 
+  @Get('acompanhamento-atividade/fases')
+  @Roles(...STAFF)
+  listarFasesAtivas() {
+    return this.service.listarFasesAtivas();
+  }
+
   @Get('minhas-pendencias')
   getMinhasPendencias(@CurrentUser() user: JwtPayload) {
     return this.service.getMinhasPendencias(user.sub);
+  }
+
+  @Get('relatorio-os')
+  @Roles(...STAFF)
+  getRelatorioOs(
+    @Query('tecnicoId') tecnicoId: string,
+    @Query('dataInicio') dataInicio: string,
+    @Query('dataFim') dataFim: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    // Não-gestores só podem ver o próprio relatório
+    const isManager = MANAGERS.some((r) => user.modulos?.some((m: { codigo: string; role: string }) => m.codigo === 'GESTAO_TI' && r === m.role));
+    const userId = isManager ? tecnicoId : user.sub;
+    return this.service.getRelatorioOs(userId, dataInicio, dataFim);
   }
 
   @Get('indicadores-estrategicos')

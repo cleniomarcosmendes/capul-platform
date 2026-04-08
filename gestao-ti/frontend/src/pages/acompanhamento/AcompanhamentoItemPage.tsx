@@ -146,6 +146,9 @@ export function AcompanhamentoItemPage() {
   const [projetoId, setProjetoId] = useState('');
   const [buscaAtividade, setBuscaAtividade] = useState('');
   const [filterStatusAtiv, setFilterStatusAtiv] = useState('');
+  const [filterResponsavelAtiv, setFilterResponsavelAtiv] = useState('');
+  const [filterFaseAtiv, setFilterFaseAtiv] = useState('');
+  const [fasesAtivas, setFasesAtivas] = useState<{ id: string; nome: string }[]>([]);
   const [filterDataInicioAtiv, setFilterDataInicioAtiv] = useState('');
   const [filterDataFimAtiv, setFilterDataFimAtiv] = useState('');
   const [atividadesResultado, setAtividadesResultado] = useState<AtividadeBusca[]>([]);
@@ -156,6 +159,7 @@ export function AcompanhamentoItemPage() {
     dashboardService.listarProjetosAtivos().then(setProjetos).catch(() => {});
     dashboardService.listarEquipes().then(setEquipes).catch(() => {});
     dashboardService.getTecnicos().then(setTecnicos).catch(() => {});
+    dashboardService.listarFasesAtivas().then(setFasesAtivas).catch(() => {});
   }, []);
 
   // Auto-load item from query params (?tipo=chamado&id=xxx)
@@ -198,10 +202,12 @@ export function AcompanhamentoItemPage() {
       q: buscaAtividade || undefined,
       projetoId: projetoId || undefined,
       status: filterStatusAtiv || undefined,
+      responsavelId: filterResponsavelAtiv || undefined,
+      faseId: filterFaseAtiv || undefined,
       dataInicio: filterDataInicioAtiv || undefined,
       dataFim: filterDataFimAtiv || undefined,
     }).then(setAtividadesResultado).catch(() => {});
-  }, [buscaAtividade, projetoId, filterStatusAtiv, filterDataInicioAtiv, filterDataFimAtiv]);
+  }, [buscaAtividade, projetoId, filterStatusAtiv, filterResponsavelAtiv, filterFaseAtiv, filterDataInicioAtiv, filterDataFimAtiv]);
 
   useEffect(() => {
     if (tab === 'atividade') buscarAtividades();
@@ -318,15 +324,16 @@ export function AcompanhamentoItemPage() {
               {/* Resultados */}
               {chamadosResultado.length > 0 && !chamadoData && (
                 <div className="mt-3 min-h-[calc(100vh-380px)] max-h-[calc(100vh-380px)] overflow-y-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-xs table-fixed">
                     <thead>
                       <tr className="text-left text-slate-400 border-b border-slate-100">
-                        <th className="py-2 px-2 font-medium w-12">#</th>
-                        <th className="py-2 px-2 font-medium">Titulo</th>
-                        <th className="py-2 px-2 font-medium w-20">Equipe</th>
-                        <th className="py-2 px-2 font-medium w-32">Tecnico</th>
-                        <th className="py-2 px-2 font-medium w-24 text-center">Status</th>
-                        <th className="py-2 px-2 font-medium w-16 text-center">Prior.</th>
+                        <th className="py-2 px-2 font-medium" style={{ width: '5%' }}>#</th>
+                        <th className="py-2 px-2 font-medium" style={{ width: '35%' }}>Titulo</th>
+                        <th className="py-2 px-2 font-medium" style={{ width: '8%' }}>Equipe</th>
+                        <th className="py-2 px-2 font-medium" style={{ width: '15%' }}>Tecnico</th>
+                        <th className="py-2 px-2 font-medium text-right" style={{ width: '8%' }}>Tempo</th>
+                        <th className="py-2 px-2 font-medium text-center" style={{ width: '12%' }}>Status</th>
+                        <th className="py-2 px-2 font-medium text-center" style={{ width: '8%' }}>Prior.</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -334,9 +341,10 @@ export function AcompanhamentoItemPage() {
                         <tr key={c.id} onClick={() => selecionarChamado(c.id)}
                           className="cursor-pointer hover:bg-orange-50 transition-colors border-b border-slate-50">
                           <td className="py-2 px-2 font-mono text-orange-600 font-bold">#{c.numero}</td>
-                          <td className="py-2 px-2 text-slate-700 truncate max-w-0">{c.titulo}</td>
-                          <td className="py-2 px-2 text-slate-400">{c.equipeAtual.sigla}</td>
+                          <td className="py-2 px-2 text-slate-700 truncate">{c.titulo}</td>
+                          <td className="py-2 px-2 text-slate-400 truncate">{c.equipeAtual.sigla}</td>
                           <td className="py-2 px-2 text-slate-400 truncate">{c.tecnico?.nome || '—'}</td>
+                          <td className="py-2 px-2 text-right text-slate-500 font-mono">{c.totalMinutos > 0 ? formatMin(c.totalMinutos) : '—'}</td>
                           <td className="py-2 px-2 text-center">
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusColors[c.status] || ''}`}>
                               {statusLabels[c.status] || c.status}
@@ -349,6 +357,14 @@ export function AcompanhamentoItemPage() {
                           </td>
                         </tr>
                       ))}
+                      <tr className="border-t border-slate-200 bg-slate-50 font-semibold">
+                        <td className="py-2 px-2" colSpan={4} />
+                        <td className="py-2 px-2 text-right text-slate-700 font-mono">
+                          {formatMin(chamadosResultado.reduce((s, c) => s + (c.totalMinutos || 0), 0))}
+                        </td>
+                        <td className="py-2 px-2 text-center text-slate-500">{chamadosResultado.length} itens</td>
+                        <td className="py-2 px-2" />
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -546,13 +562,27 @@ export function AcompanhamentoItemPage() {
         {tab === 'atividade' && (
           <>
             {/* Busca + Filtros */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+              {/* Busca */}
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Buscar (titulo da atividade)</label>
+                <div className="flex gap-2">
+                  <input type="text" value={buscaAtividade} onChange={(e) => setBuscaAtividade(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && buscarAtividades()}
+                    placeholder="Ex: 'implementar login' ou 'relatorio'"
+                    className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500" />
+                  <button onClick={buscarAtividades} className="px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600">
+                    <Search className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              {/* Filtros */}
               <div className="flex flex-wrap gap-3 items-end">
-                <div className="w-56">
+                <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Projeto</label>
                   <select value={projetoId} onChange={(e) => setProjetoId(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">
-                    <option value="">Todos os projetos</option>
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-w-[180px]">
+                    <option value="">Todos</option>
                     {projetos.map((p) => (
                       <option key={p.id} value={p.id}>#{p.numero} — {p.nome}</option>
                     ))}
@@ -570,6 +600,26 @@ export function AcompanhamentoItemPage() {
                   </select>
                 </div>
                 <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Responsavel</label>
+                  <select value={filterResponsavelAtiv} onChange={(e) => setFilterResponsavelAtiv(e.target.value)}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-w-[140px]">
+                    <option value="">Todos</option>
+                    {tecnicos.map((t) => (
+                      <option key={t.id} value={t.id}>{t.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Fase</label>
+                  <select value={filterFaseAtiv} onChange={(e) => setFilterFaseAtiv(e.target.value)}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-w-[140px]">
+                    <option value="">Todas</option>
+                    {fasesAtivas.map((f) => (
+                      <option key={f.id} value={f.id}>{f.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Data Inicio</label>
                   <input type="date" value={filterDataInicioAtiv} onChange={(e) => setFilterDataInicioAtiv(e.target.value)}
                     className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
@@ -579,31 +629,21 @@ export function AcompanhamentoItemPage() {
                   <input type="date" value={filterDataFimAtiv} onChange={(e) => setFilterDataFimAtiv(e.target.value)}
                     className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
                 </div>
-                <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Buscar atividade</label>
-                  <div className="flex gap-2">
-                    <input type="text" value={buscaAtividade} onChange={(e) => setBuscaAtividade(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && buscarAtividades()}
-                      placeholder="Titulo da atividade..."
-                      className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500" />
-                    <button onClick={buscarAtividades} className="px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600">
-                      <Search className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
               </div>
 
+              {/* Resultados */}
               {atividadesResultado.length > 0 && !atividadeData && (
-                <div className="mt-3 min-h-[calc(100vh-380px)] max-h-[calc(100vh-380px)] overflow-y-auto">
-                  <table className="w-full text-xs">
+                <div className="mt-3 min-h-[calc(100vh-420px)] max-h-[calc(100vh-420px)] overflow-y-auto">
+                  <table className="w-full text-xs table-fixed">
                     <thead>
                       <tr className="text-left text-slate-400 border-b border-slate-100">
-                        <th className="py-2 px-2 font-medium w-6"></th>
-                        <th className="py-2 px-2 font-medium">Titulo</th>
-                        <th className="py-2 px-2 font-medium w-36">Projeto</th>
-                        <th className="py-2 px-2 font-medium w-28">Responsavel</th>
-                        <th className="py-2 px-2 font-medium w-20">Fase</th>
-                        <th className="py-2 px-2 font-medium w-20 text-center">Status</th>
+                        <th className="py-2 px-2 font-medium" style={{ width: '3%' }}></th>
+                        <th className="py-2 px-2 font-medium" style={{ width: '28%' }}>Titulo</th>
+                        <th className="py-2 px-2 font-medium" style={{ width: '20%' }}>Projeto</th>
+                        <th className="py-2 px-2 font-medium" style={{ width: '14%' }}>Responsavel</th>
+                        <th className="py-2 px-2 font-medium" style={{ width: '12%' }}>Fase</th>
+                        <th className="py-2 px-2 font-medium text-right" style={{ width: '8%' }}>Tempo</th>
+                        <th className="py-2 px-2 font-medium text-center" style={{ width: '12%' }}>Status</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -611,10 +651,11 @@ export function AcompanhamentoItemPage() {
                         <tr key={a.id} onClick={() => selecionarAtividade(a.id)}
                           className="cursor-pointer hover:bg-purple-50 transition-colors border-b border-slate-50">
                           <td className="py-2 px-2"><FolderKanban className="w-3.5 h-3.5 text-purple-500" /></td>
-                          <td className="py-2 px-2 text-slate-700 truncate max-w-0">{a.titulo}</td>
+                          <td className="py-2 px-2 text-slate-700 truncate">{a.titulo}</td>
                           <td className="py-2 px-2 text-slate-400 truncate">{a.projeto.nome}</td>
                           <td className="py-2 px-2 text-slate-400 truncate">{a.usuario.nome}</td>
                           <td className="py-2 px-2 text-slate-400 truncate">{a.fase?.nome || '—'}</td>
+                          <td className="py-2 px-2 text-right text-slate-500 font-mono">{a.totalMinutos > 0 ? formatMin(a.totalMinutos) : '—'}</td>
                           <td className="py-2 px-2 text-center">
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusColors[a.status] || ''}`}>
                               {statusLabels[a.status] || a.status}
@@ -622,6 +663,13 @@ export function AcompanhamentoItemPage() {
                           </td>
                         </tr>
                       ))}
+                      <tr className="border-t border-slate-200 bg-slate-50 font-semibold">
+                        <td className="py-2 px-2" colSpan={5} />
+                        <td className="py-2 px-2 text-right text-slate-700 font-mono">
+                          {formatMin(atividadesResultado.reduce((s, a) => s + (a.totalMinutos || 0), 0))}
+                        </td>
+                        <td className="py-2 px-2 text-center text-slate-500">{atividadesResultado.length} itens</td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>

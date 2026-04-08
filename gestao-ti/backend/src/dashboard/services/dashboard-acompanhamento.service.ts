@@ -441,7 +441,7 @@ export class DashboardAcompanhamentoService {
       if (filters.dataFim) createdAt.lte = new Date(filters.dataFim + 'T23:59:59');
       where.createdAt = createdAt;
     }
-    return this.prisma.chamado.findMany({
+    const chamados = await this.prisma.chamado.findMany({
       where,
       select: {
         id: true, numero: true, titulo: true, status: true, prioridade: true,
@@ -449,9 +449,15 @@ export class DashboardAcompanhamentoService {
         solicitante: { select: { id: true, nome: true } },
         tecnico: { select: { id: true, nome: true } },
         equipeAtual: { select: { id: true, nome: true, sigla: true } },
+        registrosTempo: { select: { duracaoMinutos: true } },
       },
       orderBy: { numero: 'desc' },
       take: 50,
+    });
+    return chamados.map((c) => {
+      const totalMinutos = c.registrosTempo.reduce((sum, r) => sum + (r.duracaoMinutos || 0), 0);
+      const { registrosTempo: _, ...rest } = c;
+      return { ...rest, totalMinutos };
     });
   }
 
@@ -642,10 +648,12 @@ export class DashboardAcompanhamentoService {
     });
   }
 
-  async buscarAtividades(q?: string, projetoId?: string, status?: string, dataInicio?: string, dataFim?: string) {
+  async buscarAtividades(q?: string, projetoId?: string, status?: string, dataInicio?: string, dataFim?: string, responsavelId?: string, faseId?: string) {
     const where: Record<string, unknown> = {};
     if (projetoId) where.projetoId = projetoId;
     if (status) where.status = status;
+    if (responsavelId) where.usuarioId = responsavelId;
+    if (faseId) where.faseId = faseId;
     if (q) {
       where.titulo = { contains: q, mode: 'insensitive' };
     }
@@ -655,16 +663,38 @@ export class DashboardAcompanhamentoService {
       if (dataFim) createdAt.lte = new Date(dataFim + 'T23:59:59');
       where.createdAt = createdAt;
     }
-    return this.prisma.atividadeProjeto.findMany({
+    const atividades = await this.prisma.atividadeProjeto.findMany({
       where,
       select: {
         id: true, titulo: true, status: true, dataInicio: true, dataFimPrevista: true, createdAt: true,
         usuario: { select: { id: true, nome: true } },
         projeto: { select: { id: true, numero: true, nome: true } },
         fase: { select: { id: true, nome: true } },
+        registrosTempo: { select: { duracaoMinutos: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 50,
+    });
+    return atividades.map((a) => {
+      const totalMinutos = a.registrosTempo.reduce((sum, r) => sum + (r.duracaoMinutos || 0), 0);
+      const { registrosTempo: _, ...rest } = a;
+      return { ...rest, totalMinutos };
+    });
+  }
+
+  async listarFasesAtivas() {
+    const fases = await this.prisma.faseProjeto.findMany({
+      where: { projeto: { status: { not: 'CANCELADO' } } },
+      select: { id: true, nome: true, projeto: { select: { numero: true, nome: true } } },
+      orderBy: [{ projeto: { numero: 'desc' } }, { ordem: 'asc' }],
+    });
+    // Deduplica por nome para o filtro
+    const seen = new Set<string>();
+    return fases.filter((f) => {
+      const key = f.nome;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
     });
   }
 
@@ -838,6 +868,141 @@ export class DashboardAcompanhamentoService {
         totalPendencias: pendencias.length,
         vencidas,
         urgentes,
+      },
+    };
+  }
+
+  // ========== RELATORIO DE OS ==========
+
+  async getRelatorioOs(tecnicoId: string, dataInicio: string, dataFim: string) {
+    const inicio = new Date(dataInicio);
+    const fim = new Date(dataFim + 'T23:59:59');
+
+    // 1) Registros de tempo em CHAMADOS
+    const registrosChamado = await this.prisma.registroTempoChamado.findMany({
+      where: {
+        usuarioId: tecnicoId,
+        horaInicio: { gte: inicio, lte: fim },
+        horaFim: { not: null },
+      },
+      include: {
+        chamado: {
+          select: {
+            id: true, numero: true, titulo: true, descricao: true, status: true, prioridade: true,
+            equipeAtual: { select: { sigla: true, nome: true } },
+            historicos: {
+              where: { tipo: 'COMENTARIO', createdAt: { gte: inicio, lte: fim } },
+              select: { descricao: true, createdAt: true, usuario: { select: { nome: true } } },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+        },
+        usuario: { select: { nome: true } },
+      },
+      orderBy: { horaInicio: 'asc' },
+    });
+
+    // 2) Registros de tempo em ATIVIDADES
+    const registrosAtividade = await this.prisma.registroTempo.findMany({
+      where: {
+        usuarioId: tecnicoId,
+        horaInicio: { gte: inicio, lte: fim },
+        horaFim: { not: null },
+      },
+      include: {
+        atividade: {
+          select: {
+            id: true, titulo: true, descricao: true, status: true,
+            projeto: { select: { id: true, numero: true, nome: true } },
+            fase: { select: { nome: true } },
+            comentarios: {
+              where: { createdAt: { gte: inicio, lte: fim } },
+              select: { texto: true, createdAt: true, usuario: { select: { nome: true } } },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+        },
+        usuario: { select: { nome: true } },
+      },
+      orderBy: { horaInicio: 'asc' },
+    });
+
+    // 3) Apontamentos manuais
+    const apontamentos = await this.prisma.apontamentoHoras.findMany({
+      where: {
+        usuarioId: tecnicoId,
+        data: { gte: inicio, lte: fim },
+      },
+      include: {
+        projeto: { select: { id: true, numero: true, nome: true } },
+        fase: { select: { nome: true } },
+        usuario: { select: { nome: true } },
+      },
+      orderBy: { data: 'asc' },
+    });
+
+    // Agrupar registros por chamado
+    const chamadosMap = new Map<string, {
+      chamado: typeof registrosChamado[0]['chamado'];
+      sessoes: { horaInicio: Date; horaFim: Date; duracaoMinutos: number; observacoes: string | null }[];
+      totalMinutos: number;
+    }>();
+    for (const r of registrosChamado) {
+      const key = r.chamado.id;
+      if (!chamadosMap.has(key)) {
+        chamadosMap.set(key, { chamado: r.chamado, sessoes: [], totalMinutos: 0 });
+      }
+      const entry = chamadosMap.get(key)!;
+      const dur = r.duracaoMinutos || 0;
+      entry.sessoes.push({ horaInicio: r.horaInicio, horaFim: r.horaFim!, duracaoMinutos: dur, observacoes: r.observacoes });
+      entry.totalMinutos += dur;
+    }
+
+    // Agrupar registros por atividade
+    const atividadesMap = new Map<string, {
+      atividade: typeof registrosAtividade[0]['atividade'];
+      sessoes: { horaInicio: Date; horaFim: Date; duracaoMinutos: number; observacoes: string | null }[];
+      totalMinutos: number;
+    }>();
+    for (const r of registrosAtividade) {
+      const key = r.atividade.id;
+      if (!atividadesMap.has(key)) {
+        atividadesMap.set(key, { atividade: r.atividade, sessoes: [], totalMinutos: 0 });
+      }
+      const entry = atividadesMap.get(key)!;
+      const dur = r.duracaoMinutos || 0;
+      entry.sessoes.push({ horaInicio: r.horaInicio, horaFim: r.horaFim!, duracaoMinutos: dur, observacoes: r.observacoes });
+      entry.totalMinutos += dur;
+    }
+
+    const chamadosArr = Array.from(chamadosMap.values()).sort((a, b) => b.totalMinutos - a.totalMinutos);
+    const atividadesArr = Array.from(atividadesMap.values()).sort((a, b) => b.totalMinutos - a.totalMinutos);
+
+    const totalMinChamados = chamadosArr.reduce((s, c) => s + c.totalMinutos, 0);
+    const totalMinAtividades = atividadesArr.reduce((s, a) => s + a.totalMinutos, 0);
+    const totalMinApontamentos = apontamentos.reduce((s, a) => s + Math.round(Number(a.horas) * 60), 0);
+
+    return {
+      chamados: chamadosArr,
+      atividades: atividadesArr,
+      apontamentos: apontamentos.map((a) => ({
+        id: a.id,
+        data: a.data,
+        horas: Number(a.horas),
+        descricao: a.descricao,
+        observacoes: a.observacoes,
+        projeto: a.projeto,
+        fase: a.fase,
+      })),
+      resumo: {
+        totalMinutosChamados: totalMinChamados,
+        totalMinutosAtividades: totalMinAtividades,
+        totalMinutosApontamentos: totalMinApontamentos,
+        totalMinutosGeral: totalMinChamados + totalMinAtividades + totalMinApontamentos,
+        totalHorasGeral: +((totalMinChamados + totalMinAtividades + totalMinApontamentos) / 60).toFixed(1),
+        qtdChamados: chamadosArr.length,
+        qtdAtividades: atividadesArr.length,
+        qtdApontamentos: apontamentos.length,
       },
     };
   }

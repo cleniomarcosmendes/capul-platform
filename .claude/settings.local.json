@@ -1152,7 +1152,8 @@
       "Bash(docker stop:*)",
       "Bash(docker rm:*)",
       "Bash(timeout 30 npm run build)",
-      "Bash(bash -n /mnt/c/meus_projetos/capul-platform/scripts/backup.sh)"
+      "Bash(bash -n /mnt/c/meus_projetos/capul-platform/scripts/backup.sh)",
+      "Bash(echo \"EXIT: $?\")"
     ]
   }
 }

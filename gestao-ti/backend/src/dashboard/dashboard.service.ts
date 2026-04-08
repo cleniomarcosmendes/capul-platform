@@ -73,8 +73,12 @@ export class DashboardService {
     return this.acompanhamento.listarProjetosAtivos();
   }
 
-  async buscarAtividades(q?: string, projetoId?: string, status?: string, dataInicio?: string, dataFim?: string) {
-    return this.acompanhamento.buscarAtividades(q, projetoId, status, dataInicio, dataFim);
+  async buscarAtividades(q?: string, projetoId?: string, status?: string, dataInicio?: string, dataFim?: string, responsavelId?: string, faseId?: string) {
+    return this.acompanhamento.buscarAtividades(q, projetoId, status, dataInicio, dataFim, responsavelId, faseId);
+  }
+
+  async listarFasesAtivas() {
+    return this.acompanhamento.listarFasesAtivas();
   }
 
   async getAcompanhamentoAtividade(atividadeId: string) {
@@ -83,6 +87,10 @@ export class DashboardService {
 
   async getMinhasPendencias(userId: string) {
     return this.acompanhamento.getMinhasPendencias(userId);
+  }
+
+  async getRelatorioOs(tecnicoId: string, dataInicio: string, dataFim: string) {
+    return this.acompanhamento.getRelatorioOs(tecnicoId, dataInicio, dataFim);
   }
 
   getIndicadores(mes: number, ano: number, tiposParada?: string[]) {

@@ -50,6 +50,7 @@ const menuItems: MenuItem[] = [
   { label: 'Monitor', icon: Gauge, path: '/gestao-ti/monitor', roles: STAFF },
   { label: 'Acompanhamento', icon: Timer, path: '/gestao-ti/acompanhamento', roles: STAFF },
   { label: 'Acomp. por Item', icon: Search, path: '/gestao-ti/acompanhamento-item', roles: STAFF },
+  { label: 'Relatorio de OS', icon: FileText, path: '/gestao-ti/relatorio-os', roles: STAFF },
   { section: 'SUPORTE' },
   { label: 'Chamados', icon: Ticket, path: '/gestao-ti/chamados' },
   { label: 'Ordens de Servico', icon: ClipboardList, path: '/gestao-ti/ordens-servico', roles: STAFF },
@@ -138,9 +139,11 @@ export function Sidebar() {
         {visibleItems.map((item, idx) => {
           if ('section' in item) {
             return (
-              <p key={idx} className="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mt-4 first:mt-0">
-                {item.section}
-              </p>
+              <div key={idx} className={`mx-3 px-1 pt-1 pb-1 ${idx > 0 ? 'mt-4 border-t border-slate-700/60' : ''}`}>
+                <p className="text-[10px] font-bold text-slate-400 uppercase" style={{ letterSpacing: '0.12em' }}>
+                  {item.section}
+                </p>
+              </div>
             );
           }
 

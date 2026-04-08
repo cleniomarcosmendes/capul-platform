@@ -1352,6 +1352,7 @@ export interface ChamadoBusca {
   status: string;
   prioridade: string;
   createdAt: string;
+  totalMinutos: number;
   solicitante: { id: string; nome: string };
   tecnico: { id: string; nome: string } | null;
   equipeAtual: { id: string; nome: string; sigla: string };
@@ -1406,6 +1407,7 @@ export interface AcompanhamentoChamadoData {
 export interface AtividadeBusca {
   id: string; titulo: string; status: string;
   dataInicio: string | null; dataFimPrevista: string | null; createdAt: string;
+  totalMinutos: number;
   usuario: { id: string; nome: string };
   projeto: { id: string; numero: number; nome: string };
   fase: { id: string; nome: string } | null;
@@ -1494,5 +1496,48 @@ export interface NotaFiscalItemProjeto {
     dataLancamento: string;
     status: StatusNotaFiscal;
     fornecedor: FornecedorConfig;
+  };
+}
+
+// Relatório de OS
+export interface RelatorioOsSessao {
+  horaInicio: string; horaFim: string; duracaoMinutos: number; observacoes: string | null;
+}
+
+export interface RelatorioOsChamado {
+  chamado: {
+    id: string; numero: number; titulo: string; descricao: string; status: string; prioridade: string;
+    equipeAtual: { sigla: string; nome: string };
+    historicos: { descricao: string; createdAt: string; usuario: { nome: string } }[];
+  };
+  sessoes: RelatorioOsSessao[];
+  totalMinutos: number;
+}
+
+export interface RelatorioOsAtividade {
+  atividade: {
+    id: string; titulo: string; descricao: string | null; status: string;
+    projeto: { id: string; numero: number; nome: string };
+    fase: { nome: string } | null;
+    comentarios: { texto: string; createdAt: string; usuario: { nome: string } }[];
+  };
+  sessoes: RelatorioOsSessao[];
+  totalMinutos: number;
+}
+
+export interface RelatorioOsApontamento {
+  id: string; data: string; horas: number; descricao: string; observacoes: string | null;
+  projeto: { id: string; numero: number; nome: string };
+  fase: { nome: string } | null;
+}
+
+export interface RelatorioOsData {
+  chamados: RelatorioOsChamado[];
+  atividades: RelatorioOsAtividade[];
+  apontamentos: RelatorioOsApontamento[];
+  resumo: {
+    totalMinutosChamados: number; totalMinutosAtividades: number; totalMinutosApontamentos: number;
+    totalMinutosGeral: number; totalHorasGeral: number;
+    qtdChamados: number; qtdAtividades: number; qtdApontamentos: number;
   };
 }
