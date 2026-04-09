@@ -4,7 +4,7 @@ import type {
   AcompanhamentoData, TecnicoResumo,
   ChamadoBusca, AcompanhamentoChamadoData,
   AtividadeBusca, ProjetoResumo, AcompanhamentoAtividadeData,
-  RelatorioOsData,
+  RelatorioOsData, RelatorioChamadoData, RelatorioProjetoData,
 } from '../types';
 
 export const dashboardService = {
@@ -90,6 +90,16 @@ export const dashboardService = {
 
   async getRelatorioOs(params: { tecnicoId: string; dataInicio: string; dataFim: string }): Promise<RelatorioOsData> {
     const { data } = await gestaoApi.get('/dashboard/relatorio-os', { params });
+    return data;
+  },
+
+  async getRelatorioChamado(chamadoId: string): Promise<RelatorioChamadoData> {
+    const { data } = await gestaoApi.get('/dashboard/relatorio-chamado', { params: { chamadoId } });
+    return data;
+  },
+
+  async getRelatorioProjeto(projetoId: string): Promise<RelatorioProjetoData> {
+    const { data } = await gestaoApi.get('/dashboard/relatorio-projeto', { params: { projetoId } });
     return data;
   },
 

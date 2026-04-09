@@ -53,12 +53,12 @@ export class DashboardResumoService {
       this.prisma.chamado.count({ where: { status: 'FECHADO', createdAt: periodoFilter, ...deptoFilter } }),
       this.prisma.chamado.groupBy({
         by: ['equipeAtualId'],
-        where: { status: { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE'] }, createdAt: periodoFilter, ...deptoFilter },
+        where: { status: { notIn: ['CANCELADO'] }, createdAt: periodoFilter, ...deptoFilter },
         _count: true,
       }),
       this.prisma.chamado.groupBy({
         by: ['prioridade'],
-        where: { status: { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE'] }, createdAt: periodoFilter, ...deptoFilter },
+        where: { status: { notIn: ['CANCELADO'] }, createdAt: periodoFilter, ...deptoFilter },
         _count: true,
       }),
       this.prisma.equipeTI.findMany({

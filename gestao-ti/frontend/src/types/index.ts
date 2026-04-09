@@ -1541,3 +1541,130 @@ export interface RelatorioOsData {
     qtdChamados: number; qtdAtividades: number; qtdApontamentos: number;
   };
 }
+
+// Relatório de Chamado
+export interface RelatorioChamadoData {
+  chamado: {
+    id: string; numero: number; titulo: string; descricao: string; status: string; prioridade: string;
+    visibilidade: string; createdAt: string; updatedAt: string;
+    dataLimiteSla: string | null; dataResolucao: string | null; dataFechamento: string | null;
+    notaSatisfacao: number | null; comentarioSatisfacao: string | null;
+    softwareNome: string | null; moduloNome: string | null;
+    ipMaquina: string | null; matriculaColaborador: string | null; nomeColaborador: string | null;
+    solicitante: { id: string; nome: string; username: string; email: string };
+    tecnico: { id: string; nome: string; username: string } | null;
+    equipeAtual: { id: string; nome: string; sigla: string; cor: string | null };
+    filial: { id: string; codigo: string; nomeFantasia: string };
+    departamento: { id: string; nome: string } | null;
+    catalogoServico: { id: string; nome: string } | null;
+    slaDefinicao: { id: string; nome: string; horasResposta: number; horasResolucao: number } | null;
+    software: { id: string; nome: string } | null;
+    softwareModulo: { id: string; nome: string } | null;
+    projeto: { id: string; numero: number; nome: string } | null;
+    ativo: { id: string; nome: string; tipo: string; tag: string } | null;
+    colaboradores: { usuario: { id: string; nome: string } }[];
+    historicos: {
+      id: string; tipo: string; descricao: string; publico: boolean; createdAt: string;
+      usuario: { id: string; nome: string };
+      equipeOrigem: { id: string; nome: string; sigla: string } | null;
+      equipeDestino: { id: string; nome: string; sigla: string } | null;
+    }[];
+    anexos: {
+      id: string; nomeOriginal: string; nomeArquivo: string; mimeType: string; tamanho: number;
+      descricao: string | null; createdAt: string;
+      usuario: { id: string; nome: string };
+    }[];
+  };
+  sessoes: {
+    id: string; horaInicio: string; horaFim: string; duracaoMinutos: number;
+    observacoes: string | null; usuario: { id: string; nome: string };
+  }[];
+  ordensServico: {
+    id: string; numero: number; titulo: string; status: string;
+    dataAgendamento: string | null; dataInicio: string | null; dataFim: string | null;
+    filial: { id: string; codigo: string; nomeFantasia: string };
+    tecnicos: { tecnico: { id: string; nome: string } }[];
+  }[];
+  resumo: {
+    totalMinutos: number; totalHoras: number;
+    qtdSessoes: number; qtdOs: number; qtdAnexos: number; qtdHistoricos: number;
+  };
+}
+
+// Relatório de Projeto
+export interface RelatorioProjetoData {
+  projeto: {
+    id: string; numero: number; nome: string; descricao: string | null;
+    tipo: string; status: string; nivel: number;
+    dataInicio: string | null; dataFimPrevista: string | null; dataFimReal: string | null;
+    custoPrevisto: number | null; custoRealizado: number | null;
+    observacoes: string | null; createdAt: string;
+    responsavel: { id: string; nome: string; username: string };
+    tipoProjeto: { id: string; codigo: string; descricao: string } | null;
+    software: { id: string; nome: string } | null;
+    contrato: { id: string; numero: number; titulo: string } | null;
+    membros: { papel: string; observacoes: string | null; usuario: { id: string; nome: string; username: string } }[];
+    usuariosChave: { funcao: string; usuario: { id: string; nome: string } }[];
+    terceirizados: { empresa: string; funcao: string; especialidade: string | null; usuario: { id: string; nome: string } }[];
+    fases: {
+      id: string; nome: string; descricao: string | null; ordem: number; status: string;
+      dataInicio: string | null; dataFimPrevista: string | null; dataFimReal: string | null;
+    }[];
+    atividades: {
+      id: string; titulo: string; descricao: string | null; status: string;
+      dataAtividade: string | null; dataInicio: string | null; dataFimPrevista: string | null;
+      fase: { id: string; nome: string } | null;
+      responsaveis: { usuario: { id: string; nome: string } }[];
+      totalMinutosRegistros: number;
+    }[];
+    apontamentos: {
+      id: string; data: string; horas: number; descricao: string; observacoes: string | null;
+      usuario: { id: string; nome: string };
+      fase: { id: string; nome: string } | null;
+    }[];
+    riscos: {
+      id: string; titulo: string; descricao: string | null;
+      probabilidade: string; impacto: string; status: string;
+      planoMitigacao: string | null;
+      responsavel: { id: string; nome: string } | null;
+    }[];
+    custos: {
+      id: string; descricao: string; categoria: string;
+      valorPrevisto: number | null; valorRealizado: number | null;
+      data: string | null; observacoes: string | null;
+    }[];
+    cotacoes: {
+      id: string; fornecedor: string; descricao: string | null;
+      valor: number; moeda: string; status: string;
+      dataRecebimento: string | null; validade: string | null;
+    }[];
+    subProjetos: { id: string; numero: number; nome: string; status: string; nivel: number }[];
+    anexos: {
+      id: string; titulo: string | null; nomeOriginal: string | null; mimeType: string | null;
+      tamanhoBytes: number | null; descricao: string | null; createdAt: string;
+      usuario: { id: string; nome: string };
+    }[];
+  };
+  pendencias: {
+    id: string; numero: number; titulo: string; descricao: string | null;
+    status: string; prioridade: string;
+    dataLimite: string | null; createdAt: string;
+    responsavel: { id: string; nome: string };
+    criador: { id: string; nome: string };
+    fase: { id: string; nome: string } | null;
+    interacoes: {
+      id: string; tipo: string; descricao: string; createdAt: string;
+      usuario: { id: string; nome: string };
+    }[];
+    atividades: { id: string; titulo: string; status: string }[];
+  }[];
+  resumo: {
+    totalFases: number; fasesAprovadas: number;
+    atividadesPendentes: number; atividadesEmAndamento: number; atividadesConcluidas: number;
+    totalAtividades: number; totalHoras: number;
+    horasApontamentos: number; minutosRegistrosTempo: number;
+    riscosAbertos: number; totalRiscos: number;
+    pendenciasAbertas: number; totalPendencias: number;
+    custoPrevistoTotal: number; custoRealizadoTotal: number;
+  };
+}

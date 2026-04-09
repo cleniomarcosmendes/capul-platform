@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { chamadoService } from '../../services/chamado.service';
@@ -8,7 +8,7 @@ import {
   ArrowLeft, UserPlus, ArrowRightLeft, Send, CheckCircle,
   XCircle, RotateCcw, Lock, Star, Users, MessageSquare,
   Paperclip, Download, Trash2, FileText, Image, FileSpreadsheet, File,
-  Play, Square, Edit3, Check, X, Clock, Copy,
+  Play, Square, Edit3, Check, X, Clock, Copy, Printer,
 } from 'lucide-react';
 import { coreService } from '../../services/core.service';
 import { useToast } from '../../components/Toast';
@@ -262,9 +262,17 @@ export function ChamadoDetalhePage() {
             <div className="bg-white rounded-xl border border-slate-200 p-6">
               <div className="flex items-start justify-between gap-4 mb-4">
                 <h2 className="text-lg font-semibold text-slate-800">{chamado.titulo}</h2>
-                <span className={`text-xs font-medium px-3 py-1.5 rounded-full border ${statusColors[chamado.status]}`}>
-                  {statusLabels[chamado.status]}
-                </span>
+                <div className="flex items-center gap-2">
+                  <Link
+                    to={`/gestao-ti/chamados/${chamado.id}/relatorio`}
+                    className="flex items-center gap-1 bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg text-xs hover:bg-slate-200"
+                  >
+                    <Printer className="w-3.5 h-3.5" /> Relatorio
+                  </Link>
+                  <span className={`text-xs font-medium px-3 py-1.5 rounded-full border ${statusColors[chamado.status]}`}>
+                    {statusLabels[chamado.status]}
+                  </span>
+                </div>
               </div>
               <p className="text-sm text-slate-600 whitespace-pre-wrap">{chamado.descricao}</p>
 

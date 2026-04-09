@@ -93,6 +93,14 @@ export class DashboardService {
     return this.acompanhamento.getRelatorioOs(tecnicoId, dataInicio, dataFim);
   }
 
+  async getRelatorioChamado(chamadoId: string) {
+    return this.acompanhamento.getRelatorioChamado(chamadoId);
+  }
+
+  async getRelatorioProjeto(projetoId: string) {
+    return this.acompanhamento.getRelatorioProjeto(projetoId);
+  }
+
   getIndicadores(mes: number, ano: number, tiposParada?: string[]) {
     return this.indicadores.getIndicadores(mes, ano, tiposParada);
   }

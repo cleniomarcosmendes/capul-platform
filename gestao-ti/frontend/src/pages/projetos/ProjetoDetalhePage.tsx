@@ -8,7 +8,7 @@ import { chamadoService } from '../../services/chamado.service';
 import { compraService } from '../../services/compra.service';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
-import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare, KeyRound, ClipboardList, Download, Eye, Upload, Copy, FileText } from 'lucide-react';
+import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare, KeyRound, ClipboardList, Download, Eye, Upload, Copy, FileText, Printer } from 'lucide-react';
 import { formatDateBR } from '../../utils/date';
 import { MentionInput } from '../../components/MentionInput';
 import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
@@ -331,6 +331,12 @@ export function ProjetoDetalhePage() {
                     .map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
               )}
+              <Link
+                to={`/gestao-ti/projetos/${projeto.id}/relatorio`}
+                className="flex items-center gap-1 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm hover:bg-slate-200"
+              >
+                <Printer className="w-4 h-4" /> Relatorio
+              </Link>
               {canManage && (
                 <>
                   <Link

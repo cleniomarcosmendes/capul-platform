@@ -1153,7 +1153,8 @@
       "Bash(docker rm:*)",
       "Bash(timeout 30 npm run build)",
       "Bash(bash -n /mnt/c/meus_projetos/capul-platform/scripts/backup.sh)",
-      "Bash(echo \"EXIT: $?\")"
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(awk '/^model Chamado/,/^model [A-Z]/ {print NR\": \"$0}' /mnt/c/meus_projetos/capul-platform/gestao-ti/backend/prisma/schema.prisma)"
     ]
   }
 }

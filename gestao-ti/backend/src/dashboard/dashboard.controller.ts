@@ -169,6 +169,18 @@ export class DashboardController {
     return this.service.getRelatorioOs(userId, dataInicio, dataFim);
   }
 
+  @Get('relatorio-chamado')
+  @Roles(...STAFF)
+  getRelatorioChamado(@Query('chamadoId') chamadoId: string) {
+    return this.service.getRelatorioChamado(chamadoId);
+  }
+
+  @Get('relatorio-projeto')
+  @Roles(...STAFF)
+  getRelatorioProjeto(@Query('projetoId') projetoId: string) {
+    return this.service.getRelatorioProjeto(projetoId);
+  }
+
   @Get('indicadores-estrategicos')
   @Roles(...MANAGERS)
   getIndicadores(

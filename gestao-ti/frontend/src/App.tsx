@@ -40,6 +40,8 @@ import { ConhecimentoDetalhePage } from './pages/conhecimento/ConhecimentoDetalh
 import { AcompanhamentoPage } from './pages/acompanhamento/AcompanhamentoPage';
 import { AcompanhamentoItemPage } from './pages/acompanhamento/AcompanhamentoItemPage';
 import { RelatorioOsPage } from './pages/acompanhamento/RelatorioOsPage';
+import { RelatorioChamadoPage } from './pages/chamados/RelatorioChamadoPage';
+import { RelatorioProjetoPage } from './pages/projetos/RelatorioProjetoPage';
 import { HorariosTrabalhoPage } from './pages/horarios/HorariosTrabalhoPage';
 import { MonitorPlayerPage } from './pages/monitor/MonitorPlayerPage';
 import { NotificacoesPage } from './pages/notificacoes/NotificacoesPage';
@@ -109,6 +111,7 @@ function AppRoutes() {
         <Route path="chamados" element={<ChamadosListPage />} />
         <Route path="chamados/novo" element={<ChamadoCreatePage />} />
         <Route path="chamados/:id" element={<ChamadoDetalhePage />} />
+        <Route path="chamados/:id/relatorio" element={<RelatorioChamadoPage />} />
         <Route path="ordens-servico" element={<OrdensServicoPage />} />
 
         <Route path="equipes" element={<EquipesListPage />} />
@@ -133,6 +136,7 @@ function AppRoutes() {
         <Route path="projetos/novo" element={<ProjetoFormPage />} />
         <Route path="projetos/:id" element={<ProjetoDetalhePage />} />
         <Route path="projetos/:id/editar" element={<ProjetoFormPage />} />
+        <Route path="projetos/:id/relatorio" element={<RelatorioProjetoPage />} />
         <Route path="projetos/:projetoId/pendencias/:pendenciaId" element={<PendenciaDetalhePage />} />
         <Route path="minhas-pendencias" element={<MinhasPendenciasPage />} />
         <Route path="ativos" element={<AtivosListPage />} />
