@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { dashboardService } from '../../services/dashboard.service';
 import {
   Clock, Ticket, FolderKanban, Search, FileText,
-  ChevronDown, ChevronRight, MessageSquare,
+  ChevronDown, ChevronRight, MessageSquare, Printer,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { RelatorioOsData } from '../../types';
@@ -103,10 +103,17 @@ export function RelatorioOsPage() {
 
   return (
     <>
+      <style>{`@media print {
+        .no-print { display: none !important; }
+        header, aside, nav { display: none !important; }
+        main { padding: 0 !important; }
+        body, html { background: white !important; }
+        .bg-white { box-shadow: none !important; border-color: #e2e8f0 !important; }
+      }`}</style>
       <Header title="Relatorio de OS" />
       <main className="p-6 space-y-6">
         {/* Filtros */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 no-print">
           <div className="flex flex-wrap gap-4 items-end">
             {isManager && (
               <div className="min-w-[220px]">
@@ -143,7 +150,7 @@ export function RelatorioOsPage() {
           <>
             {/* Header do relatório */}
             <div className="bg-white rounded-xl border border-slate-200 p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4">
                 <div>
                   <h2 className="text-base font-semibold text-slate-800">
                     Relatorio de OS — {tecnicoNome}
@@ -152,6 +159,10 @@ export function RelatorioOsPage() {
                     Periodo: {fmtData(dataInicio)} a {fmtData(dataFim)}
                   </p>
                 </div>
+                <button onClick={() => window.print()}
+                  className="no-print flex items-center gap-1.5 px-3 py-2 text-sm text-slate-600 hover:text-capul-600 border border-slate-200 rounded-lg hover:border-capul-300">
+                  <Printer className="w-4 h-4" /> Imprimir
+                </button>
               </div>
             </div>
 
