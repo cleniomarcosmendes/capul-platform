@@ -1,0 +1,77 @@
+# ============================================================
+# FRAGMENTO docker-compose para o Módulo Fiscal
+# Mesclar manualmente em /mnt/c/meus_projetos/capul-platform/docker-compose.yml
+# após validação local. Não está incluído automaticamente para evitar surpresas
+# em produção.
+#
+# Após mesclar, lembrar de:
+#   - Adicionar variáveis FISCAL_*, PROTHEUS_*, SMTP_* no .env raiz
+#   - Aplicar a migration Prisma do schema fiscal
+#   - Inserir o módulo FISCAL em core.modulos_sistema (ver INIT_INSTRUCTIONS.md)
+#   - Adicionar o block location no nginx.conf (ver nginx-fiscal.conf)
+# ============================================================
+
+services:
+  fiscal-backend:
+    build:
+      context: ./fiscal/backend
+      dockerfile: Dockerfile
+    container_name: capul-fiscal-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public
+      DB_SCHEMA: fiscal
+      CORE_SCHEMA: core
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://localhost,https://localhost:5176}
+      NODE_ENV: production
+      PORT: 3002
+
+      # Certificado A1 dedicado (mitigação 11.A do addendum v1.5)
+      FISCAL_NFE_CERT_PATH: /app/certs/certificado-fiscal.pfx
+      FISCAL_MASTER_KEY: ${FISCAL_MASTER_KEY}
+
+      # SEFAZ
+      FISCAL_SEFAZ_AMBIENTE: ${FISCAL_SEFAZ_AMBIENTE:-HOMOLOGACAO}
+      FISCAL_PAUSE_SYNC: ${FISCAL_PAUSE_SYNC:-false}
+      FISCAL_CNPJ_CONSULENTE: ${FISCAL_CNPJ_CONSULENTE}
+
+      # Protheus
+      PROTHEUS_API_URL: ${PROTHEUS_API_URL}
+      PROTHEUS_API_AUTH: ${PROTHEUS_API_AUTH}
+      FISCAL_PROTHEUS_MOCK: ${FISCAL_PROTHEUS_MOCK:-true}
+
+      # SMTP (alertas digest)
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM}
+      FISCAL_FALLBACK_EMAIL: ${FISCAL_FALLBACK_EMAIL:-ti@capul.com.br}
+
+      FISCAL_STORAGE: /app/xmls
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./fiscal/backend/certs:/app/certs:ro
+      - fiscal_xmls:/app/xmls
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  fiscal-frontend:
+    build:
+      context: ./fiscal/frontend
+      dockerfile: Dockerfile
+    container_name: capul-fiscal-web
+    restart: unless-stopped
+    ports:
+      - "5176:5176"
+    depends_on:
+      - fiscal-backend
+
+volumes:
+  fiscal_xmls:

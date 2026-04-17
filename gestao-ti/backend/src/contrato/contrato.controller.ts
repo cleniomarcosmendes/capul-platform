@@ -416,7 +416,7 @@ export class ContratoController {
     if (!normalizedPath.startsWith(path.resolve(UPLOADS_DIR))) {
       throw new BadRequestException('Caminho de arquivo invalido');
     }
-    const inlineMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+    const inlineMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
     const canInline = inline === '1' && inlineMimes.includes(anexo.mimeType);
     res.setHeader('Content-Type', anexo.mimeType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `${canInline ? 'inline' : 'attachment'}; filename="${encodeURIComponent(anexo.nomeOriginal)}"`);

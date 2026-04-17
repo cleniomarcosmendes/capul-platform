@@ -7,9 +7,21 @@ import {
   Body,
   Param,
   Query,
+  Req,
+  Res,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import * as express from 'express';
+import { randomUUID } from 'crypto';
+import * as path from 'path';
+import * as fs from 'fs';
 import { ParadaService } from './parada.service';
+import { ParadaAnexoService } from './parada-anexo.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { GestaoTiGuard } from '../common/guards/gestao-ti.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -22,10 +34,23 @@ import { FinalizarParadaDto } from './dto/finalizar-parada.dto';
 import { CreateMotivoParadaDto } from './dto/create-motivo-parada.dto';
 import { UpdateMotivoParadaDto } from './dto/update-motivo-parada.dto';
 
+const ALLOWED_MIMES = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
+  'application/pdf',
+  'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain', 'text/csv',
+  'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
+  'application/octet-stream',
+];
+
 @Controller('paradas')
 @UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
 export class ParadaController {
-  constructor(private readonly service: ParadaService) {}
+  constructor(
+    private readonly service: ParadaService,
+    private readonly anexoService: ParadaAnexoService,
+  ) {}
 
   // === Motivos de Parada ===
 
@@ -151,5 +176,70 @@ export class ParadaController {
     @Param('colaboradorId') colaboradorId: string,
   ) {
     return this.service.removerColaborador(id, colaboradorId);
+  }
+
+  // === Anexos ===
+
+  @Get(':id/anexos')
+  listarAnexos(@Param('id') id: string) {
+    return this.anexoService.listAnexos(id);
+  }
+
+  @Post(':id/anexos')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: ParadaAnexoService.getUploadsDir(),
+        filename: (_req, file, cb) => {
+          const ext = path.extname(file.originalname);
+          cb(null, `${randomUUID()}${ext}`);
+        },
+      }),
+      limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        if (!ALLOWED_MIMES.includes(file.mimetype)) {
+          return cb(new BadRequestException('Tipo de arquivo nao permitido'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  addAnexo(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: JwtPayload,
+    @Body('descricao') descricao?: string,
+  ) {
+    if (!file) throw new BadRequestException('Arquivo nao enviado');
+    return this.anexoService.addAnexo(id, file, user.sub, descricao);
+  }
+
+  @Get(':id/anexos/:anexoId/download')
+  async downloadAnexo(
+    @Param('id') id: string,
+    @Param('anexoId') anexoId: string,
+    @Query('inline') inline: string,
+    @Res() res: express.Response,
+  ) {
+    const { filePath, anexo } = await this.anexoService.getAnexoFile(id, anexoId);
+    const safePath = path.resolve(filePath);
+    if (!safePath.startsWith(path.resolve(ParadaAnexoService.getUploadsDir()))) {
+      throw new BadRequestException('Caminho de arquivo invalido');
+    }
+    const inlineMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
+    const canInline = inline === '1' && inlineMimes.includes(anexo.mimeType);
+    res.setHeader('Content-Type', anexo.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `${canInline ? 'inline' : 'attachment'}; filename="${encodeURIComponent(anexo.nomeOriginal)}"`);
+    fs.createReadStream(filePath).pipe(res);
+  }
+
+  @Delete(':id/anexos/:anexoId')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  removeAnexo(
+    @Param('id') id: string,
+    @Param('anexoId') anexoId: string,
+  ) {
+    return this.anexoService.removeAnexo(id, anexoId);
   }
 }

@@ -275,6 +275,31 @@ export class DashboardOperacionalService {
     return usuarios;
   }
 
+  async getTecnicosDaEquipe(userId: string) {
+    // Buscar equipes onde o usuario e lider
+    const equipesLider = await this.prisma.membroEquipe.findMany({
+      where: { usuarioId: userId, isLider: true, status: 'ATIVO' },
+      select: { equipeId: true },
+    });
+    const equipeIds = equipesLider.map((e) => e.equipeId);
+    if (equipeIds.length === 0) return [];
+
+    // Buscar membros dessas equipes
+    const membros = await this.prisma.membroEquipe.findMany({
+      where: { equipeId: { in: equipeIds }, status: 'ATIVO' },
+      select: { usuarioId: true },
+      distinct: ['usuarioId'],
+    });
+    const ids = membros.map((m) => m.usuarioId);
+    if (ids.length === 0) return [];
+
+    return this.prisma.usuario.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, nome: true, username: true },
+      orderBy: { nome: 'asc' },
+    });
+  }
+
   private formatDuration(minutos: number): string {
     if (minutos < 1) return '< 1m';
     const h = Math.floor(minutos / 60);

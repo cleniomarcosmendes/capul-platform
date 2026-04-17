@@ -221,9 +221,11 @@ export function ConhecimentoDetalhePage() {
                         <div className="flex-1 min-w-0">
                           <button
                             onClick={() => {
-                              const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+                              const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
                               if (viewable.includes(a.mimeType)) {
-                                conhecimentoService.abrirAnexo(id!, a.id, a.mimeType);
+                                conhecimentoService.abrirAnexo(id!, a.id, a.mimeType).catch(() => {
+                                  conhecimentoService.downloadAnexo(id!, a.id, a.nomeOriginal);
+                                });
                               } else {
                                 conhecimentoService.downloadAnexo(id!, a.id, a.nomeOriginal);
                               }

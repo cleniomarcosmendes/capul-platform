@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { integracaoService, type IntegracaoApi, type IntegracaoEndpoint, type TesteConexaoResult } from '../../services/integracao.service';
-import { Plus, Plug, Pencil, Trash2, TestTube2, Check, X, ArrowRightLeft, ChevronDown, ChevronRight, Loader2, AlertTriangle, Shield, Server } from 'lucide-react';
+import { Plus, Plug, Pencil, Trash2, TestTube2, Check, X, ArrowRightLeft, Loader2, AlertTriangle, Shield, Server } from 'lucide-react';
 
 const AMBIENTES = ['PRODUCAO', 'HOMOLOGACAO'] as const;
 const METODOS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
@@ -196,8 +196,6 @@ export function IntegracoesPage() {
 
   const [integracoes, setIntegracoes] = useState<IntegracaoApi[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-
   // Form integracao
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -335,6 +333,7 @@ export function IntegracoesPage() {
     try {
       if (editingEpId) {
         await integracaoService.atualizarEndpoint(editingEpId, {
+          ambiente: epAmbiente,
           descricao: epDescricao || undefined,
           url: epUrl,
           metodo: epMetodo,
@@ -457,7 +456,63 @@ export function IntegracoesPage() {
           </form>
         )}
 
-        {/* Lista */}
+        {/* Form endpoint inline */}
+        {showEpForm && canEdit && (
+          <form onSubmit={handleEndpointSubmit} className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+            <h4 className="text-sm font-semibold text-slate-800 mb-4">{editingEpId ? 'Editar Endpoint' : 'Novo Endpoint'}</h4>
+            <div className="grid grid-cols-4 gap-3 mb-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Integracao</label>
+                <select value={showEpForm} onChange={(e) => setShowEpForm(e.target.value)} disabled={!!editingEpId}
+                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs disabled:bg-slate-100">
+                  {integracoes.map((i) => <option key={i.id} value={i.id}>{i.nome} ({i.codigo})</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Ambiente</label>
+                <select value={epAmbiente} onChange={(e) => setEpAmbiente(e.target.value as any)}
+                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs">
+                  {AMBIENTES.map((a) => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Operacao *</label>
+                <input type="text" value={epOperacao} onChange={(e) => setEpOperacao(e.target.value)} required disabled={!!editingEpId}
+                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs disabled:bg-slate-100 uppercase" placeholder="HIERARQUIA" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Metodo</label>
+                <select value={epMetodo} onChange={(e) => setEpMetodo(e.target.value as any)}
+                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs">
+                  {METODOS.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">URL *</label>
+                <input type="text" value={epUrl} onChange={(e) => setEpUrl(e.target.value)} required
+                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs font-mono" placeholder="https://api.exemplo.com/endpoint" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Descricao</label>
+                <input type="text" value={epDescricao} onChange={(e) => setEpDescricao(e.target.value)}
+                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs" placeholder="Descricao do endpoint" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Timeout (ms)</label>
+                <input type="number" value={epTimeout} onChange={(e) => setEpTimeout(e.target.value)} min="1000"
+                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs" />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button type="submit" disabled={savingEp} className="bg-emerald-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-emerald-700 disabled:opacity-50">{savingEp ? 'Salvando...' : 'Salvar'}</button>
+              <button type="button" onClick={() => { setShowEpForm(null); setEditingEpId(null); }} className="text-xs text-slate-500 hover:text-slate-700">Cancelar</button>
+            </div>
+          </form>
+        )}
+
+        {/* Lista flat de endpoints por integracao */}
         {loading ? (
           <div className="text-center py-12 text-slate-500">Carregando...</div>
         ) : integracoes.length === 0 ? (
@@ -466,229 +521,138 @@ export function IntegracoesPage() {
             <p className="text-slate-500">Nenhuma integracao cadastrada</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {integracoes.map((integ) => {
-              const isExpanded = expandedId === integ.id;
-              const endpointsAtivos = integ.endpoints.filter((ep) => ep.ambiente === integ.ambiente);
-              const endpointsOutro = integ.endpoints.filter((ep) => ep.ambiente !== integ.ambiente);
+              const allEndpoints = integ.endpoints;
+              const operacoes = [...new Set(allEndpoints.map((ep) => ep.operacao))];
 
               return (
                 <div key={integ.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                  {/* Header card */}
-                  <div className="px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-slate-50" onClick={() => setExpandedId(isExpanded ? null : integ.id)}>
-                    <div className="flex items-center gap-4">
-                      {isExpanded ? <ChevronDown className="w-5 h-5 text-slate-400" /> : <ChevronRight className="w-5 h-5 text-slate-400" />}
-                      <div>
-                        <div className="flex items-center gap-3">
-                          <span className="font-semibold text-slate-800">{integ.nome}</span>
-                          <span className="text-xs font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{integ.codigo}</span>
-                          <AmbienteBadge ambiente={integ.ambiente} />
-                          {!integ.ativo && <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-500">INATIVO</span>}
-                        </div>
-                        {integ.descricao && <p className="text-sm text-slate-500 mt-0.5">{integ.descricao}</p>}
-                      </div>
+                  {/* Header da integracao */}
+                  <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Plug className="w-5 h-5 text-emerald-600" />
+                      <span className="font-semibold text-slate-800">{integ.nome}</span>
+                      <span className="text-xs font-mono text-slate-400 bg-slate-200 px-2 py-0.5 rounded">{integ.codigo}</span>
+                      <AmbienteBadge ambiente={integ.ambiente} />
+                      <span className="text-xs text-slate-400">Auth: {integ.tipoAuth}</span>
                     </div>
-                    <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-                      <span className="text-xs text-slate-400">{endpointsAtivos.length} endpoint{endpointsAtivos.length !== 1 ? 's' : ''} ({integ.ambiente.toLowerCase()})</span>
+                    <div className="flex items-center gap-2">
                       {canEdit && (
                         <>
-                          <button onClick={() => testarTodos(integ)} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded border border-blue-200 hover:bg-blue-50" title="Testar todos endpoints ativos">
+                          <button onClick={() => testarTodos(integ)} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded border border-blue-200 hover:bg-blue-50">
                             <TestTube2 className="w-3.5 h-3.5" /> Testar Todos
                           </button>
-                          <button onClick={() => setAmbienteModal(integ)} className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-800 px-2 py-1 rounded border border-amber-200 hover:bg-amber-50" title="Alternar ambiente">
+                          <button onClick={() => setAmbienteModal(integ)} className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-800 px-2 py-1 rounded border border-amber-200 hover:bg-amber-50">
                             <ArrowRightLeft className="w-3.5 h-3.5" /> Trocar Ambiente
                           </button>
-                          <button onClick={() => iniciarEdicao(integ)} className="text-emerald-600 hover:text-emerald-800"><Pencil className="w-4 h-4" /></button>
+                          <button onClick={() => iniciarNovoEndpoint(integ.id)} className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-800 px-2 py-1 rounded border border-emerald-200 hover:bg-emerald-50">
+                            <Plus className="w-3.5 h-3.5" /> Endpoint
+                          </button>
+                          <button onClick={() => iniciarEdicao(integ)} className="text-slate-400 hover:text-emerald-600" title="Editar integracao"><Pencil className="w-4 h-4" /></button>
                           <button onClick={async () => {
                             if (!confirm(`Excluir integracao "${integ.nome}" e todos seus endpoints?`)) return;
                             try { await integracaoService.excluir(integ.id); carregar(); } catch { alert('Erro ao excluir'); }
-                          }} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></button>
+                          }} className="text-slate-400 hover:text-red-600" title="Excluir integracao"><Trash2 className="w-4 h-4" /></button>
                         </>
                       )}
                     </div>
                   </div>
 
-                  {/* Expanded: endpoints */}
-                  {isExpanded && (
-                    <div className="border-t border-slate-200 px-6 py-4">
-                      {/* Ambiente ativo */}
-                      <div className="mb-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <h5 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                            Endpoints — <AmbienteBadge ambiente={integ.ambiente} /> <span className="text-xs font-normal text-slate-400">(ativo)</span>
-                          </h5>
-                          {canEdit && (
-                            <button onClick={() => iniciarNovoEndpoint(integ.id)} className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-800">
-                              <Plus className="w-3.5 h-3.5" /> Adicionar Endpoint
-                            </button>
-                          )}
-                        </div>
+                  {/* Tabela flat de endpoints */}
+                  {allEndpoints.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">
+                            <th className="px-4 py-2.5">Operacao</th>
+                            <th className="px-4 py-2.5 text-center">Producao</th>
+                            <th className="px-4 py-2.5 text-center">Homologacao</th>
+                            <th className="px-4 py-2.5">Metodo</th>
+                            <th className="px-4 py-2.5">URL</th>
+                            <th className="px-4 py-2.5">Timeout</th>
+                            <th className="px-4 py-2.5">Status</th>
+                            {canEdit && <th className="px-4 py-2.5">Acoes</th>}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {operacoes.map((op) => {
+                            const epProd = allEndpoints.find((ep) => ep.operacao === op && ep.ambiente === 'PRODUCAO');
+                            const epHomol = allEndpoints.find((ep) => ep.operacao === op && ep.ambiente === 'HOMOLOGACAO');
+                            const epAtivo = integ.ambiente === 'PRODUCAO' ? epProd : epHomol;
+                            const ep = epAtivo || epProd || epHomol;
+                            if (!ep) return null;
 
-                        {/* Form endpoint */}
-                        {showEpForm === integ.id && canEdit && (
-                          <form onSubmit={handleEndpointSubmit} className="bg-slate-50 rounded-lg p-4 mb-4 border border-slate-200">
-                            <h6 className="text-xs font-semibold text-slate-600 mb-3">{editingEpId ? 'Editar Endpoint' : 'Novo Endpoint'}</h6>
-                            <div className="grid grid-cols-4 gap-3 mb-3">
-                              <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Ambiente</label>
-                                <select value={epAmbiente} onChange={(e) => setEpAmbiente(e.target.value as any)} disabled={!!editingEpId}
-                                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:bg-slate-100">
-                                  {AMBIENTES.map((a) => <option key={a} value={a}>{a}</option>)}
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Operacao *</label>
-                                <input type="text" value={epOperacao} onChange={(e) => setEpOperacao(e.target.value)} required disabled={!!editingEpId}
-                                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:bg-slate-100 uppercase" placeholder="HIERARQUIA" />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Metodo</label>
-                                <select value={epMetodo} onChange={(e) => setEpMetodo(e.target.value as any)}
-                                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600">
-                                  {METODOS.map((m) => <option key={m} value={m}>{m}</option>)}
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Timeout (ms)</label>
-                                <input type="number" value={epTimeout} onChange={(e) => setEpTimeout(e.target.value)} min="1000"
-                                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600" />
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3 mb-3">
-                              <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">URL *</label>
-                                <input type="text" value={epUrl} onChange={(e) => setEpUrl(e.target.value)} required
-                                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600 font-mono" placeholder="https://api.exemplo.com/endpoint" />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Descricao</label>
-                                <input type="text" value={epDescricao} onChange={(e) => setEpDescricao(e.target.value)}
-                                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600" placeholder="Busca hierarquia mercadologica" />
-                              </div>
-                            </div>
-                            <div className="flex gap-2">
-                              <button type="submit" disabled={savingEp} className="bg-emerald-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-emerald-700 disabled:opacity-50">{savingEp ? 'Salvando...' : 'Salvar'}</button>
-                              <button type="button" onClick={() => { setShowEpForm(null); setEditingEpId(null); }} className="text-xs text-slate-500 hover:text-slate-700">Cancelar</button>
-                            </div>
-                          </form>
-                        )}
-
-                        {/* Tabela endpoints ambiente ativo */}
-                        {endpointsAtivos.length > 0 ? (
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                                <th className="pb-2 pr-4">Operacao</th>
-                                <th className="pb-2 pr-4">Metodo</th>
-                                <th className="pb-2 pr-4">URL</th>
-                                <th className="pb-2 pr-4">Timeout</th>
-                                <th className="pb-2 pr-4">Status</th>
-                                {canEdit && <th className="pb-2">Acoes</th>}
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {endpointsAtivos.map((ep) => (
-                                <tr key={ep.id} className="hover:bg-slate-50">
-                                  <td className="py-2.5 pr-4">
-                                    <span className="font-medium text-slate-700">{ep.operacao}</span>
-                                    {ep.descricao && <p className="text-xs text-slate-400">{ep.descricao}</p>}
-                                  </td>
-                                  <td className="py-2.5 pr-4"><MetodoBadge metodo={ep.metodo} /></td>
-                                  <td className="py-2.5 pr-4"><span className="text-xs font-mono text-slate-600 break-all">{ep.url}</span></td>
-                                  <td className="py-2.5 pr-4 text-xs text-slate-500">{(ep.timeoutMs / 1000).toFixed(0)}s</td>
-                                  <td className="py-2.5 pr-4">
-                                    {testingId === ep.id ? (
-                                      <div className="flex items-center gap-1.5">
-                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
-                                        <span className="text-xs text-blue-500">Testando...</span>
-                                      </div>
-                                    ) : testResults[ep.id] ? (
-                                      <div className="flex items-center gap-1.5">
-                                        <StatusBadge result={testResults[ep.id]} />
-                                        <span className="text-xs text-slate-400">{testResults[ep.id].duracao}ms</span>
-                                      </div>
-                                    ) : (
-                                      <span className="text-xs text-slate-300">—</span>
-                                    )}
-                                  </td>
-                                  {canEdit && (
-                                    <td className="py-2.5">
-                                      <div className="flex items-center gap-2">
+                            return (
+                              <tr key={op} className="hover:bg-slate-50">
+                                <td className="px-4 py-3">
+                                  <span className="font-medium text-slate-700">{op}</span>
+                                  {ep.descricao && <p className="text-xs text-slate-400 mt-0.5">{ep.descricao}</p>}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  {epProd ? (
+                                    <span className={`inline-block w-3 h-3 rounded-full ${integ.ambiente === 'PRODUCAO' ? 'bg-green-500' : 'bg-slate-300'}`} title={epProd.url} />
+                                  ) : (
+                                    <span className="text-xs text-slate-300">-</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  {epHomol ? (
+                                    <span className={`inline-block w-3 h-3 rounded-full ${integ.ambiente === 'HOMOLOGACAO' ? 'bg-green-500' : 'bg-slate-300'}`} title={epHomol.url} />
+                                  ) : (
+                                    <span className="text-xs text-slate-300">-</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3"><MetodoBadge metodo={ep.metodo} /></td>
+                                <td className="px-4 py-3"><span className="text-xs font-mono text-slate-600 break-all">{ep.url}</span></td>
+                                <td className="px-4 py-3 text-xs text-slate-500">{(ep.timeoutMs / 1000).toFixed(0)}s</td>
+                                <td className="px-4 py-3">
+                                  {epAtivo && testingId === epAtivo.id ? (
+                                    <div className="flex items-center gap-1.5">
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+                                      <span className="text-xs text-blue-500">Testando...</span>
+                                    </div>
+                                  ) : epAtivo && testResults[epAtivo.id] ? (
+                                    <div className="flex items-center gap-1.5">
+                                      <StatusBadge result={testResults[epAtivo.id]} />
+                                      <span className="text-xs text-slate-400">{testResults[epAtivo.id].duracao}ms</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-slate-300">-</span>
+                                  )}
+                                </td>
+                                {canEdit && (
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center gap-2">
+                                      {epAtivo && (
                                         <button
-                                          onClick={() => testarEndpoint(ep, integ)}
-                                          disabled={testingId === ep.id}
-                                          className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-1 rounded-md transition-colors disabled:opacity-50"
+                                          onClick={() => testarEndpoint(epAtivo, integ)}
+                                          disabled={testingId === epAtivo.id}
+                                          className="inline-flex items-center gap-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 px-2.5 py-1 rounded-md disabled:opacity-50"
                                           title="Testar conexao"
                                         >
-                                          <TestTube2 className="w-3 h-3" />
-                                          Testar
+                                          <TestTube2 className="w-3 h-3" /> Testar
                                         </button>
-                                        <button onClick={() => iniciarEdicaoEndpoint(ep)} className="text-slate-400 hover:text-emerald-600 transition-colors" title="Editar"><Pencil className="w-3.5 h-3.5" /></button>
-                                        <button onClick={async () => {
-                                          if (!confirm(`Excluir endpoint "${ep.operacao}"?`)) return;
-                                          try { await integracaoService.excluirEndpoint(ep.id); carregar(); } catch { alert('Erro ao excluir'); }
-                                        }} className="text-slate-400 hover:text-red-600 transition-colors" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>
-                                      </div>
-                                    </td>
-                                  )}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        ) : (
-                          <p className="text-sm text-slate-400 italic">Nenhum endpoint cadastrado para este ambiente</p>
-                        )}
-                      </div>
-
-                      {/* Ambiente inativo (colapsado) */}
-                      {endpointsOutro.length > 0 && (
-                        <div className="mt-4 pt-4 border-t border-slate-100">
-                          <h5 className="text-sm font-semibold text-slate-500 mb-3 flex items-center gap-2">
-                            Endpoints — <AmbienteBadge ambiente={integ.ambiente === 'PRODUCAO' ? 'HOMOLOGACAO' : 'PRODUCAO'} /> <span className="text-xs font-normal text-slate-400">(inativo)</span>
-                          </h5>
-                          <table className="w-full text-sm opacity-60">
-                            <thead>
-                              <tr className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                                <th className="pb-2 pr-4">Operacao</th>
-                                <th className="pb-2 pr-4">Metodo</th>
-                                <th className="pb-2 pr-4">URL</th>
-                                <th className="pb-2 pr-4">Timeout</th>
-                                {canEdit && <th className="pb-2">Acoes</th>}
+                                      )}
+                                      <button onClick={() => iniciarEdicaoEndpoint(ep)} className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-md" title="Editar">
+                                        <Pencil className="w-3 h-3" /> Editar
+                                      </button>
+                                      <button onClick={async () => {
+                                        if (!confirm(`Excluir endpoint "${ep.operacao}"?`)) return;
+                                        try { await integracaoService.excluirEndpoint(ep.id); carregar(); } catch { alert('Erro ao excluir'); }
+                                      }} className="text-slate-400 hover:text-red-600" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>
+                                    </div>
+                                  </td>
+                                )}
                               </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {endpointsOutro.map((ep) => (
-                                <tr key={ep.id}>
-                                  <td className="py-2 pr-4 text-slate-600">{ep.operacao}</td>
-                                  <td className="py-2 pr-4"><MetodoBadge metodo={ep.metodo} /></td>
-                                  <td className="py-2 pr-4 text-xs font-mono text-slate-500 break-all">{ep.url}</td>
-                                  <td className="py-2 pr-4 text-xs text-slate-500">{(ep.timeoutMs / 1000).toFixed(0)}s</td>
-                                  {canEdit && (
-                                    <td className="py-2">
-                                      <div className="flex items-center gap-2">
-                                        <button onClick={() => iniciarEdicaoEndpoint(ep)} className="text-emerald-600 hover:text-emerald-800"><Pencil className="w-3.5 h-3.5" /></button>
-                                        <button onClick={async () => {
-                                          if (!confirm(`Excluir endpoint "${ep.operacao}"?`)) return;
-                                          try { await integracaoService.excluirEndpoint(ep.id); carregar(); } catch { alert('Erro ao excluir'); }
-                                        }} className="text-red-500 hover:text-red-700"><Trash2 className="w-3.5 h-3.5" /></button>
-                                      </div>
-                                    </td>
-                                  )}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-
-                      {/* Info autenticacao */}
-                      <div className="mt-4 pt-4 border-t border-slate-100">
-                        <div className="flex items-center gap-6 text-xs text-slate-500">
-                          <span>Auth: <span className="font-medium text-slate-700">{integ.tipoAuth}</span></span>
-                          <span>Credencial: <span className="font-medium text-slate-700">{integ.authConfig ? '********' : 'Nao configurada'}</span></span>
-                          <span>Atualizado: <span className="font-medium text-slate-700">{new Date(integ.updatedAt).toLocaleString('pt-BR')}</span></span>
-                        </div>
-                      </div>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="px-6 py-8 text-center text-sm text-slate-400">
+                      Nenhum endpoint cadastrado nesta integracao
                     </div>
                   )}
                 </div>

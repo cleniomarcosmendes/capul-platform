@@ -9,6 +9,7 @@ import { CentrosCustoPage } from './pages/centros-custo/CentrosCustoPage';
 import { UsuariosListPage } from './pages/usuarios/UsuariosListPage';
 import { UsuarioFormPage } from './pages/usuarios/UsuarioFormPage';
 import { IntegracoesPage } from './pages/integracoes/IntegracoesPage';
+import { CertificadoFiscalPage } from './pages/certificado/CertificadoFiscalPage';
 import type { ReactNode } from 'react';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -62,6 +63,7 @@ function AppRoutes() {
         <Route path="usuarios/novo" element={<UsuarioFormPage />} />
         <Route path="usuarios/:id" element={<UsuarioFormPage />} />
         <Route path="integracoes" element={<IntegracoesPage />} />
+        <Route path="certificado-fiscal" element={<CertificadoFiscalPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/configurador" replace />} />
     </Routes>

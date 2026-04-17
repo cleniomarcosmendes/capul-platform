@@ -63,7 +63,7 @@ const statusLabels: Record<string, string> = {
 
 export function RelatorioOsPage() {
   const { gestaoTiRole, usuario } = useAuth();
-  const isManager = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
+  const isManager = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
 
   const [tecnicos, setTecnicos] = useState<{ id: string; nome: string; username: string }[]>([]);
   const [tecnicoId, setTecnicoId] = useState('');
@@ -105,10 +105,15 @@ export function RelatorioOsPage() {
     <>
       <style>{`@media print {
         .no-print { display: none !important; }
-        header, aside, nav { display: none !important; }
-        main { padding: 0 !important; }
-        body, html { background: white !important; }
+        aside { display: none !important; }
+        header, nav { display: none !important; }
+        main { padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: 100% !important; }
+        .flex.h-screen { display: block !important; }
+        body, html { background: white !important; overflow: visible !important; }
+        .overflow-y-auto, .overflow-hidden { overflow: visible !important; }
         .bg-white { box-shadow: none !important; border-color: #e2e8f0 !important; }
+        table { page-break-inside: auto; font-size: 11px; }
+        tr { page-break-inside: avoid; }
       }`}</style>
       <Header title="Relatorio de OS" />
       <main className="p-6 space-y-6">
@@ -159,7 +164,7 @@ export function RelatorioOsPage() {
                     Periodo: {fmtData(dataInicio)} a {fmtData(dataFim)}
                   </p>
                 </div>
-                <button onClick={() => window.print()}
+                <button onClick={() => { setShowChamados(true); setShowAtividades(true); setShowApontamentos(true); setTimeout(() => window.print(), 100); }}
                   className="no-print flex items-center gap-1.5 px-3 py-2 text-sm text-slate-600 hover:text-capul-600 border border-slate-200 rounded-lg hover:border-capul-300">
                   <Printer className="w-4 h-4" /> Imprimir
                 </button>

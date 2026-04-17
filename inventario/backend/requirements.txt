@@ -31,6 +31,9 @@ requests==2.31.0               # HTTP client for sync (usado em sync_protheus v2
 # Cache (v2.19.13)
 redis==5.0.1                   # Redis client for caching
 
+# Rate Limiting (seguranca — protecao contra forca bruta)
+slowapi==0.1.9                 # Rate limiter para FastAPI
+
 # Desenvolvimento e Testes
 pytest==7.4.3                  # Testing framework
 pytest-asyncio==0.21.1         # Async testing

@@ -15,6 +15,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { CreateChamadoDto } from './dto/create-chamado.dto.js';
+import { UpdateChamadoHeaderDto } from './dto/update-chamado-header.dto.js';
 import { TransferirEquipeDto, TransferirTecnicoDto } from './dto/transferir-chamado.dto.js';
 import { ComentarioChamadoDto } from './dto/comentario-chamado.dto.js';
 import { ResolverChamadoDto, ReabrirChamadoDto, CsatDto } from './dto/resolver-chamado.dto.js';
@@ -101,6 +102,16 @@ export class ChamadoController {
     // IP da maquina deve ser informado pelo usuario, nao capturado automaticamente
     // (captura automatica retorna IP do Docker/proxy ao inves do IP real)
     return this.service.create(dto, user, role);
+  }
+
+  @Patch(':id/cabecalho')
+  updateHeader(
+    @Param('id') id: string,
+    @Body() dto: UpdateChamadoHeaderDto,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.updateHeader(id, dto, user, role);
   }
 
   @Post(':id/assumir')
@@ -277,7 +288,7 @@ export class ChamadoController {
       : 'application/octet-stream';
 
     // Tipos que podem ser visualizados inline no browser
-    const inlineMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+    const inlineMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
     const canInline = inline === '1' && inlineMimes.includes(mimeType);
 
     res.setHeader('Content-Type', mimeType);

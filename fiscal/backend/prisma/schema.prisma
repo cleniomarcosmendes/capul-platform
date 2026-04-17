@@ -1,0 +1,428 @@
+// ============================================================
+// Módulo Fiscal — Plataforma Capul
+// Prisma 6 multi-schema: fiscal (RW) + core (RO)
+// Plano de referência: PLANO_MODULO_FISCAL_v1.4 + ADDENDUM v1.5
+// Especificação API Protheus: ESPECIFICACAO_API_PROTHEUS_FISCAL_v2.0
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["fiscal", "core"]
+}
+
+// ============================================================
+// SCHEMA core — read-only (mesmas tabelas usadas por gestao-ti)
+// Apenas as colunas/relações que o módulo fiscal precisa ler.
+// ============================================================
+
+model UsuarioCore {
+  id                String   @id @db.Uuid
+  email             String   @unique
+  nome              String
+  ativo             Boolean
+  createdAt         DateTime @map("created_at")
+  updatedAt         DateTime @map("updated_at")
+  modulosUsuario    UsuarioModuloCore[]
+
+  @@map("usuarios")
+  @@schema("core")
+}
+
+model UsuarioModuloCore {
+  id           String      @id @db.Uuid
+  usuarioId    String      @map("usuario_id") @db.Uuid
+  moduloCodigo String      @map("modulo_codigo")
+  role         String
+  ativo        Boolean
+  usuario      UsuarioCore @relation(fields: [usuarioId], references: [id])
+
+  @@map("usuarios_modulos")
+  @@schema("core")
+}
+
+// ============================================================
+// SCHEMA fiscal — read/write
+// 12 tabelas conforme Seção 9.1 do PLANO_MODULO_FISCAL_v1.4
+// + ajustes da v1.5 (gate de bootstrap, circuit breaker UF, alertas)
+// ============================================================
+
+// ----- Frente NF-e / CT-e -----
+
+enum TipoDocumentoFiscal {
+  NFE
+  CTE
+
+  @@schema("fiscal")
+}
+
+enum OrigemConsulta {
+  PROTHEUS_CACHE       // já estava em SZR010
+  PROTHEUS_CACHE_RACE  // race condition: gravamos via POST mas Protheus já tinha
+  SEFAZ_DOWNLOAD       // baixado agora do SEFAZ e gravado no Protheus
+
+  @@schema("fiscal")
+}
+
+model DocumentoConsulta {
+  id                          String              @id @default(uuid()) @db.Uuid
+  chave                       String              @db.Char(44)
+  tipoDocumento               TipoDocumentoFiscal @map("tipo_documento")
+  filial                      String              @db.VarChar(2)
+  usuarioId                   String              @map("usuario_id") @db.Uuid
+  usuarioEmail                String              @map("usuario_email")
+  origem                      OrigemConsulta
+  consultaSefazAtualizadaEm   DateTime?           @map("consulta_sefaz_atualizada_em") // botão "Atualizar status"
+  ambienteSefaz               String              @map("ambiente_sefaz") @db.VarChar(20) // PROD | HOM
+  protocoloAutorizacao        String?             @map("protocolo_autorizacao")
+  dataAutorizacao             DateTime?           @map("data_autorizacao")
+  cnpjEmitente                String?             @map("cnpj_emitente") @db.Char(14)
+  cnpjDestinatario            String?             @map("cnpj_destinatario") @db.Char(14)
+  numeroNF                    String?             @map("numero_nf") @db.VarChar(9)
+  serie                       String?             @db.VarChar(3)
+  valorTotal                  Decimal?            @map("valor_total") @db.Decimal(15, 2)
+  statusAtual                 String?             @db.VarChar(30)
+  erroMensagem                String?             @map("erro_mensagem")
+  createdAt                   DateTime            @default(now()) @map("created_at")
+  updatedAt                   DateTime            @updatedAt @map("updated_at")
+
+  eventos                     DocumentoEvento[]
+
+  @@unique([chave, filial])
+  @@index([cnpjEmitente])
+  @@index([cnpjDestinatario])
+  @@index([usuarioId])
+  @@index([createdAt])
+  @@map("documento_consulta")
+  @@schema("fiscal")
+}
+
+model DocumentoXmlIndex {
+  id              String              @id @default(uuid()) @db.Uuid
+  chave           String              @unique @db.Char(44)
+  tipoDocumento   TipoDocumentoFiscal @map("tipo_documento")
+  caminhoArquivo  String?             @map("caminho_arquivo")
+  tamanhoBytes    Int?                @map("tamanho_bytes")
+  origem          OrigemConsulta
+  hashSha256      String?             @map("hash_sha256") @db.Char(64)
+  createdAt       DateTime            @default(now()) @map("created_at")
+
+  @@index([chave])
+  @@map("documento_xml")
+  @@schema("fiscal")
+}
+
+model DocumentoEvento {
+  id                  String            @id @default(uuid()) @db.Uuid
+  documentoId         String            @map("documento_id") @db.Uuid
+  /// Código do evento: "AUTORIZACAO" para o protocolo inicial,
+  /// ou o tpEvento SEFAZ (110110 CC-e, 110111 Cancelamento, 110140 EPEC,
+  /// 210200 Confirmação da operação, etc.)
+  tipoEvento          String            @map("tipo_evento") @db.VarChar(20)
+  descricao           String
+  dataEvento          DateTime          @map("data_evento")
+  protocoloEvento     String?           @map("protocolo_evento")
+  cStat               String?           @map("c_stat") @db.VarChar(4)
+  xMotivo             String?           @map("x_motivo")
+  xmlEvento           String?           @map("xml_evento") @db.Text
+  createdAt           DateTime          @default(now()) @map("created_at")
+
+  documento           DocumentoConsulta @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  /// Dedupe: o mesmo evento não é persistido duas vezes quando o usuário
+  /// re-consulta. (documentoId + tipoEvento + dataEvento) identifica um evento
+  /// único — o mesmo tpEvento pode ter múltiplas ocorrências em datas diferentes
+  /// (ex.: 2 CC-e sequenciais).
+  @@unique([documentoId, tipoEvento, dataEvento], name: "documento_evento_unique")
+  @@index([documentoId])
+  @@map("documento_evento")
+  @@schema("fiscal")
+}
+
+// ----- Frente Sintegra / CCC -----
+
+enum SituacaoCadastral {
+  HABILITADO
+  NAO_HABILITADO
+  SUSPENSO
+  INAPTO
+  BAIXADO
+  DESCONHECIDO
+
+  @@schema("fiscal")
+}
+
+enum TipoCadastroProtheus {
+  SA1010 // Cliente
+  SA2010 // Fornecedor
+
+  @@schema("fiscal")
+}
+
+model CadastroContribuinte {
+  id                       String                  @id @default(uuid()) @db.Uuid
+  cnpj                     String                  @db.Char(14)
+  uf                       String                  @db.Char(2)
+  inscricaoEstadual        String?                 @map("inscricao_estadual") @db.VarChar(20)
+  razaoSocial              String?                 @map("razao_social")
+  nomeFantasia             String?                 @map("nome_fantasia")
+  cnae                     String?                 @db.VarChar(7)
+  regimeTributario         String?                 @map("regime_tributario") @db.VarChar(50)
+  situacao                 SituacaoCadastral
+  dataInicioAtividade      DateTime?               @map("data_inicio_atividade")
+  dataUltimaAtualizacaoCcc DateTime?               @map("data_ultima_atualizacao_ccc")
+  enderecoLogradouro       String?                 @map("endereco_logradouro")
+  enderecoNumero           String?                 @map("endereco_numero") @db.VarChar(20)
+  enderecoBairro           String?                 @map("endereco_bairro")
+  enderecoMunicipio        String?                 @map("endereco_municipio")
+  enderecoCep              String?                 @map("endereco_cep") @db.VarChar(8)
+  /// Vínculos com as tabelas SA1010 (Clientes) e/ou SA2010 (Fornecedores) do Protheus.
+  /// Um mesmo CNPJ pode estar em AMBAS as tabelas (empresa é cliente E fornecedor)
+  /// com dados potencialmente divergentes. Array JSON de objetos:
+  /// [{ origem: "SA1010"|"SA2010", filial, codigo, loja, bloqueado, razaoSocial?, inscricaoEstadual? }]
+  vinculosProtheus         Json?                   @map("vinculos_protheus") @db.JsonB
+  ultimaConsultaCccEm      DateTime?               @map("ultima_consulta_ccc_em")
+  ultimaSincronizacaoId    String?                 @map("ultima_sincronizacao_id") @db.Uuid
+  createdAt                DateTime                @default(now()) @map("created_at")
+  updatedAt                DateTime                @updatedAt @map("updated_at")
+
+  historico                CadastroHistorico[]
+  divergencias             CadastroDivergencia[]
+
+  @@unique([cnpj, uf])
+  @@index([cnpj])
+  @@index([situacao])
+  @@index([uf])
+  @@map("cadastro_contribuinte")
+  @@schema("fiscal")
+}
+
+model CadastroHistorico {
+  id                  String               @id @default(uuid()) @db.Uuid
+  contribuinteId      String               @map("contribuinte_id") @db.Uuid
+  situacaoAnterior    SituacaoCadastral?   @map("situacao_anterior")
+  situacaoNova        SituacaoCadastral    @map("situacao_nova")
+  detectadoEm         DateTime             @default(now()) @map("detectado_em")
+  sincronizacaoId     String?              @map("sincronizacao_id") @db.Uuid
+
+  contribuinte        CadastroContribuinte @relation(fields: [contribuinteId], references: [id], onDelete: Cascade)
+
+  @@index([contribuinteId])
+  @@index([detectadoEm])
+  @@map("cadastro_historico")
+  @@schema("fiscal")
+}
+
+enum CriticidadeDivergencia {
+  BAIXA
+  MEDIA
+  ALTA
+  CRITICA
+
+  @@schema("fiscal")
+}
+
+enum StatusDivergencia {
+  ABERTA
+  RESOLVIDA
+  IGNORADA
+
+  @@schema("fiscal")
+}
+
+model CadastroDivergencia {
+  id              String                  @id @default(uuid()) @db.Uuid
+  contribuinteId  String                  @map("contribuinte_id") @db.Uuid
+  campo           String                  @db.VarChar(50) // razao_social, ie, cnae, endereco, situacao
+  valorProtheus   String?                 @map("valor_protheus")
+  valorSefaz      String?                 @map("valor_sefaz")
+  criticidade     CriticidadeDivergencia
+  status          StatusDivergencia       @default(ABERTA)
+  detectadaEm     DateTime                @default(now()) @map("detectada_em")
+  resolvidaEm     DateTime?               @map("resolvida_em")
+  resolvidaPor    String?                 @map("resolvida_por") @db.Uuid
+
+  contribuinte    CadastroContribuinte    @relation(fields: [contribuinteId], references: [id], onDelete: Cascade)
+
+  @@index([contribuinteId])
+  @@index([status])
+  @@index([criticidade])
+  @@map("cadastro_divergencia")
+  @@schema("fiscal")
+}
+
+// ----- Sincronização (cruzamento) -----
+
+enum TipoSincronizacao {
+  BOOTSTRAP        // primeira carga, dia da liberação
+  SEMANAL_AUTO     // cron sábado
+  DIARIA_AUTO      // cron noturno (com movimento Protheus)
+  DIARIA_MANUAL    // botão Setor Fiscal
+  PONTUAL          // 1 CNPJ
+  COMPLETA_MANUAL  // botão GESTOR_FISCAL excepcional
+
+  @@schema("fiscal")
+}
+
+enum StatusSincronizacao {
+  AGENDADA
+  EM_EXECUCAO
+  CONCLUIDA
+  CONCLUIDA_COM_ERROS
+  FALHADA
+  CANCELADA
+
+  @@schema("fiscal")
+}
+
+model CadastroSincronizacao {
+  id                  String              @id @default(uuid()) @db.Uuid
+  tipo                TipoSincronizacao
+  status              StatusSincronizacao
+  disparadoPor        String?             @map("disparado_por") // 'sistema' ou usuario_id
+  iniciadoEm          DateTime            @map("iniciado_em")
+  finalizadoEm        DateTime?           @map("finalizado_em")
+  totalContribuintes  Int?                @map("total_contribuintes")
+  sucessos            Int                 @default(0)
+  erros               Int                 @default(0)
+  errosPorUf          Json?               @map("erros_por_uf")
+  resumoMudancas      Json?               @map("resumo_mudancas") // pre-digest
+  observacoes         String?
+  createdAt           DateTime            @default(now()) @map("created_at")
+
+  alertas             AlertaEnviado[]
+
+  @@index([tipo])
+  @@index([status])
+  @@index([iniciadoEm])
+  @@map("cadastro_sincronizacao")
+  @@schema("fiscal")
+}
+
+model ProtheusSnapshot {
+  id            String   @id @default(uuid()) @db.Uuid
+  sincronizacaoId String? @map("sincronizacao_id") @db.Uuid
+  tipo          TipoCadastroProtheus // SA1010 ou SA2010
+  filial        String?  @db.VarChar(2)
+  quantidade    Int
+  hash          String?  @db.Char(64)
+  capturadoEm   DateTime @default(now()) @map("capturado_em")
+  payload       Json?    // pequena amostra/metadados, não a base inteira
+
+  @@index([sincronizacaoId])
+  @@index([tipo])
+  @@map("protheus_snapshot")
+  @@schema("fiscal")
+}
+
+// ----- Alertas (digest) -----
+
+model AlertaEnviado {
+  id                  String                @id @default(uuid()) @db.Uuid
+  sincronizacaoId     String                @map("sincronizacao_id") @db.Uuid
+  enviadoEm           DateTime              @default(now()) @map("enviado_em")
+  destinatarios       Json                  // [{email, nome}] resolvido no momento do envio
+  totalDestinatarios  Int                   @map("total_destinatarios")
+  totalMudancas       Int                   @map("total_mudancas")
+  fallback            Boolean               @default(false) // true = enviado para FISCAL_FALLBACK_EMAIL
+  assunto             String
+  smtpResponse        String?               @map("smtp_response")
+  erro                String?
+
+  sincronizacao       CadastroSincronizacao @relation(fields: [sincronizacaoId], references: [id])
+
+  @@index([sincronizacaoId])
+  @@index([enviadoEm])
+  @@map("alerta_enviado")
+  @@schema("fiscal")
+}
+
+// ----- Certificado A1 e ambiente -----
+
+model Certificado {
+  id              String   @id @default(uuid()) @db.Uuid
+  nomeArquivo     String   @map("nome_arquivo")
+  cnpj            String   @db.Char(14)
+  validoDe        DateTime @map("valido_de")
+  validoAte       DateTime @map("valido_ate")
+  senhaCifrada    String   @map("senha_cifrada") // AES-256-GCM
+  iv              String   // 12 bytes b64
+  authTag         String   @map("auth_tag")      // 16 bytes b64
+  ativo           Boolean  @default(false)
+  observacoes     String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([cnpj])
+  @@index([ativo])
+  @@map("certificado")
+  @@schema("fiscal")
+}
+
+enum AmbienteSefaz {
+  PRODUCAO
+  HOMOLOGACAO
+
+  @@schema("fiscal")
+}
+
+model AmbienteConfig {
+  id                       Int           @id @default(1)
+  ambienteAtivo            AmbienteSefaz @default(HOMOLOGACAO) @map("ambiente_ativo")
+  bootstrapConcluidoEm     DateTime?     @map("bootstrap_concluido_em") // gate v1.5 item 2
+  janelaSemanalCron        String        @default("0 2 * * 6") @map("janela_semanal_cron") // sábado 02:00
+  janelaDiariaCron         String        @default("0 1 * * *") @map("janela_diaria_cron")  // todo dia 01:00
+  pauseSync                Boolean       @default(false) @map("pause_sync") // freio de mão (mitigação 11.C)
+  ultimaAlteracaoEm        DateTime      @updatedAt @map("ultima_alteracao_em")
+  ultimaAlteracaoPor       String?       @map("ultima_alteracao_por")
+
+  @@map("ambiente_config")
+  @@schema("fiscal")
+}
+
+// ----- Circuit breaker por UF (mitigação 11.C) -----
+
+enum CircuitState {
+  FECHADO  // requisições normais
+  ABERTO   // bloqueado temporariamente
+  MEIO_ABERTO
+
+  @@schema("fiscal")
+}
+
+model UfCircuitState {
+  uf            String       @id @db.Char(2)
+  estado        CircuitState @default(FECHADO)
+  errosRecentes Int          @default(0) @map("erros_recentes")
+  abertoEm      DateTime?    @map("aberto_em")
+  retomadaEm    DateTime?    @map("retomada_em")
+  motivoBloqueio String?     @map("motivo_bloqueio")
+  ultimaAtualizacao DateTime @updatedAt @map("ultima_atualizacao")
+
+  @@map("uf_circuit_state")
+  @@schema("fiscal")
+}
+
+// ----- Auditoria -----
+
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  usuarioId    String?  @map("usuario_id") @db.Uuid
+  usuarioEmail String?  @map("usuario_email")
+  acao         String   @db.VarChar(80)
+  recurso      String?  @db.VarChar(80)
+  payload      Json?
+  ip           String?  @db.VarChar(45)
+  userAgent    String?  @map("user_agent")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([usuarioId])
+  @@index([acao])
+  @@index([createdAt])
+  @@map("audit_log")
+  @@schema("fiscal")
+}

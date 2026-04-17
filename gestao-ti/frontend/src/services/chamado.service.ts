@@ -63,6 +63,11 @@ export const chamadoService = {
     return data;
   },
 
+  async atualizarCabecalho(id: string, payload: { titulo?: string; descricao?: string }): Promise<Chamado> {
+    const { data } = await gestaoApi.patch(`/chamados/${id}/cabecalho`, payload);
+    return data;
+  },
+
   async assumir(id: string): Promise<Chamado> {
     const { data } = await gestaoApi.post(`/chamados/${id}/assumir`);
     return data;

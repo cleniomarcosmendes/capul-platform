@@ -88,7 +88,12 @@ export class DashboardController {
 
   @Get('acompanhamento/tecnicos')
   @Roles(...STAFF)
-  getTecnicos() {
+  getTecnicos(@CurrentUser() user: JwtPayload) {
+    // SUPORTE_TI: retorna apenas tecnicos das equipes onde e lider
+    const role = user.modulos?.find((m: { codigo: string; role: string }) => m.codigo === 'GESTAO_TI')?.role;
+    if (role === 'SUPORTE_TI') {
+      return this.service.getTecnicosDaEquipe(user.sub);
+    }
     return this.service.getTecnicosAtivos();
   }
 
@@ -157,15 +162,31 @@ export class DashboardController {
 
   @Get('relatorio-os')
   @Roles(...STAFF)
-  getRelatorioOs(
+  async getRelatorioOs(
     @Query('tecnicoId') tecnicoId: string,
     @Query('dataInicio') dataInicio: string,
     @Query('dataFim') dataFim: string,
     @CurrentUser() user: JwtPayload,
   ) {
-    // Não-gestores só podem ver o próprio relatório
-    const isManager = MANAGERS.some((r) => user.modulos?.some((m: { codigo: string; role: string }) => m.codigo === 'GESTAO_TI' && r === m.role));
-    const userId = isManager ? tecnicoId : user.sub;
+    // Gestores e líderes de equipe (SUPORTE_TI) podem ver relatórios de outros técnicos
+    const role = user.modulos?.find((m: { codigo: string; role: string }) => m.codigo === 'GESTAO_TI')?.role;
+    const isManager = MANAGERS.some((r) => r === role);
+    const isSuporte = role === 'SUPORTE_TI';
+
+    if (!isManager && !isSuporte) {
+      // Tecnico comum: so ve o proprio
+      return this.service.getRelatorioOs(user.sub, dataInicio, dataFim);
+    }
+
+    if (isSuporte && tecnicoId && tecnicoId !== user.sub) {
+      // SUPORTE_TI: validar que o tecnico e da sua equipe
+      const permitidos = await this.service.getTecnicosDaEquipe(user.sub);
+      if (!permitidos.some((t) => t.id === tecnicoId)) {
+        return this.service.getRelatorioOs(user.sub, dataInicio, dataFim);
+      }
+    }
+
+    const userId = (isManager || isSuporte) ? tecnicoId : user.sub;
     return this.service.getRelatorioOs(userId, dataInicio, dataFim);
   }
 

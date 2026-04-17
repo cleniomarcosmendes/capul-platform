@@ -56,6 +56,10 @@ export class CreateEndpointDto {
 
 export class UpdateEndpointDto {
   @IsOptional()
+  @IsEnum(AmbienteIntegracao)
+  ambiente?: AmbienteIntegracao;
+
+  @IsOptional()
   @IsString()
   descricao?: string;
 

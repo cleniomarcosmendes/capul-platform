@@ -5,7 +5,8 @@ import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { paradaService } from '../../services/parada.service';
 import { softwareService } from '../../services/software.service';
 import { coreApi } from '../../services/api';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Paperclip, Download, Trash2 } from 'lucide-react';
+import { useToast } from '../../components/Toast';
 import type { Software, SoftwareModulo, MotivoParada, TipoParada, ImpactoParada } from '../../types';
 
 // Converte ISO UTC string para formato datetime-local (hora local do browser)
@@ -50,6 +51,12 @@ export function ParadaFormPage() {
   const [error, setError] = useState('');
   const [dirty, setDirty] = useState(false);
   const { ConfirmDialog, guardedNavigate } = useUnsavedChanges(dirty);
+  const { toast, confirm } = useToast();
+
+  // Anexos (somente modo edicao)
+  type AnexoParada = { id: string; nomeOriginal: string; mimeType: string; tamanho: number; createdAt: string; usuario: { id: string; nome: string } };
+  const [anexos, setAnexos] = useState<AnexoParada[]>([]);
+  const [uploadingAnexo, setUploadingAnexo] = useState(false);
 
   const [titulo, setTitulo] = useState('');
   const [tipo, setTipo] = useState<TipoParada>('PARADA_NAO_PROGRAMADA');
@@ -84,6 +91,7 @@ export function ParadaFormPage() {
         setObservacoes(p.observacoes || '');
       }).catch(() => setError('Erro ao carregar parada'))
         .finally(() => setLoadingData(false));
+      paradaService.listarAnexos(id).then(setAnexos).catch(() => {});
     }
   }, [id, isEdit]);
 
@@ -332,6 +340,84 @@ export function ParadaFormPage() {
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
             />
           </div>
+
+          {/* Anexos — somente modo edicao */}
+          {isEdit && id && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Anexos</label>
+              <div className="border border-dashed border-slate-300 rounded-lg p-4">
+                <label className="flex items-center gap-2 text-sm text-capul-600 hover:text-capul-700 cursor-pointer w-fit">
+                  <Paperclip className="w-4 h-4" />
+                  {uploadingAnexo ? 'Enviando...' : 'Selecionar arquivo'}
+                  <input
+                    type="file"
+                    className="hidden"
+                    disabled={uploadingAnexo}
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.7z"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      e.target.value = '';
+                      setUploadingAnexo(true);
+                      try {
+                        await paradaService.uploadAnexo(id, file);
+                        const updated = await paradaService.listarAnexos(id);
+                        setAnexos(updated);
+                        toast('success', 'Anexo enviado');
+                      } catch { toast('error', 'Erro ao enviar anexo'); }
+                      setUploadingAnexo(false);
+                    }}
+                  />
+                </label>
+                <p className="text-xs text-slate-400 mt-1">Max 10MB. Imagens, PDF, documentos, planilhas, ZIP.</p>
+                {anexos.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {anexos.map((a) => (
+                      <div key={a.id} className="flex items-center gap-3 bg-slate-50 rounded-lg px-4 py-2 text-sm">
+                        <div className="flex-1 min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
+                              if (viewable.includes(a.mimeType)) {
+                                paradaService.abrirAnexo(id, a.id, a.mimeType).catch(() => {
+                                  paradaService.downloadAnexo(id, a.id, a.nomeOriginal);
+                                });
+                              } else {
+                                paradaService.downloadAnexo(id, a.id, a.nomeOriginal);
+                              }
+                            }}
+                            className="text-capul-700 hover:underline truncate text-left"
+                          >
+                            {a.nomeOriginal}
+                          </button>
+                          <p className="text-xs text-slate-400">{(a.tamanho / 1024).toFixed(0)} KB — {a.usuario.nome}</p>
+                        </div>
+                        <button type="button" onClick={() => paradaService.downloadAnexo(id, a.id, a.nomeOriginal)} className="p-1 text-slate-400 hover:text-capul-600" title="Download">
+                          <Download className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!await confirm('Remover Anexo', `Remover "${a.nomeOriginal}"?`, { variant: 'danger' })) return;
+                            try {
+                              await paradaService.removerAnexo(id, a.id);
+                              setAnexos((prev) => prev.filter((x) => x.id !== a.id));
+                              toast('success', 'Anexo removido');
+                            } catch { toast('error', 'Erro ao remover'); }
+                          }}
+                          className="p-1 text-slate-400 hover:text-red-500"
+                          title="Remover"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="flex gap-3 pt-2">
             <button

@@ -67,6 +67,7 @@ export interface UsuarioCore {
   username: string;
   nome: string;
   email: string | null;
+  permissoes?: { modulo: { codigo: string; nome: string }; roleModulo: { codigo: string; nome: string } }[];
 }
 
 export interface TipoDepartamento {

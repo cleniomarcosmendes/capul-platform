@@ -66,6 +66,16 @@ const PENDENCIA_UPLOADS_DIR = path.resolve('./uploads/pendencias');
 export class ProjetoController {
   constructor(private readonly service: ProjetoService) {}
 
+  @Get('favoritos')
+  listarFavoritos(@CurrentUser() user: JwtPayload) {
+    return this.service.listarFavoritos(user.sub);
+  }
+
+  @Post(':id/favoritar')
+  toggleFavorito(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.service.toggleFavorito(id, user.sub);
+  }
+
   @Get()
   findAll(
     @Query('status') status?: string,
@@ -120,13 +130,13 @@ export class ProjetoController {
   }
 
   @Post()
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
-  create(@Body() dto: CreateProjetoDto) {
-    return this.service.create(dto);
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  create(@Body() dto: CreateProjetoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
+    return this.service.create(dto, user.sub, role);
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async update(@Param('id') id: string, @Body() dto: UpdateProjetoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.update(id, dto);
@@ -160,14 +170,14 @@ export class ProjetoController {
   }
 
   @Post(':id/membros')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async addMembro(@Param('id') id: string, @Body() dto: CreateMembroDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.addMembro(id, dto);
   }
 
   @Delete(':id/membros/:membroId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async removeMembro(@Param('id') id: string, @Param('membroId') membroId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeMembro(id, membroId);
@@ -181,14 +191,14 @@ export class ProjetoController {
   }
 
   @Post(':id/fases')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async addFase(@Param('id') id: string, @Body() dto: CreateFaseDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.addFase(id, dto);
   }
 
   @Patch(':id/fases/:faseId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async updateFase(
     @Param('id') id: string,
     @Param('faseId') faseId: string,
@@ -201,7 +211,7 @@ export class ProjetoController {
   }
 
   @Delete(':id/fases/:faseId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async removeFase(@Param('id') id: string, @Param('faseId') faseId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeFase(id, faseId);
@@ -215,7 +225,7 @@ export class ProjetoController {
   }
 
   @Post(':id/atividades')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async addAtividade(
     @Param('id') id: string,
     @Body() dto: { titulo: string; descricao?: string; faseId?: string; pendenciaId?: string; dataInicio?: string; dataFimPrevista?: string; responsavelIds?: string[] },
@@ -227,7 +237,7 @@ export class ProjetoController {
   }
 
   @Post(':id/pendencias/:pendenciaId/gerar-atividade')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async gerarAtividadeFromPendencia(
     @Param('id') id: string,
     @Param('pendenciaId') pendenciaId: string,
@@ -240,7 +250,7 @@ export class ProjetoController {
   }
 
   @Patch(':id/atividades/:atividadeId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async updateAtividade(
     @Param('id') id: string,
     @Param('atividadeId') atividadeId: string,
@@ -253,7 +263,7 @@ export class ProjetoController {
   }
 
   @Delete(':id/atividades/:atividadeId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async removeAtividade(@Param('id') id: string, @Param('atividadeId') atividadeId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeAtividade(id, atividadeId);
@@ -267,7 +277,7 @@ export class ProjetoController {
   }
 
   @Post(':id/atividades/:atividadeId/comentarios')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async addComentario(
     @Param('id') id: string,
     @Param('atividadeId') atividadeId: string,
@@ -291,7 +301,7 @@ export class ProjetoController {
   }
 
   @Patch(':id/comentarios/:comentarioId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async updateComentario(
     @Param('id') id: string,
     @Param('comentarioId') comentarioId: string,
@@ -492,13 +502,13 @@ export class ProjetoController {
   // --- Anexos ---
 
   @Get(':id/anexos')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   listAnexos(@Param('id') id: string) {
     return this.service.listAnexos(id);
   }
 
   @Post(':id/anexos')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async addAnexo(
     @Param('id') id: string,
     @Body() dto: CreateAnexoDto,
@@ -510,7 +520,7 @@ export class ProjetoController {
   }
 
   @Post(':id/anexos/upload')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
       destination: PROJETO_UPLOADS_DIR,
@@ -540,7 +550,7 @@ export class ProjetoController {
   }
 
   @Get(':id/anexos/:anexoId/download')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async downloadAnexo(
     @Param('id') id: string,
     @Param('anexoId') anexoId: string,
@@ -552,7 +562,7 @@ export class ProjetoController {
     if (!normalizedPath.startsWith(path.resolve(PROJETO_UPLOADS_DIR))) {
       throw new BadRequestException('Caminho de arquivo invalido');
     }
-    const inlineMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+    const inlineMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
     const canInline = inline === '1' && inlineMimes.includes(anexo.mimeType || '');
     res.setHeader('Content-Type', anexo.mimeType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `${canInline ? 'inline' : 'attachment'}; filename="${encodeURIComponent(anexo.nomeOriginal || anexo.titulo)}"`);
@@ -562,7 +572,7 @@ export class ProjetoController {
   }
 
   @Delete(':id/anexos/:anexoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async removeAnexo(@Param('id') id: string, @Param('anexoId') anexoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeAnexo(id, anexoId);
@@ -811,7 +821,7 @@ export class ProjetoController {
     if (!normalizedPath.startsWith(path.resolve(PENDENCIA_UPLOADS_DIR))) {
       throw new BadRequestException('Caminho de arquivo invalido');
     }
-    const inlineMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+    const inlineMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
     const canInline = inline === '1' && inlineMimes.includes(anexo.mimeType);
     res.setHeader('Content-Type', anexo.mimeType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `${canInline ? 'inline' : 'attachment'}; filename="${encodeURIComponent(anexo.nomeOriginal)}"`);

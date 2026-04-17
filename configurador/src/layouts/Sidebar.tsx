@@ -11,6 +11,7 @@ import {
   LogOut,
   Settings,
   Plug,
+  ShieldCheck,
 } from 'lucide-react';
 
 type MenuItem =
@@ -30,6 +31,7 @@ const menuItems: MenuItem[] = [
   { label: 'Usuarios', icon: Users, path: '/configurador/usuarios', roles: [...ADMINS, 'GESTOR'] },
   { section: 'SISTEMA', roles: ADMINS },
   { label: 'Integracoes API', icon: Plug, path: '/configurador/integracoes', roles: ADMINS },
+  { label: 'Certificado A1', icon: ShieldCheck, path: '/configurador/certificado-fiscal', roles: ADMINS },
 ];
 
 function filterMenuByRole(items: MenuItem[], role: string | null): MenuItem[] {

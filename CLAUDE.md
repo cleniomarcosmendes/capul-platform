@@ -73,6 +73,17 @@ Plataforma corporativa modular com microservicos independentes:
 - Gestao de usuarios e permissoes
 - Atribuicao de modulos por usuario
 
+### 6. Fiscal (`/fiscal`) *(em desenvolvimento — Abril/2026)*
+- Centralizacao do certificado digital A1 da CAPUL
+- Consulta NF-e via SEFAZ (NFeDistribuicaoDFe por chave) — ver `docs/FLUXO_CONSULTA_NFE.md`
+- Consulta CT-e via CteConsultaProtocolo per-UF + timeline de eventos — ver `docs/FLUXO_CONSULTA_CTE.md`
+- Consulta cadastral (CCC/Sintegra) por CNPJ/CPF + UF
+- Enriquecimento Receita Federal via BrasilAPI/ReceitaWS
+- Cruzamento periodico SA1010/SA2010 × CCC (Onda 2 — BullMQ)
+- Schema Prisma: `fiscal` (multi-schema com core read-only)
+- Docs: `docs/PLANO_MODULO_FISCAL_v1.5_ADDENDUM.md`
+- **Regra critica**: NUNCA disparar consultas SEFAZ em loop ou cron nao supervisionado — risco de bloqueio do CNPJ da CAPUL (ver `memory/feedback_sefaz_nunca_em_loop.md`)
+
 ---
 
 ## Comandos Essenciais
@@ -102,6 +113,7 @@ docker compose exec auth-gateway npx prisma db seed
 | Hub | https://localhost/ | - |
 | Gestao TI | https://localhost/gestao-ti/ | admin |
 | Inventario | https://localhost:8443/ | admin/admin123 |
+| Fiscal | https://localhost/fiscal/ | admin (role ADMIN_TI) |
 | PgAdmin | http://localhost:5050 | Ver .env |
 | API Docs (Inventario) | http://localhost:8000/docs | - |
 
@@ -131,8 +143,17 @@ capul-platform/
 ├── inventario/             # Modulo Inventario
 │   ├── backend/
 │   └── frontend/
-└── configurador/           # Modulo Configurador
-    └── ...
+├── configurador/           # Modulo Configurador
+│   └── ...
+└── fiscal/                 # Modulo Fiscal (em desenvolvimento)
+    ├── backend/            # NestJS 11 + Prisma 6 (schema fiscal)
+    │   ├── prisma/schema.prisma
+    │   └── src/
+    │       ├── sefaz/      # Clients NFeDistribuicaoDFe / CCC / CTe
+    │       ├── cadastro/   # Consulta cadastral + Receita Federal
+    │       ├── nfe/, cte/  # Parsers + geracao DANFE/DACTE
+    │       └── cruzamento/ # BullMQ workers + scheduler
+    └── frontend/           # React 19 + Vite 7 + Tailwind v4
 ```
 
 ---
@@ -227,4 +248,4 @@ Este arquivo serve como ponto de entrada para o Claude Code entender a estrutura
 
 ---
 
-*Ultima atualizacao: 10/04/2026*
+*Ultima atualizacao: 17/04/2026*

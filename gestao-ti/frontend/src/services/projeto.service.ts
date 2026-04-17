@@ -467,4 +467,15 @@ export const projetoService = {
     const { data } = await gestaoApi.get(`/projetos/${projetoId}/parcelas-contrato`);
     return data;
   },
+
+  // Favoritos
+  async listarFavoritos(): Promise<string[]> {
+    const { data } = await gestaoApi.get('/projetos/favoritos');
+    return data;
+  },
+
+  async toggleFavorito(id: string): Promise<{ favorito: boolean }> {
+    const { data } = await gestaoApi.post(`/projetos/${id}/favoritar`);
+    return data;
+  },
 };

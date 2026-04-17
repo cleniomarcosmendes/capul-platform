@@ -597,9 +597,11 @@ function TabGeral({ contrato, canManage, onReload, toast, confirm }: TabPropsWit
                 <div className="flex-1 min-w-0">
                   <button
                     onClick={() => {
-                      const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+                      const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
                       if (viewable.includes(a.mimeType)) {
-                        contratoService.abrirAnexo(contrato.id, a.id, a.mimeType);
+                        contratoService.abrirAnexo(contrato.id, a.id, a.mimeType).catch(() => {
+                          handleDownload(a);
+                        });
                       } else {
                         handleDownload(a);
                       }

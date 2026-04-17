@@ -12,7 +12,7 @@ import { paradaService } from '../../services/parada.service';
 import { ordemServicoService } from '../../services/ordem-servico.service';
 import { ativoService } from '../../services/ativo.service';
 import { coreService } from '../../services/core.service';
-import { ArrowLeft, FolderKanban, Paperclip, X } from 'lucide-react';
+import { ArrowLeft, FolderKanban, Paperclip, X, CheckCircle } from 'lucide-react';
 import type { EquipeTI, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento, Ativo } from '../../types';
 
 export function ChamadoCreatePage() {
@@ -66,6 +66,8 @@ export function ChamadoCreatePage() {
 
   const [dirty, setDirty] = useState(false);
   const { ConfirmDialog, guardedNavigate } = useUnsavedChanges(dirty);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successRedirectUrl, setSuccessRedirectUrl] = useState('');
 
   const [erroMatricula, setErroMatricula] = useState('');
 
@@ -235,7 +237,8 @@ export function ChamadoCreatePage() {
       }
 
       setDirty(false);
-      navigate(paradaIdParam ? `/gestao-ti/paradas/${paradaIdParam}` : osIdParam ? `/gestao-ti/ordens-servico` : `/gestao-ti/chamados/${chamado.id}`);
+      setSuccessRedirectUrl(paradaIdParam ? `/gestao-ti/paradas/${paradaIdParam}` : osIdParam ? `/gestao-ti/ordens-servico` : `/gestao-ti/chamados/${chamado.id}`);
+      setShowSuccessModal(true);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(msg || 'Erro ao criar chamado');
@@ -247,6 +250,27 @@ export function ChamadoCreatePage() {
   return (
     <>
       {ConfirmDialog}
+
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-8 text-center animate-[fadeIn_0.2s_ease-out]">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-green-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-slate-800 mb-2">Chamado Registrado!</h3>
+            <p className="text-sm text-slate-600 mb-6">
+              Seu chamado foi registrado com sucesso! A equipe responsavel sera notificada e atendera sua solicitacao assim que possivel.
+            </p>
+            <button
+              onClick={() => navigate(successRedirectUrl)}
+              className="bg-capul-600 text-white px-8 py-2.5 rounded-lg text-sm font-medium hover:bg-capul-700 transition-colors"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+
       <Header title="Novo Chamado" />
       <div className="p-6 max-w-3xl" onChange={() => setDirty(true)}>
         <button

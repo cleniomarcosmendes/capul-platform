@@ -136,9 +136,17 @@ export default function HubPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-3xl mx-auto">
-            {usuario.modulos.map((modulo) => (
-              <ModuloCard key={modulo.codigo} modulo={modulo} />
-            ))}
+            {[...usuario.modulos]
+              .sort((a, b) => {
+                // CONFIGURADOR sempre por último — é um módulo administrativo
+                // e não deve competir visualmente com os módulos operacionais.
+                if (a.codigo === 'CONFIGURADOR') return 1;
+                if (b.codigo === 'CONFIGURADOR') return -1;
+                return 0;
+              })
+              .map((modulo) => (
+                <ModuloCard key={modulo.codigo} modulo={modulo} />
+              ))}
           </div>
         )}
 

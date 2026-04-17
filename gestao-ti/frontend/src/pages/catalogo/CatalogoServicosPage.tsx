@@ -3,7 +3,7 @@ import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { catalogoService } from '../../services/catalogo.service';
 import { equipeService } from '../../services/equipe.service';
-import { Plus, X, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Search } from 'lucide-react';
 import type { CatalogoServico, EquipeTI, Prioridade } from '../../types';
 import { useToast } from '../../components/Toast';
 
@@ -23,6 +23,7 @@ export function CatalogoServicosPage() {
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterEquipe, setFilterEquipe] = useState('');
+  const [search, setSearch] = useState('');
 
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<CatalogoServico | null>(null);
@@ -65,6 +66,14 @@ export function CatalogoServicosPage() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
   }, [items, sortKey, sortDir]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return sorted;
+    const term = search.toLowerCase();
+    return sorted.filter(
+      (i) => i.nome.toLowerCase().includes(term) || (i.descricao || '').toLowerCase().includes(term),
+    );
+  }, [sorted, search]);
 
   function loadItems() {
     setLoading(true);
@@ -132,14 +141,26 @@ export function CatalogoServicosPage() {
       <Header title="Catalogo de Servicos" />
       <div className="p-6">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <select
-            value={filterEquipe}
-            onChange={(e) => setFilterEquipe(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
-          >
-            <option value="">Todas as Equipes</option>
-            {equipes.map((e) => <option key={e.id} value={e.id}>{e.sigla} - {e.nome}</option>)}
-          </select>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por palavra-chave..."
+                className="border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm w-64"
+              />
+            </div>
+            <select
+              value={filterEquipe}
+              onChange={(e) => setFilterEquipe(e.target.value)}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+            >
+              <option value="">Todas as Equipes</option>
+              {equipes.map((e) => <option key={e.id} value={e.id}>{e.sigla} - {e.nome}</option>)}
+            </select>
+          </div>
 
           {isAdmin && (
             <button
@@ -208,8 +229,8 @@ export function CatalogoServicosPage() {
 
         {loading ? (
           <p className="text-slate-500">Carregando...</p>
-        ) : items.length === 0 ? (
-          <div className="text-center py-12 text-slate-400">Nenhum servico cadastrado</div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-12 text-slate-400">{search ? 'Nenhum servico encontrado para a busca' : 'Nenhum servico cadastrado'}</div>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <table className="w-full text-sm">
@@ -225,7 +246,7 @@ export function CatalogoServicosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {sorted.map((item) => (
+                {filtered.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <div>

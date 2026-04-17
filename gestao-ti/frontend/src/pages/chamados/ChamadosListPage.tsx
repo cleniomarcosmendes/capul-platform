@@ -42,6 +42,13 @@ const prioridadeColors: Record<string, string> = {
   BAIXA: 'bg-green-100 text-green-700',
 };
 
+const prioridadeLabels: Record<string, string> = {
+  CRITICA: 'Critica',
+  ALTA: 'Alta',
+  MEDIA: 'Media',
+  BAIXA: 'Baixa',
+};
+
 export function ChamadosListPage() {
   const { gestaoTiRole, usuario } = useAuth();
   const [searchParams] = useSearchParams();
@@ -413,7 +420,7 @@ export function ChamadosListPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs font-medium px-2 py-1 rounded-full ${prioridadeColors[c.prioridade]}`}>
-                        {c.prioridade}
+                        {prioridadeLabels[c.prioridade] || c.prioridade}
                       </span>
                     </td>
                     <td className="px-4 py-3">

@@ -12,6 +12,7 @@ import { UpdateLicencaDto } from './dto/update-licenca.dto.js';
 import { AtribuirUsuarioDto } from './dto/atribuir-usuario.dto.js';
 import { CreateCategoriaLicencaDto, UpdateCategoriaLicencaDto } from './dto/create-categoria-licenca.dto.js';
 import { StatusLicenca } from '@prisma/client';
+import { ROLES_TI } from '../common/constants/roles.constant.js';
 
 @Controller('licencas')
 @UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
@@ -72,31 +73,31 @@ export class LicencaController {
   }
 
   @Post()
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles(...ROLES_TI)
   create(@Body() dto: CreateLicencaDto) {
     return this.service.create(dto);
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles(...ROLES_TI)
   update(@Param('id') id: string, @Body() dto: UpdateLicencaDto) {
     return this.service.update(id, dto);
   }
 
   @Post(':id/renovar')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles(...ROLES_TI)
   renovar(@Param('id') id: string) {
     return this.service.renovar(id);
   }
 
   @Post(':id/inativar')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles(...ROLES_TI)
   inativar(@Param('id') id: string) {
     return this.service.inativar(id);
   }
 
   @Delete(':id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles(...ROLES_TI)
   remove(@Param('id') id: string) {
     return this.service.remove(id);
   }
@@ -109,7 +110,7 @@ export class LicencaController {
   }
 
   @Post(':id/usuarios')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles(...ROLES_TI)
   atribuirUsuario(
     @Param('id') id: string,
     @Body() dto: AtribuirUsuarioDto,
@@ -118,7 +119,7 @@ export class LicencaController {
   }
 
   @Delete(':id/usuarios/:usuarioId')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles(...ROLES_TI)
   desatribuirUsuario(
     @Param('id') id: string,
     @Param('usuarioId') usuarioId: string,

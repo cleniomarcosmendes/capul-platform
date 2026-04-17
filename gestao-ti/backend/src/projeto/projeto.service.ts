@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service.js';
 import { ProjetoHelpersService } from './services/projeto-helpers.service.js';
 import { ProjetoCoreService } from './services/projeto-core.service.js';
 import { ProjetoFaseService } from './services/projeto-fase.service.js';
@@ -28,6 +29,7 @@ import { CreateInteracaoPendenciaDto } from './dto/create-interacao-pendencia.dt
 @Injectable()
 export class ProjetoService {
   constructor(
+    private readonly prisma: PrismaService,
     private readonly helpers: ProjetoHelpersService,
     private readonly core: ProjetoCoreService,
     private readonly faseService: ProjetoFaseService,
@@ -62,8 +64,8 @@ export class ProjetoService {
     return this.core.findOne(id, userId, role);
   }
 
-  create(dto: CreateProjetoDto) {
-    return this.core.create(dto);
+  create(dto: CreateProjetoDto, userId?: string, role?: string) {
+    return this.core.create(dto, userId, role);
   }
 
   update(id: string, dto: UpdateProjetoDto) {
@@ -471,5 +473,31 @@ export class ProjetoService {
 
   checkProjetoAccessChave(projetoId: string, userId: string, role: string) {
     return this.helpers.checkProjetoAccessChave(projetoId, userId, role);
+  }
+
+  // ============================================================
+  // FAVORITOS
+  // ============================================================
+
+  async listarFavoritos(userId: string): Promise<string[]> {
+    const favs = await this.prisma.projetoFavorito.findMany({
+      where: { usuarioId: userId },
+      select: { projetoId: true },
+    });
+    return favs.map((f) => f.projetoId);
+  }
+
+  async toggleFavorito(projetoId: string, userId: string): Promise<{ favorito: boolean }> {
+    const existing = await this.prisma.projetoFavorito.findUnique({
+      where: { usuarioId_projetoId: { usuarioId: userId, projetoId } },
+    });
+    if (existing) {
+      await this.prisma.projetoFavorito.delete({ where: { id: existing.id } });
+      return { favorito: false };
+    }
+    await this.prisma.projetoFavorito.create({
+      data: { projetoId, usuarioId: userId },
+    });
+    return { favorito: true };
   }
 }

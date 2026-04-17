@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { paradaService } from '../../services/parada.service';
 import { chamadoService } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
-import { Activity, ArrowLeft, Clock, AlertTriangle, Building2, User, Wrench, Unlink, Plus, Ticket, X, Filter, CheckSquare, Users, Trash2, Search, Pencil } from 'lucide-react';
+import { Activity, ArrowLeft, Clock, AlertTriangle, Building2, User, Wrench, Unlink, Plus, Ticket, X, Filter, CheckSquare, Users, Trash2, Search, Pencil, Paperclip, Download } from 'lucide-react';
 import type { RegistroParada, Chamado, EquipeTI } from '../../types';
 import { useToast } from '../../components/Toast';
 
@@ -57,11 +57,16 @@ export function ParadaDetalhePage() {
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
   const canManage = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
-  const { confirm } = useToast();
+  const { toast, confirm } = useToast();
   const canCancel = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
 
   const [parada, setParada] = useState<RegistroParada | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Anexos
+  type AnexoParada = { id: string; nomeOriginal: string; mimeType: string; tamanho: number; createdAt: string; usuario: { id: string; nome: string } };
+  const [anexos, setAnexos] = useState<AnexoParada[]>([]);
+  const [uploadingAnexo, setUploadingAnexo] = useState(false);
   const [showFinalizar, setShowFinalizar] = useState(false);
   const [fimInput, setFimInput] = useState('');
   const [obsInput, setObsInput] = useState('');
@@ -70,6 +75,7 @@ export function ParadaDetalhePage() {
   useEffect(() => {
     if (id) {
       paradaService.buscar(id).then(setParada).catch(() => {}).finally(() => setLoading(false));
+      paradaService.listarAnexos(id).then(setAnexos).catch(() => {});
     }
   }, [id]);
 
@@ -313,6 +319,87 @@ export function ParadaDetalhePage() {
         {/* Tecnicos Colaboradores */}
         <div className="mb-6">
           <TabColaboradores parada={parada} canManage={canManage} onUpdate={setParada} />
+        </div>
+
+        {/* Anexos */}
+        <div className="bg-white rounded-xl border border-slate-200 mb-6">
+          <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+            <h4 className="font-medium text-slate-700 flex items-center gap-2">
+              <Paperclip className="w-4 h-4" /> Anexos ({anexos.length})
+            </h4>
+            {canManage && parada.status !== 'CANCELADA' && (
+              <label className="flex items-center gap-2 text-xs text-emerald-600 hover:text-emerald-800 cursor-pointer">
+                <Plus className="w-3.5 h-3.5" />
+                {uploadingAnexo ? 'Enviando...' : 'Anexar arquivo'}
+                <input
+                  type="file"
+                  className="hidden"
+                  disabled={uploadingAnexo}
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.7z"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file || !id) return;
+                    e.target.value = '';
+                    setUploadingAnexo(true);
+                    try {
+                      await paradaService.uploadAnexo(id, file);
+                      const updated = await paradaService.listarAnexos(id);
+                      setAnexos(updated);
+                      toast('success', 'Anexo enviado');
+                    } catch { toast('error', 'Erro ao enviar anexo'); }
+                    setUploadingAnexo(false);
+                  }}
+                />
+              </label>
+            )}
+          </div>
+          {anexos.length === 0 ? (
+            <div className="px-6 py-8 text-center text-sm text-slate-400">Nenhum anexo</div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {anexos.map((a) => (
+                <div key={a.id} className="px-6 py-3 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <button
+                      onClick={() => {
+                        const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
+                        if (viewable.includes(a.mimeType)) {
+                          paradaService.abrirAnexo(id!, a.id, a.mimeType).catch(() => {
+                            paradaService.downloadAnexo(id!, a.id, a.nomeOriginal);
+                          });
+                        } else {
+                          paradaService.downloadAnexo(id!, a.id, a.nomeOriginal);
+                        }
+                      }}
+                      className="text-sm text-capul-700 hover:underline truncate text-left"
+                    >
+                      {a.nomeOriginal}
+                    </button>
+                    <p className="text-xs text-slate-400">{(a.tamanho / 1024).toFixed(0)} KB — {a.usuario.nome} — {new Date(a.createdAt).toLocaleString('pt-BR')}</p>
+                  </div>
+                  <button onClick={() => paradaService.downloadAnexo(id!, a.id, a.nomeOriginal)} className="p-1 text-slate-400 hover:text-capul-600" title="Download">
+                    <Download className="w-4 h-4" />
+                  </button>
+                  {canManage && parada.status !== 'CANCELADA' && (
+                    <button
+                      onClick={async () => {
+                        if (!await confirm('Remover Anexo', `Remover "${a.nomeOriginal}"?`, { variant: 'danger' })) return;
+                        try {
+                          await paradaService.removerAnexo(id!, a.id);
+                          setAnexos((prev) => prev.filter((x) => x.id !== a.id));
+                          toast('success', 'Anexo removido');
+                        } catch { toast('error', 'Erro ao remover'); }
+                      }}
+                      className="p-1 text-slate-400 hover:text-red-500"
+                      title="Remover"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Filiais Afetadas */}

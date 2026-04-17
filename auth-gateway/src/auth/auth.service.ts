@@ -88,7 +88,7 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(payload, {
       secret: this.config.get('JWT_SECRET'),
-      expiresIn: this.config.get('JWT_ACCESS_EXPIRATION', '15m'),
+      expiresIn: this.config.get('JWT_ACCESS_EXPIRATION', '60m'),
     });
 
     const refreshToken = await this.createRefreshToken(usuario.id);
@@ -192,7 +192,7 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(payload, {
       secret: this.config.get('JWT_SECRET'),
-      expiresIn: this.config.get('JWT_ACCESS_EXPIRATION', '15m'),
+      expiresIn: this.config.get('JWT_ACCESS_EXPIRATION', '60m'),
     });
 
     const newRefreshToken = await this.createRefreshToken(usuario.id);
@@ -334,7 +334,7 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(jwtPayload, {
       secret: this.config.get('JWT_SECRET'),
-      expiresIn: this.config.get('JWT_ACCESS_EXPIRATION', '15m'),
+      expiresIn: this.config.get('JWT_ACCESS_EXPIRATION', '60m'),
     });
     const refreshToken = await this.createRefreshToken(usuario.id);
 
@@ -495,7 +495,7 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(payload, {
       secret: this.config.get('JWT_SECRET'),
-      expiresIn: this.config.get('JWT_ACCESS_EXPIRATION', '15m'),
+      expiresIn: this.config.get('JWT_ACCESS_EXPIRATION', '60m'),
     });
 
     const refreshToken = await this.createRefreshToken(userId);

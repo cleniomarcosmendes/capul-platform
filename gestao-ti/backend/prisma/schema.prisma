@@ -57,6 +57,8 @@ model Usuario {
   riscosResponsavel    RiscoProjeto[]     @relation("RiscoResponsavel")
   anexosProjeto        AnexoProjeto[]     @relation("AnexoProjetoUsuario")
   anexosChamado        AnexoChamado[]     @relation("AnexoChamadoUsuario")
+  anexosParada         AnexoParada[]      @relation("AnexoParadaUsuario")
+  projetosFavoritos    ProjetoFavorito[]  @relation("ProjetoFavoritoUsuario")
   apontamentosHoras    ApontamentoHoras[] @relation("ApontamentoHorasUsuario")
   ativosResponsavel    Ativo[]            @relation("AtivoResponsavel")
   artigosAutor         ArtigoConhecimento[] @relation("ArtigoAutor")
@@ -387,6 +389,26 @@ model AnexoChamado {
 
   @@index([chamadoId])
   @@map("anexos_chamado")
+  @@schema("gestao_ti")
+}
+
+model AnexoParada {
+  id            String   @id @default(uuid())
+  nomeOriginal  String   @map("nome_original")
+  nomeArquivo   String   @map("nome_arquivo")
+  mimeType      String   @map("mime_type")
+  tamanho       Int
+  descricao     String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  paradaId String         @map("parada_id")
+  parada   RegistroParada @relation(fields: [paradaId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("AnexoParadaUsuario", fields: [usuarioId], references: [id])
+
+  @@index([paradaId])
+  @@map("anexos_parada")
   @@schema("gestao_ti")
 }
 
@@ -752,6 +774,7 @@ enum TipoProjeto {
   IMPLANTACAO_TERCEIRO
   INFRAESTRUTURA
   OUTRO
+  STAKEHOLDER
 
   @@schema("gestao_ti")
 }
@@ -1346,6 +1369,7 @@ model RegistroParada {
   filiaisAfetadas ParadaFilialAfetada[]
   chamados        ParadaChamado[]
   colaboradores   ParadaColaborador[]
+  anexos          AnexoParada[]
 
   @@index([softwareId, status])
   @@index([status])
@@ -1451,11 +1475,27 @@ model Projeto {
   pendencias          PendenciaProjeto[]
   notaFiscalItens     NotaFiscalItem[]
   parcelaRateios      ParcelaRateioProjeto[]
+  favoritos           ProjetoFavorito[]
 
   @@index([status])
   @@index([projetoPaiId])
   @@index([softwareId])
   @@map("projetos")
+  @@schema("gestao_ti")
+}
+
+model ProjetoFavorito {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  projetoId String  @map("projeto_id")
+  projeto   Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("ProjetoFavoritoUsuario", fields: [usuarioId], references: [id])
+
+  @@unique([usuarioId, projetoId])
+  @@map("projetos_favorito")
   @@schema("gestao_ti")
 }
 

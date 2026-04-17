@@ -2,13 +2,15 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CreateProjetoDto } from '../dto/create-projeto.dto.js';
 import { UpdateProjetoDto } from '../dto/update-projeto.dto.js';
 import { ProjetoHelpersService } from './projeto-helpers.service.js';
 import { projetoListInclude, projetoDetailInclude } from './projeto.constants.js';
-import { isGestor } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI } from '../../common/constants/roles.constant.js';
+import { ROLES_EXTERNOS } from '../../common/constants/roles.constant.js';
 
 @Injectable()
 export class ProjetoCoreService {
@@ -172,7 +174,18 @@ export class ProjetoCoreService {
     return [];
   }
 
-  async create(dto: CreateProjetoDto) {
+  async create(dto: CreateProjetoDto, userId?: string, role?: string) {
+    const isExterno = role && (ROLES_EXTERNOS as readonly string[]).includes(role);
+
+    // Roles externos so podem criar subprojetos (exigem projetoPaiId)
+    if (isExterno) {
+      if (!dto.projetoPaiId) {
+        throw new ForbiddenException('Usuarios externos so podem criar sub-projetos');
+      }
+      // Validar que o usuario esta vinculado ao projeto pai
+      await this.helpers.checkProjetoAccessChave(dto.projetoPaiId, userId!, role);
+    }
+
     let nivel = 1;
     let contratoId = dto.contratoId;
 
@@ -201,11 +214,15 @@ export class ProjetoCoreService {
       if (!ct) throw new NotFoundException('Contrato nao encontrado');
     }
 
-    return this.prisma.projeto.create({
+    // Roles externos: forcar tipo STAKEHOLDER e responsavel = usuario logado
+    const tipo = isExterno ? 'STAKEHOLDER' : dto.tipo;
+    const responsavelId = isExterno ? userId! : dto.responsavelId;
+
+    const projeto = await this.prisma.projeto.create({
       data: {
         nome: dto.nome,
         descricao: dto.descricao,
-        tipo: dto.tipo,
+        tipo,
         modo: dto.modo || 'COMPLETO',
         nivel,
         dataInicio: dto.dataInicio ? new Date(dto.dataInicio) : undefined,
@@ -213,13 +230,28 @@ export class ProjetoCoreService {
         custoPrevisto: dto.custoPrevisto,
         observacoes: dto.observacoes,
         projetoPaiId: dto.projetoPaiId,
-        softwareId: dto.softwareId,
-        contratoId,
-        responsavelId: dto.responsavelId,
+        softwareId: isExterno ? undefined : dto.softwareId,
+        contratoId: isExterno ? undefined : contratoId,
+        responsavelId,
         tipoProjetoId: dto.tipoProjetoId || undefined,
       },
       include: projetoDetailInclude,
     });
+
+    // Vincular o criador externo ao subprojeto como usuario-chave/terceirizado
+    if (isExterno && userId) {
+      if (role === 'USUARIO_CHAVE') {
+        await this.prisma.usuarioChaveProjeto.create({
+          data: { projetoId: projeto.id, usuarioId: userId, funcao: 'Responsavel', ativo: true },
+        }).catch(() => {}); // ignora se ja existe
+      } else if (role === 'TERCEIRIZADO') {
+        await this.prisma.terceirizadoProjeto.create({
+          data: { projetoId: projeto.id, usuarioId: userId, funcao: 'Analista', ativo: true },
+        }).catch(() => {}); // ignora se ja existe
+      }
+    }
+
+    return projeto;
   }
 
   async update(id: string, dto: UpdateProjetoDto) {

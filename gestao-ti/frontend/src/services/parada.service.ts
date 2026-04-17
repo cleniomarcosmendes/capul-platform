@@ -125,4 +125,40 @@ export const paradaService = {
     const { data } = await gestaoApi.delete(`/paradas/${paradaId}/colaboradores/${colaboradorId}`);
     return data;
   },
+
+  // Anexos
+  async listarAnexos(paradaId: string): Promise<{ id: string; nomeOriginal: string; mimeType: string; tamanho: number; createdAt: string; usuario: { id: string; nome: string } }[]> {
+    const { data } = await gestaoApi.get(`/paradas/${paradaId}/anexos`);
+    return data;
+  },
+
+  async uploadAnexo(paradaId: string, file: File, descricao?: string): Promise<void> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (descricao) formData.append('descricao', descricao);
+    await gestaoApi.post(`/paradas/${paradaId}/anexos`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  async downloadAnexo(paradaId: string, anexoId: string, nomeOriginal: string): Promise<void> {
+    const { data } = await gestaoApi.get(`/paradas/${paradaId}/anexos/${anexoId}/download`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeOriginal;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  },
+
+  async abrirAnexo(paradaId: string, anexoId: string, mimeType: string): Promise<void> {
+    const { data } = await gestaoApi.get(`/paradas/${paradaId}/anexos/${anexoId}/download?inline=1`, { responseType: 'blob' });
+    const blob = new Blob([data], { type: mimeType });
+    const url = window.URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  },
+
+  async removerAnexo(paradaId: string, anexoId: string): Promise<void> {
+    await gestaoApi.delete(`/paradas/${paradaId}/anexos/${anexoId}`);
+  },
 };

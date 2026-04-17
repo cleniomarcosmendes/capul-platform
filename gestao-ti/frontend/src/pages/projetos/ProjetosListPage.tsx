@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { projetoService } from '../../services/projeto.service';
 import { softwareService } from '../../services/software.service';
 import { compraService } from '../../services/compra.service';
-import { FolderKanban, Plus, Search, Download } from 'lucide-react';
+import { FolderKanban, Plus, Search, Download, Star } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import type { Projeto, Software, TipoProjetoConfig } from '../../types';
 import { formatDateBR } from '../../utils/date';
@@ -35,16 +35,18 @@ export function ProjetosListPage() {
   const [tiposProjeto, setTiposProjeto] = useState<TipoProjetoConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [busca, setBusca] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
   const [filtroStatus, setFiltroStatus] = useState<string>('EM_ANDAMENTO,PLANEJAMENTO');
   const [filtroSoftware, setFiltroSoftware] = useState('');
   const [apenasRaiz, setApenasRaiz] = useState(false);
   const [meusProjetos, setMeusProjetos] = useState(true);
+  const [favoritoIds, setFavoritoIds] = useState<Set<string>>(new Set());
+  const [apenasFavoritos, setApenasFavoritos] = useState(false);
 
   useEffect(() => {
     softwareService.listar().then(setSoftwares).catch(() => {});
     compraService.listarTiposProjeto('ATIVO').then(setTiposProjeto).catch(() => {});
+    projetoService.listarFavoritos().then((ids) => setFavoritoIds(new Set(ids))).catch(() => {});
   }, []);
 
   // Carregar projetos quando auth estiver pronto e quando filtros mudarem
@@ -74,11 +76,26 @@ export function ProjetosListPage() {
   }
 
   const projetosFiltrados = projetos.filter((p) => {
+    if (apenasFavoritos && !favoritoIds.has(p.id)) return false;
     if (filtroTipo && p.tipoProjetoId !== filtroTipo) return false;
-    if (!busca.trim()) return true;
-    const termo = busca.toLowerCase();
-    return (p.nome?.toLowerCase().includes(termo)) || (p.descricao?.toLowerCase().includes(termo));
+    return true;
+  }).sort((a, b) => {
+    const aFav = favoritoIds.has(a.id) ? 0 : 1;
+    const bFav = favoritoIds.has(b.id) ? 0 : 1;
+    return aFav - bFav;
   });
+
+  async function handleToggleFavorito(projetoId: string) {
+    try {
+      const { favorito } = await projetoService.toggleFavorito(projetoId);
+      setFavoritoIds((prev) => {
+        const next = new Set(prev);
+        if (favorito) next.add(projetoId);
+        else next.delete(projetoId);
+        return next;
+      });
+    } catch { /* empty */ }
+  }
 
   const totalAtivos = projetosFiltrados.filter((p) =>
     ['PLANEJAMENTO', 'EM_ANDAMENTO', 'PAUSADO'].includes(p.status),
@@ -135,25 +152,15 @@ export function ProjetosListPage() {
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 flex flex-wrap gap-3 items-end">
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Buscar por nome ou descricao..."
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              className="border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm bg-white w-64"
-            />
-          </div>
           <form onSubmit={handleSearch} className="flex gap-2">
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Buscar..."
+                placeholder="Buscar por nome ou descricao..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm w-48"
+                className="border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm w-72"
               />
             </div>
             <button type="submit" className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm hover:bg-slate-200">
@@ -191,6 +198,15 @@ export function ProjetosListPage() {
             />
             Apenas raiz
           </label>
+          <label className="flex items-center gap-2 text-sm text-amber-600 font-medium">
+            <input
+              type="checkbox"
+              checked={apenasFavoritos}
+              onChange={(e) => setApenasFavoritos(e.target.checked)}
+              className="rounded"
+            />
+            <Star className="w-3.5 h-3.5" /> Favoritos
+          </label>
         </div>
 
         {loading ? (
@@ -218,9 +234,18 @@ export function ProjetosListPage() {
                     <tr key={p.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3 text-slate-500">{p.numero}</td>
                       <td className="px-4 py-3">
-                        <Link to={`/gestao-ti/projetos/${p.id}`} className="text-capul-600 hover:underline font-medium">
-                          {p.nome}
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => { e.preventDefault(); handleToggleFavorito(p.id); }}
+                            className="flex-shrink-0"
+                            title={favoritoIds.has(p.id) ? 'Remover favorito' : 'Favoritar'}
+                          >
+                            <Star className={`w-4 h-4 ${favoritoIds.has(p.id) ? 'fill-amber-400 text-amber-400' : 'text-slate-300 hover:text-amber-400'}`} />
+                          </button>
+                          <Link to={`/gestao-ti/projetos/${p.id}`} className="text-capul-600 hover:underline font-medium">
+                            {p.nome}
+                          </Link>
+                        </div>
                         {p.nivel > 1 && (
                           <span className="ml-2 text-xs text-slate-400">
                             N{p.nivel}{p.projetoPai ? <> — <Link to={`/gestao-ti/projetos/${p.projetoPai.id}`} className="text-capul-500 hover:underline">{p.projetoPai.nome}</Link></> : ''}

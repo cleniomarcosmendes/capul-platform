@@ -529,9 +529,11 @@ export function PendenciaDetalhePage() {
                     <Paperclip className="w-4 h-4 text-slate-400 flex-shrink-0" />
                     <button
                       onClick={() => {
-                        const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+                        const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
                         if (a.mimeType && viewable.includes(a.mimeType)) {
-                          projetoService.abrirAnexoPendencia(projetoId!, pendencia!.id, a.id, a.mimeType);
+                          projetoService.abrirAnexoPendencia(projetoId!, pendencia!.id, a.id, a.mimeType).catch(() => {
+                            handleDownloadAnexo(a);
+                          });
                         } else {
                           handleDownloadAnexo(a);
                         }

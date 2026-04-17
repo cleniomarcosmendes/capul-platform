@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CreateChamadoDto } from '../dto/create-chamado.dto.js';
+import { UpdateChamadoHeaderDto } from '../dto/update-chamado-header.dto.js';
 import { TransferirEquipeDto, TransferirTecnicoDto } from '../dto/transferir-chamado.dto.js';
 import { ComentarioChamadoDto } from '../dto/comentario-chamado.dto.js';
 import { ResolverChamadoDto, ReabrirChamadoDto, CsatDto } from '../dto/resolver-chamado.dto.js';
@@ -14,7 +15,7 @@ import { NotificacaoService } from '../../notificacao/notificacao.service.js';
 import { ChamadoHelpersService } from './chamado-helpers.service.js';
 import { ChamadoTempoService } from './chamado-tempo.service.js';
 import { chamadoInclude } from './chamado.constants.js';
-import { isGestor } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI } from '../../common/constants/roles.constant.js';
 import { StatusChamado, Visibilidade } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -99,7 +100,7 @@ export class ChamadoCoreService {
       }
 
       // Para roles nao-staff, restringir as filiais vinculadas ao usuario
-      const isStaff = isGestor(role);
+      const isStaff = isGestor(role) || isTI(role);
       if (!isStaff && !filters.filialId) {
         const userFiliais = await this.prisma.$queryRaw<{ filial_id: string }[]>`
           SELECT filial_id FROM core.usuario_filiais WHERE usuario_id = ${user.sub}
@@ -128,7 +129,7 @@ export class ChamadoCoreService {
           { tecnicoId: user.sub },
           { colaboradores: { some: { usuarioId: user.sub } } },
         ];
-      } else if (!filters.equipeId && !isGestor(role)) {
+      } else if (!filters.equipeId && !isTI(role)) {
         // Staff sem filtro "meus chamados" e sem equipe selecionada:
         // mostrar chamados das equipes que o tecnico faz parte + seus proprios
         const minhasEquipes = await this.prisma.membroEquipe.findMany({
@@ -308,6 +309,30 @@ export class ChamadoCoreService {
     });
 
     return chamado;
+  }
+
+  async updateHeader(id: string, dto: UpdateChamadoHeaderDto, user: JwtPayload, role: string) {
+    const chamado = await this.helpers.getChamadoOrFail(id);
+
+    // Apenas o solicitante ou gestores podem editar o cabecalho
+    const isCriador = chamado.solicitanteId === user.sub;
+    if (!isCriador && !isGestor(role)) {
+      throw new ForbiddenException('Apenas o solicitante ou gestores podem editar o cabecalho');
+    }
+
+    const data: Record<string, string> = {};
+    if (dto.titulo !== undefined) data.titulo = dto.titulo;
+    if (dto.descricao !== undefined) data.descricao = dto.descricao;
+
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('Nenhum campo para atualizar');
+    }
+
+    return this.prisma.chamado.update({
+      where: { id },
+      data,
+      include: chamadoInclude,
+    });
   }
 
   async assumir(id: string, user: JwtPayload) {

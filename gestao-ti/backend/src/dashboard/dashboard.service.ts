@@ -40,6 +40,10 @@ export class DashboardService {
     return this.operacional.getTecnicosAtivos();
   }
 
+  async getTecnicosDaEquipe(userId: string) {
+    return this.operacional.getTecnicosDaEquipe(userId);
+  }
+
   async getFinanceiro(filters?: { dataInicio?: string; dataFim?: string }) {
     return this.financeiro.getFinanceiro(filters);
   }

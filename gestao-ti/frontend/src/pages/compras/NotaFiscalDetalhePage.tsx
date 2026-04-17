@@ -337,9 +337,11 @@ export function NotaFiscalDetalhePage() {
                   <div className="flex-1 min-w-0">
                     <button
                       onClick={() => {
-                        const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+                        const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
                         if (viewable.includes(a.mimeType)) {
-                          compraService.abrirAnexoNF(nf.id, a.id, a.mimeType);
+                          compraService.abrirAnexoNF(nf.id, a.id, a.mimeType).catch(() => {
+                            compraService.downloadAnexoNF(nf.id, a.id, a.nomeOriginal);
+                          });
                         } else {
                           compraService.downloadAnexoNF(nf.id, a.id, a.nomeOriginal);
                         }

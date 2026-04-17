@@ -246,6 +246,10 @@ export function ProjetoDetalhePage() {
   const showEquipeTab = true;
   const isCompleto = true; // Modo SIMPLES removido - todos projetos são COMPLETO
   const isRestrictedRole = gestaoTiRole === 'USUARIO_CHAVE' || gestaoTiRole === 'TERCEIRIZADO';
+  // Subprojeto proprio: usuario externo e responsavel do subprojeto
+  const isSubprojetoProprio = isRestrictedRole && projeto.projetoPaiId && projeto.responsavelId === usuario?.id;
+  // Cor das tabs: azul para subprojeto de usuario externo, verde normal para TI
+  const tabActiveColor = isSubprojetoProprio ? 'border-blue-600 text-blue-600' : 'border-capul-600 text-capul-600';
 
   const allTabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { key: 'visaoGeral', label: 'Visao Geral', icon: Eye },
@@ -261,9 +265,20 @@ export function ProjetoDetalhePage() {
     { key: 'usuariosChave' as Tab, label: 'Usuarios-Chave', icon: KeyRound },
   ];
 
-  // USUARIO_CHAVE e TERCEIRIZADO: apenas Sub-projetos e Pendencias
-  const restrictedTabs: Tab[] = ['subprojetos', 'pendencias'];
-  const tabs = isRestrictedRole ? allTabs.filter(t => restrictedTabs.includes(t.key)) : allTabs;
+  // Tabs visiveis por contexto
+  let tabs;
+  if (!isRestrictedRole) {
+    // TI: todas as tabs
+    tabs = allTabs;
+  } else if (isSubprojetoProprio) {
+    // Subprojeto proprio: tabs completas (sem chamados, financeiro, riscos, dependencias)
+    const subprojetoTabs: Tab[] = ['visaoGeral', 'equipe', 'atividades', 'pendencias', 'anexos', 'usuariosChave'];
+    tabs = allTabs.filter(t => subprojetoTabs.includes(t.key));
+  } else {
+    // Projeto principal ou subprojeto de outro: apenas sub-projetos e pendencias
+    const restrictedTabs: Tab[] = ['subprojetos', 'pendencias'];
+    tabs = allTabs.filter(t => restrictedTabs.includes(t.key));
+  }
 
   // Navegacao: voltar para projeto pai se existir, senao para lista
   const handleVoltar = () => {
@@ -423,7 +438,7 @@ export function ProjetoDetalhePage() {
                 onClick={() => setTab(t.key)}
                 className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
                   tab === t.key
-                    ? 'border-capul-600 text-capul-600'
+                    ? tabActiveColor
                     : 'border-transparent text-slate-500 hover:text-slate-700'
                 }`}
               >
@@ -481,8 +496,8 @@ export function ProjetoDetalhePage() {
 // --- Tab Sub-projetos ---
 function TabSubProjetos({ projeto, canManage, isRestrictedRole }: { projeto: Projeto; canManage: boolean; isRestrictedRole?: boolean }) {
   const subs = projeto.subProjetos || [];
-  // USUARIO_CHAVE e TERCEIRIZADO nao podem criar sub-projetos
-  const canCreateSubProjeto = canManage && !isRestrictedRole && projeto.nivel < 3;
+  // USUARIO_CHAVE e TERCEIRIZADO podem criar sub-projetos nos projetos que estao vinculados
+  const canCreateSubProjeto = (canManage || isRestrictedRole) && projeto.nivel < 3;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200">
@@ -577,8 +592,12 @@ function TabEquipe({ projetoId, canManage, onEditingChange }: { projetoId: strin
     } catch { /* empty */ }
   }
 
+  const ROLES_TI_SET = new Set(['ADMIN', 'GESTOR_TI', 'SUPORTE_TI']);
   const membrosIds = new Set(membros.map((m) => m.usuarioId));
-  const availableUsers = usuarios.filter((u) => !membrosIds.has(u.id));
+  const availableUsers = usuarios
+    .filter((u) => !membrosIds.has(u.id))
+    .filter((u) => u.permissoes?.some((p) => p.modulo.codigo === 'GESTAO_TI' && ROLES_TI_SET.has(p.roleModulo.codigo)))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
 
   return (
     <>
@@ -2569,9 +2588,11 @@ function TabAnexos({ projetoId, canAdd, canManage }: { projetoId: string; canAdd
                 <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{anexoTipoLabel[a.tipo]}</span>
                 {a.tipo === 'ARQUIVO' ? (
                   <button onClick={() => {
-                    const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf'];
+                    const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
                     if (a.mimeType && viewable.includes(a.mimeType)) {
-                      projetoService.abrirAnexo(projetoId, a.id, a.mimeType);
+                      projetoService.abrirAnexo(projetoId, a.id, a.mimeType).catch(() => {
+                        handleDownload(a);
+                      });
                     } else {
                       handleDownload(a);
                     }
@@ -2756,9 +2777,13 @@ function TabUsuariosChave({ projetoId, canManage, onEditingChange }: { projetoId
     }
   }
 
-  // Filter out already-added users
+  // Filter: apenas USUARIO_CHAVE e TERCEIRIZADO, e nao ja adicionados
+  const ROLES_CHAVE_SET = new Set(['USUARIO_CHAVE', 'TERCEIRIZADO']);
   const idsExistentes = new Set(itens.filter((i) => i.ativo).map((i) => i.usuarioId));
-  const usuariosDisponiveis = usuarios.filter((u) => !idsExistentes.has(u.id));
+  const usuariosDisponiveis = usuarios
+    .filter((u) => !idsExistentes.has(u.id))
+    .filter((u) => u.permissoes?.some((p) => p.modulo.codigo === 'GESTAO_TI' && ROLES_CHAVE_SET.has(p.roleModulo.codigo)))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
 
   return (
     <>

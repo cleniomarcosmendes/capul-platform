@@ -32,6 +32,7 @@ export class UsuarioService {
         telefone: true,
         cargo: true,
         status: true,
+        tipo: true,
         primeiroAcesso: true,
         ultimoLogin: true,
         createdAt: true,

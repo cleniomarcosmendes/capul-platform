@@ -4,6 +4,7 @@ import { ChamadoColaboradorService } from './services/chamado-colaborador.servic
 import { ChamadoTempoService } from './services/chamado-tempo.service.js';
 import { ChamadoAnexoService } from './services/chamado-anexo.service.js';
 import { CreateChamadoDto } from './dto/create-chamado.dto.js';
+import { UpdateChamadoHeaderDto } from './dto/update-chamado-header.dto.js';
 import { TransferirEquipeDto, TransferirTecnicoDto } from './dto/transferir-chamado.dto.js';
 import { ComentarioChamadoDto } from './dto/comentario-chamado.dto.js';
 import { ResolverChamadoDto, ReabrirChamadoDto, CsatDto } from './dto/resolver-chamado.dto.js';
@@ -45,6 +46,10 @@ export class ChamadoService {
 
   async create(dto: CreateChamadoDto, user: JwtPayload, role: string) {
     return this.core.create(dto, user, role);
+  }
+
+  async updateHeader(id: string, dto: UpdateChamadoHeaderDto, user: JwtPayload, role: string) {
+    return this.core.updateHeader(id, dto, user, role);
   }
 
   async assumir(id: string, user: JwtPayload) {
