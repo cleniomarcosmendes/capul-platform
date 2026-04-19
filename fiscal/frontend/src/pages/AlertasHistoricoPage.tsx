@@ -11,12 +11,10 @@ import { extractApiError } from '../utils/errors';
 import type { AlertaEnviado, TipoSincronizacao } from '../types';
 
 const TIPO_LABEL: Record<TipoSincronizacao, string> = {
-  BOOTSTRAP: 'Bootstrap',
-  SEMANAL_AUTO: 'Semanal',
-  DIARIA_AUTO: 'Diária auto',
-  DIARIA_MANUAL: 'Diária manual',
+  MOVIMENTO_MEIO_DIA: 'Meio-dia',
+  MOVIMENTO_MANHA_SEGUINTE: 'Manhã seguinte',
+  MANUAL: 'Manual',
   PONTUAL: 'Pontual',
-  COMPLETA_MANUAL: 'Completa manual',
 };
 
 export function AlertasHistoricoPage() {

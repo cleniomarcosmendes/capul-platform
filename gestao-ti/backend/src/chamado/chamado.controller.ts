@@ -28,6 +28,11 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
+// Whitelist de MIME types aceitos em upload de anexos.
+// NAO incluir 'application/octet-stream' aqui — permitiria upload de qualquer
+// binario (ex: .exe renomeado para .pdf). Em caso de tipos legitimos que
+// chegam como octet-stream (alguns navegadores/browsers antigos), considerar
+// validacao cruzada por extensao do nome do arquivo.
 const ALLOWED_MIMES = [
   'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
   'application/pdf',
@@ -36,7 +41,6 @@ const ALLOWED_MIMES = [
   'text/plain', 'text/csv',
   'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
   'application/x-pkcs12', 'application/pkcs12',
-  'application/octet-stream',
 ];
 
 @Controller('chamados')

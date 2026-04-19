@@ -65,11 +65,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
         }
       }
 
+      // Em producao, nao vazar o campo `detalhe` — pode expor estrutura
+      // interna (nome de services, stacks, queries). Em dev, manter para
+      // facilitar debug local.
+      const isProd = process.env.NODE_ENV === 'production';
       body = {
         statusCode: status,
         mensagem,
         erro,
-        detalhe,
+        detalhe: isProd ? undefined : detalhe,
         path: req.url,
         timestamp: new Date().toISOString(),
       };

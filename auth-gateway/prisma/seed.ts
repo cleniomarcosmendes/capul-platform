@@ -181,15 +181,18 @@ async function main() {
     where: { username: 'admin' },
   });
   if (!admin) {
+    // Primeira senha do admin. Pode ser sobrescrita via INITIAL_ADMIN_PASSWORD
+    // no .env — util para producao onde nao queremos padrao conhecido.
+    const senhaInicial = process.env.INITIAL_ADMIN_PASSWORD ?? 'admin123';
     admin = await prisma.usuario.create({
       data: {
         username: 'admin',
         email: 'admin@capul.com',
         nome: 'Administrador',
-        senha: await bcrypt.hash('admin123', 10),
+        senha: await bcrypt.hash(senhaInicial, 10),
         filialPrincipalId: filial.id,
         departamentoId: deptoTI.id,
-        primeiroAcesso: false,
+        primeiroAcesso: true, // forca troca no primeiro login
         filiais: {
           create: { filialId: filial.id, isDefault: true },
         },
@@ -204,7 +207,12 @@ async function main() {
         },
       },
     });
-    console.log(`Admin criado: ${admin.username} (senha: admin123)`);
+    // NUNCA logar a senha em texto — destinos de log (Grafana/Loki/ELK)
+    // capturariam credencial em texto. Informar apenas a origem da senha.
+    const fonteSenha = process.env.INITIAL_ADMIN_PASSWORD
+      ? 'INITIAL_ADMIN_PASSWORD (env)'
+      : 'valor padrao (TROCAR no primeiro login)';
+    console.log(`Admin "${admin.username}" criado. Senha: ${fonteSenha}`);
   } else {
     // Garantir que admin tem permissao em todos os modulos
     const permissoesExistentes = await prisma.permissaoModulo.findMany({

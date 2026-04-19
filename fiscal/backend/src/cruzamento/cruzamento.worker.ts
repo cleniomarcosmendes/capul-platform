@@ -13,6 +13,7 @@ import { CccClient } from '../sefaz/ccc-client.service.js';
 import { AmbienteService } from '../ambiente/ambiente.service.js';
 import { CircuitBreakerService, CircuitBreakerOpenError } from './circuit-breaker.service.js';
 import { ExecucaoService, type CruzamentoJobData } from './execucao.service.js';
+import { DivergenciaService } from '../cadastro/divergencia.service.js';
 import type { SituacaoCadastral } from '@prisma/client';
 
 /**
@@ -46,6 +47,7 @@ export class CruzamentoWorker implements OnApplicationBootstrap, OnApplicationSh
     private readonly ambiente: AmbienteService,
     private readonly circuitBreaker: CircuitBreakerService,
     private readonly execucao: ExecucaoService,
+    private readonly divergencia: DivergenciaService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -186,6 +188,28 @@ export class CruzamentoWorker implements OnApplicationBootstrap, OnApplicationSh
           sincronizacaoId,
         },
       });
+    }
+
+    // Detecta divergências Protheus × SEFAZ. Não-bloqueante: se falhar, só
+    // loga (o upsert do contribuinte é o essencial).
+    if (jobData.protheusSnapshot) {
+      try {
+        await this.divergencia.avaliarEgrav(
+          upserted.id,
+          jobData.protheusSnapshot,
+          {
+            razaoSocial: c.razaoSocial,
+            inscricaoEstadual: c.ie,
+            cnae: c.cnae,
+            enderecoCep: c.endereco?.cep,
+            enderecoMunicipio: c.endereco?.municipio,
+          },
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Falha ao avaliar divergências para CNPJ ${cnpjClean}: ${(err as Error).message}`,
+        );
+      }
     }
   }
 

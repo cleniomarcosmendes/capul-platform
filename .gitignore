@@ -37,6 +37,15 @@ generated/
 # Certs (dev only - DO NOT commit production certs)
 nginx/certs/*.pem
 nginx/certs/*.key
+nginx/certs/*.crt
+# Certificados ICP-Brasil / A1 (fiscal) — nunca commitar arquivos reais
+*.pfx
+*.p12
+fiscal/backend/certs/*.pfx
+fiscal/backend/certs/*.p12
+# Manter estrutura dos diretorios em git mesmo sem conteudo
+!nginx/certs/.gitkeep
+!fiscal/backend/certs/.gitkeep
 
 # Coverage
 coverage/

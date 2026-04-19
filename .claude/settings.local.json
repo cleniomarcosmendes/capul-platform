@@ -1218,7 +1218,14 @@
       "Bash(echo \"exit-backend=$?\")",
       "Bash(echo \"exit-frontend=$?\")",
       "Bash(echo \"backend=$?\")",
-      "Bash(echo \"frontend=$?\")"
+      "Bash(echo \"frontend=$?\")",
+      "Bash(openssl x509 *)",
+      "Bash(bash /mnt/c/meus_projetos/capul-platform/scripts/validate-env.sh /mnt/c/meus_projetos/capul-platform/.env)",
+      "Bash(echo \"fiscal=$?\")",
+      "Bash(echo \"gestao-ti=$?\")",
+      "Bash(echo \"auth=$?\")",
+      "Bash(echo \"fiscal-fe=$?\")",
+      "Bash(echo \"compose=$?\")"
     ]
   }
 }

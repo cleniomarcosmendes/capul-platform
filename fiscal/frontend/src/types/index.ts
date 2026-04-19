@@ -615,12 +615,10 @@ export interface CadastroConsultaResult {
 // ----- Cruzamento / Onda 2 -----
 
 export type TipoSincronizacao =
-  | 'BOOTSTRAP'
-  | 'SEMANAL_AUTO'
-  | 'DIARIA_AUTO'
-  | 'DIARIA_MANUAL'
-  | 'PONTUAL'
-  | 'COMPLETA_MANUAL';
+  | 'MOVIMENTO_MEIO_DIA'
+  | 'MOVIMENTO_MANHA_SEGUINTE'
+  | 'MANUAL'
+  | 'PONTUAL';
 
 export type StatusSincronizacao =
   | 'AGENDADA'
@@ -672,8 +670,59 @@ export interface UfCircuit {
 }
 
 export interface SchedulerStatus {
-  semanal: { cron: string; proxima: string | null } | null;
-  diaria: { cron: string; proxima: string | null } | null;
+  meioDia: { cron: string; proxima: string | null } | null;
+  manhaSeguinte: { cron: string; proxima: string | null } | null;
+}
+
+/**
+ * Overview agregado do Dashboard (endpoint GET /api/v1/fiscal/dashboard).
+ * Evita 6+ requests paralelos da pagina inicial.
+ */
+export interface DashboardOverview {
+  ambiente: {
+    ativo: 'PRODUCAO' | 'HOMOLOGACAO';
+    pauseSync: boolean;
+  };
+  consumoDiario: {
+    contador: number;
+    limite: number;
+    alertaAmarelo: number;
+    alertaVermelho: number;
+    percentual: number;
+    nivel: 'ok' | 'amarelo' | 'vermelho' | 'critico';
+    pausadoAutomatico: boolean;
+  };
+  divergencias: {
+    abertasTotal: number;
+    porCriticidade: {
+      CRITICA: number;
+      ALTA: number;
+      MEDIA: number;
+      BAIXA: number;
+    };
+  };
+  certificado: {
+    cnpj: string;
+    validoAte: string;
+    diasParaVencer: number;
+    vencendoEmMenosDe60Dias: boolean;
+  } | null;
+  ufsBloqueadas: Array<{
+    uf: string;
+    estado: 'ABERTO' | 'MEIO_ABERTO';
+    retomadaEm: string | null;
+  }>;
+  scheduler: SchedulerStatus;
+  ultimasExecucoes: Array<{
+    id: string;
+    tipo: TipoSincronizacao;
+    status: StatusSincronizacao;
+    iniciadoEm: string;
+    finalizadoEm: string | null;
+    totalContribuintes: number | null;
+    sucessos: number;
+    erros: number;
+  }>;
 }
 
 // ----- Certificado -----

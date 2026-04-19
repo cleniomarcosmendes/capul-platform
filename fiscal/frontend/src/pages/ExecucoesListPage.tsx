@@ -23,12 +23,10 @@ import type {
 } from '../types';
 
 const TIPO_LABEL: Record<TipoSincronizacao, string> = {
-  BOOTSTRAP: 'Bootstrap',
-  SEMANAL_AUTO: 'Semanal automática',
-  DIARIA_AUTO: 'Diária automática',
-  DIARIA_MANUAL: 'Diária manual',
+  MOVIMENTO_MEIO_DIA: 'Movimento meio-dia',
+  MOVIMENTO_MANHA_SEGUINTE: 'Movimento manhã seguinte',
+  MANUAL: 'Manual',
   PONTUAL: 'Pontual',
-  COMPLETA_MANUAL: 'Completa manual',
 };
 
 const STATUS_BADGE: Record<StatusSincronizacao, 'gray' | 'blue' | 'yellow' | 'green' | 'red'> = {
@@ -80,7 +78,7 @@ export function ExecucoesListPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroTipo]);
 
-  async function handleTrigger(tipo: 'diaria-manual' | 'completa-manual' | 'bootstrap') {
+  async function handleTrigger(tipo: 'manual' | 'movimento-meio-dia' | 'movimento-manha-seguinte') {
     try {
       setTriggering(tipo);
       setError(null);
@@ -113,30 +111,50 @@ export function ExecucoesListPage() {
             variant="secondary"
             size="sm"
             leftIcon={<Play className="h-4 w-4" />}
-            onClick={() => handleTrigger('diaria-manual')}
-            loading={triggering === 'diaria-manual'}
+            onClick={() => handleTrigger('manual')}
+            loading={triggering === 'manual'}
           >
-            Disparar diária
+            Disparar manual
           </Button>
           {canCompleta && (
-            <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<Database className="h-4 w-4" />}
-              onClick={async () => {
-                const ok = await confirm({
-                  title: 'Disparar carga completa?',
-                  description:
-                    'Isso vai re-consultar TODOS os contribuintes cadastrados nas SEFAZ de todas as UFs. O processo pode levar várias horas e consumirá cota significativa de chamadas SEFAZ. Use apenas quando necessário (bootstrap ou recuperação após incidente).',
-                  variant: 'warning',
-                  confirmLabel: 'Disparar carga completa',
-                });
-                if (ok) handleTrigger('completa-manual');
-              }}
-              loading={triggering === 'completa-manual'}
-            >
-              Carga completa
-            </Button>
+            <>
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<Database className="h-4 w-4" />}
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: 'Antecipar corrida do meio-dia?',
+                    description:
+                      'Vai consultar agora os CNPJs com movimento de saída nas últimas horas, simulando a corrida automática das 12:00. Útil para recuperar uma corrida atrasada ou por ocorrência pontual.',
+                    variant: 'warning',
+                    confirmLabel: 'Disparar meio-dia',
+                  });
+                  if (ok) handleTrigger('movimento-meio-dia');
+                }}
+                loading={triggering === 'movimento-meio-dia'}
+              >
+                Corrida meio-dia
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<Database className="h-4 w-4" />}
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: 'Antecipar corrida da manhã seguinte?',
+                    description:
+                      'Vai consultar os CNPJs com movimento de saída do período 12:00 → 23:59 de ontem, simulando a corrida automática das 06:00.',
+                    variant: 'warning',
+                    confirmLabel: 'Disparar manhã seguinte',
+                  });
+                  if (ok) handleTrigger('movimento-manha-seguinte');
+                }}
+                loading={triggering === 'movimento-manha-seguinte'}
+              >
+                Corrida manhã seguinte
+              </Button>
+            </>
           )}
         </div>
       )}

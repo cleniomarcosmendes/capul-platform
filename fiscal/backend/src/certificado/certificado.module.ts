@@ -20,6 +20,6 @@ import { CertificadoReaderService } from './certificado-reader.service.js';
   imports: [CryptoModule],
   controllers: [CertificadoController],
   providers: [CertificadoService, CertParserService, CertificadoReaderService],
-  exports: [CertificadoReaderService],
+  exports: [CertificadoReaderService, CertificadoService],
 })
 export class CertificadoModule {}

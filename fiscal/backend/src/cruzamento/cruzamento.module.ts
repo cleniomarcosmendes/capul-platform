@@ -1,7 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { SefazModule } from '../sefaz/sefaz.module.js';
 import { AmbienteModule } from '../ambiente/ambiente.module.js';
 import { AlertasModule } from '../alertas/alertas.module.js';
+import { CadastroModule } from '../cadastro/cadastro.module.js';
 import { CircuitBreakerService } from './circuit-breaker.service.js';
 import { ExecucaoService } from './execucao.service.js';
 import { CruzamentoWorker } from './cruzamento.worker.js';
@@ -28,7 +29,7 @@ import { CruzamentoController } from './cruzamento.controller.js';
  *   - BullMqModule   → @Global, conexão Redis + filas
  */
 @Module({
-  imports: [SefazModule, AmbienteModule, AlertasModule],
+  imports: [SefazModule, AmbienteModule, AlertasModule, forwardRef(() => CadastroModule)],
   controllers: [CruzamentoController],
   providers: [
     CircuitBreakerService,
@@ -38,6 +39,6 @@ import { CruzamentoController } from './cruzamento.controller.js';
     WatchdogService,
     ExpurgoService,
   ],
-  exports: [CircuitBreakerService, ExecucaoService],
+  exports: [CircuitBreakerService, ExecucaoService, SchedulerService],
 })
 export class CruzamentoModule {}

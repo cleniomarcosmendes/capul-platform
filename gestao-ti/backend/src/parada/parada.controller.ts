@@ -34,6 +34,8 @@ import { FinalizarParadaDto } from './dto/finalizar-parada.dto';
 import { CreateMotivoParadaDto } from './dto/create-motivo-parada.dto';
 import { UpdateMotivoParadaDto } from './dto/update-motivo-parada.dto';
 
+// Whitelist de MIME types aceitos em upload — sem application/octet-stream
+// (permitiria upload de qualquer binario, inclusive executaveis renomeados).
 const ALLOWED_MIMES = [
   'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
   'application/pdf',
@@ -41,7 +43,6 @@ const ALLOWED_MIMES = [
   'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'text/plain', 'text/csv',
   'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
-  'application/octet-stream',
 ];
 
 @Controller('paradas')

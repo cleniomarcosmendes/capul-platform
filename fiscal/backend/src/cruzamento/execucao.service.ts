@@ -27,6 +27,19 @@ export interface CruzamentoJobData {
   filial: string | null;
   codigo: string;
   loja: string;
+  /**
+   * Snapshot Protheus no momento do enfileiramento — usado pelo
+   * DivergenciaService para comparar com CCC/SEFAZ. Dados opcionais; se
+   * ausentes, não há divergência gerada (mas a sync do contribuinte ainda
+   * acontece normalmente).
+   */
+  protheusSnapshot?: {
+    razaoSocial?: string | null;
+    inscricaoEstadual?: string | null;
+    cnae?: string | null;
+    enderecoCep?: string | null;
+    enderecoMunicipio?: string | null;
+  };
 }
 
 /**
@@ -133,6 +146,13 @@ export class ExecucaoService {
         filial: r.filial ?? null,
         codigo: r.codigo,
         loja: r.loja,
+        protheusSnapshot: {
+          razaoSocial: r.razaoSocial ?? null,
+          inscricaoEstadual: r.inscricaoEstadual ?? null,
+          cnae: r.cnae ?? null,
+          enderecoCep: r.endereco?.cep ?? null,
+          enderecoMunicipio: r.endereco?.municipio ?? null,
+        },
       },
       opts: {
         attempts: 3,

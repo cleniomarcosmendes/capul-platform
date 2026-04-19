@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   NotFoundException,
@@ -9,6 +11,7 @@ import { CccClient, type CccConsultaRaw } from '../sefaz/ccc-client.service.js';
 import { AmbienteService } from '../ambiente/ambiente.service.js';
 import { ProtheusCadastroService } from '../protheus/protheus-cadastro.service.js';
 import { ReceitaClient, type ReceitaFederalData } from './receita.client.js';
+import { DivergenciaService } from './divergencia.service.js';
 import type {
   CadastroContribuinte,
   SituacaoCadastral,
@@ -75,11 +78,26 @@ export interface CadastroConsultaPontualResult {
 }
 
 /**
+ * Snapshot do registro Protheus usado para comparação com SEFAZ.
+ * Representa o estado "em um ponto" — não é persistido aqui (a persistência
+ * acontece em `fiscal.cadastro_contribuinte.vinculosProtheus` como JSON).
+ */
+interface RegistroProtheusSnapshot {
+  origem: 'SA1010' | 'SA2010';
+  razaoSocial: string | null;
+  inscricaoEstadual: string | null;
+  cnae: string | null;
+  enderecoCep: string | null;
+  enderecoMunicipio: string | null;
+}
+
+/**
  * Resultado intermediário do `enrichFromProtheus` — distingue "não achou"
  * de "falhou ao consultar".
  */
 interface EnriquecimentoProtheus {
   vinculos: VinculoProtheus[];
+  registros: RegistroProtheusSnapshot[];
   falhou: boolean;
 }
 
@@ -122,6 +140,7 @@ export class CadastroService {
     private readonly ambiente: AmbienteService,
     private readonly protheusCadastro: ProtheusCadastroService,
     private readonly receita: ReceitaClient,
+    private readonly divergencia: DivergenciaService,
   ) {}
 
   async consultarPontual(cnpj: string, uf: string): Promise<CadastroConsultaPontualResult> {
@@ -141,12 +160,10 @@ export class CadastroService {
     try {
       raw = await this.ccc.consultarPorCnpj(cnpjDigits, ufUpper, ambienteStr);
     } catch (err) {
-      const msg = (err as Error).message;
-      this.logger.error(`Falha na consulta CCC para ${cnpjDigits} UF=${ufUpper}: ${msg}`);
-      throw new BadRequestException({
-        erro: 'SEFAZ_INDISPONIVEL',
-        mensagem: `Não foi possível consultar o SEFAZ de ${ufUpper}. ${msg}`,
-      });
+      this.logger.error(
+        `Falha na consulta CCC para ${cnpjDigits} UF=${ufUpper}: ${(err as Error).message}`,
+      );
+      throw this.traduzirErroSefaz(err, ufUpper);
     }
 
     if (raw.contribuintes.length === 0) {
@@ -269,6 +286,36 @@ export class CadastroService {
     // Detecta divergências entre SA1010 e SA2010 (quando existem em ambas)
     const divergenciasEntreTabelas = this.detectarDivergenciasEntreTabelas(vinculos);
 
+    // Detecta divergências Protheus × SEFAZ — alimenta a tela /divergencias.
+    // Usa o primeiro registro Protheus (se houver em ambas as tabelas, SA1 vs
+    // SA2 já é tratado em divergenciasEntreTabelas). Não-bloqueante.
+    const primeiroProtheus = enriquecimento.registros[0];
+    if (primeiroProtheus) {
+      this.divergencia
+        .avaliarEgrav(
+          upserted.id,
+          {
+            razaoSocial: primeiroProtheus.razaoSocial,
+            inscricaoEstadual: primeiroProtheus.inscricaoEstadual,
+            cnae: primeiroProtheus.cnae,
+            enderecoCep: primeiroProtheus.enderecoCep,
+            enderecoMunicipio: primeiroProtheus.enderecoMunicipio,
+          },
+          {
+            razaoSocial: contribuinte.razaoSocial,
+            inscricaoEstadual: contribuinte.ie,
+            cnae: contribuinte.cnae,
+            enderecoCep: contribuinte.endereco?.cep,
+            enderecoMunicipio: contribuinte.endereco?.municipio,
+          },
+        )
+        .catch((err) => {
+          this.logger.warn(
+            `Falha ao avaliar divergências pontuais para ${cnpjDigits}: ${(err as Error).message}`,
+          );
+        });
+    }
+
     return {
       cnpj: cnpjDigits,
       uf: ufUpper,
@@ -335,7 +382,7 @@ export class CadastroService {
     try {
       const resp = await this.protheusCadastro.porCnpj(cnpj);
       if (resp.registros.length === 0) {
-        return { vinculos: [], falhou: false };
+        return { vinculos: [], registros: [], falhou: false };
       }
       const vinculos: VinculoProtheus[] = resp.registros.map((r) => ({
         origem: r.origem as 'SA1010' | 'SA2010',
@@ -347,21 +394,115 @@ export class CadastroService {
         razaoSocial: r.razaoSocial,
         inscricaoEstadual: r.inscricaoEstadual ?? null,
       }));
+      const registros: RegistroProtheusSnapshot[] = resp.registros.map((r) => ({
+        origem: r.origem as 'SA1010' | 'SA2010',
+        razaoSocial: r.razaoSocial ?? null,
+        inscricaoEstadual: r.inscricaoEstadual ?? null,
+        cnae: r.cnae ?? null,
+        enderecoCep: r.endereco?.cep ?? null,
+        enderecoMunicipio: r.endereco?.municipio ?? null,
+      }));
       if (vinculos.length > 1) {
         this.logger.log(
           `CNPJ ${cnpj} encontrado em AMBAS as tabelas: SA1010 (${vinculos[0]?.codigo}) e SA2010 (${vinculos[1]?.codigo})`,
         );
       }
-      return { vinculos, falhou: false };
+      return { vinculos, registros, falhou: false };
     } catch (err) {
       const anyErr = err as { statusCode?: number; body?: { erro?: string } };
       if (anyErr?.statusCode === 404 || anyErr?.body?.erro === 'CNPJ_NAO_ENCONTRADO') {
         this.logger.debug(`CNPJ ${cnpj} não cadastrado no Protheus (SA1/SA2) — novo contribuinte.`);
-        return { vinculos: [], falhou: false };
+        return { vinculos: [], registros: [], falhou: false };
       }
       this.logger.warn(`Enriquecimento Protheus falhou tecnicamente para ${cnpj}: ${(err as Error).message}`);
-      return { vinculos: [], falhou: true };
+      return { vinculos: [], registros: [], falhou: true };
     }
+  }
+
+  /**
+   * Traduz erros técnicos da consulta SEFAZ em exceções HTTP específicas,
+   * para a UI mostrar mensagens claras ao operador em vez de "Erro interno".
+   *
+   * Distingue:
+   *   - LIMITE_ATINGIDO     → 429 — proteção interna da Capul, não SEFAZ
+   *   - CIRCUIT_ABERTO      → 503 — UF específica bloqueada temporariamente
+   *   - CERT_INVALIDO       → 503 — problema no certificado A1
+   *   - SEFAZ_INDISPONIVEL  → 502 — real falha do web service SEFAZ
+   */
+  private traduzirErroSefaz(err: unknown, ufUpper: string): HttpException {
+    const msg = (err as Error).message ?? '';
+    const name = (err as Error).name ?? '';
+
+    // Limite diário global da Capul (Plano v2.0 §6.2 camada 4)
+    if (name === 'LimiteDiarioAtingidoException' || msg.includes('Limite Diario Atingido')) {
+      return new HttpException(
+        {
+          erro: 'LIMITE_ATINGIDO',
+          mensagem:
+            'Limite diário de consultas SEFAZ atingido pela plataforma. Nova tentativa após 00:00. Em emergência, ADMIN_TI pode liberar em Operação → Limites.',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    // Circuit breaker da UF (Plano v2.0 §6.2 camada 3)
+    if (name === 'CircuitBreakerOpenError' || msg.includes('Circuit breaker ABERTO') || msg.includes('circuit breaker')) {
+      return new HttpException(
+        {
+          erro: 'CIRCUIT_ABERTO',
+          mensagem: `A UF ${ufUpper} está temporariamente bloqueada por excesso de falhas consecutivas no SEFAZ. Tente novamente em alguns minutos.`,
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+
+    // Problemas de certificado / mTLS
+    if (
+      msg.includes('certificate') ||
+      msg.includes('CERT') ||
+      msg.includes('UNABLE_TO_VERIFY_LEAF_SIGNATURE') ||
+      msg.includes('SELF_SIGNED_CERT') ||
+      msg.includes('mTLS') ||
+      msg.includes('pfx') ||
+      msg.includes('PFX')
+    ) {
+      return new HttpException(
+        {
+          erro: 'CERT_INVALIDO',
+          mensagem:
+            'Problema no certificado digital A1. Verificar no Configurador se há certificado ativo e válido.',
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+
+    // Timeout / rede
+    if (
+      msg.includes('timeout') ||
+      msg.includes('Timeout') ||
+      msg.includes('ETIMEDOUT') ||
+      msg.includes('ECONNREFUSED') ||
+      msg.includes('other side closed') ||
+      name === 'ConnectTimeoutError' ||
+      name === 'SocketError'
+    ) {
+      return new HttpException(
+        {
+          erro: 'SEFAZ_INDISPONIVEL',
+          mensagem: `SEFAZ de ${ufUpper} não respondeu a tempo. Tente novamente em alguns minutos.`,
+        },
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+
+    // Default — erro genérico do SEFAZ (cStat inesperado, XML inválido, etc.)
+    return new HttpException(
+      {
+        erro: 'SEFAZ_INDISPONIVEL',
+        mensagem: `Não foi possível consultar o SEFAZ de ${ufUpper}. ${msg.slice(0, 200)}`,
+      },
+      HttpStatus.BAD_GATEWAY,
+    );
   }
 
   /**

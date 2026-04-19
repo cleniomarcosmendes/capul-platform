@@ -20,12 +20,10 @@ interface ExecucaoDetalhe extends CadastroSincronizacao {
 }
 
 const TIPO_LABEL: Record<TipoSincronizacao, string> = {
-  BOOTSTRAP: 'Bootstrap (carga inicial)',
-  SEMANAL_AUTO: 'Semanal automática',
-  DIARIA_AUTO: 'Diária automática',
-  DIARIA_MANUAL: 'Diária manual',
+  MOVIMENTO_MEIO_DIA: 'Movimento meio-dia (12:00)',
+  MOVIMENTO_MANHA_SEGUINTE: 'Movimento manhã seguinte (06:00)',
+  MANUAL: 'Manual',
   PONTUAL: 'Pontual',
-  COMPLETA_MANUAL: 'Completa manual',
 };
 
 const STATUS_BADGE: Record<StatusSincronizacao, 'gray' | 'blue' | 'yellow' | 'green' | 'red'> = {
