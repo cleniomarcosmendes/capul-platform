@@ -2,12 +2,17 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { MailTransportService } from '../alertas/mail-transport.service.js';
+import { DestinatariosResolver } from '../alertas/destinatarios.resolver.js';
 import { LimiteDiarioAtingidoException } from './limite-diario.exception.js';
 
 interface AlertasEnviadosHoje {
   amarelo?: boolean;
   vermelho?: boolean;
+  critico?: boolean;
 }
+
+type NivelAlerta = 'amarelo' | 'vermelho' | 'critico';
 
 /**
  * Controla o limite diário global de consultas SEFAZ (Plano v2.0 §6.2 — camada 4).
@@ -23,7 +28,11 @@ interface AlertasEnviadosHoje {
 export class LimiteDiarioService {
   private readonly logger = new Logger(LimiteDiarioService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mail: MailTransportService,
+    private readonly destinatarios: DestinatariosResolver,
+  ) {}
 
   /**
    * Chamado antes de cada consulta SEFAZ. Verifica se o contador não passou
@@ -61,6 +70,17 @@ export class LimiteDiarioService {
       this.logger.warn(
         `Limite diário atingido (${cfg.contadorHoje}/${cfg.limiteDiario}). Corte automático ativado.`,
       );
+      // Alerta crítico: 100% — GESTOR_FISCAL + ADMIN_TI (não-bloqueante)
+      const enviados = (cfg.alertasEnviadosHoje as AlertasEnviadosHoje | null) ?? {};
+      if (!enviados.critico) {
+        this.enviarAlerta('critico', cfg.contadorHoje, cfg.limiteDiario).catch((err) => {
+          this.logger.error(`Falha ao enviar alerta crítico 100%: ${(err as Error).message}`);
+        });
+        await this.prisma.limiteDiario.update({
+          where: { id: 1 },
+          data: { alertasEnviadosHoje: { ...enviados, critico: true } as object },
+        });
+      }
       throw new LimiteDiarioAtingidoException(cfg.contadorHoje, cfg.limiteDiario);
     }
 
@@ -162,26 +182,120 @@ export class LimiteDiarioService {
     enviados: AlertasEnviadosHoje | null,
   ): Promise<void> {
     const status = enviados ?? {};
-    let mudou = false;
+    let nivel: NivelAlerta | null = null;
 
+    // Ordem invertida: vermelho tem prioridade sobre amarelo — se cruzamos
+    // amarelo+vermelho no mesmo incremento (improvável, mas possível), envia
+    // só o vermelho. Se já enviamos vermelho antes, não manda amarelo atrasado.
     if (contador >= vermelho && !status.vermelho) {
       this.logger.warn(`Consumo atingiu 90% — ${contador}/${limite}`);
       status.vermelho = true;
-      mudou = true;
-      // Envio real de e-mail a GESTOR_FISCAL + ADMIN_TI será integrado no passo
-      // seguinte via AlertasService. Por ora, apenas marca para não repetir.
+      if (!status.amarelo) status.amarelo = true; // pula amarelo tardio
+      nivel = 'vermelho';
     } else if (contador >= amarelo && !status.amarelo) {
       this.logger.warn(`Consumo atingiu 80% — ${contador}/${limite}`);
       status.amarelo = true;
-      mudou = true;
+      nivel = 'amarelo';
     }
 
-    if (mudou) {
+    if (nivel) {
       await this.prisma.limiteDiario.update({
         where: { id: 1 },
         data: { alertasEnviadosHoje: status as object },
       });
+      // Disparo de e-mail é não-bloqueante — se SMTP falhar, log e segue.
+      this.enviarAlerta(nivel, contador, limite).catch((err) => {
+        this.logger.error(`Falha ao enviar alerta ${nivel}: ${(err as Error).message}`);
+      });
     }
+  }
+
+  /**
+   * Envia e-mail de alerta nos thresholds do limite diário.
+   *   - amarelo  (80%): GESTOR_FISCAL
+   *   - vermelho (90%): GESTOR_FISCAL + ADMIN_TI
+   *   - critico (100%): GESTOR_FISCAL + ADMIN_TI (corte automático ativo)
+   */
+  private async enviarAlerta(nivel: NivelAlerta, contador: number, limite: number): Promise<void> {
+    const roles = nivel === 'amarelo' ? ['GESTOR_FISCAL'] : ['GESTOR_FISCAL', 'ADMIN_TI'];
+    const { destinatarios, fallback } = await this.destinatarios.resolveByRoles(roles);
+    const pct = ((contador / limite) * 100).toFixed(1);
+
+    const cor = nivel === 'amarelo' ? '🟡' : nivel === 'vermelho' ? '🔴' : '🚨';
+    const label =
+      nivel === 'amarelo'
+        ? 'atenção (80%)'
+        : nivel === 'vermelho'
+          ? 'crítico (90%)'
+          : 'limite atingido (100%) — corte automático ativo';
+
+    const prefix = fallback ? '[FALLBACK — sem destinatários configurados] ' : '';
+    const subject = `${prefix}${cor} [FISCAL] Consumo SEFAZ ${label} — ${contador}/${limite}`;
+
+    const html = this.renderHtmlAlerta(nivel, contador, limite, pct);
+    const text = this.renderTextAlerta(nivel, contador, limite, pct);
+
+    const result = await this.mail.send({
+      to: destinatarios.map((d) => d.email),
+      subject,
+      html,
+      text,
+    });
+
+    if (result.sent) {
+      this.logger.log(
+        `Alerta ${nivel} enviado: destinatarios=${destinatarios.length} fallback=${fallback} contador=${contador}/${limite}`,
+      );
+    } else {
+      this.logger.error(`Alerta ${nivel} não enviado: ${result.error}`);
+    }
+  }
+
+  private renderHtmlAlerta(nivel: NivelAlerta, contador: number, limite: number, pct: string): string {
+    const corBg = nivel === 'amarelo' ? '#fef3c7' : nivel === 'vermelho' ? '#fee2e2' : '#fecaca';
+    const corBorda = nivel === 'amarelo' ? '#f59e0b' : nivel === 'vermelho' ? '#ef4444' : '#dc2626';
+    const titulo =
+      nivel === 'amarelo'
+        ? 'Consumo SEFAZ atingiu 80% do limite diário'
+        : nivel === 'vermelho'
+          ? 'Consumo SEFAZ atingiu 90% do limite diário'
+          : 'Limite diário SEFAZ atingido — corte automático ATIVO';
+
+    const acao =
+      nivel === 'critico'
+        ? '<p><strong>A plataforma PAROU todas as consultas SEFAZ.</strong> Retomam automaticamente a partir de 00:00. Em caso de urgência, ADMIN_TI pode liberar manualmente em <code>Operação → Limites e Política</code>.</p>'
+        : nivel === 'vermelho'
+          ? '<p><strong>Faltam apenas 10% do limite.</strong> Avaliar origem do consumo e se há algo a pausar até o reset das 00:00.</p>'
+          : '<p>Monitorar o consumo ao longo do dia. Se chegar a 100%, a plataforma pausa automaticamente as consultas SEFAZ até 00:00.</p>';
+
+    return `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;color:#1e293b;max-width:600px;margin:0 auto;padding:20px;">
+<div style="background:${corBg};border-left:4px solid ${corBorda};padding:16px;border-radius:4px;">
+  <h2 style="margin:0 0 8px 0;color:${corBorda};font-size:16px;">${titulo}</h2>
+  <p style="margin:0;font-size:14px;">Consumo atual: <strong>${contador} / ${limite} consultas</strong> (<strong>${pct}%</strong>)</p>
+</div>
+${acao}
+<p style="color:#64748b;font-size:12px;margin-top:24px;">
+Política de consultas SEFAZ detalhada em <code>Operação → Limites e Política de Consultas</code>.<br>
+Por que este limite existe? A SEFAZ monitora consumo por CNPJ; consumo excessivo pode bloquear o CNPJ da Capul, travando a emissão de NF-e.<br>
+<em>Plataforma Capul — Módulo Fiscal</em>
+</p>
+</body></html>`;
+  }
+
+  private renderTextAlerta(nivel: NivelAlerta, contador: number, limite: number, pct: string): string {
+    const titulo =
+      nivel === 'amarelo'
+        ? 'Consumo SEFAZ atingiu 80% do limite diário'
+        : nivel === 'vermelho'
+          ? 'Consumo SEFAZ atingiu 90% do limite diário'
+          : 'Limite diário SEFAZ atingido — CORTE AUTOMÁTICO ATIVO';
+    const acao =
+      nivel === 'critico'
+        ? 'A plataforma parou todas as consultas SEFAZ. Retomam automaticamente a partir de 00:00.'
+        : nivel === 'vermelho'
+          ? 'Faltam apenas 10% do limite. Avaliar origem do consumo.'
+          : 'Monitorar o consumo ao longo do dia.';
+    return `${titulo}\n\nConsumo atual: ${contador} / ${limite} consultas (${pct}%)\n\n${acao}\n\nPolítica detalhada em: Operação → Limites e Política de Consultas\nPlataforma Capul — Módulo Fiscal`;
   }
 
   /**

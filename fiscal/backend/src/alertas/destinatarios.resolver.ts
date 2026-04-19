@@ -45,37 +45,47 @@ export class DestinatariosResolver {
     if (this.cache && this.cache.resolvedAt + this.CACHE_TTL_MS > Date.now()) {
       return this.cache.value;
     }
+    const result = await this.resolveByRoles(['GESTOR_FISCAL']);
+    this.cache = { resolvedAt: Date.now(), value: result };
+    return result;
+  }
 
+  /**
+   * Resolve destinatários por um conjunto arbitrário de roles fiscais.
+   * Útil para alertas críticos que exigem role extra (ex: limite diário 90%
+   * inclui ADMIN_TI além de GESTOR_FISCAL). Sem cache — chamado menos
+   * frequentemente que o digest.
+   */
+  async resolveByRoles(roles: string[]): Promise<ResolveResult> {
     const rows = await this.prisma.client.usuarioModuloCore.findMany({
       where: {
         moduloCodigo: MODULO_FISCAL,
-        role: 'GESTOR_FISCAL',
+        role: { in: roles },
         ativo: true,
         usuario: { ativo: true },
       },
       include: { usuario: true },
     });
 
-    const destinatarios: Destinatario[] = rows.map((r) => ({
-      email: r.usuario.email,
-      nome: r.usuario.nome,
-    }));
-
-    let result: ResolveResult;
-    if (destinatarios.length === 0) {
-      this.logger.warn(
-        `Nenhum GESTOR_FISCAL ativo — enviando para fallback ${this.fallbackEmail}`,
-      );
-      result = {
-        destinatarios: [{ email: this.fallbackEmail, nome: 'Fallback (sem gestores)' }],
-        fallback: true,
-      };
-    } else {
-      result = { destinatarios, fallback: false };
+    // Dedup por email (um usuário pode ter múltiplas roles)
+    const seen = new Set<string>();
+    const destinatarios: Destinatario[] = [];
+    for (const r of rows) {
+      if (seen.has(r.usuario.email)) continue;
+      seen.add(r.usuario.email);
+      destinatarios.push({ email: r.usuario.email, nome: r.usuario.nome });
     }
 
-    this.cache = { resolvedAt: Date.now(), value: result };
-    return result;
+    if (destinatarios.length === 0) {
+      this.logger.warn(
+        `Nenhum usuário com roles [${roles.join(', ')}] ativo — enviando para fallback ${this.fallbackEmail}`,
+      );
+      return {
+        destinatarios: [{ email: this.fallbackEmail, nome: 'Fallback (sem destinatários)' }],
+        fallback: true,
+      };
+    }
+    return { destinatarios, fallback: false };
   }
 
   /**
