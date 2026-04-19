@@ -11,6 +11,11 @@ import {
   ArrowLeft,
   LogOut,
   FileSearch,
+  Gauge,
+  Globe,
+  Clock,
+  ShieldCheck,
+  AlertTriangle,
 } from 'lucide-react';
 import type { RoleFiscal } from '../types';
 
@@ -26,9 +31,14 @@ const menuItems: MenuItem[] = [
   { label: 'Consulta Cadastral', icon: UserSearch, path: '/cadastro' },
   { section: 'CRUZAMENTO', minRole: 'ANALISTA_CADASTRO' },
   { label: 'Execucoes', icon: Activity, path: '/execucoes', minRole: 'ANALISTA_CADASTRO' },
+  { label: 'Divergencias', icon: AlertTriangle, path: '/divergencias', minRole: 'ANALISTA_CADASTRO' },
   { label: 'Historico de Alertas', icon: Mail, path: '/alertas', minRole: 'GESTOR_FISCAL' },
-  { section: 'ADMINISTRACAO', minRole: 'ADMIN_TI' },
-  { label: 'Circuit Breaker', icon: Settings, path: '/admin', minRole: 'ADMIN_TI' },
+  { section: 'OPERACAO', minRole: 'OPERADOR_ENTRADA' },
+  { label: 'Limites SEFAZ', icon: Gauge, path: '/operacao/limites', minRole: 'OPERADOR_ENTRADA' },
+  { label: 'Circuit Breaker', icon: Settings, path: '/operacao/circuit-breaker', minRole: 'ANALISTA_CADASTRO' },
+  { label: 'Ambiente PROD/HOM', icon: Globe, path: '/operacao/ambiente', minRole: 'GESTOR_FISCAL' },
+  { label: 'Agendamentos', icon: Clock, path: '/operacao/agendamentos', minRole: 'GESTOR_FISCAL' },
+  { label: 'Cadeia TLS', icon: ShieldCheck, path: '/operacao/tls', minRole: 'ADMIN_TI' },
 ];
 
 function filterMenuByRole(items: MenuItem[], role: RoleFiscal | null): MenuItem[] {

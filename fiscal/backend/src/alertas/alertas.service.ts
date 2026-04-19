@@ -152,12 +152,10 @@ export class AlertasService {
   private buildSubject(tipo: TipoSincronizacao, mudancas: number, fallback: boolean): string {
     const prefix = fallback ? '[FALLBACK — sem GESTOR_FISCAL configurado] ' : '';
     const tipoLabel: Record<TipoSincronizacao, string> = {
-      BOOTSTRAP: 'bootstrap',
-      SEMANAL_AUTO: 'semanal',
-      DIARIA_AUTO: 'diária automática',
-      DIARIA_MANUAL: 'diária manual',
+      MOVIMENTO_MEIO_DIA: 'movimento meio-dia',
+      MOVIMENTO_MANHA_SEGUINTE: 'movimento manhã seguinte',
+      MANUAL: 'manual',
       PONTUAL: 'pontual',
-      COMPLETA_MANUAL: 'completa manual',
     };
     const base = `[FISCAL] Cruzamento ${tipoLabel[tipo]} — ${mudancas} mudança(s)`;
     return prefix + base;

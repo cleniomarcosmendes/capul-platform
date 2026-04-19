@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { gunzipSync } from 'node:zlib';
 import { XMLParser } from 'fast-xml-parser';
 import { SefazAgentService } from './sefaz-agent.service.js';
+import { LimiteDiarioService } from '../limite-diario/limite-diario.service.js';
 import { getNfeDistribuicaoUrl, type AmbienteSefazStr } from './sefaz-endpoints.map.js';
 import { buildSoapEnvelope } from './soap-envelope.helper.js';
 import { soapPost } from './sefaz-http.helper.js';
@@ -31,6 +32,7 @@ export class NfeDistribuicaoClient {
 
   constructor(
     private readonly agentService: SefazAgentService,
+    private readonly limiteDiario: LimiteDiarioService,
     config: ConfigService,
   ) {
     this.cnpjConsulente = (config.get<string>('FISCAL_CNPJ_CONSULENTE') ?? '').replace(/\D/g, '');
@@ -184,6 +186,9 @@ export class NfeDistribuicaoClient {
     this.logger.log(
       `NFeDistribuicaoDFe consChNFe: chave ${chave.slice(0, 6)}… consulente=${cnpjUsado.slice(0, 8)}… em ${ambiente}`,
     );
+
+    // Camada 4 Plano v2.0 §6.2 — contabiliza consulta SEFAZ no limite diário.
+    await this.limiteDiario.checkAndIncrement();
 
     const { statusCode, rawResponse } = await soapPost({
       url,

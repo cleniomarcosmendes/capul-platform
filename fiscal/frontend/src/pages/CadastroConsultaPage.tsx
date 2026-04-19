@@ -466,7 +466,11 @@ function ProtheusStatusBanner({ result }: { result: CadastroConsultaResult }) {
           <div className="mt-1 text-xs text-blue-800">
             {nVinculos === 2
               ? 'Este CNPJ existe em SA1010 (Clientes) e SA2010 (Fornecedores) simultaneamente. Os detalhes de cada cadastro estão nos cards abaixo.'
-              : `Código ${result.vinculosProtheus[0]?.codigo}/${result.vinculosProtheus[0]?.loja} — filial ${result.vinculosProtheus[0]?.filial}.`}
+              : `Código ${result.vinculosProtheus[0]?.codigo}/${result.vinculosProtheus[0]?.loja}${
+                  result.vinculosProtheus[0]?.filial
+                    ? ` — filial ${result.vinculosProtheus[0].filial}`
+                    : ' — cadastro compartilhado entre filiais'
+                }.`}
             {result.divergenciasEntreTabelas.length > 0 && (
               <span className="ml-1 font-semibold text-amber-800">
                 ⚠ {result.divergenciasEntreTabelas.length} divergência(s) entre as tabelas detectada(s).

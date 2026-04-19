@@ -41,23 +41,26 @@ export class CruzamentoController {
   // ----- Execução manual -----
 
   /**
-   * Dispara manualmente uma sincronização.
-   * `diaria-manual` por padrão; `completa-manual` exige GESTOR_FISCAL.
+   * Dispara manualmente uma sincronização (Plano v2.0).
+   * Body aceita `tipo`: 'manual' (default), 'movimento-meio-dia' ou 'movimento-manha-seguinte'.
+   * GESTOR_FISCAL é o role mínimo para forçar manualmente uma corrida automática.
    */
   @Post('sincronizar')
   @RoleMinima('ANALISTA_CADASTRO')
   async sincronizar(
-    @Body() body: { tipo?: 'diaria-manual' | 'completa-manual' | 'bootstrap' },
+    @Body() body: { tipo?: 'manual' | 'movimento-meio-dia' | 'movimento-manha-seguinte' },
     @CurrentUser() user: FiscalAuthenticatedUser,
   ) {
-    const tipoPedido = body.tipo ?? 'diaria-manual';
+    const tipoPedido = body.tipo ?? 'manual';
     const tipoEnum = this.mapTipoBody(tipoPedido);
 
-    // COMPLETA_MANUAL exige GESTOR_FISCAL
-    if (tipoEnum === 'COMPLETA_MANUAL' && user.fiscalRole === 'ANALISTA_CADASTRO') {
+    if (
+      (tipoEnum === 'MOVIMENTO_MEIO_DIA' || tipoEnum === 'MOVIMENTO_MANHA_SEGUINTE') &&
+      user.fiscalRole === 'ANALISTA_CADASTRO'
+    ) {
       throw new ForbiddenException({
         erro: 'ROLE_INSUFICIENTE',
-        mensagem: 'Carga completa exige role GESTOR_FISCAL ou ADMIN_TI.',
+        mensagem: 'Disparo manual de corrida automática exige GESTOR_FISCAL ou ADMIN_TI.',
       });
     }
 
@@ -168,15 +171,15 @@ export class CruzamentoController {
 
   private mapTipoBody(tipo: string): TipoSincronizacao {
     const map: Record<string, TipoSincronizacao> = {
-      'diaria-manual': 'DIARIA_MANUAL',
-      'completa-manual': 'COMPLETA_MANUAL',
-      bootstrap: 'BOOTSTRAP',
+      manual: 'MANUAL',
+      'movimento-meio-dia': 'MOVIMENTO_MEIO_DIA',
+      'movimento-manha-seguinte': 'MOVIMENTO_MANHA_SEGUINTE',
     };
     const t = map[tipo];
     if (!t) {
       throw new BadRequestException({
         erro: 'TIPO_SINCRONIZACAO_INVALIDO',
-        mensagem: `Tipo "${tipo}" inválido. Valores aceitos: diaria-manual, completa-manual, bootstrap.`,
+        mensagem: `Tipo "${tipo}" inválido. Valores aceitos: manual, movimento-meio-dia, movimento-manha-seguinte.`,
       });
     }
     return t;

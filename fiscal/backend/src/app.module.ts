@@ -21,6 +21,7 @@ import { CadastroModule } from './cadastro/cadastro.module.js';
 import { CruzamentoModule } from './cruzamento/cruzamento.module.js';
 import { RelatorioModule } from './relatorio/relatorio.module.js';
 import { HistoricoModule } from './historico/historico.module.js';
+import { LimiteDiarioModule } from './limite-diario/limite-diario.module.js';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { HistoricoModule } from './historico/historico.module.js';
     SefazModule,
 
     HealthModule,
+    LimiteDiarioModule,
     AmbienteModule,
     CertificadoModule,
     AlertasModule,

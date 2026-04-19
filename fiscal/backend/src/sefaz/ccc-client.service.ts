@@ -4,6 +4,7 @@ import { SefazAgentService } from './sefaz-agent.service.js';
 import { getCccUrl, type AmbienteSefazStr } from './sefaz-endpoints.map.js';
 import { buildSoapEnvelope } from './soap-envelope.helper.js';
 import { soapPost } from './sefaz-http.helper.js';
+import { LimiteDiarioService } from '../limite-diario/limite-diario.service.js';
 
 /**
  * Retorno bruto do CadConsultaCadastro4 — mapeado diretamente a partir do
@@ -58,7 +59,10 @@ export class CccClient {
   private readonly logger = new Logger(CccClient.name);
   private readonly parser: XMLParser;
 
-  constructor(private readonly agentService: SefazAgentService) {
+  constructor(
+    private readonly agentService: SefazAgentService,
+    private readonly limiteDiario: LimiteDiarioService,
+  ) {
     this.parser = new XMLParser({
       ignoreAttributes: false,
       parseAttributeValue: false,
@@ -98,6 +102,11 @@ export class CccClient {
     const envelope = buildSoapEnvelope(inner);
 
     this.logger.log(`CCC: ${isCpf ? 'CPF' : 'CNPJ'} ${digits.slice(0, 6)}… UF=${ufUpper} ambiente=${ambiente}`);
+
+    // Camada 4 Plano v2.0 §6.2 — limite diário global de consultas SEFAZ.
+    // Lança 429 LIMITE_DIARIO_ATINGIDO se o contador estourou o teto.
+    const contador = await this.limiteDiario.checkAndIncrement();
+    this.logger.debug?.(`Limite diário: ${contador} consultas hoje.`);
 
     const { statusCode, rawResponse } = await soapPost({
       url,

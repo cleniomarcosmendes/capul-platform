@@ -23,7 +23,8 @@ export interface CruzamentoJobData {
   cnpj: string;
   uf: string;
   origem: TipoCadastroProtheus;
-  filial: string;
+  /** Filial de movimento (se informada ao iniciar). SA1/SA2 são compartilhadas; este campo é opcional. */
+  filial: string | null;
   codigo: string;
   loja: string;
 }
@@ -92,26 +93,44 @@ export class ExecucaoService {
       },
     });
 
+    // Dedup por (cnpj, uf) — Plano v2.0 §6.2 camada 1: mesmo CNPJ em várias NFs
+    // do bloco vira UMA consulta SEFAZ. Mantém o primeiro registro encontrado
+    // (vínculo Protheus do primeiro é representativo).
+    const vistos = new Set<string>();
+    const deduplicados: typeof registros = [];
+    for (const r of registros) {
+      const uf = this.ufFromRegistro(r);
+      const key = `${r.cnpj}|${uf}`;
+      if (vistos.has(key)) continue;
+      vistos.add(key);
+      deduplicados.push(r);
+    }
+    if (deduplicados.length < registros.length) {
+      this.logger.log(
+        `Dedup: ${registros.length} registros → ${deduplicados.length} CNPJs distintos (economia ${registros.length - deduplicados.length})`,
+      );
+    }
+
     // Atualiza total
     await this.prisma.cadastroSincronizacao.update({
       where: { id: sinc.id },
-      data: { totalContribuintes: registros.length },
+      data: { totalContribuintes: deduplicados.length },
     });
 
-    if (registros.length === 0) {
+    if (deduplicados.length === 0) {
       await this.finalizar(sinc.id, 0, 0, {});
       return sinc.id;
     }
 
     // Enfileira jobs
-    const jobs = registros.map((r) => ({
+    const jobs = deduplicados.map((r) => ({
       name: 'ccc-consulta',
       data: {
         sincronizacaoId: sinc.id,
         cnpj: r.cnpj,
         uf: this.ufFromRegistro(r),
         origem: r.origem,
-        filial: r.filial,
+        filial: r.filial ?? null,
         codigo: r.codigo,
         loja: r.loja,
       },
@@ -153,15 +172,6 @@ export class ExecucaoService {
       `Execução ${sincronizacaoId.slice(0, 8)} finalizada: status=${status} sucessos=${sucessos} erros=${erros}`,
     );
 
-    // Se foi uma BOOTSTRAP bem-sucedida, marca o gate
-    const sinc = await this.prisma.cadastroSincronizacao.findUnique({
-      where: { id: sincronizacaoId },
-    });
-    if (sinc?.tipo === 'BOOTSTRAP' && status === 'CONCLUIDA') {
-      await this.ambiente.marcarBootstrapConcluido(sinc.disparadoPor ?? 'sistema');
-      this.logger.log(`Bootstrap concluído — gate liberado.`);
-    }
-
     // Dispara alertas digest (não-bloqueante)
     this.alertas.enviarDigest(sincronizacaoId).catch((err) => {
       this.logger.error(`Falha ao enviar digest de ${sincronizacaoId}: ${(err as Error).message}`);
@@ -193,19 +203,50 @@ export class ExecucaoService {
         for (const r of resp.registros) {
           registros.push({ ...r, origem: tipoTabela });
         }
-        if (pagina >= resp.paginacao.totalPaginas) break;
+        // Loop-break: contrato v1 não retorna totalPaginas; usamos o próprio
+        // tamanho da página para detectar fim (registros < porPagina = última).
+        const totalPaginas = resp.paginacao?.totalPaginas;
+        if (totalPaginas !== undefined) {
+          if (pagina >= totalPaginas) break;
+        } else if (resp.registros.length < porPagina) {
+          break;
+        }
         pagina++;
       }
     }
     return registros;
   }
 
+  /**
+   * Janela de movimento por tipo (Plano v2.0 §2.1):
+   *   MOVIMENTO_MEIO_DIA         → hoje 00:00 → 12:00 (captura no pregão 12:00)
+   *   MOVIMENTO_MANHA_SEGUINTE   → ontem 12:00 → 23:59 (captura na corrida 06:00)
+   *   MANUAL                     → últimas 24h
+   *   PONTUAL                    → não passa por cruzamento batch
+   *
+   * Formato de retorno: YYYYMMDD (bate com `comMovimentoDesde` da API Protheus v1).
+   */
   private comMovimentoDesdeForTipo(tipo: TipoSincronizacao): string | undefined {
-    if (tipo === 'DIARIA_AUTO' || tipo === 'DIARIA_MANUAL') {
-      const ontem = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      return ontem.toISOString();
+    const hoje = new Date();
+    if (tipo === 'MOVIMENTO_MEIO_DIA') {
+      return this.toYmd(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()));
     }
-    return undefined; // bootstrap / semanal / completa-manual = varredura total
+    if (tipo === 'MOVIMENTO_MANHA_SEGUINTE') {
+      const ontem = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 1);
+      return this.toYmd(ontem);
+    }
+    if (tipo === 'MANUAL') {
+      const ontem = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      return this.toYmd(ontem);
+    }
+    return undefined;
+  }
+
+  private toYmd(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}${m}${dd}`;
   }
 
   private ufFromRegistro(r: RegistroComOrigem): string {

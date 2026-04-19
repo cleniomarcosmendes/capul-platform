@@ -1,6 +1,13 @@
 /**
- * Contratos da frente `cadastroFiscal` da Especificação API Protheus v2.0.
- * Ver: docs/ESPECIFICACAO_API_PROTHEUS_FISCAL_v2.0.md §3.3 e §4.
+ * Contratos da frente `cadastroFiscal` da API Protheus.
+ *
+ * Ajustado ao contrato recebido em 17/04/2026
+ * (`API – Integração Protheus – Leitura de Cadastros Fiscais.md`):
+ *   - `endereco.numero` removido (sem padronização em A1_END/A2_END)
+ *   - `dataUltimaAlteracao` removido (não retornado)
+ *   - `desdeData` removido dos filtros (apenas `comMovimentoDesde`)
+ *   - `filial` no cadastro é opcional (SA1/SA2 compartilhadas entre filiais;
+ *     `filial` só filtra a subquery de movimento em SF1/SF2/SE1/SE2)
  */
 
 export type TipoCadastroProtheus = 'SA1010' | 'SA2010';
@@ -8,16 +15,16 @@ export type TipoCadastroProtheus = 'SA1010' | 'SA2010';
 export interface CadastroFiscalQuery {
   tipo: TipoCadastroProtheus;
   ativo?: boolean;
+  /** Opcional. Filtra apenas a subquery de movimento (SF1/SF2/SE1/SE2). Não filtra SA1/SA2. */
   filial?: string;
-  desdeData?: string;          // ISO 8601 — alteração de cadastro
-  comMovimentoDesde?: string;  // ISO 8601 — movimento fiscal/financeiro
+  /** YYYYMMDD — data de último movimento fiscal/financeiro. */
+  comMovimentoDesde?: string;
   pagina?: number;
   porPagina?: number;
 }
 
 export interface CadastroFiscalEndereco {
   logradouro?: string | null;
-  numero?: string | null;
   complemento?: string | null;
   bairro?: string | null;
   municipio?: string | null;
@@ -32,7 +39,8 @@ export interface CadastroFiscalContato {
 }
 
 export interface CadastroFiscalRegistro {
-  filial: string;
+  /** Opcional: Endpoint 1 (lista) não retorna; Endpoint 2 (por CNPJ) retorna. */
+  filial?: string | null;
   codigo: string;
   loja: string;
   cnpj: string;
@@ -48,7 +56,6 @@ export interface CadastroFiscalRegistro {
   regimeTributario?: string | null;
   bloqueado: boolean;
   dataCadastro?: string | null;
-  dataUltimaAlteracao: string;
   dataUltimoMovimento?: string | null;
 }
 
@@ -59,18 +66,27 @@ export interface CadastroFiscalPaginacao {
   totalPaginas: number;
 }
 
+/**
+ * Resposta real observada em 18/04/2026 (homologação Protheus):
+ * `{ tipo, pagina, porPagina, quantidade, registros }`.
+ * Campos `paginacao`, `geradoEm`, `ativo`, `filial` do contrato v1 não são
+ * retornados — ficam opcionais aqui para permitir evolução futura do contrato.
+ */
 export interface CadastroFiscalListResponse {
   tipo: TipoCadastroProtheus;
-  filial: string | null;
-  ativo: boolean;
-  desdeData?: string;
+  pagina?: number;
+  porPagina?: number;
+  quantidade?: number;
+  filial?: string | null;
+  ativo?: boolean;
   comMovimentoDesde?: string;
-  paginacao: CadastroFiscalPaginacao;
-  geradoEm: string;
+  paginacao?: CadastroFiscalPaginacao;
+  geradoEm?: string;
   registros: CadastroFiscalRegistro[];
 }
 
 export interface CadastroFiscalCnpjResponse {
+  cnpj?: string;
   encontradoEm: TipoCadastroProtheus[];
   registros: Array<CadastroFiscalRegistro & { origem: TipoCadastroProtheus }>;
 }

@@ -22,7 +22,8 @@ import type {
 export interface VinculoProtheus {
   origem: 'SA1010' | 'SA2010';
   origemDescricao: 'Cliente' | 'Fornecedor';
-  filial: string;
+  /** SA1/SA2 são tabelas compartilhadas entre filiais. Endpoint por CNPJ retorna; lista paginada não. */
+  filial: string | null;
   codigo: string;
   loja: string;
   bloqueado: boolean;
@@ -339,7 +340,7 @@ export class CadastroService {
       const vinculos: VinculoProtheus[] = resp.registros.map((r) => ({
         origem: r.origem as 'SA1010' | 'SA2010',
         origemDescricao: r.origem === 'SA1010' ? 'Cliente' : 'Fornecedor',
-        filial: r.filial,
+        filial: r.filial ?? null,
         codigo: r.codigo,
         loja: r.loja,
         bloqueado: r.bloqueado,

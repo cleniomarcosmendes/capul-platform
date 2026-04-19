@@ -8,10 +8,15 @@ import { DashboardPage } from './pages/DashboardPage';
 import { NfeConsultaPage } from './pages/NfeConsultaPage';
 import { CteConsultaPage } from './pages/CteConsultaPage';
 import { CadastroConsultaPage } from './pages/CadastroConsultaPage';
-import { AdminPage } from './pages/AdminPage';
 import { ExecucoesListPage } from './pages/ExecucoesListPage';
 import { ExecucaoDetalhePage } from './pages/ExecucaoDetalhePage';
 import { AlertasHistoricoPage } from './pages/AlertasHistoricoPage';
+import { DivergenciasListPage } from './pages/DivergenciasListPage';
+import { OperacaoAmbientePage } from './pages/OperacaoAmbientePage';
+import { OperacaoLimitesPage } from './pages/OperacaoLimitesPage';
+import { OperacaoCircuitBreakerPage } from './pages/OperacaoCircuitBreakerPage';
+import { OperacaoAgendamentosPage } from './pages/OperacaoAgendamentosPage';
+import { OperacaoTlsPage } from './pages/OperacaoTlsPage';
 import type { RoleFiscal } from './types';
 
 function ProtectedRoute({
@@ -93,6 +98,14 @@ function App() {
               }
             />
             <Route
+              path="divergencias"
+              element={
+                <ProtectedRoute minRole="ANALISTA_CADASTRO">
+                  <DivergenciasListPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="alertas"
               element={
                 <ProtectedRoute minRole="GESTOR_FISCAL">
@@ -101,13 +114,46 @@ function App() {
               }
             />
             <Route
-              path="admin"
+              path="operacao/ambiente"
               element={
-                <ProtectedRoute minRole="ADMIN_TI">
-                  <AdminPage />
+                <ProtectedRoute minRole="GESTOR_FISCAL">
+                  <OperacaoAmbientePage />
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="operacao/limites"
+              element={
+                <ProtectedRoute minRole="OPERADOR_ENTRADA">
+                  <OperacaoLimitesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="operacao/circuit-breaker"
+              element={
+                <ProtectedRoute minRole="ANALISTA_CADASTRO">
+                  <OperacaoCircuitBreakerPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="operacao/agendamentos"
+              element={
+                <ProtectedRoute minRole="GESTOR_FISCAL">
+                  <OperacaoAgendamentosPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="operacao/tls"
+              element={
+                <ProtectedRoute minRole="ADMIN_TI">
+                  <OperacaoTlsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="admin" element={<Navigate to="/operacao/ambiente" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

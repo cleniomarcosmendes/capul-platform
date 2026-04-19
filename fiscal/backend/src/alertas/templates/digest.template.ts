@@ -28,12 +28,10 @@ export interface DigestInput {
 }
 
 const TIPO_LABEL: Record<TipoSincronizacao, string> = {
-  BOOTSTRAP: 'Carga inicial (bootstrap)',
-  SEMANAL_AUTO: 'Carga completa semanal',
-  DIARIA_AUTO: 'Carga diária automática',
-  DIARIA_MANUAL: 'Carga diária manual',
+  MOVIMENTO_MEIO_DIA: 'Movimento — meio-dia',
+  MOVIMENTO_MANHA_SEGUINTE: 'Movimento — manhã seguinte',
+  MANUAL: 'Sincronização manual',
   PONTUAL: 'Consulta pontual',
-  COMPLETA_MANUAL: 'Carga completa manual',
 };
 
 const SITUACAO_LABEL: Record<SituacaoCadastral, string> = {

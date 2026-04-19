@@ -56,7 +56,11 @@ export class ProtheusXmlService {
     if (this.mockMode) return this.mock.exists(chave);
 
     try {
-      return await this.http.get<XmlFiscalExistsResponse>(`/xmlFiscal/${chave}/exists`);
+      return await this.http.request<XmlFiscalExistsResponse>({
+        operacao: 'xmlFiscal',
+        method: 'GET',
+        pathSuffix: `/${chave}/exists`,
+      });
     } catch (err) {
       throw this.convertError(err, 'exists', chave);
     }
@@ -70,7 +74,11 @@ export class ProtheusXmlService {
     if (this.mockMode) return this.mock.get(chave);
 
     try {
-      return await this.http.get<XmlFiscalGetResponse>(`/xmlFiscal/${chave}`);
+      return await this.http.request<XmlFiscalGetResponse>({
+        operacao: 'xmlFiscal',
+        method: 'GET',
+        pathSuffix: `/${chave}`,
+      });
     } catch (err) {
       throw this.convertError(err, 'get', chave);
     }
@@ -84,7 +92,11 @@ export class ProtheusXmlService {
     if (this.mockMode) return this.mock.post(body);
 
     try {
-      return await this.http.post<XmlFiscalPostResponse>('/xmlFiscal', body);
+      return await this.http.request<XmlFiscalPostResponse>({
+        operacao: 'xmlFiscal',
+        method: 'POST',
+        body,
+      });
     } catch (err) {
       throw this.convertError(err, 'post', body.chave);
     }

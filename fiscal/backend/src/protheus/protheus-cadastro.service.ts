@@ -20,25 +20,38 @@ export class ProtheusCadastroService {
   constructor(private readonly http: ProtheusHttpClient) {}
 
   async listar(query: CadastroFiscalQuery): Promise<CadastroFiscalListResponse> {
-    return this.http.get<CadastroFiscalListResponse>('/cadastroFiscal', {
-      tipo: query.tipo,
-      ativo: query.ativo,
-      filial: query.filial,
-      desdeData: query.desdeData,
-      comMovimentoDesde: query.comMovimentoDesde,
-      pagina: query.pagina,
-      porPagina: query.porPagina,
+    return this.http.request<CadastroFiscalListResponse>({
+      operacao: 'cadastroFiscal',
+      method: 'GET',
+      query: {
+        tipo: query.tipo,
+        ativo: query.ativo,
+        filial: query.filial,
+        comMovimentoDesde: query.comMovimentoDesde,
+        pagina: query.pagina,
+        porPagina: query.porPagina,
+      },
     });
   }
 
   async porCnpj(cnpj: string): Promise<CadastroFiscalCnpjResponse> {
-    if (!/^\d{14}$/.test(cnpj)) {
-      throw new BadRequestException(`CNPJ inválido: esperado 14 dígitos, recebido "${cnpj}"`);
+    if (!/^\d{11}$|^\d{14}$/.test(cnpj)) {
+      throw new BadRequestException(
+        `Documento inválido: esperado 11 (CPF) ou 14 (CNPJ) dígitos, recebido "${cnpj}"`,
+      );
     }
-    return this.http.get<CadastroFiscalCnpjResponse>(`/cadastroFiscal/${cnpj}`);
+    return this.http.request<CadastroFiscalCnpjResponse>({
+      operacao: 'cadastroFiscal',
+      method: 'GET',
+      query: { cnpj },
+    });
   }
 
   async health(): Promise<{ status: string; versao: string; timestamp: string }> {
-    return this.http.get('/cadastroFiscal/health');
+    return this.http.request({
+      operacao: 'cadastroFiscal',
+      method: 'GET',
+      pathSuffix: '/health',
+    });
   }
 }

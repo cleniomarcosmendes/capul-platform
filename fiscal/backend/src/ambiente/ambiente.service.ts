@@ -1,10 +1,10 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AmbienteSefaz } from '@prisma/client';
 
 /**
  * Gerencia o registro singleton `ambiente_config` (id=1):
- * ambiente PROD/HOM, gate de bootstrap, freio de mão, janelas cron.
+ * ambiente PROD/HOM, freio de mão, crons de movimento 12:00/06:00.
  */
 @Injectable()
 export class AmbienteService {
@@ -25,18 +25,11 @@ export class AmbienteService {
       bootstrapConcluido: cfg.bootstrapConcluidoEm !== null,
       bootstrapConcluidoEm: cfg.bootstrapConcluidoEm,
       pauseSync: cfg.pauseSync,
-      janelaSemanalCron: cfg.janelaSemanalCron,
-      janelaDiariaCron: cfg.janelaDiariaCron,
+      cronMovimentoMeioDia: cfg.cronMovimentoMeioDia,
+      cronMovimentoManhaSeguinte: cfg.cronMovimentoManhaSeguinte,
       ultimaAlteracaoEm: cfg.ultimaAlteracaoEm,
       ultimaAlteracaoPor: cfg.ultimaAlteracaoPor,
     };
-  }
-
-  async marcarBootstrapConcluido(usuario: string) {
-    return this.prisma.ambienteConfig.update({
-      where: { id: 1 },
-      data: { bootstrapConcluidoEm: new Date(), ultimaAlteracaoPor: usuario },
-    });
   }
 
   async alterarAmbiente(ambiente: AmbienteSefaz, usuario: string) {
@@ -58,22 +51,5 @@ export class AmbienteService {
       where: { id: 1 },
       data: { pauseSync: false, ultimaAlteracaoPor: usuario },
     });
-  }
-
-  /**
-   * Verificação usada por todos os endpoints de sincronização:
-   * lança 409 BOOTSTRAP_PENDENTE se a primeira carga ainda não foi feita.
-   * Pode ser bypassed por ADMIN_TI via header X-Fiscal-Override-Gate.
-   */
-  async assertBootstrapConcluido(allowOverride = false): Promise<void> {
-    if (allowOverride) return;
-    const cfg = await this.getOrCreate();
-    if (!cfg.bootstrapConcluidoEm) {
-      throw new ConflictException({
-        erro: 'BOOTSTRAP_PENDENTE',
-        mensagem:
-          'A carga inicial (bootstrap) ainda não foi concluída. Botões manuais permanecem desabilitados até a finalização.',
-      });
-    }
   }
 }

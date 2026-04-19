@@ -5,6 +5,7 @@ import { getNfeConsultaProtocoloUrl, type AmbienteSefazStr } from './sefaz-endpo
 import { buildSoapEnvelope } from './soap-envelope.helper.js';
 import { soapPost } from './sefaz-http.helper.js';
 import { ufFromChave } from '../common/helpers/chave.helper.js';
+import { LimiteDiarioService } from '../limite-diario/limite-diario.service.js';
 
 /**
  * Erro tipado para falhas do web service NfeConsultaProtocolo4.
@@ -33,7 +34,10 @@ export class NfeConsultaProtocoloClient {
   private readonly logger = new Logger(NfeConsultaProtocoloClient.name);
   private readonly parser: XMLParser;
 
-  constructor(private readonly agentService: SefazAgentService) {
+  constructor(
+    private readonly agentService: SefazAgentService,
+    private readonly limiteDiario: LimiteDiarioService,
+  ) {
     this.parser = new XMLParser({
       ignoreAttributes: false,
       parseAttributeValue: false,
@@ -79,6 +83,8 @@ export class NfeConsultaProtocoloClient {
     const agent = await this.agentService.getAgent();
 
     this.logger.log(`NfeConsultaProtocolo: chave ${chave.slice(0, 6)}… UF=${uf} ambiente=${ambiente}`);
+
+    await this.limiteDiario.checkAndIncrement();
 
     const { statusCode, rawResponse } = await soapPost({
       url,

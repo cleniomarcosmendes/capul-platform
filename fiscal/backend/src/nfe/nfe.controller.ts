@@ -81,6 +81,17 @@ export class NfeController {
   }
 
   /**
+   * Timeline consolidada de eventos da NF-e (SPED150/SPED156/SZR010), com
+   * SF1010 separado em bloco `alertasEntrada`. Consome `/eventosNfe` da API
+   * Protheus (contrato recebido 18/04/2026).
+   */
+  @Get(':chave/timeline')
+  @RoleMinima('OPERADOR_ENTRADA')
+  async timeline(@Param('chave') chave: string) {
+    return this.nfe.timeline(chave);
+  }
+
+  /**
    * Download do XML cru (application/xml). Faz a mesma consulta completa
    * mas devolve o conteúdo bruto para o usuário salvar localmente.
    */

@@ -6,27 +6,21 @@ import { DestinatariosResolver } from '../alertas/destinatarios.resolver.js';
 import type { TipoSincronizacao } from '@prisma/client';
 
 /**
- * Watchdog dos repeatable jobs (item 3 do addendum v1.5).
+ * Watchdog das corridas automáticas do cruzamento (Plano v2.0 §2.1).
  *
- * Executa a cada 1 hora e verifica se a última execução de cada cron
- * automático (SEMANAL_AUTO e DIARIA_AUTO) está dentro do intervalo esperado.
+ * Executa a cada 1 hora e verifica se a última execução de cada corrida
+ * automática (MOVIMENTO_MEIO_DIA e MOVIMENTO_MANHA_SEGUINTE) está dentro
+ * do intervalo esperado (18h = 12h entre corridas × 1.5 buffer).
  *
- * Regras:
- *   - SEMANAL_AUTO: última execução deve ter sido há menos de 10 dias.
- *     (limite = 7 dias × 1.5 buffer ≈ 10 dias)
- *   - DIARIA_AUTO: última execução deve ter sido há menos de 36 horas.
- *     (limite = 24h × 1.5 buffer = 36h)
- *
- * Se uma rotina estiver atrasada, envia um alerta dedicado para GESTOR_FISCAL
+ * Se uma corrida estiver atrasada, envia alerta dedicado para GESTOR_FISCAL
  * + ADMIN_TI com subject `[FISCAL] Rotina agendada atrasada`.
  *
  * Cuidados:
- *   - Durante as primeiras 36h após o go-live da Onda 2 o watchdog pode
- *     disparar falsos positivos. Para evitar, verifica se existe QUALQUER
- *     execução do tipo antes de alertar (se não existe, não alerta — é
- *     estado inicial, não atraso).
- *   - Não alerta múltiplas vezes para o mesmo atraso: usa uma janela de
- *     supressão de 6h via tabela fiscal.audit_log.
+ *   - No go-live e primeiras 18h o watchdog pode disparar falso positivo.
+ *     Por isso: se não há NENHUMA execução do tipo, não alerta (estado
+ *     inicial, não atraso real).
+ *   - Não alerta múltiplas vezes para o mesmo atraso: janela de supressão
+ *     de 6h via tabela fiscal.audit_log.
  */
 @Injectable()
 export class WatchdogService {
@@ -42,8 +36,11 @@ export class WatchdogService {
   @Cron(CronExpression.EVERY_HOUR, { timeZone: 'America/Sao_Paulo', name: 'fiscal:watchdog' })
   async verificar(): Promise<void> {
     try {
-      await this.verificarTipo('SEMANAL_AUTO', 10 * 24 * 60 * 60 * 1000); // 10 dias
-      await this.verificarTipo('DIARIA_AUTO', 36 * 60 * 60 * 1000); // 36 horas
+      // Plano v2.0 §2.1: 2 corridas diárias (12:00 e 06:00). Se alguma delas
+      // passou mais de 18h sem rodar, algo está travado e o GESTOR_FISCAL é alertado.
+      const LIMITE_18H = 18 * 60 * 60 * 1000;
+      await this.verificarTipo('MOVIMENTO_MEIO_DIA', LIMITE_18H);
+      await this.verificarTipo('MOVIMENTO_MANHA_SEGUINTE', LIMITE_18H);
     } catch (err) {
       this.logger.error(`Watchdog falhou: ${(err as Error).message}`);
     }

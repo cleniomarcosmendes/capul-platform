@@ -25,7 +25,7 @@ export function Header({ title }: { title: string }) {
     <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
       <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
       <div className="flex items-center gap-4">
-        <TlsBadge status={caStatus} onClick={() => navigate('/admin')} />
+        <TlsBadge status={caStatus} onClick={() => navigate('/operacao/tls')} />
         {ambiente && (
           <div
             className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full border ${

@@ -257,13 +257,15 @@ model CadastroDivergencia {
 
 // ----- Sincronização (cruzamento) -----
 
+// Plano v2.0 — cruzamento movimento-based em 2 corridas diárias.
+// Valores antigos (BOOTSTRAP, SEMANAL_AUTO, DIARIA_AUTO, DIARIA_MANUAL,
+// COMPLETA_MANUAL) descontinuados: a cadência passou a ser janela 12h/12h
+// alinhada à janela de cancelamento NF-e de 24h.
 enum TipoSincronizacao {
-  BOOTSTRAP        // primeira carga, dia da liberação
-  SEMANAL_AUTO     // cron sábado
-  DIARIA_AUTO      // cron noturno (com movimento Protheus)
-  DIARIA_MANUAL    // botão Setor Fiscal
-  PONTUAL          // 1 CNPJ
-  COMPLETA_MANUAL  // botão GESTOR_FISCAL excepcional
+  MOVIMENTO_MEIO_DIA         // cron 12:00 — clientes/fornecedores com movimento hoje 00:00→12:00
+  MOVIMENTO_MANHA_SEGUINTE   // cron 06:00 D+1 — movimento ontem 12:00→23:59
+  MANUAL                     // botão "sincronizar agora" (GESTOR_FISCAL)
+  PONTUAL                    // 1 CNPJ disparado pela UI
 
   @@schema("fiscal")
 }
@@ -286,6 +288,9 @@ model CadastroSincronizacao {
   disparadoPor        String?             @map("disparado_por") // 'sistema' ou usuario_id
   iniciadoEm          DateTime            @map("iniciado_em")
   finalizadoEm        DateTime?           @map("finalizado_em")
+  janelaInicio        DateTime?           @map("janela_inicio")          // início da janela de movimento coberta
+  janelaFim           DateTime?           @map("janela_fim")             // fim da janela de movimento coberta
+  filiaisMovimento    String[]            @default([]) @map("filiais_movimento") // filiais com movimento no período (informativo)
   totalContribuintes  Int?                @map("total_contribuintes")
   sucessos            Int                 @default(0)
   erros               Int                 @default(0)
@@ -371,16 +376,35 @@ enum AmbienteSefaz {
 }
 
 model AmbienteConfig {
-  id                       Int           @id @default(1)
-  ambienteAtivo            AmbienteSefaz @default(HOMOLOGACAO) @map("ambiente_ativo")
-  bootstrapConcluidoEm     DateTime?     @map("bootstrap_concluido_em") // gate v1.5 item 2
-  janelaSemanalCron        String        @default("0 2 * * 6") @map("janela_semanal_cron") // sábado 02:00
-  janelaDiariaCron         String        @default("0 1 * * *") @map("janela_diaria_cron")  // todo dia 01:00
-  pauseSync                Boolean       @default(false) @map("pause_sync") // freio de mão (mitigação 11.C)
-  ultimaAlteracaoEm        DateTime      @updatedAt @map("ultima_alteracao_em")
-  ultimaAlteracaoPor       String?       @map("ultima_alteracao_por")
+  id                         Int           @id @default(1)
+  ambienteAtivo              AmbienteSefaz @default(HOMOLOGACAO) @map("ambiente_ativo")
+  bootstrapConcluidoEm       DateTime?     @map("bootstrap_concluido_em") // gate legado — Plano v2.0 não usa
+  cronMovimentoMeioDia       String        @default("0 12 * * *") @map("cron_movimento_meio_dia")       // todo dia 12:00
+  cronMovimentoManhaSeguinte String        @default("0 6 * * *")  @map("cron_movimento_manha_seguinte") // todo dia 06:00 D+1
+  pauseSync                  Boolean       @default(false) @map("pause_sync") // freio de mão
+  ultimaAlteracaoEm          DateTime      @updatedAt @map("ultima_alteracao_em")
+  ultimaAlteracaoPor         String?       @map("ultima_alteracao_por")
 
   @@map("ambiente_config")
+  @@schema("fiscal")
+}
+
+// ----- Limite diário global de consultas SEFAZ (Plano v2.0 §6.4) -----
+
+model LimiteDiario {
+  id                  Int       @id @default(1)
+  limiteDiario        Int       @default(2000) @map("limite_diario")
+  alertaAmarelo       Int       @default(1600) @map("alerta_amarelo")      // 80% default
+  alertaVermelho      Int       @default(1800) @map("alerta_vermelho")     // 90% default
+  contadorHoje        Int       @default(0)    @map("contador_hoje")
+  dataContador        DateTime  @default(now()) @map("data_contador") @db.Date
+  pausadoAutomatico   Boolean   @default(false) @map("pausado_automatico")
+  pausadoEm           DateTime? @map("pausado_em")
+  alertasEnviadosHoje Json?     @map("alertas_enviados_hoje") // { amarelo: bool, vermelho: bool }
+  atualizadoEm        DateTime  @updatedAt @map("atualizado_em")
+  atualizadoPor       String?   @map("atualizado_por")
+
+  @@map("limite_diario")
   @@schema("fiscal")
 }
 

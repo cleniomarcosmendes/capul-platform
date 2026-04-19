@@ -107,7 +107,7 @@ export function SefazCaStatusCard() {
             </button>
           )}
           <Link
-            to="/admin"
+            to="/operacao/tls"
             className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900"
           >
             Ver detalhes <ArrowRight className="h-3 w-3" />

@@ -1212,7 +1212,13 @@
       "Bash(/mnt/d/Docs_Geral/sqlcl/bin/sql.exe -s totvs_prd/totvs_prd@192.168.7.92:1521/capulhlg @/tmp/find1.sql)",
       "Bash(/mnt/d/Docs_Geral/sqlcl/bin/sql.exe -s totvs_prd/totvs_prd@192.168.7.85:1521/capulfis)",
       "Bash(sort -k2)",
-      "Bash(openssl rand *)"
+      "Bash(openssl rand *)",
+      "Bash(npx jest *)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(echo \"exit-backend=$?\")",
+      "Bash(echo \"exit-frontend=$?\")",
+      "Bash(echo \"backend=$?\")",
+      "Bash(echo \"frontend=$?\")"
     ]
   }
 }

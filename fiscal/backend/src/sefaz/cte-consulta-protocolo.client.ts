@@ -5,6 +5,7 @@ import { getCteConsultaProtocoloUrl, type AmbienteSefazStr } from './sefaz-endpo
 import { buildSoapEnvelope } from './soap-envelope.helper.js';
 import { soapPost } from './sefaz-http.helper.js';
 import { ufFromChave } from '../common/helpers/chave.helper.js';
+import { LimiteDiarioService } from '../limite-diario/limite-diario.service.js';
 
 export class CteConsultaProtocoloError extends Error {
   constructor(message: string, public readonly statusCode: number) {
@@ -44,7 +45,10 @@ export class CteConsultaProtocoloClient {
   private readonly logger = new Logger(CteConsultaProtocoloClient.name);
   private readonly parser: XMLParser;
 
-  constructor(private readonly agentService: SefazAgentService) {
+  constructor(
+    private readonly agentService: SefazAgentService,
+    private readonly limiteDiario: LimiteDiarioService,
+  ) {
     this.parser = new XMLParser({
       ignoreAttributes: false,
       parseAttributeValue: false,
@@ -71,6 +75,8 @@ export class CteConsultaProtocoloClient {
     const agent = await this.agentService.getAgent();
 
     this.logger.log(`CteConsultaProtocolo: chave ${chave.slice(0, 6)}… UF=${uf} ambiente=${ambiente}`);
+
+    await this.limiteDiario.checkAndIncrement();
 
     const { statusCode, rawResponse } = await soapPost({
       url,

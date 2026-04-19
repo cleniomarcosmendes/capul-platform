@@ -5,24 +5,23 @@ import { ExecucaoService } from './execucao.service.js';
 import { AmbienteService } from '../ambiente/ambiente.service.js';
 
 /**
- * Scheduler de rotinas automáticas do cruzamento.
+ * Scheduler de rotinas automáticas do cruzamento — Plano v2.0 §2.1.
  *
- * Inicializado em onApplicationBootstrap lendo `janelaSemanalCron` e
- * `janelaDiariaCron` do `fiscal.ambiente_config`. Se a config for alterada
- * depois, chame `reagendar()` via endpoint admin.
+ * Duas corridas diárias alinhadas à janela de 24h de cancelamento de NF-e:
+ *   - MOVIMENTO_MEIO_DIA        (padrão 12:00) — movimento hoje 00:00 → 12:00
+ *   - MOVIMENTO_MANHA_SEGUINTE  (padrão 06:00) — movimento ontem 12:00 → 23:59
  *
- * Cada cron firing chama `ExecucaoService.iniciar(SEMANAL_AUTO|DIARIA_AUTO)`,
- * que cria a sincronização e enfileira os jobs no BullMQ.
+ * Cron expressions lidos de `fiscal.ambiente_config.cron_movimento_meio_dia`
+ * e `cron_movimento_manha_seguinte`. Se a config mudar, chame `registrar()`.
  *
- * O freio de mão (`ambiente_config.pauseSync`) é respeitado no próprio
- * `ExecucaoService.iniciar`, que lança exceção se ativo. Aqui só capturamos
- * a exceção pra não matar o scheduler.
+ * O freio de mão (`ambiente_config.pauseSync`) é respeitado dentro do
+ * `ExecucaoService.iniciar`. Aqui só capturamos exceções para não matar o cron.
  */
 @Injectable()
 export class SchedulerService implements OnApplicationBootstrap {
   private readonly logger = new Logger(SchedulerService.name);
-  private readonly SEMANAL_JOB = 'fiscal:cruzamento-semanal';
-  private readonly DIARIA_JOB = 'fiscal:cruzamento-diaria';
+  private readonly MEIO_DIA_JOB = 'fiscal:movimento-meio-dia';
+  private readonly MANHA_SEGUINTE_JOB = 'fiscal:movimento-manha-seguinte';
 
   constructor(
     private readonly scheduler: SchedulerRegistry,
@@ -34,67 +33,57 @@ export class SchedulerService implements OnApplicationBootstrap {
     await this.registrar();
   }
 
-  /**
-   * Registra os crons com base nos padrões do ambiente_config.
-   * Idempotente — remove crons existentes antes de recriar.
-   */
   async registrar(): Promise<void> {
     const cfg = await this.ambiente.getOrCreate();
 
-    this.removerSeExistir(this.SEMANAL_JOB);
-    this.removerSeExistir(this.DIARIA_JOB);
+    this.removerSeExistir(this.MEIO_DIA_JOB);
+    this.removerSeExistir(this.MANHA_SEGUINTE_JOB);
 
-    try {
-      const semanal = new CronJob(
-        cfg.janelaSemanalCron,
-        () => {
-          this.execucao.iniciar('SEMANAL_AUTO', 'sistema:scheduler').catch((err) => {
-            this.logger.warn(
-              `Cron semanal falhou ao iniciar: ${(err as Error).message}`,
-            );
-          });
-        },
-        null,
-        false,
-        'America/Sao_Paulo',
-      );
-      this.scheduler.addCronJob(this.SEMANAL_JOB, semanal as unknown as CronJob);
-      semanal.start();
-      this.logger.log(`Cron SEMANAL_AUTO registrado: ${cfg.janelaSemanalCron}`);
-    } catch (err) {
-      this.logger.error(`Falha ao registrar cron semanal (${cfg.janelaSemanalCron}): ${(err as Error).message}`);
-    }
+    this.registrarCron(
+      this.MEIO_DIA_JOB,
+      cfg.cronMovimentoMeioDia,
+      'MOVIMENTO_MEIO_DIA',
+      () =>
+        this.execucao
+          .iniciar('MOVIMENTO_MEIO_DIA', 'sistema:scheduler')
+          .catch((err) => this.logger.warn(`MOVIMENTO_MEIO_DIA falhou: ${(err as Error).message}`)),
+    );
 
-    try {
-      const diaria = new CronJob(
-        cfg.janelaDiariaCron,
-        () => {
-          this.execucao.iniciar('DIARIA_AUTO', 'sistema:scheduler').catch((err) => {
-            this.logger.warn(
-              `Cron diária falhou ao iniciar: ${(err as Error).message}`,
-            );
-          });
-        },
-        null,
-        false,
-        'America/Sao_Paulo',
-      );
-      this.scheduler.addCronJob(this.DIARIA_JOB, diaria as unknown as CronJob);
-      diaria.start();
-      this.logger.log(`Cron DIARIA_AUTO registrado: ${cfg.janelaDiariaCron}`);
-    } catch (err) {
-      this.logger.error(`Falha ao registrar cron diária (${cfg.janelaDiariaCron}): ${(err as Error).message}`);
-    }
+    this.registrarCron(
+      this.MANHA_SEGUINTE_JOB,
+      cfg.cronMovimentoManhaSeguinte,
+      'MOVIMENTO_MANHA_SEGUINTE',
+      () =>
+        this.execucao
+          .iniciar('MOVIMENTO_MANHA_SEGUINTE', 'sistema:scheduler')
+          .catch((err) => this.logger.warn(`MOVIMENTO_MANHA_SEGUINTE falhou: ${(err as Error).message}`)),
+    );
   }
 
   getStatus(): {
-    semanal: { cron: string; proxima: Date | null } | null;
-    diaria: { cron: string; proxima: Date | null } | null;
+    meioDia: { cron: string; proxima: Date | null } | null;
+    manhaSeguinte: { cron: string; proxima: Date | null } | null;
   } {
     return {
-      semanal: this.infoJob(this.SEMANAL_JOB),
-      diaria: this.infoJob(this.DIARIA_JOB),
+      meioDia: this.infoJob(this.MEIO_DIA_JOB),
+      manhaSeguinte: this.infoJob(this.MANHA_SEGUINTE_JOB),
     };
+  }
+
+  private registrarCron(
+    name: string,
+    cronExpr: string,
+    label: string,
+    handler: () => void,
+  ): void {
+    try {
+      const job = new CronJob(cronExpr, handler, null, false, 'America/Sao_Paulo');
+      this.scheduler.addCronJob(name, job as unknown as CronJob);
+      job.start();
+      this.logger.log(`Cron ${label} registrado: ${cronExpr}`);
+    } catch (err) {
+      this.logger.error(`Falha ao registrar cron ${label} (${cronExpr}): ${(err as Error).message}`);
+    }
   }
 
   private infoJob(name: string) {

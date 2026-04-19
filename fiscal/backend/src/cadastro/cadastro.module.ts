@@ -4,10 +4,11 @@ import { AmbienteModule } from '../ambiente/ambiente.module.js';
 import { CadastroController } from './cadastro.controller.js';
 import { CadastroService } from './cadastro.service.js';
 import { ReceitaClient } from './receita.client.js';
+import { DivergenciaController } from './divergencia.controller.js';
 
 @Module({
   imports: [SefazModule, AmbienteModule],
-  controllers: [CadastroController],
+  controllers: [CadastroController, DivergenciaController],
   providers: [CadastroService, ReceitaClient],
   exports: [CadastroService],
 })

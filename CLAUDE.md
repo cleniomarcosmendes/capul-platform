@@ -73,15 +73,17 @@ Plataforma corporativa modular com microservicos independentes:
 - Gestao de usuarios e permissoes
 - Atribuicao de modulos por usuario
 
-### 6. Fiscal (`/fiscal`) *(em desenvolvimento — Abril/2026)*
-- Centralizacao do certificado digital A1 da CAPUL
-- Consulta NF-e via SEFAZ (NFeDistribuicaoDFe por chave) — ver `docs/FLUXO_CONSULTA_NFE.md`
-- Consulta CT-e via CteConsultaProtocolo per-UF + timeline de eventos — ver `docs/FLUXO_CONSULTA_CTE.md`
-- Consulta cadastral (CCC/Sintegra) por CNPJ/CPF + UF
-- Enriquecimento Receita Federal via BrasilAPI/ReceitaWS
-- Cruzamento periodico SA1010/SA2010 × CCC (Onda 2 — BullMQ)
-- Schema Prisma: `fiscal` (multi-schema com core read-only)
-- Docs: `docs/PLANO_MODULO_FISCAL_v1.5_ADDENDUM.md`
+### 6. Fiscal (`/fiscal`) *(em desenvolvimento — Abril/2026 — Onda 1 do Plano v2.0 completa)*
+- Consulta cadastral (CCC/Sintegra) por CNPJ/CPF + UF + Receita Federal + Vínculo Protheus (SA1/SA2)
+- Consulta NF-e/CT-e por chave (SEFAZ direto; Onda 2 migra para SZR → SPED156 → SEFAZ via Protheus)
+- Cruzamento cadastral **movimento-based 2×/dia** (12:00 + 06:00 D+1) dentro da janela de 24h de cancelamento NF-e
+- **Proteção 5 camadas** contra bloqueio SEFAZ: dedup CNPJ + rate 20 req/min + circuit breaker UF + limite diário 2.000/dia + freio de mão
+- Tela `/operacao/limites` com política SEFAZ escrita + widget consumo tempo real
+- Tela `/divergencias` para resolver discrepâncias Protheus × SEFAZ
+- Cliente HTTP Protheus resolvido dinamicamente via `core.integracoes_api_endpoints` (Configurador)
+- Schema Prisma: `fiscal` (multi-schema com core read-only) + tabela `limite_diario`
+- Certificado A1: gestão no **Configurador** (não no Fiscal)
+- Docs: `docs/PLANO_MODULO_FISCAL_v2.0.md` (plano mestre), `docs/PENDENCIAS_PROTHEUS_18ABR2026.md` (formais)
 - **Regra critica**: NUNCA disparar consultas SEFAZ em loop ou cron nao supervisionado — risco de bloqueio do CNPJ da CAPUL (ver `memory/feedback_sefaz_nunca_em_loop.md`)
 
 ---
@@ -248,4 +250,4 @@ Este arquivo serve como ponto de entrada para o Claude Code entender a estrutura
 
 ---
 
-*Ultima atualizacao: 17/04/2026*
+*Ultima atualizacao: 18/04/2026*

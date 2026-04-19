@@ -477,6 +477,39 @@ export interface ConsultaProtocoloStatus {
   erro?: string | null;
 }
 
+// ---------------------------------------------------------------------------
+// Timeline vinda do Protheus (contrato `/eventosNfe` recebido 18/04/2026)
+// ---------------------------------------------------------------------------
+
+export type OrigemEventoProtheus =
+  | 'SPED150'
+  | 'SPED156'
+  | 'SPED156/CCE'
+  | 'SZR010'
+  | 'SF1010'
+  | (string & {});
+
+export interface EventoProtheusNfe {
+  /** Formato `YYYYMMDD HH:MM:SS` (timezone America/Sao_Paulo). */
+  quando: string;
+  origem: OrigemEventoProtheus;
+  tipo: string;
+  ator: string;
+  detalhes: string;
+}
+
+/**
+ * Resposta do endpoint `GET /api/v1/fiscal/nfe/:chave/timeline`.
+ * SF1010 é separado em `alertasEntrada` (regra interna: timeline estrita
+ * contém apenas SPED150/156/SZR/CCE).
+ */
+export interface TimelineNfeProtheusResponse {
+  chave: string;
+  quantidade: number;
+  timeline: EventoProtheusNfe[];
+  alertasEntrada: EventoProtheusNfe[];
+}
+
 export interface NfeConsultaResult {
   chave: string;
   filial: string;
@@ -504,7 +537,8 @@ export type TipoCadastroProtheus = 'SA1010' | 'SA2010';
 export interface VinculoProtheus {
   origem: 'SA1010' | 'SA2010';
   origemDescricao: 'Cliente' | 'Fornecedor';
-  filial: string;
+  /** SA1/SA2 são tabelas compartilhadas entre filiais — campo pode vir vazio ou null. */
+  filial: string | null;
   codigo: string;
   loja: string;
   bloqueado: boolean;

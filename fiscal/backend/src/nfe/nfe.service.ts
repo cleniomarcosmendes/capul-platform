@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { ProtheusXmlService } from '../protheus/protheus-xml.service.js';
 import { ProtheusGravacaoHelper } from '../protheus/protheus-gravacao.helper.js';
+import { ProtheusEventosService } from '../protheus/protheus-eventos.service.js';
+import type { EventoNfeRaw } from '../protheus/interfaces/eventos-nfe.interface.js';
 import { NfeDistribuicaoClient, SefazConsultaError } from '../sefaz/nfe-distribuicao.client.js';
 import {
   NfeConsultaProtocoloClient,
@@ -80,6 +82,7 @@ export class NfeService {
 
   constructor(
     private readonly protheusXml: ProtheusXmlService,
+    private readonly protheusEventos: ProtheusEventosService,
     private readonly gravacaoHelper: ProtheusGravacaoHelper,
     private readonly sefazDistribuicao: NfeDistribuicaoClient,
     private readonly sefazConsulta: NfeConsultaProtocoloClient,
@@ -88,6 +91,57 @@ export class NfeService {
     private readonly documentoEvento: DocumentoEventoService,
     private readonly ambiente: AmbienteService,
   ) {}
+
+  /**
+   * Timeline consolidada de eventos de uma NF-e a partir do Protheus
+   * (SPED150/SPED156/SZR010/SF1010), aplicando a regra interna de separar
+   * SF1010 em bloco "alertas" (fora da timeline estrita SPED + SZR).
+   *
+   * Ver memory `feedback_fiscal_timeline_so_sped` e
+   * `docs/PENDENCIAS_PROTHEUS_18ABR2026.md` §4.4.
+   */
+  async timeline(chave: string): Promise<{
+    chave: string;
+    quantidade: number;
+    timeline: EventoNfeRaw[];
+    alertasEntrada: EventoNfeRaw[];
+  }> {
+    assertChaveFormato(chave);
+    try {
+      const resp = await this.protheusEventos.listar(chave);
+      const timeline: EventoNfeRaw[] = [];
+      const alertasEntrada: EventoNfeRaw[] = [];
+      for (const ev of resp.eventos) {
+        if (ev.origem === 'SF1010') alertasEntrada.push(ev);
+        else timeline.push(ev);
+      }
+      return { chave: resp.chave, quantidade: resp.quantidade, timeline, alertasEntrada };
+    } catch (err) {
+      // Protheus pode não ter publicado /eventosNfe ainda — erros comuns:
+      //   - "Unexpected token '<'" (retornou HTML 404 em vez de JSON)
+      //   - "other side closed" / "SocketError" (servidor dropou a conexão)
+      //   - timeouts de rede
+      // Traduz qualquer um deles para 503 com mensagem clara ao operador.
+      const msg = (err as Error).message ?? '';
+      const name = (err as Error).name ?? '';
+      const apiIndisponivel =
+        msg.includes("'<'") ||
+        msg.includes('not valid JSON') ||
+        msg.includes('other side closed') ||
+        msg.includes('Connect Timeout') ||
+        name === 'SocketError' ||
+        name === 'ConnectTimeoutError';
+      if (apiIndisponivel) {
+        this.logger.warn(`/eventosNfe Protheus indisponível (${name}: ${msg.slice(0, 120)})`);
+        throw new ServiceUnavailableException({
+          erro: 'EVENTOSNFE_NAO_DISPONIVEL',
+          mensagem:
+            'Endpoint /eventosNfe do Protheus ainda não está publicado em homologação. Aguarde liberação pela equipe Protheus.',
+        });
+      }
+      throw err;
+    }
+  }
 
   async consultarPorChave(
     chave: string,
