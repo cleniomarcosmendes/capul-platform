@@ -21,21 +21,25 @@ datasource db {
 // ============================================================
 
 model UsuarioCore {
-  id                String   @id @db.Uuid
-  email             String   @unique
-  nome              String
-  ativo             Boolean
-  createdAt         DateTime @map("created_at")
-  updatedAt         DateTime @map("updated_at")
-  modulosUsuario    UsuarioModuloCore[]
+  // core.usuarios é gerenciado pelo auth-gateway (id TEXT, email nullable, sem campo ativo).
+  // Este modelo é read-only — o fiscal nunca escreve no schema core.
+  id             String    @id
+  email          String?   @unique
+  nome           String
+  createdAt      DateTime  @map("created_at")
+  updatedAt      DateTime  @map("updated_at")
+  modulosUsuario UsuarioModuloCore[]
 
   @@map("usuarios")
   @@schema("core")
 }
 
 model UsuarioModuloCore {
-  id           String      @id @db.Uuid
-  usuarioId    String      @map("usuario_id") @db.Uuid
+  // core.usuarios_modulos precisa ser criada via migration do auth-gateway.
+  // Usada por alertas/destinatarios.resolver.ts para envio de e-mails.
+  // Enquanto a tabela não existir, alertas de e-mail falham graciosamente (SMTP não configurado).
+  id           String      @id
+  usuarioId    String      @map("usuario_id")
   moduloCodigo String      @map("modulo_codigo")
   role         String
   ativo        Boolean
