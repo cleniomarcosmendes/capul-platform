@@ -62,18 +62,22 @@ export class DestinatariosResolver {
         moduloCodigo: MODULO_FISCAL,
         role: { in: roles },
         ativo: true,
-        usuario: { ativo: true },
+        // filtro por usuario.ativo removido: core.usuarios não tem campo booleano ativo
+        // (usa enum status); a filtragem de ativos é feita pela presença em usuarios_modulos
       },
       include: { usuario: true },
     });
 
     // Dedup por email (um usuário pode ter múltiplas roles)
+    // email é nullable em core.usuarios — pular registros sem e-mail cadastrado
     const seen = new Set<string>();
     const destinatarios: Destinatario[] = [];
     for (const r of rows) {
-      if (seen.has(r.usuario.email)) continue;
-      seen.add(r.usuario.email);
-      destinatarios.push({ email: r.usuario.email, nome: r.usuario.nome });
+      const email = r.usuario.email;
+      if (!email) continue;
+      if (seen.has(email)) continue;
+      seen.add(email);
+      destinatarios.push({ email, nome: r.usuario.nome });
     }
 
     if (destinatarios.length === 0) {
