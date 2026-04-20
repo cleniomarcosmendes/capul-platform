@@ -43,7 +43,7 @@ const readOnlyCoreExtension = Prisma.defineExtension({
   },
 });
 
-const CORE_MODELS = new Set(['UsuarioCore', 'UsuarioModuloCore']);
+const CORE_MODELS = new Set(['UsuarioCore', 'PermissaoModuloCore', 'ModuloSistemaCore', 'RoleModuloCore']);
 function isCoreModel(model: string): boolean {
   return CORE_MODELS.has(model);
 }

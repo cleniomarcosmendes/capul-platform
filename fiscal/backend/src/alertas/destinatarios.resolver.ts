@@ -57,18 +57,16 @@ export class DestinatariosResolver {
    * frequentemente que o digest.
    */
   async resolveByRoles(roles: string[]): Promise<ResolveResult> {
-    const rows = await this.prisma.client.usuarioModuloCore.findMany({
+    const rows = await this.prisma.client.permissaoModuloCore.findMany({
       where: {
-        moduloCodigo: MODULO_FISCAL,
-        role: { in: roles },
-        ativo: true,
-        // filtro por usuario.ativo removido: core.usuarios não tem campo booleano ativo
-        // (usa enum status); a filtragem de ativos é feita pela presença em usuarios_modulos
+        status: 'ATIVO',
+        modulo: { codigo: MODULO_FISCAL },
+        role: { codigo: { in: roles } },
       },
       include: { usuario: true },
     });
 
-    // Dedup por email (um usuário pode ter múltiplas roles)
+    // Dedup por email (um usuário pode ter múltiplas permissões)
     // email é nullable em core.usuarios — pular registros sem e-mail cadastrado
     const seen = new Set<string>();
     const destinatarios: Destinatario[] = [];

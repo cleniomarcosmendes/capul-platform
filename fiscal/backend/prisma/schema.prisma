@@ -21,31 +21,58 @@ datasource db {
 // ============================================================
 
 model UsuarioCore {
-  // core.usuarios é gerenciado pelo auth-gateway (id TEXT, email nullable, sem campo ativo).
-  // Este modelo é read-only — o fiscal nunca escreve no schema core.
-  id             String    @id
-  email          String?   @unique
-  nome           String
-  createdAt      DateTime  @map("created_at")
-  updatedAt      DateTime  @map("updated_at")
-  modulosUsuario UsuarioModuloCore[]
+  // core.usuarios — gerenciado pelo auth-gateway. id TEXT (não UUID), email nullable.
+  id         String                @id
+  email      String?               @unique
+  nome       String
+  createdAt  DateTime              @map("created_at")
+  updatedAt  DateTime              @map("updated_at")
+  permissoes PermissaoModuloCore[]
 
   @@map("usuarios")
   @@schema("core")
 }
 
-model UsuarioModuloCore {
-  // core.usuarios_modulos precisa ser criada via migration do auth-gateway.
-  // Usada por alertas/destinatarios.resolver.ts para envio de e-mails.
-  // Enquanto a tabela não existir, alertas de e-mail falham graciosamente (SMTP não configurado).
-  id           String      @id
-  usuarioId    String      @map("usuario_id")
-  moduloCodigo String      @map("modulo_codigo")
-  role         String
-  ativo        Boolean
-  usuario      UsuarioCore @relation(fields: [usuarioId], references: [id])
+model ModuloSistemaCore {
+  // core.modulos_sistema — catálogo de módulos da plataforma (gerenciado pelo auth-gateway).
+  id         String                @id
+  codigo     String                @unique
+  permissoes PermissaoModuloCore[]
+  roles      RoleModuloCore[]
 
-  @@map("usuarios_modulos")
+  @@map("modulos_sistema")
+  @@schema("core")
+}
+
+model RoleModuloCore {
+  // core.roles_modulo — roles disponíveis por módulo.
+  id         String                @id
+  codigo     String
+  moduloId   String                @map("modulo_id")
+  modulo     ModuloSistemaCore     @relation(fields: [moduloId], references: [id])
+  permissoes PermissaoModuloCore[]
+
+  @@unique([moduloId, codigo])
+  @@map("roles_modulo")
+  @@schema("core")
+}
+
+model PermissaoModuloCore {
+  // core.permissoes_modulo — vínculo usuário × módulo × role.
+  // Substitui o modelo anterior UsuarioModuloCore que referenciava a tabela
+  // inexistente core.usuarios_modulos.
+  id        String            @id
+  status    String
+  usuarioId String            @map("usuario_id")
+  moduloId  String            @map("modulo_id")
+  roleId    String            @map("role_modulo_id")
+  createdAt DateTime          @map("created_at")
+  updatedAt DateTime          @map("updated_at")
+  usuario   UsuarioCore       @relation(fields: [usuarioId], references: [id])
+  modulo    ModuloSistemaCore @relation(fields: [moduloId], references: [id])
+  role      RoleModuloCore    @relation(fields: [roleId], references: [id])
+
+  @@map("permissoes_modulo")
   @@schema("core")
 }
 

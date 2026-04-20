@@ -68,6 +68,16 @@ async function main() {
       urlBackend: '/api/v1/gestao-ti',
       ordem: 2,
     },
+    {
+      codigo: 'FISCAL',
+      nome: 'Fiscal',
+      descricao: 'Consulta NF-e/CT-e, cadastro de contribuintes e cruzamento de dados com SEFAZ',
+      icone: 'file-text',
+      cor: '#F59E0B',
+      urlFrontend: '/fiscal/',
+      urlBackend: '/api/v1/fiscal',
+      ordem: 3,
+    },
   ];
 
   const modulos: Record<string, { id: string }> = {};
@@ -82,7 +92,8 @@ async function main() {
   const modConfigurador = modulos['CONFIGURADOR'];
   const modInventario = modulos['INVENTARIO'];
   const modGestaoTi = modulos['GESTAO_TI'];
-  console.log('Modulos: CONFIGURADOR, INVENTARIO, GESTAO_TI');
+  const modFiscal = modulos['FISCAL'];
+  console.log('Modulos: CONFIGURADOR, INVENTARIO, GESTAO_TI, FISCAL');
 
   // 4. Roles (upsert por modulo_id + codigo)
   const rolesData = [
@@ -101,6 +112,9 @@ async function main() {
     { codigo: 'USUARIO_FINAL', nome: 'Usuario Final', descricao: 'Abrir chamados publicos e consultar status dos proprios chamados', moduloId: modGestaoTi.id },
     { codigo: 'USUARIO_CHAVE', nome: 'Usuario-Chave', descricao: 'Usuarios-chave de projetos (acesso limitado a pendencias)', moduloId: modGestaoTi.id },
     { codigo: 'TERCEIRIZADO', nome: 'Terceirizado', descricao: 'Analista externo com acesso restrito a projetos e pendencias vinculados', moduloId: modGestaoTi.id },
+    // Fiscal
+    { codigo: 'GESTOR_FISCAL', nome: 'Gestor Fiscal', descricao: 'Consulta cadastral, NF-e/CT-e, divergencias e agendamentos', moduloId: modFiscal.id },
+    { codigo: 'ADMIN_TI', nome: 'Admin TI', descricao: 'Acesso total ao fiscal: certificados, limites, alternancia PROD/HOM e pausar jobs', moduloId: modFiscal.id },
   ];
 
   const roles: Record<string, { id: string }> = {};
@@ -115,7 +129,8 @@ async function main() {
   const roleAdminConfig = roles[`${modConfigurador.id}:ADMIN`];
   const roleAdminInv = roles[`${modInventario.id}:ADMIN`];
   const roleAdminTi = roles[`${modGestaoTi.id}:ADMIN`];
-  console.log('Roles: 3 Configurador + 3 Inventario + 6 Gestao TI = 12 total');
+  const roleAdminTiFiscal = roles[`${modFiscal.id}:ADMIN_TI`];
+  console.log('Roles: 3 Configurador + 3 Inventario + 6 Gestao TI + 2 Fiscal = 14 total');
 
   // 5. Tipos de Departamento (find or create)
   const tiposDeptData = [
@@ -202,6 +217,7 @@ async function main() {
               { moduloId: modConfigurador.id, roleModuloId: roleAdminConfig.id },
               { moduloId: modInventario.id, roleModuloId: roleAdminInv.id },
               { moduloId: modGestaoTi.id, roleModuloId: roleAdminTi.id },
+              { moduloId: modFiscal.id, roleModuloId: roleAdminTiFiscal.id },
             ],
           },
         },
@@ -224,6 +240,7 @@ async function main() {
       { moduloId: modConfigurador.id, roleModuloId: roleAdminConfig.id },
       { moduloId: modInventario.id, roleModuloId: roleAdminInv.id },
       { moduloId: modGestaoTi.id, roleModuloId: roleAdminTi.id },
+      { moduloId: modFiscal.id, roleModuloId: roleAdminTiFiscal.id },
     ];
 
     for (const p of permissoesDesejadas) {
