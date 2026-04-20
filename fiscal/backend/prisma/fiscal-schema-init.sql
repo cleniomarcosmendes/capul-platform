@@ -352,4 +352,4 @@ INSERT INTO "fiscal"."ambiente_config" (
 ) ON CONFLICT ("id") DO NOTHING;
 
 -- limite_diario (singleton id=1)
-INSERT INTO "fiscal"."limite_diario" ("id") VALUES (1) ON CONFLICT ("id") DO NOTHING;
+INSERT INTO "fiscal"."limite_diario" ("id", "atualizado_em") VALUES (1, NOW()) ON CONFLICT ("id") DO NOTHING;
