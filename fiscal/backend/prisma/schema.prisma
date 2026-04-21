@@ -28,8 +28,44 @@ model UsuarioCore {
   createdAt  DateTime              @map("created_at")
   updatedAt  DateTime              @map("updated_at")
   permissoes PermissaoModuloCore[]
+  filiais    UsuarioFilialCore[]
 
   @@map("usuarios")
+  @@schema("core")
+}
+
+model UsuarioFilialCore {
+  // core.usuario_filiais — pivot user ↔ filiais (gerenciado pelo Configurador).
+  // Fonte de verdade para "quais filiais esse usuário pode consultar/operar".
+  id        String  @id
+  usuarioId String  @map("usuario_id")
+  filialId  String  @map("filial_id")
+  isDefault Boolean @default(false) @map("is_default")
+
+  usuario UsuarioCore @relation(fields: [usuarioId], references: [id])
+  filial  FilialCore  @relation(fields: [filialId], references: [id])
+
+  @@unique([usuarioId, filialId])
+  @@map("usuario_filiais")
+  @@schema("core")
+}
+
+model FilialCore {
+  // core.filiais — gerenciado pelo Configurador. Read-only no fiscal.
+  // Usado para resolver CNPJ por código de filial (2 dígitos Protheus) no
+  // fluxo NFeDistribuicaoDFe — o CNPJ consulente precisa ser ator do
+  // documento (emitente/destinatário), e em transferências entre filiais
+  // CAPUL a matriz não é ator.
+  id           String @id
+  codigo       String
+  cnpj         String?
+  razaoSocial  String? @map("razao_social")
+  nomeFantasia String  @map("nome_fantasia")
+  status       String
+
+  usuarios UsuarioFilialCore[]
+
+  @@map("filiais")
   @@schema("core")
 }
 

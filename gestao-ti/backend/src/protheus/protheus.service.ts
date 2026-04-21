@@ -34,7 +34,7 @@ export class ProtheusService {
     }
 
     try {
-      const url = `${AUTH_GATEWAY_URL}/api/v1/internal/integracoes/codigo/PROTHEUS/endpoints-ativos`;
+      const url = `${AUTH_GATEWAY_URL}/api/v1/internal/integracoes/codigo/PROTHEUS/endpoints-ativos?modulo=GESTAO_TI`;
       const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
       if (response.ok) {
         const data = await response.json();

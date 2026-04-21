@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards, ParseEnumPipe } from '@nestjs/common';
+import { ModuloConsumidor } from '@prisma/client';
 import { IntegracaoService } from './integracao.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
@@ -7,6 +8,7 @@ import {
   CreateEndpointDto,
   UpdateEndpointDto,
   TestarEndpointDto,
+  TrocarAmbienteModuloDto,
 } from './dto/integracao.dto';
 
 @Controller('api/v1/core/integracoes')
@@ -71,5 +73,19 @@ export class IntegracaoController {
   @Post(':id/endpoints')
   addEndpoint(@Param('id') id: string, @Body() dto: CreateEndpointDto) {
     return this.integracaoService.addEndpoint(id, dto);
+  }
+
+  @Patch(':id/endpoints/:endpointId/ativar')
+  ativarEndpoint(@Param('id') id: string, @Param('endpointId') endpointId: string) {
+    return this.integracaoService.ativarEndpoint(id, endpointId);
+  }
+
+  @Post(':id/modulos/:modulo/trocar-ambiente')
+  trocarAmbienteModulo(
+    @Param('id') id: string,
+    @Param('modulo', new ParseEnumPipe(ModuloConsumidor)) modulo: ModuloConsumidor,
+    @Body() dto: TrocarAmbienteModuloDto,
+  ) {
+    return this.integracaoService.trocarAmbienteModulo(id, modulo, dto.ambiente);
   }
 }

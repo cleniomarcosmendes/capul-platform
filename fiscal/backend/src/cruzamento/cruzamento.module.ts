@@ -9,6 +9,7 @@ import { CruzamentoWorker } from './cruzamento.worker.js';
 import { SchedulerService } from './scheduler.service.js';
 import { WatchdogService } from './watchdog.service.js';
 import { ExpurgoService } from './expurgo.service.js';
+import { StartupCleanupService } from './startup-cleanup.service.js';
 import { CruzamentoController } from './cruzamento.controller.js';
 
 /**
@@ -38,6 +39,7 @@ import { CruzamentoController } from './cruzamento.controller.js';
     SchedulerService,
     WatchdogService,
     ExpurgoService,
+    StartupCleanupService,
   ],
   exports: [CircuitBreakerService, ExecucaoService, SchedulerService],
 })

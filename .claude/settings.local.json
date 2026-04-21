@@ -1225,7 +1225,9 @@
       "Bash(echo \"gestao-ti=$?\")",
       "Bash(echo \"auth=$?\")",
       "Bash(echo \"fiscal-fe=$?\")",
-      "Bash(echo \"compose=$?\")"
+      "Bash(echo \"compose=$?\")",
+      "Bash(NODE_OPTIONS=\"--experimental-vm-modules\" node_modules/.bin/jest src/protheus/protheus-xml-nfe.service.spec.ts)",
+      "Bash(NODE_OPTIONS=\"--experimental-vm-modules\" node_modules/.bin/jest)"
     ]
   }
 }

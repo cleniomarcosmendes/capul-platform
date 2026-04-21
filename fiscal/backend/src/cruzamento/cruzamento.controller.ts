@@ -48,7 +48,12 @@ export class CruzamentoController {
   @Post('sincronizar')
   @RoleMinima('ANALISTA_CADASTRO')
   async sincronizar(
-    @Body() body: { tipo?: 'manual' | 'movimento-meio-dia' | 'movimento-manha-seguinte' },
+    @Body()
+    body: {
+      tipo?: 'manual' | 'movimento-meio-dia' | 'movimento-manha-seguinte';
+      dataInicio?: string;
+      dataFim?: string;
+    },
     @CurrentUser() user: FiscalAuthenticatedUser,
   ) {
     const tipoPedido = body.tipo ?? 'manual';
@@ -64,8 +69,68 @@ export class CruzamentoController {
       });
     }
 
-    const id = await this.execucao.iniciar(tipoEnum, user.email);
-    return { sincronizacaoId: id, tipo: tipoEnum, status: 'EM_EXECUCAO' };
+    // Janela personalizada (manual com datas) — valida e monta objeto Date.
+    let janela: { inicio: Date; fim: Date } | undefined;
+    if (body.dataInicio || body.dataFim) {
+      if (tipoEnum !== 'MANUAL') {
+        throw new BadRequestException({
+          erro: 'JANELA_APENAS_MANUAL',
+          mensagem: 'Janela personalizada (dataInicio/dataFim) so e valida para tipo=manual.',
+        });
+      }
+      if (!body.dataInicio || !body.dataFim) {
+        throw new BadRequestException({
+          erro: 'JANELA_INCOMPLETA',
+          mensagem: 'dataInicio e dataFim sao obrigatorios quando um deles e informado.',
+        });
+      }
+      janela = this.validarJanela(body.dataInicio, body.dataFim);
+    }
+
+    const id = await this.execucao.iniciar(tipoEnum, user.email, janela);
+    return { sincronizacaoId: id, tipo: tipoEnum, status: 'EM_EXECUCAO', janela };
+  }
+
+  /**
+   * Valida e converte janela de datas informada pelo usuario.
+   * Regras: datas no formato YYYY-MM-DD, inicio <= fim, inicio no maximo
+   * 60 dias atras (evita consumo excessivo da cota SEFAZ), fim nao futuro.
+   */
+  private validarJanela(dataInicio: string, dataFim: string): { inicio: Date; fim: Date } {
+    const regex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!regex.test(dataInicio) || !regex.test(dataFim)) {
+      throw new BadRequestException({
+        erro: 'DATA_FORMATO',
+        mensagem: 'dataInicio e dataFim devem estar no formato YYYY-MM-DD.',
+      });
+    }
+    const inicio = new Date(`${dataInicio}T00:00:00-03:00`);
+    const fim = new Date(`${dataFim}T23:59:59-03:00`);
+    if (isNaN(inicio.getTime()) || isNaN(fim.getTime())) {
+      throw new BadRequestException({ erro: 'DATA_INVALIDA', mensagem: 'Data invalida.' });
+    }
+    if (inicio.getTime() > fim.getTime()) {
+      throw new BadRequestException({
+        erro: 'JANELA_INVERTIDA',
+        mensagem: 'dataInicio deve ser anterior ou igual a dataFim.',
+      });
+    }
+    const agora = new Date();
+    if (fim.getTime() > agora.getTime() + 24 * 60 * 60_000) {
+      throw new BadRequestException({
+        erro: 'DATA_FUTURA',
+        mensagem: 'dataFim nao pode ser no futuro.',
+      });
+    }
+    const LIMITE_DIAS = 60;
+    const maxPast = new Date(agora.getTime() - LIMITE_DIAS * 24 * 60 * 60_000);
+    if (inicio.getTime() < maxPast.getTime()) {
+      throw new BadRequestException({
+        erro: 'JANELA_MUITO_ANTIGA',
+        mensagem: `dataInicio nao pode ser anterior a ${LIMITE_DIAS} dias atras (protecao contra consumo excessivo da cota SEFAZ).`,
+      });
+    }
+    return { inicio, fim };
   }
 
   @Get('execucoes')
@@ -86,6 +151,22 @@ export class CruzamentoController {
       where: { id },
       include: { alertas: true },
     });
+  }
+
+  /**
+   * Cancela uma execucao em andamento. Marca como CANCELADA no banco e
+   * remove jobs pendentes da fila. Jobs ja em processamento continuam ate
+   * acabar (BullMQ nao permite abort seguro), mas o digest final nao sera
+   * emitido pois a execucao ja esta marcada como CANCELADA.
+   */
+  @Post('execucoes/:id/cancelar')
+  @HttpCode(200)
+  @RoleMinima('ADMIN_TI')
+  async cancelarExecucao(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: FiscalAuthenticatedUser,
+  ) {
+    return this.execucao.cancelar(id, user.email);
   }
 
   // ----- Scheduler -----

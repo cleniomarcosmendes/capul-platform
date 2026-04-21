@@ -9,12 +9,14 @@ import { ProtheusXmlService } from '../protheus/protheus-xml.service.js';
 import { ProtheusGravacaoHelper } from '../protheus/protheus-gravacao.helper.js';
 import { ProtheusEventosService } from '../protheus/protheus-eventos.service.js';
 import type { EventoNfeRaw } from '../protheus/interfaces/eventos-nfe.interface.js';
+import type { XmlNfeResult } from '../protheus/interfaces/xml-nfe.interface.js';
 import { NfeDistribuicaoClient, SefazConsultaError } from '../sefaz/nfe-distribuicao.client.js';
 import {
   NfeConsultaProtocoloClient,
   NfeConsultaProtocoloError,
 } from '../sefaz/nfe-consulta-protocolo.client.js';
 import { AmbienteService } from '../ambiente/ambiente.service.js';
+import { PrismaService } from '../prisma/prisma.service.js';
 import { NfeParserService } from './parsers/nfe-parser.service.js';
 import { DocumentoConsultaService } from './documento-consulta.service.js';
 import {
@@ -90,6 +92,7 @@ export class NfeService {
     private readonly documentoConsulta: DocumentoConsultaService,
     private readonly documentoEvento: DocumentoEventoService,
     private readonly ambiente: AmbienteService,
+    private readonly prisma: PrismaService,
   ) {}
 
   /**
@@ -163,46 +166,45 @@ export class NfeService {
     let gravacaoMensagem: string | null = null;
     let gravacaoErro: string | null = null;
 
-    // --- passo 1: cache check Protheus (tolerante a falhas) ---
-    let existeNoProtheus = false;
+    // ---------- passo 1: GET /xmlNfe (busca SZR010 → fallback SPED156) ----------
+    let xmlNfeResp: XmlNfeResult | null = null;
     try {
-      const existe = await this.protheusXml.exists(chave);
-      existeNoProtheus = existe.existe;
-      leitura = existeNoProtheus ? 'CACHE_HIT' : 'CACHE_MISS';
-      leituraMensagem = existeNoProtheus
-        ? 'XML encontrado no cache do Protheus (SZR010).'
-        : 'XML não encontrado no Protheus — baixando da SEFAZ.';
+      xmlNfeResp = await this.protheusXml.buscarXml(chave);
+      if (xmlNfeResp.found) {
+        leitura = 'CACHE_HIT';
+        leituraMensagem =
+          xmlNfeResp.origem === 'SZR010'
+            ? 'XML encontrado no cache do Protheus (SZR010).'
+            : 'XML encontrado no Protheus (SPED156) — gravando em SZR/SZQ.';
+      } else {
+        leitura = 'CACHE_MISS';
+        leituraMensagem = 'XML não encontrado no Protheus — baixando da SEFAZ.';
+      }
     } catch (err) {
       const msg = (err as Error).message;
       this.logger.warn(
-        `xmlFiscal.exists falhou para chave ${chave.slice(0, 6)}…: ${msg} — seguindo para SEFAZ.`,
+        `xmlNfe falhou para chave ${chave.slice(0, 6)}…: ${msg} — seguindo para SEFAZ.`,
       );
       leitura = 'FALHA_TECNICA';
-      leituraMensagem = 'Não foi possível verificar o cache no Protheus. Buscando direto na SEFAZ.';
+      leituraMensagem =
+        'Não foi possível consultar o XML no Protheus. Buscando direto na SEFAZ.';
       leituraErro = msg;
     }
 
-    if (existeNoProtheus) {
-      this.logger.log(`Cache HIT Protheus — chave ${chave.slice(0, 6)}… filial=${filial}`);
-      try {
-        const protResp = await this.protheusXml.get(chave);
-        xmlString = protResp.xml;
-        origem = 'PROTHEUS_CACHE';
+    if (xmlNfeResp?.found) {
+      this.logger.log(
+        `xmlNfe HIT origem=${xmlNfeResp.origem} — chave ${chave.slice(0, 6)}… filial=${filial}`,
+      );
+      xmlString = Buffer.from(xmlNfeResp.xmlBase64, 'base64').toString('utf8');
+      origem = 'PROTHEUS_CACHE';
+
+      if (xmlNfeResp.origem === 'SZR010') {
+        // Já estava em SZR/SZQ — gravação não é necessária
         gravacao = 'NAO_APLICAVEL';
-        gravacaoMensagem = 'XML já estava no Protheus — gravação não é necessária.';
-      } catch (err) {
-        // Cache hit no exists mas falhou no get — continua para SEFAZ como fallback
-        const msg = (err as Error).message;
-        this.logger.warn(
-          `xmlFiscal.get falhou para chave ${chave.slice(0, 6)}…: ${msg} — seguindo para SEFAZ.`,
-        );
-        leitura = 'FALHA_TECNICA';
-        leituraMensagem = 'Cache Protheus estava disponível mas o download falhou. Buscando direto na SEFAZ.';
-        leituraErro = msg;
-        xmlString = await this.baixarDoSefaz(chave);
-        origem = 'SEFAZ_DOWNLOAD';
-        // Tenta gravar o XML baixado de volta no Protheus (pode ter sido uma
-        // falha momentanea na leitura mas a gravacao funcionar)
+        gravacaoMensagem = 'XML já estava em SZR/SZQ — gravação não é necessária.';
+      } else {
+        // Veio de SPED156 — Protheus NÃO auto-grava SZR/SZQ. A plataforma
+        // faz o /grvXML para popular o cache (best effort).
         const result = await this.gravacaoHelper.tentarGravar({
           chave,
           tipoDocumento: 'NFE',
@@ -216,11 +218,13 @@ export class NfeService {
         if (result.raceCondition) origem = 'PROTHEUS_CACHE_RACE';
       }
     } else {
-      this.logger.log(`Cache MISS — baixando do SEFAZ — chave ${chave.slice(0, 6)}… filial=${filial}`);
-      xmlString = await this.baixarDoSefaz(chave);
+      // 404 (cache miss) ou falha técnica — fallback SEFAZ + grvXML
+      this.logger.log(
+        `xmlNfe MISS — baixando do SEFAZ — chave ${chave.slice(0, 6)}… filial=${filial}`,
+      );
+      xmlString = await this.baixarDoSefaz(chave, filial);
       origem = 'SEFAZ_DOWNLOAD';
 
-      // grava em SZR010/SZQ010 via Protheus (best effort)
       const result = await this.gravacaoHelper.tentarGravar({
         chave,
         tipoDocumento: 'NFE',
@@ -578,14 +582,31 @@ export class NfeService {
    * Baixa o XML autorizado da SEFAZ via NFeDistribuicaoDFe.
    * Trata erros tipados (SefazConsultaError) e erros técnicos (timeout, schema, etc.)
    * com mensagens específicas para o frontend.
+   *
+   * Resolve o CNPJ consulente pelo `filial` do request: o NFeDistribuicaoDFe
+   * só devolve documentos quando o consulente é ator (emitente/destinatário).
+   * Em transferências entre filiais CAPUL, a matriz (FISCAL_CNPJ_CONSULENTE)
+   * pode não ser ator — nesse caso o CNPJ da filial selecionada é quem
+   * aparece na NF. O certificado matriz cobre toda a família 25834847 via
+   * procuração e-CAC. Se a filial não for encontrada, mantém o default.
    */
-  private async baixarDoSefaz(chave: string): Promise<string> {
+  private async baixarDoSefaz(chave: string, filial: string): Promise<string> {
     const ambienteCfg = await this.ambiente.getOrCreate();
     const ambienteStr = ambienteCfg.ambienteAtivo === 'PRODUCAO' ? 'PRODUCAO' : 'HOMOLOGACAO';
     const ufAutor = ufFromChave(chave);
+    const cnpjConsulenteOverride = await this.resolverCnpjConsulentePorFilial(filial);
 
     try {
-      const baixado = await this.sefazDistribuicao.consultarPorChave(chave, ufAutor, ambienteStr);
+      const baixado = await this.sefazDistribuicao.consultarPorChave(
+        chave,
+        ufAutor,
+        ambienteStr,
+        cnpjConsulenteOverride,
+      );
+      this.logger.log(
+        `distDFe consChNFe (consulente=${baixado.cnpjConsulenteUsado.slice(0, 8)}…) ` +
+          `retornou XML para ${chave.slice(0, 6)}… filial=${filial}`,
+      );
       return baixado.xml;
     } catch (err) {
       // Erro semântico tipado da SEFAZ (cStat ≠ 138)
@@ -635,6 +656,27 @@ export class NfeService {
         erro: 'SEFAZ_FALHA_TECNICA',
         mensagem: `Falha ao consultar a SEFAZ: ${errMsg}. Verifique o certificado A1 e tente novamente.`,
       });
+    }
+  }
+
+  /**
+   * Retorna o CNPJ (somente dígitos) da filial ativa com o `codigo` dado,
+   * ou `null` se não encontrada / sem CNPJ — nesse caso o chamador mantém
+   * o consulente padrão (FISCAL_CNPJ_CONSULENTE). Não lança.
+   */
+  private async resolverCnpjConsulentePorFilial(codigo: string): Promise<string | null> {
+    try {
+      const filial = await this.prisma.filialCore.findFirst({
+        where: { codigo, status: 'ATIVO' },
+        select: { cnpj: true },
+      });
+      const cnpj = filial?.cnpj?.replace(/\D/g, '') ?? '';
+      return cnpj.length === 14 ? cnpj : null;
+    } catch (err) {
+      this.logger.warn(
+        `Falha ao resolver CNPJ da filial ${codigo} — usando consulente padrão. ${(err as Error).message}`,
+      );
+      return null;
     }
   }
 

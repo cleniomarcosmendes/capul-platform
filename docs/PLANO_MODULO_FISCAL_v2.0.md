@@ -3,8 +3,8 @@
 ### Plano Mestre v2.0
 
 - **Autor:** Clenio Marcos — Departamento de T.I.
-- **Data:** 17/04/2026
-- **Versão:** 2.0
+- **Data:** 17/04/2026 — **Revisão 2.2 em 20/04/2026** (Onda 2 consolidada + decisão CT-e)
+- **Versão:** 2.2
 - **Substitui:** `PLANO_MODULO_FISCAL_v1.5_ADDENDUM.md` (11/04/2026) e todas as versões anteriores do plano
 - **Status:** Plano ativo — em execução
 
@@ -17,6 +17,8 @@
 | 1.0 – 1.4 | Jan–Mar/2026 | Planejamento inicial; consultas SEFAZ diretas; cruzamento batch massivo; escopo "xmlFiscal" não-formalizado. |
 | 1.5 (addendum) | 11/04/2026 | 11 ajustes pós-auditoria: gate de bootstrap, circuit breaker, LGPD, esboço de recurso `xmlFiscal`. |
 | **2.0** | **17/04/2026** | **Reestruturação mestre após alinhamento operacional com Setor Fiscal.** Pontos-chave: (1) cruzamento deixa de ser "bootstrap + semanal massivo" e passa a ser **movimento-based com duas corridas diárias** (12:00 e 06:00) dentro da janela de cancelamento de 24h da NF-e; (2) novo contrato Protheus `cadastroFiscal` recebido em 17/04 (v1 spec-driven, sem `xmlFiscal`) — `xmlFiscal` fica na Onda 2; (3) **divisão clara** de responsabilidades entre Configurador (certificado, integrações API) e Fiscal (operação); (4) **proteção de 5 camadas** contra bloqueio SEFAZ, com **limite diário global de 2.000 consultas/dia** e **rate limit de 20 req/min**, incluindo **política escrita** exposta na UI; (5) menu do módulo reorganizado; (6) remoção do conceito de "fila de NFs pendentes de SZR" (não é caso de uso real). |
+| **2.1** | **20/04/2026** | **Arquitetura Onda 2 consolidada após alinhamento com equipe Protheus.** Substitui o trio `/xmlFiscal` (GET `/exists` + GET + POST) por **endpoint unificado de consulta** (Protheus em finalização) que resolve transparente SZR/SZQ + SPED156.ZIPPROC + SPED150 em uma única chamada, retornando XML e timeline de eventos. **Fallback SEFAZ passa a ser responsabilidade da Plataforma Fiscal** (com certificado A1 próprio da CAPUL gerido no Configurador), seguido de `POST /grvXML` para gravar em SZR/SZQ. Os 2 bloqueadores formais (`GET xmlFiscal` e `baixarXmlSefaz` no Protheus) foram **removidos**. |
+| **2.2** | **20/04/2026** | **Onda 2 ajustada: contrato `xmlNfe` recebido + decisão sobre CT-e.** (1) Endpoint unificado virou na verdade **2 endpoints separados**: `GET /xmlNfe?CHAVENFEE=...` (fallback SZR→SPED156, sem auto-grava) + `GET /eventosNfe?CHAVENFEE=...` (timeline). (2) Plataforma chama `POST /grvXML` em **2 cenários**: (a) origem=SPED156 ao consultar `/xmlNfe` (popula SZR/SZQ), e (b) após fallback SEFAZ direto. (3) **CT-e fica fora do fluxo Protheus por enquanto** — varredura em PROD não localizou CT-e em nenhuma tabela; equipe Protheus vai investigar captação local. Plataforma mantém CT-e **100% via SEFAZ direto** (XML por NFeDistribuicaoDFe nacional + eventos por CteConsultaProtocolo per-UF), sem chamar `/xmlNfe`, `/eventosNfe` ou `/grvXML` para CT-e. |
 
 ---
 
@@ -53,13 +55,43 @@ As tabelas SA1010 e SA2010 do Protheus são compartilhadas entre filiais (A1_FIL
 
 Consequência: a consulta cadastral pontual (Consulta Cadastral) e a recuperação por CNPJ no novo `cadastroFiscal` **não recebem parâmetro de filial**.
 
-### 2.3. `xmlFiscal` (frente NF-e/CT-e via Protheus) fica na Onda 2
+### 2.3. Arquitetura Onda 2 — `xmlNfe` + `eventosNfe` + fallback SEFAZ na plataforma (revisada 20/04/2026 v2.2)
 
-O contrato `/cadastroFiscal` recebido em 17/04/2026 é **somente leitura de cadastros**. A frente de armazenamento de XMLs em SZR010/SZQ010 (necessária para o fluxo `SZR → SPED156 → portal SEFAZ via Protheus`) continua dependendo da segunda API, ainda em desenvolvimento pela equipe Protheus.
+Após alinhamento com a equipe Protheus em 20/04/2026 e recebimento do contrato `xmlNfe`, a Onda 2 ficou definida como **2 endpoints Protheus separados + fallback SEFAZ na plataforma**, exclusivamente para **NF-e (modelo 55)**. CT-e segue caminho diferente — ver Seção 2.7.
 
-**Na prática:**
-- Onda 1 (imediata, ao receber `/cadastroFiscal`): destrava cruzamento e consulta cadastral.
-- Onda 2 (quando `/xmlFiscal` destravar): migra NF-e/CT-e do SEFAZ-direto atual para o fluxo via Protheus.
+**Camada 1A — `GET /xmlNfe?CHAVENFEE=...`** (Protheus — recebido 20/04/2026):
+- Busca primeiro em `SZR010.ZR_XML`; se não houver, fallback para `SPED156.DOCXMLRET`
+- Resposta 200: `{ chave, origem: "SZR010"|"SPED156", xmlBase64 }`
+- Resposta 404: `{ status, message, chave }` — XML não localizado em nenhuma das fontes
+- **Importante:** quando origem = `SPED156`, Protheus **não** grava automaticamente em SZR/SZQ — a plataforma é responsável por chamar `POST /grvXML` para popular o cache.
+
+**Camada 1B — `GET /eventosNfe?CHAVENFEE=...`** (Protheus — contrato de 18/04/2026):
+- Retorna timeline de eventos consolidada de SPED150 + SPED156 (cancelamento, CC-e, manifestações)
+- Chamada em paralelo com `xmlNfe`
+
+**Camada 2 — Fallback SEFAZ direto da Plataforma** (quando Camada 1A retorna 404):
+- Plataforma chama SEFAZ via `NFeDistribuicaoDFe` usando **certificado A1 próprio da CAPUL** (gerido no Configurador)
+- Ao obter sucesso, chama `POST /grvXML` (Protheus) para gravar em SZR/SZQ
+- Consulta subsequente a `xmlNfe` passa a retornar 200 com `origem: "SZR010"`
+
+**`POST /grvXML` é chamado em 2 cenários:**
+
+1. **origem = SPED156** ao consultar `xmlNfe` → popula SZR/SZQ a partir do XML extraído da SPED156 (Protheus não faz isso automaticamente)
+2. **Após fallback SEFAZ** → popula SZR/SZQ com o XML baixado da SEFAZ pela plataforma
+
+**Mudanças em relação ao plano original:**
+
+| Item | v2.0 (original) | v2.1 (20/04/2026) |
+|------|-----------------|---------------------|
+| Quem consulta SZR/SZQ/SPED? | Plataforma (GET `/xmlFiscal/{chave}/exists` + GET `/xmlFiscal/{chave}`) | **Protheus** (endpoint unificado, transparente) |
+| Quem baixa SEFAZ no fallback? | Protheus (endpoint `baixarXmlSefaz` proposto) | **Plataforma** (cliente direto SEFAZ + A1 CAPUL) |
+| Onde fica o certificado A1? | Protheus (para a plataforma não chamar SEFAZ) | **Configurador da Plataforma** (CAPUL) |
+| Quantos endpoints Protheus? | 3 (`exists`, `GET xmlFiscal`, `POST xmlFiscal`) | **2** (unificado de consulta + `POST /grvXML`) |
+| Regra "SEFAZ só via Protheus"? | Seguida estritamente | Flexibilizada: SEFAZ só é chamada no fallback (sob demanda do usuário, nunca em loop — respeitando `feedback_sefaz_nunca_em_loop.md`) |
+
+**Status das ondas:**
+- **Onda 1** (imediata, ao receber `/cadastroFiscal`): destrava cruzamento e consulta cadastral — **COMPLETA em 18/04/2026**.
+- **Onda 2** (quando endpoint unificado destravar em HOM): migra NF-e/CT-e do SEFAZ-direto "sempre" atual para o fluxo híbrido **Protheus primeiro, SEFAZ só no gap** — equipe Protheus finalizando em 20/04/2026.
 
 ### 2.4. Separação clara Configurador × Fiscal
 
@@ -83,6 +115,34 @@ Descartado após análise do Setor Fiscal. O caso das 357 NFs em estado anômalo
 
 ---
 
+### 2.7. CT-e (modelo 57) — fora do fluxo Protheus por enquanto (decisão 20/04/2026)
+
+Após varredura em PRODUÇÃO da chave de teste `31260316505190000139570010013015461001507170` em todas as tabelas relevantes (SZR010, SZQ010, GZH010, SF1010, SF2010, C00010, CC0010, SPED150, SPED154, SPED156, SPED050) — **CT-e não foi localizado em nenhuma tabela do Protheus CAPUL**.
+
+**Decisão:**
+
+- CT-e é tratado de **forma diferente da NF-e** — fica **fora** do fluxo Protheus por enquanto.
+- A plataforma **continua chamando SEFAZ direto** para CT-e:
+  - **XML**: tentativa via NFeDistribuicaoDFe nacional + fallback per-UF (já implementado em `fiscal/backend/src/cte/cte.service.ts`)
+  - **Eventos**: `CteConsultaProtocolo` per-UF (já implementado)
+- **NÃO chama** `/xmlNfe` nem `/eventosNfe` com chave de CT-e.
+- **NÃO chama** `/grvXML` para CT-e (não popula SZR/SZQ).
+- Cache local da plataforma para CT-e fica em `fiscal.documento_evento` (já existente).
+- Limites e proteções SEFAZ (5 camadas — Seção 6) **continuam aplicáveis** às consultas CT-e SEFAZ.
+
+**Próximo passo (não bloqueante):**
+- Equipe Protheus vai investigar captação local de CT-e (job de distDFe para modelo 57, alimentação de SZR010 com `ZR_TPXML='CTe'`, ou tabela dedicada).
+- Quando trouxerem algo consistente, abriremos planejamento dedicado **Onda 3 — CT-e via Protheus** seguindo o mesmo padrão da NF-e (`xmlCte`/`eventosCte` ou extensão dos endpoints atuais).
+
+**Mapa atualizado de divisão por documento:**
+
+| Documento | XML | Eventos | Cache local Protheus | `/grvXML`? |
+|-----------|-----|---------|----------------------|------------|
+| **NF-e (modelo 55)** | `/xmlNfe` → fallback SEFAZ | `/eventosNfe` | ✅ SZR010 + SPED150/156 | ✅ Sim (em 2 cenários) |
+| **CT-e (modelo 57)** | **SEFAZ direto** | **SEFAZ direto** (CteConsultaProtocolo) | ❌ Apenas `fiscal.documento_evento` | ❌ Não |
+
+---
+
 ## 3. Contratos externos
 
 Esta versão **não redefine** os contratos — eles vivem em documentos próprios, versionados separadamente:
@@ -90,9 +150,12 @@ Esta versão **não redefine** os contratos — eles vivem em documentos própri
 | Documento | Versão | Conteúdo | Status |
 |---|---|---|---|
 | `API – Integração Protheus – Leitura de Cadastros Fiscais.md` | v1 (spec-driven) | Endpoints `/cadastroFiscal` e `/cadastroFiscal?cnpj=` + `/healthcheck`. SQL de referência para SA1010, SA2010 e filtro `comMovimentoDesde`. | **Recebido 17/04/2026.** Destrava Onda 1. |
-| `ESPECIFICACAO_API_PROTHEUS_FISCAL_v2.0.md` | v2.0 | Especificação original incluindo `/xmlFiscal` (POST grava SZR+SZQ, GET recupera, `/exists` cache check). | Aguardando segunda API do Protheus para Onda 2. |
-| `FLUXO_CONSULTA_NFE.md` | v1.0 | Fluxo técnico NF-e. **Precisa atualização** para refletir `SZR → SPED156 → SEFAZ via Protheus` (fluxo definido na memória de 16/04). | Atualização prevista na Onda 2. |
+| `szr010-szq010.txt` + `Eventos_nfe.txt` | draft | `POST /grvXML` (grava SZR010+SZQ010) + `GET /eventosNfe` (timeline SPED150/156). | Recebido 18/04/2026. `/grvXML` segue válido no fluxo v2.1 (usado pela plataforma após baixar SEFAZ). `/eventosNfe` será provavelmente **substituído ou estendido** pelo endpoint unificado (20/04). |
+| `GET /xmlNfe?CHAVENFEE=...` | **v1 (recebido 20/04/2026)** | Retorna XML de NF-e da SZR010 (preferencial) ou SPED156 (fallback). Resposta inclui campo `origem` (`SZR010`/`SPED156`). 404 quando não localizado. **Não auto-grava** SZR ao ler de SPED156. **Aceita apenas NF-e** (CT-e não está nas tabelas — ver Seção 2.7). | **Recebido. Aguardando URL HOM + credenciais.** |
+| `ESPECIFICACAO_API_PROTHEUS_FISCAL_v2.0.md` | v2.0 | Especificação original incluindo `/xmlFiscal` (POST grava SZR+SZQ, GET recupera, `/exists` cache check). | **Parcialmente superada** pelo endpoint unificado (20/04). `POST xmlFiscal` → virou `/grvXML`. `GET xmlFiscal` e `/exists` → substituídos pelo endpoint unificado. |
+| `FLUXO_CONSULTA_NFE.md` | v1.0 | Fluxo técnico NF-e. **Precisa atualização** para refletir endpoint unificado + fallback SEFAZ direto na plataforma. | Atualização prevista na Onda 2. |
 | `FLUXO_CONSULTA_CTE.md` | v1.0 | Fluxo técnico CT-e. Mesma observação. | Atualização prevista na Onda 2. |
+| `PENDENCIAS_PROTHEUS_18ABR2026.md` | 1.1 (atualizado 20/04) | Registro formal de pendências técnicas enviadas à equipe Protheus. Bloqueadores 2.1 e 2.2 resolvidos em 20/04; novas perguntas 2bis.1–2bis.4 em aberto. | Aguardando publicação do endpoint unificado + respostas dos esclarecimentos 3.x. |
 
 ---
 
@@ -148,25 +211,38 @@ Para cada CNPJ:
 
 Volume esperado por corrida: ~200–500 CNPJs distintos (após dedup). Dia completo (2 corridas + consultas NF-e/CT-e + pontuais): **~500–1.000 consultas SEFAZ** (estimativa inicial).
 
-### 4.3. Consulta NF-e/CT-e por chave (Onda 2 — aguarda `/xmlFiscal`)
+### 4.3. Consulta NF-e/CT-e por chave (Onda 2 — aguarda endpoint unificado, 20/04/2026)
 
 ```
 [UI] → informa chave de 44 dígitos
       ↓
 [fiscal-backend]
-1. ProtheusXmlService.exists(chave)         → GET /xmlFiscal/{chave}/exists
-      ↓ se TRUE:
-2. ProtheusXmlService.getXml(chave)          → GET /xmlFiscal/{chave}
-                                                (retorna XML + itens + eventos SPED156)
-      ↓ FIM — sem consulta SEFAZ
-      ↓ se FALSE:
-3. NfeDistribuicaoClient.consultarPorChave() → SEFAZ (pela primeira vez)
-4. ProtheusXmlService.post(xml)              → POST /xmlFiscal
-                                                (grava SZR010 + SZQ010 + eventos)
-5. Devolve XML + parsed para a UI
+1. ProtheusConsultaService.buscarPorChave(chave)
+         → GET /rest/api/INFOCLIENTES/FISCAL/<endpointUnificado>?chave=...
+           (Protheus resolve transparente: SZR/SZQ → SPED156.ZIPPROC → SPED150)
+      ↓ se 200 OK:
+2. Plataforma recebe { xmlBase64, eventos[], origem, cabecalho }
+   └─ se origem = "SPED156" → Protheus já gravou SZR/SZQ automaticamente
+   └─ se origem = "SZR" → XML veio do cache já existente
+   └─ FIM — sem consulta SEFAZ
+
+      ↓ se 404 Not Found:
+3. NfeDistribuicaoClient.consultarPorChave(chave, ambiente)
+         → SEFAZ (NFeDistribuicaoDFe) com certificado A1 da CAPUL
+         → protegido por rate limit 20 req/min + limite diário 2.000/dia
+                                                + circuit breaker UF + freio de mão
+4. ProtheusXmlService.grvXml(chave, xmlCab, xmlItens)
+         → POST /rest/api/INFOCLIENTES/FISCAL/grvXML
+           (grava SZR010 cabeçalho + SZQ010 itens)
+5. Devolve XML + parsed para a UI (consulta subsequente virá de SZR)
 ```
 
-Até a Onda 2 estar pronta, o código permanece chamando SEFAZ direto (como é hoje). Esta é **dívida técnica conhecida** e acompanhada.
+**Notas de implementação:**
+
+- Ambos os caminhos retornam para a UI o mesmo envelope (`{ xml, eventos, cabecalho, origem }`), diferindo apenas em `origem: "SZR" | "SPED156" | "SEFAZ_DIRETO"`.
+- O **certificado A1 da CAPUL** é carregado dinamicamente do Configurador a cada bootstrap (rotação simples de certificado sem redeploy).
+- O fallback SEFAZ só dispara sob **ação direta do usuário** (nunca em loop, cron ou retry automático) — respeita rigorosamente `feedback_sefaz_nunca_em_loop.md`.
+- Até o endpoint unificado entrar em HOM, o código permanece chamando SEFAZ como fonte única (dívida técnica **conhecida** e acompanhada — será removida no mesmo commit que ativa o cliente do endpoint unificado).
 
 ---
 

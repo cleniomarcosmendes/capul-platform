@@ -57,7 +57,7 @@ export function OperacaoAmbientePage() {
     if (!ok) return;
     setActing(true);
     try {
-      await fiscalApi.put('/ambiente', { ambienteAtivo: novo });
+      await fiscalApi.put('/ambiente', { ambiente: novo });
       toast.success(`Ambiente alterado para ${novo}`);
       load();
     } catch (err) {

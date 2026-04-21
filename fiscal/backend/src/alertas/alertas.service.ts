@@ -75,6 +75,14 @@ export class AlertasService {
     // Resolve destinatários
     const { destinatarios, fallback } = await this.destinatariosResolver.resolve();
 
+    if (destinatarios.length === 0) {
+      this.logger.warn(
+        `Digest de ${sincronizacaoId.slice(0, 8)} nao enviado — sem destinatarios validos e sem FISCAL_FALLBACK_EMAIL configurado. ` +
+          'Configure FISCAL_FALLBACK_EMAIL no .env ou atribua role GESTOR_FISCAL/ADMIN_TI a algum usuario com e-mail cadastrado.',
+      );
+      return;
+    }
+
     const ambienteCfg = await this.prisma.ambienteConfig.findUnique({ where: { id: 1 } });
 
     const digestInput: DigestInput = {

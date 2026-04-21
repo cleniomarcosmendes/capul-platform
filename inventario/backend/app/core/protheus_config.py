@@ -86,7 +86,7 @@ class ProtheusConfig:
 
 async def _fetch_from_api() -> Optional[Dict[str, Any]]:
     """Busca config do Auth Gateway via API interna."""
-    url = f"{AUTH_GATEWAY_URL}/api/v1/internal/integracoes/codigo/PROTHEUS/endpoints-ativos"
+    url = f"{AUTH_GATEWAY_URL}/api/v1/internal/integracoes/codigo/PROTHEUS/endpoints-ativos?modulo=INVENTARIO"
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             # Usa JWT_SECRET para gerar um token interno simplificado

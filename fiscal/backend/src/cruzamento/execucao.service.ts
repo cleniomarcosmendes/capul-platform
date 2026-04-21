@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { QUEUE_CRUZAMENTO } from '../bullmq/bullmq.module.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -73,8 +73,21 @@ export class ExecucaoService {
   /**
    * Inicia uma execução.
    * Retorna o id da sincronização imediatamente (assíncrona).
+   *
+   * `janela` (opcional) sobrescreve o calculo padrao de `comMovimentoDesde`
+   * baseado no tipo. Usado no disparo manual com data personalizada — o
+   * usuario escolhe exatamente o periodo a reprocessar.
+   *
+   * Limitacao conhecida (21/04/2026): a API Protheus atual suporta apenas
+   * `comMovimentoDesde` (data inicial). `janela.fim` e gravado em
+   * `fiscal.cadastro_sincronizacao` para documentacao, mas nao e aplicado
+   * na consulta. Pedido de `comMovimentoAte` registrado em MELHORIAS_BACKLOG.
    */
-  async iniciar(tipo: TipoSincronizacao, disparadoPor: string): Promise<string> {
+  async iniciar(
+    tipo: TipoSincronizacao,
+    disparadoPor: string,
+    janela?: { inicio: Date; fim: Date },
+  ): Promise<string> {
     const ambienteCfg = await this.ambiente.getOrCreate();
     if (ambienteCfg.pauseSync && tipo !== 'PONTUAL') {
       throw new ConflictException({
@@ -89,12 +102,18 @@ export class ExecucaoService {
         status: 'EM_EXECUCAO',
         disparadoPor,
         iniciadoEm: new Date(),
+        janelaInicio: janela?.inicio,
+        janelaFim: janela?.fim,
       },
     });
-    this.logger.log(`Execução ${sinc.id.slice(0, 8)} iniciada (tipo=${tipo}, por=${disparadoPor})`);
+    this.logger.log(
+      `Execução ${sinc.id.slice(0, 8)} iniciada (tipo=${tipo}, por=${disparadoPor}` +
+        (janela ? `, janela=${janela.inicio.toISOString().slice(0, 10)}→${janela.fim.toISOString().slice(0, 10)}` : '') +
+        ')',
+    );
 
-    // Carrega a base de contribuintes conforme o modo
-    const registros = await this.carregarBase(tipo);
+    // Carrega a base de contribuintes conforme o modo (janela sobrescreve padrao)
+    const registros = await this.carregarBase(tipo, janela);
     this.logger.log(`Execução ${sinc.id.slice(0, 8)}: ${registros.length} registros para processar`);
 
     // Snapshot
@@ -168,6 +187,67 @@ export class ExecucaoService {
   }
 
   /**
+   * Cancela uma execução EM_EXECUCAO manualmente (ADMIN_TI na UI).
+   * Marca como CANCELADA no banco + remove jobs da fila BullMQ associados.
+   * Nao afeta jobs que ja comecaram a processar (BullMQ nao permite kill
+   * seguro de job in-flight), mas evita que mais jobs pendentes rodem.
+   */
+  async cancelar(
+    sincronizacaoId: string,
+    canceladoPor: string,
+  ): Promise<{ cancelada: boolean; jobsRemovidos: number }> {
+    const sinc = await this.prisma.cadastroSincronizacao.findUnique({
+      where: { id: sincronizacaoId },
+    });
+    if (!sinc) {
+      throw new NotFoundException(`Execucao ${sincronizacaoId} nao encontrada`);
+    }
+    if (sinc.status !== 'EM_EXECUCAO') {
+      throw new ConflictException({
+        erro: 'STATUS_INVALIDO',
+        mensagem: `Execucao nao pode ser cancelada (status atual: ${sinc.status}). Apenas EM_EXECUCAO e cancelavel.`,
+      });
+    }
+
+    // Remove jobs pendentes da fila associados a esta sincronizacao.
+    let jobsRemovidos = 0;
+    try {
+      // Prefere jobs em wait/delayed/paused (nao iniciados). Active sao
+      // mantidos — BullMQ nao permite abort seguro.
+      const jobs = await this.queue.getJobs(['waiting', 'delayed', 'paused', 'wait'], 0, 10_000);
+      for (const job of jobs) {
+        if (job.data?.sincronizacaoId === sincronizacaoId) {
+          await job.remove();
+          jobsRemovidos++;
+        }
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Falha ao remover jobs da fila para execucao ${sincronizacaoId}: ${(err as Error).message}`,
+      );
+    }
+
+    const observacao =
+      `[${new Date().toISOString()}] Execucao cancelada manualmente por ${canceladoPor}. ` +
+      `${jobsRemovidos} job(s) pendente(s) removidos da fila.`;
+
+    await this.prisma.cadastroSincronizacao.update({
+      where: { id: sincronizacaoId },
+      data: {
+        status: 'CANCELADA',
+        finalizadoEm: new Date(),
+        observacoes: sinc.observacoes ? `${sinc.observacoes}\n${observacao}` : observacao,
+      },
+    });
+
+    this.logger.warn(
+      `Execucao ${sincronizacaoId.slice(0, 8)} cancelada por ${canceladoPor}, ${jobsRemovidos} jobs removidos.`,
+    );
+
+    return { cancelada: true, jobsRemovidos };
+  }
+
+  /**
    * Finaliza uma execução — chamada pelo worker quando o contador de jobs
    * concluídos atinge o total. Atualiza status, dispara alertas digest.
    */
@@ -205,9 +285,14 @@ export class ExecucaoService {
    * Paginação interna — acumula em memória porque 116k registros ×
    * ~500 bytes/registro = ~60 MB, aceitável em runtime Node 22.
    */
-  private async carregarBase(tipo: TipoSincronizacao): Promise<RegistroComOrigem[]> {
+  private async carregarBase(
+    tipo: TipoSincronizacao,
+    janela?: { inicio: Date; fim: Date },
+  ): Promise<RegistroComOrigem[]> {
     const registros: RegistroComOrigem[] = [];
-    const comMovimentoDesde = this.comMovimentoDesdeForTipo(tipo);
+    const comMovimentoDesde = janela
+      ? this.toYmd(janela.inicio)
+      : this.comMovimentoDesdeForTipo(tipo);
 
     for (const tipoTabela of ['SA1010', 'SA2010'] as TipoCadastroProtheus[]) {
       let pagina = 1;

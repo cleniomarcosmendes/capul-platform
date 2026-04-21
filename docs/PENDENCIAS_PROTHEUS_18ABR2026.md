@@ -3,10 +3,68 @@
 
 - **De:** Clenio Marcos — Departamento de T.I. (CAPUL)
 - **Para:** Equipe Protheus / TOTVS
-- **Data:** 18/04/2026
+- **Data:** 18/04/2026 — **Atualizado em 20/04/2026** (arquitetura revisada após alinhamento)
 - **Referência:** Contratos recebidos em 18/04/2026
   - `szr010-szq010.txt` — `POST /rest/api/INFOCLIENTES/FISCAL/grvXML`
   - `Eventos_nfe.txt` — `GET /rest/api/INFOCLIENTES/FISCAL/eventosNfe`
+
+---
+
+## 🆕 Atualização 20/04/2026 (parte 2) — Decisão sobre CT-e
+
+Após varredura em PRODUÇÃO da chave de teste `31260316505190000139570010013015461001507170` em todas as tabelas Protheus relevantes (SZR010, SZQ010, GZH010, SF1010, SF2010, C00010, CC0010, SPED150, SPED154, SPED156, SPED050) — **CT-e não foi localizado em nenhuma tabela**.
+
+**Decisão:**
+
+- **CT-e será tratado de forma diferente da NF-e** — fica **fora** do fluxo Protheus por enquanto.
+- A plataforma **continua chamando SEFAZ direto** para CT-e (XML + eventos via `CteConsultaProtocolo` per-UF), conforme já implementado em `fiscal/backend/src/cte/cte.service.ts`.
+- **NÃO grava CT-e em SZR010/SZQ010** via `/grvXML` — equipe Protheus precisa antes investigar/definir captação local.
+- **NÃO chama `/xmlNfe` nem `/eventosNfe` com chave de CT-e** — só faz sentido para NF-e.
+- Equipe Protheus vai aprofundar investigação. Quando trouxerem algo consistente sobre captação de CT-e (job, tabela, processo de geração de SZR010 com `ZR_TPXML='CTe'`), abriremos novo planejamento dedicado.
+
+**Resumo da divisão de fluxo (20/04/2026):**
+
+| Documento | Origem do XML | Origem dos eventos | Cache local Protheus |
+|-----------|---------------|---------------------|----------------------|
+| **NF-e (modelo 55)** | `/xmlNfe` Protheus → fallback SEFAZ → `/grvXML` | `/eventosNfe` Protheus | ✅ SZR010/SZQ010 + SPED150/156 |
+| **CT-e (modelo 57)** | **SEFAZ direto** (NFeDistribuicaoDFe / nacional + per-UF) | **CteConsultaProtocolo SEFAZ** (per-UF) | ❌ Por enquanto, só `fiscal.documento_evento` (cache da plataforma) |
+
+---
+
+## 🆕 Atualização 20/04/2026 — Arquitetura revisada
+
+Após alinhamento com a equipe Protheus, o fluxo de consulta ficou definido como **3 camadas hierárquicas**, e os **bloqueadores 2.1 e 2.2 foram removidos**:
+
+```
+[1] Plataforma → Protheus (endpoint único de consulta)
+    Protheus resolve internamente (transparente):
+      ├─ SZR010/SZQ010  (cache gravado)
+      ├─ SPED156.ZIPPROC (XML extraído + gravado em SZR/SZQ automaticamente)
+      └─ SPED150 (timeline de eventos)
+    Resposta:
+      ├─ achou → { xmlBase64, eventos[], origem: "SZR"|"SPED156" } → FIM
+      └─ não achou → 404
+
+[2] Plataforma → SEFAZ direto (com certificado A1 próprio da CAPUL)
+    ├─ baixa XML via NFeDistribuicaoDFe
+    └─ chama POST /grvXML (Protheus) para gravar em SZR/SZQ → FIM
+```
+
+**Decisões consolidadas:**
+
+| Decisão | Valor |
+|---------|-------|
+| Quem consulta SZR/SZQ/SPED? | **Protheus** (transparente para o cliente) |
+| Quem baixa SEFAZ no fallback? | **Plataforma Fiscal (CAPUL)** — com A1 próprio |
+| Onde é gerido o certificado A1? | **Configurador** (Plataforma CAPUL) |
+| Status dos endpoints | Equipe Protheus está **finalizando o endpoint unificado** |
+
+**Impacto nos bloqueadores originais:**
+
+- 🔴 **2.1 — Falta GET para recuperar XML**: **RESOLVIDO** — o endpoint unificado já retorna `xmlBase64` quando encontra em SZR/SZQ/SPED156.
+- 🔴 **2.2 — Falta endpoint `baixarXmlSefaz`**: **RESOLVIDO** — quem baixa da SEFAZ é a própria plataforma (usando A1 da CAPUL, não do Protheus).
+
+As seções 2.1 e 2.2 abaixo ficam **arquivadas** como histórico da negociação.
 
 ---
 
@@ -22,9 +80,9 @@ As pendências estão organizadas em 3 grupos:
 
 ---
 
-## 2. 🔴 Bloqueadores
+## 2. 🔴 ~~Bloqueadores~~ — RESOLVIDOS em 20/04/2026 (ver topo da doc)
 
-### 2.1. Falta endpoint GET para **recuperar XML** da SZR010
+### 2.1. ~~Falta endpoint GET para **recuperar XML** da SZR010~~ [HISTÓRICO]
 
 A especificação v2.0 (doc `ESPECIFICACAO_API_PROTHEUS_FISCAL_v2.0.md`, Seção 3.1) previa 3 operações para a frente de XML:
 
@@ -60,7 +118,7 @@ A Opção B é preferível porque resolve em **uma única chamada** (timeline + 
 
 ---
 
-### 2.2. Falta endpoint para **download do XML via portal SEFAZ** (fallback)
+### 2.2. ~~Falta endpoint para **download do XML via portal SEFAZ** (fallback)~~ [HISTÓRICO]
 
 A especificação v2.0 (Seção 2.1, frente 2) previa que **o Protheus faria o download** do XML na SEFAZ quando o XML ainda não existisse em SZR010, usando o certificado A1 já gerenciado pelo Protheus. A intenção era que a plataforma Fiscal **nunca** chamasse SEFAZ diretamente.
 
@@ -82,6 +140,72 @@ Adicionar um endpoint:
 - Resposta 409: `{ code: 409, message: "Chave fora de prazo SEFAZ" }` (cStat=632, por exemplo)
 
 **Nota:** uma implementação enxuta é: o endpoint `baixarXmlSefaz` também já **grava** em SZR010/SZQ010 no sucesso (faz a gravação internamente, sem exigir chamada separada a `/grvXML`). Isso é natural e simplifica o lado do cliente.
+
+---
+
+## 2bis. 🆕 Perguntas novas sobre o endpoint unificado (20/04/2026)
+
+Com a arquitetura revisada, precisamos de algumas confirmações sobre o endpoint unificado que o Protheus está finalizando:
+
+### 2bis.1. Nome e assinatura do endpoint
+
+**Pergunta:** o endpoint unificado será:
+
+1. O `/eventosNfe` existente **estendido** para já incluir `xmlBase64` na resposta?
+2. Um endpoint novo (ex: `GET /rest/api/INFOCLIENTES/FISCAL/consultaNfe/{chave}`)?
+
+A preferência é um endpoint **novo e explícito**, porque o nome `/eventosNfe` sugere "apenas timeline" e evita ambiguidade no cliente HTTP.
+
+### 2bis.2. Formato da resposta de sucesso
+
+Sugestão de contrato para alinhamento:
+
+```json
+// 200 OK — encontrado
+{
+  "chave": "53260455087053000183550010000008961143366160",
+  "xmlBase64": "PD94bWwg...",
+  "origem": "SZR" | "SPED156" | "SPED150_SEM_XML",
+  "cabecalho": {
+    "filial": "01",
+    "modelo": "55",
+    "serie": "001",
+    "numero": "896114",
+    "emissao": "2026-04-18",
+    "emitente": { "cnpj": "...", "razaoSocial": "...", "codFor": "F14059", "loja": "0001" },
+    "destinatario": { "cnpj": "...", "razaoSocial": "..." },
+    "valorTotal": 12345.67
+  },
+  "eventos": [
+    { "quando": "20260418 10:23:14", "origem": "SPED150", "tipo": "AUTORIZACAO", "ator": "SEFAZ", "detalhes": {...} },
+    { "quando": "20260418 10:40:22", "origem": "SPED156", "tipo": "CCE", "ator": "SEFAZ", "detalhes": {...} },
+    { "quando": "20260419 09:12:00", "origem": "SZR010",  "tipo": "ARMAZENAMENTO_XML", "ator": "PROTHEUS", "detalhes": {...} }
+  ]
+}
+
+// 404 Not Found — não existe em SZR/SZQ/SPED156/SPED150 do Protheus
+{ "code": 404, "message": "Chave não encontrada no Protheus — consultar SEFAZ" }
+```
+
+**Perguntas:**
+
+1. O campo `origem` retorna de onde o Protheus extraiu o XML/eventos? Isso nos ajuda a saber se o SZR já foi gravado ou se o Protheus está montando a resposta a partir da SPED156 pela primeira vez.
+2. Quando o Protheus extrai XML da **SPED156.ZIPPROC pela primeira vez**, ele **já grava automaticamente em SZR/SZQ** (como combinado) ou retorna só para a plataforma e nós disparamos o `/grvXML` depois?
+3. Quando encontrado apenas em **SPED150 sem XML** (raro, mas possível — evento registrado mas XML nunca chegou), ainda retorna 200 com `xmlBase64: null` + lista de eventos? Ou retorna 404 porque o foco é o XML?
+
+### 2bis.3. Comportamento do 404 e fallback SEFAZ
+
+Confirmação: quando o Protheus retorna 404 (não achou em nenhuma das fontes), a plataforma:
+
+1. Chama SEFAZ direto com seu próprio certificado A1 da CAPUL
+2. Ao obter sucesso, chama `POST /grvXML` para gravar em SZR/SZQ
+3. **Opcional**: registra um evento em SPED156 também? Ou o `/grvXML` já cuida disso?
+
+**Pergunta:** após o fallback SEFAZ + `/grvXML`, uma consulta subsequente ao endpoint unificado deve retornar **200 OK** com `origem: "SZR"` (confirmando que foi gravado). Isso está implícito, mas queremos confirmar.
+
+### 2bis.4. Certificado A1 da plataforma
+
+Como a plataforma agora baixa direto da SEFAZ no fallback, vamos gerir o certificado A1 da CAPUL no **Configurador da Plataforma** (não no Protheus). Isso foi combinado em sessões anteriores. **Confirmação:** o Protheus não precisa nos fornecer acesso ao certificado A1 dele — só precisamos do endpoint unificado e do `/grvXML`.
 
 ---
 
@@ -261,31 +385,33 @@ O exemplo inclui entrada `SF1010` ("Entrada fiscal dada no Protheus"). Pelo acor
 
 ---
 
-## 5. O que a CAPUL pode adiantar **sem** essas respostas
+## 5. O que a CAPUL pode adiantar **enquanto** o endpoint unificado é finalizado
 
-Enquanto aguardamos o posicionamento da equipe Protheus, a CAPUL pode avançar:
+Com a arquitetura revisada (20/04), a CAPUL pode avançar em paralelo:
 
-1. **Cliente HTTP do `/eventosNfe`** — contrato claro, só GET, não bloqueia.
-2. **Cliente HTTP do `/grvXML`** — pode ser esboçado, mas precisa esclarecer itens 3.1, 3.2, 3.7 e 3.8 antes de testar em homologação.
-3. **`XmlParserToSzrSzq`** — service que extrai ~25 campos de cabeçalho e N campos por item de um XML `nfeProc` para montar o body do `/grvXML`. Pode ser desenvolvido e testado unitariamente sem dependência da API real.
-4. **Atualização do `EventosTimeline`** (frontend) — para consumir o novo formato `{ quando, origem, tipo, ator, detalhes }` no lugar do formato atual.
-5. **Filtragem de SF1010** na UI conforme regra interna (item 4.4).
+1. **Cliente HTTP do endpoint unificado** — podemos esboçar com base no contrato sugerido em 2bis.2 e ajustar quando o Protheus publicar a versão final.
+2. **Cliente HTTP do `/grvXML`** — pronto para uso no fallback SEFAZ; depende apenas dos esclarecimentos 3.1, 3.2, 3.7 e 3.8.
+3. **Service `XmlParserToSzrSzq`** — extrai ~25 campos de cabeçalho e N campos por item de um XML `nfeProc` para montar o body do `/grvXML`. Desenvolvível e testável unitariamente.
+4. **Cliente SEFAZ direto (NFeDistribuicaoDFe)** — com certificado A1 CAPUL gerido pelo Configurador, já previsto no plano v2.0.
+5. **Atualização do `EventosTimeline`** (frontend) — para o novo formato `{ quando, origem, tipo, ator, detalhes }`.
+6. **Filtragem de SF1010** na UI conforme regra interna (item 4.4).
 
-Não avançaremos:
+**Bloqueios atuais:**
 
-- Fluxo "cache SZR" até o bloqueador 2.1 estar resolvido
-- Remoção das chamadas SEFAZ diretas até o bloqueador 2.2 estar resolvido
-- Testes de integração real até as URLs/credenciais do item 3.6 estarem definidas
+- Testes de integração real — dependem da publicação em homologação do endpoint unificado (equipe Protheus finalizando) e das URLs/credenciais (item 3.6).
+- Confirmação do contrato de resposta em 2bis.2 — sem isso, o cliente HTTP fica em "esboço" e pode precisar de ajuste.
 
 ---
 
 ## 6. Próxima ação
 
+**Status 20/04/2026:** bloqueadores 2.1 e 2.2 foram **resolvidos no alinhamento** e a equipe Protheus está **finalizando o endpoint unificado**.
+
 Solicitamos gentilmente:
 
-1. **Posicionamento formal** sobre os bloqueadores 2.1 e 2.2 (com preferência pelas opções propostas ou outra alternativa).
-2. **Esclarecimentos** nos itens 3.1 a 3.8.
-3. **Data estimada** para publicação em homologação dos endpoints acordados.
+1. **Publicação do contrato final** do endpoint unificado (nome, parâmetros, formato de resposta) — ver perguntas 2bis.1 a 2bis.4.
+2. **Esclarecimentos** nos itens 3.1 a 3.8 (preenchimento de CODFOR/LOJSIG, idempotência, response do `/grvXML`, credenciais de homologação etc.).
+3. **Data estimada** para publicação em homologação dos 2 endpoints (unificado + `/grvXML`).
 
 Nos colocamos à disposição para reunião técnica presencial ou remota para discutir qualquer ponto.
 

@@ -6,6 +6,7 @@ import { RoleMinima } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { FiscalAuthenticatedUser } from '../common/interfaces/jwt-payload.interface.js';
 import { AmbienteService } from './ambiente.service.js';
+import { AtualizarCronsDto } from './dto/atualizar-crons.dto.js';
 import { AmbienteSefaz } from '@prisma/client';
 
 @Controller('ambiente')
@@ -26,6 +27,19 @@ export class AmbienteController {
     @CurrentUser() user: FiscalAuthenticatedUser,
   ) {
     return this.ambiente.alterarAmbiente(body.ambiente, user.email);
+  }
+
+  @Put('crons')
+  @RoleMinima('ADMIN_TI')
+  async atualizarCrons(
+    @Body() dto: AtualizarCronsDto,
+    @CurrentUser() user: FiscalAuthenticatedUser,
+  ) {
+    return this.ambiente.atualizarCrons(
+      dto.cronMovimentoMeioDia,
+      dto.cronMovimentoManhaSeguinte,
+      user.email,
+    );
   }
 
   @Post('pause-sync')

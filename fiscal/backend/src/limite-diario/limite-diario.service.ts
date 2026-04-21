@@ -217,8 +217,14 @@ export class LimiteDiarioService {
    *   - critico (100%): GESTOR_FISCAL + ADMIN_TI (corte automático ativo)
    */
   private async enviarAlerta(nivel: NivelAlerta, contador: number, limite: number): Promise<void> {
-    const roles = nivel === 'amarelo' ? ['GESTOR_FISCAL'] : ['GESTOR_FISCAL', 'ADMIN_TI'];
+    const roles = nivel === 'amarelo' ? ['GESTOR_FISCAL', 'ADMIN_TI'] : ['GESTOR_FISCAL', 'ADMIN_TI'];
     const { destinatarios, fallback } = await this.destinatarios.resolveByRoles(roles);
+    if (destinatarios.length === 0) {
+      this.logger.warn(
+        `Alerta ${nivel} (SEFAZ ${contador}/${limite}) nao enviado — sem destinatarios validos e FISCAL_FALLBACK_EMAIL nao configurado.`,
+      );
+      return;
+    }
     const pct = ((contador / limite) * 100).toFixed(1);
 
     const cor = nivel === 'amarelo' ? '🟡' : nivel === 'vermelho' ? '🔴' : '🚨';

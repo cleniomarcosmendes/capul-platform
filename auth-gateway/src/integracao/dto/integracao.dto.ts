@@ -21,9 +21,18 @@ export enum TipoAuth {
   NONE = 'NONE',
 }
 
+export enum ModuloConsumidor {
+  FISCAL = 'FISCAL',
+  GESTAO_TI = 'GESTAO_TI',
+  INVENTARIO = 'INVENTARIO',
+}
+
 // --- Endpoint DTOs ---
 
 export class CreateEndpointDto {
+  @IsEnum(ModuloConsumidor)
+  modulo: ModuloConsumidor;
+
   @IsEnum(AmbienteIntegracao)
   ambiente: AmbienteIntegracao;
 
@@ -55,6 +64,10 @@ export class CreateEndpointDto {
 }
 
 export class UpdateEndpointDto {
+  @IsOptional()
+  @IsEnum(ModuloConsumidor)
+  modulo?: ModuloConsumidor;
+
   @IsOptional()
   @IsEnum(AmbienteIntegracao)
   ambiente?: AmbienteIntegracao;
@@ -126,9 +139,9 @@ export class UpdateIntegracaoDto {
   @IsString()
   descricao?: string;
 
-  @IsOptional()
-  @IsEnum(AmbienteIntegracao)
-  ambiente?: AmbienteIntegracao;
+  // NOTE: `ambiente` removido do DTO. A flag global foi substituida por
+  // controle per-endpoint via ModuloConsumidor. Use
+  // POST /integracoes/:id/modulos/:modulo/trocar-ambiente para troca em lote.
 
   @IsOptional()
   @IsEnum(TipoAuth)
@@ -141,6 +154,11 @@ export class UpdateIntegracaoDto {
   @IsOptional()
   @IsBoolean()
   ativo?: boolean;
+}
+
+export class TrocarAmbienteModuloDto {
+  @IsEnum(AmbienteIntegracao)
+  ambiente: AmbienteIntegracao;
 }
 
 export class TestarEndpointDto {

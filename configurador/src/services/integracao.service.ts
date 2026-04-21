@@ -1,5 +1,8 @@
 import { coreApi } from './api';
 
+export type ModuloConsumidor = 'FISCAL' | 'GESTAO_TI' | 'INVENTARIO';
+export const MODULOS_CONSUMIDORES: readonly ModuloConsumidor[] = ['FISCAL', 'GESTAO_TI', 'INVENTARIO'] as const;
+
 export interface IntegracaoApi {
   id: string;
   codigo: string;
@@ -16,6 +19,7 @@ export interface IntegracaoApi {
 
 export interface IntegracaoEndpoint {
   id: string;
+  modulo: ModuloConsumidor;
   ambiente: 'PRODUCAO' | 'HOMOLOGACAO';
   operacao: string;
   descricao: string | null;
@@ -74,6 +78,25 @@ export const integracaoService = {
 
   async excluirEndpoint(endpointId: string): Promise<void> {
     await coreApi.delete(`/integracoes/endpoints/${endpointId}`);
+  },
+
+  async ativarEndpoint(integracaoId: string, endpointId: string): Promise<IntegracaoEndpoint> {
+    const { data } = await coreApi.patch(
+      `/integracoes/${integracaoId}/endpoints/${endpointId}/ativar`,
+    );
+    return data;
+  },
+
+  async trocarAmbienteModulo(
+    integracaoId: string,
+    modulo: ModuloConsumidor,
+    ambiente: 'PRODUCAO' | 'HOMOLOGACAO',
+  ): Promise<{ integracaoId: string; modulo: ModuloConsumidor; ambiente: string; endpointsAtivados: number }> {
+    const { data } = await coreApi.post(
+      `/integracoes/${integracaoId}/modulos/${modulo}/trocar-ambiente`,
+      { ambiente },
+    );
+    return data;
   },
 
   async testarConexao(dto: { url: string; metodo: string; headers?: Record<string, string>; authHeader?: string; timeoutMs?: number }): Promise<TesteConexaoResult> {

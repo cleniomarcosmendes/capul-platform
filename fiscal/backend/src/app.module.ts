@@ -23,6 +23,7 @@ import { RelatorioModule } from './relatorio/relatorio.module.js';
 import { HistoricoModule } from './historico/historico.module.js';
 import { LimiteDiarioModule } from './limite-diario/limite-diario.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
+import { FiliaisModule } from './filiais/filiais.module.js';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { DashboardModule } from './dashboard/dashboard.module.js';
     AmbienteModule,
     CertificadoModule,
     AlertasModule,
+    FiliaisModule,
     NfeModule,
     CteModule,
     CadastroModule,

@@ -73,6 +73,13 @@ export class WatchdogService {
     const { destinatarios } = await this.destinatariosResolver.resolve();
     const emails = destinatarios.map((d) => d.email);
 
+    if (emails.length === 0) {
+      this.logger.warn(
+        `Watchdog: alerta de ${tipo} atrasado (${horasAtraso}h) nao enviado — sem destinatarios validos.`,
+      );
+      return;
+    }
+
     const result = await this.mail.send({
       to: emails,
       subject: assunto,

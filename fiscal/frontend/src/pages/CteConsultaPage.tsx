@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { AlertCircle, Download, FileText, Info } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlertCircle, Download, FileText, Info, X } from 'lucide-react';
 import { fiscalApi } from '../services/api';
 import { PageWrapper } from '../components/PageWrapper';
 import { Button } from '../components/Button';
@@ -7,10 +7,18 @@ import { Badge } from '../components/Badge';
 import { ErrorCard } from '../components/ErrorCard';
 import { OrigemBadge } from '../components/OrigemBadge';
 import { EventosTimeline } from '../components/EventosTimeline';
+import { useAuth } from '../contexts/AuthContext';
 import { extractApiError } from '../utils/errors';
 import { Row } from '../components/Row';
 import { fmtNum } from '../utils/format';
 import type { ProtheusStatus, TimelineEvento, ConsultaProtocoloStatus } from '../types';
+
+interface FilialResumo {
+  codigo: string;
+  nomeFantasia: string;
+  cnpj: string | null;
+  isDefault?: boolean;
+}
 
 type Tab = 'gerais' | 'participantes' | 'valores' | 'historico';
 
@@ -58,6 +66,26 @@ export function CteConsultaPage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CteResult | null>(null);
   const [tab, setTab] = useState<Tab>('gerais');
+  const { usuario } = useAuth();
+
+  const [filiais, setFiliais] = useState<FilialResumo[]>([]);
+  const [filialSelecionada, setFilialSelecionada] = useState<string>(
+    usuario?.filialCodigo ?? '01',
+  );
+
+  useEffect(() => {
+    fiscalApi
+      .get<FilialResumo[]>('/filiais')
+      .then((r) => {
+        setFiliais(r.data);
+        if (r.data.length > 0 && !r.data.some((f) => f.codigo === filialSelecionada)) {
+          const defaultFilial = r.data.find((f) => f.isDefault) ?? r.data[0];
+          setFilialSelecionada(defaultFilial.codigo);
+        }
+      })
+      .catch(() => setFiliais([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleConsultar(e: React.FormEvent) {
     e.preventDefault();
@@ -70,7 +98,10 @@ export function CteConsultaPage() {
     }
     try {
       setLoading(true);
-      const { data } = await fiscalApi.post<CteResult>('/cte/consulta', { chave });
+      const { data } = await fiscalApi.post<CteResult>('/cte/consulta', {
+        chave,
+        filial: filialSelecionada,
+      });
       setResult(data);
       // Se não tem XML, jogamos o usuário direto pro histórico (única coisa visível)
       if (!data.xmlDisponivel) setTab('historico');
@@ -118,20 +149,58 @@ export function CteConsultaPage() {
           (SZR010) — se não estiver em cache, exibimos apenas o status e os eventos
           retornados pelo serviço CteConsultaProtocolo da SEFAZ.
         </p>
-        <div className="flex gap-3">
-          <div className="flex-1">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-96">
+            <label className="mb-1 block text-xs font-medium text-slate-700">
+              Filial consulente
+            </label>
+            <select
+              value={filialSelecionada}
+              onChange={(e) => setFilialSelecionada(e.target.value)}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-slate-500"
+              title="Filial registrada em fiscal.documento_consulta para auditoria"
+            >
+              {filiais.length === 0 && (
+                <option value={filialSelecionada}>{filialSelecionada}</option>
+              )}
+              {filiais.map((f) => (
+                <option key={f.codigo} value={f.codigo}>
+                  {f.codigo} — {f.nomeFantasia}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="w-[30rem]">
             <label className="mb-1 block text-xs font-medium text-slate-700">
               Chave de acesso
             </label>
-            <input
-              type="text"
-              value={chave}
-              onChange={(e) => setChave(e.target.value.replace(/\D/g, '').slice(0, 44))}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm focus:border-slate-500 focus:ring-slate-500"
-              required
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={chave}
+                onChange={(e) => setChave(e.target.value.replace(/\D/g, '').slice(0, 44))}
+                placeholder="31260400000000000000570010000000011000000010"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 pr-9 font-mono text-sm tracking-tight focus:border-slate-500 focus:ring-slate-500"
+                required
+              />
+              {chave.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChave('');
+                    setResult(null);
+                    setError(null);
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  title="Limpar chave e resultado"
+                  tabIndex={-1}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex items-end">
+          <div>
             <Button type="submit" loading={loading}>
               Consultar
             </Button>

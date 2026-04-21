@@ -269,6 +269,14 @@ enum TipoAuth {
   @@schema("core")
 }
 
+enum ModuloConsumidor {
+  FISCAL
+  GESTAO_TI
+  INVENTARIO
+
+  @@schema("core")
+}
+
 model IntegracaoApi {
   id          String              @id @default(uuid())
   codigo      String              @unique
@@ -289,6 +297,7 @@ model IntegracaoApi {
 
 model IntegracaoApiEndpoint {
   id            String              @id @default(uuid())
+  modulo        ModuloConsumidor
   ambiente      AmbienteIntegracao
   operacao      String
   descricao     String?
@@ -303,7 +312,7 @@ model IntegracaoApiEndpoint {
   integracaoId  String              @map("integracao_id")
   integracao    IntegracaoApi       @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
 
-  @@unique([integracaoId, ambiente, operacao])
+  @@unique([integracaoId, modulo, ambiente, operacao])
   @@map("integracoes_api_endpoints")
   @@schema("core")
 }

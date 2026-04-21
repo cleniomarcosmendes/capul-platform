@@ -14,6 +14,7 @@ import { Badge } from '../components/Badge';
 import { ErrorCard } from '../components/ErrorCard';
 import { OrigemBadge } from '../components/OrigemBadge';
 import { useToast } from '../components/Toast';
+import { useAuth } from '../contexts/AuthContext';
 import { extractApiError } from '../utils/errors';
 import { Row } from '../components/Row';
 import {
@@ -33,6 +34,13 @@ import type {
   NfeProduto,
 } from '../types';
 
+interface FilialResumo {
+  codigo: string;
+  nomeFantasia: string;
+  cnpj: string | null;
+  isDefault?: boolean;
+}
+
 type Tab =
   | 'nfe'
   | 'emitente'
@@ -51,6 +59,28 @@ export function NfeConsultaPage() {
   const [tab, setTab] = useState<Tab>('nfe');
   const [eventoIdAberto, setEventoIdAberto] = useState<string | null>(null);
   const toast = useToast();
+  const { usuario } = useAuth();
+
+  const [filiais, setFiliais] = useState<FilialResumo[]>([]);
+  const [filialSelecionada, setFilialSelecionada] = useState<string>(
+    usuario?.filialCodigo ?? '01',
+  );
+
+  useEffect(() => {
+    fiscalApi
+      .get<FilialResumo[]>('/filiais')
+      .then((r) => {
+        setFiliais(r.data);
+        // Se a filial atualmente selecionada nao esta na lista de acessiveis,
+        // ajusta para a default do usuario (ou primeira da lista).
+        if (r.data.length > 0 && !r.data.some((f) => f.codigo === filialSelecionada)) {
+          const defaultFilial = r.data.find((f) => f.isDefault) ?? r.data[0];
+          setFilialSelecionada(defaultFilial.codigo);
+        }
+      })
+      .catch(() => setFiliais([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleConsultar(e: React.FormEvent) {
     e.preventDefault();
@@ -65,6 +95,7 @@ export function NfeConsultaPage() {
       setLoading(true);
       const { data } = await fiscalApi.post<NfeConsultaResult>('/nfe/consulta', {
         chave: chaveLimpa,
+        filial: filialSelecionada,
       });
       setResult(data);
       setTab('nfe');
@@ -166,21 +197,58 @@ export function NfeConsultaPage() {
           Informe a chave de acesso (44 dígitos). O XML será buscado primeiro no Protheus; se não
           existir, será baixado do SEFAZ e gravado no monitor de NF-e automaticamente.
         </p>
-        <div className="flex gap-3">
-          <div className="flex-1">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-96">
+            <label className="mb-1 block text-xs font-medium text-slate-700">
+              Filial consulente
+            </label>
+            <select
+              value={filialSelecionada}
+              onChange={(e) => setFilialSelecionada(e.target.value)}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-slate-500"
+              title="CNPJ usado como consulente na chamada SEFAZ NFeDistribuicaoDFe"
+            >
+              {filiais.length === 0 && (
+                <option value={filialSelecionada}>{filialSelecionada}</option>
+              )}
+              {filiais.map((f) => (
+                <option key={f.codigo} value={f.codigo}>
+                  {f.codigo} — {f.nomeFantasia}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="w-[30rem]">
             <label className="mb-1 block text-xs font-medium text-slate-700">
               Chave de acesso
             </label>
-            <input
-              type="text"
-              value={chave}
-              onChange={(e) => setChave(e.target.value.replace(/\D/g, '').slice(0, 44))}
-              placeholder="31260400000000000000550010000000011000000010"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm focus:border-slate-500 focus:ring-slate-500"
-              required
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={chave}
+                onChange={(e) => setChave(e.target.value.replace(/\D/g, '').slice(0, 44))}
+                placeholder="31260400000000000000550010000000011000000010"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 pr-9 font-mono text-sm tracking-tight focus:border-slate-500 focus:ring-slate-500"
+                required
+              />
+              {chave.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChave('');
+                    setResult(null);
+                    setError(null);
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  title="Limpar chave e resultado"
+                  tabIndex={-1}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex items-end">
+          <div>
             <Button type="submit" loading={loading}>
               Consultar
             </Button>
@@ -191,7 +259,17 @@ export function NfeConsultaPage() {
       {error && <ErrorCard error={error} context="nfe" />}
 
       {result && (
-        <div className="space-y-6">
+        <div
+          className={`space-y-6 transition-opacity ${
+            chave && chave !== result.chave ? 'opacity-50' : 'opacity-100'
+          }`}
+        >
+          {chave && chave !== result.chave && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 print:hidden">
+              Resultado abaixo refere-se à chave anterior. Clique em{' '}
+              <span className="font-semibold">Consultar</span> para atualizar.
+            </div>
+          )}
           <div className="print:hidden">
             <OrigemBadge
               status={result.protheusStatus}

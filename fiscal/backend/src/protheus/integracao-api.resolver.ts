@@ -2,10 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 
 const AUTH_GATEWAY_URL = process.env.AUTH_GATEWAY_URL || 'http://auth-gateway:3000';
 const CODIGO_INTEGRACAO = 'PROTHEUS';
+const MODULO_CONSUMIDOR = 'FISCAL';
 const CACHE_TTL_MS = 5 * 60_000;
 
 interface IntegracaoEndpointRaw {
   operacao: string;
+  ambiente: 'PRODUCAO' | 'HOMOLOGACAO';
   url: string;
   metodo: string;
   timeoutMs: number;
@@ -15,7 +17,7 @@ interface IntegracaoEndpointRaw {
 interface IntegracaoConfigRaw {
   codigo: string;
   nome: string;
-  ambiente: 'PRODUCAO' | 'HOMOLOGACAO';
+  ambiente: 'PRODUCAO' | 'HOMOLOGACAO' | 'MIXED';
   tipoAuth: 'BASIC' | 'BEARER' | 'API_KEY' | 'NONE';
   authConfig: string | null;
   endpoints: IntegracaoEndpointRaw[];
@@ -62,7 +64,7 @@ export class IntegracaoApiResolver {
       timeoutMs: ep.timeoutMs || 30_000,
       headers: ep.headers ?? null,
       authHeader: this.buildAuthHeader(config),
-      ambiente: config.ambiente,
+      ambiente: ep.ambiente,
     };
   }
 
@@ -87,7 +89,7 @@ export class IntegracaoApiResolver {
       return this.cache;
     }
 
-    const url = `${AUTH_GATEWAY_URL}/api/v1/internal/integracoes/codigo/${CODIGO_INTEGRACAO}/endpoints-ativos`;
+    const url = `${AUTH_GATEWAY_URL}/api/v1/internal/integracoes/codigo/${CODIGO_INTEGRACAO}/endpoints-ativos?modulo=${MODULO_CONSUMIDOR}`;
     try {
       const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
       if (!response.ok) {

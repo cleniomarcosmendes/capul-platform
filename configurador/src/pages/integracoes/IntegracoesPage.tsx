@@ -1,12 +1,34 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
-import { integracaoService, type IntegracaoApi, type IntegracaoEndpoint, type TesteConexaoResult } from '../../services/integracao.service';
-import { Plus, Plug, Pencil, Trash2, TestTube2, Check, X, ArrowRightLeft, Loader2, AlertTriangle, Shield, Server } from 'lucide-react';
+import {
+  integracaoService,
+  MODULOS_CONSUMIDORES,
+  type IntegracaoApi,
+  type IntegracaoEndpoint,
+  type ModuloConsumidor,
+  type TesteConexaoResult,
+} from '../../services/integracao.service';
+import {
+  Plus, Plug, Pencil, Trash2, TestTube2, Check, X, Loader2, AlertTriangle, Shield,
+  FileText, HardDrive, Users,
+} from 'lucide-react';
 
 const AMBIENTES = ['PRODUCAO', 'HOMOLOGACAO'] as const;
 const METODOS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
 const TIPOS_AUTH = ['BASIC', 'BEARER', 'API_KEY', 'NONE'] as const;
+
+const MODULO_LABEL: Record<ModuloConsumidor, string> = {
+  FISCAL: 'Fiscal',
+  GESTAO_TI: 'Gestão TI',
+  INVENTARIO: 'Inventário',
+};
+
+const MODULO_ICON: Record<ModuloConsumidor, typeof FileText> = {
+  FISCAL: FileText,
+  GESTAO_TI: Users,
+  INVENTARIO: HardDrive,
+};
 
 function StatusBadge({ result }: { result: TesteConexaoResult }) {
   if (result.sucesso) {
@@ -22,10 +44,15 @@ function StatusBadge({ result }: { result: TesteConexaoResult }) {
   );
 }
 
-function AmbienteBadge({ ambiente, size = 'sm' }: { ambiente: string; size?: 'sm' | 'lg' }) {
-  const base = ambiente === 'PRODUCAO'
-    ? 'bg-red-100 text-red-700 border-red-200'
-    : 'bg-amber-100 text-amber-700 border-amber-200';
+type AmbienteLike = 'PRODUCAO' | 'HOMOLOGACAO' | 'MIXED';
+
+function AmbienteBadge({ ambiente, size = 'sm' }: { ambiente: AmbienteLike; size?: 'sm' | 'lg' }) {
+  const base =
+    ambiente === 'PRODUCAO'
+      ? 'bg-red-100 text-red-700 border-red-200'
+      : ambiente === 'HOMOLOGACAO'
+      ? 'bg-amber-100 text-amber-700 border-amber-200'
+      : 'bg-purple-100 text-purple-700 border-purple-200';
   const sizeClass = size === 'lg' ? 'text-sm px-3 py-1 font-semibold' : 'text-xs px-2 py-0.5 font-medium';
   return <span className={`${sizeClass} rounded-full border ${base}`}>{ambiente}</span>;
 }
@@ -41,114 +68,96 @@ function MetodoBadge({ metodo }: { metodo: string }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full font-mono font-medium ${colors[metodo] || 'bg-slate-100 text-slate-700'}`}>{metodo}</span>;
 }
 
-// --- Modal de troca de ambiente ---
-function ModalTrocaAmbiente({
+/** Ambiente ativo agregado nos endpoints ativos de (integracao, modulo). */
+function ambienteDoModulo(endpoints: IntegracaoEndpoint[], modulo: ModuloConsumidor): AmbienteLike {
+  const ativos = endpoints.filter((ep) => ep.modulo === modulo && ep.ativo);
+  if (ativos.length === 0) return 'HOMOLOGACAO';
+  const set = new Set(ativos.map((ep) => ep.ambiente));
+  if (set.size === 1) return [...set][0] as 'PRODUCAO' | 'HOMOLOGACAO';
+  return 'MIXED';
+}
+
+// --- Modal de confirmacao de ativacao de endpoint (single) ---
+function ModalConfirmarAtivacao({
   integ,
+  endpointAlvo,
+  endpointAtualAtivo,
   onConfirm,
   onCancel,
   switching,
 }: {
   integ: IntegracaoApi;
+  endpointAlvo: IntegracaoEndpoint;
+  endpointAtualAtivo: IntegracaoEndpoint | null;
   onConfirm: () => void;
   onCancel: () => void;
   switching: boolean;
 }) {
-  const novoAmbiente = integ.ambiente === 'PRODUCAO' ? 'HOMOLOGACAO' : 'PRODUCAO';
-  const isProd = novoAmbiente === 'PRODUCAO';
-  const endpointsNovo = integ.endpoints.filter((ep) => ep.ambiente === novoAmbiente);
-  const endpointsAtual = integ.endpoints.filter((ep) => ep.ambiente === integ.ambiente);
+  const isProd = endpointAlvo.ambiente === 'PRODUCAO';
+  const Icon = MODULO_ICON[endpointAlvo.modulo];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95">
-        {/* Header */}
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+        {/* Header colorido pelo ambiente alvo */}
         <div className={`px-6 py-5 ${isProd ? 'bg-gradient-to-r from-red-600 to-red-700' : 'bg-gradient-to-r from-amber-500 to-amber-600'}`}>
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white/20 rounded-lg">
-              <ArrowRightLeft className="w-5 h-5 text-white" />
+              <Shield className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="text-white font-semibold text-lg">Trocar Ambiente</h3>
+              <h3 className="text-white font-semibold text-lg">
+                Ativar em {endpointAlvo.ambiente}
+              </h3>
               <p className="text-white/80 text-sm">{integ.nome}</p>
             </div>
           </div>
         </div>
 
-        {/* Body */}
         <div className="px-6 py-5">
-          {/* Transicao visual */}
-          <div className="flex items-center justify-center gap-4 mb-5">
-            <div className="flex-1 text-center">
-              <div className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 ${
-                integ.ambiente === 'PRODUCAO'
-                  ? 'border-red-200 bg-red-50'
-                  : 'border-amber-200 bg-amber-50'
-              }`}>
-                <Server className={`w-4 h-4 ${integ.ambiente === 'PRODUCAO' ? 'text-red-500' : 'text-amber-500'}`} />
-                <div className="text-left">
-                  <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Atual</p>
-                  <p className={`text-sm font-bold ${integ.ambiente === 'PRODUCAO' ? 'text-red-700' : 'text-amber-700'}`}>
-                    {integ.ambiente}
-                  </p>
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-400 mt-1">{endpointsAtual.length} endpoint{endpointsAtual.length !== 1 ? 's' : ''}</p>
-            </div>
+          {/* Identificacao da operacao */}
+          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+            <Icon className="w-4 h-4 text-slate-400" />
+            <span className="text-xs text-slate-400 uppercase tracking-wider">{MODULO_LABEL[endpointAlvo.modulo]}</span>
+            <span className="text-slate-300">/</span>
+            <span className="font-semibold text-slate-800 text-sm">{endpointAlvo.operacao}</span>
+            <MetodoBadge metodo={endpointAlvo.metodo} />
+          </div>
 
-            <div className="flex flex-col items-center">
-              <ArrowRightLeft className="w-5 h-5 text-slate-400" />
+          {/* URL que fica ativa */}
+          <div className="mb-3">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="w-2 h-2 rounded-full bg-green-500" />
+              <p className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Ficara ativa</p>
+              <AmbienteBadge ambiente={endpointAlvo.ambiente} />
             </div>
-
-            <div className="flex-1 text-center">
-              <div className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed ${
-                isProd
-                  ? 'border-red-300 bg-red-50/50'
-                  : 'border-amber-300 bg-amber-50/50'
-              }`}>
-                <Shield className={`w-4 h-4 ${isProd ? 'text-red-500' : 'text-amber-500'}`} />
-                <div className="text-left">
-                  <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Novo</p>
-                  <p className={`text-sm font-bold ${isProd ? 'text-red-700' : 'text-amber-700'}`}>
-                    {novoAmbiente}
-                  </p>
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-400 mt-1">{endpointsNovo.length} endpoint{endpointsNovo.length !== 1 ? 's' : ''}</p>
+            <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              <span className="text-xs font-mono text-green-800 break-all">{endpointAlvo.url}</span>
             </div>
           </div>
 
-          {/* Aviso */}
-          {isProd && (
-            <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg mb-4">
-              <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
-              <p className="text-xs text-red-700 leading-relaxed">
-                Voce esta trocando para <strong>PRODUCAO</strong>. Todos os modulos da plataforma passarao a usar os endpoints de producao imediatamente.
-              </p>
-            </div>
-          )}
-
-          {/* Endpoints que serao ativados */}
-          {endpointsNovo.length > 0 && (
-            <div className="mb-4">
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Endpoints que serao ativados</p>
-              <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                {endpointsNovo.map((ep) => (
-                  <div key={ep.id} className="flex items-center gap-2 text-xs bg-slate-50 rounded-lg px-3 py-2">
-                    <MetodoBadge metodo={ep.metodo} />
-                    <span className="font-medium text-slate-700">{ep.operacao}</span>
-                    <span className="text-slate-400 font-mono truncate flex-1 text-right text-[11px]">{ep.url}</span>
-                  </div>
-                ))}
+          {/* URL que desativa (se houver) */}
+          {endpointAtualAtivo && endpointAtualAtivo.id !== endpointAlvo.id && (
+            <div className="mb-3">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="w-2 h-2 rounded-full bg-slate-300" />
+                <p className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Sera desativada</p>
+                <AmbienteBadge ambiente={endpointAtualAtivo.ambiente} />
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                <span className="text-xs font-mono text-slate-500 line-through break-all">{endpointAtualAtivo.url}</span>
               </div>
             </div>
           )}
 
-          {endpointsNovo.length === 0 && (
-            <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4">
-              <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
-              <p className="text-xs text-amber-700 leading-relaxed">
-                Nenhum endpoint cadastrado para o ambiente <strong>{novoAmbiente}</strong>. Cadastre os endpoints antes de trocar.
+          {/* Aviso quando for PROD */}
+          {isProd && (
+            <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg mt-4">
+              <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-red-700 leading-relaxed">
+                A ativacao em <strong>PRODUCAO</strong> afeta imediatamente as consultas reais do modulo
+                <strong> {MODULO_LABEL[endpointAlvo.modulo]}</strong>. Certifique-se de que o endpoint esta publicado e responde.
               </p>
             </div>
           )}
@@ -159,29 +168,21 @@ function ModalTrocaAmbiente({
           <button
             onClick={onCancel}
             disabled={switching}
-            className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-200 rounded-lg disabled:opacity-50"
           >
             Cancelar
           </button>
           <button
             onClick={onConfirm}
-            disabled={switching || endpointsNovo.length === 0}
-            className={`flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-              isProd
-                ? 'bg-red-600 hover:bg-red-700 shadow-red-200 shadow-md'
-                : 'bg-amber-500 hover:bg-amber-600 shadow-amber-200 shadow-md'
+            disabled={switching}
+            className={`flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ${
+              isProd ? 'bg-red-600 hover:bg-red-700 shadow-red-200 shadow-md' : 'bg-amber-500 hover:bg-amber-600 shadow-amber-200 shadow-md'
             }`}
           >
             {switching ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Trocando...
-              </>
+              <><Loader2 className="w-4 h-4 animate-spin" /> Ativando...</>
             ) : (
-              <>
-                <ArrowRightLeft className="w-4 h-4" />
-                Confirmar Troca
-              </>
+              <><Shield className="w-4 h-4" /> Ativar em {endpointAlvo.ambiente}</>
             )}
           </button>
         </div>
@@ -202,7 +203,6 @@ export function IntegracoesPage() {
   const [formCodigo, setFormCodigo] = useState('');
   const [formNome, setFormNome] = useState('');
   const [formDescricao, setFormDescricao] = useState('');
-  const [formAmbiente, setFormAmbiente] = useState<'PRODUCAO' | 'HOMOLOGACAO'>('HOMOLOGACAO');
   const [formTipoAuth, setFormTipoAuth] = useState<'BASIC' | 'BEARER' | 'API_KEY' | 'NONE'>('BASIC');
   const [formAuthConfig, setFormAuthConfig] = useState('');
   const [saving, setSaving] = useState(false);
@@ -210,6 +210,7 @@ export function IntegracoesPage() {
   // Form endpoint
   const [showEpForm, setShowEpForm] = useState<string | null>(null); // integracaoId
   const [editingEpId, setEditingEpId] = useState<string | null>(null);
+  const [epModulo, setEpModulo] = useState<ModuloConsumidor>('INVENTARIO');
   const [epAmbiente, setEpAmbiente] = useState<'PRODUCAO' | 'HOMOLOGACAO'>('PRODUCAO');
   const [epOperacao, setEpOperacao] = useState('');
   const [epDescricao, setEpDescricao] = useState('');
@@ -222,9 +223,17 @@ export function IntegracoesPage() {
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, TesteConexaoResult>>({});
 
-  // Modal troca ambiente
-  const [ambienteModal, setAmbienteModal] = useState<IntegracaoApi | null>(null);
+  // Modal de confirmacao de ativacao (single-endpoint)
+  const [confirmarAtivacao, setConfirmarAtivacao] = useState<{
+    integ: IntegracaoApi;
+    endpointAlvo: IntegracaoEndpoint;
+    endpointAtualAtivo: IntegracaoEndpoint | null;
+  } | null>(null);
   const [switching, setSwitching] = useState(false);
+
+
+  // Tab ativo por integracao (default: primeiro modulo com endpoints)
+  const [activeTab, setActiveTab] = useState<Record<string, ModuloConsumidor>>({});
 
   useEffect(() => { carregar(); }, []);
 
@@ -236,14 +245,11 @@ export function IntegracoesPage() {
     } catch { /* silencioso */ } finally { setLoading(false); }
   }
 
-  // --- Integracao CRUD ---
-
   function iniciarNovo() {
     setEditingId(null);
     setFormCodigo('');
     setFormNome('');
     setFormDescricao('');
-    setFormAmbiente('HOMOLOGACAO');
     setFormTipoAuth('BASIC');
     setFormAuthConfig('');
     setShowForm(true);
@@ -254,7 +260,6 @@ export function IntegracoesPage() {
     setFormCodigo(integ.codigo);
     setFormNome(integ.nome);
     setFormDescricao(integ.descricao || '');
-    setFormAmbiente(integ.ambiente);
     setFormTipoAuth(integ.tipoAuth);
     setFormAuthConfig(integ.authConfig || '');
     setShowForm(true);
@@ -268,7 +273,6 @@ export function IntegracoesPage() {
         await integracaoService.atualizar(editingId, {
           nome: formNome,
           descricao: formDescricao || undefined,
-          ambiente: formAmbiente,
           tipoAuth: formTipoAuth,
           authConfig: formAuthConfig || undefined,
         } as any);
@@ -277,7 +281,6 @@ export function IntegracoesPage() {
           codigo: formCodigo.toUpperCase(),
           nome: formNome,
           descricao: formDescricao || undefined,
-          ambiente: formAmbiente,
           tipoAuth: formTipoAuth,
           authConfig: formAuthConfig || undefined,
         } as any);
@@ -289,24 +292,24 @@ export function IntegracoesPage() {
     } finally { setSaving(false); }
   }
 
-  const confirmarTrocaAmbiente = useCallback(async () => {
-    if (!ambienteModal) return;
-    const novoAmbiente = ambienteModal.ambiente === 'PRODUCAO' ? 'HOMOLOGACAO' : 'PRODUCAO';
+  const confirmarAtivacaoEndpoint = useCallback(async () => {
+    if (!confirmarAtivacao) return;
     setSwitching(true);
     try {
-      await integracaoService.atualizar(ambienteModal.id, { ambiente: novoAmbiente } as any);
-      setAmbienteModal(null);
+      await integracaoService.ativarEndpoint(confirmarAtivacao.integ.id, confirmarAtivacao.endpointAlvo.id);
+      setConfirmarAtivacao(null);
       carregar();
-    } catch {
-      alert('Erro ao trocar ambiente');
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'Erro ao ativar endpoint');
     } finally { setSwitching(false); }
-  }, [ambienteModal]);
+  }, [confirmarAtivacao]);
 
   // --- Endpoint CRUD ---
 
-  function iniciarNovoEndpoint(integracaoId: string) {
+  function iniciarNovoEndpoint(integracaoId: string, moduloPadrao: ModuloConsumidor = 'INVENTARIO') {
     setShowEpForm(integracaoId);
     setEditingEpId(null);
+    setEpModulo(moduloPadrao);
     setEpAmbiente('PRODUCAO');
     setEpOperacao('');
     setEpDescricao('');
@@ -318,6 +321,7 @@ export function IntegracoesPage() {
   function iniciarEdicaoEndpoint(ep: IntegracaoEndpoint) {
     setShowEpForm(ep.integracaoId);
     setEditingEpId(ep.id);
+    setEpModulo(ep.modulo);
     setEpAmbiente(ep.ambiente);
     setEpOperacao(ep.operacao);
     setEpDescricao(ep.descricao || '');
@@ -333,6 +337,7 @@ export function IntegracoesPage() {
     try {
       if (editingEpId) {
         await integracaoService.atualizarEndpoint(editingEpId, {
+          modulo: epModulo,
           ambiente: epAmbiente,
           descricao: epDescricao || undefined,
           url: epUrl,
@@ -341,8 +346,9 @@ export function IntegracoesPage() {
         } as any);
       } else {
         await integracaoService.adicionarEndpoint(showEpForm, {
+          modulo: epModulo,
           ambiente: epAmbiente,
-          operacao: epOperacao.toUpperCase(),
+          operacao: epOperacao.trim(),
           descricao: epDescricao || undefined,
           url: epUrl,
           metodo: epMetodo,
@@ -357,7 +363,14 @@ export function IntegracoesPage() {
     } finally { setSavingEp(false); }
   }
 
-  // --- Testar conexao ---
+  function abrirConfirmacaoAtivacao(integ: IntegracaoApi, ep: IntegracaoEndpoint) {
+    if (ep.ativo) return; // ja ativo — nada a fazer
+    // Encontra o irmao atualmente ativo (mesmo modulo+operacao, outro ambiente)
+    const atualAtivo = integ.endpoints.find(
+      (e) => e.modulo === ep.modulo && e.operacao === ep.operacao && e.ativo,
+    ) ?? null;
+    setConfirmarAtivacao({ integ, endpointAlvo: ep, endpointAtualAtivo: atualAtivo });
+  }
 
   async function testarEndpoint(ep: IntegracaoEndpoint, integ: IntegracaoApi) {
     setTestingId(ep.id);
@@ -370,7 +383,6 @@ export function IntegracoesPage() {
       } else if (integ.tipoAuth === 'API_KEY' && integ.authConfig) {
         authHeader = integ.authConfig;
       }
-
       const result = await integracaoService.testarConexao({
         url: ep.url,
         metodo: ep.metodo,
@@ -385,8 +397,8 @@ export function IntegracoesPage() {
     } finally { setTestingId(null); }
   }
 
-  async function testarTodos(integ: IntegracaoApi) {
-    const endpoints = integ.endpoints.filter((ep) => ep.ambiente === integ.ambiente && ep.ativo);
+  async function testarTodosModulo(integ: IntegracaoApi, modulo: ModuloConsumidor) {
+    const endpoints = integ.endpoints.filter((ep) => ep.modulo === modulo && ep.ativo);
     for (const ep of endpoints) {
       await testarEndpoint(ep, integ);
     }
@@ -394,12 +406,15 @@ export function IntegracoesPage() {
 
   return (
     <>
-      <Header title="Integracoes API" ambienteAtivo={integracoes.find((i) => i.codigo === 'PROTHEUS')?.ambiente ?? null} />
+      <Header title="Integracoes API" ambienteAtivo={null} />
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
-          <p className="text-sm text-slate-500">Gerencie as integracoes com sistemas externos (ERP, GLPI, etc.)</p>
+          <p className="text-sm text-slate-500">
+            Gerencie as integracoes com sistemas externos (ERP, GLPI, etc.) —
+            cada modulo consumidor tem seus proprios endpoints ativaveis independentemente.
+          </p>
           {canEdit && (
-            <button onClick={iniciarNovo} className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors">
+            <button onClick={iniciarNovo} className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700">
               <Plus className="w-4 h-4" /> Nova Integracao
             </button>
           )}
@@ -426,14 +441,7 @@ export function IntegracoesPage() {
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600" placeholder="Integracao com ERP Totvs Protheus" />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Ambiente Ativo</label>
-                <select value={formAmbiente} onChange={(e) => setFormAmbiente(e.target.value as any)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600">
-                  {AMBIENTES.map((a) => <option key={a} value={a}>{a}</option>)}
-                </select>
-              </div>
+            <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Tipo Autenticacao</label>
                 <select value={formTipoAuth} onChange={(e) => setFormTipoAuth(e.target.value as any)}
@@ -460,7 +468,7 @@ export function IntegracoesPage() {
         {showEpForm && canEdit && (
           <form onSubmit={handleEndpointSubmit} className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
             <h4 className="text-sm font-semibold text-slate-800 mb-4">{editingEpId ? 'Editar Endpoint' : 'Novo Endpoint'}</h4>
-            <div className="grid grid-cols-4 gap-3 mb-3">
+            <div className="grid grid-cols-5 gap-3 mb-3">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Integracao</label>
                 <select value={showEpForm} onChange={(e) => setShowEpForm(e.target.value)} disabled={!!editingEpId}
@@ -469,16 +477,23 @@ export function IntegracoesPage() {
                 </select>
               </div>
               <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Modulo *</label>
+                <select value={epModulo} onChange={(e) => setEpModulo(e.target.value as ModuloConsumidor)} disabled={!!editingEpId}
+                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs disabled:bg-slate-100">
+                  {MODULOS_CONSUMIDORES.map((m) => <option key={m} value={m}>{MODULO_LABEL[m]}</option>)}
+                </select>
+              </div>
+              <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Ambiente</label>
-                <select value={epAmbiente} onChange={(e) => setEpAmbiente(e.target.value as any)}
-                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs">
+                <select value={epAmbiente} onChange={(e) => setEpAmbiente(e.target.value as any)} disabled={!!editingEpId}
+                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs disabled:bg-slate-100">
                   {AMBIENTES.map((a) => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Operacao *</label>
                 <input type="text" value={epOperacao} onChange={(e) => setEpOperacao(e.target.value)} required disabled={!!editingEpId}
-                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs disabled:bg-slate-100 uppercase" placeholder="HIERARQUIA" />
+                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs disabled:bg-slate-100" placeholder="xmlNfe" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Metodo</label>
@@ -512,7 +527,7 @@ export function IntegracoesPage() {
           </form>
         )}
 
-        {/* Lista flat de endpoints por integracao */}
+        {/* Lista agrupada por integracao > modulo */}
         {loading ? (
           <div className="text-center py-12 text-slate-500">Carregando...</div>
         ) : integracoes.length === 0 ? (
@@ -523,9 +538,6 @@ export function IntegracoesPage() {
         ) : (
           <div className="space-y-6">
             {integracoes.map((integ) => {
-              const allEndpoints = integ.endpoints;
-              const operacoes = [...new Set(allEndpoints.map((ep) => ep.operacao))];
-
               return (
                 <div key={integ.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                   {/* Header da integracao */}
@@ -534,18 +546,11 @@ export function IntegracoesPage() {
                       <Plug className="w-5 h-5 text-emerald-600" />
                       <span className="font-semibold text-slate-800">{integ.nome}</span>
                       <span className="text-xs font-mono text-slate-400 bg-slate-200 px-2 py-0.5 rounded">{integ.codigo}</span>
-                      <AmbienteBadge ambiente={integ.ambiente} />
                       <span className="text-xs text-slate-400">Auth: {integ.tipoAuth}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       {canEdit && (
                         <>
-                          <button onClick={() => testarTodos(integ)} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded border border-blue-200 hover:bg-blue-50">
-                            <TestTube2 className="w-3.5 h-3.5" /> Testar Todos
-                          </button>
-                          <button onClick={() => setAmbienteModal(integ)} className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-800 px-2 py-1 rounded border border-amber-200 hover:bg-amber-50">
-                            <ArrowRightLeft className="w-3.5 h-3.5" /> Trocar Ambiente
-                          </button>
                           <button onClick={() => iniciarNovoEndpoint(integ.id)} className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-800 px-2 py-1 rounded border border-emerald-200 hover:bg-emerald-50">
                             <Plus className="w-3.5 h-3.5" /> Endpoint
                           </button>
@@ -559,98 +564,193 @@ export function IntegracoesPage() {
                     </div>
                   </div>
 
-                  {/* Tabela flat de endpoints */}
-                  {allEndpoints.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">
-                            <th className="px-4 py-2.5">Operacao</th>
-                            <th className="px-4 py-2.5 text-center">Producao</th>
-                            <th className="px-4 py-2.5 text-center">Homologacao</th>
-                            <th className="px-4 py-2.5">Metodo</th>
-                            <th className="px-4 py-2.5">URL</th>
-                            <th className="px-4 py-2.5">Timeout</th>
-                            <th className="px-4 py-2.5">Status</th>
-                            {canEdit && <th className="px-4 py-2.5">Acoes</th>}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {operacoes.map((op) => {
-                            const epProd = allEndpoints.find((ep) => ep.operacao === op && ep.ambiente === 'PRODUCAO');
-                            const epHomol = allEndpoints.find((ep) => ep.operacao === op && ep.ambiente === 'HOMOLOGACAO');
-                            const epAtivo = integ.ambiente === 'PRODUCAO' ? epProd : epHomol;
-                            const ep = epAtivo || epProd || epHomol;
-                            if (!ep) return null;
+                  {/* Tabs por modulo */}
+                  {(() => {
+                    const modulosComEndpoints = MODULOS_CONSUMIDORES.filter(
+                      (m) => integ.endpoints.some((ep) => ep.modulo === m),
+                    );
+                    if (modulosComEndpoints.length === 0) return null;
 
+                    const moduloAtivo: ModuloConsumidor =
+                      activeTab[integ.id] && modulosComEndpoints.includes(activeTab[integ.id])
+                        ? activeTab[integ.id]
+                        : modulosComEndpoints[0];
+
+                    const endpointsDoModulo = integ.endpoints.filter((ep) => ep.modulo === moduloAtivo);
+                    const operacoes = [...new Set(endpointsDoModulo.map((ep) => ep.operacao))];
+
+                    return (
+                      <>
+                        {/* Tab bar */}
+                        <div className="flex items-stretch border-b border-slate-200 bg-white px-2">
+                          {modulosComEndpoints.map((modulo) => {
+                            const endpoints = integ.endpoints.filter((ep) => ep.modulo === modulo);
+                            const ativos = endpoints.filter((ep) => ep.ativo).length;
+                            const ambiente = ambienteDoModulo(integ.endpoints, modulo);
+                            const Icon = MODULO_ICON[modulo];
+                            const ativo = modulo === moduloAtivo;
                             return (
-                              <tr key={op} className="hover:bg-slate-50">
-                                <td className="px-4 py-3">
-                                  <span className="font-medium text-slate-700">{op}</span>
-                                  {ep.descricao && <p className="text-xs text-slate-400 mt-0.5">{ep.descricao}</p>}
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                  {epProd ? (
-                                    <span className={`inline-block w-3 h-3 rounded-full ${integ.ambiente === 'PRODUCAO' ? 'bg-green-500' : 'bg-slate-300'}`} title={epProd.url} />
-                                  ) : (
-                                    <span className="text-xs text-slate-300">-</span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                  {epHomol ? (
-                                    <span className={`inline-block w-3 h-3 rounded-full ${integ.ambiente === 'HOMOLOGACAO' ? 'bg-green-500' : 'bg-slate-300'}`} title={epHomol.url} />
-                                  ) : (
-                                    <span className="text-xs text-slate-300">-</span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-3"><MetodoBadge metodo={ep.metodo} /></td>
-                                <td className="px-4 py-3"><span className="text-xs font-mono text-slate-600 break-all">{ep.url}</span></td>
-                                <td className="px-4 py-3 text-xs text-slate-500">{(ep.timeoutMs / 1000).toFixed(0)}s</td>
-                                <td className="px-4 py-3">
-                                  {epAtivo && testingId === epAtivo.id ? (
-                                    <div className="flex items-center gap-1.5">
-                                      <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
-                                      <span className="text-xs text-blue-500">Testando...</span>
-                                    </div>
-                                  ) : epAtivo && testResults[epAtivo.id] ? (
-                                    <div className="flex items-center gap-1.5">
-                                      <StatusBadge result={testResults[epAtivo.id]} />
-                                      <span className="text-xs text-slate-400">{testResults[epAtivo.id].duracao}ms</span>
-                                    </div>
-                                  ) : (
-                                    <span className="text-xs text-slate-300">-</span>
-                                  )}
-                                </td>
-                                {canEdit && (
-                                  <td className="px-4 py-3">
-                                    <div className="flex items-center gap-2">
-                                      {epAtivo && (
-                                        <button
-                                          onClick={() => testarEndpoint(epAtivo, integ)}
-                                          disabled={testingId === epAtivo.id}
-                                          className="inline-flex items-center gap-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 px-2.5 py-1 rounded-md disabled:opacity-50"
-                                          title="Testar conexao"
-                                        >
-                                          <TestTube2 className="w-3 h-3" /> Testar
-                                        </button>
-                                      )}
-                                      <button onClick={() => iniciarEdicaoEndpoint(ep)} className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-md" title="Editar">
-                                        <Pencil className="w-3 h-3" /> Editar
-                                      </button>
-                                      <button onClick={async () => {
-                                        if (!confirm(`Excluir endpoint "${ep.operacao}"?`)) return;
-                                        try { await integracaoService.excluirEndpoint(ep.id); carregar(); } catch { alert('Erro ao excluir'); }
-                                      }} className="text-slate-400 hover:text-red-600" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>
-                                    </div>
-                                  </td>
-                                )}
-                              </tr>
+                              <button
+                                key={modulo}
+                                onClick={() => setActiveTab((prev) => ({ ...prev, [integ.id]: modulo }))}
+                                className={`flex items-center gap-2 px-4 py-3 text-sm border-b-2 transition-colors ${
+                                  ativo
+                                    ? 'border-emerald-600 text-emerald-700 font-semibold bg-emerald-50/40'
+                                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                                }`}
+                              >
+                                <Icon className="w-4 h-4" />
+                                <span>{MODULO_LABEL[modulo]}</span>
+                                <AmbienteBadge ambiente={ambiente} />
+                                <span className="text-[11px] text-slate-400">{ativos}/{endpoints.length}</span>
+                              </button>
                             );
                           })}
-                        </tbody>
-                      </table>
+                        </div>
+
+                        {/* Sub-header: acoes do modulo ativo */}
+                        {canEdit && (
+                          <div className="flex items-center justify-end gap-2 px-6 py-2.5 bg-slate-50/60 border-b border-slate-100">
+                            <button
+                              onClick={() => testarTodosModulo(integ, moduloAtivo)}
+                              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded border border-blue-200 hover:bg-blue-50"
+                            >
+                              <TestTube2 className="w-3.5 h-3.5" /> Testar Todos
+                            </button>
+                            <button
+                              onClick={() => iniciarNovoEndpoint(integ.id, moduloAtivo)}
+                              className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-800 px-2 py-1 rounded border border-emerald-200 hover:bg-emerald-50"
+                            >
+                              <Plus className="w-3.5 h-3.5" /> Endpoint
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Tabela do modulo ativo */}
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">
+                                <th className="px-4 py-2.5">Operacao</th>
+                                <th className="px-4 py-2.5 text-center">Producao</th>
+                                <th className="px-4 py-2.5 text-center">Homologacao</th>
+                                <th className="px-4 py-2.5">Metodo</th>
+                                <th className="px-4 py-2.5">URL</th>
+                                <th className="px-4 py-2.5">Timeout</th>
+                                <th className="px-4 py-2.5">Status</th>
+                                {canEdit && <th className="px-4 py-2.5 text-right">Acoes</th>}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {operacoes.map((op) => {
+                                const epProd = endpointsDoModulo.find((ep) => ep.operacao === op && ep.ambiente === 'PRODUCAO');
+                                const epHomol = endpointsDoModulo.find((ep) => ep.operacao === op && ep.ambiente === 'HOMOLOGACAO');
+                                const epAtivo = [epProd, epHomol].find((ep) => ep?.ativo) ?? null;
+                                const epDisplay = epAtivo || epProd || epHomol;
+                                if (!epDisplay) return null;
+
+                                const renderDot = (ep: IntegracaoEndpoint | undefined) => {
+                                  if (!ep) return <span className="text-xs text-slate-300">-</span>;
+                                  const color = ep.ativo ? 'bg-green-500' : 'bg-slate-300 hover:bg-slate-400';
+                                  return (
+                                    <button
+                                      onClick={() => canEdit && abrirConfirmacaoAtivacao(integ, ep)}
+                                      disabled={!canEdit || ep.ativo}
+                                      className={`inline-block w-3 h-3 rounded-full transition-colors ${color} ${canEdit && !ep.ativo ? 'cursor-pointer' : 'cursor-default'}`}
+                                      title={ep.ativo ? `ATIVO: ${ep.url}` : `Clique para ativar: ${ep.url}`}
+                                    />
+                                  );
+                                };
+
+                                const urlAtiva = (epAtivo || epDisplay).url;
+                                return (
+                                  <tr key={op} className="hover:bg-slate-50">
+                                    <td className="px-4 py-3">
+                                      <span className="font-medium text-slate-700">{op}</span>
+                                      {epDisplay.descricao && <p className="text-xs text-slate-400 mt-0.5">{epDisplay.descricao}</p>}
+                                    </td>
+                                    <td className="px-4 py-3 text-center">{renderDot(epProd)}</td>
+                                    <td className="px-4 py-3 text-center">{renderDot(epHomol)}</td>
+                                    <td className="px-4 py-3"><MetodoBadge metodo={epDisplay.metodo} /></td>
+                                    <td className="px-4 py-3 max-w-xs">
+                                      <span
+                                        className="block truncate text-xs font-mono text-slate-600"
+                                        title={urlAtiva}
+                                      >
+                                        {urlAtiva}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-xs text-slate-500">{(epDisplay.timeoutMs / 1000).toFixed(0)}s</td>
+                                    <td className="px-4 py-3">
+                                      {epAtivo && testingId === epAtivo.id ? (
+                                        <div className="flex items-center gap-1.5">
+                                          <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+                                          <span className="text-xs text-blue-500">Testando...</span>
+                                        </div>
+                                      ) : epAtivo && testResults[epAtivo.id] ? (
+                                        <div className="flex items-center gap-1.5">
+                                          <StatusBadge result={testResults[epAtivo.id]} />
+                                          <span className="text-xs text-slate-400">{testResults[epAtivo.id].duracao}ms</span>
+                                        </div>
+                                      ) : !epAtivo ? (
+                                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                                          <AlertTriangle className="w-3 h-3" /> Sem ativo
+                                        </span>
+                                      ) : (
+                                        <span className="text-xs text-slate-300">-</span>
+                                      )}
+                                    </td>
+                                    {canEdit && (
+                                      <td className="px-4 py-3">
+                                        <div className="flex items-center justify-end gap-2">
+                                          {epAtivo && (
+                                            <button
+                                              onClick={() => testarEndpoint(epAtivo, integ)}
+                                              disabled={testingId === epAtivo.id}
+                                              className="inline-flex items-center gap-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 px-2.5 py-1 rounded-md disabled:opacity-50"
+                                              title="Testar conexao"
+                                            >
+                                              <TestTube2 className="w-3 h-3" /> Testar
+                                            </button>
+                                          )}
+                                          <button
+                                            onClick={() => iniciarEdicaoEndpoint(epDisplay)}
+                                            className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-md"
+                                            title="Editar endpoint"
+                                          >
+                                            <Pencil className="w-3 h-3" /> Editar
+                                          </button>
+                                          <button
+                                            onClick={async () => {
+                                              if (!confirm(`Excluir endpoint "${epDisplay.operacao}" (${epDisplay.ambiente})?`)) return;
+                                              try { await integracaoService.excluirEndpoint(epDisplay.id); carregar(); } catch { alert('Erro ao excluir'); }
+                                            }}
+                                            className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50"
+                                            title="Excluir endpoint"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        </div>
+                                      </td>
+                                    )}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    );
+                  })()}
+
+                  {/* Fallback: endpoints sem modulo (nunca deveria acontecer apos migration) */}
+                  {integ.endpoints.filter((ep) => !MODULOS_CONSUMIDORES.includes(ep.modulo)).length > 0 && (
+                    <div className="px-6 py-3 bg-red-50 border-t border-red-200 text-xs text-red-700">
+                      Existem endpoints sem modulo definido — contate o administrador.
                     </div>
-                  ) : (
+                  )}
+
+                  {integ.endpoints.length === 0 && (
                     <div className="px-6 py-8 text-center text-sm text-slate-400">
                       Nenhum endpoint cadastrado nesta integracao
                     </div>
@@ -662,12 +762,14 @@ export function IntegracoesPage() {
         )}
       </div>
 
-      {/* Modal troca de ambiente */}
-      {ambienteModal && (
-        <ModalTrocaAmbiente
-          integ={ambienteModal}
-          onConfirm={confirmarTrocaAmbiente}
-          onCancel={() => setAmbienteModal(null)}
+      {/* Modal de confirmacao de ativacao de endpoint */}
+      {confirmarAtivacao && (
+        <ModalConfirmarAtivacao
+          integ={confirmarAtivacao.integ}
+          endpointAlvo={confirmarAtivacao.endpointAlvo}
+          endpointAtualAtivo={confirmarAtivacao.endpointAtualAtivo}
+          onConfirm={confirmarAtivacaoEndpoint}
+          onCancel={() => setConfirmarAtivacao(null)}
           switching={switching}
         />
       )}

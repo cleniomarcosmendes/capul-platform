@@ -54,8 +54,10 @@ export class NfeDistribuicaoClient {
     chave: string,
     ufAutor: string,
     ambiente: AmbienteSefazStr,
-  ): Promise<{ xml: string; cStat: string; xMotivo: string }> {
-    const resultado = await this.consChNFeInterno(chave, ufAutor, ambiente);
+    cnpjConsulenteOverride?: string | null,
+  ): Promise<{ xml: string; cStat: string; xMotivo: string; cnpjConsulenteUsado: string }> {
+    const cnpjUsado = (cnpjConsulenteOverride ?? this.cnpjConsulente).replace(/\D/g, '');
+    const resultado = await this.consChNFeInterno(chave, ufAutor, ambiente, cnpjUsado);
     if (!resultado.xmlNfe) {
       // Sem o procNFe — normalmente aconteceria em cenário atípico (SEFAZ
       // devolveu apenas eventos). Para este método específico, consideramos
@@ -69,6 +71,7 @@ export class NfeDistribuicaoClient {
       xml: resultado.xmlNfe,
       cStat: resultado.cStat,
       xMotivo: resultado.xMotivo,
+      cnpjConsulenteUsado: cnpjUsado,
     };
   }
 

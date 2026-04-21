@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { ModuloConsumidor, AmbienteIntegracao } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import * as https from 'https';
 import * as http from 'http';
@@ -19,7 +20,7 @@ export class IntegracaoService {
   async findAll() {
     return this.prisma.integracaoApi.findMany({
       include: {
-        endpoints: { orderBy: [{ ambiente: 'asc' }, { operacao: 'asc' }] },
+        endpoints: { orderBy: [{ modulo: 'asc' }, { operacao: 'asc' }, { ambiente: 'asc' }] },
       },
       orderBy: { nome: 'asc' },
     });
@@ -29,7 +30,7 @@ export class IntegracaoService {
     const integracao = await this.prisma.integracaoApi.findUnique({
       where: { id },
       include: {
-        endpoints: { orderBy: [{ ambiente: 'asc' }, { operacao: 'asc' }] },
+        endpoints: { orderBy: [{ modulo: 'asc' }, { operacao: 'asc' }, { ambiente: 'asc' }] },
       },
     });
     if (!integracao) throw new NotFoundException('Integracao nao encontrada');
@@ -40,37 +41,49 @@ export class IntegracaoService {
     const integracao = await this.prisma.integracaoApi.findUnique({
       where: { codigo },
       include: {
-        endpoints: { orderBy: [{ ambiente: 'asc' }, { operacao: 'asc' }] },
+        endpoints: { orderBy: [{ modulo: 'asc' }, { operacao: 'asc' }, { ambiente: 'asc' }] },
       },
     });
     if (!integracao) throw new NotFoundException(`Integracao "${codigo}" nao encontrada`);
     return integracao;
   }
 
-  async getEndpointsAtivos(codigo: string) {
+  /**
+   * Retorna os endpoints ATIVOS de um modulo consumidor especifico.
+   * Chamado pelos resolvers do Fiscal / Gestao TI / Inventario (Python).
+   * O campo `ambiente` do response e derivado: se todos endpoints ativos sao
+   * do mesmo ambiente -> esse valor; se mistos -> "MIXED". Usado so para log
+   * pelos consumidores — nao para routing.
+   */
+  async getEndpointsAtivos(codigo: string, modulo?: ModuloConsumidor) {
     const integracao = await this.prisma.integracaoApi.findUnique({
       where: { codigo },
       include: {
         endpoints: {
-          where: { ativo: true },
+          where: {
+            ativo: true,
+            ...(modulo ? { modulo } : {}),
+          },
           orderBy: { operacao: 'asc' },
         },
       },
     });
     if (!integracao) throw new NotFoundException(`Integracao "${codigo}" nao encontrada`);
 
-    const endpointsDoAmbiente = integracao.endpoints.filter(
-      (ep) => ep.ambiente === integracao.ambiente,
-    );
+    const ambientes = new Set(integracao.endpoints.map((ep) => ep.ambiente));
+    const ambienteDerivado =
+      ambientes.size === 0 ? 'HOMOLOGACAO' : ambientes.size === 1 ? [...ambientes][0] : 'MIXED';
 
     return {
       codigo: integracao.codigo,
       nome: integracao.nome,
-      ambiente: integracao.ambiente,
+      ambiente: ambienteDerivado,
       tipoAuth: integracao.tipoAuth,
       authConfig: integracao.authConfig,
-      endpoints: endpointsDoAmbiente.map((ep) => ({
+      endpoints: integracao.endpoints.map((ep) => ({
         operacao: ep.operacao,
+        modulo: ep.modulo,
+        ambiente: ep.ambiente,
         url: ep.url,
         metodo: ep.metodo,
         timeoutMs: ep.timeoutMs,
@@ -118,7 +131,7 @@ export class IntegracaoService {
     } catch (err: any) {
       if (err.code === 'P2002') {
         throw new ConflictException(
-          `Endpoint "${dto.operacao}" ja existe para ambiente ${dto.ambiente} nesta integracao`,
+          `Endpoint "${dto.operacao}" ja existe para modulo ${dto.modulo}, ambiente ${dto.ambiente} nesta integracao`,
         );
       }
       throw err;
@@ -128,10 +141,19 @@ export class IntegracaoService {
   async updateEndpoint(endpointId: string, dto: UpdateEndpointDto) {
     const ep = await this.prisma.integracaoApiEndpoint.findUnique({ where: { id: endpointId } });
     if (!ep) throw new NotFoundException('Endpoint nao encontrado');
-    return this.prisma.integracaoApiEndpoint.update({
-      where: { id: endpointId },
-      data: dto,
-    });
+    try {
+      return await this.prisma.integracaoApiEndpoint.update({
+        where: { id: endpointId },
+        data: dto,
+      });
+    } catch (err: any) {
+      if (err.code === 'P2002') {
+        throw new ConflictException(
+          'Alteracao viola invariante: ja existe outro endpoint ativo para (modulo, operacao).',
+        );
+      }
+      throw err;
+    }
   }
 
   async removeEndpoint(endpointId: string) {
@@ -139,6 +161,73 @@ export class IntegracaoService {
     if (!ep) throw new NotFoundException('Endpoint nao encontrado');
     await this.prisma.integracaoApiEndpoint.delete({ where: { id: endpointId } });
     return { success: true, message: 'Endpoint excluido com sucesso' };
+  }
+
+  /**
+   * Ativa um endpoint especifico (ativo=true) e desativa o irmao de mesmo
+   * (modulo, operacao) em ambiente diferente. Garante a invariante em uma
+   * transacao atomica.
+   */
+  async ativarEndpoint(integracaoId: string, endpointId: string) {
+    const ep = await this.prisma.integracaoApiEndpoint.findUnique({
+      where: { id: endpointId },
+    });
+    if (!ep) throw new NotFoundException('Endpoint nao encontrado');
+    if (ep.integracaoId !== integracaoId) {
+      throw new BadRequestException('Endpoint nao pertence a essa integracao');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // Desativa o(s) irmao(s) do mesmo (modulo, operacao) em outros ambientes
+      await tx.integracaoApiEndpoint.updateMany({
+        where: {
+          integracaoId,
+          modulo: ep.modulo,
+          operacao: ep.operacao,
+          NOT: { id: endpointId },
+        },
+        data: { ativo: false },
+      });
+      // Ativa o alvo
+      await tx.integracaoApiEndpoint.update({
+        where: { id: endpointId },
+        data: { ativo: true },
+      });
+    });
+
+    return this.prisma.integracaoApiEndpoint.findUnique({ where: { id: endpointId } });
+  }
+
+  /**
+   * Para cada operacao do (integracao, modulo), ativa a linha do ambiente
+   * pedido e desativa a do outro ambiente. Transacional.
+   * Substitui o antigo PATCH /integracoes/:id { ambiente } para o dominio
+   * per-modulo.
+   */
+  async trocarAmbienteModulo(
+    integracaoId: string,
+    modulo: ModuloConsumidor,
+    ambiente: AmbienteIntegracao,
+  ) {
+    await this.findOne(integracaoId);
+
+    const [ativados] = await this.prisma.$transaction([
+      this.prisma.integracaoApiEndpoint.updateMany({
+        where: { integracaoId, modulo, ambiente },
+        data: { ativo: true },
+      }),
+      this.prisma.integracaoApiEndpoint.updateMany({
+        where: { integracaoId, modulo, NOT: { ambiente } },
+        data: { ativo: false },
+      }),
+    ]);
+
+    return {
+      integracaoId,
+      modulo,
+      ambiente,
+      endpointsAtivados: ativados.count,
+    };
   }
 
   // --- Testar conexao ---

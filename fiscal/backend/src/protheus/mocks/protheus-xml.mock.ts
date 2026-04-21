@@ -20,6 +20,11 @@ import type {
   XmlFiscalPostResponse,
 } from '../interfaces/xml-fiscal.interface.js';
 import { XmlFiscalProtheusError } from '../interfaces/xml-fiscal.interface.js';
+import {
+  XmlNfeProtheusError,
+  type XmlNfeResult,
+} from '../interfaces/xml-nfe.interface.js';
+import type { GrvXmlBody } from '../interfaces/grv-xml.interface.js';
 
 interface MockEntry {
   body: XmlFiscalPostBody;
@@ -31,13 +36,97 @@ interface MockEntry {
 
 export class ProtheusXmlMock {
   private readonly cache = new Map<string, MockEntry>();
+  private readonly sped156Seed = new Map<string, string>();
 
   reset(): void {
     this.cache.clear();
+    this.sped156Seed.clear();
   }
 
   size(): number {
     return this.cache.size;
+  }
+
+  /**
+   * Mock do `GET /xmlNfe`. Reusa o cache populado por `post()` para simular
+   * o lado SZR010. Aceita também uma "carga sintética SPED156" via
+   * `seedSped156(chave, xmlBase64)` para exercitar o branch de fallback.
+   */
+  async buscarXml(chave: string): Promise<XmlNfeResult> {
+    if (!/^\d{44}$/.test(chave)) {
+      throw new XmlNfeProtheusError(
+        'CHAVE_INVALIDA',
+        `Chave ${chave} fora do formato 44 dígitos (mock).`,
+        400,
+      );
+    }
+    const found = this.findByChave(chave);
+    if (found) {
+      return {
+        found: true,
+        chave,
+        origem: 'SZR010',
+        xmlBase64: Buffer.from(found.body.xml, 'utf8').toString('base64'),
+      };
+    }
+    const seeded = this.sped156Seed.get(chave);
+    if (seeded) {
+      return { found: true, chave, origem: 'SPED156', xmlBase64: seeded };
+    }
+    return {
+      found: false,
+      chave,
+      message: 'XML nao localizado em SZR010 nem em SPED156 para a chave informada.',
+    };
+  }
+
+  /**
+   * Helper de teste: simula que o XML existe em SPED156 mas ainda não foi
+   * gravado em SZR010 — exercita o branch onde a plataforma precisa chamar
+   * `/grvXML` após receber a resposta.
+   */
+  seedSped156(chave: string, xmlBase64: string): void {
+    this.sped156Seed.set(chave, xmlBase64);
+  }
+
+  /**
+   * Mock do `POST /grvXML`. Extrai a chave do campo CHVNFE do XMLCAB e
+   * reusa o cache para simular idempotência.
+   */
+  async grvXml(body: GrvXmlBody): Promise<{ status: 'GRAVADO' | 'JA_EXISTIA'; chave: string; itensGravados: number }> {
+    const cab = body.itens.find((i) => i.alias === 'XMLCAB');
+    if (!cab || cab.alias !== 'XMLCAB') {
+      throw new XmlFiscalProtheusError('XML_MALFORMADO', 'Body grvXML sem XMLCAB (mock).', 400);
+    }
+    const chaveCampo = cab.campos.find((c) => c.campo === 'CHVNFE');
+    const chave = chaveCampo?.valor ?? '';
+    if (!/^\d{44}$/.test(chave)) {
+      throw new XmlFiscalProtheusError('CHAVE_INVALIDA', `CHVNFE inválido no XMLCAB (mock).`, 400);
+    }
+    const itensCount = body.itens.filter((i) => i.alias === 'XMLIT').length;
+    const existing = this.findByChave(chave);
+    if (existing) {
+      return { status: 'JA_EXISTIA', chave, itensGravados: existing.itensCount };
+    }
+    const filialCampo = cab.campos.find((c) => c.campo === 'FILIAL');
+    const tpXmlCampo = cab.campos.find((c) => c.campo === 'TPXML');
+    const modeloCampo = cab.campos.find((c) => c.campo === 'MODELO');
+    const userCampo = cab.campos.find((c) => c.campo === 'USRREC');
+    const entry: MockEntry = {
+      body: {
+        chave,
+        tipoDocumento: tpXmlCampo?.valor === 'CTe' ? 'CTE' : 'NFE',
+        filial: filialCampo?.valor ?? '01',
+        xml: Buffer.from(cab.xmlBase64, 'base64').toString('utf8'),
+        usuarioCapulQueDisparou: userCampo?.valor,
+      },
+      gravadoEm: new Date().toISOString(),
+      usuarioRecebedor: userCampo?.valor ?? 'API_FISCAL',
+      itensCount,
+      modelo: modeloCampo?.valor ?? '55',
+    };
+    this.cache.set(this.key(chave, entry.body.filial), entry);
+    return { status: 'GRAVADO', chave, itensGravados: itensCount };
   }
 
   async exists(chave: string): Promise<XmlFiscalExistsResponse> {
