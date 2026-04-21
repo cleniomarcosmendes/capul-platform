@@ -17,6 +17,40 @@ esquecer — e sem poluir a conversa principal.
 
 ---
 
+## Fiscal — Qualidade de dados
+
+### ⏳ 2026-04-21 — Corrigir worker do cruzamento para gravar `vinculos_protheus` completos
+
+**Contexto:** O campo `fiscal.cadastro_contribuinte.vinculos_protheus` (JSON)
+chega inconsistente — às vezes com TODOS os campos
+(`loja`, `codigo`, `filial`, `origem`, `origemDescricao`, `bloqueado`,
+`razaoSocial`, `inscricaoEstadual`), às vezes só com 4
+(`loja`, `codigo`, `filial`, `origem`) faltando os demais.
+
+**Exemplo real (21/04):** CNPJs como `44700997672` (ARNALDO JOSE PEREIRA),
+`04154414000126` (ROSELY), `21175203000431` (EMBRAURB) vieram com vínculo
+incompleto. Outros CNPJs (ex: CLENIO `82652970682`) vieram completos.
+
+**Impacto:** a coluna "Razão social no Protheus" e "IE no Protheus" na UI
+de Divergências ficou vazia para esses registros, mesmo o dado existindo
+em `divergencia.valorProtheus` quando há divergência do campo.
+
+**Paliativo aplicado hoje (UI-side):** `DivergenciasListPage` faz merge
+best-effort — se o vínculo não tem `razaoSocial`, pega de
+`divergencia.valorProtheus` (campo=razao_social); idem para IE.
+O backlog do worker continua — outras telas que leem `vinculosProtheus`
+diretamente (sem ter as divergências à mão) ainda verão os dados parciais.
+
+**Onde consertar:** `fiscal/backend/src/cruzamento/cruzamento.worker.ts`
+(provável) — ao persistir o contribuinte, garantir que `vinculosProtheus`
+armazene todos os campos vindos do `cadastroFiscal` do Protheus, não
+apenas os 4 identificadores.
+
+**Re-executar** uma corrida de cruzamento após o fix repopula os dados
+corretamente (o worker sobrescreve o JSON). Não requer migration.
+
+---
+
 ## Integração Protheus
 
 ### ⏳ 2026-04-21 — Pedir parâmetro `comMovimentoAte` à equipe Protheus (API `cadastroFiscal`)
@@ -110,6 +144,45 @@ Adotada a opção 2 do plano. `Header.tsx` agora deriva de todos os endpoints
 ativos do PROTHEUS: badge mostra **API-PRD** (vermelho), **API-HLG** (âmbar)
 ou **API-MIX** (roxo) conforme uniformidade. Algoritmo equivalente ao
 `ambienteDoModulo` usado na página de integrações, porém sem filtro por módulo.
+
+### ✅ 2026-04-21 — Divergências agrupadas por contribuinte + export Excel
+
+Fragmentação real da tela `/divergencias`: 110 linhas na UI eram apenas
+**49 contribuintes** (mesmo CNPJ com 3-4 campos divergentes aparecia 3-4
+vezes, espalhado pela criticidade). Analista perdia contexto — cliente
+corrigido parcialmente no ERP porque ele só via a primeira divergência.
+
+**Backend** (`divergencia.controller.ts`):
+- Novo `GET /divergencias/por-contribuinte` — agrupa por contribuinte,
+  retorna `[{contribuinte, divergencias:[...], total, criticidadeMax,
+  detectadaEmMaisAntiga}]`. Ordem: criticidadeMax DESC, detectada ASC.
+- Filtro `?campo=X` filtra quais contribuintes aparecem (têm ≥ 1
+  divergência nesse campo), mas retorna TODAS as divergências deles —
+  contexto completo para ajuste no ERP. Decisão operacional, não técnica.
+- Novos endpoints em lote:
+  `PATCH /divergencias/por-contribuinte/:id/resolver-todas` e
+  `.../ignorar-todas`. Afeta só divergências `status=ABERTA` (preserva
+  trilha de RESOLVIDAs/IGNORADAs existentes).
+- Visão plana (`GET /divergencias`) preservada para relatório analítico.
+
+**Frontend** (`DivergenciasListPage.tsx` + `utils/export.ts`):
+- Tabela reestruturada: 1 linha = 1 contribuinte, expansível para ver
+  detalhes por campo. Badges coloridos dos campos divergentes na linha
+  principal (vermelho=ALTA, amarelo=MEDIA, cinza=BAIXA).
+- Ações em lote: "Resolver todas" / "Ignorar todas" direto na linha.
+- Ações individuais ainda disponíveis ao expandir (caso precise tratar
+  só um campo específico).
+- Novo filtro `campo` dropdown + stats agregados no topo.
+- **Botão "Exportar Excel"**: gera `.xlsx` com 1 linha por divergência,
+  mas agrupadas por CNPJ — útil pro Setor Fiscal encaminhar para o setor
+  que vai corrigir no ERP. 15 colunas (CNPJ, UF, Razão, Fantasia, IE,
+  Município, Situação, Campo, valores Protheus/SEFAZ, Criticidade,
+  Status, detectadaEm, resolvidaEm, Nº divergências do CNPJ).
+- `xlsx` adicionado como dependência (mesma versão do Inventário, para
+  consistência de padrão entre módulos).
+
+Testado: endpoint agrupado retornou 110 divergências em 49 contribuintes
+ordenados por ALTA primeiro. Filtro por campo funciona corretamente.
 
 ### ✅ 2026-04-21 — Proteção contra execuções concorrentes + cooldown + UI "Nova execução"
 

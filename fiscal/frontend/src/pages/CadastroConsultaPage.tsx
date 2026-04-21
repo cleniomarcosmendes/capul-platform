@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AlertCircle, Check, Copy, Sparkles, AlertTriangle, Database, UserSearch, Info, Building2 } from 'lucide-react';
 import { fiscalApi } from '../services/api';
 import { PageWrapper } from '../components/PageWrapper';
@@ -33,31 +34,30 @@ const SITUACAO_LABEL: Record<SituacaoCadastral, string> = {
 };
 
 export function CadastroConsultaPage() {
+  const [searchParams] = useSearchParams();
   const [documento, setDocumento] = useState('');
   const [uf, setUf] = useState('MG');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CadastroConsultaResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const autoTriggeredRef = useRef<string | null>(null);
 
   const docDigits = documento.replace(/\D/g, '');
 
-  async function handleConsultar(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setResult(null);
-    setCopied(false);
-
-    if (docDigits.length !== 11 && docDigits.length !== 14) {
+  async function consultar(cnpjLimpo: string, ufAlvo: string) {
+    if (cnpjLimpo.length !== 11 && cnpjLimpo.length !== 14) {
       setError('Informe um CPF (11 dígitos) ou CNPJ (14 dígitos).');
       return;
     }
-
+    setError(null);
+    setResult(null);
+    setCopied(false);
     try {
       setLoading(true);
       const { data } = await fiscalApi.post<CadastroConsultaResult>('/cadastro/consulta', {
-        cnpj: docDigits,
-        uf,
+        cnpj: cnpjLimpo,
+        uf: ufAlvo,
       });
       setResult(data);
     } catch (err) {
@@ -66,6 +66,34 @@ export function CadastroConsultaPage() {
       setLoading(false);
     }
   }
+
+  async function handleConsultar(e: React.FormEvent) {
+    e.preventDefault();
+    await consultar(docDigits, uf);
+  }
+
+  /**
+   * Deep-link via query params: outras telas (ex: Divergências) enviam o
+   * usuário para cá já preenchido. Se `auto=1`, dispara a consulta
+   * automaticamente. A ref evita re-disparo se o componente re-renderizar.
+   */
+  useEffect(() => {
+    const cnpjParam = searchParams.get('cnpj');
+    const ufParam = searchParams.get('uf');
+    const auto = searchParams.get('auto');
+    if (!cnpjParam) return;
+
+    const cnpjLimpo = cnpjParam.replace(/\D/g, '');
+    setDocumento(cnpjLimpo);
+    const ufFinal = ufParam ? ufParam.toUpperCase() : uf;
+    if (ufParam) setUf(ufFinal);
+
+    if (auto === '1' && autoTriggeredRef.current !== cnpjLimpo) {
+      autoTriggeredRef.current = cnpjLimpo;
+      consultar(cnpjLimpo, ufFinal);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   function handleCopyForCadastro() {
     if (!result) return;
