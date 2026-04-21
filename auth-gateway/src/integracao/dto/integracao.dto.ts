@@ -111,9 +111,9 @@ export class CreateIntegracaoDto {
   @IsString()
   descricao?: string;
 
-  @IsOptional()
-  @IsEnum(AmbienteIntegracao)
-  ambiente?: AmbienteIntegracao;
+  // NOTE: `ambiente` global removido — controle e per-endpoint via
+  // ModuloConsumidor + flag `ativo`. Resposta de getEndpointsAtivos deriva
+  // um ambiente agregado (PRODUCAO / HOMOLOGACAO / MIXED) apenas para log.
 
   @IsOptional()
   @IsEnum(TipoAuth)

@@ -6,6 +6,7 @@ import { integrationService } from '../services/integration.service';
 import { countingListService } from '../services/counting-list.service';
 import { TableSkeleton } from '../components/LoadingSkeleton';
 import { ErrorState } from '../components/ErrorState';
+import { PromptDialog } from '../components/PromptDialog';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import { TabAnalise } from './inventarios/components/TabAnalise';
@@ -126,6 +127,7 @@ function TabDivergencias({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [ajusteAberto, setAjusteAberto] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -142,13 +144,11 @@ function TabDivergencias({
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const handleResolve = async (id: string, type: 'ACCEPT' | 'RECOUNT' | 'ADJUST') => {
-    let finalQuantity: number | undefined;
-    if (type === 'ADJUST') {
-      const input = prompt('Informe a quantidade final ajustada:');
-      if (input === null) return;
-      finalQuantity = parseFloat(input);
-      if (isNaN(finalQuantity)) { toast.error('Quantidade invalida.'); return; }
+  const handleResolve = async (id: string, type: 'ACCEPT' | 'RECOUNT' | 'ADJUST', finalQuantity?: number) => {
+    // Para ADJUST, abre modal de input; a propria continuacao vira pelo onConfirm.
+    if (type === 'ADJUST' && finalQuantity === undefined) {
+      setAjusteAberto(id);
+      return;
     }
 
     setResolvingId(id);
@@ -283,6 +283,29 @@ function TabDivergencias({
           </table>
         </div>
       )}
+
+      <PromptDialog
+        open={ajusteAberto !== null}
+        title="Ajuste manual da divergencia"
+        description="Informe a quantidade final que ficara registrada como resolucao do ajuste."
+        label="Quantidade final"
+        placeholder="Ex: 12.5"
+        inputType="number"
+        confirmLabel="Confirmar ajuste"
+        validate={(v) => {
+          const n = parseFloat(v);
+          if (isNaN(n)) return 'Informe um numero valido.';
+          if (n < 0) return 'Quantidade nao pode ser negativa.';
+          return null;
+        }}
+        onConfirm={(v) => {
+          const id = ajusteAberto;
+          const n = parseFloat(v);
+          setAjusteAberto(null);
+          if (id) handleResolve(id, 'ADJUST', n);
+        }}
+        onCancel={() => setAjusteAberto(null)}
+      />
     </>
   );
 }

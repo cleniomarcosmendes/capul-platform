@@ -1,6 +1,9 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../components/Toast';
+import { useConfirm } from '../../components/ConfirmDialog';
+import { extractApiError } from '../../utils/errors';
 import { centroCustoService } from '../../services/centro-custo.service';
 import { filialService } from '../../services/filial.service';
 import { Plus, Wallet, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
@@ -12,6 +15,8 @@ type SortDir = 'asc' | 'desc';
 export function CentrosCustoPage() {
   const { configuradorRole } = useAuth();
   const canEdit = configuradorRole === 'ADMIN' || configuradorRole === 'GESTOR';
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [centrosCusto, setCentrosCusto] = useState<CentroCusto[]>([]);
   const [filiais, setFiliais] = useState<FilialOption[]>([]);
@@ -104,9 +109,10 @@ export function CentrosCustoPage() {
       setDescricao('');
       setShowForm(false);
       setEditingId(null);
+      toast.success(editingId ? 'Centro de custo atualizado' : 'Centro de custo criado');
       carregar();
-    } catch {
-      alert('Erro ao salvar centro de custo');
+    } catch (err) {
+      toast.error('Erro ao salvar centro de custo', extractApiError(err));
     } finally {
       setSaving(false);
     }
@@ -224,9 +230,20 @@ export function CentrosCustoPage() {
                             {cc.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
                           </button>
                           <button onClick={async () => {
-                            if (!confirm(`Excluir centro de custo "${cc.nome}"?`)) return;
-                            try { await centroCustoService.excluir(cc.id); carregar(); }
-                            catch (err: unknown) { alert((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir'); }
+                            const ok = await confirm({
+                              title: `Excluir centro de custo "${cc.nome}"?`,
+                              description: 'Esta acao nao pode ser desfeita.',
+                              variant: 'danger',
+                              confirmLabel: 'Excluir',
+                            });
+                            if (!ok) return;
+                            try {
+                              await centroCustoService.excluir(cc.id);
+                              toast.success('Centro de custo excluido');
+                              carregar();
+                            } catch (err) {
+                              toast.error('Erro ao excluir', extractApiError(err));
+                            }
                           }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">
                             <Trash2 className="w-3.5 h-3.5" /> Excluir
                           </button>

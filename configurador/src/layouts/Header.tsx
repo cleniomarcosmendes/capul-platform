@@ -3,23 +3,31 @@ import { useEffect, useState } from 'react';
 import { User, Radio } from 'lucide-react';
 import { integracaoService } from '../services/integracao.service';
 
+type AmbienteHeader = 'PRODUCAO' | 'HOMOLOGACAO' | 'MIXED';
+
 export function Header({ title, ambienteAtivo }: { title: string; ambienteAtivo?: string | null }) {
   const { usuario, configuradorRole } = useAuth();
-  const [ambienteLocal, setAmbienteLocal] = useState<string | null>(null);
+  const [ambienteLocal, setAmbienteLocal] = useState<AmbienteHeader | null>(null);
 
   useEffect(() => {
     if (ambienteAtivo !== undefined) return; // se a pagina fornece, nao buscar
     integracaoService.listar()
       .then((data) => {
         const protheus = data.find((i) => i.codigo === 'PROTHEUS');
-        if (protheus) setAmbienteLocal(protheus.ambiente);
+        if (!protheus) return;
+        // Ambiente global agora e derivado de todos os endpoints ativos:
+        // se todos apontam pro mesmo ambiente, mostra ele; se mistos, MIXED.
+        const ativos = protheus.endpoints.filter((ep) => ep.ativo);
+        if (ativos.length === 0) return;
+        const set = new Set(ativos.map((ep) => ep.ambiente));
+        setAmbienteLocal(set.size === 1 ? ([...set][0] as 'PRODUCAO' | 'HOMOLOGACAO') : 'MIXED');
       })
       .catch(() => {});
   }, [ambienteAtivo]);
 
-  const ambiente = ambienteAtivo !== undefined ? ambienteAtivo : ambienteLocal;
-
+  const ambiente = ambienteAtivo !== undefined ? (ambienteAtivo as AmbienteHeader | null) : ambienteLocal;
   const isProd = ambiente === 'PRODUCAO';
+  const isMixed = ambiente === 'MIXED';
 
   return (
     <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
@@ -29,10 +37,12 @@ export function Header({ title, ambienteAtivo }: { title: string; ambienteAtivo?
           <div className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full border ${
             isProd
               ? 'bg-red-50 text-red-700 border-red-200'
+              : isMixed
+              ? 'bg-purple-50 text-purple-700 border-purple-200'
               : 'bg-amber-50 text-amber-700 border-amber-200'
           }`}>
-            <Radio className={`w-3 h-3 ${isProd ? 'text-red-500' : 'text-amber-500'}`} />
-            API-{isProd ? 'PRD' : 'HLG'}
+            <Radio className={`w-3 h-3 ${isProd ? 'text-red-500' : isMixed ? 'text-purple-500' : 'text-amber-500'}`} />
+            API-{isProd ? 'PRD' : isMixed ? 'MIX' : 'HLG'}
           </div>
         )}
         <span className="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-medium">

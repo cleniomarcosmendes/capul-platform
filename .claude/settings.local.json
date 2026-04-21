@@ -1227,7 +1227,8 @@
       "Bash(echo \"fiscal-fe=$?\")",
       "Bash(echo \"compose=$?\")",
       "Bash(NODE_OPTIONS=\"--experimental-vm-modules\" node_modules/.bin/jest src/protheus/protheus-xml-nfe.service.spec.ts)",
-      "Bash(NODE_OPTIONS=\"--experimental-vm-modules\" node_modules/.bin/jest)"
+      "Bash(NODE_OPTIONS=\"--experimental-vm-modules\" node_modules/.bin/jest)",
+      "Bash(xargs -I {} find /mnt/c/meus_projetos/capul-platform/{} -type f -size +5M)"
     ]
   }
 }

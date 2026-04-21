@@ -368,7 +368,7 @@ export function ProjetoDetalhePage() {
                         const novo = await projetoService.duplicar(projeto.id);
                         navigate(`/gestao-ti/projetos/${novo.id}`);
                       } catch {
-                        alert('Erro ao duplicar projeto');
+                        toast('error', 'Erro ao duplicar projeto');
                       }
                     }}
                     className="flex items-center gap-1 bg-blue-50 text-blue-700 px-3 py-2 rounded-lg text-sm hover:bg-blue-100"

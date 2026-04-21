@@ -282,7 +282,6 @@ model IntegracaoApi {
   codigo      String              @unique
   nome        String
   descricao   String?
-  ambiente    AmbienteIntegracao  @default(HOMOLOGACAO)
   tipoAuth    TipoAuth            @default(BASIC) @map("tipo_auth")
   authConfig  String?             @map("auth_config")
   ativo       Boolean             @default(true)

@@ -8,7 +8,6 @@ export interface IntegracaoApi {
   codigo: string;
   nome: string;
   descricao: string | null;
-  ambiente: 'PRODUCAO' | 'HOMOLOGACAO';
   tipoAuth: 'BASIC' | 'BEARER' | 'API_KEY' | 'NONE';
   authConfig: string | null;
   ativo: boolean;

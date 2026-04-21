@@ -1,6 +1,9 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../components/Toast';
+import { useConfirm } from '../../components/ConfirmDialog';
+import { extractApiError } from '../../utils/errors';
 import { tipoDepartamentoService } from '../../services/tipo-departamento.service';
 import { Plus, Pencil, Trash2, Layers, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { TipoDepartamento } from '../../types';
@@ -11,6 +14,8 @@ type SortDir = 'asc' | 'desc';
 export function TiposDepartamentoPage() {
   const { configuradorRole } = useAuth();
   const canEdit = configuradorRole === 'ADMIN';
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [tipos, setTipos] = useState<TipoDepartamento[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,24 +94,35 @@ export function TiposDepartamentoPage() {
       }
       setShowForm(false);
       setEditingId(null);
+      toast.success(editingId ? 'Tipo atualizado' : 'Tipo criado');
       carregar();
-    } catch {
-      alert('Erro ao salvar tipo de departamento');
+    } catch (err) {
+      toast.error('Erro ao salvar tipo de departamento', extractApiError(err));
     }
     setSaving(false);
   }
 
   async function handleExcluir(tipo: TipoDepartamento) {
     if ((tipo._count?.departamentos || 0) > 0) {
-      alert(`Nao e possivel excluir: ${tipo._count?.departamentos} departamento(s) vinculado(s)`);
+      toast.warning(
+        'Nao e possivel excluir',
+        `Existem ${tipo._count?.departamentos} departamento(s) vinculado(s) a este tipo.`,
+      );
       return;
     }
-    if (!confirm(`Excluir tipo "${tipo.nome}"?`)) return;
+    const ok = await confirm({
+      title: `Excluir tipo "${tipo.nome}"?`,
+      description: 'Esta acao nao pode ser desfeita.',
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+    });
+    if (!ok) return;
     try {
       await tipoDepartamentoService.excluir(tipo.id);
+      toast.success('Tipo excluido');
       carregar();
-    } catch {
-      alert('Erro ao excluir');
+    } catch (err) {
+      toast.error('Erro ao excluir', extractApiError(err));
     }
   }
 

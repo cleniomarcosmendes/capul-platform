@@ -1,6 +1,9 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../components/Toast';
+import { useConfirm } from '../../components/ConfirmDialog';
+import { extractApiError } from '../../utils/errors';
 import { departamentoService } from '../../services/departamento.service';
 import { filialService } from '../../services/filial.service';
 import { tipoDepartamentoService } from '../../services/tipo-departamento.service';
@@ -13,6 +16,8 @@ type SortDir = 'asc' | 'desc';
 export function DepartamentosPage() {
   const { configuradorRole } = useAuth();
   const canEdit = configuradorRole === 'ADMIN' || configuradorRole === 'GESTOR';
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [filiais, setFiliais] = useState<FilialOption[]>([]);
@@ -116,9 +121,10 @@ export function DepartamentosPage() {
       setDescricao('');
       setShowForm(false);
       setEditingId(null);
+      toast.success(editingId ? 'Departamento atualizado' : 'Departamento criado');
       carregar();
-    } catch {
-      alert('Erro ao salvar departamento');
+    } catch (err) {
+      toast.error('Erro ao salvar departamento', extractApiError(err));
     } finally {
       setSaving(false);
     }
@@ -240,13 +246,19 @@ export function DepartamentosPage() {
                             {depto.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
                           </button>
                           <button onClick={async () => {
-                            if (!confirm(`Excluir departamento "${depto.nome}"?`)) return;
+                            const ok = await confirm({
+                              title: `Excluir departamento "${depto.nome}"?`,
+                              description: 'Esta acao nao pode ser desfeita.',
+                              variant: 'danger',
+                              confirmLabel: 'Excluir',
+                            });
+                            if (!ok) return;
                             try {
                               await departamentoService.excluir(depto.id);
+                              toast.success('Departamento excluido');
                               carregar();
                             } catch (err: unknown) {
-                              const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir';
-                              alert(msg);
+                              toast.error('Erro ao excluir', extractApiError(err));
                             }
                           }} className="flex items-center gap-1 text-xs text-red-600 hover:underline">
                             <Trash2 className="w-3.5 h-3.5" /> Excluir

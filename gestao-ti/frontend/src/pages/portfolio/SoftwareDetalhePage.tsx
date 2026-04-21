@@ -69,7 +69,7 @@ export function SoftwareDetalhePage() {
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
   const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
-  const { confirm } = useToast();
+  const { toast, confirm } = useToast();
 
   const [software, setSoftware] = useState<Software | null>(null);
   const [loading, setLoading] = useState(true);
@@ -186,7 +186,7 @@ export function SoftwareDetalhePage() {
                       await softwareService.excluir(id!);
                       navigate('/gestao-ti/softwares');
                     } catch (err: unknown) {
-                      alert((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir');
+                      toast('error', (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao excluir');
                     }
                   }}
                   className="flex items-center gap-1 text-sm text-red-600 hover:text-red-700 border border-red-300 px-3 py-1.5 rounded-lg hover:bg-red-50"

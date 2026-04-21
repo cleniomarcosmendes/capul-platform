@@ -1,6 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { fiscalApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../components/Toast';
+import { useConfirm } from '../../components/ConfirmDialog';
+import { extractApiError } from '../../utils/errors';
 
 interface CertificadoPublico {
   id: string;
@@ -18,6 +21,8 @@ interface CertificadoPublico {
 export function CertificadoFiscalPage() {
   const { configuradorRole } = useAuth();
   const isAdmin = configuradorRole === 'ADMIN';
+  const toast = useToast();
+  const confirm = useConfirm();
   const [certs, setCerts] = useState<CertificadoPublico[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,21 +48,27 @@ export function CertificadoFiscalPage() {
   async function handleAtivar(id: string) {
     try {
       await fiscalApi.post(`/certificado/${id}/ativar`);
+      toast.success('Certificado ativado');
       load();
     } catch (err) {
-      const msg = (err as { response?: { data?: { mensagem?: string } } }).response?.data?.mensagem;
-      alert(msg ?? 'Falha ao ativar.');
+      toast.error('Falha ao ativar', extractApiError(err));
     }
   }
 
   async function handleRemover(id: string) {
-    if (!confirm('Remover este certificado? Esta ação não pode ser desfeita.')) return;
+    const ok = await confirm({
+      title: 'Remover este certificado?',
+      description: 'Esta acao nao pode ser desfeita. O certificado sera excluido permanentemente.',
+      variant: 'danger',
+      confirmLabel: 'Remover',
+    });
+    if (!ok) return;
     try {
       await fiscalApi.delete(`/certificado/${id}`);
+      toast.success('Certificado removido');
       load();
     } catch (err) {
-      const msg = (err as { response?: { data?: { mensagem?: string } } }).response?.data?.mensagem;
-      alert(msg ?? 'Falha ao remover.');
+      toast.error('Falha ao remover', extractApiError(err));
     }
   }
 

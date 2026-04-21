@@ -314,7 +314,6 @@ async function main() {
         codigo: 'PROTHEUS',
         nome: 'Protheus ERP',
         descricao: 'Integracao com ERP Protheus (Totvs) — consumido por Inventario (hierarquia/produtos/digitacao), Gestao TI (colaboradores) e Fiscal (xmlNfe/grvXML/eventosNfe/cadastroFiscal)',
-        ambiente: 'HOMOLOGACAO',
         tipoAuth: 'BASIC',
         authConfig: 'QVBJQ0FQVUw6QXAxQzRwdTFQUkQ=',
         endpoints: {

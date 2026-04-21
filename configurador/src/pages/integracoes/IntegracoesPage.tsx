@@ -1,6 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../components/Toast';
+import { useConfirm } from '../../components/ConfirmDialog';
+import { extractApiError } from '../../utils/errors';
 import {
   integracaoService,
   MODULOS_CONSUMIDORES,
@@ -11,7 +14,7 @@ import {
 } from '../../services/integracao.service';
 import {
   Plus, Plug, Pencil, Trash2, TestTube2, Check, X, Loader2, AlertTriangle, Shield,
-  FileText, HardDrive, Users,
+  FileText, HardDrive, Users, ArrowLeftRight,
 } from 'lucide-react';
 
 const AMBIENTES = ['PRODUCAO', 'HOMOLOGACAO'] as const;
@@ -191,9 +194,146 @@ function ModalConfirmarAtivacao({
   );
 }
 
+// --- Modal de confirmacao de troca de ambiente em massa (todos os endpoints de um modulo) ---
+function ModalConfirmarTrocaBulk({
+  integ,
+  modulo,
+  ambienteAlvo,
+  endpoints,
+  onConfirm,
+  onCancel,
+  switching,
+}: {
+  integ: IntegracaoApi;
+  modulo: ModuloConsumidor;
+  ambienteAlvo: 'PRODUCAO' | 'HOMOLOGACAO';
+  endpoints: IntegracaoEndpoint[];
+  onConfirm: () => void;
+  onCancel: () => void;
+  switching: boolean;
+}) {
+  const isProd = ambienteAlvo === 'PRODUCAO';
+  const Icon = MODULO_ICON[modulo];
+
+  // Agrupa por operacao → par (alvo vs. atual ativo)
+  const operacoes = [...new Set(endpoints.map((ep) => ep.operacao))].sort();
+  const linhas = operacoes.map((op) => {
+    const alvo = endpoints.find((ep) => ep.operacao === op && ep.ambiente === ambienteAlvo);
+    const atualAtivo = endpoints.find((ep) => ep.operacao === op && ep.ativo) ?? null;
+    return { op, alvo, atualAtivo, jaAtivo: atualAtivo?.ambiente === ambienteAlvo };
+  });
+  const totalMudancas = linhas.filter((l) => !!l.alvo && !l.jaAtivo).length;
+  const semAlvo = linhas.filter((l) => !l.alvo).length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
+        {/* Header colorido pelo ambiente alvo */}
+        <div className={`px-6 py-5 ${isProd ? 'bg-gradient-to-r from-red-600 to-red-700' : 'bg-gradient-to-r from-amber-500 to-amber-600'}`}>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/20 rounded-lg">
+              <ArrowLeftRight className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-white font-semibold text-lg">
+                Trocar {MODULO_LABEL[modulo]} para {ambienteAlvo}
+              </h3>
+              <p className="text-white/80 text-sm">{integ.nome} — {totalMudancas} operacao(oes) sera(ao) alterada(s)</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-5">
+          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+            <Icon className="w-4 h-4 text-slate-400" />
+            <span className="text-xs text-slate-400 uppercase tracking-wider">{MODULO_LABEL[modulo]}</span>
+            <span className="text-slate-300">/</span>
+            <span className="text-slate-600 text-sm">{operacoes.length} operacao(oes)</span>
+          </div>
+
+          <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+            {linhas.map(({ op, alvo, atualAtivo, jaAtivo }) => (
+              <div key={op} className="flex items-center gap-3 py-1.5 text-sm">
+                <span className="font-medium text-slate-700 min-w-[120px]">{op}</span>
+                {!alvo ? (
+                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                    <AlertTriangle className="w-3 h-3" /> sem endpoint {ambienteAlvo}
+                  </span>
+                ) : jaAtivo ? (
+                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                    <Check className="w-3 h-3" /> ja em {ambienteAlvo}
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-2 text-xs">
+                    {atualAtivo && (
+                      <>
+                        <AmbienteBadge ambiente={atualAtivo.ambiente} />
+                        <ArrowLeftRight className="w-3 h-3 text-slate-400" />
+                      </>
+                    )}
+                    <AmbienteBadge ambiente={alvo.ambiente} />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {semAlvo > 0 && (
+            <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg mt-4">
+              <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-amber-700 leading-relaxed">
+                {semAlvo} operacao(oes) nao tem endpoint cadastrado em <strong>{ambienteAlvo}</strong> —
+                sera(ao) ignorada(s). Cadastre manualmente antes se precisar.
+              </p>
+            </div>
+          )}
+
+          {isProd && totalMudancas > 0 && (
+            <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg mt-4">
+              <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-red-700 leading-relaxed">
+                A troca em massa para <strong>PRODUCAO</strong> afeta imediatamente todas as consultas reais do
+                modulo <strong>{MODULO_LABEL[modulo]}</strong>. Certifique-se de que todos os endpoints estao publicados.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={switching}
+            className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-200 rounded-lg disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={switching || totalMudancas === 0}
+            className={`flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ${
+              isProd ? 'bg-red-600 hover:bg-red-700 shadow-red-200 shadow-md' : 'bg-amber-500 hover:bg-amber-600 shadow-amber-200 shadow-md'
+            }`}
+          >
+            {switching ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Trocando...</>
+            ) : totalMudancas === 0 ? (
+              <><Check className="w-4 h-4" /> Nada a fazer</>
+            ) : (
+              <><ArrowLeftRight className="w-4 h-4" /> Trocar {totalMudancas} operacao(oes)</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function IntegracoesPage() {
   const { configuradorRole } = useAuth();
   const canEdit = configuradorRole === 'ADMIN';
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [integracoes, setIntegracoes] = useState<IntegracaoApi[]>([]);
   const [loading, setLoading] = useState(true);
@@ -230,6 +370,14 @@ export function IntegracoesPage() {
     endpointAtualAtivo: IntegracaoEndpoint | null;
   } | null>(null);
   const [switching, setSwitching] = useState(false);
+
+  // Modal de troca em massa (todos os endpoints de um modulo)
+  const [trocaBulk, setTrocaBulk] = useState<{
+    integ: IntegracaoApi;
+    modulo: ModuloConsumidor;
+    ambienteAlvo: 'PRODUCAO' | 'HOMOLOGACAO';
+  } | null>(null);
+  const [switchingBulk, setSwitchingBulk] = useState(false);
 
 
   // Tab ativo por integracao (default: primeiro modulo com endpoints)
@@ -286,9 +434,10 @@ export function IntegracoesPage() {
         } as any);
       }
       setShowForm(false);
+      toast.success(editingId ? 'Integracao atualizada' : 'Integracao criada');
       carregar();
-    } catch (err: any) {
-      alert(err?.response?.data?.message || 'Erro ao salvar integracao');
+    } catch (err) {
+      toast.error('Falha ao salvar integracao', extractApiError(err));
     } finally { setSaving(false); }
   }
 
@@ -297,12 +446,33 @@ export function IntegracoesPage() {
     setSwitching(true);
     try {
       await integracaoService.ativarEndpoint(confirmarAtivacao.integ.id, confirmarAtivacao.endpointAlvo.id);
+      const amb = confirmarAtivacao.endpointAlvo.ambiente;
+      const op = confirmarAtivacao.endpointAlvo.operacao;
       setConfirmarAtivacao(null);
+      toast.success(`Endpoint ativado em ${amb}`, `Operacao "${op}"`);
       carregar();
-    } catch (err: any) {
-      alert(err?.response?.data?.message || 'Erro ao ativar endpoint');
+    } catch (err) {
+      toast.error('Falha ao ativar endpoint', extractApiError(err));
     } finally { setSwitching(false); }
-  }, [confirmarAtivacao]);
+  }, [confirmarAtivacao, toast]);
+
+  const confirmarTrocaBulk = useCallback(async () => {
+    if (!trocaBulk) return;
+    setSwitchingBulk(true);
+    try {
+      const res = await integracaoService.trocarAmbienteModulo(
+        trocaBulk.integ.id,
+        trocaBulk.modulo,
+        trocaBulk.ambienteAlvo,
+      );
+      const amb = trocaBulk.ambienteAlvo;
+      setTrocaBulk(null);
+      toast.success(`Ambiente do modulo alterado para ${amb}`, `${res.endpointsAtivados} operacao(oes) agora em ${amb}`);
+      carregar();
+    } catch (err) {
+      toast.error('Falha ao trocar ambiente do modulo', extractApiError(err));
+    } finally { setSwitchingBulk(false); }
+  }, [trocaBulk, toast]);
 
   // --- Endpoint CRUD ---
 
@@ -357,9 +527,10 @@ export function IntegracoesPage() {
       }
       setShowEpForm(null);
       setEditingEpId(null);
+      toast.success(editingEpId ? 'Endpoint atualizado' : 'Endpoint criado');
       carregar();
-    } catch (err: any) {
-      alert(err?.response?.data?.message || 'Erro ao salvar endpoint');
+    } catch (err) {
+      toast.error('Falha ao salvar endpoint', extractApiError(err));
     } finally { setSavingEp(false); }
   }
 
@@ -556,8 +727,20 @@ export function IntegracoesPage() {
                           </button>
                           <button onClick={() => iniciarEdicao(integ)} className="text-slate-400 hover:text-emerald-600" title="Editar integracao"><Pencil className="w-4 h-4" /></button>
                           <button onClick={async () => {
-                            if (!confirm(`Excluir integracao "${integ.nome}" e todos seus endpoints?`)) return;
-                            try { await integracaoService.excluir(integ.id); carregar(); } catch { alert('Erro ao excluir'); }
+                            const ok = await confirm({
+                              title: `Excluir integracao "${integ.nome}"?`,
+                              description: 'Todos os endpoints vinculados serao removidos. Esta acao nao pode ser desfeita.',
+                              variant: 'danger',
+                              confirmLabel: 'Excluir',
+                            });
+                            if (!ok) return;
+                            try {
+                              await integracaoService.excluir(integ.id);
+                              toast.success('Integracao excluida');
+                              carregar();
+                            } catch (err) {
+                              toast.error('Erro ao excluir', extractApiError(err));
+                            }
                           }} className="text-slate-400 hover:text-red-600" title="Excluir integracao"><Trash2 className="w-4 h-4" /></button>
                         </>
                       )}
@@ -611,6 +794,21 @@ export function IntegracoesPage() {
                         {/* Sub-header: acoes do modulo ativo */}
                         {canEdit && (
                           <div className="flex items-center justify-end gap-2 px-6 py-2.5 bg-slate-50/60 border-b border-slate-100">
+                            <button
+                              onClick={() => setTrocaBulk({ integ, modulo: moduloAtivo, ambienteAlvo: 'HOMOLOGACAO' })}
+                              className="flex items-center gap-1 text-xs text-amber-700 hover:text-amber-800 px-2 py-1 rounded border border-amber-200 hover:bg-amber-50"
+                              title={`Ativar todos os endpoints de ${MODULO_LABEL[moduloAtivo]} em HOMOLOGACAO`}
+                            >
+                              <ArrowLeftRight className="w-3.5 h-3.5" /> Todos HOM
+                            </button>
+                            <button
+                              onClick={() => setTrocaBulk({ integ, modulo: moduloAtivo, ambienteAlvo: 'PRODUCAO' })}
+                              className="flex items-center gap-1 text-xs text-red-700 hover:text-red-800 px-2 py-1 rounded border border-red-200 hover:bg-red-50"
+                              title={`Ativar todos os endpoints de ${MODULO_LABEL[moduloAtivo]} em PRODUCAO`}
+                            >
+                              <ArrowLeftRight className="w-3.5 h-3.5" /> Todos PROD
+                            </button>
+                            <span className="mx-1 h-4 w-px bg-slate-200" />
                             <button
                               onClick={() => testarTodosModulo(integ, moduloAtivo)}
                               className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded border border-blue-200 hover:bg-blue-50"
@@ -722,8 +920,20 @@ export function IntegracoesPage() {
                                           </button>
                                           <button
                                             onClick={async () => {
-                                              if (!confirm(`Excluir endpoint "${epDisplay.operacao}" (${epDisplay.ambiente})?`)) return;
-                                              try { await integracaoService.excluirEndpoint(epDisplay.id); carregar(); } catch { alert('Erro ao excluir'); }
+                                              const ok = await confirm({
+                                                title: `Excluir endpoint "${epDisplay.operacao}"?`,
+                                                description: `Ambiente ${epDisplay.ambiente}. Esta acao nao pode ser desfeita.`,
+                                                variant: 'danger',
+                                                confirmLabel: 'Excluir',
+                                              });
+                                              if (!ok) return;
+                                              try {
+                                                await integracaoService.excluirEndpoint(epDisplay.id);
+                                                toast.success('Endpoint excluido');
+                                                carregar();
+                                              } catch (err) {
+                                                toast.error('Erro ao excluir endpoint', extractApiError(err));
+                                              }
                                             }}
                                             className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50"
                                             title="Excluir endpoint"
@@ -771,6 +981,19 @@ export function IntegracoesPage() {
           onConfirm={confirmarAtivacaoEndpoint}
           onCancel={() => setConfirmarAtivacao(null)}
           switching={switching}
+        />
+      )}
+
+      {/* Modal de troca em massa por modulo */}
+      {trocaBulk && (
+        <ModalConfirmarTrocaBulk
+          integ={trocaBulk.integ}
+          modulo={trocaBulk.modulo}
+          ambienteAlvo={trocaBulk.ambienteAlvo}
+          endpoints={trocaBulk.integ.endpoints.filter((ep) => ep.modulo === trocaBulk.modulo)}
+          onConfirm={confirmarTrocaBulk}
+          onCancel={() => setTrocaBulk(null)}
+          switching={switchingBulk}
         />
       )}
     </>

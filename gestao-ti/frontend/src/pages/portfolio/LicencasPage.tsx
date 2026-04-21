@@ -36,7 +36,7 @@ const statusCores: Record<string, string> = {
 export function LicencasPage() {
   const { gestaoTiRole } = useAuth();
   const isAdmin = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
-  const { confirm } = useToast();
+  const { toast, confirm } = useToast();
 
   const [licencas, setLicencas] = useState<SoftwareLicenca[]>([]);
   const [categorias, setCategorias] = useState<CategoriaLicenca[]>([]);
@@ -170,7 +170,7 @@ export function LicencasPage() {
       carregarLicencas();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      alert(msg || 'Erro ao excluir licenca');
+      toast('error', msg || 'Erro ao excluir licenca');
     }
   }
 

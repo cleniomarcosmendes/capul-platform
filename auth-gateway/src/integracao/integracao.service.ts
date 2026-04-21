@@ -211,14 +211,17 @@ export class IntegracaoService {
   ) {
     await this.findOne(integracaoId);
 
-    const [ativados] = await this.prisma.$transaction([
-      this.prisma.integracaoApiEndpoint.updateMany({
-        where: { integracaoId, modulo, ambiente },
-        data: { ativo: true },
-      }),
+    // IMPORTANTE: desativar ANTES de ativar, caso contrario o partial unique
+    // index (ativo=true WHERE modulo,operacao) quebra no meio da transacao
+    // porque as linhas do ambiente antigo ainda estariam ativas.
+    const [, ativados] = await this.prisma.$transaction([
       this.prisma.integracaoApiEndpoint.updateMany({
         where: { integracaoId, modulo, NOT: { ambiente } },
         data: { ativo: false },
+      }),
+      this.prisma.integracaoApiEndpoint.updateMany({
+        where: { integracaoId, modulo, ambiente },
+        data: { ativo: true },
       }),
     ]);
 
