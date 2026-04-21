@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Clock, Calendar, Save, Info, AlertCircle } from 'lucide-react';
-import { fiscalApi } from '../services/api';
-import { PageWrapper } from '../components/PageWrapper';
-import { Button } from '../components/Button';
-import { useToast } from '../components/Toast';
-import { useAuth } from '../contexts/AuthContext';
-import { extractApiError } from '../utils/errors';
+import { fiscalApi } from '../../../services/api';
+import { Button } from '../../../components/Button';
+import { useToast } from '../../../components/Toast';
+import { useAuth } from '../../../contexts/AuthContext';
+import { extractApiError } from '../../../utils/errors';
 
 interface SchedulerStatus {
   meioDia: { cron: string; proxima: string | null } | null;
@@ -17,7 +16,7 @@ interface AmbienteStatus {
   cronMovimentoManhaSeguinte: string;
 }
 
-export function OperacaoAgendamentosPage() {
+export function AgendamentosTab() {
   const [status, setStatus] = useState<SchedulerStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -61,12 +60,10 @@ export function OperacaoAgendamentosPage() {
   async function handleSalvar() {
     setSalvando(true);
     try {
-      // 1. Grava no banco com validacao backend (tenta instanciar CronJob)
       await fiscalApi.put('/ambiente/crons', {
         cronMovimentoMeioDia: cronMeioDia,
         cronMovimentoManhaSeguinte: cronManhaSeguinte,
       });
-      // 2. Recarrega scheduler para aplicar sem restart do fiscal-backend
       await fiscalApi.post('/cruzamento/scheduler/recarregar');
       toast.success('Horários atualizados', 'O scheduler foi recarregado com os novos crons.');
       await load();
@@ -78,7 +75,7 @@ export function OperacaoAgendamentosPage() {
   }
 
   return (
-    <PageWrapper title="Agendamentos do Cruzamento">
+    <>
       <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
         Duas corridas diárias automáticas alinhadas à janela de 24h de cancelamento de NF-e
         (Plano v2.0 §2.1). Cada corrida varre apenas os CNPJs que tiveram movimento fiscal no
@@ -132,22 +129,15 @@ export function OperacaoAgendamentosPage() {
           </Button>
         </div>
       )}
-    </PageWrapper>
+    </>
   );
 }
 
-// Traduz um cron 5-campos (min hora dia mes dow) em descricao legivel
-// para os casos MAIS comuns. Cobre "0 12 * * *", "0 6 * * 1-5", e
-// expressoes com "*\/30 * * * *". Casos exoticos retornam a propria expressao.
 function descreverCron(expr: string): string {
   const partes = expr.trim().split(/\s+/);
   if (partes.length !== 5) return expr;
   const [min, hora, diaMes, mes, dow] = partes;
-
-  // Todo dia (* * *) no calendario
   const todoDia = diaMes === '*' && mes === '*' && dow === '*';
-
-  // Minuto e hora sao especificos (numericos puros)
   const minNum = /^\d+$/.test(min) ? parseInt(min, 10) : null;
   const horaNum = /^\d+$/.test(hora) ? parseInt(hora, 10) : null;
 
@@ -175,7 +165,6 @@ function descreverCron(expr: string): string {
   return expr;
 }
 
-/** Validacao client-side minima — 5 campos nao vazios separados por espaco. */
 function cronValido(expr: string): boolean {
   const partes = expr.trim().split(/\s+/);
   return partes.length === 5 && partes.every((p) => p.length > 0);

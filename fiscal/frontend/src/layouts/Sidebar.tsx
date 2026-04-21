@@ -7,14 +7,11 @@ import {
   UserSearch,
   Activity,
   Mail,
-  Settings,
+  Sliders,
+  Stethoscope,
   ArrowLeft,
   LogOut,
   FileSearch,
-  Gauge,
-  Globe,
-  Clock,
-  ShieldCheck,
   AlertTriangle,
 } from 'lucide-react';
 import type { RoleFiscal } from '../types';
@@ -34,11 +31,8 @@ const menuItems: MenuItem[] = [
   { label: 'Divergencias', icon: AlertTriangle, path: '/divergencias', minRole: 'ANALISTA_CADASTRO' },
   { label: 'Historico de Alertas', icon: Mail, path: '/alertas', minRole: 'GESTOR_FISCAL' },
   { section: 'OPERACAO', minRole: 'OPERADOR_ENTRADA' },
-  { label: 'Limites SEFAZ', icon: Gauge, path: '/operacao/limites', minRole: 'OPERADOR_ENTRADA' },
-  { label: 'Circuit Breaker', icon: Settings, path: '/operacao/circuit-breaker', minRole: 'ANALISTA_CADASTRO' },
-  { label: 'Ambiente PROD/HOM', icon: Globe, path: '/operacao/ambiente', minRole: 'GESTOR_FISCAL' },
-  { label: 'Agendamentos', icon: Clock, path: '/operacao/agendamentos', minRole: 'GESTOR_FISCAL' },
-  { label: 'Cadeia TLS', icon: ShieldCheck, path: '/operacao/tls', minRole: 'ADMIN_TI' },
+  { label: 'Controle Operacional', icon: Sliders, path: '/operacao/controle', minRole: 'OPERADOR_ENTRADA' },
+  { label: 'Diagnóstico', icon: Stethoscope, path: '/operacao/diagnostico', minRole: 'ANALISTA_CADASTRO' },
 ];
 
 function filterMenuByRole(items: MenuItem[], role: RoleFiscal | null): MenuItem[] {

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { fiscalApi } from '../services/api';
-import { PageWrapper } from '../components/PageWrapper';
-import { Badge } from '../components/Badge';
+import { fiscalApi } from '../../../services/api';
+import { Badge } from '../../../components/Badge';
 
 interface UfCircuit {
   uf: string;
@@ -13,7 +12,7 @@ interface UfCircuit {
   ultimaAtualizacao: string;
 }
 
-export function OperacaoCircuitBreakerPage() {
+export function CircuitBreakerTab() {
   const [circuits, setCircuits] = useState<UfCircuit[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,7 +33,7 @@ export function OperacaoCircuitBreakerPage() {
   }, []);
 
   return (
-    <PageWrapper title="Circuit Breaker por UF">
+    <>
       <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
         Cada SEFAZ estadual tem um disjuntor próprio. UFs com 3 ou mais erros consecutivos ficam
         bloqueadas por 30 minutos automaticamente (estado <strong>ABERTO</strong>), depois entram
@@ -84,6 +83,6 @@ export function OperacaoCircuitBreakerPage() {
           </table>
         )}
       </div>
-    </PageWrapper>
+    </>
   );
 }

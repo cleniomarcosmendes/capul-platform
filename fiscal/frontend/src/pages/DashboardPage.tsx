@@ -199,7 +199,7 @@ function ConsumoCard({ consumo }: { consumo: DashboardOverview['consumoDiario'] 
           ? 'amber'
           : 'emerald';
   return (
-    <Link to="/operacao/limites" className="block">
+    <Link to="/operacao/controle/limites" className="block">
       <Card titulo="Consumo SEFAZ hoje" icone={<Gauge className="h-4 w-4" />} cor={cor}>
         <div className="flex items-baseline gap-1">
           <span className={`text-2xl font-bold ${corTextoPorNivel(cor)}`}>{consumo.contador}</span>
@@ -257,7 +257,7 @@ function DivergenciasCard({
 function AmbienteCard({ ambiente }: { ambiente: DashboardOverview['ambiente'] }) {
   const cor = ambiente.pauseSync ? 'red' : ambiente.ativo === 'PRODUCAO' ? 'emerald' : 'amber';
   return (
-    <Link to="/operacao/ambiente" className="block">
+    <Link to="/operacao/controle/ambiente" className="block">
       <Card titulo="Ambiente" icone={<Globe2 className="h-4 w-4" />} cor={cor}>
         <div className="flex items-center gap-2">
           <Badge variant={ambiente.ativo === 'PRODUCAO' ? 'green' : 'yellow'}>
@@ -377,7 +377,7 @@ function UfsBloqueadasCard({ ufs }: { ufs: DashboardOverview['ufsBloqueadas'] })
     );
   }
   return (
-    <Link to="/operacao/circuit-breaker" className="block">
+    <Link to="/operacao/diagnostico/circuit-breaker" className="block">
       <Card titulo="Circuit Breaker por UF" icone={<Zap className="h-4 w-4" />} cor="red">
         <div className="flex flex-wrap gap-1.5">
           {ufs.map((u) => (

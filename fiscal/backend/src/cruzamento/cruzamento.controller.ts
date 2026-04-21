@@ -133,6 +133,17 @@ export class CruzamentoController {
     return { inicio, fim };
   }
 
+  /**
+   * Estado operacional por tipo: última execução concluída, execução em
+   * curso, disponibilidade (cooldown). Consumido pela UI de /execucoes
+   * para desabilitar botões de disparo e renderizar o banner de status.
+   */
+  @Get('status-execucao-tipos')
+  @RoleMinima('ANALISTA_CADASTRO')
+  async statusExecucaoTipos() {
+    return this.execucao.statusExecucaoPorTipo();
+  }
+
   @Get('execucoes')
   @RoleMinima('ANALISTA_CADASTRO')
   async listarExecucoes(@Query('tipo') tipo?: TipoSincronizacao, @Query('limit') limit?: string) {

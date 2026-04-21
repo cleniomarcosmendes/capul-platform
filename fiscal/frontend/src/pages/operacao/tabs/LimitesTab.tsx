@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Info, ShieldAlert } from 'lucide-react';
-import { fiscalApi } from '../services/api';
-import { PageWrapper } from '../components/PageWrapper';
-import { Button } from '../components/Button';
-import { useToast } from '../components/Toast';
-import { useConfirm } from '../components/ConfirmDialog';
-import { useAuth } from '../contexts/AuthContext';
-import { extractApiError } from '../utils/errors';
+import { fiscalApi } from '../../../services/api';
+import { Button } from '../../../components/Button';
+import { useToast } from '../../../components/Toast';
+import { useConfirm } from '../../../components/ConfirmDialog';
+import { useAuth } from '../../../contexts/AuthContext';
+import { extractApiError } from '../../../utils/errors';
 
 interface LimiteDiarioStatus {
   contadorHoje: number;
@@ -19,7 +18,7 @@ interface LimiteDiarioStatus {
   percentualConsumido: number;
 }
 
-export function OperacaoLimitesPage() {
+export function LimitesTab() {
   const [status, setStatus] = useState<LimiteDiarioStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
@@ -47,7 +46,7 @@ export function OperacaoLimitesPage() {
 
   useEffect(() => {
     load();
-    const timer = setInterval(load, 30_000); // refresh a cada 30s
+    const timer = setInterval(load, 30_000);
     return () => clearInterval(timer);
   }, []);
 
@@ -117,8 +116,7 @@ export function OperacaoLimitesPage() {
     : 'slate';
 
   return (
-    <PageWrapper title="Limites e Política de Consultas SEFAZ">
-      {/* Widget de consumo em tempo real */}
+    <>
       {loading ? (
         <div className="mb-6 rounded-lg border border-slate-200 bg-slate-50 p-5 text-slate-500">
           Carregando status…
@@ -190,7 +188,6 @@ export function OperacaoLimitesPage() {
         </div>
       ) : null}
 
-      {/* Editor de limites (apenas ADMIN_TI) */}
       {editMode && isAdmin && status && (
         <div className="mb-6 rounded-lg border border-indigo-200 bg-indigo-50 p-5">
           <h3 className="mb-3 text-sm font-semibold text-indigo-900">Editar valores</h3>
@@ -222,7 +219,6 @@ export function OperacaoLimitesPage() {
         </div>
       )}
 
-      {/* Texto da política — Plano v2.0 §6.3 */}
       <article className="prose prose-slate max-w-none rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="!mb-2 !mt-0 text-lg font-semibold text-slate-900">
           Por que existe este limite?
@@ -345,7 +341,7 @@ export function OperacaoLimitesPage() {
           Alterações deste texto ou dos limites exigem alinhamento com o Setor Fiscal.
         </div>
       </div>
-    </PageWrapper>
+    </>
   );
 }
 
@@ -371,4 +367,3 @@ function LimitInput({
     </label>
   );
 }
-

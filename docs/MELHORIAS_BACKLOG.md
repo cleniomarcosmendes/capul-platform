@@ -17,57 +17,6 @@ esquecer — e sem poluir a conversa principal.
 
 ---
 
-## Fiscal
-
-### ⏳ 2026-04-20 — Drop da coluna global `integracoes_api.ambiente`
-
-**Contexto:** Passo 11 do plano per-endpoint/modulo (v2). Depois do refactor,
-a coluna ficou "morta-viva" — ainda existe no banco mas nenhum código de
-produção lê mais dela para routing. UI removeu o campo do `UpdateIntegracaoDto`.
-
-**Por que adiado:** DDL (`DROP COLUMN`) num banco com 3 backends ativos é
-uma ação irreversível. Boa prática é observar 1-2 dias de uso real da nova
-UI e dos 3 resolvers (Fiscal, Gestão TI, Inventário) antes de remover, pra
-garantir que nada escapou da varredura inicial.
-
-**Quando retomar:** Se nada quebrar até 22-23/04/2026, criar migration
-`20260423000000_drop_ambiente_global/migration.sql` com:
-```sql
-ALTER TABLE core.integracoes_api DROP COLUMN ambiente;
-```
-Rollback trivial: reverter a migration anterior restaura coluna + dados.
-
-**Arquivos afetados quando for fazer:**
-- `auth-gateway/prisma/migrations/` (novo diretório)
-- `auth-gateway/prisma/schema.prisma` (remove `ambiente` do model `IntegracaoApi`)
-- `configurador/src/layouts/Header.tsx` (ver item abaixo — provavelmente
-  quebra o badge stale, já fica oportuno)
-
----
-
-### ⏳ 2026-04-20 — Header do Configurador derivar ambiente dos endpoints
-
-**Contexto:** `configurador/src/layouts/Header.tsx` ainda lê
-`protheus.ambiente` (a coluna global) para mostrar o badge "API-HLG" ou
-"API-PRD". Depois do refactor per-endpoint, essa flag ficou stale — não
-reflete mais a realidade quando há ambientes mistos entre os módulos.
-
-**Por que adiado:** Não bloqueia funcionalidade — é só um badge informativo.
-Apagar agora deixaria o cabeçalho sem indicador nenhum, o que é pior.
-
-**Quando retomar:** Junto com o drop da coluna (item acima). Alternativas:
-1. Remover o badge de vez.
-2. Derivar do primeiro módulo (se todos iguais, mostra o valor; se mistos,
-   mostra "MIXED"). Mesmo algoritmo do `ambienteDoModulo` já usado na
-   página de integrações.
-3. Mostrar um badge por módulo (FIS-HLG, TI-PRD, INV-PRD) — mais denso mas
-   mais informativo.
-
-**Arquivos:** `configurador/src/layouts/Header.tsx`,
-`configurador/src/services/integracao.service.ts` (se precisar de helper).
-
----
-
 ## Integração Protheus
 
 ### ⏳ 2026-04-21 — Pedir parâmetro `comMovimentoAte` à equipe Protheus (API `cadastroFiscal`)
@@ -147,8 +96,73 @@ não resolver, considerar automatizar parte do checklist (script que lê
 
 ## Histórico (feitos)
 
-*(vazio — quando um item for concluído, mover para cá com a data da conclusão
-e um breve resumo do que foi feito)*
+### ✅ 2026-04-21 — Drop da coluna global `integracoes_api.ambiente`
+
+Migration `20260421180000_drop_ambiente_integracao_global/migration.sql`
+aplicada. Removido do schema Prisma, do `CreateIntegracaoDto`, do seed e da
+interface `IntegracaoApi` do Configurador. Response de `getEndpointsAtivos`
+continua retornando `ambiente` derivado (PRODUCAO / HOMOLOGACAO / MIXED)
+apenas para log.
+
+### ✅ 2026-04-21 — Header do Configurador derivar ambiente dos endpoints
+
+Adotada a opção 2 do plano. `Header.tsx` agora deriva de todos os endpoints
+ativos do PROTHEUS: badge mostra **API-PRD** (vermelho), **API-HLG** (âmbar)
+ou **API-MIX** (roxo) conforme uniformidade. Algoritmo equivalente ao
+`ambienteDoModulo` usado na página de integrações, porém sem filtro por módulo.
+
+### ✅ 2026-04-21 — Proteção contra execuções concorrentes + cooldown + UI "Nova execução"
+
+Fechou buraco real de operação descoberto ao observar a tela `/execucoes`:
+os 4 botões de disparo não tinham lock no backend, então clique duplo criava
+N execuções paralelas consultando os MESMOS CNPJs no SEFAZ N vezes (dedup
+era per-execução, não entre execuções). A UI só travava durante o POST axios.
+
+**Backend** (`execucao.service.ts`):
+- Novo guard `guardConcorrenciaECooldown()` em `iniciar()` — rejeita 409:
+  - Se já existe EM_EXECUCAO do mesmo tipo (`EXECUCAO_JA_EM_CURSO`)
+  - Se última CONCLUIDA foi há < cooldown (`EXECUCAO_EM_COOLDOWN`)
+- Cooldowns: `MOVIMENTO_*=6h` (cron natural roda 2x/dia), `MANUAL=15min`,
+  `PONTUAL=0` (isento — consultas por chave)
+- Novo método `statusExecucaoPorTipo()` + endpoint
+  `GET /cruzamento/status-execucao-tipos` com estado consolidado
+  (emCurso, ultimaConcluida, disponivelEm, bloqueadoPor) para a UI
+
+**Frontend** (`ExecucoesListPage.tsx`):
+- 4 botões soltos → **1 único "Nova execução"** que abre `ModalNovaExecucao`
+- Modal mostra 3 opções com badge dinâmico por estado: disponível / em curso
+  (spinner) / em cooldown (Clock + hora disponível) / freio ativo. Botão
+  desabilitado quando não pode disparar — UI antecipa o 409 do backend.
+- **Banner de status** acima da tabela (3 cards: meio-dia, manhã seguinte,
+  ambiente SEFAZ) com refresh automático a cada 30s
+- Removido botão "Disparar manual (24h)" — redundante com "Manual (período)"
+  cujo default é 24h
+
+Testado end-to-end: 2ª tentativa retorna 409 com mensagem precisa
+("Aguarde até DD/MM/AAAA, HH:MM (cooldown de Xmin)"), status endpoint marca
+`bloqueadoPor: COOLDOWN`, banner reflete corretamente.
+
+### ✅ 2026-04-21 — Consolidar seção "Operação" do Fiscal em 2 hubs com abas
+
+Executada a Opção B (consolidação parcial, não centralizar em tela única).
+Sidebar reduziu de **5 para 2 entries** na seção OPERACAO:
+- **Controle Operacional** (`/operacao/controle`) — 4 abas: Ambiente, Agendamentos, Freio de Mão, Limites SEFAZ
+- **Diagnóstico** (`/operacao/diagnostico`) — 2 abas: Circuit Breaker, Cadeia TLS
+
+Roteamento via **React Router sub-routes** (opção robusta escolhida no lugar
+de state local + query param), permitindo deep-link direto para aba
+(`/operacao/controle/freio`). Rotas antigas (`/operacao/ambiente`, etc.)
+preservadas via `<Navigate replace>` — bookmarks não quebram.
+
+Freio de Mão foi extraído da antiga página Ambiente para **aba dedicada**,
+com contexto didático ("o que o freio pausa" vs "o que continua funcionando").
+
+Cada aba autocontida com seu próprio `useEffect` + fetch — só carrega
+quando ativada.
+
+Arquivos: 6 `*Tab.tsx` + 2 `Operacao*Page.tsx` (hubs) em `pages/operacao/`,
++ App.tsx reescrito, + Sidebar simplificada, + 3 Links do Dashboard ajustados.
+5 páginas antigas removidas. Role-filtering mantido por tab.
 
 ---
 

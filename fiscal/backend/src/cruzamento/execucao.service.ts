@@ -96,6 +96,12 @@ export class ExecucaoService {
       });
     }
 
+    // Guard concorrência + cooldown (pulando para PONTUAL — consulta isolada
+    // por chave/CNPJ não tem efeito cumulativo em SEFAZ que justifique bloquear).
+    if (tipo !== 'PONTUAL') {
+      await this.guardConcorrenciaECooldown(tipo);
+    }
+
     const sinc = await this.prisma.cadastroSincronizacao.create({
       data: {
         tipo,
@@ -184,6 +190,174 @@ export class ExecucaoService {
     await this.queue.addBulk(jobs);
     this.logger.log(`Execução ${sinc.id.slice(0, 8)}: ${jobs.length} jobs enfileirados em fiscal:cruzamento`);
     return sinc.id;
+  }
+
+  /**
+   * Cooldown em minutos entre execuções finalizadas do mesmo tipo.
+   * PONTUAL fica fora desta proteção (consultas isoladas por chave).
+   *
+   * - MOVIMENTO_MEIO_DIA / MOVIMENTO_MANHA_SEGUINTE: 6h. O cron roda 2x/dia
+   *   (12:00 e 06:00 D+1) e cobre janelas contíguas. Rodar de novo em < 6h
+   *   re-consulta os mesmos CNPJs no SEFAZ, duplicando consumo sem ganho.
+   * - MANUAL: 15 min. Protege contra duplo-clique e engano rápido, mas
+   *   permite correção ágil se o operador errou a janela.
+   */
+  private static readonly COOLDOWN_MIN: Record<TipoSincronizacao, number> = {
+    MOVIMENTO_MEIO_DIA: 6 * 60,
+    MOVIMENTO_MANHA_SEGUINTE: 6 * 60,
+    MANUAL: 15,
+    PONTUAL: 0,
+  };
+
+  /**
+   * Bloqueia o disparo de uma nova execução se:
+   *   1. Já existe execução EM_EXECUCAO do mesmo tipo (protege contra
+   *      duplo-clique e cliques em paralelo — backend não deve aceitar 2
+   *      execuções concorrentes do mesmo tipo).
+   *   2. Última execução CONCLUIDA do mesmo tipo foi há menos que o cooldown
+   *      configurado (protege contra reprocessamento desnecessário que
+   *      duplica consumo SEFAZ sem ganho real — dedup é por execução,
+   *      não entre execuções).
+   *
+   * Lança ConflictException com código estruturado que a UI usa para
+   * disabilitar botão correto e mostrar a data/hora de disponibilidade.
+   */
+  private async guardConcorrenciaECooldown(tipo: TipoSincronizacao): Promise<void> {
+    // 1. Já existe execução do mesmo tipo em curso?
+    const emCurso = await this.prisma.cadastroSincronizacao.findFirst({
+      where: { tipo, status: 'EM_EXECUCAO', finalizadoEm: null },
+      orderBy: { iniciadoEm: 'desc' },
+    });
+    if (emCurso) {
+      throw new ConflictException({
+        erro: 'EXECUCAO_JA_EM_CURSO',
+        mensagem:
+          `Já existe uma execução ${tipo} em curso desde ${emCurso.iniciadoEm.toLocaleString('pt-BR')}. ` +
+          `Aguarde concluir ou cancele antes de disparar outra.`,
+        sincronizacaoEmCurso: emCurso.id,
+      });
+    }
+
+    // 2. Passou o cooldown desde a última CONCLUIDA do mesmo tipo?
+    const cooldownMin = ExecucaoService.COOLDOWN_MIN[tipo];
+    if (cooldownMin > 0) {
+      const ultima = await this.prisma.cadastroSincronizacao.findFirst({
+        where: { tipo, status: 'CONCLUIDA', finalizadoEm: { not: null } },
+        orderBy: { finalizadoEm: 'desc' },
+      });
+      if (ultima?.finalizadoEm) {
+        const msDesde = Date.now() - ultima.finalizadoEm.getTime();
+        const cooldownMs = cooldownMin * 60_000;
+        if (msDesde < cooldownMs) {
+          const disponivelEm = new Date(ultima.finalizadoEm.getTime() + cooldownMs);
+          throw new ConflictException({
+            erro: 'EXECUCAO_EM_COOLDOWN',
+            mensagem:
+              `Já houve uma execução ${tipo} concluída em ${ultima.finalizadoEm.toLocaleString('pt-BR')}. ` +
+              `Aguarde até ${disponivelEm.toLocaleString('pt-BR')} (cooldown de ${cooldownMin}min) para disparar novamente.`,
+            ultimaExecucaoId: ultima.id,
+            ultimaFinalizadoEm: ultima.finalizadoEm,
+            disponivelEm,
+            cooldownMinutos: cooldownMin,
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * Snapshot do estado operacional por tipo para a UI do /execucoes.
+   * Para cada tipo bloqueável (todos exceto PONTUAL), devolve:
+   *   - emCurso: se há execução EM_EXECUCAO (id + iniciadoEm)
+   *   - ultimaConcluida: última finalização CONCLUIDA (id + finalizadoEm + contadores)
+   *   - disponivelEm: Date a partir de quando o tipo pode ser disparado (se em cooldown)
+   *   - cooldownMinutos: duração do cooldown do tipo
+   *   - bloqueadoPor: motivo estruturado ('EM_CURSO' | 'COOLDOWN' | null)
+   *
+   * UI consome para desabilitar a opção correspondente no modal "Nova execução"
+   * e para renderizar o banner de status no topo da lista.
+   */
+  async statusExecucaoPorTipo(): Promise<
+    Array<{
+      tipo: TipoSincronizacao;
+      cooldownMinutos: number;
+      emCurso: { id: string; iniciadoEm: Date; disparadoPor: string | null } | null;
+      ultimaConcluida: {
+        id: string;
+        finalizadoEm: Date;
+        totalContribuintes: number | null;
+        sucessos: number;
+        erros: number;
+      } | null;
+      disponivelEm: Date | null;
+      bloqueadoPor: 'EM_CURSO' | 'COOLDOWN' | null;
+    }>
+  > {
+    const tipos: TipoSincronizacao[] = [
+      'MOVIMENTO_MEIO_DIA',
+      'MOVIMENTO_MANHA_SEGUINTE',
+      'MANUAL',
+    ];
+
+    const agora = Date.now();
+    const resultado = await Promise.all(
+      tipos.map(async (tipo) => {
+        const cooldownMin = ExecucaoService.COOLDOWN_MIN[tipo];
+        const [emCurso, ultimaConcluida] = await Promise.all([
+          this.prisma.cadastroSincronizacao.findFirst({
+            where: { tipo, status: 'EM_EXECUCAO', finalizadoEm: null },
+            orderBy: { iniciadoEm: 'desc' },
+            select: { id: true, iniciadoEm: true, disparadoPor: true },
+          }),
+          this.prisma.cadastroSincronizacao.findFirst({
+            where: { tipo, status: 'CONCLUIDA', finalizadoEm: { not: null } },
+            orderBy: { finalizadoEm: 'desc' },
+            select: {
+              id: true,
+              finalizadoEm: true,
+              totalContribuintes: true,
+              sucessos: true,
+              erros: true,
+            },
+          }),
+        ]);
+
+        let disponivelEm: Date | null = null;
+        let bloqueadoPor: 'EM_CURSO' | 'COOLDOWN' | null = null;
+        if (emCurso) {
+          bloqueadoPor = 'EM_CURSO';
+        } else if (ultimaConcluida?.finalizadoEm && cooldownMin > 0) {
+          const fim = ultimaConcluida.finalizadoEm.getTime() + cooldownMin * 60_000;
+          if (agora < fim) {
+            disponivelEm = new Date(fim);
+            bloqueadoPor = 'COOLDOWN';
+          }
+        }
+
+        return {
+          tipo,
+          cooldownMinutos: cooldownMin,
+          emCurso: emCurso && {
+            id: emCurso.id,
+            iniciadoEm: emCurso.iniciadoEm,
+            disparadoPor: emCurso.disparadoPor,
+          },
+          ultimaConcluida: ultimaConcluida?.finalizadoEm
+            ? {
+                id: ultimaConcluida.id,
+                finalizadoEm: ultimaConcluida.finalizadoEm,
+                totalContribuintes: ultimaConcluida.totalContribuintes,
+                sucessos: ultimaConcluida.sucessos,
+                erros: ultimaConcluida.erros,
+              }
+            : null,
+          disponivelEm,
+          bloqueadoPor,
+        };
+      }),
+    );
+
+    return resultado;
   }
 
   /**
