@@ -39,7 +39,7 @@ export class SchedulerService implements OnApplicationBootstrap {
     this.removerSeExistir(this.MEIO_DIA_JOB);
     this.removerSeExistir(this.MANHA_SEGUINTE_JOB);
 
-    this.registrarCron(
+    this.registrarCronSePresente(
       this.MEIO_DIA_JOB,
       cfg.cronMovimentoMeioDia,
       'MOVIMENTO_MEIO_DIA',
@@ -49,7 +49,7 @@ export class SchedulerService implements OnApplicationBootstrap {
           .catch((err) => this.logger.warn(`MOVIMENTO_MEIO_DIA falhou: ${(err as Error).message}`)),
     );
 
-    this.registrarCron(
+    this.registrarCronSePresente(
       this.MANHA_SEGUINTE_JOB,
       cfg.cronMovimentoManhaSeguinte,
       'MOVIMENTO_MANHA_SEGUINTE',
@@ -58,6 +58,24 @@ export class SchedulerService implements OnApplicationBootstrap {
           .iniciar('MOVIMENTO_MANHA_SEGUINTE', 'sistema:scheduler')
           .catch((err) => this.logger.warn(`MOVIMENTO_MANHA_SEGUINTE falhou: ${(err as Error).message}`)),
     );
+  }
+
+  /**
+   * Cron vazio/null = desabilitado. Desde 22/04/2026 o
+   * `MOVIMENTO_MANHA_SEGUINTE` vem NULL por padrão — janela semanal torna a
+   * 2ª corrida diária redundante (setor fiscal 22/04/2026).
+   */
+  private registrarCronSePresente(
+    name: string,
+    cronExpr: string | null | undefined,
+    label: string,
+    handler: () => void,
+  ): void {
+    if (!cronExpr || cronExpr.trim() === '') {
+      this.logger.log(`Cron ${label} desabilitado (expressão vazia na config).`);
+      return;
+    }
+    this.registrarCron(name, cronExpr, label, handler);
   }
 
   getStatus(): {

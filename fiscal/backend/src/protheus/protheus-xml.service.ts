@@ -2,14 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ProtheusHttpClient, ProtheusHttpError } from './protheus-http.client.js';
 import { ProtheusXmlMock } from './mocks/protheus-xml.mock.js';
-import {
-  XmlFiscalProtheusError,
-  type XmlFiscalErrorBody,
-  type XmlFiscalExistsResponse,
-  type XmlFiscalGetResponse,
-  type XmlFiscalPostBody,
-  type XmlFiscalPostResponse,
-} from './interfaces/xml-fiscal.interface.js';
+import { XmlFiscalProtheusError } from './interfaces/xml-fiscal.interface.js';
 import {
   XmlNfeProtheusError,
   type XmlNfeResult,
@@ -17,16 +10,16 @@ import {
 import type { GrvXmlBody } from './interfaces/grv-xml.interface.js';
 
 /**
- * Adapter da frente `xmlFiscal` (Especificação API v2.0 §3.6/§3.7/§3.8).
+ * Adapter da frente XML fiscal Protheus — contrato v2 (22/04/2026):
+ *   - `buscarXml(chave)` → GET /xmlNfe (unificado NF-e + CT-e, resolve SZR010 ou SPED156)
+ *   - `grvXml(body)`     → POST /grvXML (grava SZR010 + SZQ010)
  *
  * Toggle por env `FISCAL_PROTHEUS_MOCK`:
  *   - true  → usa stub em memória (ProtheusXmlMock)
  *   - false → faz chamadas reais ao Protheus via undici
  *
- * O mock permanece ATIVO até a reunião com o time Protheus em 13/04/2026
- * confirmar a publicação dos endpoints reais. A interface pública
- * (`exists`, `get`, `post`) é idêntica nos dois modos — qualquer código que
- * consume este service não precisa saber qual modo está ativo.
+ * A interface pública é idêntica nos dois modos — qualquer código que
+ * consome este service não precisa saber qual modo está ativo.
  */
 @Injectable()
 export class ProtheusXmlService {
@@ -40,7 +33,7 @@ export class ProtheusXmlService {
   ) {
     this.mockMode = config.get<string>('FISCAL_PROTHEUS_MOCK') === 'true';
     if (this.mockMode) {
-      this.logger.warn('ProtheusXmlService MOCK ATIVO — chamadas xmlFiscal não atingem o Protheus real.');
+      this.logger.warn('ProtheusXmlService MOCK ATIVO — chamadas xmlNfe/grvXML não atingem o Protheus real.');
     }
   }
 
@@ -121,47 +114,6 @@ export class ProtheusXmlService {
   }
 
   /**
-   * Cache check leve. NUNCA trafega o conteúdo de ZR_XML.
-   * "Não existe" é resposta normal HTTP 200 — ver §3.6 da Especificação.
-   *
-   * @deprecated O contrato `xmlFiscal` da v2.0 foi substituído por `/xmlNfe`
-   * (recebido em 20/04/2026). Use `buscarXml(chave)` que faz a chamada única
-   * e devolve `{ found, origem, xmlBase64 }`. Será removido após a migração
-   * de `nfe.service.ts`.
-   */
-  async exists(chave: string): Promise<XmlFiscalExistsResponse> {
-    if (this.mockMode) return this.mock.exists(chave);
-
-    try {
-      return await this.http.request<XmlFiscalExistsResponse>({
-        operacao: 'xmlFiscal',
-        method: 'GET',
-        pathSuffix: `/${chave}/exists`,
-      });
-    } catch (err) {
-      throw this.convertError(err, 'exists', chave);
-    }
-  }
-
-  /**
-   * Recupera XML completo + metadados (ZR_XML + colunas de SZR010 + count SZQ010).
-   * 404 → CHAVE_NAO_ENCONTRADA, tratado como exceção tipada.
-   */
-  async get(chave: string): Promise<XmlFiscalGetResponse> {
-    if (this.mockMode) return this.mock.get(chave);
-
-    try {
-      return await this.http.request<XmlFiscalGetResponse>({
-        operacao: 'xmlFiscal',
-        method: 'GET',
-        pathSuffix: `/${chave}`,
-      });
-    } catch (err) {
-      throw this.convertError(err, 'get', chave);
-    }
-  }
-
-  /**
    * Grava XML em SZR010 (cabeçalho) + SZQ010 (itens) via `POST /grvXML`
    * (contrato 18/04/2026).
    *
@@ -206,59 +158,4 @@ export class ProtheusXmlService {
     }
   }
 
-  /**
-   * Grava XML novo em SZR010 (cabeçalho) + SZQ010 (itens) transacional.
-   * 201 GRAVADO ou 200 JA_EXISTENTE — ambos são SUCESSO, distinguem o caminho.
-   *
-   * @deprecated Contrato `xmlFiscal` da v2.0 foi substituído por `POST /grvXML`
-   * (recebido em 18/04). Use `grvXml(body)` com body montado via
-   * `XmlParserToSzrSzqService.montarBody()`. Será removido após a migração do
-   * ProtheusGravacaoHelper.
-   */
-  async post(body: XmlFiscalPostBody): Promise<XmlFiscalPostResponse> {
-    if (this.mockMode) return this.mock.post(body);
-
-    try {
-      return await this.http.request<XmlFiscalPostResponse>({
-        operacao: 'xmlFiscal',
-        method: 'POST',
-        body,
-      });
-    } catch (err) {
-      throw this.convertError(err, 'post', body.chave);
-    }
-  }
-
-  // ----- erro: converte ProtheusHttpError em XmlFiscalProtheusError -----
-
-  private convertError(err: unknown, op: string, chave: string): Error {
-    if (err instanceof XmlFiscalProtheusError) return err;
-
-    if (err instanceof ProtheusHttpError) {
-      const body = err.body as XmlFiscalErrorBody | null;
-      if (body?.erro) {
-        return new XmlFiscalProtheusError(
-          body.erro,
-          body.mensagem ?? `Falha em xmlFiscal.${op} para chave ${chave}`,
-          err.statusCode,
-          body.detalhe,
-        );
-      }
-      // Sem corpo estruturado — devolve erro genérico
-      const isUnavailable = err.statusCode >= 500;
-      return new XmlFiscalProtheusError(
-        isUnavailable ? 'PROTHEUS_INDISPONIVEL' : 'NAO_AUTORIZADO',
-        `xmlFiscal.${op} retornou HTTP ${err.statusCode}`,
-        err.statusCode,
-      );
-    }
-
-    // Erro de rede / timeout
-    this.logger.error(`xmlFiscal.${op} erro inesperado para chave ${chave}: ${(err as Error).message}`);
-    return new XmlFiscalProtheusError(
-      'PROTHEUS_INDISPONIVEL',
-      `Protheus inacessível em xmlFiscal.${op}`,
-      503,
-    );
-  }
 }

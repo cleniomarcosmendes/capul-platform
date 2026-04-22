@@ -143,25 +143,33 @@ export function OrigemBadge({
             {inferirTitulo(status)}
           </div>
           <div className={`mt-1 space-y-1 text-xs ${esquemaCor.textoCorpo}`}>
-            {/* Linha 1 — Origem (SEFAZ ou Protheus) */}
-            <div className="flex items-center gap-1.5">
-              {status.leitura === 'CACHE_HIT' ? (
-                <>
-                  <Database className="h-3.5 w-3.5 shrink-0" />
-                  <span>XML obtido do Protheus (SZR010 / cache)</span>
-                </>
-              ) : (
-                <>
-                  <CloudDownload className="h-3.5 w-3.5 shrink-0" />
-                  <span>XML baixado direto da SEFAZ via certificado A1</span>
-                </>
-              )}
-            </div>
+            {/* Linha 1 — Origem (SEFAZ ou Protheus).
+                Em FALHA_TECNICA a caixa de detalhe abaixo descreve o erro, então
+                não repetimos aqui. Em CACHE_MISS puro (sem XML vindo da SEFAZ)
+                a mensagem antiga "baixado da SEFAZ" era falsa — agora é explícita. */}
+            {status.leitura === 'CACHE_HIT' ? (
+              <div className="flex items-center gap-1.5">
+                <Database className="h-3.5 w-3.5 shrink-0" />
+                <span>XML obtido do Protheus (SZR010 / cache)</span>
+              </div>
+            ) : status.leitura === 'CACHE_MISS' ? (
+              <div className="flex items-center gap-1.5">
+                <CloudDownload className="h-3.5 w-3.5 shrink-0" />
+                <span>XML não encontrado no Protheus — apenas status consultado na SEFAZ</span>
+              </div>
+            ) : null}
 
-            {/* Linha 2 — Status da gravação */}
+            {/* Linha 2 — Status da gravação.
+                Se o backend mandou uma mensagem explícita (caso CT-e: "gravação via
+                monitor Protheus"), preferimos ela porque é mais precisa que o texto
+                genérico do enum. */}
             <div className="flex items-center gap-1.5">
               {iconeGravacao(status.gravacao)}
-              <span>{textoGravacao(status.gravacao)}</span>
+              <span>
+                {status.gravacao === 'NAO_APLICAVEL' && status.gravacaoMensagem
+                  ? status.gravacaoMensagem
+                  : textoGravacao(status.gravacao)}
+              </span>
             </div>
 
             {/* Mensagens de detalhe quando houve falha */}
@@ -246,6 +254,13 @@ function inferirTitulo(status: ProtheusStatus): string {
     return 'Protheus indisponível — dados só em memória';
   }
   if (status.gravacao === 'FALHA_TECNICA') return 'Baixado da SEFAZ, mas NÃO gravado no Protheus';
+  // CT-e com Protheus fora: leitura falha, gravação é NAO_APLICAVEL (CT-e nunca grava).
+  if (status.leitura === 'FALHA_TECNICA' && status.gravacao === 'NAO_APLICAVEL') {
+    return 'Protheus indisponível — consulta SEFAZ concluída';
+  }
+  if (status.leitura === 'CACHE_MISS' && status.gravacao === 'NAO_APLICAVEL') {
+    return 'Consulta SEFAZ concluída (sem cópia no Protheus)';
+  }
   if (status.leitura === 'NAO_CONSULTADO') return 'Protheus em modo simulação (dev)';
   return 'Consulta concluída';
 }

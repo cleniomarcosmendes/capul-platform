@@ -62,17 +62,24 @@ export class AmbienteService {
    */
   async atualizarCrons(
     cronMovimentoMeioDia: string,
-    cronMovimentoManhaSeguinte: string,
+    cronMovimentoManhaSeguinte: string | null | undefined,
     usuario: string,
   ) {
     this.validarCron('cronMovimentoMeioDia', cronMovimentoMeioDia);
-    this.validarCron('cronMovimentoManhaSeguinte', cronMovimentoManhaSeguinte);
+    // null/vazio = desabilitado — não validar como cron.
+    const manhaNormalizada =
+      !cronMovimentoManhaSeguinte || cronMovimentoManhaSeguinte.trim() === ''
+        ? null
+        : cronMovimentoManhaSeguinte;
+    if (manhaNormalizada) {
+      this.validarCron('cronMovimentoManhaSeguinte', manhaNormalizada);
+    }
 
     return this.prisma.ambienteConfig.update({
       where: { id: 1 },
       data: {
         cronMovimentoMeioDia,
-        cronMovimentoManhaSeguinte,
+        cronMovimentoManhaSeguinte: manhaNormalizada,
         ultimaAlteracaoPor: usuario,
       },
     });

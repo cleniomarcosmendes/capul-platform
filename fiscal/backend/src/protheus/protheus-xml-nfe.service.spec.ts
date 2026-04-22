@@ -47,22 +47,10 @@ describe('ProtheusXmlService.buscarXml — MOCK MODE', () => {
     await expect(svc.buscarXml('123')).rejects.toBeInstanceOf(XmlNfeProtheusError);
   });
 
-  it('retorna origem SZR010 quando o XML foi previamente gravado via post()', async () => {
-    const svc = makeService({ mock: true });
-    await svc.post({
-      chave: CHAVE,
-      tipoDocumento: 'NFE',
-      filial: '02',
-      xml: '<?xml version="1.0"?><nfeProc xmlns="http://www.portalfiscal.inf.br/nfe"><NFe/></nfeProc>',
-      usuarioCapulQueDisparou: 'tester@capul',
-    });
-    const r = await svc.buscarXml(CHAVE);
-    expect(r.found).toBe(true);
-    if (r.found) {
-      expect(r.origem).toBe('SZR010');
-      expect(r.xmlBase64.length).toBeGreaterThan(0);
-    }
-  });
+  // Teste "post() → buscarXml() retorna SZR010" removido em 22/04/2026
+  // junto com o método @deprecated `post()` do ProtheusXmlService. O caminho
+  // de gravação agora é `grvXml(body)` (POST /grvXML) e é coberto no teste
+  // de integração de `nfe.service`.
 });
 
 describe('ProtheusXmlService.buscarXml — HTTP MODE', () => {

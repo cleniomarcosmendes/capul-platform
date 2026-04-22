@@ -1228,7 +1228,15 @@
       "Bash(echo \"compose=$?\")",
       "Bash(NODE_OPTIONS=\"--experimental-vm-modules\" node_modules/.bin/jest src/protheus/protheus-xml-nfe.service.spec.ts)",
       "Bash(NODE_OPTIONS=\"--experimental-vm-modules\" node_modules/.bin/jest)",
-      "Bash(xargs -I {} find /mnt/c/meus_projetos/capul-platform/{} -type f -size +5M)"
+      "Bash(xargs -I {} find /mnt/c/meus_projetos/capul-platform/{} -type f -size +5M)",
+      "Bash(echo \"---exit=$?\")",
+      "Bash(echo \"---fiscal-fe=$?\")",
+      "Bash(echo \"---auth=$?\")",
+      "Bash(echo \"---auth-final=$?\")",
+      "Bash(echo \"---gt-be=$?\")",
+      "Bash(echo \"---gt-fe=$?\")",
+      "Bash(echo \"---conf=$?\")",
+      "Bash(echo \"---hub=$?\")"
     ]
   }
 }

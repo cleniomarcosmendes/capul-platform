@@ -447,7 +447,7 @@ model AmbienteConfig {
   ambienteAtivo              AmbienteSefaz @default(HOMOLOGACAO) @map("ambiente_ativo")
   bootstrapConcluidoEm       DateTime?     @map("bootstrap_concluido_em") // gate legado — Plano v2.0 não usa
   cronMovimentoMeioDia       String        @default("0 12 * * *") @map("cron_movimento_meio_dia")       // todo dia 12:00
-  cronMovimentoManhaSeguinte String        @default("0 6 * * *")  @map("cron_movimento_manha_seguinte") // todo dia 06:00 D+1
+  cronMovimentoManhaSeguinte String?       @map("cron_movimento_manha_seguinte") // NULL = desabilitado. 22/04/2026: janela semanal tornou 2ª corrida redundante.
   pauseSync                  Boolean       @default(false) @map("pause_sync") // freio de mão
   ultimaAlteracaoEm          DateTime      @updatedAt @map("ultima_alteracao_em")
   ultimaAlteracaoPor         String?       @map("ultima_alteracao_por")

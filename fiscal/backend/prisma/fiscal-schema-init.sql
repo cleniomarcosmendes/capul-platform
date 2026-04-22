@@ -225,7 +225,7 @@ CREATE TABLE "fiscal"."ambiente_config" (
     "ambiente_ativo" "fiscal"."AmbienteSefaz" NOT NULL DEFAULT 'HOMOLOGACAO',
     "bootstrap_concluido_em" TIMESTAMP(3),
     "cron_movimento_meio_dia" TEXT NOT NULL DEFAULT '0 12 * * *',
-    "cron_movimento_manha_seguinte" TEXT NOT NULL DEFAULT '0 6 * * *',
+    "cron_movimento_manha_seguinte" TEXT, -- NULL = desabilitado (padrao desde 22/04/2026, janela semanal)
     "pause_sync" BOOLEAN NOT NULL DEFAULT false,
     "ultima_alteracao_em" TIMESTAMP(3) NOT NULL,
     "ultima_alteracao_por" TEXT,
@@ -343,12 +343,14 @@ ALTER TABLE "fiscal"."alerta_enviado"
 
 -- Seeds de singletons obrigatórios
 -- ambiente_config (singleton id=1)
+-- cron_movimento_manha_seguinte fica NULL por padrao desde 22/04/2026 (janela semanal
+-- torna a 2a corrida diaria redundante — ADMIN_TI pode habilitar via UI se precisar).
 INSERT INTO "fiscal"."ambiente_config" (
     "id", "ambiente_ativo", "pause_sync",
     "ultima_alteracao_em", "cron_movimento_meio_dia", "cron_movimento_manha_seguinte"
 ) VALUES (
     1, 'HOMOLOGACAO', false,
-    NOW(), '0 12 * * *', '0 6 * * *'
+    NOW(), '0 12 * * *', NULL
 ) ON CONFLICT ("id") DO NOTHING;
 
 -- limite_diario (singleton id=1)

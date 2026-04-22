@@ -21,6 +21,7 @@ import {
 } from '../nfe/documento-evento.service.js';
 import type { CteParsed } from './parsers/cte-parsed.interface.js';
 import type { FiscalAuthenticatedUser } from '../common/interfaces/jwt-payload.interface.js';
+import type { XmlNfeResult } from '../protheus/interfaces/xml-nfe.interface.js';
 import type { OrigemConsulta } from '@prisma/client';
 import {
   type ProtheusStatus,
@@ -105,35 +106,46 @@ export class CteService {
       'Gravação CT-e não é realizada por este módulo — o Protheus grava via monitor CT-e.';
     const gravacaoErro: string | null = null;
 
-    // --- passo 1: cache check Protheus (tolerante) ---
-    let existeNoProtheus = false;
+    // --- passo 1: GET /xmlNfe (unificado NF-e/CT-e — busca SZR010 → SPED156) ---
+    // O endpoint Protheus é o mesmo para NF-e (modelo 55) e CT-e (modelo 57) —
+    // discrimina pelo conteúdo da chave. Migrado da operação antiga `xmlFiscal`
+    // (contrato v1 antes de 20/04) em 22/04/2026.
+    let xmlNfeResp: XmlNfeResult | null = null;
     try {
-      const existe = await this.protheusXml.exists(chave);
-      existeNoProtheus = existe.existe;
-      leitura = existeNoProtheus ? 'CACHE_HIT' : 'CACHE_MISS';
-      leituraMensagem = existeNoProtheus
-        ? 'XML encontrado no cache do Protheus (SZR010).'
-        : 'XML não encontrado no Protheus — consultando apenas status na SEFAZ.';
+      xmlNfeResp = await this.protheusXml.buscarXml(chave);
+      if (xmlNfeResp.found) {
+        leitura = 'CACHE_HIT';
+        leituraMensagem =
+          xmlNfeResp.origem === 'SZR010'
+            ? 'XML encontrado no cache do Protheus (SZR010).'
+            : 'XML encontrado no Protheus (SPED156).';
+      } else {
+        leitura = 'CACHE_MISS';
+        leituraMensagem = 'XML não encontrado no Protheus — consultando apenas status na SEFAZ.';
+      }
     } catch (err) {
       const msg = (err as Error).message;
-      this.logger.warn(`xmlFiscal.exists CT-e falhou: ${msg}`);
+      this.logger.warn(
+        `xmlNfe falhou para CT-e chave ${chave.slice(0, 6)}…: ${msg} — seguindo apenas com status SEFAZ.`,
+      );
       leitura = 'FALHA_TECNICA';
       leituraMensagem = 'Não foi possível verificar o cache no Protheus. Seguindo apenas com status SEFAZ.';
       leituraErro = msg;
     }
 
-    // --- passo 2: se existe no Protheus, baixa XML e parseia ---
-    if (existeNoProtheus) {
+    // --- passo 2: se o XML veio do Protheus, decodifica e parseia ---
+    if (xmlNfeResp?.found) {
       try {
-        const protResp = await this.protheusXml.get(chave);
-        xmlString = protResp.xml;
+        xmlString = Buffer.from(xmlNfeResp.xmlBase64, 'base64').toString('utf8');
         origem = 'PROTHEUS_CACHE';
         parsed = this.parser.parse(xmlString);
       } catch (err) {
         const msg = (err as Error).message;
-        this.logger.warn(`xmlFiscal.get CT-e falhou: ${msg} — caindo apenas para status SEFAZ.`);
+        this.logger.warn(
+          `Parse do XML CT-e falhou para chave ${chave.slice(0, 6)}…: ${msg} — caindo apenas para status SEFAZ.`,
+        );
         leitura = 'FALHA_TECNICA';
-        leituraMensagem = 'Cache Protheus estava disponível mas o download falhou. Seguindo apenas com status.';
+        leituraMensagem = 'XML recebido do Protheus mas parse falhou. Seguindo apenas com status.';
         leituraErro = msg;
         xmlString = null;
         parsed = null;

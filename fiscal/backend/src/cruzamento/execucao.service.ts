@@ -149,19 +149,53 @@ export class ExecucaoService {
       );
     }
 
-    // Atualiza total
+    // Janela semanal (Plano v2.2 — alinhado com setor fiscal em 22/04/2026):
+    // cada CNPJ/UF é consultado no SEFAZ no máximo 1x por semana corrente
+    // (domingo 00:00 BRT → sábado 23:59 BRT). Protege a cota diária SEFAZ e
+    // reflete o fato de que o estado cadastral raramente muda na mesma semana.
+    //
+    // MANUAL e PONTUAL NÃO respeitam a janela — o operador dispara de propósito
+    // quando precisa de dado fresco (ex: cliente regularizou, ligou avisando).
+    const respeitaJanelaSemanal = tipo === 'MOVIMENTO_MEIO_DIA' || tipo === 'MOVIMENTO_MANHA_SEGUINTE';
+    let filtrados = deduplicados;
+    let puladosSemanais = 0;
+    if (respeitaJanelaSemanal && deduplicados.length > 0) {
+      const cutoff = this.inicioSemanaBRT();
+      const jaConsultados = await this.prisma.cadastroContribuinte.findMany({
+        where: {
+          ultimaConsultaCccEm: { gte: cutoff },
+          OR: deduplicados.map((r) => ({ cnpj: r.cnpj, uf: this.ufFromRegistro(r) })),
+        },
+        select: { cnpj: true, uf: true },
+      });
+      const chavesJa = new Set(jaConsultados.map((c) => `${c.cnpj}|${c.uf}`));
+      filtrados = deduplicados.filter((r) => !chavesJa.has(`${r.cnpj}|${this.ufFromRegistro(r)}`));
+      puladosSemanais = deduplicados.length - filtrados.length;
+      if (puladosSemanais > 0) {
+        this.logger.log(
+          `Janela semanal (desde ${cutoff.toISOString()}): ${deduplicados.length} candidatos → ${filtrados.length} novos (${puladosSemanais} já consultados nesta semana).`,
+        );
+      }
+    }
+
+    // Atualiza total com o número efetivo de jobs que serão enfileirados
     await this.prisma.cadastroSincronizacao.update({
       where: { id: sinc.id },
-      data: { totalContribuintes: deduplicados.length },
+      data: { totalContribuintes: filtrados.length },
     });
 
-    if (deduplicados.length === 0) {
+    if (filtrados.length === 0) {
+      if (puladosSemanais > 0) {
+        this.logger.log(
+          `Execução ${sinc.id.slice(0, 8)}: nada a consultar — todos os ${puladosSemanais} CNPJs já foram consultados nesta semana.`,
+        );
+      }
       await this.finalizar(sinc.id, 0, 0, {});
       return sinc.id;
     }
 
     // Enfileira jobs
-    const jobs = deduplicados.map((r) => ({
+    const jobs = filtrados.map((r) => ({
       name: 'ccc-consulta',
       data: {
         sincronizacaoId: sinc.id,
@@ -530,5 +564,25 @@ export class ExecucaoService {
 
   private ufFromRegistro(r: RegistroComOrigem): string {
     return r.endereco?.uf ?? r.inscricaoEstadualUF ?? 'MG';
+  }
+
+  /**
+   * Início da semana corrente em horário de Brasília (domingo 00:00 BRT),
+   * retornado como Date em UTC pronto para comparação com `ultimaConsultaCccEm`.
+   *
+   * Regra do setor fiscal (22/04/2026): janela semanal domingo→sábado.
+   * O container roda em UTC, então convertemos via pt-BR locale + offset fixo
+   * BRT=UTC-3 (Brasil não adota mais DST desde 2019 — Dec. 9.772/2019).
+   */
+  private inicioSemanaBRT(): Date {
+    // "Agora" em BRT: UTC menos 3 horas — independe de DST (abolido em 2019).
+    const agoraBRT = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const diaSemana = agoraBRT.getUTCDay(); // 0=domingo ... 6=sábado
+    // Domingo 00:00 BRT da semana corrente (em UTC = domingo 03:00 UTC)
+    const domingoBRT = new Date(agoraBRT);
+    domingoBRT.setUTCDate(agoraBRT.getUTCDate() - diaSemana);
+    domingoBRT.setUTCHours(0, 0, 0, 0);
+    // Converter de volta para UTC "real" adicionando 3h
+    return new Date(domingoBRT.getTime() + 3 * 60 * 60 * 1000);
   }
 }

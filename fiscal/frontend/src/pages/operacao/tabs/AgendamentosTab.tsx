@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Clock, Calendar, Save, Info, AlertCircle } from 'lucide-react';
+import { Clock, Calendar, Save, Info, AlertCircle, Power, PowerOff } from 'lucide-react';
 import { fiscalApi } from '../../../services/api';
 import { Button } from '../../../components/Button';
 import { useToast } from '../../../components/Toast';
@@ -13,8 +13,11 @@ interface SchedulerStatus {
 
 interface AmbienteStatus {
   cronMovimentoMeioDia: string;
-  cronMovimentoManhaSeguinte: string;
+  cronMovimentoManhaSeguinte: string | null; // null = desabilitado (desde 22/04/2026)
 }
+
+// Valor padrão proposto quando o operador decide reabilitar a corrida da manhã.
+const CRON_MANHA_DEFAULT = '0 6 * * *';
 
 export function AgendamentosTab() {
   const [status, setStatus] = useState<SchedulerStatus | null>(null);
@@ -37,8 +40,9 @@ export function AgendamentosTab() {
         fiscalApi.get<AmbienteStatus>('/ambiente'),
       ]);
       setStatus(schedulerResp.data);
-      setCronMeioDia(ambienteResp.data.cronMovimentoMeioDia);
-      setCronManhaSeguinte(ambienteResp.data.cronMovimentoManhaSeguinte);
+      setCronMeioDia(ambienteResp.data.cronMovimentoMeioDia ?? '');
+      // null = desabilitado — representamos como string vazia no campo.
+      setCronManhaSeguinte(ambienteResp.data.cronMovimentoManhaSeguinte ?? '');
     } finally {
       setLoading(false);
     }
@@ -52,9 +56,10 @@ export function AgendamentosTab() {
   }, []);
 
   const meioDiaAlterado = status?.meioDia ? cronMeioDia !== status.meioDia.cron : false;
-  const manhaAlterado = status?.manhaSeguinte
-    ? cronManhaSeguinte !== status.manhaSeguinte.cron
-    : false;
+  // Comparação de manhã tratando desabilitação como estado válido.
+  // Backend retorna status.manhaSeguinte=null quando cron está vazio/nulo.
+  const manhaCronServidor = status?.manhaSeguinte?.cron ?? '';
+  const manhaAlterado = cronManhaSeguinte !== manhaCronServidor;
   const temAlteracao = meioDiaAlterado || manhaAlterado;
 
   async function handleSalvar() {
@@ -62,7 +67,8 @@ export function AgendamentosTab() {
     try {
       await fiscalApi.put('/ambiente/crons', {
         cronMovimentoMeioDia: cronMeioDia,
-        cronMovimentoManhaSeguinte: cronManhaSeguinte,
+        // String vazia = pedido de desabilitar. Backend aceita null ou '' e normaliza.
+        cronMovimentoManhaSeguinte: cronManhaSeguinte.trim() === '' ? null : cronManhaSeguinte,
       });
       await fiscalApi.post('/cruzamento/scheduler/recarregar');
       toast.success('Horários atualizados', 'O scheduler foi recarregado com os novos crons.');
@@ -97,12 +103,14 @@ export function AgendamentosTab() {
           />
           <ScheduleCard
             title="Corrida da manhã seguinte"
-            descricao="Movimento ontem 12:00 → 23:59 (ainda dentro das 24h de cancelamento)"
+            descricao="Redundante com janela semanal — desabilitada por padrão desde 22/04/2026. Habilite se quiser dupla corrida diária."
             cron={cronManhaSeguinte}
             onCronChange={setCronManhaSeguinte}
             proxima={status?.manhaSeguinte?.proxima ?? null}
             alterado={manhaAlterado}
             editavel={isAdmin}
+            desabilitavel
+            valorPadrao={CRON_MANHA_DEFAULT}
           />
         </div>
       )}
@@ -134,6 +142,7 @@ export function AgendamentosTab() {
 }
 
 function descreverCron(expr: string): string {
+  if (!expr || expr.trim() === '') return 'Desabilitado';
   const partes = expr.trim().split(/\s+/);
   if (partes.length !== 5) return expr;
   const [min, hora, diaMes, mes, dow] = partes;
@@ -166,6 +175,8 @@ function descreverCron(expr: string): string {
 }
 
 function cronValido(expr: string): boolean {
+  // Vazio é válido — significa "desabilitado" quando o card permite desabilitacao.
+  if (!expr || expr.trim() === '') return true;
   const partes = expr.trim().split(/\s+/);
   return partes.length === 5 && partes.every((p) => p.length > 0);
 }
@@ -178,6 +189,8 @@ function ScheduleCard({
   proxima,
   alterado,
   editavel,
+  desabilitavel = false,
+  valorPadrao,
 }: {
   title: string;
   descricao: string;
@@ -186,7 +199,12 @@ function ScheduleCard({
   proxima: string | null;
   alterado: boolean;
   editavel: boolean;
+  /** Permite limpar o campo (desabilitar o cron). */
+  desabilitavel?: boolean;
+  /** Valor proposto quando o usuário clica em "Habilitar". */
+  valorPadrao?: string;
 }) {
+  const desabilitado = !cron || cron.trim() === '';
   const valido = cronValido(cron);
   return (
     <div
@@ -215,15 +233,15 @@ function ScheduleCard({
               type="text"
               value={cron}
               onChange={(e) => onCronChange(e.target.value)}
-              disabled={!editavel}
-              placeholder="0 12 * * *"
+              disabled={!editavel || desabilitado}
+              placeholder={desabilitavel && desabilitado ? 'desabilitado' : '0 12 * * *'}
               className={`w-44 rounded-md border px-2 py-1 font-mono text-xs focus:outline-none focus:ring-2 ${
                 valido
                   ? 'border-slate-300 focus:border-slate-500 focus:ring-slate-500/30'
                   : 'border-red-300 focus:border-red-500 focus:ring-red-500/30'
               } disabled:bg-slate-50 disabled:text-slate-500`}
             />
-            <span className="text-xs text-slate-500">
+            <span className={`text-xs ${desabilitado ? 'italic text-slate-400' : 'text-slate-500'}`}>
               {valido ? descreverCron(cron) : (
                 <span className="inline-flex items-center gap-1 text-red-600">
                   <AlertCircle className="h-3 w-3" />
@@ -231,6 +249,29 @@ function ScheduleCard({
                 </span>
               )}
             </span>
+            {editavel && desabilitavel && (
+              desabilitado ? (
+                <button
+                  type="button"
+                  onClick={() => onCronChange(valorPadrao ?? '0 6 * * *')}
+                  className="ml-auto inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+                  title={`Habilitar com ${valorPadrao ?? '0 6 * * *'}`}
+                >
+                  <Power className="h-3 w-3" />
+                  Habilitar
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onCronChange('')}
+                  className="ml-auto inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-100"
+                  title="Desabilitar este cron"
+                >
+                  <PowerOff className="h-3 w-3" />
+                  Desabilitar
+                </button>
+              )
+            )}
           </div>
         </div>
 
@@ -243,9 +284,11 @@ function ScheduleCard({
                   dateStyle: 'short',
                   timeStyle: 'short',
                 })
-              : alterado
-                ? 'Será calculada ao salvar'
-                : 'Sem próxima execução'}
+              : desabilitado
+                ? 'Desabilitado'
+                : alterado
+                  ? 'Será calculada ao salvar'
+                  : 'Sem próxima execução'}
           </p>
         </div>
       </div>
