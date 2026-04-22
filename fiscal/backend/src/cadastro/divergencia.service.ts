@@ -46,7 +46,21 @@ export class DivergenciaService {
 
   /**
    * Compara Protheus × SEFAZ e grava/atualiza divergências.
-   * Retorna a quantidade de divergências detectadas (novas ou reabertas).
+   *
+   * Para cada campo AVALIADO (ambos lados preenchidos), há três desfechos:
+   *   1. Divergente → upsert em ABERTA (cria nova ou atualiza valores da existente).
+   *   2. Bate e já havia divergência ABERTA → auto-resolve (RESOLVIDA, resolvidaPor=NULL).
+   *      Sem isso, divergências vindas de respostas bugadas/snapshots obsoletos
+   *      ficavam zumbis — incidente real em 21/04/2026 com 98 divergências de uma
+   *      execução cancelada em que o Protheus devolveu campos trocados.
+   *   3. Bate e não havia ABERTA → nada a fazer.
+   *
+   * Campos NÃO avaliados (um lado vazio) nunca viram divergência e também não
+   * devem auto-resolver uma eventual ABERTA antiga — falta de dado não é prova
+   * de igualdade.
+   *
+   * Retorna a quantidade de divergências DETECTADAS nesta avaliação (a tela
+   * /divergencias continua contando apenas ABERTAS).
    */
   async avaliarEgrav(
     contribuinteId: string,
@@ -54,16 +68,54 @@ export class DivergenciaService {
     sefaz: DadosSefazComparacao,
   ): Promise<number> {
     const detectadas = this.comparar(protheus, sefaz);
-    if (detectadas.length === 0) return 0;
+    const avaliados = this.camposAvaliados(protheus, sefaz);
+    const camposDetectados = new Set(detectadas.map((d) => d.campo));
+    const camposParaAutoResolver = [...avaliados].filter((c) => !camposDetectados.has(c));
 
     for (const d of detectadas) {
       await this.upsertDivergencia(contribuinteId, d);
     }
 
-    this.logger.debug(
-      `Contribuinte ${contribuinteId.slice(0, 8)}: ${detectadas.length} divergência(s) detectada(s).`,
-    );
+    if (camposParaAutoResolver.length > 0) {
+      const r = await this.prisma.cadastroDivergencia.updateMany({
+        where: {
+          contribuinteId,
+          status: 'ABERTA',
+          campo: { in: camposParaAutoResolver },
+        },
+        data: { status: 'RESOLVIDA', resolvidaEm: new Date(), resolvidaPor: null },
+      });
+      if (r.count > 0) {
+        this.logger.log(
+          `Contribuinte ${contribuinteId.slice(0, 8)}: ${r.count} divergência(s) auto-resolvida(s) (campos que passaram a bater: ${camposParaAutoResolver.join(', ')}).`,
+        );
+      }
+    }
+
+    if (detectadas.length > 0) {
+      this.logger.debug(
+        `Contribuinte ${contribuinteId.slice(0, 8)}: ${detectadas.length} divergência(s) detectada(s).`,
+      );
+    }
     return detectadas.length;
+  }
+
+  /**
+   * Retorna o conjunto de campos onde AMBOS os lados (Protheus e SEFAZ) têm
+   * valor — condição para o campo ser considerado "avaliado" por `comparar`.
+   * Os nomes retornados seguem a convenção de `cadastro_divergencia.campo`.
+   */
+  private camposAvaliados(
+    p: DadosProtheusComparacao,
+    s: DadosSefazComparacao,
+  ): Set<string> {
+    const out = new Set<string>();
+    if (p.razaoSocial && s.razaoSocial) out.add('razao_social');
+    if (p.inscricaoEstadual && s.inscricaoEstadual) out.add('inscricao_estadual');
+    if (p.cnae && s.cnae) out.add('cnae');
+    if (p.enderecoCep && s.enderecoCep) out.add('endereco_cep');
+    if (p.enderecoMunicipio && s.enderecoMunicipio) out.add('endereco_municipio');
+    return out;
   }
 
   // ----- internos -----
