@@ -31,14 +31,27 @@ INSERT INTO core.modulos_sistema (
   NOW(), NOW()
 ) ON CONFLICT (codigo) DO NOTHING;
 
--- 2. Roles do módulo FISCAL
+-- 2. Roles do módulo FISCAL — hierarquia em 4 niveis (alinhada com
+--    fiscal/backend/src/common/constants/roles.constant.ts)
+--
+--    OPERADOR_ENTRADA  → consulta NF-e/CT-e + cadastro pontual + historico proprio
+--    ANALISTA_CADASTRO → tudo do anterior + relatorios + divergencias + sincronizacao manual
+--    GESTOR_FISCAL     → tudo do anterior + multi-filial + alterna PROD/HOM + recebe alertas
+--    ADMIN_TI          → tudo do anterior + certificado + limpeza + pausar/retomar jobs
+--
+--    Correcao 23/04/2026: seed anterior cadastrava apenas GESTOR_FISCAL e
+--    ADMIN_TI — controllers do backend usam tambem OPERADOR_ENTRADA e
+--    ANALISTA_CADASTRO via @RoleMinima. Sem essas roles cadastradas, o
+--    Configurador nao permite atribuir os niveis intermediarios.
 WITH mod AS (SELECT id FROM core.modulos_sistema WHERE codigo = 'FISCAL')
 INSERT INTO core.roles_modulo (id, codigo, nome, descricao, modulo_id)
 SELECT gen_random_uuid(), r.codigo, r.nome, r.descricao, mod.id
 FROM mod,
   (VALUES
-    ('GESTOR_FISCAL', 'Gestor Fiscal',  'Consulta cadastral, NF-e/CT-e, divergencias e agendamentos'),
-    ('ADMIN_TI',      'Admin TI',       'Acesso total ao fiscal: certificados, limites, alternancia PROD/HOM e pausar jobs')
+    ('OPERADOR_ENTRADA',  'Operador de Entrada',  'Consulta NF-e/CT-e + cadastro pontual + historico proprio'),
+    ('ANALISTA_CADASTRO', 'Analista de Cadastro', 'Operador + relatorios + divergencias + sincronizacao manual'),
+    ('GESTOR_FISCAL',     'Gestor Fiscal',        'Analista + multi-filial + alterna PROD/HOM + recebe alertas'),
+    ('ADMIN_TI',          'Admin TI',             'Gestor + certificados + limpeza + pausar/retomar jobs')
   ) AS r(codigo, nome, descricao)
 ON CONFLICT (modulo_id, codigo) DO NOTHING;
 

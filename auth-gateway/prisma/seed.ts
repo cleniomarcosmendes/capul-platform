@@ -112,9 +112,11 @@ async function main() {
     { codigo: 'USUARIO_FINAL', nome: 'Usuario Final', descricao: 'Abrir chamados publicos e consultar status dos proprios chamados', moduloId: modGestaoTi.id },
     { codigo: 'USUARIO_CHAVE', nome: 'Usuario-Chave', descricao: 'Usuarios-chave de projetos (acesso limitado a pendencias)', moduloId: modGestaoTi.id },
     { codigo: 'TERCEIRIZADO', nome: 'Terceirizado', descricao: 'Analista externo com acesso restrito a projetos e pendencias vinculados', moduloId: modGestaoTi.id },
-    // Fiscal
-    { codigo: 'GESTOR_FISCAL', nome: 'Gestor Fiscal', descricao: 'Consulta cadastral, NF-e/CT-e, divergencias e agendamentos', moduloId: modFiscal.id },
-    { codigo: 'ADMIN_TI', nome: 'Admin TI', descricao: 'Acesso total ao fiscal: certificados, limites, alternancia PROD/HOM e pausar jobs', moduloId: modFiscal.id },
+    // Fiscal — hierarquia em 4 niveis (ver fiscal/backend/src/common/constants/roles.constant.ts)
+    { codigo: 'OPERADOR_ENTRADA', nome: 'Operador de Entrada', descricao: 'Consulta NF-e/CT-e + cadastro pontual + historico proprio', moduloId: modFiscal.id },
+    { codigo: 'ANALISTA_CADASTRO', nome: 'Analista de Cadastro', descricao: 'Operador + relatorios + divergencias + sincronizacao manual', moduloId: modFiscal.id },
+    { codigo: 'GESTOR_FISCAL', nome: 'Gestor Fiscal', descricao: 'Analista + multi-filial + alterna PROD/HOM + recebe alertas', moduloId: modFiscal.id },
+    { codigo: 'ADMIN_TI', nome: 'Admin TI', descricao: 'Gestor + certificados + limpeza + pausar/retomar jobs', moduloId: modFiscal.id },
   ];
 
   const roles: Record<string, { id: string }> = {};
