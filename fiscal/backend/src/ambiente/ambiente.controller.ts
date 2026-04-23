@@ -15,7 +15,7 @@ export class AmbienteController {
   constructor(private readonly ambiente: AmbienteService) {}
 
   @Get()
-  @RoleMinima('OPERADOR_ENTRADA')
+  @RoleMinima('GESTOR_FISCAL')
   async getStatus() {
     return this.ambiente.getStatus();
   }

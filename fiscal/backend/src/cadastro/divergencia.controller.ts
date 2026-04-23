@@ -72,7 +72,7 @@ export class DivergenciaController {
   // ---------- Visão plana (1 linha = 1 divergência) ----------
 
   @Get()
-  @RoleMinima('ANALISTA_CADASTRO')
+  @RoleMinima('GESTOR_FISCAL')
   async listar(@Query() q: ListarQuery) {
     const take = Math.min(Number(q.limit ?? '50'), 200);
     const skip = Math.max(Number(q.offset ?? '0'), 0);
@@ -122,7 +122,7 @@ export class DivergenciaController {
    * Ordem: criticidadeMax DESC (ALTA primeiro), detectadaMaisAntiga ASC.
    */
   @Get('por-contribuinte')
-  @RoleMinima('ANALISTA_CADASTRO')
+  @RoleMinima('GESTOR_FISCAL')
   async listarPorContribuinte(@Query() q: ListarQuery) {
     const take = Math.min(Number(q.limit ?? '50'), 200);
     const skip = Math.max(Number(q.offset ?? '0'), 0);
@@ -245,7 +245,7 @@ export class DivergenciaController {
   // ---------- Obter / atualizar individual ----------
 
   @Get(':id')
-  @RoleMinima('ANALISTA_CADASTRO')
+  @RoleMinima('GESTOR_FISCAL')
   async obter(@Param('id', new ParseUUIDPipe()) id: string) {
     const div = await this.prisma.cadastroDivergencia.findUnique({
       where: { id },
@@ -256,7 +256,7 @@ export class DivergenciaController {
   }
 
   @Patch(':id')
-  @RoleMinima('ANALISTA_CADASTRO')
+  @RoleMinima('GESTOR_FISCAL')
   async atualizar(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() body: AtualizarDto,
@@ -287,7 +287,7 @@ export class DivergenciaController {
    * intactas para manter trilha de auditoria.
    */
   @Patch('por-contribuinte/:contribuinteId/resolver-todas')
-  @RoleMinima('ANALISTA_CADASTRO')
+  @RoleMinima('GESTOR_FISCAL')
   async resolverTodasDoContribuinte(
     @Param('contribuinteId', new ParseUUIDPipe()) contribuinteId: string,
     @Body() _body: AcaoEmLoteDto,
@@ -297,7 +297,7 @@ export class DivergenciaController {
   }
 
   @Patch('por-contribuinte/:contribuinteId/ignorar-todas')
-  @RoleMinima('ANALISTA_CADASTRO')
+  @RoleMinima('GESTOR_FISCAL')
   async ignorarTodasDoContribuinte(
     @Param('contribuinteId', new ParseUUIDPipe()) contribuinteId: string,
     @Body() _body: AcaoEmLoteDto,

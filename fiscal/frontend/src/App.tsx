@@ -59,7 +59,9 @@ function ProtectedRoute({
   }
 
   if (minRole && !hasMinRole(fiscalRole, minRole)) {
-    return <Navigate to="/" replace />;
+    // Operador/Analista nao tem acesso a Dashboard ou rotas avancadas —
+    // manda para a primeira tela permitida (Consulta NF-e).
+    return <Navigate to="/nfe" replace />;
   }
 
   return <>{children}</>;
@@ -80,14 +82,21 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<DashboardPage />} />
+            <Route
+              index
+              element={
+                <ProtectedRoute minRole="GESTOR_FISCAL">
+                  <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
             <Route path="nfe" element={<NfeConsultaPage />} />
             <Route path="cte" element={<CteConsultaPage />} />
             <Route path="cadastro" element={<CadastroConsultaPage />} />
             <Route
               path="execucoes"
               element={
-                <ProtectedRoute minRole="ANALISTA_CADASTRO">
+                <ProtectedRoute minRole="GESTOR_FISCAL">
                   <ExecucoesListPage />
                 </ProtectedRoute>
               }
@@ -95,7 +104,7 @@ function App() {
             <Route
               path="execucoes/:id"
               element={
-                <ProtectedRoute minRole="ANALISTA_CADASTRO">
+                <ProtectedRoute minRole="GESTOR_FISCAL">
                   <ExecucaoDetalhePage />
                 </ProtectedRoute>
               }
@@ -103,7 +112,7 @@ function App() {
             <Route
               path="divergencias"
               element={
-                <ProtectedRoute minRole="ANALISTA_CADASTRO">
+                <ProtectedRoute minRole="GESTOR_FISCAL">
                   <DivergenciasListPage />
                 </ProtectedRoute>
               }
@@ -120,7 +129,7 @@ function App() {
             <Route
               path="operacao/controle"
               element={
-                <ProtectedRoute minRole="OPERADOR_ENTRADA">
+                <ProtectedRoute minRole="GESTOR_FISCAL">
                   <OperacaoControlePage />
                 </ProtectedRoute>
               }
@@ -153,7 +162,7 @@ function App() {
               <Route
                 path="limites"
                 element={
-                  <ProtectedRoute minRole="OPERADOR_ENTRADA">
+                  <ProtectedRoute minRole="GESTOR_FISCAL">
                     <LimitesTab />
                   </ProtectedRoute>
                 }
@@ -164,7 +173,7 @@ function App() {
             <Route
               path="operacao/diagnostico"
               element={
-                <ProtectedRoute minRole="ANALISTA_CADASTRO">
+                <ProtectedRoute minRole="GESTOR_FISCAL">
                   <OperacaoDiagnosticoPage />
                 </ProtectedRoute>
               }
@@ -173,7 +182,7 @@ function App() {
               <Route
                 path="circuit-breaker"
                 element={
-                  <ProtectedRoute minRole="ANALISTA_CADASTRO">
+                  <ProtectedRoute minRole="GESTOR_FISCAL">
                     <CircuitBreakerTab />
                   </ProtectedRoute>
                 }
@@ -197,6 +206,7 @@ function App() {
             <Route path="operacao/tls" element={<Navigate to="/operacao/diagnostico/tls" replace />} />
 
             <Route path="admin" element={<Navigate to="/operacao/controle" replace />} />
+            {/* Fallback: roles baixas serao redirecionadas pelo ProtectedRoute do `/` para /nfe */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

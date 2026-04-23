@@ -238,7 +238,7 @@ model CadastroContribuinte {
   razaoSocial              String?                 @map("razao_social")
   nomeFantasia             String?                 @map("nome_fantasia")
   cnae                     String?                 @db.VarChar(7)
-  regimeTributario         String?                 @map("regime_tributario") @db.VarChar(50)
+  regimeTributario         String?                 @map("regime_tributario") @db.VarChar(100)
   situacao                 SituacaoCadastral
   dataInicioAtividade      DateTime?               @map("data_inicio_atividade")
   dataUltimaAtualizacaoCcc DateTime?               @map("data_ultima_atualizacao_ccc")

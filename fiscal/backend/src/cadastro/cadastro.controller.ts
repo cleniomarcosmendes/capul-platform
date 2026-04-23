@@ -49,7 +49,7 @@ export class CadastroController {
    * Histórico de mudanças de situação.
    */
   @Get(':cnpj/historico')
-  @RoleMinima('ANALISTA_CADASTRO')
+  @RoleMinima('GESTOR_FISCAL')
   async historico(@Param('cnpj') cnpj: string) {
     return this.service.getHistorico(cnpj);
   }

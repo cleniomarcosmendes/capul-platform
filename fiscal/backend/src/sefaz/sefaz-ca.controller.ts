@@ -21,11 +21,12 @@ export class SefazCaController {
   ) {}
 
   /**
-   * Status completo da cadeia. Aberto para qualquer role com acesso ao Fiscal
-   * (inclusive OPERADOR_ENTRADA) — informação não-sensível, útil para contexto.
+   * Status completo da cadeia. Restrito a GESTOR_FISCAL+ desde 23/04/2026:
+   * operador/analista de cadastro ficam limitados a NF-e, CT-e e Consulta
+   * Cadastral, sem acesso a telas de diagnostico.
    */
   @Get('status')
-  @RoleMinima('OPERADOR_ENTRADA')
+  @RoleMinima('GESTOR_FISCAL')
   status() {
     return this.ca.getStatus();
   }

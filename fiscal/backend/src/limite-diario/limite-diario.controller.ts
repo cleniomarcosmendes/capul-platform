@@ -19,7 +19,7 @@ export class LimiteDiarioController {
   constructor(private readonly service: LimiteDiarioService) {}
 
   @Get()
-  @RoleMinima('OPERADOR_ENTRADA')
+  @RoleMinima('GESTOR_FISCAL')
   async status() {
     return this.service.getStatus();
   }

@@ -20,19 +20,22 @@ type MenuItem =
   | { section: string; minRole?: RoleFiscal }
   | { label: string; icon: React.ComponentType<{ className?: string }>; path: string; minRole?: RoleFiscal };
 
+// Regra 23/04/2026: OPERADOR_ENTRADA e ANALISTA_CADASTRO só usam NF-e, CT-e
+// e Consulta Cadastral. Itens de cruzamento, alertas e operação exigem
+// GESTOR_FISCAL+. Dashboard também — tem KPIs operacionais sensíveis.
 const menuItems: MenuItem[] = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/', minRole: 'GESTOR_FISCAL' },
   { section: 'CONSULTAS' },
   { label: 'Consulta NF-e', icon: FileText, path: '/nfe' },
   { label: 'Consulta CT-e', icon: Truck, path: '/cte' },
   { label: 'Consulta Cadastral', icon: UserSearch, path: '/cadastro' },
-  { section: 'CRUZAMENTO', minRole: 'ANALISTA_CADASTRO' },
-  { label: 'Execucoes', icon: Activity, path: '/execucoes', minRole: 'ANALISTA_CADASTRO' },
-  { label: 'Divergencias', icon: AlertTriangle, path: '/divergencias', minRole: 'ANALISTA_CADASTRO' },
+  { section: 'CRUZAMENTO', minRole: 'GESTOR_FISCAL' },
+  { label: 'Execucoes', icon: Activity, path: '/execucoes', minRole: 'GESTOR_FISCAL' },
+  { label: 'Divergencias', icon: AlertTriangle, path: '/divergencias', minRole: 'GESTOR_FISCAL' },
   { label: 'Historico de Alertas', icon: Mail, path: '/alertas', minRole: 'GESTOR_FISCAL' },
-  { section: 'OPERACAO', minRole: 'OPERADOR_ENTRADA' },
-  { label: 'Controle Operacional', icon: Sliders, path: '/operacao/controle', minRole: 'OPERADOR_ENTRADA' },
-  { label: 'Diagnóstico', icon: Stethoscope, path: '/operacao/diagnostico', minRole: 'ANALISTA_CADASTRO' },
+  { section: 'OPERACAO', minRole: 'GESTOR_FISCAL' },
+  { label: 'Controle Operacional', icon: Sliders, path: '/operacao/controle', minRole: 'GESTOR_FISCAL' },
+  { label: 'Diagnóstico', icon: Stethoscope, path: '/operacao/diagnostico', minRole: 'GESTOR_FISCAL' },
 ];
 
 function filterMenuByRole(items: MenuItem[], role: RoleFiscal | null): MenuItem[] {

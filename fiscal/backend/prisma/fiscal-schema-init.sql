@@ -103,7 +103,7 @@ CREATE TABLE "fiscal"."cadastro_contribuinte" (
     "razao_social" TEXT,
     "nome_fantasia" TEXT,
     "cnae" VARCHAR(7),
-    "regime_tributario" VARCHAR(50),
+    "regime_tributario" VARCHAR(100), -- 23/04/2026: ampliado de 50 pra 100 (SIMEI completo tem 63 chars)
     "situacao" "fiscal"."SituacaoCadastral" NOT NULL,
     "data_inicio_atividade" TIMESTAMP(3),
     "data_ultima_atualizacao_ccc" TIMESTAMP(3),

@@ -42,7 +42,7 @@ export class CteController {
    * Re-executa a gravacao no Protheus (SZR010 + SZQ010) para um CT-e.
    */
   @Post(':chave/filial/:filial/regravar-protheus')
-  @RoleMinima('OPERADOR_ENTRADA')
+  @RoleMinima('GESTOR_FISCAL')
   async regravarProtheus(
     @Param('chave') chave: string,
     @Param('filial') filial: string,

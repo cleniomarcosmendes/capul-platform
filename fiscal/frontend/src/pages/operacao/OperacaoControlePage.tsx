@@ -15,7 +15,7 @@ const TABS: TabDef[] = [
   { path: 'ambiente', label: 'Ambiente', icon: Globe, minRole: 'GESTOR_FISCAL' },
   { path: 'agendamentos', label: 'Agendamentos', icon: Clock, minRole: 'GESTOR_FISCAL' },
   { path: 'freio', label: 'Freio de Mão', icon: ShieldAlert, minRole: 'GESTOR_FISCAL' },
-  { path: 'limites', label: 'Limites SEFAZ', icon: Gauge, minRole: 'OPERADOR_ENTRADA' },
+  { path: 'limites', label: 'Limites SEFAZ', icon: Gauge, minRole: 'GESTOR_FISCAL' },
 ];
 
 /**

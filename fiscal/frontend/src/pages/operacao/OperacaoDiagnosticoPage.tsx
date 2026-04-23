@@ -12,7 +12,7 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
-  { path: 'circuit-breaker', label: 'Circuit Breaker', icon: Settings, minRole: 'ANALISTA_CADASTRO' },
+  { path: 'circuit-breaker', label: 'Circuit Breaker', icon: Settings, minRole: 'GESTOR_FISCAL' },
   { path: 'tls', label: 'Cadeia TLS', icon: ShieldCheck, minRole: 'ADMIN_TI' },
 ];
 

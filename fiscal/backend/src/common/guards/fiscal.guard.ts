@@ -29,9 +29,18 @@ export class FiscalGuard implements CanActivate {
       throw new ForbiddenException(`Role inválida no módulo FISCAL: ${moduloFiscal.role}`);
     }
 
+    // `core.usuarios.email` é nullable no auth-gateway, mas várias tabelas do
+    // fiscal (documento_consulta, audit_log, etc.) têm `usuario_email NOT NULL`.
+    // Sem fallback, o upsert explode com erro Prisma → 500. Mantemos um valor
+    // determinístico por usuário (sem-email+<id>@capul.local) para preservar
+    // rastreabilidade + autor em queries por e-mail.
+    const emailEfetivo = payload.email && payload.email.trim() !== ''
+      ? payload.email
+      : `sem-email+${payload.sub}@capul.local`;
+
     req.fiscalUser = {
       id: payload.sub,
-      email: payload.email,
+      email: emailEfetivo,
       nome: payload.nome,
       filialId: payload.filialId,
       filialCodigo: payload.filialCodigo,

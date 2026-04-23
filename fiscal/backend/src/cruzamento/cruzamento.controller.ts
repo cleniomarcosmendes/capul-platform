@@ -46,7 +46,7 @@ export class CruzamentoController {
    * GESTOR_FISCAL é o role mínimo para forçar manualmente uma corrida automática.
    */
   @Post('sincronizar')
-  @RoleMinima('ANALISTA_CADASTRO')
+  @RoleMinima('GESTOR_FISCAL')
   async sincronizar(
     @Body()
     body: {
@@ -139,13 +139,13 @@ export class CruzamentoController {
    * para desabilitar botões de disparo e renderizar o banner de status.
    */
   @Get('status-execucao-tipos')
-  @RoleMinima('ANALISTA_CADASTRO')
+  @RoleMinima('GESTOR_FISCAL')
   async statusExecucaoTipos() {
     return this.execucao.statusExecucaoPorTipo();
   }
 
   @Get('execucoes')
-  @RoleMinima('ANALISTA_CADASTRO')
+  @RoleMinima('GESTOR_FISCAL')
   async listarExecucoes(@Query('tipo') tipo?: TipoSincronizacao, @Query('limit') limit?: string) {
     const take = Math.min(Number(limit ?? '50'), 200);
     return this.prisma.cadastroSincronizacao.findMany({
@@ -156,7 +156,7 @@ export class CruzamentoController {
   }
 
   @Get('execucoes/:id')
-  @RoleMinima('ANALISTA_CADASTRO')
+  @RoleMinima('GESTOR_FISCAL')
   async getExecucao(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.prisma.cadastroSincronizacao.findUnique({
       where: { id },
@@ -198,7 +198,7 @@ export class CruzamentoController {
   // ----- Circuit breaker -----
 
   @Get('circuit-breaker')
-  @RoleMinima('ANALISTA_CADASTRO')
+  @RoleMinima('GESTOR_FISCAL')
   async getCircuitBreakerStates() {
     return this.circuitBreaker.getAllStates();
   }
@@ -244,7 +244,7 @@ export class CruzamentoController {
   // ----- Health -----
 
   @Get('health')
-  @RoleMinima('ANALISTA_CADASTRO')
+  @RoleMinima('GESTOR_FISCAL')
   async health() {
     return {
       ok: true,

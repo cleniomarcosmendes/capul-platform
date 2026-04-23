@@ -54,7 +54,7 @@ export class NfeController {
    * adicional). Retorna apenas o `protheusStatus` atualizado.
    */
   @Post(':chave/filial/:filial/regravar-protheus')
-  @RoleMinima('OPERADOR_ENTRADA')
+  @RoleMinima('GESTOR_FISCAL')
   async regravarProtheus(
     @Param('chave') chave: string,
     @Param('filial') filial: string,
@@ -71,7 +71,7 @@ export class NfeController {
    * registro em `fiscal.documento_consulta`).
    */
   @Post(':chave/filial/:filial/atualizar-status')
-  @RoleMinima('OPERADOR_ENTRADA')
+  @RoleMinima('GESTOR_FISCAL')
   async atualizarStatus(
     @Param('chave') chave: string,
     @Param('filial') filial: string,

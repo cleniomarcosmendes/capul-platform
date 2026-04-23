@@ -11,7 +11,7 @@ export class DashboardController {
   constructor(private readonly service: DashboardService) {}
 
   @Get()
-  @RoleMinima('OPERADOR_ENTRADA')
+  @RoleMinima('GESTOR_FISCAL')
   async overview() {
     return this.service.getOverview();
   }
