@@ -128,6 +128,40 @@ não resolver, considerar automatizar parte do checklist (script que lê
 
 ---
 
+## Gestão TI — UX
+
+### ⏳ 2026-04-25 — Bubbles estilo WhatsApp na interação de equipes (Chamado e Projeto)
+
+**Contexto:** Hoje as áreas de "interação entre equipes" em **Chamado** e
+**Projeto** mostram comentários/mensagens em uma lista vertical homogênea —
+sem distinção visual clara entre quem escreveu o quê. Em conversas longas
+fica difícil seguir o fluxo.
+
+**Proposta:** Layout estilo WhatsApp com 2 colunas lógicas:
+- **Mensagens "minhas"** (autor = usuário logado): alinhadas à **direita**, fundo cor suave A (ex.: verde-claro / azul-claro)
+- **Mensagens "dos outros"** (qualquer outro autor): alinhadas à **esquerda**, fundo cor suave B (ex.: cinza-claro / lilás-claro)
+- Avatar/nome do autor visível só do lado correspondente
+- Timestamp pequeno abaixo da bubble
+- Como temos mais espaço que mobile, podemos enriquecer com:
+  - Anexos inline (preview de imagem, link de PDF) dentro da bubble
+  - Reações emoji rápidas (👍 ✅ 👀)
+  - Citação/quote da mensagem anterior
+
+**Onde aplica:**
+- `gestao-ti/frontend/src/pages/chamados/ChamadoDetalhePage.tsx` — aba/seção de comentários ou histórico
+- `gestao-ti/frontend/src/pages/projetos/ProjetoDetalhePage.tsx` — aba de comunicação/comentários
+- Provavelmente componente comum reutilizável (ex.: `ChatBubbleList.tsx` em `components/`)
+
+**Adiada porque:** mudança puramente visual; sistema funcional do jeito atual.
+Vai bem com uma sessão dedicada a polish UX (junto com outros ajustes
+visuais que aparecerem). Estimativa: ~3-4h (componente + 2 telas).
+
+**Por quê vale fazer:** comunicação fluida em chamados longos é onde a
+ferramenta vira "experiência de uso" vs "formulário corporativo". Diferença
+de adoção real pelos técnicos e usuários-chave.
+
+---
+
 ## Histórico (feitos)
 
 ### ✅ 2026-04-21 — Drop da coluna global `integracoes_api.ambiente`
