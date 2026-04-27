@@ -92,6 +92,24 @@ export class NfeController {
   }
 
   /**
+   * Atualiza a timeline persistida em fiscal.documento_evento lendo os
+   * eventos do Protheus (SPED156/SPED150) — sem consumir slot SEFAZ.
+   *
+   * Diferente de `/atualizar-status` (que chama SEFAZ direto e consome
+   * rate-limit). Use este quando o SEFAZ não devolver eventos (cenário
+   * comum quando Monitor Protheus já consumiu via distDFe).
+   */
+  @Post(':chave/filial/:filial/atualizar-eventos-protheus')
+  @RoleMinima('OPERADOR_ENTRADA')
+  async atualizarEventosProtheus(
+    @Param('chave') chave: string,
+    @Param('filial') filial: string,
+    @CurrentUser() user: FiscalAuthenticatedUser,
+  ) {
+    return this.nfe.atualizarEventosProtheus(chave, filial, user);
+  }
+
+  /**
    * Download do XML cru (application/xml). Faz a mesma consulta completa
    * mas devolve o conteúdo bruto para o usuário salvar localmente.
    */

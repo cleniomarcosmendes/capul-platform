@@ -71,13 +71,43 @@ export interface SefazRefreshResult {
 
 /**
  * Endpoints representativos usados para extrair a cadeia TLS ICP-Brasil.
- * Escolhidos para cobrir os 3 padrões de infra da SEFAZ: autorizador próprio
- * (MG), nacional (AN) e virtual (SVRS).
+ * Escolhidos para cobrir os padrões de infra da SEFAZ: autorizador próprio
+ * (MG, GO, SP), nacional (AN) e virtual (SVRS).
+ *
+ * GO adicionado em 23/04/2026: SEFAZ-GO usa AC SOLUTI SSL EV G4 (ICP-Brasil
+ * Raiz v10), cadeia que não aparecia quando extraíamos só de MG/AN/SVRS.
+ * Sem essa AC, consultas cadastrais (CCC) para CPF/CNPJ de GO falhavam com
+ * `unable to get local issuer certificate`.
+ *
+ * SP adicionado preventivamente — outro autorizador próprio importante que
+ * pode usar AC diferente. Preferível que o refresh cubra amplo do que tropeçar
+ * caso a caso quando surgir consulta de UF nova.
  */
 const ENDPOINTS_PARA_EXTRACAO: ReadonlyArray<{ host: string; label: string }> = [
   { host: 'nfe.fazenda.mg.gov.br', label: 'MG — autorizador próprio' },
+  { host: 'nfe.sefaz.go.gov.br', label: 'GO — autorizador próprio (AC SOLUTI)' },
+  { host: 'nfe.fazenda.sp.gov.br', label: 'SP — autorizador próprio' },
   { host: 'www1.nfe.fazenda.gov.br', label: 'AN — nacional (NFeDistribuicaoDFe)' },
   { host: 'nfe.svrs.rs.gov.br', label: 'SVRS — virtual (fallback)' },
+];
+
+/**
+ * Raízes ICP-Brasil baixadas diretamente do repositório oficial do ITI.
+ * Servidores SEFAZ mandam só as intermediárias no handshake TLS (AC SOLUTI,
+ * AC SERPRO, etc.) — sem a raiz, o Node não consegue fechar a cadeia de
+ * validação e cai em `unable to get issuer certificate`.
+ *
+ * Adicionado em 23/04/2026 após erro em SEFAZ-GO (AC SOLUTI SSL EV G4
+ * → Raiz Brasileira v10, que não estava em nenhuma store).
+ *
+ * Os arquivos são baixados no `refresh()` junto com as intermediárias.
+ */
+const RAIZES_ICP_BRASIL: ReadonlyArray<{ url: string; arquivo: string; label: string }> = [
+  {
+    url: 'https://acraiz.icpbrasil.gov.br/credenciadas/RAIZ/ICP-Brasilv10.crt',
+    arquivo: 'icp-brasil-raiz-v10.pem',
+    label: 'ICP-Brasil Raiz v10 (válida até 2032)',
+  },
 ];
 
 const IDADE_ATENCAO_DIAS = 60;
@@ -305,6 +335,27 @@ export class SefazCaService {
       } catch (err) {
         logs.push(`✗ ${ep.label}: ${(err as Error).message}`);
         this.logger.warn(`Refresh falhou para ${ep.host}: ${(err as Error).message}`);
+      }
+    }
+
+    // Baixa raízes ICP-Brasil do ITI — servidores SEFAZ não mandam a raiz no
+    // handshake, então precisamos buscá-la separadamente. Sem a raiz v10, a
+    // AC SOLUTI SSL EV G4 (usada por SEFAZ-GO) não fecha a cadeia de validação.
+    for (const raiz of RAIZES_ICP_BRASIL) {
+      try {
+        const pem = await this.fetchRaizIcpBrasil(raiz.url);
+        // Valida que é PEM de certificado — evita salvar lixo se URL retornar HTML
+        try {
+          new X509Certificate(pem);
+        } catch {
+          logs.push(`✗ ${raiz.label}: URL retornou conteúdo inválido (não é certificado)`);
+          continue;
+        }
+        novosCerts.set(raiz.arquivo, Buffer.from(pem, 'utf8'));
+        logs.push(`✓ ${raiz.label}: baixada de ${new URL(raiz.url).host}`);
+      } catch (err) {
+        logs.push(`✗ ${raiz.label}: ${(err as Error).message}`);
+        this.logger.warn(`Download de ${raiz.label} falhou: ${(err as Error).message}`);
       }
     }
 
@@ -658,6 +709,35 @@ export class SefazCaService {
     const base64 = der.toString('base64');
     const lines = base64.match(/.{1,64}/g) ?? [base64];
     return `-----BEGIN CERTIFICATE-----\n${lines.join('\n')}\n-----END CERTIFICATE-----\n`;
+  }
+
+  /**
+   * Baixa um certificado raiz ICP-Brasil via HTTPS. Aceita resposta em PEM
+   * ou DER e normaliza para PEM. Usa `undici` (ja transitivo do projeto).
+   *
+   * `rejectUnauthorized: false` intencional — a raiz é a própria que vai
+   * validar outras cadeias ICP-Brasil; validar TLS aqui exigiria já ter a
+   * raiz, ovo-galinha. O conteúdo é validado logo depois via X509Certificate.
+   */
+  private async fetchRaizIcpBrasil(url: string): Promise<string> {
+    const { request, Agent } = await import('undici');
+    const agent = new Agent({ connect: { rejectUnauthorized: false } });
+    const { statusCode, body } = await request(url, {
+      dispatcher: agent,
+      headersTimeout: 10_000,
+      bodyTimeout: 30_000,
+    });
+    if (statusCode !== 200) {
+      throw new Error(`HTTP ${statusCode} ao baixar ${url}`);
+    }
+    const buf = Buffer.from(await body.arrayBuffer());
+    const texto = buf.toString('utf8');
+    // Se já vem como PEM, retorna direto
+    if (texto.trim().startsWith('-----BEGIN CERTIFICATE-----')) {
+      return texto;
+    }
+    // Caso contrário assume DER e converte para PEM
+    return this.derToPem(buf);
   }
 
   private gerarNomeArquivo(pem: string, host: string, index: number): string | null {

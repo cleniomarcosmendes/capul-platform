@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,9 +13,36 @@ import {
   AtribuirPermissaoDto,
 } from './dto/create-usuario.dto';
 
+// Roles do módulo Fiscal cujos titulares recebem alertas por e-mail
+// (DestinatariosResolver). Sem e-mail cadastrado o usuário é silenciosamente
+// pulado e perde alertas críticos — daí a obrigatoriedade contextual.
+const MODULO_FISCAL_CODIGO = 'FISCAL';
+const ROLES_FISCAIS_COM_EMAIL = ['GESTOR_FISCAL', 'ADMIN_TI'];
+
 @Injectable()
 export class UsuarioService {
   constructor(private prisma: PrismaService, private auditLog: AuditLogService) {}
+
+  private async assertEmailParaPermissaoFiscal(
+    email: string | null | undefined,
+    moduloId: string,
+    roleModuloId: string,
+  ): Promise<void> {
+    if (email && email.trim() !== '') return;
+    const [modulo, role] = await Promise.all([
+      this.prisma.moduloSistema.findUnique({ where: { id: moduloId }, select: { codigo: true } }),
+      this.prisma.roleModulo.findUnique({ where: { id: roleModuloId }, select: { codigo: true, nome: true } }),
+    ]);
+    if (
+      modulo?.codigo === MODULO_FISCAL_CODIGO &&
+      role &&
+      ROLES_FISCAIS_COM_EMAIL.includes(role.codigo)
+    ) {
+      throw new BadRequestException(
+        `E-mail é obrigatório para a role "${role.nome}" no módulo Fiscal — usado para alertas críticos (limite SEFAZ, circuit breaker, digest de cruzamento).`,
+      );
+    }
+  }
 
   async findAll(filialId?: string) {
     const where: any = {};
@@ -79,6 +107,12 @@ export class UsuarioService {
       throw new ConflictException('Username ou email ja existe');
     }
 
+    if (dto.permissoes?.length) {
+      for (const p of dto.permissoes) {
+        await this.assertEmailParaPermissaoFiscal(dto.email, p.moduloId, p.roleModuloId);
+      }
+    }
+
     const senhaHash = await bcrypt.hash(dto.senha, 10);
 
     const novoUsuario = await this.prisma.usuario.create({
@@ -119,7 +153,25 @@ export class UsuarioService {
   }
 
   async update(id: string, dto: UpdateUsuarioDto) {
-    await this.findOne(id);
+    const usuarioAtual = await this.findOne(id);
+
+    // Se o e-mail está sendo limpado/omitido, garantir que o usuário não tem
+    // permissão fiscal ativa que dependa de e-mail (caso contrário ele
+    // silenciosamente perde alertas críticos).
+    const novoEmail = dto.email !== undefined ? dto.email : usuarioAtual.email;
+    if (!novoEmail || novoEmail.trim() === '') {
+      const permsFiscais = usuarioAtual.permissoes.filter(
+        (p) =>
+          p.status === 'ATIVO' &&
+          p.modulo.codigo === MODULO_FISCAL_CODIGO &&
+          ROLES_FISCAIS_COM_EMAIL.includes(p.roleModulo.codigo),
+      );
+      if (permsFiscais.length > 0) {
+        throw new BadRequestException(
+          `Não é possível remover o e-mail enquanto o usuário tiver a role "${permsFiscais[0].roleModulo.nome}" no módulo Fiscal — essa role recebe alertas por e-mail. Revogue a permissão ou cadastre um e-mail.`,
+        );
+      }
+    }
 
     const { filialIds, ...userData } = dto;
 
@@ -174,7 +226,9 @@ export class UsuarioService {
   }
 
   async atribuirPermissao(usuarioId: string, dto: AtribuirPermissaoDto) {
-    await this.findOne(usuarioId);
+    const usuario = await this.findOne(usuarioId);
+
+    await this.assertEmailParaPermissaoFiscal(usuario.email, dto.moduloId, dto.roleModuloId);
 
     const result = await this.prisma.permissaoModulo.upsert({
       where: {

@@ -12,6 +12,12 @@ interface PermissaoForm {
   habilitado: boolean;
 }
 
+// Roles do módulo Fiscal que recebem alertas por e-mail (digest de cruzamento,
+// limite SEFAZ, circuit breaker). DestinatariosResolver pula usuário sem email
+// silenciosamente — daí a obrigatoriedade contextual aqui.
+const ROLES_FISCAIS_COM_EMAIL = ['GESTOR_FISCAL', 'ADMIN_TI'];
+const MODULO_FISCAL_CODIGO = 'FISCAL';
+
 export function UsuarioFormPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -111,6 +117,23 @@ export function UsuarioFormPage() {
     setPermissoes((prev) => prev.map((p) => p.moduloId === moduloId ? { ...p, roleModuloId } : p));
   }
 
+  // True quando a combinação atual de permissões inclui uma role fiscal que
+  // recebe alertas — usado para forçar email e mostrar feedback visual.
+  function exigeEmailFiscal(): { exige: boolean; roleNome: string | null } {
+    const moduloFiscal = modulos.find((m) => m.codigo === MODULO_FISCAL_CODIGO);
+    if (!moduloFiscal) return { exige: false, roleNome: null };
+    const perm = permissoes.find((p) => p.moduloId === moduloFiscal.id && p.habilitado);
+    if (!perm) return { exige: false, roleNome: null };
+    const role = moduloFiscal.rolesDisponiveis.find((r) => r.id === perm.roleModuloId);
+    if (!role || !ROLES_FISCAIS_COM_EMAIL.includes(role.codigo)) {
+      return { exige: false, roleNome: null };
+    }
+    return { exige: true, roleNome: role.nome };
+  }
+
+  const emailFiscalCheck = exigeEmailFiscal();
+  const emailObrigatorio = emailFiscalCheck.exige;
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setErro('');
@@ -119,6 +142,15 @@ export function UsuarioFormPage() {
 
     try {
       const permsHabilitadas = permissoes.filter((p) => p.habilitado && p.roleModuloId);
+
+      const fiscalCheck = exigeEmailFiscal();
+      if (fiscalCheck.exige && (!email || email.trim() === '')) {
+        setErro(
+          `E-mail é obrigatório para usuários com role "${fiscalCheck.roleNome}" no módulo Fiscal — esses usuários recebem alertas críticos (limite SEFAZ, circuit breaker, digest de cruzamento). Cadastre o e-mail antes de salvar.`,
+        );
+        setSaving(false);
+        return;
+      }
 
       if (isEdicao) {
         await usuarioService.atualizar(id!, {
@@ -165,7 +197,7 @@ export function UsuarioFormPage() {
         navigate('/configurador/usuarios');
       }
     } catch (err: any) {
-      setErro(err?.response?.data?.message?.[0] || err?.response?.data?.message || 'Erro ao salvar usuario');
+      setErro(extrairMensagemErro(err));
     } finally {
       setSaving(false);
     }
@@ -265,8 +297,21 @@ export function UsuarioFormPage() {
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Email{emailObrigatorio && <span className="text-red-600"> *</span>}
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required={emailObrigatorio}
+                  className={inputClass}
+                />
+                {emailObrigatorio && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Obrigatório para a role "{emailFiscalCheck.roleNome}" no Fiscal — usado para alertas (limite SEFAZ, circuit breaker, digest de cruzamento).
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Telefone</label>
@@ -402,4 +447,36 @@ export function UsuarioFormPage() {
       </div>
     </>
   );
+}
+
+/**
+ * Extrai a mensagem mais útil possível de um erro axios. Ordem:
+ *  1. Array de mensagens (validação class-validator) — pega todas, junta com ; para o operador
+ *     ver as regras que falharam
+ *  2. String direta (ConflictException, BadRequestException com mensagem única)
+ *  3. Campo `error` se existir
+ *  4. Erro de rede (sem response) — mensagem específica com código do axios
+ *  5. HTTP status + texto genérico se tudo acima falhar
+ *
+ * A lógica anterior usava `message?.[0] || message || fallback`, que para strings caía na
+ * primeira letra ("U" em "Username…"). Além disso não distinguia erro de rede de 500.
+ */
+function extrairMensagemErro(err: any): string {
+  const msg = err?.response?.data?.message;
+  if (Array.isArray(msg) && msg.length > 0) return msg.join('; ');
+  if (typeof msg === 'string' && msg.length > 0) return msg;
+
+  const errorField = err?.response?.data?.error;
+  if (typeof errorField === 'string' && errorField.length > 0) return errorField;
+
+  if (!err?.response) {
+    return `Sem resposta do servidor (${err?.code || err?.message || 'erro de rede'}). Verifique a conexão ou tente novamente.`;
+  }
+
+  const status = err.response.status;
+  if (status === 401) return 'Sessão expirada. Faça login novamente.';
+  if (status === 403) return 'Você não tem permissão para esta operação.';
+  if (status === 409) return 'Conflito: username ou email já existente.';
+  if (status >= 500) return `Erro interno do servidor (HTTP ${status}). Cheque os logs do auth-gateway.`;
+  return `Erro ao salvar (HTTP ${status}).`;
 }

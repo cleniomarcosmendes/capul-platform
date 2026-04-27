@@ -17,7 +17,7 @@ import {
 } from '../sefaz/nfe-consulta-protocolo.client.js';
 import { AmbienteService } from '../ambiente/ambiente.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { NfeParserService } from './parsers/nfe-parser.service.js';
+import { NfeParserService, ORGAO_RECEPCAO_MAP } from './parsers/nfe-parser.service.js';
 import { DocumentoConsultaService } from './documento-consulta.service.js';
 import {
   DocumentoEventoService,
@@ -192,6 +192,28 @@ export class NfeService {
     }
 
     if (xmlNfeResp?.found) {
+      const candidateXml = Buffer.from(xmlNfeResp.xmlBase64, 'base64').toString('utf8');
+      // SPED156.DOCXMLRET às vezes guarda apenas o `<resNFe>` (resumo do
+      // NFeDistribuicaoDFe quando só houve Ciência sem Confirmação). Sem o
+      // `<NFe>` completo o parser quebra. Tratamos como cache miss e caímos
+      // pro fallback SEFAZ — mesmo caminho de quando o Protheus retorna 404.
+      const temNFeCompleta = /<NFe\b/.test(candidateXml) || /<nfeProc\b/.test(candidateXml);
+      if (!temNFeCompleta) {
+        this.logger.warn(
+          `xmlNfe HIT mas sem NF-e completa (origem=${xmlNfeResp.origem}, ` +
+            `provavelmente <resNFe>) — chave ${chave.slice(0, 6)}… filial=${filial}. ` +
+            `Caindo para fallback SEFAZ.`,
+        );
+        leitura = 'CACHE_MISS';
+        leituraMensagem =
+          xmlNfeResp.origem === 'SPED156'
+            ? 'Protheus tem apenas resumo (resNFe) em SPED156 — XML completo será baixado da SEFAZ.'
+            : 'Protheus retornou conteúdo sem NF-e completa — buscando na SEFAZ.';
+        xmlNfeResp = null;
+      }
+    }
+
+    if (xmlNfeResp?.found) {
       this.logger.log(
         `xmlNfe HIT origem=${xmlNfeResp.origem} — chave ${chave.slice(0, 6)}… filial=${filial}`,
       );
@@ -324,8 +346,13 @@ export class NfeService {
       throw new NotFoundException(`Evento ${eventoId} não encontrado para esta NF-e.`);
     }
     if (!evento.xmlEvento) {
-      // Autorização (AUTORIZACAO) não tem procEventoNFe salvo — devolvemos o
-      // que temos direto do registro para manter o modal funcional.
+      // Sem procEventoNFe salvo (autorização inicial OU evento vindo do
+      // Protheus /eventosNfe, que só devolve metadados). Construímos um
+      // detalhe sintético com os campos deriváveis — fica ~80% igual ao
+      // portal SEFAZ. Os 3 campos que dependem exclusivamente do XML
+      // (Id do Evento / Sequencial / Protocolo + Data Autorização) ficam
+      // nulos e o frontend mostra "-" pra eles, com nota explicativa.
+      const detalheSintetico = this.construirDetalheSintetico(evento, doc);
       return {
         id: evento.id,
         tipoEvento: evento.tipoEvento,
@@ -334,7 +361,7 @@ export class NfeService {
         protocolo: evento.protocoloEvento,
         cStat: evento.cStat,
         xMotivo: evento.xMotivo,
-        detalhe: null,
+        detalhe: detalheSintetico,
       };
     }
     const detalhe = this.parser.parseEventoXml(evento.xmlEvento);
@@ -347,6 +374,97 @@ export class NfeService {
       cStat: evento.cStat,
       xMotivo: evento.xMotivo,
       detalhe,
+    };
+  }
+
+  /**
+   * Monta um "NfeEventoDetalhe" parcial a partir dos dados que já temos
+   * quando o procEventoNFe completo não foi persistido (caso típico:
+   * eventos sincronizados via Protheus /eventosNfe).
+   *
+   * Derivações seguras (não palpite):
+   *   - Órgão Recepção: manifestações (210200/210/220/240) vão SEMPRE ao
+   *     Ambiente Nacional (91). CC-e, Cancelamento, EPEC vão à UF emitente.
+   *   - Ambiente: vem do documento_consulta.ambienteSefaz (registrado na
+   *     consulta que trouxe o XML).
+   *   - Autor Evento (CNPJ): manifestações = destinatário; demais tipos
+   *     (cancelamento/CC-e) = emitente.
+   *   - Mensagem de Autorização: cStat 135 = "Evento registrado e vinculado
+   *     a NF-e" (único status de autorização bem-sucedida de evento).
+   *
+   * Campos que ficam null (sem XML do procEventoNFe não há como derivar):
+   *   - Id do Evento, Sequencial, Versão Evento, Justificativa,
+   *     Protocolo SEFAZ, Data/Hora da Autorização.
+   */
+  private construirDetalheSintetico(
+    evento: {
+      tipoEvento: string;
+      descricao: string;
+      dataEvento: Date;
+      cStat: string | null;
+      idEvento?: string | null;
+      protocoloEvento?: string | null;
+    },
+    doc: { chave: string; cnpjEmitente: string | null; cnpjDestinatario: string | null; ambienteSefaz: string },
+  ): import('./parsers/nfe-parsed.interface.js').NfeEventoDetalhe {
+    const tpEvento = evento.tipoEvento;
+    const ehManifestacao = ['210200', '210210', '210220', '210240'].includes(tpEvento);
+    // Órgão: 91 (AN) para manifestações; cUF do emitente para cancelamento/CC-e/EPEC
+    const cUfEmitente = doc.chave.slice(0, 2);
+    const orgaoRecepcao = ehManifestacao ? '91' : cUfEmitente;
+    const orgaoRecepcaoDescricao = ORGAO_RECEPCAO_MAP[orgaoRecepcao] ?? null;
+    // Autor: destinatário para manifestações, emitente para os demais
+    const autorCnpj = ehManifestacao ? doc.cnpjDestinatario : doc.cnpjEmitente;
+    const ambiente: '1' | '2' = doc.ambienteSefaz === 'PRODUCAO' ? '1' : '2';
+    const ambienteDescricao = ambiente === '1' ? '1 - Produção' : '2 - Homologação';
+    // Mensagem de autorização: cStat 135 é o único "sucesso" padrão para eventos.
+    const autorizacaoMensagem =
+      evento.cStat === '135'
+        ? '135 - Evento registrado e vinculado a NF-e'
+        : evento.cStat
+          ? `${evento.cStat}`
+          : null;
+    return {
+      orgaoRecepcao,
+      orgaoRecepcaoDescricao,
+      ambiente,
+      ambienteDescricao,
+      versao: '1.00',
+      chave: doc.chave,
+      // idEvento agora vem do Protheus /eventosNfe (contrato 27/04/2026).
+      // Continua null para eventos que o Protheus não devolve esse campo
+      // (ex.: autorização sintética da própria NF-e).
+      idEvento: evento.idEvento ?? null,
+      autorCnpj,
+      autorCpf: null,
+      dataEvento: evento.dataEvento.toISOString(),
+      tipoEvento: tpEvento,
+      // Combina código + descrição igual portal SEFAZ (ex: "210240 - Operação não Realizada").
+      // Só faz sentido quando tpEvento é numérico — para 'AUTORIZACAO' mantém a descrição original.
+      tipoEventoDescricao: /^\d+$/.test(tpEvento)
+        ? `${tpEvento} - ${evento.descricao}`
+        : evento.descricao,
+      // Manifestações (210200/210210/210220/210240) sempre são únicas por NF-e
+      // (operador só manifesta uma vez em cada modalidade) — nSeqEvento=1.
+      // CC-e (110110) pode ter múltiplas; sem o XML não dá pra inferir o número.
+      sequencial: ehManifestacao ? 1 : null,
+      versaoEvento: '1.00',
+      descricaoEvento: evento.descricao,
+      justificativa: null, // Protheus /eventosNfe não devolve
+      autorizacaoCStat: evento.cStat,
+      autorizacaoMotivo: evento.cStat === '135' ? 'Evento registrado e vinculado a NF-e' : null,
+      autorizacaoMensagem,
+      // Protocolo SEFAZ específico do evento — Protheus disponibilizou em
+      // 27/04/2026 via /eventosNfe. Distinto do protocolo da autorização
+      // original da NF-e (esse fica em documento_consulta.protocolo).
+      autorizacaoProtocolo: evento.protocoloEvento ?? null,
+      // Aproximação pelo `dataEvento` (= `quando` do Protheus). No XML
+      // procEventoNFe há dois timestamps próximos: `dhEvento` (intenção do
+      // autor) e `dhRegEvento` (registro pela SEFAZ). O Protheus expõe
+      // apenas um campo `quando` — usamos como Data/Hora Autorização
+      // enquanto o ERP não devolve `dhRegEvento` separado. Em geral diferem
+      // por segundos, suficiente para auditoria visual.
+      autorizacaoDataHora: evento.dataEvento.toISOString(),
     };
   }
 
@@ -576,6 +694,217 @@ export class NfeService {
           'O serviço pode estar temporariamente indisponível — tente novamente em alguns minutos.',
       });
     }
+  }
+
+  /**
+   * Atualiza a timeline de eventos da NF-e usando o Protheus como fonte —
+   * SEM consumir slot SEFAZ. Chama `/eventosNfe` (SPED150 + SPED156 + SZR010)
+   * e persiste os eventos em `fiscal.documento_evento`.
+   *
+   * Racional: o SEFAZ, após "consumir" um evento via distDFe/consChNFe,
+   * normalmente não o devolve novamente — por isso o botão "Atualizar status
+   * no SEFAZ" pode voltar vazio mesmo quando o portal SEFAZ mostra 8 eventos.
+   * O Protheus mantém a timeline histórica em SPED156, então é a fonte
+   * confiável. Endpoint separado do /atualizar-status para o operador poder
+   * escolher: Protheus (gratuito, sem slot SEFAZ) ou SEFAZ (quando precisa
+   * forçar reconsulta).
+   */
+  async atualizarEventosProtheus(chave: string, filial: string, _user: FiscalAuthenticatedUser) {
+    this.validateChave(chave);
+    const doc = await this.documentoConsulta.findByChave(chave, filial);
+    if (!doc) {
+      throw new NotFoundException(
+        `Documento ${chave} filial ${filial} não encontrado. Faça a consulta primeiro.`,
+      );
+    }
+
+    this.logger.log(
+      `atualizarEventosProtheus: iniciando para chave=${chave.slice(0, 10)}… filial=${filial}`,
+    );
+
+    let respProtheus;
+    try {
+      respProtheus = await this.protheusEventos.listar(chave);
+      this.logger.log(
+        `atualizarEventosProtheus: Protheus retornou ${respProtheus.quantidade} evento(s) brutos para ${chave.slice(0, 10)}…`,
+      );
+      // Loga TODOS os campos de cada evento — precisamos saber se o
+      // campo `detalhes` carrega a justificativa (NT 2012/003), que é o
+      // único campo "enriquecido" que o portal SEFAZ mostra além dos
+      // metadados básicos. Se não vier, pedimos à equipe Protheus.
+      if (respProtheus.eventos.length > 0) {
+        for (const [idx, e] of respProtheus.eventos.entries()) {
+          this.logger.log(
+            `atualizarEventosProtheus: evento[${idx}] origem=${e.origem} tipo="${e.tipo}" quando=${e.quando} ator="${e.ator}" detalhes="${e.detalhes}"`,
+          );
+        }
+      }
+    } catch (err) {
+      const msg = (err as Error).message ?? '';
+      const name = (err as Error).name ?? '';
+      this.logger.warn(
+        `atualizarEventosProtheus: erro Protheus — name=${name} msg=${msg.slice(0, 200)}`,
+      );
+      const apiIndisponivel =
+        msg.includes("'<'") ||
+        msg.includes('not valid JSON') ||
+        msg.includes('other side closed') ||
+        msg.includes('Connect Timeout') ||
+        name === 'SocketError' ||
+        name === 'ConnectTimeoutError';
+      if (apiIndisponivel) {
+        throw new ServiceUnavailableException({
+          erro: 'EVENTOSNFE_NAO_DISPONIVEL',
+          mensagem:
+            'Endpoint /eventosNfe do Protheus ainda não está publicado. Enquanto isso, use "Atualizar status no SEFAZ" (consome slot).',
+        });
+      }
+      throw err;
+    }
+
+    const eventosParaPersistir: EventoInput[] = [];
+    let ignoradosNaoTimeline = 0;
+    let ignoradosDataInvalida = 0;
+    for (const ev of respProtheus.eventos) {
+      // Eventos não-SEFAZ (SF1010 entrada fiscal, SZR010 importação interna)
+      // não pertencem à timeline oficial — são atos do Protheus, não da SEFAZ.
+      if (ev.origem === 'SF1010' || ev.origem === 'SZR010') {
+        ignoradosNaoTimeline++;
+        continue;
+      }
+      const dataEvento = this.parseDataProtheus(ev.quando);
+      if (!dataEvento) {
+        ignoradosDataInvalida++;
+        this.logger.warn(
+          `atualizarEventosProtheus: data inválida ignorada — "${ev.quando}" origem=${ev.origem} tipo=${ev.tipo}`,
+        );
+        continue;
+      }
+      const tipoNormalizado = this.mapearTipoEventoProtheus(ev.tipo, ev.origem);
+      const descricao = TIPO_EVENTO_LABEL[tipoNormalizado] ?? ev.tipo;
+      // Extrai cStat do `detalhes` quando vier no formato "… [cStat 135]" —
+      // dá pra mostrar como "Mensagem de Autorização" no modal/impressão do
+      // evento, igual ao portal SEFAZ.
+      const cStatMatch = ev.detalhes?.match(/\[cStat\s+(\d{1,4})\]/);
+      const cStatExtraido = cStatMatch ? cStatMatch[1] : null;
+      const xMotivoComplementar = [`[${ev.origem}]`, ev.ator, ev.detalhes]
+        .filter((s) => s && s.trim())
+        .join(' · ');
+      // Protheus disponibilizou em 27/04/2026 o `id_evento` e o `protocolo`
+      // específico do evento. Vêm como string vazia para eventos que não os
+      // geram (ex.: SPED156 autorização original) — normalizamos para null.
+      const idEventoProtheus = ev.id_evento && ev.id_evento.trim() !== '' ? ev.id_evento.trim() : null;
+      const protocoloProtheus = ev.protocolo && ev.protocolo.trim() !== '' ? ev.protocolo.trim() : null;
+      eventosParaPersistir.push({
+        tipoEvento: tipoNormalizado,
+        descricao,
+        dataEvento,
+        cStat: cStatExtraido,
+        xMotivo: xMotivoComplementar,
+        idEvento: idEventoProtheus,
+        protocoloEvento: protocoloProtheus,
+      });
+    }
+
+    this.logger.log(
+      `atualizarEventosProtheus: ${eventosParaPersistir.length} evento(s) para persistir ` +
+        `(ignorados: ${ignoradosNaoTimeline} não-timeline [SF1010/SZR010], ${ignoradosDataInvalida} data inválida)`,
+    );
+
+    await this.documentoEvento.upsertMany(doc.id, eventosParaPersistir);
+    const eventosTimeline = await this.carregarEventosDoBanco(doc.id);
+    this.logger.log(
+      `atualizarEventosProtheus: timeline final = ${eventosTimeline.length} evento(s) persistido(s) no banco.`,
+    );
+
+    return {
+      chave,
+      filial,
+      consultadoEm: new Date().toISOString(),
+      origem: 'PROTHEUS_SPED156',
+      quantidadeProtheus: respProtheus.quantidade,
+      quantidadeRecebidaUtil: eventosParaPersistir.length,
+      quantidadePersistida: eventosParaPersistir.length,
+      ignoradosSF1010: ignoradosNaoTimeline,
+      ignoradosDataInvalida,
+      eventos: eventosTimeline,
+    };
+  }
+
+  /**
+   * Parse da data Protheus no formato "YYYYMMDD HH:MM:SS" (timezone BRT).
+   * Retorna null se o formato não bater — não queremos persistir eventos
+   * com timestamp inválido.
+   */
+  private parseDataProtheus(quando: string): Date | null {
+    const m = quando.match(/^(\d{4})(\d{2})(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    if (!m) return null;
+    // Protheus devolve em horário local (BRT = UTC-3). Construímos um ISO
+    // com offset explícito para não depender do TZ do processo Node.
+    const [, y, mo, d, h, mi, s] = m;
+    const iso = `${y}-${mo}-${d}T${h}:${mi}:${s}-03:00`;
+    const dt = new Date(iso);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  /**
+   * Traduz o campo `tipo` do Protheus (texto livre tipo "Manif: Confirmacao
+   * da Operacao", "NFe autorizada SEFAZ") para o código numérico SEFAZ
+   * correspondente. Crítico para o dedup de `fiscal.documento_evento`
+   * (@@unique documentoId+tipoEvento+dataEvento) — se não bater, o mesmo
+   * evento vira 2 linhas (uma "210200" vinda do SEFAZ, outra
+   * "MANIF: CONFIRMACAO DA OPERACAO" vinda do Protheus).
+   *
+   * Também restrito a ≤ 20 chars para caber em VARCHAR(20) da coluna
+   * `tipo_evento` — strings maiores silenciosamente falhavam o upsert
+   * (descoberto 24/04/2026 quando 4 eventos Protheus estouraram a coluna).
+   */
+  private mapearTipoEventoProtheus(tipo: string, origem: string): string {
+    // Normaliza: uppercase + remove acentos + colapsa espaços + remove
+    // prefixos conhecidos ("Manif: ", "NFe "). O Protheus devolve o mesmo
+    // evento com formatações diferentes dependendo da origem (SPED150 usa
+    // "Manif: X", SPED156 usa "X" direto).
+    const normal = tipo
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, ' ')
+      .replace(/^MANIF:\s*/, '')
+      .replace(/^NFE\s+/, '');
+
+    const map: Record<string, string> = {
+      AUTORIZACAO: TIPO_EVENTO_AUTORIZACAO,
+      'AUTORIZACAO DE USO': TIPO_EVENTO_AUTORIZACAO,
+      'AUTORIZADA SEFAZ': TIPO_EVENTO_AUTORIZACAO,
+      CANCELAMENTO: '110111',
+      'CANCELAMENTO POR SUBSTITUICAO': '110112',
+      'CC-E': '110110',
+      CCE: '110110',
+      'CARTA DE CORRECAO': '110110',
+      EPEC: '110113',
+      CIENCIA: '210210',
+      'CIENCIA DA OPERACAO': '210210',
+      CONFIRMACAO: '210200',
+      'CONFIRMACAO DA OPERACAO': '210200',
+      DESCONHECIMENTO: '210220',
+      'DESCONHECIMENTO DA OPERACAO': '210220',
+      'OPERACAO NAO REALIZADA': '210240',
+      'MDF-E AUTORIZADO': '310610',
+      'CANCELAMENTO DE MDF-E': '310620',
+      'REGISTRO PASSAGEM MDF-E': '510630',
+      'CT-E AUTORIZADO': '510620',
+    };
+    if (map[normal]) return map[normal];
+
+    // Fallback: origem + tipo truncado para caber em VARCHAR(20).
+    // Ex.: "SPED156/EPEC", "SPED150/X" — serve para o operador identificar
+    // que o Protheus mandou um tipo não mapeado, sem derrubar a persistência.
+    const fallback = `${origem}/${normal}`.slice(0, 20);
+    this.logger.warn(
+      `mapearTipoEventoProtheus: tipo "${tipo}" (origem=${origem}) não mapeado — usando fallback "${fallback}". Adicionar ao map se recorrente.`,
+    );
+    return fallback;
   }
 
   /**

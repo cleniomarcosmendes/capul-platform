@@ -30,6 +30,10 @@ export interface CccConsultaRaw {
     nomeFantasia?: string | null;
     cnae?: string | null;
     inicioAtividade?: string | null;
+    /** IE atual (CCC v4 IEAtual). Igual à IE consultada quando não houve substituição. */
+    ieAtual?: string | null;
+    /** DFe habilitados derivados de indCredNFe/CTe (1, 2, 3 = habilitado; 4 = opcional; 0 = não). */
+    dfeHabilitados: string[];
     endereco?: {
       logradouro?: string | null;
       numero?: string | null;
@@ -168,6 +172,12 @@ export class CccClient {
 
     const contribuintes = infCadList.map((c: any) => {
       const ender = c.ender ?? null;
+      // DFe habilitados: códigos indCred 1/2/3 = credenciado; 4 = opcional; 0 = não
+      const dfeHabilitados: string[] = [];
+      const credNfe = String(c.indCredNFe ?? '');
+      const credCte = String(c.indCredCTe ?? '');
+      if (['1', '2', '3', '4'].includes(credNfe)) dfeHabilitados.push('NFe');
+      if (['1', '2', '3', '4'].includes(credCte)) dfeHabilitados.push('CTe');
       return {
         ie: str(c.IE),
         cnpj: str(c.CNPJ),
@@ -185,6 +195,8 @@ export class CccClient {
         nomeFantasia: str(c.xFant),
         cnae: str(c.CNAE),
         inicioAtividade: str(c.dIniAtiv),
+        ieAtual: str(c.IEAtual),
+        dfeHabilitados,
         endereco: ender
           ? {
               logradouro: str(ender.xLgr),

@@ -10,7 +10,7 @@ import { EventosTimeline } from '../components/EventosTimeline';
 import { useAuth } from '../contexts/AuthContext';
 import { extractApiError } from '../utils/errors';
 import { Row } from '../components/Row';
-import { fmtNum } from '../utils/format';
+import { fmtChaveMascara, fmtNum } from '../utils/format';
 import type { ProtheusStatus, TimelineEvento, ConsultaProtocoloStatus } from '../types';
 
 interface FilialResumo {
@@ -145,9 +145,10 @@ export function CteConsultaPage() {
         className="mb-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
       >
         <p className="mb-3 text-xs text-slate-500">
-          Informe a chave de acesso do CT-e (44 dígitos). O XML é lido do Protheus
-          (SZR010) — se não estiver em cache, exibimos apenas o status e os eventos
-          retornados pelo serviço CteConsultaProtocolo da SEFAZ.
+          Informe a chave de acesso do CT-e (44 dígitos — os separadores da máscara são aplicados
+          automaticamente: <span className="font-mono">UF-AAMM-CNPJ-mod-série-nNF-tpEmis+cNF-DV</span>).
+          O XML é lido do Protheus (SZR010) — se não estiver em cache, exibimos apenas o status e
+          os eventos retornados pelo serviço CteConsultaProtocolo da SEFAZ.
         </p>
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-96">
@@ -177,9 +178,11 @@ export function CteConsultaPage() {
             <div className="relative">
               <input
                 type="text"
-                value={chave}
+                value={fmtChaveMascara(chave)}
                 onChange={(e) => setChave(e.target.value.replace(/\D/g, '').slice(0, 44))}
-                placeholder="31260400000000000000570010000000011000000010"
+                placeholder="52-2604-00000000000000-57-001-000000001-100000001-0"
+                maxLength={51}
+                title="UF-AAMM-CNPJ-mod-série-nNF-tpEmis+cNF-DV"
                 className="w-full rounded-md border border-slate-300 px-3 py-2 pr-9 font-mono text-sm tracking-tight focus:border-slate-500 focus:ring-slate-500"
                 required
               />

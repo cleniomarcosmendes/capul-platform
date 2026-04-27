@@ -13,6 +13,8 @@ export interface EventoInput {
   descricao: string;
   dataEvento: Date;
   protocoloEvento?: string | null;
+  /** Id do Evento (XML procEventoNFe). Disponibilizado pelo Protheus em 27/04/2026. */
+  idEvento?: string | null;
   cStat?: string | null;
   xMotivo?: string | null;
   xmlEvento?: string | null;
@@ -79,6 +81,7 @@ export class DocumentoEventoService {
             descricao: evt.descricao,
             dataEvento: evt.dataEvento,
             protocoloEvento: evt.protocoloEvento ?? null,
+            idEvento: evt.idEvento ?? null,
             cStat: evt.cStat ?? null,
             xMotivo: evt.xMotivo ?? null,
             xmlEvento: evt.xmlEvento ?? null,
@@ -86,15 +89,32 @@ export class DocumentoEventoService {
           update: {
             descricao: evt.descricao,
             protocoloEvento: evt.protocoloEvento ?? undefined,
+            idEvento: evt.idEvento ?? undefined,
             cStat: evt.cStat ?? undefined,
             xMotivo: evt.xMotivo ?? undefined,
+            // Caso típico: evento foi criado primeiro via "Atualizar eventos
+            // (Protheus)" sem XML, depois "Atualizar status no SEFAZ" trouxe
+            // o procEventoNFe completo. Sem essa linha o XML era descartado
+            // e o detalhe sintético sobrevivia eternamente — cobrindo os
+            // campos que só existem no XML (xJust, nSeqEvento, dhRegEvento).
+            xmlEvento: evt.xmlEvento ?? undefined,
           },
         });
       } catch (err) {
         // Isolamos falhas por evento — um evento mal-formado não deve
-        // derrubar a persistência dos outros.
+        // derrubar a persistência dos outros. Logamos message + code + meta
+        // porque Prisma validation errors às vezes deixam `.message` vazio
+        // mas expõem o motivo real em `.code` ou `.meta` (ex.: P2000 =
+        // string too long para a coluna).
+        const anyErr = err as any;
+        const msg =
+          (err as Error).message ||
+          anyErr?.code ||
+          anyErr?.meta?.target ||
+          JSON.stringify(anyErr).slice(0, 200) ||
+          '(sem mensagem)';
         this.logger.warn(
-          `Falha ao persistir evento ${evt.tipoEvento} para documento ${documentoId}: ${(err as Error).message}`,
+          `Falha ao persistir evento ${evt.tipoEvento} para documento ${documentoId}: ${msg}`,
         );
       }
     }

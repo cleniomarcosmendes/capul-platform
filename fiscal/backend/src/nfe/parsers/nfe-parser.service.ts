@@ -123,6 +123,23 @@ const ICMS_CST_MAP: Record<string, string> = {
   '70': 'Com redução de base de cálculo e cobrança do ICMS por substituição tributária',
   '90': 'Outras',
 };
+/**
+ * Códigos CSOSN — Código de Situação da Operação no Simples Nacional.
+ * Aplicável quando o emitente é optante pelo Simples Nacional (CRT=1 ou 2).
+ * Anexo III da NT 2010/001.
+ */
+const ICMS_CSOSN_MAP: Record<string, string> = {
+  '101': 'Tributada pelo Simples Nacional com permissão de crédito',
+  '102': 'Tributada pelo Simples Nacional sem permissão de crédito',
+  '103': 'Isenção do ICMS no Simples Nacional para faixa de receita bruta',
+  '201': 'Tributada pelo Simples Nacional com permissão de crédito e com cobrança do ICMS por substituição tributária',
+  '202': 'Tributada pelo Simples Nacional sem permissão de crédito e com cobrança do ICMS por substituição tributária',
+  '203': 'Isenção do ICMS no Simples Nacional para faixa de receita bruta e com cobrança do ICMS por substituição tributária',
+  '300': 'Imune',
+  '400': 'Não tributada pelo Simples Nacional',
+  '500': 'ICMS cobrado anteriormente por substituição tributária (substituído) ou por antecipação',
+  '900': 'Outros',
+};
 const MOD_BC_MAP: Record<string, string> = {
   '0': 'Margem Valor Agregado (%)',
   '1': 'Pauta (valor)',
@@ -138,7 +155,26 @@ const MOD_BC_ST_MAP: Record<string, string> = {
   '5': 'Pauta (valor)',
   '6': 'Valor da Operação',
 };
-const ORGAO_RECEPCAO_MAP: Record<string, string> = {
+/**
+ * Motivo de desoneração do ICMS — NT 2016/002 Anexo II. Aplicável tanto ao
+ * ICMS Normal (motDesICMS) quanto ao ICMS ST (motDesICMSST) — mesmos códigos.
+ */
+const MOT_DES_ICMS_MAP: Record<string, string> = {
+  '1': 'Táxi',
+  '3': 'Produtor Agropecuário',
+  '4': 'Frotista/Locadora',
+  '5': 'Diplomático/Consular',
+  '6': 'Utilitários e Motocicletas da Amazônia Ocidental e Áreas de Livre Comércio',
+  '7': 'SUFRAMA',
+  '8': 'Venda a Órgão Público',
+  '9': 'Outros',
+  '10': 'Deficiente Condutor',
+  '11': 'Deficiente Não Condutor',
+  '12': 'Órgão de Fomento e Desenvolvimento Agropecuário',
+  '16': 'Olimpíadas Rio 2016',
+  '90': 'Solicitado pelo Fisco',
+};
+export const ORGAO_RECEPCAO_MAP: Record<string, string> = {
   '11': 'RO', '12': 'AC', '13': 'AM', '14': 'RR', '15': 'PA', '16': 'AP',
   '17': 'TO', '21': 'MA', '22': 'PI', '23': 'CE', '24': 'RN', '25': 'PB',
   '26': 'PE', '27': 'AL', '28': 'SE', '29': 'BA', '31': 'MG', '32': 'ES',
@@ -455,9 +491,16 @@ export class NfeParserService {
     const orig = str(icms.orig);
     const modBC = str(icms.modBC);
     const modBCST = str(icms.modBCST);
+    const motDes = str(icms.motDesICMS);
+    const motDesST = str(icms.motDesICMSST);
+    // CSOSN tem 3 dígitos (101, 102, 201, 900, etc.), CST normal tem 2 (00, 10, 20...).
+    // Tenta CSOSN primeiro — se não tem mapa, cai para CST.
+    const cstDescricao = cst
+      ? (cst.length === 3 ? ICMS_CSOSN_MAP[cst] : ICMS_CST_MAP[cst]) ?? null
+      : null;
     return {
       cst,
-      cstDescricao: cst ? ICMS_CST_MAP[cst] ?? null : null,
+      cstDescricao,
       orig,
       origDescricao: orig ? ICMS_ORIG_MAP[orig] ?? null : null,
       modBC,
@@ -465,6 +508,7 @@ export class NfeParserService {
       base: optNum(icms.vBC),
       aliquota: optNum(icms.pICMS),
       valor: optNum(icms.vICMS),
+      percentualReducaoBC: optNum(icms.pRedBC),
       baseFcp: optNum(icms.vBCFCP),
       percentualFcp: optNum(icms.pFCP),
       valorFcp: optNum(icms.vFCP),
@@ -482,9 +526,14 @@ export class NfeParserService {
       percentualFcpStRetido: optNum(icms.pFCPSTRet),
       valorFcpStRetido: optNum(icms.vFCPSTRet),
       valorIcmsSTDesonerado: optNum(icms.vICMSSTDeson),
-      motivoDesoneracaoST: str(icms.motDesICMSST),
+      motivoDesoneracaoST: motDesST,
+      motivoDesoneracaoSTDescricao: motDesST ? MOT_DES_ICMS_MAP[motDesST] ?? null : null,
       valorIcmsDesonerado: optNum(icms.vICMSDeson),
-      motivoDesoneracao: str(icms.motDesICMS),
+      motivoDesoneracao: motDes,
+      motivoDesoneracaoDescricao: motDes ? MOT_DES_ICMS_MAP[motDes] ?? null : null,
+      // Simples Nacional — presentes em ICMSSN101, ICMSSN201, ICMSSN900.
+      aliquotaCreditoSN: optNum(icms.pCredSN),
+      valorCreditoICMSSN: optNum(icms.vCredICMSSN),
     };
   }
 

@@ -194,6 +194,7 @@ export interface NfeIcmsProduto {
   base?: number | null;
   aliquota?: number | null;
   valor?: number | null;
+  percentualReducaoBC?: number | null;
   baseFcp?: number | null;
   percentualFcp?: number | null;
   valorFcp?: number | null;
@@ -212,8 +213,13 @@ export interface NfeIcmsProduto {
   valorFcpStRetido?: number | null;
   valorIcmsSTDesonerado?: number | null;
   motivoDesoneracaoST?: string | null;
+  motivoDesoneracaoSTDescricao?: string | null;
   valorIcmsDesonerado?: number | null;
   motivoDesoneracao?: string | null;
+  motivoDesoneracaoDescricao?: string | null;
+  // Simples Nacional (ICMSSN101/201/900)
+  aliquotaCreditoSN?: number | null;
+  valorCreditoICMSSN?: number | null;
 }
 
 export interface NfeIbsCbsProduto {
@@ -399,13 +405,13 @@ export interface NfeEventoDetalhe {
   ambienteDescricao: string;
   versao?: string | null;
   chave: string;
-  idEvento: string;
+  idEvento: string | null;
   autorCnpj?: string | null;
   autorCpf?: string | null;
   dataEvento: string;
   tipoEvento: string;
   tipoEventoDescricao: string;
-  sequencial: number;
+  sequencial: number | null;
   versaoEvento?: string | null;
   descricaoEvento?: string | null;
   justificativa?: string | null;
@@ -544,6 +550,8 @@ export interface VinculoProtheus {
   bloqueado: boolean;
   razaoSocial?: string | null;
   inscricaoEstadual?: string | null;
+  /** UF da IE deste vínculo (inscUF do Protheus) — usada na auditoria multi-UF. */
+  uf: string | null;
 }
 
 export interface DivergenciaEntreTabelas {
@@ -581,9 +589,48 @@ export interface DadosReceitaFederal {
   consultadoEm: string;
 }
 
+/** Uma inscrição estadual retornada pelo CCC/SEFAZ. */
+export interface InscricaoEstadualSefaz {
+  inscricaoEstadual: string;
+  /** UF da SEFAZ que retornou esta IE. */
+  uf: string;
+  situacao: SituacaoCadastral;
+  situacaoRaw: string;
+  cSit: string | null;
+  dataSituacao: string | null;
+  dataFimAtividade: string | null;
+  inicioAtividade: string | null;
+  razaoSocial: string | null;
+  nomeFantasia: string | null;
+  cnae: string | null;
+  regimeApuracao: string | null;
+  ieDestinatario: string | null;
+  ieDestinatarioCTe: string | null;
+  ieAtual: string | null;
+  dfeHabilitados: string[];
+  endereco: NfeEndereco | null;
+}
+
+export type StatusCruzamentoIe = 'AMBOS' | 'APENAS_PROTHEUS' | 'APENAS_SEFAZ';
+
+export interface CruzamentoIeProtheusSefaz {
+  inscricaoEstadual: string;
+  status: StatusCruzamentoIe;
+  vinculosProtheus: VinculoProtheus[];
+  sefaz: InscricaoEstadualSefaz | null;
+  alertas: string[];
+}
+
 export interface CadastroConsultaResult {
   cnpj: string;
+  /** UF principal do resultado (onde está a IE habilitada ou a 1ª UF consultada). */
   uf: string;
+  /** Todas as UFs consultadas nesta requisição. */
+  ufsConsultadas: string[];
+  /** UFs ignoradas por exceder o cap de 5 UFs por consulta. */
+  ufsIgnoradasPorCap: string[];
+  /** UFs que tiveram erro técnico na consulta (timeout, circuit breaker, etc). */
+  ufsComFalha: Array<{ uf: string; erro: string }>;
   situacao: SituacaoCadastral;
   razaoSocial: string | null;
   nomeFantasia: string | null;
@@ -596,6 +643,13 @@ export interface CadastroConsultaResult {
   regimeApuracao: string | null;
   ieDestinatario: string | null;
   ieDestinatarioCTe: string | null;
+
+  // Todas as IEs retornadas pelo CCC/SEFAZ + cruzamento com vínculos Protheus.
+  // Introduzido em 24/04/2026 após feedback do setor fiscal: CCC pode devolver
+  // N inscrições para o mesmo CPF/CNPJ (produtor rural com várias propriedades,
+  // empresa com IEs por filial). Antes mostrávamos só a 1ª.
+  inscricoesSefaz: InscricaoEstadualSefaz[];
+  cruzamentoInscricoes: CruzamentoIeProtheusSefaz[];
 
   // Enriquecimento via Receita Federal (BrasilAPI / ReceitaWS)
   dadosReceita: DadosReceitaFederal | null;

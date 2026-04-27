@@ -94,8 +94,16 @@ export class CertificadoService {
       await mkdir(this.certsDir, { recursive: true, mode: 0o700 });
       const path = resolve(this.certsDir, `${novo.id}.pfx`);
       await writeFile(path, buffer, { mode: 0o600, flag: 'wx' });
-      // Reforça chmod (em alguns filesystems o mode do writeFile é ignorado)
-      await chmod(path, 0o600);
+      // chmod best-effort: bind mounts em WSL2 (filesystem 9P) negam chmod
+      // porque mapeiam todo UID para o usuário do host. O mode do writeFile já
+      // foi solicitado; em prod Linux nativo é honrado.
+      try {
+        await chmod(path, 0o600);
+      } catch (chmodErr) {
+        this.logger.warn(
+          `chmod ${path} falhou (provável bind mount sem suporte): ${(chmodErr as Error).message}`,
+        );
+      }
     } catch (err) {
       await this.prisma.certificado.delete({ where: { id: novo.id } }).catch(() => undefined);
       throw new BadRequestException(

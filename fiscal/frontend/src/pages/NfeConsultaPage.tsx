@@ -20,6 +20,7 @@ import { Row } from '../components/Row';
 import {
   fmtCep,
   fmtChave,
+  fmtChaveMascara,
   fmtCnpj,
   fmtData,
   fmtDataHora,
@@ -132,6 +133,69 @@ export function NfeConsultaPage() {
     URL.revokeObjectURL(url);
   }
 
+  /**
+   * Atualiza a lista de eventos consultando o Protheus (SPED156). Diferente
+   * do "Atualizar status no SEFAZ", NÃO consome slot SEFAZ — pode ser clicado
+   * quantas vezes for necessário. Fonte preferida porque o SEFAZ pode não
+   * devolver eventos já "consumidos" pelo Monitor Protheus.
+   */
+  async function handleAtualizarEventosProtheus() {
+    if (!result) return;
+    try {
+      setLoading(true);
+      const { data } = await fiscalApi.post<{
+        eventos: NfeParsed['eventos'];
+        quantidadeProtheus: number;
+        quantidadeRecebidaUtil: number;
+        quantidadePersistida: number;
+        ignoradosSF1010: number;
+        ignoradosDataInvalida: number;
+      }>(`/nfe/${result.chave}/filial/${result.filial}/atualizar-eventos-protheus`);
+
+      // Atualiza só os eventos do resultado em memória — evita refazer todo
+      // o parse do XML (que é pesado) e preserva demais dados já exibidos.
+      setResult({
+        ...result,
+        parsed: { ...result.parsed, eventos: data.eventos },
+      });
+
+      // Feedback detalhado: se Protheus devolveu 0, diz isso. Se devolveu
+      // algo mas tudo foi ignorado (ex.: só SF1010), explica por que a
+      // tabela não mudou.
+      if (data.quantidadeProtheus === 0) {
+        toast.info(
+          'Protheus não tem eventos para esta chave',
+          'O endpoint /eventosNfe respondeu com 0 eventos. Pode ser NF-e emitida por outra unidade, fora do escopo SPED156/SPED150 da CAPUL.',
+        );
+      } else if (data.quantidadeRecebidaUtil === 0) {
+        toast.info(
+          `Protheus retornou ${data.quantidadeProtheus} registro(s), mas nenhum é evento de timeline`,
+          `${data.ignoradosSF1010} SF1010 (entrada fiscal) + ${data.ignoradosDataInvalida} com data inválida. Nenhum evento SEFAZ (SPED156/SPED150) disponível.`,
+        );
+      } else {
+        toast.success(
+          'Eventos sincronizados com o Protheus',
+          `${data.eventos.length} evento(s) na timeline · ${data.quantidadeRecebidaUtil} vieram do SPED156/SPED150 nesta chamada.`,
+        );
+      }
+    } catch (err: any) {
+      const body = err?.response?.data;
+      if (body?.erro === 'EVENTOSNFE_NAO_DISPONIVEL') {
+        toast.info(
+          'Endpoint /eventosNfe ainda não publicado',
+          body.mensagem ?? 'Aguarde a equipe Protheus publicar o endpoint.',
+        );
+      } else {
+        toast.error(
+          'Falha ao sincronizar eventos',
+          extractApiError(err, 'Tente novamente em alguns minutos.'),
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleAtualizarStatus() {
     if (!result) return;
     try {
@@ -194,8 +258,10 @@ export function NfeConsultaPage() {
         className="mb-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm print:hidden"
       >
         <p className="mb-3 text-xs text-slate-500">
-          Informe a chave de acesso (44 dígitos). O XML será buscado primeiro no Protheus; se não
-          existir, será baixado do SEFAZ e gravado no monitor de NF-e automaticamente.
+          Informe a chave de acesso (44 dígitos — os separadores da máscara são aplicados
+          automaticamente: <span className="font-mono">UF-AAMM-CNPJ-mod-série-nNF-tpEmis+cNF-DV</span>).
+          O XML será buscado primeiro no Protheus; se não existir, será baixado do SEFAZ e
+          gravado no monitor de NF-e automaticamente.
         </p>
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-96">
@@ -225,9 +291,11 @@ export function NfeConsultaPage() {
             <div className="relative">
               <input
                 type="text"
-                value={chave}
+                value={fmtChaveMascara(chave)}
                 onChange={(e) => setChave(e.target.value.replace(/\D/g, '').slice(0, 44))}
-                placeholder="31260400000000000000550010000000011000000010"
+                placeholder="52-2604-00000000000000-55-001-000000001-100000001-0"
+                maxLength={51}
+                title="UF-AAMM-CNPJ-mod-série-nNF-tpEmis+cNF-DV"
                 className="w-full rounded-md border border-slate-300 px-3 py-2 pr-9 font-mono text-sm tracking-tight focus:border-slate-500 focus:ring-slate-500"
                 required
               />
@@ -360,7 +428,12 @@ export function NfeConsultaPage() {
             </div>
             <div className="p-5">
               {tab === 'nfe' && (
-                <AbaNfe parsed={result.parsed} onAbrirEvento={setEventoIdAberto} />
+                <AbaNfe
+                  parsed={result.parsed}
+                  onAbrirEvento={setEventoIdAberto}
+                  onAtualizarEventosProtheus={handleAtualizarEventosProtheus}
+                  atualizandoEventos={loading}
+                />
               )}
               {tab === 'emitente' && <AbaParticipante p={result.parsed.emitente} tipo="emitente" />}
               {tab === 'destinatario' && (
@@ -377,7 +450,12 @@ export function NfeConsultaPage() {
           {/* Em modo de impressão, exibimos todas as abas em sequência */}
           <div className="hidden print:block">
             <SecaoImpressao titulo="Dados da NF-e">
-              <AbaNfe parsed={result.parsed} onAbrirEvento={() => undefined} />
+              <AbaNfe
+                parsed={result.parsed}
+                onAbrirEvento={() => undefined}
+                onAtualizarEventosProtheus={() => undefined}
+                atualizandoEventos={false}
+              />
             </SecaoImpressao>
             <SecaoImpressao titulo="Emitente">
               <AbaParticipante p={result.parsed.emitente} tipo="emitente" />
@@ -467,9 +545,13 @@ function valorOuVazio(v?: string | null): string {
 function AbaNfe({
   parsed,
   onAbrirEvento,
+  onAtualizarEventosProtheus,
+  atualizandoEventos,
 }: {
   parsed: NfeParsed;
   onAbrirEvento: (eventoId: string) => void;
+  onAtualizarEventosProtheus: () => void;
+  atualizandoEventos: boolean;
 }) {
   const g = parsed.dadosGerais;
   const e = parsed.emitente;
@@ -560,7 +642,7 @@ function AbaNfe({
       </Secao>
 
       <section className="mb-0">
-        <h3 className="mb-3 border-b border-slate-200 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-600">
+        <h3 className="mb-2 border-b border-slate-200 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-600">
           Situação Atual:{' '}
           <span className="text-slate-900">
             {prot ? (prot.cStat === '100' ? 'AUTORIZADA' : prot.motivo) : 'Sem protocolo'}
@@ -570,6 +652,18 @@ function AbaNfe({
             {g.ambiente === '1' ? 'produção' : 'homologação'})
           </span>
         </h3>
+        <div className="mb-3 print:hidden">
+          <button
+            type="button"
+            onClick={onAtualizarEventosProtheus}
+            disabled={atualizandoEventos}
+            className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Lê SPED156/SPED150 do Protheus — não consome slot SEFAZ"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${atualizandoEventos ? 'animate-spin' : ''}`} />
+            Atualizar eventos (Protheus)
+          </button>
+        </div>
 
         {parsed.eventos.length > 0 ? (
           <div className="overflow-x-auto">
@@ -585,7 +679,20 @@ function AbaNfe({
               <tbody className="text-slate-800">
                 {parsed.eventos.map((ev) => (
                   <tr key={ev.id ?? `${ev.tipoEvento}-${ev.dataEvento}`} className="border-b border-slate-100">
-                    <td className="py-2 pr-4">{rotuloEvento(ev)}</td>
+                    <td className="py-2 pr-4">
+                      {ev.id ? (
+                        <button
+                          type="button"
+                          onClick={() => onAbrirEvento(ev.id!)}
+                          className="text-left text-sky-700 underline decoration-dotted underline-offset-2 hover:text-sky-900 hover:decoration-solid"
+                          title="Ver detalhes e imprimir este evento"
+                        >
+                          {rotuloEvento(ev)}
+                        </button>
+                      ) : (
+                        rotuloEvento(ev)
+                      )}
+                    </td>
                     <td className="py-2 pr-4 font-mono">
                       {ev.protocolo && ev.id && ev.possuiDetalhe ? (
                         <button
@@ -608,14 +715,15 @@ function AbaNfe({
             </table>
             <p className="mt-3 text-xs italic text-slate-500 print:hidden">
               Eventos posteriores (cancelamento, CC-e, ciência, MDF-e vinculado, CT-e vinculado) são obtidos clicando em
-              &quot;Atualizar status no SEFAZ&quot;.
+              &quot;Atualizar eventos (Protheus)&quot; acima — leitura do SPED156/SPED150, sem consumir slot SEFAZ.
+              Use &quot;Atualizar status no SEFAZ&quot; no topo da tela apenas quando precisar forçar consulta direta.
             </p>
           </div>
         ) : (
           <p className="text-sm text-slate-500">
             Nenhum evento registrado.{' '}
             <span className="italic">
-              Clique em &quot;Atualizar status no SEFAZ&quot; para carregar a timeline completa.
+              Clique em &quot;Atualizar eventos (Protheus)&quot; para carregar a timeline do SPED156.
             </span>
           </p>
         )}
@@ -950,6 +1058,36 @@ function DetalheProduto({ produto: p }: { produto: NfeProduto }) {
         </GridRow>
         <GridRow cols={3}>
           <Row
+            label="Percentual Redução de BC do ICMS Normal"
+            value={fmtNum(icms.percentualReducaoBC ?? null, 4)}
+          />
+          <Row
+            label="Valor ICMS Desonerado"
+            value={fmtNum(icms.valorIcmsDesonerado ?? 0)}
+          />
+          <Row
+            label="Motivo Desoneração ICMS"
+            value={
+              icms.motivoDesoneracao
+                ? `${icms.motivoDesoneracao}${icms.motivoDesoneracaoDescricao ? ' - ' + icms.motivoDesoneracaoDescricao : ''}`
+                : '-'
+            }
+          />
+        </GridRow>
+        {(icms.aliquotaCreditoSN != null || icms.valorCreditoICMSSN != null) && (
+          <GridRow cols={2}>
+            <Row
+              label="Alíquota aplicável de cálculo do crédito"
+              value={fmtNum(icms.aliquotaCreditoSN ?? null, 4)}
+            />
+            <Row
+              label="Valor de crédito do ICMS"
+              value={fmtNum(icms.valorCreditoICMSSN ?? 0)}
+            />
+          </GridRow>
+        )}
+        <GridRow cols={3}>
+          <Row
             label="Valor da Base de Cálculo do FCP"
             value={fmtNum(icms.baseFcp ?? 0)}
           />
@@ -1012,7 +1150,11 @@ function DetalheProduto({ produto: p }: { produto: NfeProduto }) {
           />
           <Row
             label="Motivo da desoneração do ICMS-ST"
-            value={valorOuVazio(icms.motivoDesoneracaoST)}
+            value={
+              icms.motivoDesoneracaoST
+                ? `${icms.motivoDesoneracaoST}${icms.motivoDesoneracaoSTDescricao ? ' - ' + icms.motivoDesoneracaoSTDescricao : ''}`
+                : '-'
+            }
           />
         </GridRow>
       </SubSecao>
@@ -1590,14 +1732,26 @@ function EventoDetalheModal({
           <h2 className="text-base font-semibold text-slate-800">
             {data ? rotuloEvento({ tipoEvento: data.tipoEvento, descricao: data.descricao }) : 'Detalhe do Evento'}
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-            aria-label="Fechar"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => data && imprimirEventoPopup(data)}
+              disabled={!data || loading}
+              className="inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Imprimir este evento (abre janela com layout padrão SEFAZ)"
+            >
+              <Printer className="h-4 w-4" />
+              Imprimir
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              aria-label="Fechar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         <div className="p-5">
@@ -1634,7 +1788,7 @@ function EventoDetalheModal({
                     />
                     <Row
                       label="Sequencial do Evento"
-                      value={String(det.sequencial)}
+                      value={det.sequencial != null ? String(det.sequencial) : '-'}
                     />
                   </Secao>
 
@@ -1646,7 +1800,10 @@ function EventoDetalheModal({
                     <Row label="Versão" value={valorOuVazio(det.versaoEvento)} />
                     <Row
                       label="Justificativa"
-                      value={valorOuVazio(det.justificativa)}
+                      value={
+                        det.justificativa ??
+                        '(não disponível — XML do procEventoNFe não foi entregue pelo Protheus nem pela SEFAZ via consChNFe; consulte o portal SEFAZ para ver a justificativa registrada)'
+                      }
                       wide
                     />
                   </Secao>
@@ -1672,18 +1829,36 @@ function EventoDetalheModal({
                   </section>
                 </>
               ) : (
-                // Fallback quando for AUTORIZACAO (sem procEventoNFe salvo): exibe o que temos.
-                <Secao titulo="Autorização de Uso" cols={2}>
-                  <Row label="Tipo de Evento" value="Autorização de Uso" />
-                  <Row label="Data/Hora" value={fmtDataHora(data.dataEvento)} />
-                  <Row label="Protocolo" value={valorOuVazio(data.protocolo)} />
-                  <Row label="Status (cStat)" value={valorOuVazio(data.cStat)} />
-                  <Row
-                    label="Motivo (xMotivo)"
-                    value={valorOuVazio(data.xMotivo)}
-                    wide
-                  />
-                </Secao>
+                // Fallback: evento sem procEventoNFe salvo (ex.: autorização
+                // inicial ou eventos vindos do Protheus /eventosNfe, que não
+                // devolve o XML do procEventoNFe, apenas metadados). Mostra
+                // os campos que o banco guarda — permite imprimir mesmo sem
+                // o detalhe completo.
+                <>
+                  <h3 className="mb-3 text-center text-sm font-semibold text-slate-700">
+                    {rotuloEvento({ tipoEvento: data.tipoEvento, descricao: data.descricao })}
+                  </h3>
+                  <Secao titulo="Dados do Evento" cols={2}>
+                    <Row
+                      label="Tipo de Evento"
+                      value={rotuloEvento({ tipoEvento: data.tipoEvento, descricao: data.descricao })}
+                    />
+                    <Row label="Data/Hora" value={fmtDataHora(data.dataEvento)} />
+                    <Row label="Protocolo" value={valorOuVazio(data.protocolo)} />
+                    <Row label="Status (cStat)" value={valorOuVazio(data.cStat)} />
+                    <Row
+                      label="Observações / Origem"
+                      value={valorOuVazio(data.xMotivo)}
+                      wide
+                    />
+                  </Secao>
+                  <p className="mt-3 text-xs italic text-slate-500">
+                    Este evento foi sincronizado via Protheus (SPED150/SPED156) ou veio do
+                    protocolo de autorização do XML. O detalhe completo
+                    (procEventoNFe com justificativa/assinatura SEFAZ) só fica
+                    disponível após &quot;Atualizar status no SEFAZ&quot;.
+                  </p>
+                </>
               )}
             </>
           )}
@@ -1691,4 +1866,182 @@ function EventoDetalheModal({
       </div>
     </div>
   );
+}
+
+/**
+ * Abre uma janela standalone com o layout do evento formatado para impressão.
+ *
+ * Espelha o comportamento do portal SEFAZ: ao clicar no protocolo de um
+ * evento, o portal abre popup `about:blank` com HTML estático (só os campos
+ * e valores), e o usuário manda imprimir via Ctrl+P. Fazemos igual — nenhuma
+ * dependência de CSS de impressão no modal, e o operador obtém um A4 com
+ * exatamente os dados do evento.
+ */
+function imprimirEventoPopup(data: NfeEventoDetalheResponse): void {
+  const det = data.detalhe;
+  const titulo = det?.tipoEventoDescricao ?? data.descricao ?? 'Evento';
+  const cnpjFmt = (s: string | null | undefined) => {
+    if (!s) return '-';
+    const d = s.replace(/\D/g, '');
+    if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+    if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    return s;
+  };
+  const chaveFmt = (c: string | null | undefined) =>
+    c ? c.replace(/(\d{4})(?=\d)/g, '$1 ') : '-';
+  const dataHoraFmt = (iso: string | null | undefined) => {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    return isNaN(d.getTime())
+      ? iso
+      : d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  };
+  const escape = (v: unknown) =>
+    String(v ?? '').replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
+    ));
+
+  // Helper: célula label + valor (mesma estrutura visual do portal SEFAZ).
+  const campo = (label: string, valor: string) => `
+    <div class="campo">
+      <div class="label">${escape(label)}</div>
+      <div class="valor">${escape(valor || '-')}</div>
+    </div>
+  `;
+
+  // Corpo do HTML. Quando `det` existe (já veio o procEventoNFe salvo),
+  // renderiza todas as seções; senão, cai no fallback de autorização simples.
+  const corpo = det
+    ? `
+      <h1>${escape(titulo)}</h1>
+      <section class="grid-3">
+        ${campo('Órgão Recepção do Evento', det.orgaoRecepcao ? `${det.orgaoRecepcao}${det.orgaoRecepcaoDescricao ? ' - ' + det.orgaoRecepcaoDescricao : ''}` : '-')}
+        ${campo('Ambiente', det.ambienteDescricao)}
+        ${campo('Versão', det.versao ?? '-')}
+      </section>
+      <section class="grid-2">
+        ${campo('Chave de Acesso', chaveFmt(det.chave))}
+        ${campo('Id do Evento', det.idEvento ?? '-')}
+      </section>
+      <section class="grid-2">
+        ${campo('Autor Evento (CNPJ / CPF)', cnpjFmt(det.autorCnpj ?? det.autorCpf))}
+        ${campo('Data Evento', dataHoraFmt(det.dataEvento))}
+      </section>
+      <section class="grid-2">
+        ${campo('Tipo de Evento', det.tipoEventoDescricao)}
+        ${campo('Sequencial do Evento', det.sequencial != null ? String(det.sequencial) : '-')}
+      </section>
+      <h2>Detalhes do Evento</h2>
+      <section class="grid-2">
+        ${campo('Descrição do Evento', det.descricaoEvento ?? '-')}
+        ${campo('Versão', det.versaoEvento ?? '-')}
+      </section>
+      <section class="grid-1">
+        ${campo('Justificativa', det.justificativa ?? '(não disponível — XML do procEventoNFe não foi entregue pelo Protheus nem pela SEFAZ via consChNFe; consulte o portal SEFAZ para ver a justificativa registrada)')}
+      </section>
+      <h2>Autorização pela SEFAZ</h2>
+      <section class="grid-3">
+        ${campo('Mensagem de Autorização', det.autorizacaoMensagem ?? '-')}
+        ${campo('Protocolo', det.autorizacaoProtocolo ?? '-')}
+        ${campo('Data/Hora Autorização', dataHoraFmt(det.autorizacaoDataHora))}
+      </section>
+    `
+    : `
+      <h1>${escape(titulo)}</h1>
+      <section class="grid-2">
+        ${campo('Tipo de Evento', titulo)}
+        ${campo('Data/Hora', dataHoraFmt(data.dataEvento))}
+      </section>
+      <section class="grid-2">
+        ${campo('Protocolo', data.protocolo ?? '-')}
+        ${campo('Status (cStat)', data.cStat ?? '-')}
+      </section>
+      <section class="grid-1">
+        ${campo('Observações / Origem', data.xMotivo ?? '-')}
+      </section>
+      <p style="margin-top:12px;font-size:9px;font-style:italic;color:#666;">
+        Evento sincronizado via Protheus (SPED150/SPED156) ou obtido do protocolo de autorização do XML. O detalhe completo
+        (procEventoNFe com assinatura SEFAZ) só fica disponível após &quot;Atualizar status no SEFAZ&quot;.
+      </p>
+    `;
+
+  const html = `<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Evento — ${escape(titulo)}</title>
+<style>
+  @page { size: A4; margin: 1.5cm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    color: #000;
+    margin: 0;
+    padding: 0;
+  }
+  h1 {
+    font-size: 14px;
+    text-align: center;
+    color: #8b6508;
+    margin: 0 0 12px 0;
+    padding-bottom: 6px;
+  }
+  h2 {
+    font-size: 12px;
+    color: #8b6508;
+    margin: 16px 0 6px 0;
+    padding-bottom: 2px;
+    border-bottom: 1px solid #c9a15a;
+  }
+  section { margin-bottom: 8px; display: grid; gap: 6px; }
+  .grid-1 { grid-template-columns: 1fr; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .campo {
+    border: 1px solid #b5925a;
+    padding: 4px 6px;
+    background: #fffaf0;
+  }
+  .label {
+    font-size: 9px;
+    color: #666;
+    margin-bottom: 2px;
+  }
+  .valor {
+    font-size: 11px;
+    color: #000;
+    word-break: break-word;
+  }
+  @media print {
+    .campo { background: transparent; }
+    body { -webkit-print-color-adjust: economy; }
+  }
+</style>
+</head>
+<body>
+${corpo}
+<script>
+  // Aguarda render + dispara print. Depois de fechar/imprimir, a aba fecha.
+  window.addEventListener('load', function() {
+    setTimeout(function() {
+      window.focus();
+      window.print();
+    }, 200);
+  });
+</script>
+</body>
+</html>`;
+
+  const popup = window.open('', '_blank', 'width=900,height=700,scrollbars=yes');
+  if (!popup) {
+    // Popup bloqueado pelo navegador — avisa o operador.
+    alert(
+      'Janela de impressão bloqueada pelo navegador. Libere popups para este site e tente novamente.',
+    );
+    return;
+  }
+  popup.document.open();
+  popup.document.write(html);
+  popup.document.close();
 }

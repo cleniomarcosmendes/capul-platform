@@ -1,13 +1,25 @@
 /**
  * Contratos da frente `cadastroFiscal` da API Protheus.
  *
- * Ajustado ao contrato recebido em 17/04/2026
- * (`API – Integração Protheus – Leitura de Cadastros Fiscais.md`):
- *   - `endereco.numero` removido (sem padronização em A1_END/A2_END)
- *   - `dataUltimaAlteracao` removido (não retornado)
- *   - `desdeData` removido dos filtros (apenas `comMovimentoDesde`)
- *   - `filial` no cadastro é opcional (SA1/SA2 compartilhadas entre filiais;
- *     `filial` só filtra a subquery de movimento em SF1/SF2/SE1/SE2)
+ * Contrato v3 recebido em 23/04/2026 — renomeia todos os campos para formas
+ * abreviadas (`inscIE`, `razSoc`, `municip` etc.). Os **valores** também foram
+ * corrigidos na mesma rodada (antes vinham `inscricaoEstadual="MG"` e
+ * `municipio="70404"` — era código IBGE, agora vêm valores reais).
+ *
+ * Histórico do contrato:
+ *   - v1 (pré-17/04): inicial, com `endereco.numero`, `dataUltimaAlteracao`.
+ *   - v2 (17/04): enxuga campos opcionais; mantém naming descritivo.
+ *   - v3 (23/04): naming encurtado + bugs de troca de campo corrigidos.
+ *
+ * Mapeamento v2 → v3 (para quem lê commits antigos):
+ *   encontradoEm → origens              inscricaoEstadual → inscIE
+ *   registros    → itens                inscricaoEstadualUF → inscUF
+ *   tipoPessoa   → pessoa               inscricaoMunicipal → inscIM
+ *   razaoSocial  → razSoc               regimeTributario → regTrib
+ *   nomeFantasia → fantasia             bloqueado → bloquead
+ *   dataCadastro → dtCadast             dataUltimoMovimento → dtUltMov
+ *   endereco.logradouro → logrado       endereco.municipio → municip
+ *   endereco.complemento → complem      endereco.municipioIbge → munIBGE
  */
 
 export type TipoCadastroProtheus = 'SA1010' | 'SA2010';
@@ -24,11 +36,11 @@ export interface CadastroFiscalQuery {
 }
 
 export interface CadastroFiscalEndereco {
-  logradouro?: string | null;
-  complemento?: string | null;
+  logrado?: string | null;
+  complem?: string | null;
   bairro?: string | null;
-  municipio?: string | null;
-  municipioIbge?: string | null;
+  municip?: string | null;
+  munIBGE?: string | null;
   uf?: string | null;
   cep?: string | null;
 }
@@ -44,19 +56,19 @@ export interface CadastroFiscalRegistro {
   codigo: string;
   loja: string;
   cnpj: string;
-  tipoPessoa: 'F' | 'J';
-  inscricaoEstadual?: string | null;
-  inscricaoEstadualUF?: string | null;
-  inscricaoMunicipal?: string | null;
+  pessoa: 'F' | 'J';
+  inscIE?: string | null;
+  inscUF?: string | null;
+  inscIM?: string | null;
   cnae?: string | null;
-  razaoSocial: string;
-  nomeFantasia?: string | null;
+  razSoc: string;
+  fantasia?: string | null;
   endereco?: CadastroFiscalEndereco | null;
   contato?: CadastroFiscalContato | null;
-  regimeTributario?: string | null;
-  bloqueado: boolean;
-  dataCadastro?: string | null;
-  dataUltimoMovimento?: string | null;
+  regTrib?: string | null;
+  bloquead: boolean;
+  dtCadast?: string | null;
+  dtUltMov?: string | null;
 }
 
 export interface CadastroFiscalPaginacao {
@@ -67,10 +79,8 @@ export interface CadastroFiscalPaginacao {
 }
 
 /**
- * Resposta real observada em 18/04/2026 (homologação Protheus):
- * `{ tipo, pagina, porPagina, quantidade, registros }`.
- * Campos `paginacao`, `geradoEm`, `ativo`, `filial` do contrato v1 não são
- * retornados — ficam opcionais aqui para permitir evolução futura do contrato.
+ * Resposta do endpoint 1 — listagem paginada (`GET /cadastroFiscal?tipo=SA1010`).
+ * Campo raiz `itens` (era `registros` no v2).
  */
 export interface CadastroFiscalListResponse {
   tipo: TipoCadastroProtheus;
@@ -82,11 +92,15 @@ export interface CadastroFiscalListResponse {
   comMovimentoDesde?: string;
   paginacao?: CadastroFiscalPaginacao;
   geradoEm?: string;
-  registros: CadastroFiscalRegistro[];
+  itens: CadastroFiscalRegistro[];
 }
 
+/**
+ * Resposta do endpoint 2 — consulta pontual (`GET /cadastroFiscal?cnpj=...`).
+ * Campo raiz `itens` + `origens` (era `registros` + `encontradoEm` no v2).
+ */
 export interface CadastroFiscalCnpjResponse {
   cnpj?: string;
-  encontradoEm: TipoCadastroProtheus[];
-  registros: Array<CadastroFiscalRegistro & { origem: TipoCadastroProtheus }>;
+  origens: TipoCadastroProtheus[];
+  itens: Array<CadastroFiscalRegistro & { origem: TipoCadastroProtheus }>;
 }

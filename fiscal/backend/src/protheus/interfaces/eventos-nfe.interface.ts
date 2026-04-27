@@ -31,6 +31,19 @@ export interface EventoNfeRaw {
   ator: string;
   /** Texto livre com informações contextuais (ex: `"DISTRIBUIDORA X | R$ 12.450,00"`). */
   detalhes: string;
+  /**
+   * Id do Evento conforme XML procEventoNFe:
+   *   ID + tpEvento(6) + chave(44) + nSeqEvento(2) = 54 chars.
+   * Disponibilizado em 27/04/2026. String vazia ("") para eventos que não
+   * geram esse Id (ex.: SPED156 autorização original, SZR010 importação interna).
+   */
+  id_evento?: string;
+  /**
+   * Protocolo SEFAZ específico do evento (distinto do protocolo de autorização
+   * da NF-e). Disponibilizado em 27/04/2026. String vazia para eventos sem
+   * protocolo SEFAZ (autorização sintética, importação Protheus).
+   */
+  protocolo?: string;
 }
 
 export interface EventosNfeResponse {

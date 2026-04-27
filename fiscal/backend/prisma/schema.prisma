@@ -61,11 +61,23 @@ model FilialCore {
   cnpj         String?
   razaoSocial  String? @map("razao_social")
   nomeFantasia String  @map("nome_fantasia")
-  status       String
+  status       StatusGeralCore
 
   usuarios UsuarioFilialCore[]
 
   @@map("filiais")
+  @@schema("core")
+}
+
+enum StatusGeralCore {
+  // core."StatusGeral" — enum compartilhado de ATIVO/INATIVO. Mapeado pra
+  // diferenciar do enum local fiscal (caso venha a existir). Fix watchdog
+  // 26/04/2026 — antes era declarado como String e Prisma 6 falhava ao
+  // converter o enum DB pra String simples.
+  ATIVO
+  INATIVO
+
+  @@map("StatusGeral")
   @@schema("core")
 }
 
@@ -98,7 +110,7 @@ model PermissaoModuloCore {
   // Substitui o modelo anterior UsuarioModuloCore que referenciava a tabela
   // inexistente core.usuarios_modulos.
   id        String            @id
-  status    String
+  status    StatusGeralCore
   usuarioId String            @map("usuario_id")
   moduloId  String            @map("modulo_id")
   roleId    String            @map("role_modulo_id")
@@ -193,6 +205,11 @@ model DocumentoEvento {
   descricao           String
   dataEvento          DateTime          @map("data_evento")
   protocoloEvento     String?           @map("protocolo_evento")
+  /// Id do Evento conforme o XML do procEventoNFe (ID + tpEvento + chave + nSeqEvento, total 54 chars).
+  /// Disponibilizado em 27/04/2026 via API Protheus /eventosNfe (junto do `protocolo`).
+  /// Antes desse contrato esse campo era apenas derivável do XML completo —
+  /// para eventos sintéticos ficava null. Hoje vem direto da fonte.
+  idEvento            String?           @map("id_evento") @db.VarChar(54)
   cStat               String?           @map("c_stat") @db.VarChar(4)
   xMotivo             String?           @map("x_motivo")
   xmlEvento           String?           @map("xml_evento") @db.Text

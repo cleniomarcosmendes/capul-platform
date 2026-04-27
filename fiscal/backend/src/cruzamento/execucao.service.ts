@@ -205,12 +205,15 @@ export class ExecucaoService {
         filial: r.filial ?? null,
         codigo: r.codigo,
         loja: r.loja,
+        // Contrato Protheus v3 (23/04/2026) — campos encurtados.
+        // Snapshot interno mantém naming descritivo (DivergenciaService compara
+        // contra este shape, não contra o payload v3 cru).
         protheusSnapshot: {
-          razaoSocial: r.razaoSocial ?? null,
-          inscricaoEstadual: r.inscricaoEstadual ?? null,
+          razaoSocial: r.razSoc ?? null,
+          inscricaoEstadual: r.inscIE ?? null,
           cnae: r.cnae ?? null,
           enderecoCep: r.endereco?.cep ?? null,
-          enderecoMunicipio: r.endereco?.municipio ?? null,
+          enderecoMunicipio: r.endereco?.municip ?? null,
         },
       },
       opts: {
@@ -513,15 +516,15 @@ export class ExecucaoService {
           pagina,
           porPagina,
         });
-        for (const r of resp.registros) {
+        for (const r of resp.itens) {
           registros.push({ ...r, origem: tipoTabela });
         }
         // Loop-break: contrato v1 não retorna totalPaginas; usamos o próprio
-        // tamanho da página para detectar fim (registros < porPagina = última).
+        // tamanho da página para detectar fim (itens < porPagina = última).
         const totalPaginas = resp.paginacao?.totalPaginas;
         if (totalPaginas !== undefined) {
           if (pagina >= totalPaginas) break;
-        } else if (resp.registros.length < porPagina) {
+        } else if (resp.itens.length < porPagina) {
           break;
         }
         pagina++;
@@ -563,7 +566,8 @@ export class ExecucaoService {
   }
 
   private ufFromRegistro(r: RegistroComOrigem): string {
-    return r.endereco?.uf ?? r.inscricaoEstadualUF ?? 'MG';
+    // `inscUF` é o campo v3 (antes `inscricaoEstadualUF`).
+    return r.endereco?.uf ?? r.inscUF ?? 'MG';
   }
 
   /**

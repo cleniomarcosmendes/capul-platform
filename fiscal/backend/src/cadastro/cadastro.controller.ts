@@ -32,8 +32,8 @@ export class CadastroController {
   @Post('consulta')
   @RoleMinima('OPERADOR_ENTRADA')
   @Throttle({ sefaz: { ttl: 60_000, limit: 20 } })
-  async consultar(@Body() body: { cnpj: string; uf: string }) {
-    return this.service.consultarPontual(body.cnpj, body.uf);
+  async consultar(@Body() body: { cnpj: string; uf?: string | null }) {
+    return this.service.consultarPontual(body.cnpj, body.uf ?? null);
   }
 
   /**

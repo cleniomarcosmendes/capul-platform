@@ -82,6 +82,10 @@ export interface NfeIcmsProduto {
   baseFcp?: number | null;             // vBCFCP
   percentualFcp?: number | null;       // pFCP
   valorFcp?: number | null;            // vFCP
+  // ICMS Normal — redução de BC + desoneração
+  percentualReducaoBC?: number | null;   // pRedBC (ICMS Normal — CST 20, 70, 90 etc.)
+  motivoDesoneracaoDescricao?: string | null;
+  motivoDesoneracaoSTDescricao?: string | null;
   // ST
   modBCST?: string | null;             // modBCST
   modBCSTDescricao?: string | null;
@@ -100,6 +104,9 @@ export interface NfeIcmsProduto {
   motivoDesoneracaoST?: string | null; // motDesICMSST
   valorIcmsDesonerado?: number | null; // vICMSDeson
   motivoDesoneracao?: string | null;   // motDesICMS
+  // Simples Nacional (ICMSSN101, ICMSSN201, ICMSSN900)
+  aliquotaCreditoSN?: number | null;   // pCredSN
+  valorCreditoICMSSN?: number | null;  // vCredICMSSN
 }
 
 export interface NfeIbsCbsProduto {
@@ -312,13 +319,16 @@ export interface NfeEventoDetalhe {
   ambienteDescricao: string;              // 1-Produção / 2-Homologação
   versao?: string | null;                 // @versao do evento
   chave: string;                          // chNFe
-  idEvento: string;                       // @Id — "ID" + tpEvento + chNFe + nSeqEvento
+  // @Id — "ID" + tpEvento + chNFe + nSeqEvento. Null quando construído
+  // sinteticamente (evento sem XML do procEventoNFe — ex.: Protheus /eventosNfe).
+  idEvento: string | null;
   autorCnpj?: string | null;              // CNPJ
   autorCpf?: string | null;               // CPF
   dataEvento: string;                     // dhEvento
   tipoEvento: string;                     // tpEvento
   tipoEventoDescricao: string;
-  sequencial: number;                     // nSeqEvento
+  // nSeqEvento. Null quando sintetizado sem XML.
+  sequencial: number | null;
   versaoEvento?: string | null;           // verEvento
   descricaoEvento?: string | null;        // detEvento/descEvento
   justificativa?: string | null;          // detEvento/xJust

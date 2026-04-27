@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertCircle, Check, Copy, Sparkles, AlertTriangle, Database, UserSearch, Info, Building2 } from 'lucide-react';
+import { AlertCircle, Check, Copy, Sparkles, AlertTriangle, Database, UserSearch, Info, Building2, GitCompareArrows, MapPin, ChevronDown, ChevronRight, FileText } from 'lucide-react';
 import { fiscalApi } from '../services/api';
 import { PageWrapper } from '../components/PageWrapper';
 import { Button } from '../components/Button';
@@ -8,7 +8,14 @@ import { Badge } from '../components/Badge';
 import { extractApiError } from '../utils/errors';
 import { Row } from '../components/Row';
 import { fmtCnpj, fmtCep } from '../utils/format';
-import type { CadastroConsultaResult, SituacaoCadastral, VinculoProtheus } from '../types';
+import type {
+  CadastroConsultaResult,
+  CruzamentoIeProtheusSefaz,
+  InscricaoEstadualSefaz,
+  SituacaoCadastral,
+  StatusCruzamentoIe,
+  VinculoProtheus,
+} from '../types';
 
 const UFS = [
   'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT',
@@ -33,10 +40,24 @@ const SITUACAO_LABEL: Record<SituacaoCadastral, string> = {
   DESCONHECIDO: 'Desconhecido',
 };
 
+const CRUZAMENTO_VARIANT: Record<StatusCruzamentoIe, 'green' | 'red' | 'yellow'> = {
+  AMBOS: 'green',
+  APENAS_PROTHEUS: 'red',
+  APENAS_SEFAZ: 'yellow',
+};
+
+const CRUZAMENTO_LABEL: Record<StatusCruzamentoIe, string> = {
+  AMBOS: 'Protheus + SEFAZ',
+  APENAS_PROTHEUS: 'Apenas Protheus',
+  APENAS_SEFAZ: 'Apenas SEFAZ',
+};
+
 export function CadastroConsultaPage() {
   const [searchParams] = useSearchParams();
   const [documento, setDocumento] = useState('');
-  const [uf, setUf] = useState('MG');
+  // UF começa vazia (modo auto): o backend deduz a UF a partir dos vínculos
+  // Protheus. Se o CNPJ não existir no Protheus, o backend pede UF explícita.
+  const [uf, setUf] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CadastroConsultaResult | null>(null);
@@ -45,7 +66,7 @@ export function CadastroConsultaPage() {
 
   const docDigits = documento.replace(/\D/g, '');
 
-  async function consultar(cnpjLimpo: string, ufAlvo: string) {
+  async function consultar(cnpjLimpo: string, ufAlvo: string | null) {
     if (cnpjLimpo.length !== 11 && cnpjLimpo.length !== 14) {
       setError('Informe um CPF (11 dígitos) ou CNPJ (14 dígitos).');
       return;
@@ -69,7 +90,8 @@ export function CadastroConsultaPage() {
 
   async function handleConsultar(e: React.FormEvent) {
     e.preventDefault();
-    await consultar(docDigits, uf);
+    // UF vazia é permitida: backend tentará inferir a partir dos vínculos Protheus.
+    await consultar(docDigits, uf || null);
   }
 
   /**
@@ -122,6 +144,8 @@ export function CadastroConsultaPage() {
       <p className="mb-4 text-xs text-slate-500">
         Verifique a situação cadastral de um contribuinte no SEFAZ — use para validar um novo
         cliente/fornecedor antes de cadastrá-lo no Protheus, ou para auditar um cadastro existente.
+        {' '}
+        <span className="text-slate-600">Para auditoria de cadastro já existente, deixe a UF em branco — o sistema descobre as UFs a partir dos vínculos Protheus (até 5).</span>
       </p>
 
       <form
@@ -149,13 +173,17 @@ export function CadastroConsultaPage() {
               required
             />
           </div>
-          <div className="w-24">
-            <label className="mb-1 block text-xs font-medium text-slate-700">UF</label>
+          <div className="w-28">
+            <label className="mb-1 block text-xs font-medium text-slate-700">
+              UF <span className="font-normal text-slate-400">(opcional)</span>
+            </label>
             <select
               value={uf}
               onChange={(e) => setUf(e.target.value)}
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-slate-500"
+              title="Deixe em branco para consultar todas as UFs onde o contribuinte tem vínculo no Protheus"
             >
+              <option value="">— auto —</option>
               {UFS.map((u) => (
                 <option key={u} value={u}>
                   {u}
@@ -302,6 +330,29 @@ export function CadastroConsultaPage() {
 
           </div>
 
+          {/* Avisos de auditoria multi-UF */}
+          <MultiUfBanners result={result} />
+
+          {/* Detalhamento por IE — só faz sentido quando há mais de uma.
+              Produtor rural com várias propriedades, empresa com IEs por
+              filial: cada IE tem endereço/CNAE/regime específicos que são
+              necessários para cadastrar individualmente no Protheus. */}
+          {result.inscricoesSefaz.length > 1 && (
+            <InscricoesEstaduaisDetalhadasCard
+              inscricoes={result.inscricoesSefaz}
+              ufPrincipal={result.uf}
+              iePrincipal={result.inscricaoEstadual}
+            />
+          )}
+
+          {/* Cruzamento de IEs Protheus × SEFAZ */}
+          {result.cruzamentoInscricoes.length > 0 && (
+            <CruzamentoInscricoesCard
+              cruzamento={result.cruzamentoInscricoes}
+              ufsConsultadas={result.ufsConsultadas}
+            />
+          )}
+
           <ReceitaFederalCard result={result} />
 
           {/* Bloco de cadastro — só aparece no caso "novo" */}
@@ -328,6 +379,415 @@ export function CadastroConsultaPage() {
         </div>
       )}
     </PageWrapper>
+  );
+}
+
+function MultiUfBanners({ result }: { result: CadastroConsultaResult }) {
+  const multiUf = result.ufsConsultadas.length > 1;
+  const temIgnoradas = result.ufsIgnoradasPorCap.length > 0;
+  const temFalhas = result.ufsComFalha.length > 0;
+  if (!multiUf && !temIgnoradas && !temFalhas) return null;
+
+  return (
+    <div className="space-y-2">
+      {multiUf && (
+        <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            Consulta multi-UF executada. Consultadas {result.ufsConsultadas.length} SEFAZs:
+            {' '}
+            <span className="font-mono font-semibold">
+              {result.ufsConsultadas.join(', ')}
+            </span>
+            . UFs inferidas a partir dos vínculos Protheus deste contribuinte.
+          </div>
+        </div>
+      )}
+      {temIgnoradas && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <div className="font-semibold">UFs não consultadas (cap de proteção SEFAZ)</div>
+            <div className="mt-0.5">
+              Este contribuinte tem vínculo em mais de 5 UFs. Para preservar o orçamento
+              diário de consultas SEFAZ, as UFs abaixo não foram consultadas nesta chamada —
+              faça uma consulta individual selecionando cada uma no filtro de UF:
+              {' '}
+              <span className="font-mono font-semibold">
+                {result.ufsIgnoradasPorCap.join(', ')}
+              </span>
+              .
+            </div>
+          </div>
+        </div>
+      )}
+      {temFalhas && (
+        <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-900">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <div className="font-semibold">
+              Falha técnica em {result.ufsComFalha.length} UF
+              {result.ufsComFalha.length > 1 ? 's' : ''}
+            </div>
+            <ul className="mt-1 space-y-0.5">
+              {result.ufsComFalha.map((f) => (
+                <li key={f.uf}>
+                  <span className="font-mono font-semibold">{f.uf}</span>: {f.erro}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-1 text-[11px]">
+              Os dados das outras UFs permanecem válidos. Tente novamente em alguns minutos.
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InscricoesEstaduaisDetalhadasCard({
+  inscricoes,
+  ufPrincipal,
+  iePrincipal,
+}: {
+  inscricoes: InscricaoEstadualSefaz[];
+  ufPrincipal: string;
+  iePrincipal: string | null;
+}) {
+  // Ordena: primeiro a IE habilitada/principal, depois as demais por UF + IE.
+  const ordenadas = [...inscricoes].sort((a, b) => {
+    const aPrincipal = a.inscricaoEstadual === iePrincipal && a.uf === ufPrincipal;
+    const bPrincipal = b.inscricaoEstadual === iePrincipal && b.uf === ufPrincipal;
+    if (aPrincipal && !bPrincipal) return -1;
+    if (!aPrincipal && bPrincipal) return 1;
+    if (a.uf !== b.uf) return a.uf.localeCompare(b.uf);
+    return a.inscricaoEstadual.localeCompare(b.inscricaoEstadual);
+  });
+
+  // Estado de expansão por IE — operador clica na linha que quer ver. Set
+  // permite múltiplas IEs abertas simultaneamente sem fechar as anteriores.
+  const [expandidas, setExpandidas] = useState<Set<string>>(() => new Set());
+
+  function toggleIe(key: string) {
+    setExpandidas((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function expandirTodas() {
+    setExpandidas(new Set(ordenadas.map((ie) => `${ie.uf}-${ie.inscricaoEstadual}`)));
+  }
+
+  function recolherTodas() {
+    setExpandidas(new Set());
+  }
+
+  const todasExpandidas = expandidas.size === ordenadas.length && ordenadas.length > 0;
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+          <MapPin className="h-3.5 w-3.5" />
+          Inscrições estaduais ({inscricoes.length})
+        </div>
+        <button
+          type="button"
+          onClick={todasExpandidas ? recolherTodas : expandirTodas}
+          className="text-xs font-medium text-emerald-700 hover:text-emerald-800"
+        >
+          {todasExpandidas ? 'Recolher todas' : 'Expandir todas'}
+        </button>
+      </div>
+      <p className="mb-4 text-xs text-slate-500">
+        Clique em uma linha para ver os dados completos daquela inscrição (razão social,
+        endereço, CNAE, regime). Cada IE costuma ter dados próprios — útil para produtor
+        rural com várias propriedades ou empresa com filiais.
+      </p>
+
+      <div className="divide-y divide-slate-100 rounded-md border border-slate-200">
+        {ordenadas.map((ie) => {
+          const key = `${ie.uf}-${ie.inscricaoEstadual}`;
+          const ehPrincipal =
+            ie.inscricaoEstadual === iePrincipal && ie.uf === ufPrincipal;
+          const aberta = expandidas.has(key);
+          return (
+            <div key={key}>
+              <button
+                type="button"
+                onClick={() => toggleIe(key)}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-inset"
+              >
+                {aberta ? (
+                  <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                )}
+                <span className="font-mono text-sm font-semibold text-slate-900">
+                  {ie.inscricaoEstadual}
+                </span>
+                <Badge variant="gray">{ie.uf}</Badge>
+                <Badge variant={SITUACAO_VARIANT[ie.situacao]}>
+                  {SITUACAO_LABEL[ie.situacao]}
+                </Badge>
+                {ehPrincipal && <Badge variant="blue">Principal</Badge>}
+                {ie.nomeFantasia && (
+                  <span className="ml-2 truncate text-xs text-slate-600">
+                    {ie.nomeFantasia}
+                  </span>
+                )}
+                {ie.dfeHabilitados.length > 0 && (
+                  <span className="ml-auto flex items-center gap-1 text-[11px] text-slate-500">
+                    <FileText className="h-3 w-3" />
+                    {ie.dfeHabilitados.join(' · ')}
+                  </span>
+                )}
+              </button>
+
+              {aberta && (
+                <div className="border-t border-slate-100 bg-slate-50/40 px-4 py-4">
+                  <div className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
+                    {/* Situação IE — combina código cSit + label legível, igual portal SEFAZ.
+                        cSit oficial: 0=Não habilitado, 1=Habilitado, 2=Suspenso, 3=Inapto, 4=Baixado, 5=Nulo. */}
+                    <Row
+                      label="Situação IE"
+                      value={`${ie.cSit ?? '?'} - ${SITUACAO_LABEL[ie.situacao]}`}
+                    />
+                    {ie.dataSituacao && (
+                      <Row label="Situação desde (dUltSit)" value={ie.dataSituacao} />
+                    )}
+                    {ie.razaoSocial && (
+                      <Row label="Razão social (xNome)" value={ie.razaoSocial} wide />
+                    )}
+                    {ie.nomeFantasia && (
+                      <Row label="Nome fantasia (xFant)" value={ie.nomeFantasia} wide />
+                    )}
+                    {ie.cnae && <Row label="CNAE principal" value={ie.cnae} />}
+                    {ie.regimeApuracao && (
+                      <Row label="Regime de apuração (xRegApur)" value={ie.regimeApuracao} />
+                    )}
+                    {ie.inicioAtividade && (
+                      <Row label="Início de atividade (dIniAtiv)" value={ie.inicioAtividade} />
+                    )}
+                    {ie.dataFimAtividade && (
+                      <Row label="Fim de atividade (dFimAtiv)" value={ie.dataFimAtividade} />
+                    )}
+                    {/* IE atual — sempre visível (não escondemos quando igual à IE consultada),
+                        para o operador ver explícito que o CCC confirmou que não houve substituição. */}
+                    {ie.ieAtual && (
+                      <Row
+                        label="IE atual (IEAtual)"
+                        value={
+                          ie.ieAtual === ie.inscricaoEstadual
+                            ? `${ie.ieAtual} (sem substituição)`
+                            : `${ie.ieAtual} (substituição registrada)`
+                        }
+                      />
+                    )}
+                    {ie.ieDestinatario && (
+                      <Row label="IE como destinatário NF-e (indCredNFe)" value={ie.ieDestinatario} />
+                    )}
+                    {ie.ieDestinatarioCTe && (
+                      <Row label="IE como destinatário CT-e (indCredCTe)" value={ie.ieDestinatarioCTe} />
+                    )}
+                    {ie.dfeHabilitados.length > 0 && (
+                      <Row label="DFe habilitados" value={ie.dfeHabilitados.join(', ')} />
+                    )}
+                    {ie.endereco && (
+                      <>
+                        <Row
+                          label="Endereço"
+                          value={`${ie.endereco.logradouro ?? ''}${ie.endereco.numero ? ', ' + ie.endereco.numero : ''}${ie.endereco.bairro ? ' - ' + ie.endereco.bairro : ''}` || '-'}
+                          wide
+                        />
+                        <Row
+                          label="Município / UF"
+                          value={`${ie.endereco.municipio ?? '-'} / ${ie.uf}`}
+                        />
+                        {ie.endereco.cep && <Row label="CEP" value={fmtCep(ie.endereco.cep)} />}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="mt-3 flex items-start gap-1.5 text-[11px] text-slate-500">
+        <Info className="mt-0.5 h-3 w-3 shrink-0" />
+        <span>
+          Campos como <em>Tipo IE (Produtor Rural)</em>, <em>Porte da Empresa</em>,
+          <em> Crédito Presumido</em> e <em>Tipo Produtor</em> aparecem apenas no portal
+          SVRS (enriquecimento interno SEFAZ) — não são retornados pelo serviço SOAP
+          oficial CCC v4. Se precisar deles, consulte direto no Cadastro Centralizado
+          do portal.
+        </span>
+      </p>
+    </div>
+  );
+}
+
+function CruzamentoInscricoesCard({
+  cruzamento,
+  ufsConsultadas,
+}: {
+  cruzamento: CruzamentoIeProtheusSefaz[];
+  ufsConsultadas: string[];
+}) {
+  const totalAmbos = cruzamento.filter((c) => c.status === 'AMBOS').length;
+  const totalApenasProtheus = cruzamento.filter((c) => c.status === 'APENAS_PROTHEUS').length;
+  const totalApenasSefaz = cruzamento.filter((c) => c.status === 'APENAS_SEFAZ').length;
+  const temAlerta = cruzamento.some((c) => c.alertas.length > 0);
+  // Mostra coluna UF quando há mais de uma SEFAZ consultada OU quando há
+  // diversidade de UFs nos vínculos Protheus (mesmo que só 1 SEFAZ).
+  const ufsNoCruzamento = new Set<string>();
+  for (const c of cruzamento) {
+    if (c.sefaz?.uf) ufsNoCruzamento.add(c.sefaz.uf);
+    for (const v of c.vinculosProtheus) {
+      if (v.uf) ufsNoCruzamento.add(v.uf);
+    }
+  }
+  const mostrarColunaUF = ufsConsultadas.length > 1 || ufsNoCruzamento.size > 1;
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+        <GitCompareArrows className="h-3.5 w-3.5" />
+        Cruzamento de inscrições estaduais — Protheus × SEFAZ
+      </div>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Badge variant="gray">{cruzamento.length} IE{cruzamento.length > 1 ? 's' : ''} no total</Badge>
+        {totalAmbos > 0 && (
+          <Badge variant="green">{totalAmbos} em ambos</Badge>
+        )}
+        {totalApenasProtheus > 0 && (
+          <Badge variant="red">{totalApenasProtheus} só no Protheus</Badge>
+        )}
+        {totalApenasSefaz > 0 && (
+          <Badge variant="yellow">{totalApenasSefaz} só no SEFAZ</Badge>
+        )}
+      </div>
+
+      {temAlerta && (
+        <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            Há divergências entre o cadastro do Protheus e o CCC/SEFAZ. Revise os itens
+            destacados abaixo — cada linha traz orientação específica para regularização.
+          </div>
+        </div>
+      )}
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <th className="py-2 pr-3">Inscrição estadual</th>
+              {mostrarColunaUF && <th className="py-2 pr-3">UF</th>}
+              <th className="py-2 pr-3">Status</th>
+              <th className="py-2 pr-3">SEFAZ</th>
+              <th className="py-2 pr-3">Protheus</th>
+              <th className="py-2">Observações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cruzamento.map((c) => {
+              const ufsDaLinha = new Set<string>();
+              if (c.sefaz?.uf) ufsDaLinha.add(c.sefaz.uf);
+              for (const v of c.vinculosProtheus) {
+                if (v.uf) ufsDaLinha.add(v.uf);
+              }
+              const ufsTexto = Array.from(ufsDaLinha).sort().join(', ') || '-';
+              return (
+                <tr key={c.inscricaoEstadual} className="border-b border-slate-100 align-top">
+                  <td className="py-2.5 pr-3 font-mono text-slate-900">{c.inscricaoEstadual}</td>
+                  {mostrarColunaUF && (
+                    <td className="py-2.5 pr-3 font-mono text-xs text-slate-700">{ufsTexto}</td>
+                  )}
+                  <td className="py-2.5 pr-3">
+                    <Badge variant={CRUZAMENTO_VARIANT[c.status]}>
+                      {CRUZAMENTO_LABEL[c.status]}
+                    </Badge>
+                  </td>
+                  <td className="py-2.5 pr-3 text-xs text-slate-700">
+                    {c.sefaz ? (
+                      <div className="flex flex-col gap-1">
+                        <Badge variant={SITUACAO_VARIANT[c.sefaz.situacao]}>
+                          {SITUACAO_LABEL[c.sefaz.situacao]}
+                        </Badge>
+                        {c.sefaz.dataSituacao && (
+                          <span className="text-[11px] text-slate-500">
+                            desde {c.sefaz.dataSituacao}
+                          </span>
+                        )}
+                        {c.sefaz.regimeApuracao && (
+                          <span className="text-[11px] text-slate-500">
+                            Regime: {c.sefaz.regimeApuracao}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="italic text-slate-400">não encontrado</span>
+                    )}
+                  </td>
+                  <td className="py-2.5 pr-3 text-xs text-slate-700">
+                    {c.vinculosProtheus.length > 0 ? (
+                      <div className="space-y-1">
+                        {c.vinculosProtheus.map((v) => (
+                          <div
+                            key={`${v.origem}-${v.codigo}-${v.loja}-${v.filial}`}
+                            className="flex items-center gap-1.5"
+                          >
+                            <Badge variant={v.bloqueado ? 'red' : 'blue'}>
+                              {v.origem}
+                            </Badge>
+                            <code className="font-mono text-[11px] text-slate-600">
+                              {v.codigo}/{v.loja}
+                            </code>
+                            {v.uf && (
+                              <span className="font-mono text-[11px] text-slate-400">
+                                {v.uf}
+                              </span>
+                            )}
+                            {v.bloqueado && (
+                              <span className="text-[11px] text-red-600">bloqueado</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="italic text-slate-400">sem vínculo</span>
+                    )}
+                  </td>
+                  <td className="py-2.5 text-xs text-slate-700">
+                    {c.alertas.length > 0 ? (
+                      <ul className="space-y-1">
+                        {c.alertas.map((a, idx) => (
+                          <li key={idx} className="flex items-start gap-1.5 text-amber-800">
+                            <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                            <span>{a}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-emerald-700">
+                        <Check className="h-3.5 w-3.5" /> consistente
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
