@@ -49,3 +49,8 @@ fiscal/backend/certs/*.p12
 
 # Coverage
 coverage/
+
+# Claude Code — config local pessoal (allowlists Bash, etc.)
+# Convenção .local segue o mesmo padrão de .env.*.local — config compartilhada
+# fica em .claude/settings.json (se existir); local fica fora do repo.
+.claude/settings.local.json
