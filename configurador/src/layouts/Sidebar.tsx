@@ -12,6 +12,8 @@ import {
   Settings,
   Plug,
   ShieldCheck,
+  HardDrive,
+  ScrollText,
 } from 'lucide-react';
 
 type MenuItem =
@@ -32,6 +34,8 @@ const menuItems: MenuItem[] = [
   { section: 'SISTEMA', roles: ADMINS },
   { label: 'Integracoes API', icon: Plug, path: '/configurador/integracoes', roles: ADMINS },
   { label: 'Certificado A1', icon: ShieldCheck, path: '/configurador/certificado-fiscal', roles: ADMINS },
+  { label: 'Backup & DR', icon: HardDrive, path: '/configurador/backup-dr', roles: ADMINS },
+  { label: 'Retencao Logs', icon: ScrollText, path: '/configurador/audit-retention', roles: ADMINS },
 ];
 
 function filterMenuByRole(items: MenuItem[], role: string | null): MenuItem[] {

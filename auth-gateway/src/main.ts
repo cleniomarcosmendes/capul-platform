@@ -1,11 +1,15 @@
 import { NestFactory } from '@nestjs/core';
 import helmet from 'helmet';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { globalValidationPipe } from './common/pipes/validation.pipe';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // bufferLogs garante que toda saida (incluindo bootstrap) passe pelo Pino logger
+  // configurado no AppModule. Auditoria observabilidade 26/04/2026 #1.
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  app.useLogger(app.get(Logger));
 
   // Helmet — headers de seguranca (defesa em profundidade alem do Nginx)
   app.use(
@@ -29,6 +33,6 @@ async function bootstrap() {
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
-  console.log(`Auth Gateway rodando na porta ${port}`);
+  app.get(Logger).log(`Auth Gateway rodando na porta ${port}`, 'Bootstrap');
 }
 bootstrap();

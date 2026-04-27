@@ -1,15 +1,16 @@
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import helmet from 'helmet';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 
 async function bootstrap() {
-  const logger = new Logger('FiscalBootstrap');
-
-  const app = await NestFactory.create(AppModule, {
-    logger: ['error', 'warn', 'log', 'debug', 'verbose'],
-  });
+  // bufferLogs + useLogger(Pino) — todos os logs (incluindo bootstrap) saem em JSON.
+  // Auditoria observabilidade 26/04/2026 #1.
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  app.useLogger(app.get(Logger));
+  const logger = app.get(Logger);
 
   // Headers de segurança via helmet: CSP, X-Frame-Options, Referrer-Policy,
   // X-Content-Type-Options, etc. crossOriginResourcePolicy liberado para que
@@ -47,6 +48,8 @@ async function bootstrap() {
       'CORS_ORIGINS não configurado. Defina a variável de ambiente com a lista ' +
         'de origens permitidas (ex: "https://localhost,https://capul.com.br"). ' +
         'Abortando para evitar operação insegura.',
+      undefined,
+      'FiscalBootstrap',
     );
     process.exit(1);
   }
@@ -57,15 +60,16 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Fiscal-Override-Gate'],
   });
-  logger.log(`CORS habilitado para: ${corsOrigins.join(', ')}`);
+  logger.log(`CORS habilitado para: ${corsOrigins.join(', ')}`, 'FiscalBootstrap');
 
   const port = Number(process.env.PORT ?? 3002);
   await app.listen(port);
 
-  logger.log(`Módulo Fiscal iniciado em http://0.0.0.0:${port}/api/v1/fiscal`);
-  logger.log(`Ambiente: ${process.env.NODE_ENV ?? 'development'}`);
+  logger.log(`Módulo Fiscal iniciado em http://0.0.0.0:${port}/api/v1/fiscal`, 'FiscalBootstrap');
+  logger.log(`Ambiente: ${process.env.NODE_ENV ?? 'development'}`, 'FiscalBootstrap');
   logger.log(
     `Protheus xmlFiscal mock: ${process.env.FISCAL_PROTHEUS_MOCK === 'true' ? 'ATIVO (stub em memória)' : 'desativado (chamadas reais)'}`,
+    'FiscalBootstrap',
   );
 }
 

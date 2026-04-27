@@ -1,11 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module.js';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  app.useLogger(app.get(Logger));
 
   // Helmet — headers de seguranca (defesa em profundidade alem do Nginx)
   app.use(
@@ -38,6 +40,6 @@ async function bootstrap() {
 
   const port = process.env.PORT ?? 3001;
   await app.listen(port);
-  console.log(`Gestão TI Backend rodando na porta ${port}`);
+  app.get(Logger).log(`Gestão TI Backend rodando na porta ${port}`, 'Bootstrap');
 }
 bootstrap();

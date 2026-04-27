@@ -11,6 +11,8 @@ import { CentrosCustoPage } from './pages/centros-custo/CentrosCustoPage';
 import { UsuariosListPage } from './pages/usuarios/UsuariosListPage';
 import { UsuarioFormPage } from './pages/usuarios/UsuarioFormPage';
 import { IntegracoesPage } from './pages/integracoes/IntegracoesPage';
+import { BackupDrPage } from './pages/backup-dr/BackupDrPage';
+import { AuditRetentionPage } from './pages/observabilidade/AuditRetentionPage';
 import { CertificadoFiscalPage } from './pages/certificado/CertificadoFiscalPage';
 import type { ReactNode } from 'react';
 
@@ -66,6 +68,8 @@ function AppRoutes() {
         <Route path="usuarios/:id" element={<UsuarioFormPage />} />
         <Route path="integracoes" element={<IntegracoesPage />} />
         <Route path="certificado-fiscal" element={<CertificadoFiscalPage />} />
+        <Route path="backup-dr" element={<BackupDrPage />} />
+        <Route path="audit-retention" element={<AuditRetentionPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/configurador" replace />} />
     </Routes>

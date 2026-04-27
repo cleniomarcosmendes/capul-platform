@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { LoggerModule } from 'nestjs-pino';
+import { randomUUID } from 'crypto';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { EquipeModule } from './equipe/equipe.module.js';
 import { CatalogoServicoModule } from './catalogo-servico/catalogo-servico.module.js';
@@ -25,10 +27,43 @@ import { HorarioModule } from './horario/horario.module.js';
 import { CompraModule } from './compra/compra.module.js';
 import { ProtheusModule } from './protheus/protheus.module.js';
 import { JwtStrategy } from './common/strategies/jwt.strategy.js';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
+import { HealthModule } from './health/health.module.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Logs estruturados em JSON com correlation ID via X-Request-ID.
+    // Auditoria observabilidade 26/04/2026 #1.
+    LoggerModule.forRoot({
+      pinoHttp: {
+        level: process.env.LOG_LEVEL ?? (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
+        transport:
+          process.env.NODE_ENV === 'production'
+            ? undefined
+            : { target: 'pino-pretty', options: { singleLine: true, translateTime: 'HH:MM:ss.l' } },
+        genReqId: (req, res) => {
+          const existing = req.headers['x-request-id'];
+          const id = (typeof existing === 'string' && existing) || randomUUID();
+          res.setHeader('x-request-id', id);
+          return id;
+        },
+        customLogLevel: (_req, res, err) => {
+          if (err || res.statusCode >= 500) return 'error';
+          if (res.statusCode >= 400) return 'warn';
+          return 'info';
+        },
+        serializers: {
+          req: (req) => ({ id: req.id, method: req.method, url: req.url, remoteAddress: req.remoteAddress }),
+          res: (res) => ({ statusCode: res.statusCode }),
+        },
+        customProps: (req) => ({ reqId: (req as { id?: string }).id }),
+        autoLogging: {
+          ignore: (req) => req.url === '/api/v1/gestao-ti/health' || req.url === '/health',
+        },
+        redact: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["x-api-key"]'],
+      },
+    }),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     ThrottlerModule.forRoot([{
       ttl: 60000,   // 1 minuto
@@ -55,10 +90,14 @@ import { JwtStrategy } from './common/strategies/jwt.strategy.js';
     CompraModule,
     ProtheusModule,
     DashboardModule,
+    HealthModule,
   ],
   providers: [
     JwtStrategy,
+    // Ordem: Throttler primeiro (rate limit antes de auth) → JwtAuthGuard depois.
+    // JwtAuthGuard global protege todos endpoints; usar @Public() para excecionar.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],
 })
 export class AppModule {}

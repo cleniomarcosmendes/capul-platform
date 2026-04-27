@@ -29,8 +29,10 @@ from app.core.exceptions import safe_error_response
 # Importar autenticação do módulo correto
 from app.core.security import get_current_user as get_current_user_from_security
 
-# Configurar logging
-logging.basicConfig(level=logging.INFO)
+# Configurar logging em JSON + correlation ID via X-Request-ID.
+# Auditoria observabilidade 26/04/2026 #1 — alinha com auth/gestao/fiscal.
+from app.core.logging_config import setup_logging, RequestIdMiddleware
+setup_logging()
 logger = logging.getLogger(__name__)
 
 # =================================
@@ -208,13 +210,19 @@ except Exception as e:
 # CONFIGURAÇÃO DO FASTAPI
 # =================================
 
+_is_production = os.getenv("ENVIRONMENT", os.getenv("ENV", os.getenv("NODE_ENV", "development"))).lower() == "production"
+
 app = FastAPI(
     title="Sistema de Inventário",
     description="Sistema de controle de inventário físico",
     version="2.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
+    docs_url=None if _is_production else "/docs",
+    redoc_url=None if _is_production else "/redoc",
+    openapi_url=None if _is_production else "/openapi.json",
 )
+
+# Correlation ID — propaga X-Request-ID entre serviços (Auditoria observabilidade 26/04/2026 #1)
+app.add_middleware(RequestIdMiddleware)
 
 # Rate Limiting — protecao contra forca bruta e abuso
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -264,7 +272,7 @@ async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
+    # X-XSS-Protection removido — obsoleto, navegadores modernos ignoram (auditoria 25/04 #14)
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     return response
@@ -5593,16 +5601,19 @@ async def get_dashboard_stats(
         # === INVENTARIOS ===
         total_inventories = db.query(func.count(InventoryList.id)).filter(inventory_filter).scalar() or 0
 
+        # status é enum (DRAFT/IN_PROGRESS/COMPLETED/CLOSED) — não pode misturar com
+        # valores de list_status (ABERTA/EM_CONTAGEM/ENCERRADA). Mapeamento em
+        # InventoryList: ABERTA↔DRAFT, EM_CONTAGEM↔IN_PROGRESS, ENCERRADA↔COMPLETED.
         completed_inventories = db.query(func.count(InventoryList.id)).filter(
-            and_(inventory_filter, InventoryList.status.in_(['COMPLETED', 'ENCERRADA']))
+            and_(inventory_filter, InventoryList.status.in_(['COMPLETED', 'CLOSED']))
         ).scalar() or 0
 
         active_inventories = db.query(func.count(InventoryList.id)).filter(
-            and_(inventory_filter, InventoryList.status.in_(['DRAFT', 'IN_PROGRESS', 'EM_CONTAGEM', 'ABERTA']))
+            and_(inventory_filter, InventoryList.status.in_(['DRAFT', 'IN_PROGRESS']))
         ).scalar() or 0
 
         in_progress = db.query(func.count(InventoryList.id)).filter(
-            and_(inventory_filter, InventoryList.status == 'EM_CONTAGEM')
+            and_(inventory_filter, InventoryList.status == 'IN_PROGRESS')
         ).scalar() or 0
 
         # === ITENS ===
@@ -5622,7 +5633,7 @@ async def get_dashboard_stats(
         ).join(
             InventoryList, InventoryItem.inventory_list_id == InventoryList.id
         ).filter(
-            and_(inventory_filter, cast(Counting.counted_at, Date) == today)
+            and_(inventory_filter, cast(Counting.created_at, Date) == today)
         ).scalar() or 0
 
         countings_yesterday = db.query(func.count(Counting.id)).join(
@@ -5630,7 +5641,7 @@ async def get_dashboard_stats(
         ).join(
             InventoryList, InventoryItem.inventory_list_id == InventoryList.id
         ).filter(
-            and_(inventory_filter, cast(Counting.counted_at, Date) == yesterday)
+            and_(inventory_filter, cast(Counting.created_at, Date) == yesterday)
         ).scalar() or 0
 
         # === DIVERGENCIAS ===
@@ -5639,7 +5650,7 @@ async def get_dashboard_stats(
         ).filter(
             and_(
                 inventory_filter,
-                InventoryList.status.in_(['EM_CONTAGEM', 'IN_PROGRESS']),
+                InventoryList.status == 'IN_PROGRESS',
                 InventoryItem.count_cycle_1 != None,
                 InventoryItem.count_cycle_1 != InventoryItem.expected_quantity
             )
@@ -5654,7 +5665,7 @@ async def get_dashboard_stats(
             ).join(
                 InventoryList, InventoryItem.inventory_list_id == InventoryList.id
             ).filter(
-                and_(inventory_filter, cast(Counting.counted_at, Date) == day)
+                and_(inventory_filter, cast(Counting.created_at, Date) == day)
             ).scalar() or 0
             history.append({"date": day.strftime("%d/%m"), "count": count})
 
@@ -7126,14 +7137,17 @@ async def process_counting_result(db: Session, inventory_item, counting):
                 # TEMPORÁRIO: Comentado para evitar erro de duplicação
                 # await create_next_counting_assignment(db, inventory_item, 2)
                 
-                # Criar registro de discrepância
+                # Criar registro de discrepância — campos do modelo Discrepancy:
+                # variance_quantity, variance_percentage, tolerance_exceeded
+                # (correção 26/04/2026 — campos antigos expected_quantity/counted_quantity
+                # nunca existiram no modelo; eram leftover de refactor)
+                _variance = counted_qty - expected_qty
+                _variance_pct = (_variance / expected_qty * 100) if expected_qty != 0 else 0.0
                 discrepancy = Discrepancy(
                     inventory_item_id=inventory_item.id,
-                    expected_quantity=expected_qty,
-                    counted_quantity=counted_qty,
-                    difference=counted_qty - expected_qty,
-                    discrepancy_type='SYSTEM_VS_PHYSICAL',
-                    count_number=1,
+                    variance_quantity=float(_variance),
+                    variance_percentage=float(_variance_pct),
+                    tolerance_exceeded=abs(_variance) > 0.0,
                     status='PENDING',
                     created_by=counting.counted_by,
                     observation=f"Divergência detectada na 1ª contagem. Esperado: {expected_qty}, Contado: {counted_qty}"
@@ -7154,19 +7168,18 @@ async def process_counting_result(db: Session, inventory_item, counting):
                     # TEMPORÁRIO: Comentado para evitar erro de duplicação
                     # await create_next_counting_assignment(db, inventory_item, 3)
                     
-                    # Atualizar discrepância
+                    # Atualizar discrepância (modelo nao tem count_number — fix 26/04/2026)
                     discrepancy = db.query(Discrepancy).filter(
-                        Discrepancy.inventory_item_id == inventory_item.id,
-                        Discrepancy.count_number == 1
-                    ).first()
-                    
+                        Discrepancy.inventory_item_id == inventory_item.id
+                    ).order_by(Discrepancy.created_at.asc()).first()
+
                     if discrepancy:
-                        discrepancy.observation += f" | 2ª contagem: {second_qty} (divergência persiste)"
+                        discrepancy.observation = (discrepancy.observation or '') + f" | 2ª contagem: {second_qty} (divergência persiste)"
                         db.commit()
                 else:
                     # 1ª e 2ª contagem concordam - verificar se há divergência com esperado
                     expected_qty = float(inventory_item.expected_quantity or 0)
-                    current_qty = float(quantity)
+                    current_qty = float(counting.quantity)
                     has_divergence_final = abs(current_qty - expected_qty) > 0.01
                     
                     if not has_divergence_final:
@@ -7183,7 +7196,7 @@ async def process_counting_result(db: Session, inventory_item, counting):
             if first_count and second_count:
                 # Terceira contagem - verificar se há divergência com esperado
                 expected_qty = float(inventory_item.expected_quantity or 0)
-                current_qty = float(quantity)
+                current_qty = float(counting.quantity)
                 has_divergence_final = abs(current_qty - expected_qty) > 0.01
                 
                 if not has_divergence_final:
