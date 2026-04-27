@@ -175,32 +175,88 @@ bash scripts/migrate.sh --skip-seed
 
 ## 4. BACKUP E RESTAURACAO
 
+> Atualizado em 26/04/2026 conforme `docs/AUDITORIA_BACKUP_DR_26042026.md`.
+> Backup agora cobre: **banco + .env + cert A1 + Redis + uploads + app**.
+
 ### Backup (executar ANTES de qualquer atualizacao)
 
+**Modo recomendado** — script unificado:
 ```bash
-# Backup completo do banco
+cd /opt/capul-platform
+sudo ./scripts/backup.sh full
+```
+
+Saidas em `/opt/capul-platform/backups/`:
+- `backup_full_YYYYMMDD_HHMMSS.tar.gz`         — app + banco + uploads
+- `backup_certs_YYYYMMDD_HHMMSS.tar.gz.enc`    — certificado A1 fiscal (cifrado)
+- `backup_env_YYYYMMDD_HHMMSS.txt.enc`         — .env (cifrado)
+- `backup_redis_YYYYMMDD_HHMMSS.rdb.enc`       — Redis snapshot (cifrado)
+
+**Pré-requisito** — chave de criptografia configurada (uma única vez):
+```bash
+sudo openssl rand -hex 32 | sudo tee /etc/capul-backup-key >/dev/null
+sudo chmod 0400 /etc/capul-backup-key
+# IMPORTANTE: salvar copia desta chave em cofre fora do servidor!
+```
+
+**Modo legado** (apenas banco — fallback se script falhar):
+```bash
 docker compose exec postgres pg_dump -U $DB_USER capul_platform \
   --format=custom --compress=9 \
   -f /var/lib/postgresql/data/backup_$(date +%Y%m%d_%H%M%S).dump
-
-# Copiar para fora do container
 docker cp capul-db:/var/lib/postgresql/data/backup_*.dump ./backups/
 ```
 
-### Restauracao (em caso de falha)
+### Restauracao completa (em caso de falha catastrofica)
+
+> Ordem importa: **cert + .env primeiro**, depois banco, depois Redis, depois subir app.
 
 ```bash
-# Parar todos os servicos
+# 1. Parar todos os servicos
+cd /opt/capul-platform
 docker compose stop
 
-# Restaurar backup
-docker compose exec postgres pg_restore -U $DB_USER -d capul_platform \
-  --clean --if-exists \
-  /var/lib/postgresql/data/backup_YYYYMMDD_HHMMSS.dump
+# 2. Restaurar .env (precisa antes do banco para conexao)
+openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/etc/capul-backup-key \
+  -in /opt/capul-platform/backups/backup_env_YYYYMMDD_HHMMSS.txt.enc \
+  -out /opt/capul-platform/.env
+chmod 0600 /opt/capul-platform/.env
 
-# Subir servicos
+# 3. Restaurar certificado A1 fiscal
+openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/etc/capul-backup-key \
+  -in /opt/capul-platform/backups/backup_certs_YYYYMMDD_HHMMSS.tar.gz.enc \
+  | tar -xzf - -C /opt/capul-platform/fiscal/backend/
+
+# 4. Subir somente o postgres
+docker compose up -d postgres
+sleep 10
+
+# 5. Restaurar banco
+docker cp /opt/capul-platform/backups/backup_db_YYYYMMDD_HHMMSS.dump capul-db:/tmp/restore.dump
+docker compose exec postgres pg_restore -U $DB_USER -d capul_platform \
+  --clean --if-exists /tmp/restore.dump
+
+# 6. Restaurar Redis (opcional — em caso de jobs BullMQ em andamento)
+docker compose up -d redis
+sleep 5
+openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/etc/capul-backup-key \
+  -in /opt/capul-platform/backups/backup_redis_YYYYMMDD_HHMMSS.rdb.enc \
+  -out /tmp/dump.rdb
+docker compose stop redis
+docker cp /tmp/dump.rdb capul-redis:/data/dump.rdb
+rm /tmp/dump.rdb
+
+# 7. Subir aplicacao
 docker compose up -d
+
+# 8. Smoke test
+curl -sk https://localhost/api/v1/fiscal/health
+docker compose ps
 ```
+
+### Agendamento automatico (systemd timer)
+
+Templates em `scripts/systemd/`. Veja `scripts/systemd/README.md` para instalacao.
 
 ---
 

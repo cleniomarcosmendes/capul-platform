@@ -1,0 +1,19 @@
+[Unit]
+Description=Capul Platform Backup (full)
+Documentation=file:///opt/capul-platform/docs/AUDITORIA_BACKUP_DR_26042026.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/capul-platform
+EnvironmentFile=-/opt/capul-platform/.env
+ExecStart=/opt/capul-platform/scripts/backup.sh full
+StandardOutput=append:/var/log/capul-platform/backup.log
+StandardError=append:/var/log/capul-platform/backup.err.log
+TimeoutStartSec=3600
+
+# Hardening basico
+ProtectSystem=full
+NoNewPrivileges=true

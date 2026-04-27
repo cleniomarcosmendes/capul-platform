@@ -1,0 +1,11 @@
+[Unit]
+Description=Capul Platform Backup Daily — disparo diario as 02:00 com janela aleatoria de 10min
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+RandomizedDelaySec=600
+Unit=capul-backup.service
+
+[Install]
+WantedBy=timers.target

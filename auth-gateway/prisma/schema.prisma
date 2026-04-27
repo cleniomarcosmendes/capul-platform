@@ -343,3 +343,29 @@ model SystemLog {
   @@map("system_logs")
   @@schema("core")
 }
+
+// =============================================================================
+// Backup & DR — Auditoria 26/04/2026 Sprint 4
+// =============================================================================
+// Registra execucoes do scripts/backup.sh para visibilidade no Configurador.
+// Script POSTa em /api/v1/internal/backup/execucao apos cada run (sucesso ou falha).
+// =============================================================================
+model BackupExecucao {
+  id          String   @id @default(uuid())
+  tipo        String   // full | app | db | uploads | certs | env | redis
+  status      String   // SUCESSO | FALHA | EM_ANDAMENTO
+  iniciadoEm  DateTime @default(now()) @map("iniciado_em")
+  finalizadoEm DateTime? @map("finalizado_em")
+  duracaoMs   Int?     @map("duracao_ms")
+  tamanhoBytes BigInt? @map("tamanho_bytes")
+  hostname    String?
+  destino     String?  // local | s3 | etc — onde foi gravado
+  cifrado     Boolean  @default(false)
+  mensagem    String?  // erro ou resumo
+  metadata    Json?    // dados extras (paths, contagens, etc.)
+
+  @@index([iniciadoEm(sort: Desc)])
+  @@index([status])
+  @@map("backup_execucoes")
+  @@schema("core")
+}
