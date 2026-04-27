@@ -10,6 +10,7 @@ import { CreateContratoDto } from '../dto/create-contrato.dto.js';
 import { UpdateContratoDto } from '../dto/update-contrato.dto.js';
 import { RenovarContratoDto } from '../dto/renovar-contrato.dto.js';
 import { contratoListInclude, contratoDetailInclude, TRANSICOES_VALIDAS } from './contrato.constants.js';
+import { paginate } from '../../common/prisma/paginate.helper.js';
 
 @Injectable()
 export class ContratoCoreService {
@@ -74,6 +75,8 @@ export class ContratoCoreService {
     softwareId?: string;
     fornecedor?: string;
     vencendoEm?: number;
+    page?: number;
+    pageSize?: number;
   }, usuarioId?: string, role?: string) {
     const where: Record<string, unknown> = {};
 
@@ -98,15 +101,23 @@ export class ContratoCoreService {
       });
       const equipeIds = membrosComPermissao.map(m => m.equipeId);
       if (equipeIds.length === 0) {
-        return []; // Sem permissao em nenhuma equipe
+        // Sem permissão — retorna shape paginado vazio pra compat com o frontend.
+        return {
+          items: [],
+          total: 0,
+          page: Math.max(1, filters.page ?? 1),
+          pageSize: Math.min(200, Math.max(1, filters.pageSize ?? 50)),
+        };
       }
       where.equipeId = { in: equipeIds };
     }
 
-    return this.prisma.contrato.findMany({
+    return paginate(this.prisma, this.prisma.contrato, {
       where,
       include: contratoListInclude,
       orderBy: { numero: 'desc' },
+      page: filters.page,
+      pageSize: filters.pageSize,
     });
   }
 

@@ -220,7 +220,22 @@ export function RelatorioProjetoPage() {
   return (
     <>
       <Header title="Relatorio de Projeto" />
-      <style>{`@media print { .no-print { display: none !important; } }`}</style>
+      <style>{`@media print {
+        @page { margin: 1cm; }
+        .no-print { display: none !important; }
+        aside { display: none !important; }
+        header, nav { display: none !important; }
+        /* h-screen (100vh) do MainLayout reservava página inteira em branco
+           antes do conteúdo do relatório. Força auto em print. */
+        .h-screen { height: auto !important; min-height: 0 !important; }
+        .flex.h-screen { display: block !important; height: auto !important; overflow: visible !important; }
+        main { padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: 100% !important; overflow: visible !important; }
+        body, html { background: white !important; overflow: visible !important; margin: 0 !important; padding: 0 !important; }
+        .overflow-y-auto, .overflow-hidden, .overflow-auto { overflow: visible !important; }
+        .bg-white { box-shadow: none !important; border-color: #e2e8f0 !important; }
+        table { page-break-inside: auto; font-size: 11px; }
+        tr { page-break-inside: avoid; }
+      }`}</style>
       <main className="p-6 space-y-6">
 
         {/* ─── Header ───────────────────────────────────────── */}

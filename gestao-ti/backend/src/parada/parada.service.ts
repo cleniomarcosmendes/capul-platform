@@ -9,6 +9,7 @@ import { UpdateParadaDto } from './dto/update-parada.dto';
 import { FinalizarParadaDto } from './dto/finalizar-parada.dto';
 import { CreateMotivoParadaDto } from './dto/create-motivo-parada.dto';
 import { UpdateMotivoParadaDto } from './dto/update-motivo-parada.dto';
+import { paginate } from '../common/prisma/paginate.helper.js';
 
 const paradaListInclude = {
   motivoParada: { select: { id: true, nome: true } },
@@ -48,6 +49,8 @@ export class ParadaService {
     motivoParadaId?: string;
     dataInicio?: string;
     dataFim?: string;
+    page?: number;
+    pageSize?: number;
   }) {
     const where: Record<string, unknown> = {};
 
@@ -69,10 +72,12 @@ export class ParadaService {
       where.inicio = inicio;
     }
 
-    return this.prisma.registroParada.findMany({
+    return paginate(this.prisma, this.prisma.registroParada, {
       where,
       include: paradaListInclude,
       orderBy: { inicio: 'desc' },
+      page: filters.page,
+      pageSize: filters.pageSize,
     });
   }
 

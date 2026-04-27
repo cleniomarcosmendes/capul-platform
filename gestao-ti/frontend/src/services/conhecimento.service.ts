@@ -1,16 +1,36 @@
 import { gestaoApi } from './api';
 import type { ArtigoConhecimento, AnexoConhecimento } from '../types';
+import type { PaginatedResponse } from '../components/Paginator';
+
+interface ConhecimentoFilters {
+  categoria?: string;
+  status?: string;
+  softwareId?: string;
+  equipeTiId?: string;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}
 
 export const conhecimentoService = {
-  async listar(filters?: {
-    categoria?: string;
-    status?: string;
-    softwareId?: string;
-    equipeTiId?: string;
-    search?: string;
-  }): Promise<ArtigoConhecimento[]> {
-    const { data } = await gestaoApi.get('/conhecimento', { params: filters });
+  /** Paginado (23/04/2026). */
+  async listarPaginado(filters: ConhecimentoFilters = {}): Promise<PaginatedResponse<ArtigoConhecimento>> {
+    const params: Record<string, string> = {};
+    if (filters.categoria) params.categoria = filters.categoria;
+    if (filters.status) params.status = filters.status;
+    if (filters.softwareId) params.softwareId = filters.softwareId;
+    if (filters.equipeTiId) params.equipeTiId = filters.equipeTiId;
+    if (filters.search) params.search = filters.search;
+    params.page = String(filters.page ?? 1);
+    params.pageSize = String(filters.pageSize ?? 50);
+    const { data } = await gestaoApi.get<PaginatedResponse<ArtigoConhecimento>>('/conhecimento', { params });
     return data;
+  },
+
+  /** Compat — retorna só `items`. */
+  async listar(filters: Omit<ConhecimentoFilters, 'page' | 'pageSize'> = {}): Promise<ArtigoConhecimento[]> {
+    const res = await this.listarPaginado({ ...filters, page: 1, pageSize: 200 });
+    return res.items;
   },
 
   async buscar(id: string): Promise<ArtigoConhecimento> {

@@ -1,15 +1,38 @@
 import { gestaoApi } from './api';
 import type { Ativo, AtivoSoftwareItem } from '../types';
+import type { PaginatedResponse } from '../components/Paginator';
+
+interface AtivoListFilters {
+  tipo?: string;
+  status?: string;
+  filialId?: string;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}
 
 export const ativoService = {
-  async listar(filters?: {
-    tipo?: string;
-    status?: string;
-    filialId?: string;
-    search?: string;
-  }): Promise<Ativo[]> {
-    const { data } = await gestaoApi.get('/ativos', { params: filters });
+  /**
+   * Listagem paginada (23/04/2026). Retorna `{ items, total, page, pageSize }`.
+   */
+  async listarPaginado(filters: AtivoListFilters = {}): Promise<PaginatedResponse<Ativo>> {
+    const params: Record<string, string> = {};
+    if (filters.tipo) params.tipo = filters.tipo;
+    if (filters.status) params.status = filters.status;
+    if (filters.filialId) params.filialId = filters.filialId;
+    if (filters.search) params.search = filters.search;
+    params.page = String(filters.page ?? 1);
+    params.pageSize = String(filters.pageSize ?? 50);
+    const { data } = await gestaoApi.get<PaginatedResponse<Ativo>>('/ativos', { params });
     return data;
+  },
+
+  /**
+   * Compatibilidade — retorna só `items`. Puxa até 200 por chamada.
+   */
+  async listar(filters?: Omit<AtivoListFilters, 'page' | 'pageSize'>): Promise<Ativo[]> {
+    const res = await this.listarPaginado({ ...(filters ?? {}), page: 1, pageSize: 200 });
+    return res.items;
   },
 
   async buscar(id: string): Promise<Ativo> {

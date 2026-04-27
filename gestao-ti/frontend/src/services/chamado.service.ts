@@ -13,6 +13,15 @@ interface ListFilters {
   tecnicoId?: string;
   dataInicio?: string;
   dataFim?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ListarChamadosResult {
+  items: Chamado[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 interface CreateChamadoPayload {
@@ -36,7 +45,13 @@ interface CreateChamadoPayload {
 }
 
 export const chamadoService = {
-  async listar(filters: ListFilters = {}): Promise<Chamado[]> {
+  /**
+   * Lista paginada — usa `ListarChamadosResult` com `items`, `total`, `page`, `pageSize`.
+   * Introduzido em 23/04/2026 para a tela `/chamados` (a legada `listar` vira wrapper
+   * que extrai `items` com `pageSize=200` para manter compatibilidade dos outros
+   * consumidores — Dashboard, OS, Projeto, Parada).
+   */
+  async listarPaginado(filters: ListFilters = {}): Promise<ListarChamadosResult> {
     const params: Record<string, string> = {};
     if (filters.status) params.status = filters.status;
     if (filters.equipeId) params.equipeId = filters.equipeId;
@@ -49,8 +64,20 @@ export const chamadoService = {
     if (filters.tecnicoId) params.tecnicoId = filters.tecnicoId;
     if (filters.dataInicio) params.dataInicio = filters.dataInicio;
     if (filters.dataFim) params.dataFim = filters.dataFim;
-    const { data } = await gestaoApi.get('/chamados', { params });
+    if (filters.page) params.page = String(filters.page);
+    if (filters.pageSize) params.pageSize = String(filters.pageSize);
+    const { data } = await gestaoApi.get<ListarChamadosResult>('/chamados', { params });
     return data;
+  },
+
+  /**
+   * Retorna só `items` (API antiga). Preserva compatibilidade com Dashboard,
+   * OrdensServico, ProjetoDetalhe, ParadaDetalhe. Puxa até 200 por chamada
+   * — se o chamador precisar de mais, usar `listarPaginado`.
+   */
+  async listar(filters: ListFilters = {}): Promise<Chamado[]> {
+    const res = await this.listarPaginado({ pageSize: 200, ...filters });
+    return res.items;
   },
 
   async buscar(id: string): Promise<Chamado> {

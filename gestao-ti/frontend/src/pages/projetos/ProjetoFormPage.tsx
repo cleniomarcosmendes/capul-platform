@@ -39,6 +39,12 @@ export function ProjetoFormPage() {
   const [descricao, setDescricao] = useState(searchParams.get('descricao') || '');
   const [tipoProjetoId, setTipoProjetoId] = useState('');
   const [projetoPaiId, setProjetoPaiId] = useState(searchParams.get('projetoPaiId') || '');
+  // Quando o usuário veio do botão "Novo Sub-projeto" (URL ?projetoPaiId=X),
+  // o pai está fixado — mostramos info read-only em vez do select pra evitar
+  // confusão (select de raiz não lista projetos N2+ → mostraria "Nenhum" mesmo
+  // tendo pai correto). Bug fix 25/04/2026.
+  const projetoPaiFixadoPorUrl = !!searchParams.get('projetoPaiId');
+  const [projetoPaiInfo, setProjetoPaiInfo] = useState<{ numero: number; nome: string } | null>(null);
   const [softwareId, setSoftwareId] = useState(searchParams.get('softwareId') || '');
   const [contratoId, setContratoId] = useState('');
   const [responsavelId, setResponsavelId] = useState(searchParams.get('responsavelId') || '');
@@ -50,9 +56,25 @@ export function ProjetoFormPage() {
   useEffect(() => {
     softwareService.listar({ status: 'ATIVO' }).then(setSoftwares).catch(() => {});
     contratoService.listar({ status: 'ATIVO' }).then(setContratos).catch(() => {});
-    coreService.listarUsuarios().then(setUsuarios).catch(() => {});
+    // Filtra apenas perfis aptos a serem Responsável de Projeto:
+    // ADMIN, GESTOR_TI, SUPORTE_TI (staff TI) + USUARIO_CHAVE (negócio liderando projeto).
+    coreService.listarUsuarios().then((users) => {
+      const rolesElegiveis = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE'];
+      const elegiveis = users.filter((u: any) =>
+        u.permissoes?.some((p: any) => p.modulo?.codigo === 'GESTAO_TI' && rolesElegiveis.includes(p.roleModulo?.codigo))
+      );
+      setUsuarios(elegiveis);
+    }).catch(() => {});
     projetoService.listar({ apenasRaiz: true }).then(setProjetosRaiz).catch(() => {});
     compraService.listarTiposProjeto('ATIVO').then(setTiposProjeto).catch(() => {});
+
+    // Se veio com projetoPaiId na URL (botão "Novo Sub-projeto"),
+    // busca o pai pra mostrar #N nome — funciona pra qualquer nível, não só raiz.
+    if (projetoPaiFixadoPorUrl && projetoPaiId) {
+      projetoService.buscar(projetoPaiId)
+        .then((p) => setProjetoPaiInfo({ numero: p.numero, nome: p.nome }))
+        .catch(() => {});
+    }
 
     if (isEdit && id) {
       projetoService.buscar(id).then((p) => {
@@ -190,7 +212,20 @@ export function ProjetoFormPage() {
               </select>
             </div>
 
-            {!isEdit && (
+            {!isEdit && projetoPaiFixadoPorUrl && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Projeto Pai</label>
+                <div className="w-full border border-slate-200 bg-slate-50 rounded-lg px-3 py-2 text-sm text-slate-700">
+                  {projetoPaiInfo
+                    ? `#${projetoPaiInfo.numero} - ${projetoPaiInfo.nome}`
+                    : 'Carregando...'}
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Voce esta criando um sub-projeto. O pai foi definido pelo contexto.
+                </p>
+              </div>
+            )}
+            {!isEdit && !projetoPaiFixadoPorUrl && (
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Projeto Pai</label>
                 <select

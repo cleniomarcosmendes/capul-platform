@@ -36,6 +36,8 @@ export class ChamadoService {
     tecnicoId?: string;
     dataInicio?: string;
     dataFim?: string;
+    page?: number;
+    pageSize?: number;
   }) {
     return this.core.findAll(user, role, filters);
   }

@@ -1,4 +1,5 @@
 import { gestaoApi } from './api';
+import type { PaginatedResponse } from '../components/Paginator';
 import type {
   Contrato,
   StatusContrato,
@@ -21,6 +22,8 @@ interface ListFilters {
   softwareId?: string;
   fornecedor?: string;
   vencendoEm?: number;
+  page?: number;
+  pageSize?: number;
 }
 
 interface CreateContratoPayload {
@@ -87,15 +90,24 @@ export const contratoService = {
     }
   },
 
-  async listar(filters: ListFilters = {}): Promise<Contrato[]> {
+  /** Paginado (23/04/2026). Retorna `{ items, total, page, pageSize }`. */
+  async listarPaginado(filters: ListFilters = {}): Promise<PaginatedResponse<Contrato>> {
     const params: Record<string, string> = {};
     if (filters.tipoContratoId) params.tipoContratoId = filters.tipoContratoId;
     if (filters.status) params.status = filters.status;
     if (filters.softwareId) params.softwareId = filters.softwareId;
     if (filters.fornecedor) params.fornecedor = filters.fornecedor;
     if (filters.vencendoEm) params.vencendoEm = String(filters.vencendoEm);
-    const { data } = await gestaoApi.get('/contratos', { params });
+    params.page = String(filters.page ?? 1);
+    params.pageSize = String(filters.pageSize ?? 50);
+    const { data } = await gestaoApi.get<PaginatedResponse<Contrato>>('/contratos', { params });
     return data;
+  },
+
+  /** Compat — retorna só `items`. pageSize=200. */
+  async listar(filters: Omit<ListFilters, 'page' | 'pageSize'> = {}): Promise<Contrato[]> {
+    const res = await this.listarPaginado({ ...filters, page: 1, pageSize: 200 });
+    return res.items;
   },
 
   async buscar(id: string): Promise<Contrato> {

@@ -9,25 +9,37 @@ import type {
   StatusSoftware,
   StatusModulo,
 } from '../types';
+import type { PaginatedResponse } from '../components/Paginator';
 
 interface SoftwareFilters {
   tipo?: TipoSoftware;
   criticidade?: Criticidade;
   status?: StatusSoftware;
   equipeId?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 export const softwareService = {
   // ─── Software CRUD ────────────────────────────────────────
 
-  async listar(filters: SoftwareFilters = {}): Promise<Software[]> {
+  /** Paginado (23/04/2026). */
+  async listarPaginado(filters: SoftwareFilters = {}): Promise<PaginatedResponse<Software>> {
     const params: Record<string, string> = {};
     if (filters.tipo) params.tipo = filters.tipo;
     if (filters.criticidade) params.criticidade = filters.criticidade;
     if (filters.status) params.status = filters.status;
     if (filters.equipeId) params.equipeId = filters.equipeId;
-    const { data } = await gestaoApi.get('/softwares', { params });
+    params.page = String(filters.page ?? 1);
+    params.pageSize = String(filters.pageSize ?? 50);
+    const { data } = await gestaoApi.get<PaginatedResponse<Software>>('/softwares', { params });
     return data;
+  },
+
+  /** Compat — retorna só `items`. pageSize=200. */
+  async listar(filters: Omit<SoftwareFilters, 'page' | 'pageSize'> = {}): Promise<Software[]> {
+    const res = await this.listarPaginado({ ...filters, page: 1, pageSize: 200 });
+    return res.items;
   },
 
   async buscar(id: string): Promise<Software> {

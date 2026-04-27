@@ -86,6 +86,8 @@ export class ProjetoController {
     @Query('search') search?: string,
     @Query('apenasRaiz') apenasRaiz?: string,
     @Query('meusProjetos') meusProjetos?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
     @CurrentUser() user?: JwtPayload,
     @GestaoTiRole() role?: string,
   ) {
@@ -100,6 +102,8 @@ export class ProjetoController {
       meusProjetos,
       usuarioId: user?.sub,
       role,
+      page: page ? parseInt(page, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
     });
   }
 

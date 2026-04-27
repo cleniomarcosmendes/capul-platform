@@ -71,6 +71,8 @@ export class ChamadoController {
     @Query('tecnicoId') tecnicoId?: string,
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
     return this.service.findAll(user, role, {
       status,
@@ -85,6 +87,8 @@ export class ChamadoController {
       tecnicoId,
       dataInicio,
       dataFim,
+      page: page ? parseInt(page, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
     });
   }
 

@@ -5,6 +5,7 @@ import { UpdateOsDto } from './dto/update-os.dto.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { StatusOS } from '@prisma/client';
 import { isGestor } from '../common/constants/roles.constant.js';
+import { paginate } from '../common/prisma/paginate.helper.js';
 
 const osListInclude = {
   filial: { select: { id: true, codigo: true, nomeFantasia: true } },
@@ -28,14 +29,16 @@ const osListInclude = {
 export class OrdemServicoService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(status?: StatusOS, filialId?: string) {
-    return this.prisma.ordemServico.findMany({
+  async findAll(status?: StatusOS, filialId?: string, page?: number, pageSize?: number) {
+    return paginate(this.prisma, this.prisma.ordemServico, {
       where: {
         ...(status ? { status } : {}),
         ...(filialId ? { filialId } : {}),
       },
       include: osListInclude,
       orderBy: { createdAt: 'desc' },
+      page,
+      pageSize,
     });
   }
 

@@ -56,6 +56,8 @@ export class ProjetoService {
     meusProjetos?: string;
     usuarioId?: string;
     role?: string;
+    page?: number;
+    pageSize?: number;
   }) {
     return this.core.findAll(filters);
   }

@@ -32,10 +32,19 @@ export function PendenciaDetalhePage() {
   const { toast, confirm } = useToast();
   const isGestor = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
   const canManage = gestaoTiRole !== 'USUARIO_FINAL' && Boolean(gestaoTiRole);
-  const canGerarAtividade = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
+  const isStaffTI = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
+  const isRestrictedRole = ['USUARIO_CHAVE', 'TERCEIRIZADO'].includes(gestaoTiRole || '');
 
   const [pendencia, setPendencia] = useState<PendenciaProjeto | null>(null);
-  const [projeto, setProjeto] = useState<{ id: string; numero: number; nome: string; projetoPai?: { id: string; numero: number; nome: string } | null } | null>(null);
+  const [projeto, setProjeto] = useState<{ id: string; numero: number; nome: string; responsavelId?: string; projetoPai?: { id: string; numero: number; nome: string } | null } | null>(null);
+
+  // USUARIO_CHAVE/TERCEIRIZADO podem gerar atividade somente no SEU subprojeto próprio
+  // (alinhado com `isSubprojetoProprio` do ProjetoDetalhePage e backend que já libera o endpoint).
+  // Memory `melhorias_17abr2026.md`: subprojetos liberam fases/atividades para esses roles.
+  const isSubprojetoProprio = isRestrictedRole
+    && !!projeto?.projetoPai
+    && projeto?.responsavelId === usuario?.id;
+  const canGerarAtividade = isStaffTI || isSubprojetoProprio;
   const [loading, setLoading] = useState(true);
   const [comentario, setComentario] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -69,7 +78,13 @@ export function PendenciaDetalhePage() {
         projetoService.listarUsuariosChave(projetoId!),
       ]);
       setPendencia(pend);
-      setProjeto({ id: proj.id, numero: proj.numero, nome: proj.nome, projetoPai: proj.projetoPai });
+      setProjeto({
+        id: proj.id,
+        numero: proj.numero,
+        nome: proj.nome,
+        responsavelId: proj.responsavel?.id,
+        projetoPai: proj.projetoPai,
+      });
       setMembrosEquipe(membros);
       const map = new Map<string, string>();
       if (proj.responsavel) map.set(proj.responsavel.id, proj.responsavel.nome);

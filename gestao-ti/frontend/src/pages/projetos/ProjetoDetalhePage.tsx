@@ -254,7 +254,10 @@ export function ProjetoDetalhePage() {
   const allTabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { key: 'visaoGeral', label: 'Visao Geral', icon: Eye },
     { key: 'subprojetos', label: 'Sub-projetos', icon: FolderKanban },
+    // Equipe TI executora + Usuarios-Chave (negócio) — agrupadas lado a lado
+    // pra facilitar a navegação entre os dois "elencos" do projeto.
     ...(showEquipeTab ? [{ key: 'equipe' as Tab, label: 'Equipe', icon: Users }] : []),
+    { key: 'usuariosChave' as Tab, label: 'Usuarios-Chave', icon: KeyRound },
     { key: 'atividades', label: 'Atividades', icon: Clock },
     { key: 'pendencias' as Tab, label: 'Pendencias', icon: ClipboardList },
     { key: 'financeiro', label: 'Financeiro', icon: DollarSign },
@@ -262,7 +265,6 @@ export function ProjetoDetalhePage() {
     ...(isCompleto ? [{ key: 'dependencias' as Tab, label: 'Dependencias', icon: Link2 }] : []),
     { key: 'anexos', label: 'Anexos', icon: Paperclip },
     { key: 'chamados', label: 'Chamados', icon: Ticket },
-    { key: 'usuariosChave' as Tab, label: 'Usuarios-Chave', icon: KeyRound },
   ];
 
   // Tabs visiveis por contexto
@@ -496,8 +498,9 @@ export function ProjetoDetalhePage() {
 // --- Tab Sub-projetos ---
 function TabSubProjetos({ projeto, canManage, isRestrictedRole }: { projeto: Projeto; canManage: boolean; isRestrictedRole?: boolean }) {
   const subs = projeto.subProjetos || [];
-  // USUARIO_CHAVE e TERCEIRIZADO podem criar sub-projetos nos projetos que estao vinculados
-  const canCreateSubProjeto = (canManage || isRestrictedRole) && projeto.nivel < 3;
+  // USUARIO_CHAVE e TERCEIRIZADO podem criar sub-projetos nos projetos que estao vinculados.
+  // Hierarquia limitada a 2 niveis (decisao 26/04/2026): so projeto raiz (N1) pode ter subprojetos.
+  const canCreateSubProjeto = (canManage || isRestrictedRole) && projeto.nivel < 2;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200">
@@ -604,9 +607,14 @@ function TabEquipe({ projetoId, canManage, onEditingChange }: { projetoId: strin
     {/* protecao via pai */}
     <div className="bg-white rounded-xl border border-slate-200">
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-        <h4 className="font-semibold text-slate-700">Equipe RACI ({membros.length})</h4>
+        <div>
+          <h4 className="font-semibold text-slate-700">Equipe TI Executora ({membros.length})</h4>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Quem executa tecnicamente o projeto (ADMIN / GESTOR_TI / SUPORTE_TI). Para usuarios-chave / terceirizados (negocio), use a aba <strong>Usuarios-Chave</strong> ao lado.
+          </p>
+        </div>
         {canManage && !showForm && (
-          <button onClick={() => setShowForm(true)} className="flex items-center gap-1 text-sm text-capul-600 hover:underline">
+          <button onClick={() => setShowForm(true)} className="flex items-center gap-1 text-sm text-capul-600 hover:underline whitespace-nowrap">
             <Plus className="w-4 h-4" />
             Adicionar Membro
           </button>
@@ -2790,11 +2798,16 @@ function TabUsuariosChave({ projetoId, canManage, onEditingChange }: { projetoId
     {/* protecao via pai */}
     <div className="bg-white rounded-xl border border-slate-200">
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-        <h4 className="font-semibold text-slate-700">
-          Usuarios-Chave ({itens.filter((i) => i.ativo).length})
-        </h4>
+        <div>
+          <h4 className="font-semibold text-slate-700">
+            Usuarios-Chave ({itens.filter((i) => i.ativo).length})
+          </h4>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Stakeholders de negocio (USUARIO_CHAVE / TERCEIRIZADO) que validam/aprovam. Para a equipe TI executora, use a aba <strong>Equipe</strong> ao lado.
+          </p>
+        </div>
         {canManage && (
-          <button onClick={handleShowForm} className="flex items-center gap-1 text-sm text-capul-600 hover:underline">
+          <button onClick={handleShowForm} className="flex items-center gap-1 text-sm text-capul-600 hover:underline whitespace-nowrap">
             <Plus className="w-4 h-4" />
             Adicionar
           </button>

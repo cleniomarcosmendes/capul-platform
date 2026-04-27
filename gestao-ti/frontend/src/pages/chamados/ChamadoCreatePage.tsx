@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
@@ -70,6 +70,16 @@ export function ChamadoCreatePage() {
   const [successRedirectUrl, setSuccessRedirectUrl] = useState('');
 
   const [erroMatricula, setErroMatricula] = useState('');
+  const [mensagemFallback, setMensagemFallback] = useState('');
+  const nomeColaboradorRef = useRef<HTMLInputElement>(null);
+
+  // Quando o input do nome libera (Protheus offline ou matrícula inválida),
+  // foca automaticamente — é o "posicionar para o usuário" pedido em UX.
+  useEffect(() => {
+    if (nomeEditavel && nomeColaboradorRef.current) {
+      nomeColaboradorRef.current.focus();
+    }
+  }, [nomeEditavel]);
 
   async function buscarColaborador() {
     const valor = matriculaColaborador.trim();
@@ -83,15 +93,20 @@ export function ChamadoCreatePage() {
     setBuscandoColaborador(true);
     setNomeColaborador('');
     setNomeEditavel(false);
+    setMensagemFallback('');
     try {
       const { data } = await (await import('../../services/api')).gestaoApi.get(`/protheus/colaborador/${matriculaColaborador.trim()}`);
       if (data.encontrado && data.nome) {
         setNomeColaborador(data.nome);
       } else {
+        // Matrícula consultada mas Protheus não retornou nome — pode ser matrícula inválida
         setNomeEditavel(true);
+        setMensagemFallback('Matricula nao localizada no Protheus. Digite o nome manualmente.');
       }
     } catch {
+      // Erro de rede / timeout — Protheus pode estar offline
       setNomeEditavel(true);
+      setMensagemFallback('Protheus indisponivel no momento. Digite o nome manualmente.');
     }
     setBuscandoColaborador(false);
   }
@@ -315,7 +330,13 @@ export function ChamadoCreatePage() {
                       }}
                       onBlur={buscarColaborador}
                       placeholder="Ex: E05111"
-                      className={`flex-1 border rounded-lg px-3 py-2 text-sm ${erroMatricula ? 'border-red-400 bg-red-50' : 'border-slate-300'}`}
+                      className={`flex-1 border rounded-lg px-3 py-2 text-sm ${
+                        erroMatricula
+                          ? 'border-red-400 bg-red-50'
+                          : buscandoColaborador
+                            ? 'border-amber-400 bg-amber-50'
+                            : 'border-slate-300'
+                      }`}
                       required
                       maxLength={10}
                     />
@@ -326,6 +347,7 @@ export function ChamadoCreatePage() {
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Nome do Colaborador {nomeEditavel && '*'}</label>
                   <input
+                    ref={nomeColaboradorRef}
                     value={nomeColaborador}
                     onChange={(e) => setNomeColaborador(e.target.value)}
                     readOnly={!nomeEditavel}
@@ -333,6 +355,9 @@ export function ChamadoCreatePage() {
                     placeholder={nomeEditavel ? 'Digite o nome' : 'Preenchido automaticamente'}
                     className={`w-full border border-slate-300 rounded-lg px-3 py-2 text-sm ${!nomeEditavel ? 'bg-slate-50 text-slate-700' : ''}`}
                   />
+                  {mensagemFallback && nomeEditavel && (
+                    <p className="text-xs text-amber-700 mt-1 italic">{mensagemFallback}</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -587,10 +612,14 @@ export function ChamadoCreatePage() {
           <div className="pt-2">
             <button
               type="submit"
-              disabled={saving}
-              className="bg-capul-600 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50 transition-colors"
+              disabled={saving || buscandoColaborador}
+              className="bg-capul-600 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {saving ? 'Criando...' : 'Abrir Chamado'}
+              {saving
+                ? 'Criando...'
+                : buscandoColaborador
+                  ? 'Aguardando matricula...'
+                  : 'Abrir Chamado'}
             </button>
           </div>
         </form>

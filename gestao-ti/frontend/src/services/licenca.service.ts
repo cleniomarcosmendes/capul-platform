@@ -1,5 +1,6 @@
 import { gestaoApi } from './api';
 import type { SoftwareLicenca, LicencaUsuario, StatusLicenca, CategoriaLicenca } from '../types';
+import type { PaginatedResponse } from '../components/Paginator';
 
 interface LicencaFilters {
   softwareId?: string;
@@ -7,6 +8,8 @@ interface LicencaFilters {
   vencendoEm?: number;
   categoriaId?: string;
   avulsas?: boolean;
+  page?: number;
+  pageSize?: number;
 }
 
 interface CreateLicencaPayload {
@@ -25,15 +28,24 @@ interface CreateLicencaPayload {
 }
 
 export const licencaService = {
-  async listar(filters: LicencaFilters = {}): Promise<SoftwareLicenca[]> {
+  /** Paginada — usa `{ items, total, page, pageSize }`. Introduzido em 23/04/2026. */
+  async listarPaginado(filters: LicencaFilters = {}): Promise<PaginatedResponse<SoftwareLicenca>> {
     const params: Record<string, string> = {};
     if (filters.softwareId) params.softwareId = filters.softwareId;
     if (filters.status) params.status = filters.status;
     if (filters.vencendoEm) params.vencendoEm = String(filters.vencendoEm);
     if (filters.categoriaId) params.categoriaId = filters.categoriaId;
     if (filters.avulsas) params.avulsas = 'true';
-    const { data } = await gestaoApi.get('/licencas', { params });
+    params.page = String(filters.page ?? 1);
+    params.pageSize = String(filters.pageSize ?? 50);
+    const { data } = await gestaoApi.get<PaginatedResponse<SoftwareLicenca>>('/licencas', { params });
     return data;
+  },
+
+  /** Compatibilidade — retorna só `items`. Usa pageSize=200. */
+  async listar(filters: Omit<LicencaFilters, 'page' | 'pageSize'> = {}): Promise<SoftwareLicenca[]> {
+    const res = await this.listarPaginado({ ...filters, page: 1, pageSize: 200 });
+    return res.items;
   },
 
   async buscar(id: string): Promise<SoftwareLicenca> {

@@ -345,20 +345,19 @@ export function HorariosTrabalhoPage() {
                         <span>Expediente: <strong>{h.horaInicioExpediente}–{h.horaFimExpediente}</strong></span>
                         <span>Almoco: <strong>{h.horaInicioAlmoco}–{h.horaFimAlmoco}</strong></span>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-3">
                         <button
                           onClick={() => iniciarEdicao(h)}
-                          className="text-slate-400 hover:text-capul-600 transition-colors"
-                          title="Editar horario"
+                          className="flex items-center gap-1 text-xs text-capul-600 hover:underline"
                         >
-                          <Pencil className="w-4 h-4" />
+                          <Pencil className="w-3.5 h-3.5" /> Editar
                         </button>
                         <button
                           onClick={() => h.usuarioId && remover(h.usuarioId)}
-                          className="text-slate-400 hover:text-red-500 transition-colors"
+                          className="flex items-center gap-1 text-xs text-red-600 hover:underline"
                           title="Remover (voltar ao padrao)"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" /> Remover
                         </button>
                       </div>
                     </div>

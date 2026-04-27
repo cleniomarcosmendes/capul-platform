@@ -6,6 +6,7 @@ import { softwareService } from '../../services/software.service';
 import { equipeService } from '../../services/equipe.service';
 import { Plus, Search, AppWindow, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { exportService } from '../../services/export.service';
+import { Paginator } from '../../components/Paginator';
 import type { Software, EquipeTI, TipoSoftware, Criticidade, StatusSoftware } from '../../types';
 
 const statusCores: Record<string, string> = {
@@ -51,6 +52,10 @@ export function SoftwaresListPage() {
   const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
 
   const [softwares, setSoftwares] = useState<Software[]>([]);
+  // Paginação 23/04/2026
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(50);
+  const [totalSoftwares, setTotalSoftwares] = useState<number>(0);
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
@@ -80,16 +85,23 @@ export function SoftwaresListPage() {
   useEffect(() => {
     setLoading(true);
     softwareService
-      .listar({
+      .listarPaginado({
         tipo: filtroTipo || undefined,
         criticidade: filtroCriticidade || undefined,
         status: filtroStatus || undefined,
         equipeId: filtroEquipe || undefined,
+        page,
+        pageSize,
       })
-      .then(setSoftwares)
+      .then((res) => {
+        setSoftwares(res.items);
+        setTotalSoftwares(res.total);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [filtroTipo, filtroCriticidade, filtroStatus, filtroEquipe]);
+  }, [filtroTipo, filtroCriticidade, filtroStatus, filtroEquipe, page, pageSize]);
+
+  useEffect(() => { setPage(1); }, [filtroTipo, filtroCriticidade, filtroStatus, filtroEquipe, pageSize]);
 
   const filtered = useMemo(() => {
     if (!busca) return softwares;
@@ -260,6 +272,18 @@ export function SoftwaresListPage() {
               </table>
             </div>
           </div>
+        )}
+        {!loading && (
+          <Paginator
+            total={totalSoftwares}
+            shownCount={softwares.length}
+            page={page}
+            setPage={setPage}
+            pageSize={pageSize}
+            setPageSize={setPageSize}
+            labelSingular="software"
+            labelPlural="softwares"
+          />
         )}
       </div>
     </>

@@ -7,6 +7,7 @@ import { chamadoService } from '../../services/chamado.service';
 import { coreService } from '../../services/core.service';
 import { exportService } from '../../services/export.service';
 import { useToast } from '../../components/Toast';
+import { Paginator } from '../../components/Paginator';
 import {
   Plus, X, ArrowLeft, Play, Square, Ban, UserPlus, Link2, Unlink,
   Clock, CheckCircle, Users, FileText, Download, MessageSquare, Send,
@@ -45,6 +46,10 @@ export function OrdensServicoPage() {
   const isTecnico = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
 
   const [ordens, setOrdens] = useState<OrdemServico[]>([]);
+  // Paginação (23/04/2026)
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(50);
+  const [totalOrdens, setTotalOrdens] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<StatusOS | ''>('');
   const [busca, setBusca] = useState('');
@@ -86,15 +91,30 @@ export function OrdensServicoPage() {
 
   function loadOrdens() {
     setLoading(true);
-    ordemServicoService.listar(filterStatus || undefined)
-      .then(setOrdens).catch(() => {}).finally(() => setLoading(false));
+    ordemServicoService.listarPaginado(filterStatus || undefined, undefined, page, pageSize)
+      .then((res) => {
+        setOrdens(res.items);
+        setTotalOrdens(res.total);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadOrdens(); }, [filterStatus]);
+  useEffect(() => { loadOrdens(); }, [filterStatus, page, pageSize]);
+  // Mudar filtro volta pra página 1 (evita ficar numa página fora do range).
+  useEffect(() => { setPage(1); }, [filterStatus, pageSize]);
 
   useEffect(() => {
     if ((showForm || showAddTecnico) && tecnicos.length === 0) {
-      coreService.listarUsuarios().then(setTecnicos).catch(() => {});
+      // Filtra apenas staff de TI (ADMIN, GESTOR_TI, SUPORTE_TI) — outros usuários
+      // não devem ser atribuíveis como técnico de OS. Mesma lógica de ChamadosListPage.
+      coreService.listarUsuarios().then((users) => {
+        const rolesStaff = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
+        const staff = users.filter((u: any) =>
+          u.permissoes?.some((p: any) => p.modulo?.codigo === 'GESTAO_TI' && rolesStaff.includes(p.roleModulo?.codigo))
+        );
+        setTecnicos(staff);
+      }).catch(() => {});
     }
     if (showForm && filiais.length === 0) {
       const isStaff = gestaoTiRole && ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole);
@@ -567,6 +587,18 @@ export function OrdensServicoPage() {
                   ))}
                 </tbody>
               </table>
+            )}
+            {!loading && (
+              <Paginator
+                total={totalOrdens}
+                shownCount={ordens.length}
+                page={page}
+                setPage={setPage}
+                pageSize={pageSize}
+                setPageSize={setPageSize}
+                labelSingular="ordem de serviço"
+                labelPlural="ordens de serviço"
+              />
             )}
           </div>
 

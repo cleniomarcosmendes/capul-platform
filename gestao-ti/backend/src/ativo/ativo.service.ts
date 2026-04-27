@@ -6,6 +6,7 @@ import { CreateAtivoDto } from './dto/create-ativo.dto.js';
 import { UpdateAtivoDto } from './dto/update-ativo.dto.js';
 import { AddAtivoSoftwareDto } from './dto/add-ativo-software.dto.js';
 import { StatusAtivo } from '@prisma/client';
+import { paginate } from '../common/prisma/paginate.helper.js';
 
 const ativoListInclude = {
   filial: { select: { id: true, codigo: true, nomeFantasia: true } },
@@ -41,6 +42,8 @@ export class AtivoService {
     status?: string;
     filialId?: string;
     search?: string;
+    page?: number;
+    pageSize?: number;
   }) {
     const where: Record<string, unknown> = {};
     if (filters.tipo) where.tipo = filters.tipo;
@@ -55,10 +58,12 @@ export class AtivoService {
       ];
     }
 
-    return this.prisma.ativo.findMany({
+    return paginate(this.prisma, this.prisma.ativo, {
       where,
       include: ativoListInclude,
       orderBy: { tag: 'asc' },
+      page: filters.page,
+      pageSize: filters.pageSize,
     });
   }
 

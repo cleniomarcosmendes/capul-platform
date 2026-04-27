@@ -7,6 +7,7 @@ import { FileText, Plus, Search, AlertTriangle, Download, ArrowUpDown, ArrowUp, 
 import { exportService } from '../../services/export.service';
 import type { Contrato, StatusContrato, TipoContratoConfig } from '../../types';
 import { formatDateBR } from '../../utils/date';
+import { Paginator } from '../../components/Paginator';
 
 type SortKey = 'numero' | 'titulo' | 'fornecedor' | 'valorTotal' | 'dataFim' | 'status';
 type SortDir = 'asc' | 'desc';
@@ -32,6 +33,10 @@ export function ContratosListPage() {
   const canManage = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
 
   const [contratos, setContratos] = useState<Contrato[]>([]);
+  // Paginação 23/04/2026
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(50);
+  const [totalContratos, setTotalContratos] = useState<number>(0);
   const [tiposContrato, setTiposContrato] = useState<TipoContratoConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -56,17 +61,23 @@ export function ContratosListPage() {
 
   useEffect(() => {
     loadContratos();
-  }, [filterTipoContratoId, filterStatus, filterVencendo]);
+  }, [filterTipoContratoId, filterStatus, filterVencendo, page, pageSize]);
+
+  // Volta pra página 1 ao mudar filtro.
+  useEffect(() => { setPage(1); }, [filterTipoContratoId, filterStatus, filterVencendo, pageSize]);
 
   async function loadContratos() {
     setLoading(true);
     try {
-      const data = await contratoService.listar({
+      const res = await contratoService.listarPaginado({
         tipoContratoId: filterTipoContratoId || undefined,
         status: (filterStatus as StatusContrato) || undefined,
         vencendoEm: filterVencendo ? parseInt(filterVencendo, 10) : undefined,
+        page,
+        pageSize,
       });
-      setContratos(data);
+      setContratos(res.items);
+      setTotalContratos(res.total);
     } catch {
       // ignore
     } finally {
@@ -251,6 +262,18 @@ export function ContratosListPage() {
               </tbody>
             </table>
           </div>
+        )}
+        {!loading && (
+          <Paginator
+            total={totalContratos}
+            shownCount={contratos.length}
+            page={page}
+            setPage={setPage}
+            pageSize={pageSize}
+            setPageSize={setPageSize}
+            labelSingular="contrato"
+            labelPlural="contratos"
+          />
         )}
       </div>
     </>

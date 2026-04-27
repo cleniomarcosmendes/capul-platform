@@ -44,9 +44,20 @@ export class ConhecimentoController {
     @Query('softwareId') softwareId?: string,
     @Query('equipeTiId') equipeTiId?: string,
     @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
     @GestaoTiRole() role?: string,
   ) {
-    return this.service.findAll({ categoria, status, softwareId, equipeTiId, search, role });
+    return this.service.findAll({
+      categoria,
+      status,
+      softwareId,
+      equipeTiId,
+      search,
+      role,
+      page: page ? parseInt(page, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+    });
   }
 
   @Get(':id')

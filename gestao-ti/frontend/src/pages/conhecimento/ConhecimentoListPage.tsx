@@ -7,6 +7,7 @@ import { softwareService } from '../../services/software.service';
 import { equipeService } from '../../services/equipe.service';
 import { Plus, Search, BookMarked, Globe, Lock } from 'lucide-react';
 import type { ArtigoConhecimento, CategoriaArtigo, StatusArtigo, Software, EquipeTI } from '../../types';
+import { Paginator } from '../../components/Paginator';
 
 const categoriaLabel: Record<CategoriaArtigo, string> = {
   PROCEDIMENTO: 'Procedimento', SOLUCAO: 'Solucao', FAQ: 'FAQ', CONFIGURACAO: 'Configuracao', OUTRO: 'Outro',
@@ -27,10 +28,15 @@ export function ConhecimentoListPage() {
   const canCreate = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
 
   const [artigos, setArtigos] = useState<ArtigoConhecimento[]>([]);
+  // Paginação 23/04/2026
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(50);
+  const [totalArtigos, setTotalArtigos] = useState<number>(0);
   const [softwares, setSoftwares] = useState<Software[]>([]);
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
+  const [buscaDebounced, setBuscaDebounced] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState<CategoriaArtigo | ''>('');
   const [filtroStatus, setFiltroStatus] = useState<StatusArtigo | ''>('');
   const [filtroSoftware, setFiltroSoftware] = useState('');
@@ -41,20 +47,33 @@ export function ConhecimentoListPage() {
     equipeService.listar('ATIVO').then(setEquipes).catch(() => {});
   }, []);
 
+  // Debounce da busca — 350ms depois da última tecla dispara novo fetch.
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaDebounced(busca), 350);
+    return () => clearTimeout(t);
+  }, [busca]);
+
   useEffect(() => {
     setLoading(true);
     conhecimentoService
-      .listar({
+      .listarPaginado({
         categoria: filtroCategoria || undefined,
         status: filtroStatus || undefined,
         softwareId: filtroSoftware || undefined,
         equipeTiId: filtroEquipe || undefined,
-        search: busca || undefined,
+        search: buscaDebounced.trim() || undefined,
+        page,
+        pageSize,
       })
-      .then(setArtigos)
+      .then((res) => {
+        setArtigos(res.items);
+        setTotalArtigos(res.total);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [filtroCategoria, filtroStatus, filtroSoftware, filtroEquipe, busca]);
+  }, [filtroCategoria, filtroStatus, filtroSoftware, filtroEquipe, buscaDebounced, page, pageSize]);
+
+  useEffect(() => { setPage(1); }, [filtroCategoria, filtroStatus, filtroSoftware, filtroEquipe, buscaDebounced, pageSize]);
 
   return (
     <>
@@ -153,6 +172,18 @@ export function ConhecimentoListPage() {
               </Link>
             ))}
           </div>
+        )}
+        {!loading && (
+          <Paginator
+            total={totalArtigos}
+            shownCount={artigos.length}
+            page={page}
+            setPage={setPage}
+            pageSize={pageSize}
+            setPageSize={setPageSize}
+            labelSingular="artigo"
+            labelPlural="artigos"
+          />
         )}
       </div>
     </>

@@ -1,5 +1,6 @@
 import { gestaoApi } from './api';
 import type { RegistroParada, ParadaColaborador, MotivoParada, TipoParada, ImpactoParada, StatusParada } from '../types';
+import type { PaginatedResponse } from '../components/Paginator';
 
 interface ParadaFilters {
   softwareId?: string;
@@ -11,6 +12,8 @@ interface ParadaFilters {
   motivoParadaId?: string;
   dataInicio?: string;
   dataFim?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 interface CreateParadaPayload {
@@ -41,7 +44,8 @@ interface UpdateParadaPayload {
 }
 
 export const paradaService = {
-  async listar(filters: ParadaFilters = {}): Promise<RegistroParada[]> {
+  /** Paginado (23/04/2026). */
+  async listarPaginado(filters: ParadaFilters = {}): Promise<PaginatedResponse<RegistroParada>> {
     const params: Record<string, string> = {};
     if (filters.softwareId) params.softwareId = filters.softwareId;
     if (filters.moduloId) params.moduloId = filters.moduloId;
@@ -52,8 +56,16 @@ export const paradaService = {
     if (filters.motivoParadaId) params.motivoParadaId = filters.motivoParadaId;
     if (filters.dataInicio) params.dataInicio = filters.dataInicio;
     if (filters.dataFim) params.dataFim = filters.dataFim;
-    const { data } = await gestaoApi.get('/paradas', { params });
+    params.page = String(filters.page ?? 1);
+    params.pageSize = String(filters.pageSize ?? 50);
+    const { data } = await gestaoApi.get<PaginatedResponse<RegistroParada>>('/paradas', { params });
     return data;
+  },
+
+  /** Compat — retorna só `items`. pageSize=200. */
+  async listar(filters: Omit<ParadaFilters, 'page' | 'pageSize'> = {}): Promise<RegistroParada[]> {
+    const res = await this.listarPaginado({ ...filters, page: 1, pageSize: 200 });
+    return res.items;
   },
 
   async buscar(id: string): Promise<RegistroParada> {

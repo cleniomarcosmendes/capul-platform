@@ -25,8 +25,17 @@ export class SoftwareController {
     @Query('criticidade') criticidade?: Criticidade,
     @Query('status') status?: StatusSoftware,
     @Query('equipeId') equipeId?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
-    return this.service.findAll({ tipo, criticidade, status, equipeId });
+    return this.service.findAll({
+      tipo,
+      criticidade,
+      status,
+      equipeId,
+      page: page ? parseInt(page, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+    });
   }
 
   @Get(':id')

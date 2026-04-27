@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,6 +9,7 @@ import { FolderKanban, Plus, Search, Download, Star } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import type { Projeto, Software, TipoProjetoConfig } from '../../types';
 import { formatDateBR } from '../../utils/date';
+import { Paginator } from '../../components/Paginator';
 
 const statusLabel: Record<string, string> = {
   PLANEJAMENTO: 'Planejamento',
@@ -31,10 +32,15 @@ export function ProjetosListPage() {
   const canManage = gestaoTiRole !== 'USUARIO_FINAL' && Boolean(gestaoTiRole);
 
   const [projetos, setProjetos] = useState<Projeto[]>([]);
+  // Paginação 23/04/2026
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(50);
+  const [totalProjetos, setTotalProjetos] = useState<number>(0);
   const [softwares, setSoftwares] = useState<Software[]>([]);
   const [tiposProjeto, setTiposProjeto] = useState<TipoProjetoConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
   const [filtroStatus, setFiltroStatus] = useState<string>('EM_ANDAMENTO,PLANEJAMENTO');
   const [filtroSoftware, setFiltroSoftware] = useState('');
@@ -49,41 +55,80 @@ export function ProjetosListPage() {
     projetoService.listarFavoritos().then((ids) => setFavoritoIds(new Set(ids))).catch(() => {});
   }, []);
 
+  // Debounce da busca — 350ms depois da última tecla dispara novo fetch.
+  useEffect(() => {
+    const t = setTimeout(() => setSearchDebounced(search), 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
   // Carregar projetos quando auth estiver pronto e quando filtros mudarem
   useEffect(() => {
     if (!usuario?.id) return; // Aguardar auth
     loadData();
-  }, [usuario?.id, filtroStatus, filtroSoftware, apenasRaiz, meusProjetos]);
+  }, [usuario?.id, filtroStatus, filtroSoftware, apenasRaiz, meusProjetos, searchDebounced, page, pageSize]);
+
+  // Volta pra página 1 quando filtro muda.
+  useEffect(() => { setPage(1); }, [filtroStatus, filtroSoftware, apenasRaiz, meusProjetos, searchDebounced, pageSize]);
 
   async function loadData() {
     setLoading(true);
     try {
-      const data = await projetoService.listar({
+      const res = await projetoService.listarPaginado({
         status: filtroStatus || undefined,
         softwareId: filtroSoftware || undefined,
-        search: search || undefined,
+        search: searchDebounced.trim() || undefined,
         apenasRaiz: apenasRaiz || undefined,
         meusProjetos: meusProjetos || undefined,
+        page,
+        pageSize,
       });
-      setProjetos(data);
+      setProjetos(res.items);
+      setTotalProjetos(res.total);
     } catch { /* empty */ }
     setLoading(false);
-  }
-
-  function handleSearch(e: React.FormEvent) {
-    e.preventDefault();
-    loadData();
   }
 
   const projetosFiltrados = projetos.filter((p) => {
     if (apenasFavoritos && !favoritoIds.has(p.id)) return false;
     if (filtroTipo && p.tipoProjetoId !== filtroTipo) return false;
     return true;
-  }).sort((a, b) => {
-    const aFav = favoritoIds.has(a.id) ? 0 : 1;
-    const bFav = favoritoIds.has(b.id) ? 0 : 1;
-    return aFav - bFav;
   });
+
+  // Ordenação por árvore (DFS): pai primeiro, filhos abaixo, recursivo.
+  // Dentro de cada nível, ordena por (favorito desc, numero asc).
+  // Filhos cujo pai não está na página atual são apêndicados no final como "órfãos".
+  const projetosOrdenados = useMemo(() => {
+    const byParent = new Map<string | null, typeof projetosFiltrados>();
+    projetosFiltrados.forEach((p) => {
+      const key = p.projetoPaiId ?? null;
+      const arr = byParent.get(key) ?? [];
+      arr.push(p);
+      byParent.set(key, arr);
+    });
+    const cmp = (a: typeof projetosFiltrados[0], b: typeof projetosFiltrados[0]) => {
+      const aFav = favoritoIds.has(a.id) ? 0 : 1;
+      const bFav = favoritoIds.has(b.id) ? 0 : 1;
+      if (aFav !== bFav) return aFav - bFav;
+      return Number(a.numero) - Number(b.numero);
+    };
+    const result: typeof projetosFiltrados = [];
+    const visitados = new Set<string>();
+    const dfs = (parentId: string | null) => {
+      const children = (byParent.get(parentId) ?? []).slice().sort(cmp);
+      children.forEach((c) => {
+        if (visitados.has(c.id)) return;
+        visitados.add(c.id);
+        result.push(c);
+        dfs(c.id);
+      });
+    };
+    dfs(null);
+    // Órfãos (filhos cujo pai não está na página/filtro atual)
+    projetosFiltrados.forEach((p) => {
+      if (!visitados.has(p.id)) result.push(p);
+    });
+    return result;
+  }, [projetosFiltrados, favoritoIds]);
 
   async function handleToggleFavorito(projetoId: string) {
     try {
@@ -152,21 +197,16 @@ export function ProjetosListPage() {
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 flex flex-wrap gap-3 items-end">
-          <form onSubmit={handleSearch} className="flex gap-2">
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Buscar por nome ou descricao..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm w-72"
-              />
-            </div>
-            <button type="submit" className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm hover:bg-slate-200">
-              Buscar
-            </button>
-          </form>
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Buscar por nome ou descricao..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm w-72"
+            />
+          </div>
           <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
             <option value="">Todos Tipos</option>
             {tiposProjeto.map((t) => <option key={t.id} value={t.id}>{t.descricao}</option>)}
@@ -230,11 +270,22 @@ export function ProjetosListPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {projetosFiltrados.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-50">
+                  {projetosOrdenados.map((p) => {
+                    // Hierarquia visual — auditoria UX 25/04/2026:
+                    // - Indentação proporcional ao nível (24px por degrau)
+                    // - Cor da fonte/peso diferente entre projeto raiz e subprojeto
+                    // - Background sutil em subprojeto
+                    // - Ícone "└" indicando relação filial
+                    const isSubprojeto = p.nivel > 1;
+                    const indentPx = (p.nivel - 1) * 24;
+                    return (
+                    <tr key={p.id} className={`hover:bg-slate-100 ${isSubprojeto ? 'bg-slate-50/60' : ''}`}>
                       <td className="px-4 py-3 text-slate-500">{p.numero}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" style={{ paddingLeft: `${16 + indentPx}px` }}>
                         <div className="flex items-center gap-2">
+                          {isSubprojeto && (
+                            <span className="text-slate-400 select-none text-xs" aria-hidden>└</span>
+                          )}
                           <button
                             onClick={(e) => { e.preventDefault(); handleToggleFavorito(p.id); }}
                             className="flex-shrink-0"
@@ -242,13 +293,18 @@ export function ProjetosListPage() {
                           >
                             <Star className={`w-4 h-4 ${favoritoIds.has(p.id) ? 'fill-amber-400 text-amber-400' : 'text-slate-300 hover:text-amber-400'}`} />
                           </button>
-                          <Link to={`/gestao-ti/projetos/${p.id}`} className="text-capul-600 hover:underline font-medium">
+                          <Link
+                            to={`/gestao-ti/projetos/${p.id}`}
+                            className={isSubprojeto
+                              ? 'text-slate-700 hover:underline font-normal'
+                              : 'text-capul-600 hover:underline font-semibold'}
+                          >
                             {p.nome}
                           </Link>
                         </div>
-                        {p.nivel > 1 && (
-                          <span className="ml-2 text-xs text-slate-400">
-                            N{p.nivel}{p.projetoPai ? <> — <Link to={`/gestao-ti/projetos/${p.projetoPai.id}`} className="text-capul-500 hover:underline">{p.projetoPai.nome}</Link></> : ''}
+                        {isSubprojeto && (
+                          <span className="ml-6 text-xs text-slate-400">
+                            N{p.nivel}
                           </span>
                         )}
                       </td>
@@ -263,15 +319,34 @@ export function ProjetosListPage() {
                       <td className="px-4 py-3 text-slate-500 text-xs">
                         {p.dataInicio ? formatDateBR(p.dataInicio) : '-'}
                       </td>
-                      <td className="px-4 py-3 text-right text-slate-700 font-medium">
-                        {p._count.subProjetos}
+                      <td className="px-4 py-3 text-right">
+                        {p._count.subProjetos > 0 ? (
+                          <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 rounded-full bg-capul-50 text-capul-700 text-xs font-semibold">
+                            {p._count.subProjetos}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 text-xs">—</span>
+                        )}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           </div>
+        )}
+        {!loading && (
+          <Paginator
+            total={totalProjetos}
+            shownCount={projetos.length}
+            page={page}
+            setPage={setPage}
+            pageSize={pageSize}
+            setPageSize={setPageSize}
+            labelSingular="projeto"
+            labelPlural="projetos"
+          />
         )}
       </div>
     </>

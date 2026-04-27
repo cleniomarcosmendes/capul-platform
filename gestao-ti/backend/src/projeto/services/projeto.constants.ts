@@ -28,6 +28,10 @@ export const projetoDetailInclude = {
   software: { select: { id: true, nome: true, tipo: true } },
   contrato: { select: { id: true, numero: true, titulo: true } },
   responsavel: { select: { id: true, nome: true, username: true } },
+  // projetoPai necessário para `PendenciaDetalhePage` detectar subprojeto e
+  // liberar `gerar atividade` para USUARIO_CHAVE/TERCEIRIZADO no seu próprio
+  // subprojeto. Já existia em `projetoListInclude`, faltava aqui (bug 25/04).
+  projetoPai: { select: { id: true, numero: true, nome: true } },
   tipoProjeto: { select: { id: true, codigo: true, descricao: true } },
   subProjetos: {
     select: { id: true, numero: true, nome: true, status: true, modo: true, nivel: true },

@@ -7,6 +7,7 @@ import { UpdateArtigoDto } from './dto/update-artigo.dto.js';
 import { StatusArtigo } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
+import { paginate } from '../common/prisma/paginate.helper.js';
 
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads', 'conhecimento');
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -38,6 +39,8 @@ export class ConhecimentoService {
     equipeTiId?: string;
     search?: string;
     role?: string;
+    page?: number;
+    pageSize?: number;
   }) {
     const where: Record<string, unknown> = {};
     if (filters.categoria) where.categoria = filters.categoria;
@@ -58,10 +61,12 @@ export class ConhecimentoService {
       where.status = 'PUBLICADO';
     }
 
-    return this.prisma.artigoConhecimento.findMany({
+    return paginate(this.prisma, this.prisma.artigoConhecimento, {
       where,
       include: artigoListInclude,
       orderBy: { updatedAt: 'desc' },
+      page: filters.page,
+      pageSize: filters.pageSize,
     });
   }
 

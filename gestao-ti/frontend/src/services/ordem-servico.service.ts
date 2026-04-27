@@ -1,5 +1,6 @@
 import { gestaoApi } from './api';
 import type { OrdemServico, StatusOS } from '../types';
+import type { PaginatedResponse } from '../components/Paginator';
 
 interface CreateOsPayload {
   titulo: string;
@@ -18,12 +19,28 @@ interface UpdateOsPayload {
 }
 
 export const ordemServicoService = {
-  async listar(status?: StatusOS, filialId?: string): Promise<OrdemServico[]> {
+  /**
+   * Listagem paginada (23/04/2026). Para chamadores antigos que querem só
+   * o array, use `listar()` que faz unwrap do `items` com `pageSize=200`.
+   */
+  async listarPaginado(
+    status?: StatusOS,
+    filialId?: string,
+    page = 1,
+    pageSize = 50,
+  ): Promise<PaginatedResponse<OrdemServico>> {
     const params: Record<string, string> = {};
     if (status) params.status = status;
     if (filialId) params.filialId = filialId;
-    const { data } = await gestaoApi.get('/ordens-servico', { params });
+    params.page = String(page);
+    params.pageSize = String(pageSize);
+    const { data } = await gestaoApi.get<PaginatedResponse<OrdemServico>>('/ordens-servico', { params });
     return data;
+  },
+
+  async listar(status?: StatusOS, filialId?: string): Promise<OrdemServico[]> {
+    const res = await this.listarPaginado(status, filialId, 1, 200);
+    return res.items;
   },
 
   async buscar(id: string): Promise<OrdemServico> {

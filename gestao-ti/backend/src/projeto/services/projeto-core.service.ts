@@ -11,6 +11,7 @@ import { ProjetoHelpersService } from './projeto-helpers.service.js';
 import { projetoListInclude, projetoDetailInclude } from './projeto.constants.js';
 import { isGestor, isTI } from '../../common/constants/roles.constant.js';
 import { ROLES_EXTERNOS } from '../../common/constants/roles.constant.js';
+import { paginate } from '../../common/prisma/paginate.helper.js';
 
 @Injectable()
 export class ProjetoCoreService {
@@ -30,6 +31,8 @@ export class ProjetoCoreService {
     meusProjetos?: string;
     usuarioId?: string;
     role?: string;
+    page?: number;
+    pageSize?: number;
   }) {
     const where: Record<string, unknown> = {};
 
@@ -71,10 +74,12 @@ export class ProjetoCoreService {
       }
     }
 
-    return this.prisma.projeto.findMany({
+    return paginate(this.prisma, this.prisma.projeto, {
       where,
       include: projetoListInclude,
       orderBy: { numero: 'desc' },
+      page: filters.page,
+      pageSize: filters.pageSize,
     });
   }
 
@@ -194,8 +199,11 @@ export class ProjetoCoreService {
         where: { id: dto.projetoPaiId },
       });
       if (!pai) throw new NotFoundException('Projeto pai nao encontrado');
-      if (pai.nivel >= 3) {
-        throw new BadRequestException('Maximo de 3 niveis de hierarquia atingido');
+      // Hierarquia limitada a 2 niveis (PROJETO + SUBPROJETO) — decisao 26/04/2026.
+      // Razao: simplifica indicadores, navegacao e modelo mental. Casos N3 existentes
+      // continuam funcionais (apenas novas criacoes sao bloqueadas).
+      if (pai.nivel >= 2) {
+        throw new BadRequestException('Hierarquia limitada a 2 niveis: PROJETO e SUBPROJETO. Nao e permitido criar subprojeto de subprojeto.');
       }
       nivel = pai.nivel + 1;
 

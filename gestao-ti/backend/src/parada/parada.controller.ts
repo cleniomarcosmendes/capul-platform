@@ -91,6 +91,8 @@ export class ParadaController {
     @Query('motivoParadaId') motivoParadaId?: string,
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
     return this.service.findAll({
       softwareId,
@@ -102,6 +104,8 @@ export class ParadaController {
       motivoParadaId,
       dataInicio,
       dataFim,
+      page: page ? parseInt(page, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
     });
   }
 

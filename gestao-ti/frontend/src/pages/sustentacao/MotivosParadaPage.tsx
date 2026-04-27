@@ -190,10 +190,9 @@ export function MotivosParadaPage() {
                         <div className="flex items-center gap-3">
                           <button
                             onClick={() => handleEdit(m)}
-                            className="text-slate-400 hover:text-capul-600 transition-colors"
-                            title="Editar"
+                            className="flex items-center gap-1 text-xs text-capul-600 hover:underline"
                           >
-                            <Pencil className="w-4 h-4" />
+                            <Pencil className="w-3.5 h-3.5" /> Editar
                           </button>
                           <button
                             onClick={() => handleToggleStatus(m)}

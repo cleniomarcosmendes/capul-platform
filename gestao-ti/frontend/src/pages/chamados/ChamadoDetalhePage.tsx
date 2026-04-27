@@ -910,7 +910,15 @@ export function ChamadoDetalhePage() {
                     <button onClick={() => {
                       setShowAddColab(!showAddColab);
                       if (!showAddColab && usuariosDisponiveis.length === 0) {
-                        coreService.listarUsuarios().then(setUsuariosDisponiveis).catch(() => {});
+                        // Filtra apenas staff de TI — colaboradores de chamado devem ser
+                        // técnicos atuando, não usuários finais (mesma lógica de OS).
+                        coreService.listarUsuarios().then((users) => {
+                          const rolesStaff = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
+                          const staff = users.filter((u: any) =>
+                            u.permissoes?.some((p: any) => p.modulo?.codigo === 'GESTAO_TI' && rolesStaff.includes(p.roleModulo?.codigo))
+                          );
+                          setUsuariosDisponiveis(staff);
+                        }).catch(() => {});
                       }
                     }} className="text-sm text-capul-600 hover:underline font-medium">
                       {showAddColab ? 'Cancelar' : '+ Adicionar'}

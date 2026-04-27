@@ -7,6 +7,7 @@ import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
 import { Plus, Eye, Download, Star, Search } from 'lucide-react';
 import { exportService } from '../../services/export.service';
+import { Paginator } from '../../components/Paginator';
 import type { Chamado, EquipeTI, Departamento, StatusChamado, Visibilidade, UsuarioCore } from '../../types';
 
 interface FilialOption {
@@ -53,6 +54,14 @@ export function ChamadosListPage() {
   const { gestaoTiRole, usuario } = useAuth();
   const [searchParams] = useSearchParams();
   const [chamados, setChamados] = useState<Chamado[]>([]);
+  // Paginação server-side (23/04/2026 — produção tem 500+ chamados, a UI
+  // retornava só os 100 primeiros. A busca por texto também é server-side
+  // agora pra não perder chamados fora da página atual.)
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(50);
+  const [totalChamados, setTotalChamados] = useState<number>(0);
+  // Debounce do termo de busca — evita request a cada tecla digitada.
+  const [buscaDebounced, setBuscaDebounced] = useState<string>('');
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [filiais, setFiliais] = useState<FilialOption[]>([]);
@@ -127,35 +136,45 @@ export function ChamadosListPage() {
   const carregarChamados = useCallback((silent = false) => {
     if (!usuario) return; // Aguardar auth estar pronto
     if (!silent) setLoading(true);
-    if (pendentesAvaliacao) {
-      chamadoService
-        .listar({ pendentesAvaliacao: true })
-        .then(setChamados)
-        .catch(() => {})
-        .finally(() => { if (!silent) setLoading(false); });
-    } else {
-      const filialId = filterFilial || undefined;
-      chamadoService
-        .listar({
+    const baseFilters = pendentesAvaliacao
+      ? { pendentesAvaliacao: true }
+      : {
           status: filterStatus || undefined,
           equipeId: filterEquipe || undefined,
           visibilidade: filterVisibilidade || undefined,
           meusChamados: meusChamados || undefined,
-          filialId,
+          filialId: filterFilial || undefined,
           departamentoId: filterDepartamento || undefined,
           tecnicoId: filterTecnico || undefined,
           dataInicio: filterDataInicio || undefined,
           dataFim: filterDataFim || undefined,
-        })
-        .then(setChamados)
-        .catch(() => {})
-        .finally(() => { if (!silent) setLoading(false); });
-    }
-  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, filterDepartamento, filterTecnico, filterDataInicio, filterDataFim, usuario, pendentesAvaliacao]);
+          search: buscaDebounced.trim() || undefined,
+        };
+    chamadoService
+      .listarPaginado({ ...baseFilters, page, pageSize })
+      .then((res) => {
+        setChamados(res.items);
+        setTotalChamados(res.total);
+      })
+      .catch(() => {})
+      .finally(() => { if (!silent) setLoading(false); });
+  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, filterDepartamento, filterTecnico, filterDataInicio, filterDataFim, usuario, pendentesAvaliacao, buscaDebounced, page, pageSize]);
 
   useEffect(() => {
     carregarChamados();
   }, [carregarChamados]);
+
+  // Debounce da busca — 350ms depois da última tecla dispara novo fetch.
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaDebounced(busca), 350);
+    return () => clearTimeout(t);
+  }, [busca]);
+
+  // Ao mudar QUALQUER filtro (exceto a própria página) volta para a página 1
+  // — evita ficar "preso" na página 7 depois de aplicar um filtro que só tem 2 páginas.
+  useEffect(() => {
+    setPage(1);
+  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, filterDepartamento, filterTecnico, filterDataInicio, filterDataFim, pendentesAvaliacao, buscaDebounced, pageSize]);
 
   // Auto-refresh a cada 60s (silencioso)
   const silentRef = useRef(carregarChamados);
@@ -165,11 +184,9 @@ export function ChamadosListPage() {
     return () => clearInterval(poll);
   }, []);
 
-  const chamadosFiltrados = chamados.filter((c) => {
-    if (!busca.trim()) return true;
-    const termo = busca.toLowerCase();
-    return (c.titulo?.toLowerCase().includes(termo)) || (c.descricao?.toLowerCase().includes(termo));
-  });
+  // Busca agora é server-side (via `buscaDebounced` → param `search`). Exibimos
+  // os itens da página atual exatamente como o backend devolveu.
+  const chamadosFiltrados = chamados;
 
   return (
     <>
@@ -462,6 +479,19 @@ export function ChamadosListPage() {
               </tbody>
             </table>
           </div>
+        )}
+
+        {!loading && (
+          <Paginator
+            total={totalChamados}
+            shownCount={chamados.length}
+            page={page}
+            setPage={setPage}
+            pageSize={pageSize}
+            setPageSize={setPageSize}
+            labelSingular="chamado"
+            labelPlural="chamados"
+          />
         )}
       </div>
     </>

@@ -9,6 +9,7 @@ import type { SoftwareLicenca, Software, StatusLicenca, CategoriaLicenca } from 
 
 import { formatDateBR } from '../../utils/date';
 import { useToast } from '../../components/Toast';
+import { Paginator } from '../../components/Paginator';
 
 const modeloLabel: Record<string, string> = {
   SUBSCRICAO: 'Subscricao',
@@ -39,6 +40,10 @@ export function LicencasPage() {
   const { toast, confirm } = useToast();
 
   const [licencas, setLicencas] = useState<SoftwareLicenca[]>([]);
+  // Paginação 23/04/2026
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(50);
+  const [totalLicencas, setTotalLicencas] = useState<number>(0);
   const [categorias, setCategorias] = useState<CategoriaLicenca[]>([]);
   const [softwares, setSoftwares] = useState<Software[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,16 +94,24 @@ export function LicencasPage() {
   const carregarLicencas = useCallback(() => {
     setLoading(true);
     licencaService
-      .listar({
+      .listarPaginado({
         status: filtroStatus || undefined,
         softwareId: filtroSoftware || undefined,
         vencendoEm: filtroVencendo ? parseInt(filtroVencendo) : undefined,
         categoriaId: filtroCategoria || undefined,
+        page,
+        pageSize,
       })
-      .then(setLicencas)
+      .then((res) => {
+        setLicencas(res.items);
+        setTotalLicencas(res.total);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [filtroStatus, filtroSoftware, filtroVencendo, filtroCategoria]);
+  }, [filtroStatus, filtroSoftware, filtroVencendo, filtroCategoria, page, pageSize]);
+
+  // Volta pra página 1 ao mudar filtro.
+  useEffect(() => { setPage(1); }, [filtroStatus, filtroSoftware, filtroVencendo, filtroCategoria, pageSize]);
 
   useEffect(() => {
     carregarLicencas();
@@ -578,6 +591,18 @@ export function LicencasPage() {
                 </tbody>
               </table>
             </div>
+            {!loading && (
+              <Paginator
+                total={totalLicencas}
+                shownCount={licencas.length}
+                page={page}
+                setPage={setPage}
+                pageSize={pageSize}
+                setPageSize={setPageSize}
+                labelSingular="licença"
+                labelPlural="licenças"
+              />
+            )}
           </div>
         )}
       </div>

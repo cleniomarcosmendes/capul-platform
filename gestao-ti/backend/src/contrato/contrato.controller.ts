@@ -158,6 +158,8 @@ export class ContratoController {
     @Query('softwareId') softwareId?: string,
     @Query('fornecedor') fornecedor?: string,
     @Query('vencendoEm') vencendoEm?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
     @CurrentUser() user?: JwtPayload,
     @GestaoTiRole() role?: string,
   ) {
@@ -167,6 +169,8 @@ export class ContratoController {
       softwareId,
       fornecedor,
       vencendoEm: vencendoEm ? parseInt(vencendoEm, 10) : undefined,
+      page: page ? parseInt(page, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
     }, user?.sub, role);
   }
 

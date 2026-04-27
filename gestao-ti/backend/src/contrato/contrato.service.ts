@@ -39,6 +39,8 @@ export class ContratoService {
     softwareId?: string;
     fornecedor?: string;
     vencendoEm?: number;
+    page?: number;
+    pageSize?: number;
   }, usuarioId?: string, role?: string) {
     return this.core.findAll(filters, usuarioId, role);
   }

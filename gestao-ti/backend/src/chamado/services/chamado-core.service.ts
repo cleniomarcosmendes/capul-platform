@@ -66,6 +66,14 @@ export class ChamadoCoreService {
     tecnicoId?: string;
     dataInicio?: string;
     dataFim?: string;
+    /**
+     * Paginação (introduzida em 23/04/2026 após chamados passarem de 500 em
+     * produção). Padrão: página 1, 50 por página. `pageSize` aceita até 200
+     * para permitir export/visualização consolidada, mas o client padrão fica
+     * em 50 para manter a UI ágil.
+     */
+    page?: number;
+    pageSize?: number;
   }) {
     const where: Record<string, unknown> = {};
 
@@ -162,12 +170,23 @@ export class ChamadoCoreService {
       }
     }
 
-    return this.prisma.chamado.findMany({
-      where,
-      include: chamadoInclude,
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
+    // Paginação: default 1 × 50; teto 200 para proteger contra payloads
+    // muito grandes. count e findMany no mesmo $transaction para consistência
+    // (evita total que não bate com a página retornada se houver insert entre
+    // as duas queries).
+    const page = Math.max(1, filters.page ?? 1);
+    const pageSize = Math.min(200, Math.max(1, filters.pageSize ?? 50));
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.chamado.count({ where }),
+      this.prisma.chamado.findMany({
+        where,
+        include: chamadoInclude,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+    return { items, total, page, pageSize };
   }
 
   async findOne(id: string, user: JwtPayload, role: string) {

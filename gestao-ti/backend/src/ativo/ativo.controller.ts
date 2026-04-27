@@ -21,8 +21,17 @@ export class AtivoController {
     @Query('status') status?: string,
     @Query('filialId') filialId?: string,
     @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
-    return this.service.findAll({ tipo, status, filialId, search });
+    return this.service.findAll({
+      tipo,
+      status,
+      filialId,
+      search,
+      page: page ? parseInt(page, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+    });
   }
 
   @Get(':id')

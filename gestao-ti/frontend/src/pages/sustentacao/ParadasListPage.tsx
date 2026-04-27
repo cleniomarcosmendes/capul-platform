@@ -6,6 +6,7 @@ import { paradaService } from '../../services/parada.service';
 import { softwareService } from '../../services/software.service';
 import { Activity, Plus, AlertTriangle, Search, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { exportService } from '../../services/export.service';
+import { Paginator } from '../../components/Paginator';
 import type { RegistroParada, Software, MotivoParada, TipoParada, ImpactoParada, StatusParada } from '../../types';
 
 const tipoLabel: Record<string, string> = {
@@ -51,6 +52,10 @@ export function ParadasListPage() {
   const canManage = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
 
   const [paradas, setParadas] = useState<RegistroParada[]>([]);
+  // Paginação 23/04/2026
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(50);
+  const [totalParadas, setTotalParadas] = useState<number>(0);
   const [softwares, setSoftwares] = useState<Software[]>([]);
   const [motivos, setMotivos] = useState<MotivoParada[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,19 +87,24 @@ export function ParadasListPage() {
 
   useEffect(() => {
     loadParadas();
-  }, [filtroSoftware, filtroTipo, filtroImpacto, filtroStatus, filtroMotivo]);
+  }, [filtroSoftware, filtroTipo, filtroImpacto, filtroStatus, filtroMotivo, page, pageSize]);
+
+  useEffect(() => { setPage(1); }, [filtroSoftware, filtroTipo, filtroImpacto, filtroStatus, filtroMotivo, pageSize]);
 
   async function loadParadas() {
     setLoading(true);
     try {
-      const data = await paradaService.listar({
+      const res = await paradaService.listarPaginado({
         softwareId: filtroSoftware || undefined,
         tipo: (filtroTipo as TipoParada) || undefined,
         impacto: (filtroImpacto as ImpactoParada) || undefined,
         status: (filtroStatus as StatusParada) || undefined,
         motivoParadaId: filtroMotivo || undefined,
+        page,
+        pageSize,
       });
-      setParadas(data);
+      setParadas(res.items);
+      setTotalParadas(res.total);
     } catch { /* empty */ }
     setLoading(false);
   }
@@ -319,6 +329,18 @@ export function ParadasListPage() {
               </table>
             </div>
           </div>
+        )}
+        {!loading && (
+          <Paginator
+            total={totalParadas}
+            shownCount={paradas.length}
+            page={page}
+            setPage={setPage}
+            pageSize={pageSize}
+            setPageSize={setPageSize}
+            labelSingular="parada"
+            labelPlural="paradas"
+          />
         )}
       </div>
     </>

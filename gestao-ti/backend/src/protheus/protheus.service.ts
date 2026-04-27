@@ -69,7 +69,9 @@ export class ProtheusService {
       const ep = config.endpoints.find((e) => e.operacao === 'INFOCLIENTES');
       if (ep) {
         url = `${ep.url}?CODCLIENTE=${encodeURIComponent(matricula)}`;
-        timeoutMs = ep.timeoutMs || 8000;
+        // Default 3s — UX: usuário espera no máximo 3s antes do fallback liberar.
+        // Configurável via Configurador → Integrações API (`timeoutMs` por endpoint).
+        timeoutMs = ep.timeoutMs || 3000;
       } else {
         this.logger.warn('Endpoint INFOCLIENTES nao encontrado na config, usando endpoints disponiveis');
         return null;

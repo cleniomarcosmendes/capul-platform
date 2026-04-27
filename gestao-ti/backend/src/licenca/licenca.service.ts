@@ -9,6 +9,7 @@ import { UpdateLicencaDto } from './dto/update-licenca.dto.js';
 import { CreateCategoriaLicencaDto, UpdateCategoriaLicencaDto } from './dto/create-categoria-licenca.dto.js';
 import { StatusLicenca, ModeloLicenca } from '@prisma/client';
 import { isGestor } from '../common/constants/roles.constant.js';
+import { paginate } from '../common/prisma/paginate.helper.js';
 
 const MODELOS_POR_USUARIO: ModeloLicenca[] = ['POR_USUARIO', 'SUBSCRICAO', 'SAAS'];
 
@@ -39,6 +40,8 @@ export class LicencaService {
     vencendoEm?: number; // dias
     categoriaId?: string;
     avulsas?: boolean;
+    page?: number;
+    pageSize?: number;
   }, role: string) {
     const where: Record<string, unknown> = {};
 
@@ -54,16 +57,22 @@ export class LicencaService {
       where.status = 'ATIVA';
     }
 
-    const licencas = await this.prisma.softwareLicenca.findMany({
+    const resultado = await paginate(this.prisma, this.prisma.softwareLicenca, {
       where,
       include: {
         ...licencaInclude,
         _count: { select: { usuarios: true } },
       },
       orderBy: { dataVencimento: 'asc' },
+      page: filters.page,
+      pageSize: filters.pageSize,
     });
 
-    return this.filterSensitiveFields(licencas, role);
+    // Mantém shape paginado; filtra campos sensíveis dentro de `items`.
+    return {
+      ...resultado,
+      items: this.filterSensitiveFields(resultado.items as never[], role),
+    };
   }
 
   async findOne(id: string, role: string) {

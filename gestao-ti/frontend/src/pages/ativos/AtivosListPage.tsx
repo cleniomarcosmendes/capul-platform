@@ -6,6 +6,7 @@ import { ativoService } from '../../services/ativo.service';
 import { coreApi } from '../../services/api';
 import { Plus, Search, Server, Monitor, Laptop, Printer, Network, HardDrive, Box, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { exportService } from '../../services/export.service';
+import { Paginator } from '../../components/Paginator';
 import type { Ativo, TipoAtivo, StatusAtivo, FilialResumo } from '../../types';
 
 const tipoLabel: Record<TipoAtivo, string> = {
@@ -49,9 +50,14 @@ export function AtivosListPage() {
   const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
 
   const [ativos, setAtivos] = useState<Ativo[]>([]);
+  // Paginação 23/04/2026
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(50);
+  const [totalAtivosGeral, setTotalAtivosGeral] = useState<number>(0);
   const [filiais, setFiliais] = useState<FilialResumo[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
+  const [buscaDebounced, setBuscaDebounced] = useState('');
   const [filtroTipo, setFiltroTipo] = useState<TipoAtivo | ''>('');
   const [filtroStatus, setFiltroStatus] = useState<StatusAtivo | ''>('');
   const [filtroFilial, setFiltroFilial] = useState('');
@@ -88,19 +94,32 @@ export function AtivosListPage() {
     coreApi.get('/filiais').then(({ data }) => setFiliais(data)).catch(() => {});
   }, []);
 
+  // Debounce da busca — 350ms depois da última tecla dispara novo fetch.
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaDebounced(busca), 350);
+    return () => clearTimeout(t);
+  }, [busca]);
+
   useEffect(() => {
     setLoading(true);
     ativoService
-      .listar({
+      .listarPaginado({
         tipo: filtroTipo || undefined,
         status: filtroStatus || undefined,
         filialId: filtroFilial || undefined,
-        search: busca || undefined,
+        search: buscaDebounced.trim() || undefined,
+        page,
+        pageSize,
       })
-      .then(setAtivos)
+      .then((res) => {
+        setAtivos(res.items);
+        setTotalAtivosGeral(res.total);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [filtroTipo, filtroStatus, filtroFilial, busca]);
+  }, [filtroTipo, filtroStatus, filtroFilial, buscaDebounced, page, pageSize]);
+  // Volta pra página 1 ao mudar filtro.
+  useEffect(() => { setPage(1); }, [filtroTipo, filtroStatus, filtroFilial, buscaDebounced, pageSize]);
 
   const totalAtivos = ativos.filter((a) => a.status === 'ATIVO').length;
   const totalManutencao = ativos.filter((a) => a.status === 'EM_MANUTENCAO').length;
@@ -228,6 +247,18 @@ export function AtivosListPage() {
               </tbody>
             </table>
           </div>
+        )}
+        {!loading && (
+          <Paginator
+            total={totalAtivosGeral}
+            shownCount={ativos.length}
+            page={page}
+            setPage={setPage}
+            pageSize={pageSize}
+            setPageSize={setPageSize}
+            labelSingular="ativo"
+            labelPlural="ativos"
+          />
         )}
       </div>
     </>

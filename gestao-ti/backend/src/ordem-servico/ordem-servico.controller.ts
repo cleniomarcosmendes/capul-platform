@@ -17,8 +17,18 @@ export class OrdemServicoController {
   constructor(private readonly service: OrdemServicoService) {}
 
   @Get()
-  findAll(@Query('status') status?: StatusOS, @Query('filialId') filialId?: string) {
-    return this.service.findAll(status, filialId);
+  findAll(
+    @Query('status') status?: StatusOS,
+    @Query('filialId') filialId?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.service.findAll(
+      status,
+      filialId,
+      page ? parseInt(page, 10) : undefined,
+      pageSize ? parseInt(pageSize, 10) : undefined,
+    );
   }
 
   @Get(':id')

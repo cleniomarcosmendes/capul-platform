@@ -10,6 +10,7 @@ import { UpdateSoftwareDto } from './dto/update-software.dto.js';
 import { CreateModuloDto } from './dto/create-modulo.dto.js';
 import { UpdateModuloDto } from './dto/update-modulo.dto.js';
 import { TipoSoftware, Criticidade, StatusSoftware, StatusModulo } from '@prisma/client';
+import { paginate } from '../common/prisma/paginate.helper.js';
 
 const softwareListInclude = {
   equipeResponsavel: { select: { id: true, nome: true, sigla: true, cor: true } },
@@ -45,6 +46,8 @@ export class SoftwareService {
     criticidade?: Criticidade;
     status?: StatusSoftware;
     equipeId?: string;
+    page?: number;
+    pageSize?: number;
   }) {
     const where: Record<string, unknown> = {};
     if (filters.tipo) where.tipo = filters.tipo;
@@ -52,10 +55,12 @@ export class SoftwareService {
     if (filters.status) where.status = filters.status;
     if (filters.equipeId) where.equipeResponsavelId = filters.equipeId;
 
-    return this.prisma.software.findMany({
+    return paginate(this.prisma, this.prisma.software, {
       where,
       include: softwareListInclude,
       orderBy: { nome: 'asc' },
+      page: filters.page,
+      pageSize: filters.pageSize,
     });
   }
 
