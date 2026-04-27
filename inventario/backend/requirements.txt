@@ -4,38 +4,45 @@
 # =================================
 
 # Framework Web
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
+# Auditoria 25/04/2026 #13 — atualizado para fechar CVEs em FastAPI/Starlette
+fastapi==0.121.1                # 25/04 #13 round 3 — starlette 0.47+ traz CVE-2025-54121 e CVE-2025-62727
+uvicorn[standard]==0.32.1
 
 # Banco de Dados
-sqlalchemy==2.0.23
-psycopg2-binary==2.9.9          # PostgreSQL driver
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10          # PostgreSQL driver
 
 # Autenticação e Segurança
-pyjwt==2.8.0                    # JSON Web Tokens
-bcrypt==4.3.0                   # Bcrypt hashing (compatível com passlib 1.7.4)
-passlib[bcrypt]==1.7.4          # Password hashing
-python-multipart==0.0.6        # Form data parsing
+pyjwt==2.12.0                    # 25/04 #13 round 2 — CVE-2026-32597 (havia residual em 2.10.1)
+bcrypt==4.3.0                    # Bcrypt hashing (compatível com passlib 1.7.4)
+passlib[bcrypt]==1.7.4           # Password hashing
+python-multipart==0.0.26         # 6 CVEs (round 2 — 0.0.22 e 0.0.26)
 
 # Validação de Dados
-pydantic==2.5.0                # Data validation
+pydantic==2.10.3                # Data validation
 
 # Utilitários
-python-dotenv==1.0.0           # Environment variables
-python-dateutil==2.8.2         # Date utilities
+python-dotenv==1.2.2            # CVE-2026-28684 (round 2)
+python-dateutil==2.9.0.post0    # Date utilities
 
 # HTTP e Requests
-httpx==0.25.2                  # HTTP client for async
-requests==2.31.0               # HTTP client for sync (usado em sync_protheus v2.14.0)
+httpx==0.28.1                   # HTTP client for async
+requests==2.33.0                # 5 CVEs (round 2 — 2.32.4 e 2.33.0)
 
 # Cache (v2.19.13)
-redis==5.0.1                   # Redis client for caching
+redis==5.2.1                    # Redis client for caching
+
+# Logs estruturados em JSON (auditoria observabilidade 26/04/2026 #1)
+python-json-logger==3.2.1       # JsonFormatter pra agregação futura (Loki/ELK)
 
 # Rate Limiting (seguranca — protecao contra forca bruta)
-slowapi==0.1.9                 # Rate limiter para FastAPI
+slowapi==0.1.9                  # Rate limiter para FastAPI
 
 # Desenvolvimento e Testes
-pytest==7.4.3                  # Testing framework
-pytest-asyncio==0.21.1         # Async testing
-black==23.11.0                 # Code formatting
-flake8==6.1.0                  # Code linting
+# Versões 9.0.3 (pytest) e 26.3.1 (black) reportadas pelo pip-audit não existem
+# no PyPI no momento (versões do "futuro"). Ficamos com 8.3.4 / 24.10.0.
+# Como são DEV deps, NÃO vão pra runtime — vulns aceitas no escopo da auditoria 25/04 #13.
+pytest==8.3.4                   # CVE-2025-71176 (fix esperado em 9.0.3 quando lançar)
+pytest-asyncio==0.24.0          # Async testing
+black==24.10.0                  # CVE-2026-32274 (fix esperado em 26.3.1 quando lançar)
+flake8==7.1.1                   # Code linting

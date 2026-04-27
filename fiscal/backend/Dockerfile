@@ -37,9 +37,16 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 
-# Diretório montado em runtime: /app/certs (read-only) — certificado A1 .pfx
+# Diretório montado em runtime: /app/certs (read-write — Configurador faz upload do A1)
 # Diretório montado em runtime: /app/xmls (read-write) — XMLs baixados (cache de disco opcional)
 RUN mkdir -p /app/certs /app/xmls
+
+# Hardening — rodar como usuário não-root (auditoria 25/04/2026 #2)
+# chown abrange /app/certs e /app/xmls criados acima; o volume host ./fiscal/backend/certs
+# é montado por cima — appuser precisa ler o .pfx (cert pre-existente) e gravar novos uploads.
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
+    && chown -R appuser:appgroup /app
+USER appuser
 
 ENV NODE_ENV=production
 ENV TZ=America/Sao_Paulo

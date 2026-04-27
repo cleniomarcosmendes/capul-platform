@@ -13,6 +13,7 @@ import * as express from 'express';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -24,6 +25,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
+  @Public()
   @Throttle({ default: { ttl: 60000, limit: 10 } }) // 10 tentativas por minuto
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto, @Req() req: express.Request) {
@@ -33,6 +35,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @Public()
   @HttpCode(HttpStatus.OK)
   async refresh(@Body() dto: RefreshTokenDto) {
     return this.authService.refresh(dto.refreshToken);
@@ -98,6 +101,7 @@ export class AuthController {
   }
 
   @Post('mfa/login')
+  @Public()
   @Throttle({ default: { ttl: 60000, limit: 5 } })
   @HttpCode(HttpStatus.OK)
   async mfaLogin(@Body() body: { mfaToken: string; code: string }, @Req() req: express.Request) {

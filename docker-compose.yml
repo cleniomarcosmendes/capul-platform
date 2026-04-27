@@ -1,3 +1,14 @@
+# Rotação de logs aplicada a todos os serviços — auditoria 26/04/2026 #1
+# (Observabilidade). Sem isso, /var/lib/docker/containers/*/-json.log cresce
+# indefinidamente até encher o disco. Com 50m × 5 arquivos: ~250MB max por
+# container, ~3.25GB total para os 13 serviços.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+    compress: "true"
+
 services:
   # =======================================
   # REVERSE PROXY
@@ -19,6 +30,18 @@ services:
       - inventario-frontend
       - fiscal-frontend
     restart: unless-stopped
+    logging: *default-logging
+    # Limites de recursos — auditoria 25/04/2026 #5 (proxy reverso, todo tráfego passa)
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpus: 0.5
+    # Healthcheck — auditoria 25/04/2026 #6
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--no-check-certificate", "https://127.0.0.1/api/v1/auth/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   # =======================================
   # INFRAESTRUTURA
@@ -42,6 +65,11 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    logging: *default-logging
+    # Limites de recursos — auditoria 25/04/2026 #5 (DB pode crescer com queries pesadas)
+    mem_limit: 2g
+    mem_reservation: 256m
+    cpus: 1.0
 
   redis:
     image: redis:7-alpine
@@ -54,6 +82,18 @@ services:
     volumes:
       - redis_data:/data
     restart: unless-stopped
+    logging: *default-logging
+    # Limites de recursos — auditoria 25/04/2026 #5
+    mem_limit: 256m
+    mem_reservation: 32m
+    cpus: 0.25
+    # Healthcheck — auditoria 25/04/2026 #6
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "--no-auth-warning", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # =======================================
   # CORE — Auth Gateway + Portal Hub
@@ -77,6 +117,18 @@ services:
       redis:
         condition: service_started
     restart: unless-stopped
+    logging: *default-logging
+    # Limites de recursos — auditoria 25/04/2026 #5 (NestJS + Prisma + bcrypt)
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpus: 0.5
+    # Healthcheck — auditoria 25/04/2026 #6
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/v1/auth/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   hub:
     build: ./hub
@@ -85,6 +137,18 @@ services:
     depends_on:
       - auth-gateway
     restart: unless-stopped
+    logging: *default-logging
+    # Limites de recursos — auditoria 25/04/2026 #5 (frontend nginx static)
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpus: 0.25
+    # Healthcheck — auditoria 25/04/2026 #6
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5170/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   configurador:
     build: ./configurador
@@ -93,6 +157,18 @@ services:
     depends_on:
       - auth-gateway
     restart: unless-stopped
+    logging: *default-logging
+    # Limites de recursos — auditoria 25/04/2026 #5 (frontend nginx static)
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpus: 0.25
+    # Healthcheck — auditoria 25/04/2026 #6
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5175/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # =======================================
   # MODULO — Inventario
@@ -124,6 +200,11 @@ services:
       redis:
         condition: service_started
     restart: unless-stopped
+    logging: *default-logging
+    # Limites de recursos — auditoria 25/04/2026 #5 (FastAPI + sync Protheus)
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpus: 0.5
 
   inventario-frontend:
     build: ./inventario/frontend
@@ -132,6 +213,18 @@ services:
     depends_on:
       - inventario-backend
     restart: unless-stopped
+    logging: *default-logging
+    # Limites de recursos — auditoria 25/04/2026 #5 (frontend nginx static)
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpus: 0.25
+    # Healthcheck — auditoria 25/04/2026 #6
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5174/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # =======================================
   # MODULO — Gestao de T.I.
@@ -156,6 +249,18 @@ services:
       redis:
         condition: service_started
     restart: unless-stopped
+    logging: *default-logging
+    # Limites de recursos — auditoria 25/04/2026 #5 (NestJS + Prisma + uploads)
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpus: 0.5
+    # Healthcheck — auditoria 25/04/2026 #6
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/api/v1/gestao-ti/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   gestao-ti-frontend:
     build: ./gestao-ti/frontend
@@ -164,6 +269,18 @@ services:
     depends_on:
       - gestao-ti-backend
     restart: unless-stopped
+    logging: *default-logging
+    # Limites de recursos — auditoria 25/04/2026 #5 (frontend nginx static)
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpus: 0.25
+    # Healthcheck — auditoria 25/04/2026 #6
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5173/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # =======================================
   # MODULO — Fiscal
@@ -208,6 +325,11 @@ services:
       redis:
         condition: service_started
     restart: unless-stopped
+    logging: *default-logging
+    # Limites de recursos — auditoria 25/04/2026 #5 (NestJS + BullMQ + parsers XML)
+    mem_limit: 768m
+    mem_reservation: 128m
+    cpus: 0.75
 
   fiscal-frontend:
     build: ./fiscal/frontend
@@ -216,6 +338,18 @@ services:
     depends_on:
       - fiscal-backend
     restart: unless-stopped
+    logging: *default-logging
+    # Limites de recursos — auditoria 25/04/2026 #5 (frontend nginx static)
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpus: 0.25
+    # Healthcheck — auditoria 25/04/2026 #6
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5176/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # =======================================
   # FERRAMENTAS
@@ -230,6 +364,18 @@ services:
       - "127.0.0.1:5050:80"  # Apenas acesso local (localhost do servidor)
     depends_on:
       - postgres
+    logging: *default-logging
+    # Limites de recursos — auditoria 25/04/2026 #5 (uso intermitente administrativo)
+    mem_limit: 512m
+    mem_reservation: 256m
+    cpus: 0.25
+    # Healthcheck — auditoria 25/04/2026 #6 (pgAdmin expõe /misc/ping)
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/misc/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
 volumes:
   postgres_data:

@@ -23,6 +23,11 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/tsconfig.json ./
 COPY --from=builder /app/tsconfig.seed.json ./
 
+# Hardening — rodar como usuário não-root (auditoria 25/04/2026 #2)
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
+    && chown -R appuser:appgroup /app
+USER appuser
+
 ENV NODE_ENV=production
 EXPOSE 3001
 

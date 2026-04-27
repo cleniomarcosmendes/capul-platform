@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { REDIS_CONNECTION } from '../bullmq/bullmq.module.js';
 import { MailTransportService } from '../alertas/mail-transport.service.js';
 import { SefazCaService } from '../sefaz/sefaz-ca.service.js';
+import { Public } from '../common/decorators/public.decorator.js';
 
 interface CheckResult {
   ok: boolean;
@@ -49,6 +50,7 @@ interface HealthResponse {
  * Retorna HTTP 200 em `ok`/`degraded` e HTTP 503 em `down`. O Docker/K8s
  * healthcheck deve considerar 200 como saudável.
  */
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(
