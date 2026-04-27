@@ -15,10 +15,16 @@ Tipos de anomalias detectadas:
 
 import logging
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
+
+# Helper — modelos do schema usam DateTime(timezone=True). Misturar com
+# _now_utc() (naive) gera "can't subtract offset-naive and offset-aware".
+# Fix 26/04/2026.
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
 
 from app.models.models import (
     InventoryList,
@@ -62,7 +68,7 @@ class Anomaly:
         self.counting_list_id = counting_list_id
         self.counting_list_code = counting_list_code
         self.affected_products = affected_products
-        self.detected_at = detected_at or datetime.utcnow()
+        self.detected_at = detected_at or _now_utc()
         self.extra_metadata = metadata or {}
 
     def to_dict(self) -> Dict[str, Any]:
@@ -170,7 +176,7 @@ def detect_orphan_products(db: Session, hours_threshold: int = 24) -> List[Anoma
     anomalies = []
 
     try:
-        cutoff = datetime.utcnow() - timedelta(hours=hours_threshold)
+        cutoff = _now_utc() - timedelta(hours=hours_threshold)
 
         # Buscar listas de contagem ativas criadas há mais de N horas
         counting_lists = db.query(CountingList).filter(
@@ -192,7 +198,7 @@ def detect_orphan_products(db: Session, hours_threshold: int = 24) -> List[Anoma
                     InventoryList.id == counting_list.inventory_id
                 ).first()
 
-                hours_open = (datetime.utcnow() - counting_list.created_at).total_seconds() / 3600
+                hours_open = (_now_utc() - counting_list.created_at).total_seconds() / 3600
 
                 anomaly = Anomaly(
                     severity="HIGH",
@@ -242,7 +248,7 @@ def detect_stuck_lists(db: Session, days_threshold: int = 7) -> List[Anomaly]:
     anomalies = []
 
     try:
-        cutoff = datetime.utcnow() - timedelta(days=days_threshold)
+        cutoff = _now_utc() - timedelta(days=days_threshold)
 
         stuck_lists = db.query(CountingList).filter(
             CountingList.list_status == "ABERTA",
@@ -254,7 +260,7 @@ def detect_stuck_lists(db: Session, days_threshold: int = 7) -> List[Anomaly]:
                 InventoryList.id == counting_list.inventory_id
             ).first()
 
-            days_open = (datetime.utcnow() - counting_list.created_at).days
+            days_open = (_now_utc() - counting_list.created_at).days
 
             # Contar produtos contados vs total
             total_items = db.query(CountingListItem).filter(
@@ -323,7 +329,7 @@ def detect_stuck_inventories(db: Session, days_threshold: int = 3) -> List[Anoma
     anomalies = []
 
     try:
-        cutoff = datetime.utcnow() - timedelta(days=days_threshold)
+        cutoff = _now_utc() - timedelta(days=days_threshold)
 
         # Buscar inventários IN_PROGRESS atualizados há muito tempo
         stuck_inventories = db.query(InventoryList).filter(
@@ -332,7 +338,7 @@ def detect_stuck_inventories(db: Session, days_threshold: int = 3) -> List[Anoma
         ).all()
 
         for inventory in stuck_inventories:
-            days_idle = (datetime.utcnow() - inventory.updated_at).days
+            days_idle = (_now_utc() - inventory.updated_at).days
 
             # Verificar se há listas de contagem ativas
             active_lists = db.query(CountingList).filter(
@@ -556,7 +562,7 @@ def get_anomaly_summary(anomalies: List[Anomaly]) -> Dict[str, Any]:
     """
     summary = {
         "total_anomalies": len(anomalies),
-        "detected_at": datetime.utcnow().isoformat(),
+        "detected_at": _now_utc().isoformat(),
         "by_severity": {
             "CRITICAL": len([a for a in anomalies if a.severity == "CRITICAL"]),
             "HIGH": len([a for a in anomalies if a.severity == "HIGH"]),
