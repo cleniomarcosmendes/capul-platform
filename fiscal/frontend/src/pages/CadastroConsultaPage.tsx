@@ -300,6 +300,26 @@ export function CadastroConsultaPage() {
               <Row label="Razão social" value={result.razaoSocial ?? '-'} wide />
               {result.nomeFantasia && <Row label="Nome fantasia" value={result.nomeFantasia} wide />}
               <Row label="CNPJ" value={fmtCnpj(result.cnpj)} />
+              {/* Situação CPF/CNPJ na Receita Federal — fonte distinta da Situação IE.
+                  CNPJ: vem do BrasilAPI/ReceitaWS. CPF: limitação intransponível (LGPD).
+                  Inferimos pelo número de dígitos do `result.cnpj` (campo único que
+                  guarda ambos no backend). */}
+              {result.cnpj.replace(/\D/g, '').length === 14 ? (
+                <Row
+                  label="Situação CNPJ (Receita)"
+                  value={
+                    result.dadosReceita?.situacao
+                      ? result.dadosReceita.situacao +
+                        (result.dadosReceita.dataSituacao ? ` desde ${result.dadosReceita.dataSituacao}` : '')
+                      : 'Não disponível'
+                  }
+                />
+              ) : (
+                <Row
+                  label="Situação CPF (Receita)"
+                  value="Não disponível via API pública (LGPD) — consulte portal SEFAZ/Receita"
+                />
+              )}
               <Row label="Inscrição estadual" value={result.inscricaoEstadual ?? '-'} />
               <Row label="CNAE principal" value={result.cnae ?? '-'} />
               <Row label="Início de atividade" value={result.inicioAtividade ?? '-'} />
