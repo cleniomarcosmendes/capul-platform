@@ -387,14 +387,6 @@ export function NfeConsultaPage() {
               >
                 Atualizar status no SEFAZ
               </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                leftIcon={<Printer className="h-4 w-4" />}
-                onClick={() => window.print()}
-              >
-                Imprimir
-              </Button>
             </div>
           </section>
 

@@ -97,33 +97,16 @@ export class DanfeGeneratorService {
 
     // Folha 1: distribui blocos verticalmente e calcula onde a tabela começa/termina
     const layoutFolha1 = this.planejarFolha1(parsed);
-    // Produtos que cabem na folha 1
-    const { produtosFolha1, produtosRestantes } = this.dividirProdutosPaginaInicial(
+    // Distribui produtos em folhas usando ALTURA REAL de cada um (não estimativa
+    // fixa de 18pt). Resolve overflow visual quando produtos têm descrição
+    // multi-linha (ex.: NCM longo + N.FCI UUID — chega a 40+pt).
+    const folhasProdutos = this.distribuirProdutosEmFolhas(
+      doc,
       produtos,
-      layoutFolha1.tabelaInicioY,
-      layoutFolha1.tabelaFimY,
-      produtos.length === 0,
+      layoutFolha1.tabelaFimY - layoutFolha1.tabelaInicioY,
     );
-
-    // Folhas seguintes
-    const folhasSeguintes: NfeProduto[][] = [];
-    if (produtosRestantes.length > 0) {
-      // Último grupo precisa deixar espaço para "dados adicionais" no final
-      // da última folha. Primeiras páginas de continuação usam espaço cheio.
-      const linhasPorPagCheia = this.capacidadeTabelaFolhaContinua(false);
-      const linhasPorPagUltima = this.capacidadeTabelaFolhaContinua(true);
-      let restantes = [...produtosRestantes];
-      while (restantes.length > 0) {
-        // Se o que sobra cabe na última página (com dados adicionais reservado), encerra.
-        if (restantes.length <= linhasPorPagUltima) {
-          folhasSeguintes.push(restantes);
-          restantes = [];
-        } else {
-          folhasSeguintes.push(restantes.slice(0, linhasPorPagCheia));
-          restantes = restantes.slice(linhasPorPagCheia);
-        }
-      }
-    }
+    const produtosFolha1 = folhasProdutos[0] ?? [];
+    const folhasSeguintes: NfeProduto[][] = folhasProdutos.slice(1);
 
     const totalFolhas = 1 + folhasSeguintes.length;
 
@@ -142,7 +125,10 @@ export class DanfeGeneratorService {
     this.renderBlocoIdentificacaoFiscal(doc, parsed, yAposHeader);
     const yAposFiscal = yAposHeader + 18; // 1 linha de dados fiscais
     this.renderBlocoDestinatario(doc, parsed, yAposFiscal);
-    const yAposDest = yAposFiscal + 58; // 3 linhas do destinatário
+    // hTotal do bloco destinatário = 10 (título) + 3 × 18 (linhas) = 64pt.
+    // Antes estava 58 — sobrepunha o título da FATURA/DUPLICATA na última linha
+    // (MUNICÍPIO/UF/IE/HORA), visível como "UNAI" colado em "FATURA / DUPLICATA".
+    const yAposDest = yAposFiscal + 64;
     const yFatura = this.renderBlocoFatura(doc, parsed, yAposDest);
     const yCalcImposto = this.renderBlocoCalculoImposto(doc, parsed, yFatura);
     const yTransporte = this.renderBlocoTransporte(doc, parsed, yCalcImposto);
@@ -1275,7 +1261,7 @@ export class DanfeGeneratorService {
     y += this.HEADER_DANFE_H;
     // Faixa fiscal já faz parte do HEADER_DANFE_H — não duplicar
     y += 18; // no-op do renderBlocoIdentificacaoFiscal
-    y += 58; // bloco destinatário (3 linhas)
+    y += 64; // bloco destinatário = 10 (título) + 3 × 18 (linhas)
     // Fatura opcional
     const temFatura = parsed.cobranca.fatura?.numero || parsed.cobranca.duplicatas.length > 0;
     if (temFatura) y += 10 + 32 + 3;
@@ -1291,47 +1277,94 @@ export class DanfeGeneratorService {
   }
 
   /**
-   * Divide os produtos entre "cabem na folha 1" vs "vão pras folhas seguintes".
-   * Usa altura média de 18pt por linha (bom enough para heurística — o loop
-   * de render ajusta a altura real). Se nenhum produto → volta tudo.
+   * Distribui produtos em folhas usando a altura REAL de cada linha (medida
+   * via `calcularAlturaLinha` — mesma usada no render). Resolve overflow
+   * visual que ocorria quando descrições multi-linha (NCM longo + N.FCI UUID)
+   * estouravam a estimativa de 18pt fixos.
+   *
+   * Estratégia:
+   *  - Folha 1: usa todo o espaço disponível (`espacoFolha1`)
+   *  - Folhas continuação: usa `espacoFolhaContinua` (calculado via
+   *    capacidadeTabelaFolhaContinua, agora em pontos não em linhas)
+   *  - Reserva DADOS_ADICIONAIS_H na ÚLTIMA folha (onde o bloco de info
+   *    complementar é renderizado)
    */
-  private dividirProdutosPaginaInicial(
+  private distribuirProdutosEmFolhas(
+    doc: PDFKit.PDFDocument,
     produtos: NfeProduto[],
-    tabelaInicioY: number,
-    tabelaFimY: number,
-    semProdutos: boolean,
-  ): { produtosFolha1: NfeProduto[]; produtosRestantes: NfeProduto[] } {
-    if (semProdutos) {
-      return { produtosFolha1: [], produtosRestantes: [] };
-    }
-    const espaco = tabelaFimY - tabelaInicioY;
-    const altMediaLinha = 18;
-    const cabem = Math.max(1, Math.floor(espaco / altMediaLinha));
-    // Se todos cabem E sobra espaço >= DADOS_ADICIONAIS_H, a folha 1 é a única.
-    const espacoSobra = espaco - cabem * altMediaLinha;
-    const cabeDadosAdicionais = espacoSobra >= this.DADOS_ADICIONAIS_H;
-    if (produtos.length <= cabem) {
-      if (cabeDadosAdicionais) {
-        return { produtosFolha1: produtos, produtosRestantes: [] };
+    espacoFolha1: number,
+  ): NfeProduto[][] {
+    if (produtos.length === 0) return [[]];
+
+    const w = this.PAGE_W - 2 * this.MARGIN;
+    const larguraDescricao = w * this.colunas.descricao - 4;
+
+    // Pré-calcula altura real de cada produto (1 vez só)
+    const alturas = produtos.map((p) => {
+      const desc = this.montarDescricaoProdutoExtendida(p);
+      return this.calcularAlturaLinha(doc, desc, larguraDescricao);
+    });
+
+    const yInicioContinua = this.MARGIN + this.HEADER_DANFE_H + 4 + 24;
+    const espacoContinua = this.PAGE_H - this.MARGIN - this.FOOTER_H - yInicioContinua;
+    const reservaDadosAdic = this.DADOS_ADICIONAIS_H;
+
+    const folhas: NfeProduto[][] = [];
+    let folhaAtual: NfeProduto[] = [];
+    let alturaAcum = 0;
+    let espacoFolhaAtual = espacoFolha1;
+    let ehFolha1 = true;
+
+    for (let i = 0; i < produtos.length; i++) {
+      const altura = alturas[i]!;
+      // Se for a ÚLTIMA tentativa de encaixar, reservar espaço para
+      // DADOS_ADICIONAIS — só vale na folha que vai ter o bloco de info.
+      const ehUltimoProduto = i === produtos.length - 1;
+      const reservaNecessaria =
+        ehUltimoProduto && folhas.length === 0 && ehFolha1
+          ? reservaDadosAdic
+          : 0;
+      const limite = espacoFolhaAtual - reservaNecessaria;
+
+      if (alturaAcum + altura > limite && folhaAtual.length > 0) {
+        // Não cabe — fecha folha atual e abre nova
+        folhas.push(folhaAtual);
+        folhaAtual = [];
+        alturaAcum = 0;
+        ehFolha1 = false;
+        espacoFolhaAtual = espacoContinua;
       }
-      // Cabem mas sem espaço pro rodapé — manda uma parte pra folha 2 forçando
-      // que a última folha tenha espaço.
-      const cabeComRodape = Math.max(
-        1,
-        Math.floor((espaco - this.DADOS_ADICIONAIS_H) / altMediaLinha),
-      );
-      if (produtos.length <= cabeComRodape) {
-        return { produtosFolha1: produtos, produtosRestantes: [] };
-      }
-      return {
-        produtosFolha1: produtos.slice(0, cabeComRodape),
-        produtosRestantes: produtos.slice(cabeComRodape),
-      };
+
+      folhaAtual.push(produtos[i]!);
+      alturaAcum += altura;
     }
-    return {
-      produtosFolha1: produtos.slice(0, cabem),
-      produtosRestantes: produtos.slice(cabem),
-    };
+
+    if (folhaAtual.length > 0) folhas.push(folhaAtual);
+
+    // Última folha precisa de espaço para DADOS_ADICIONAIS. Se a última
+    // folha está cheia demais, move últimos produtos pra uma folha extra.
+    while (folhas.length > 0) {
+      const ultima = folhas[folhas.length - 1]!;
+      const espacoUltima =
+        folhas.length === 1 ? espacoFolha1 : espacoContinua;
+      let alturaUltima = 0;
+      for (let i = 0; i < ultima.length; i++) {
+        const idxOriginal = produtos.indexOf(ultima[i]!);
+        alturaUltima += alturas[idxOriginal]!;
+      }
+      if (alturaUltima + reservaDadosAdic <= espacoUltima) break;
+      // Não há espaço para DADOS_ADICIONAIS — move o último produto pra nova folha
+      if (ultima.length <= 1) {
+        // Se só tem 1 produto e ainda não cabe, criar nova folha vazia para os
+        // dados adicionais (caso patológico — NF-e com 1 produto gigantesco).
+        folhas.push([]);
+        break;
+      }
+      const ultimoProd = ultima.pop()!;
+      folhas.push([ultimoProd]);
+    }
+
+    return folhas;
   }
 
   // ============================================================
@@ -1519,6 +1552,15 @@ export class DanfeGeneratorService {
 
   private formatDateShort(iso: string | null | undefined): string {
     if (!iso) return '-';
+    // Strings `YYYY-MM-DD` (sem hora — ex.: `<dVenc>` de duplicatas) são datas
+    // calendáricas, não timestamps. `new Date('2026-04-30')` interpreta como
+    // `2026-04-30T00:00:00Z` (UTC); converter para America/Sao_Paulo (UTC-3)
+    // volta para 29/04 21:00, mostrando dia anterior. Bypass: split direto da
+    // string, sem passar por Date. Mesma lógica do `fmtData` no frontend.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+      const [y, m, day] = iso.split('-');
+      return `${day}/${m}/${y}`;
+    }
     const d = new Date(iso);
     if (isNaN(d.getTime())) return iso;
     return d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
