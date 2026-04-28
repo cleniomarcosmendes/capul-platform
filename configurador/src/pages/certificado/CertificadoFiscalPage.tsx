@@ -27,6 +27,8 @@ export function CertificadoFiscalPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [substituindoAtivo, setSubstituindoAtivo] = useState(false);
+  const [editObsCert, setEditObsCert] = useState<CertificadoPublico | null>(null);
 
   async function load() {
     try {
@@ -159,20 +161,49 @@ export function CertificadoFiscalPage() {
                   )}
                 </div>
 
-                {isAdmin && !c.ativo && (
+                {isAdmin && (
                   <div className="flex flex-col gap-2">
-                    <button
-                      onClick={() => handleAtivar(c.id)}
-                      className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-                    >
-                      Ativar
-                    </button>
-                    <button
-                      onClick={() => handleRemover(c.id)}
-                      className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-red-50 hover:text-red-700 transition-colors"
-                    >
-                      Remover
-                    </button>
+                    {c.ativo ? (
+                      <>
+                        <button
+                          onClick={() => {
+                            setSubstituindoAtivo(true);
+                            setUploadOpen(true);
+                          }}
+                          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                          title="Faz upload de um novo certificado. O atual continua ativo até você ativar o novo."
+                        >
+                          Substituir
+                        </button>
+                        <button
+                          onClick={() => setEditObsCert(c)}
+                          className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                        >
+                          Editar observações
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleAtivar(c.id)}
+                          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                        >
+                          Ativar
+                        </button>
+                        <button
+                          onClick={() => setEditObsCert(c)}
+                          className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                        >
+                          Editar observações
+                        </button>
+                        <button
+                          onClick={() => handleRemover(c.id)}
+                          className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-red-50 hover:text-red-700 transition-colors"
+                        >
+                          Remover
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -181,12 +212,131 @@ export function CertificadoFiscalPage() {
         </div>
       )}
 
-      {uploadOpen && <UploadModal onClose={() => setUploadOpen(false)} onUploaded={load} />}
+      {uploadOpen && (
+        <UploadModal
+          modoSubstituicao={substituindoAtivo}
+          onClose={() => {
+            setUploadOpen(false);
+            setSubstituindoAtivo(false);
+          }}
+          onUploaded={() => {
+            load();
+            setSubstituindoAtivo(false);
+          }}
+        />
+      )}
+      {editObsCert && (
+        <EditObsModal
+          cert={editObsCert}
+          onClose={() => setEditObsCert(null)}
+          onSaved={() => {
+            load();
+            setEditObsCert(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded: () => void }) {
+function EditObsModal({
+  cert,
+  onClose,
+  onSaved,
+}: {
+  cert: CertificadoPublico;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [observacoes, setObservacoes] = useState(cert.observacoes ?? '');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      setError(null);
+      await fiscalApi.patch(`/certificado/${cert.id}`, {
+        observacoes: observacoes.trim() || null,
+      });
+      toast.success('Observações atualizadas');
+      onSaved();
+    } catch (err) {
+      setError(extractApiError(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl"
+      >
+        <h2 className="mb-1 text-lg font-bold text-slate-900">Editar observações</h2>
+        <p className="mb-4 text-xs text-slate-500">
+          Texto livre para documentar contexto operacional (renovação, próxima
+          data, responsável, etc.). Não altera o certificado em si.
+        </p>
+        <div className="mb-4 rounded-md bg-slate-50 p-3 text-xs text-slate-600">
+          <span className="font-mono text-slate-900">{cert.cnpjMascarado}</span>
+          {' · '}
+          <code className="rounded bg-white px-1.5">{cert.nomeArquivo}</code>
+        </div>
+        <label className="mb-4 block">
+          <span className="mb-1 block text-xs font-medium text-slate-700">
+            Observações
+          </span>
+          <textarea
+            value={observacoes}
+            onChange={(e) => setObservacoes(e.target.value)}
+            rows={4}
+            maxLength={500}
+            placeholder="Ex.: Renovado em 15/03/2026 por SyngularID. Próxima renovação prevista para 15/03/2027."
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500"
+          />
+          <span className="mt-1 block text-right text-[11px] text-slate-400">
+            {observacoes.length} / 500
+          </span>
+        </label>
+        {error && (
+          <div className="mb-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800">
+            {error}
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:bg-emerald-300 transition-colors"
+          >
+            {loading ? 'Salvando…' : 'Salvar'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function UploadModal({
+  modoSubstituicao,
+  onClose,
+  onUploaded,
+}: {
+  modoSubstituicao: boolean;
+  onClose: () => void;
+  onUploaded: () => void;
+}) {
   const [file, setFile] = useState<File | null>(null);
   const [senha, setSenha] = useState('');
   const [observacoes, setObservacoes] = useState('');
@@ -225,11 +375,20 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
         onSubmit={handleSubmit}
         className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl"
       >
-        <h2 className="mb-1 text-lg font-bold text-slate-900">Upload de certificado A1</h2>
+        <h2 className="mb-1 text-lg font-bold text-slate-900">
+          {modoSubstituicao ? 'Substituir certificado ativo' : 'Upload de certificado A1'}
+        </h2>
         <p className="mb-4 text-xs text-slate-500">
           Arquivo .pfx/.p12 (até 100 KB). A senha é cifrada com AES-256-GCM antes de ser
           persistida. O certificado não é ativado automaticamente — ative depois via botão.
         </p>
+        {modoSubstituicao && (
+          <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            <strong>Atenção — modo substituição:</strong> o certificado atual continua ativo
+            até você clicar em "Ativar" no novo. Não há interrupção do serviço durante o
+            upload. O antigo só pode ser removido depois que você ativar o novo.
+          </div>
+        )}
 
         <label className="mb-3 block">
           <span className="mb-1 block text-xs font-medium text-slate-700">Arquivo</span>

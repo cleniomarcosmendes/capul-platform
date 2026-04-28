@@ -7,6 +7,7 @@ import {
   HttpCode,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UploadedFile,
   UseGuards,
@@ -21,6 +22,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { FiscalAuthenticatedUser } from '../common/interfaces/jwt-payload.interface.js';
 import { CertificadoService } from './certificado.service.js';
 import { UploadCertificadoDto } from './dto/upload-certificado.dto.js';
+import { AtualizarObservacoesDto } from './dto/atualizar-observacoes.dto.js';
 
 @Controller('certificado')
 @UseGuards(JwtAuthGuard, FiscalGuard, RolesGuard)
@@ -85,6 +87,20 @@ export class CertificadoController {
   @RoleMinima('ADMIN_TI')
   async ativar(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.service.ativar(id);
+  }
+
+  /**
+   * Atualiza apenas o campo `observacoes` (texto livre — uso comum:
+   * documentar histórico de renovação, contexto, próximas datas).
+   * Não muda binário, senha ou status ativo. Apenas ADMIN_TI.
+   */
+  @Patch(':id')
+  @RoleMinima('ADMIN_TI')
+  async atualizarObservacoes(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: AtualizarObservacoesDto,
+  ) {
+    return this.service.atualizarObservacoes(id, body.observacoes ?? null);
   }
 
   /**

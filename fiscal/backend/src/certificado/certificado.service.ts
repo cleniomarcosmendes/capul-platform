@@ -106,8 +106,23 @@ export class CertificadoService {
       }
     } catch (err) {
       await this.prisma.certificado.delete({ where: { id: novo.id } }).catch(() => undefined);
+      const msg = (err as NodeJS.ErrnoException).message ?? '';
+      const code = (err as NodeJS.ErrnoException).code;
+      // EACCES = sem permissão de escrita no diretório (caso comum em deploy
+      // produção: bind mount `./fiscal/backend/certs:/app/certs` herda owner do
+      // host, mas o container roda como appuser uid=100). Mensagem específica
+      // ajuda o Douglas/admin a corrigir sem abrir issue.
+      if (code === 'EACCES' || code === 'EPERM') {
+        throw new BadRequestException(
+          'Falha ao gravar o certificado no servidor — sem permissão de escrita ' +
+            'em /app/certs (bind mount). Solução no host (executar uma vez por servidor): ' +
+            '`sudo install -d -m 0700 -o 100 -g 101 /opt/capul-platform/fiscal/backend/certs` ' +
+            'e depois `sudo chown -R 100:101 /opt/capul-platform/fiscal/backend/certs/`. ' +
+            `Detalhe técnico: ${msg}`,
+        );
+      }
       throw new BadRequestException(
-        `Falha ao persistir binário do certificado: ${(err as Error).message}`,
+        `Falha ao persistir binário do certificado: ${msg}`,
       );
     }
 
@@ -150,6 +165,23 @@ export class CertificadoService {
     });
 
     this.logger.log(`Certificado ${id} ativado (CNPJ ${this.mask(resultado.cnpj)}).`);
+    return this.toPublico(resultado);
+  }
+
+  /**
+   * Atualiza apenas o campo `observacoes` (texto livre — uso comum:
+   * histórico de renovação, contexto operacional, próximas datas).
+   * Não altera o binário, senha ou status ativo.
+   */
+  async atualizarObservacoes(id: string, observacoes: string | null): Promise<CertificadoPublico> {
+    const cert = await this.prisma.certificado.findUnique({ where: { id } });
+    if (!cert) throw new NotFoundException(`Certificado ${id} não encontrado.`);
+    const obsLimpa = observacoes?.trim();
+    const resultado = await this.prisma.certificado.update({
+      where: { id },
+      data: { observacoes: obsLimpa && obsLimpa !== '' ? obsLimpa : null },
+    });
+    this.logger.log(`Certificado ${id} — observações atualizadas.`);
     return this.toPublico(resultado);
   }
 

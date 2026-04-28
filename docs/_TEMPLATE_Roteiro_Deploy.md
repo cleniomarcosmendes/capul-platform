@@ -111,6 +111,29 @@ LOG_LEVEL=info
 SMTP_HOST=...
 ```
 
+### 3.3 Permissões de diretórios montados via bind mount
+
+Containers rodam como usuário non-root (`appuser` uid=100, gid=101 — auditoria
+25/04/2026). Bind mounts (`./X:/Y` no `docker-compose.yml`) herdam owner do
+host, geralmente `root` (clone com `sudo`). Containers ficam sem permissão de
+escrita → erros `EACCES: permission denied`.
+
+Diretórios afetados (validar a cada novo deploy):
+
+| Bind mount | Container que escreve | Comando setup (uma vez) |
+|---|---|---|
+| `./fiscal/backend/certs` | `fiscal-backend` | `sudo install -d -m 0700 -o 100 -g 101 /opt/capul-platform/fiscal/backend/certs` |
+| (outros que vierem a usar) | ... | `sudo chown -R 100:101 /opt/capul-platform/<path>` |
+
+Verificar:
+```bash
+ls -ld /opt/capul-platform/fiscal/backend/certs/
+# Esperado: drwx------ <N> 100 101 ...
+```
+
+⚠ Pular este passo causa falhas silenciosas em runtime quando o usuário tenta
+upload pela UI (descoberto 28/04/2026 com cert A1 do Douglas).
+
 ---
 
 ## 4. PASSO 0 — Backup completo
