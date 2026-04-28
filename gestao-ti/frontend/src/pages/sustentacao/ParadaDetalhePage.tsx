@@ -6,7 +6,7 @@ import { paradaService } from '../../services/parada.service';
 import { chamadoService } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
 import { Activity, ArrowLeft, Clock, AlertTriangle, Building2, User, Wrench, Unlink, Plus, Ticket, X, Filter, CheckSquare, Users, Trash2, Search, Pencil, Paperclip, Download } from 'lucide-react';
-import type { RegistroParada, Chamado, EquipeTI } from '../../types';
+import type { RegistroParada, Chamado, EquipeTI, ParadaHistorico, TipoEventoParada } from '../../types';
 import { useToast } from '../../components/Toast';
 
 const tipoLabel: Record<string, string> = {
@@ -61,6 +61,10 @@ export function ParadaDetalhePage() {
   const canCancel = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
 
   const [parada, setParada] = useState<RegistroParada | null>(null);
+  // canMutate combina role + status: bloqueia mutações (anexo/colaborador/chamado)
+  // em paradas FINALIZADA ou CANCELADA. Para reabrir, usar botão "Reabrir"
+  // (apenas FINALIZADA — CANCELADA é terminal).
+  const canMutate = canManage && parada?.status === 'EM_ANDAMENTO';
   const [loading, setLoading] = useState(true);
 
   // Anexos
@@ -103,6 +107,22 @@ export function ParadaDetalhePage() {
     setActionLoading(false);
   }
 
+  async function handleReabrir() {
+    if (!id) return;
+    const ok = await confirm(
+      'Reabrir Parada',
+      'A parada voltara ao status EM ANDAMENTO. Os campos de finalizacao (data fim, duracao, finalizado por) serao zerados. Confirma?',
+      { variant: 'warning', confirmLabel: 'Sim, reabrir' },
+    );
+    if (!ok) return;
+    setActionLoading(true);
+    try {
+      const updated = await paradaService.reabrir(id);
+      setParada(updated);
+    } catch { /* empty */ }
+    setActionLoading(false);
+  }
+
   if (loading) {
     return (
       <>
@@ -131,6 +151,23 @@ export function ParadaDetalhePage() {
         >
           <ArrowLeft className="w-4 h-4" /> Voltar
         </button>
+
+        {/* Banner: parada foi reaberta — alertar até nova finalização */}
+        {parada.reabertaEm && parada.status === 'EM_ANDAMENTO' && (
+          <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 flex items-start gap-2">
+            <svg className="w-5 h-5 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div className="flex-1">
+              <div className="font-medium">Parada reaberta</div>
+              <div className="text-xs mt-0.5">
+                Em {new Date(parada.reabertaEm).toLocaleString('pt-BR')}
+                {parada.reabertaPor && ` por ${parada.reabertaPor.nome}`}.
+                Documente nas observações o motivo / o que foi alterado ao finalizar novamente.
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Header */}
         <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
@@ -163,7 +200,20 @@ export function ParadaDetalhePage() {
                       <Pencil className="w-3.5 h-3.5" /> Editar
                     </Link>
                     <button
-                      onClick={() => setShowFinalizar(true)}
+                      onClick={() => {
+                        // Pré-preenche `fim` com agora local — operador VÊ
+                        // que vai usar agora e pode alterar. Antes ficava
+                        // vazio e silenciosamente assumia agora no submit.
+                        // Format `YYYY-MM-DDTHH:mm` (datetime-local sem TZ).
+                        const now = new Date();
+                        const tzOffset = now.getTimezoneOffset() * 60000;
+                        const local = new Date(now.getTime() - tzOffset)
+                          .toISOString()
+                          .slice(0, 16);
+                        setFimInput(local);
+                        setObsInput('');
+                        setShowFinalizar(true);
+                      }}
                       className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700"
                     >
                       Finalizar
@@ -181,6 +231,18 @@ export function ParadaDetalhePage() {
                 )}
               </div>
             )}
+            {parada.status === 'FINALIZADA' && canCancel && (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleReabrir}
+                  disabled={actionLoading}
+                  className="text-xs bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700"
+                  title="Volta a parada para EM ANDAMENTO. Use quando precisar editar/anexar/adicionar colaborador depois de finalizar."
+                >
+                  Reabrir
+                </button>
+              </div>
+            )}
           </div>
 
           {parada.descricao && (
@@ -189,47 +251,79 @@ export function ParadaDetalhePage() {
         </div>
 
         {/* Finalizar modal */}
-        {showFinalizar && (
-          <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
-            <h4 className="font-medium text-slate-700 mb-3">Finalizar Parada</h4>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm text-slate-600 mb-1">Data/Hora Fim</label>
-                <input
-                  type="datetime-local"
-                  value={fimInput}
-                  onChange={(e) => setFimInput(e.target.value)}
-                  className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full max-w-xs"
-                />
-                <p className="text-xs text-slate-400 mt-1">Se vazio, usa a data/hora atual</p>
-              </div>
-              <div>
-                <label className="block text-sm text-slate-600 mb-1">Observacoes</label>
-                <textarea
-                  value={obsInput}
-                  onChange={(e) => setObsInput(e.target.value)}
-                  rows={2}
-                  className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleFinalizar}
-                  disabled={actionLoading}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
-                >
-                  {actionLoading ? 'Finalizando...' : 'Confirmar'}
-                </button>
-                <button
-                  onClick={() => setShowFinalizar(false)}
-                  className="border border-slate-300 text-slate-600 px-4 py-2 rounded-lg text-sm hover:bg-slate-50"
-                >
-                  Cancelar
-                </button>
+        {showFinalizar && (() => {
+          const foiReaberta = !!parada.reabertaEm;
+          const obsValida = obsInput.trim().length >= 10;
+          const podeSubmeter = !foiReaberta || obsValida;
+          return (
+            <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+              <h4 className="font-medium text-slate-700 mb-3">Finalizar Parada</h4>
+              {foiReaberta && (
+                <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                  <strong>Esta parada foi reaberta.</strong> Documente nas observações o
+                  que foi alterado durante a reabertura (mínimo 10 caracteres). Esse
+                  registro fica permanente para auditoria.
+                </div>
+              )}
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm text-slate-600 mb-1">Data/Hora Fim</label>
+                  <input
+                    type="datetime-local"
+                    value={fimInput}
+                    onChange={(e) => setFimInput(e.target.value)}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full max-w-xs"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Pré-preenchido com agora — pode ajustar.</p>
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-600 mb-1">
+                    Observações
+                    {foiReaberta && <span className="text-red-600"> *</span>}
+                  </label>
+                  <textarea
+                    value={obsInput}
+                    onChange={(e) => setObsInput(e.target.value)}
+                    rows={3}
+                    placeholder={
+                      foiReaberta
+                        ? 'Ex.: Adicionado anexo X esquecido / Corrigido colaborador Y / Ajuste de duração'
+                        : 'Opcional: descreva resolução, impacto, lições aprendidas'
+                    }
+                    className={`border rounded-lg px-3 py-2 text-sm w-full ${
+                      foiReaberta && !obsValida
+                        ? 'border-amber-400 focus:border-amber-500 focus:ring-amber-500'
+                        : 'border-slate-300 focus:border-slate-500 focus:ring-slate-500'
+                    }`}
+                  />
+                  {foiReaberta && (
+                    <p className={`text-xs mt-1 ${obsValida ? 'text-emerald-600' : 'text-amber-700'}`}>
+                      {obsValida
+                        ? '✓ Mínimo atingido'
+                        : `Mínimo 10 caracteres (${obsInput.trim().length}/10)`}
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleFinalizar}
+                    disabled={actionLoading || !podeSubmeter}
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={!podeSubmeter ? 'Preencha as observações antes de finalizar' : undefined}
+                  >
+                    {actionLoading ? 'Finalizando...' : 'Confirmar'}
+                  </button>
+                  <button
+                    onClick={() => setShowFinalizar(false)}
+                    className="border border-slate-300 text-slate-600 px-4 py-2 rounded-lg text-sm hover:bg-slate-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Informacoes */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -313,12 +407,12 @@ export function ParadaDetalhePage() {
 
         {/* Chamados Vinculados */}
         <div className="mb-6">
-          <TabChamados parada={parada} canManage={canManage} onUpdate={setParada} />
+          <TabChamados parada={parada} canManage={canMutate} onUpdate={setParada} />
         </div>
 
         {/* Tecnicos Colaboradores */}
         <div className="mb-6">
-          <TabColaboradores parada={parada} canManage={canManage} onUpdate={setParada} />
+          <TabColaboradores parada={parada} canManage={canMutate} onUpdate={setParada} />
         </div>
 
         {/* Anexos */}
@@ -327,7 +421,7 @@ export function ParadaDetalhePage() {
             <h4 className="font-medium text-slate-700 flex items-center gap-2">
               <Paperclip className="w-4 h-4" /> Anexos ({anexos.length})
             </h4>
-            {canManage && parada.status !== 'CANCELADA' && (
+            {canMutate && (
               <label className="flex items-center gap-2 text-xs text-emerald-600 hover:text-emerald-800 cursor-pointer">
                 <Plus className="w-3.5 h-3.5" />
                 {uploadingAnexo ? 'Enviando...' : 'Anexar arquivo'}
@@ -380,7 +474,7 @@ export function ParadaDetalhePage() {
                   <button onClick={() => paradaService.downloadAnexo(id!, a.id, a.nomeOriginal)} className="p-1 text-slate-400 hover:text-capul-600" title="Download">
                     <Download className="w-4 h-4" />
                   </button>
-                  {canManage && parada.status !== 'CANCELADA' && (
+                  {canMutate && (
                     <button
                       onClick={async () => {
                         if (!await confirm('Remover Anexo', `Remover "${a.nomeOriginal}"?`, { variant: 'danger' })) return;
@@ -402,8 +496,11 @@ export function ParadaDetalhePage() {
           )}
         </div>
 
+        {/* Histórico (timeline imutável) */}
+        <TimelineHistorico historico={parada.historico ?? []} />
+
         {/* Filiais Afetadas */}
-        <div className="bg-white rounded-xl border border-slate-200">
+        <div className="bg-white rounded-xl border border-slate-200 mt-6">
           <div className="px-6 py-4 border-b border-slate-200">
             <h4 className="font-medium text-slate-700 flex items-center gap-2">
               <Building2 className="w-4 h-4" /> Filiais Afetadas ({parada.filiaisAfetadas.length})
@@ -426,6 +523,103 @@ export function ParadaDetalhePage() {
         </div>
       </div>
     </>
+  );
+}
+
+const eventoConfig: Record<
+  TipoEventoParada,
+  { label: string; color: string; bg: string; ring: string; icon: typeof Activity }
+> = {
+  REGISTRADA: {
+    label: 'Registrada',
+    color: 'text-blue-700',
+    bg: 'bg-blue-100',
+    ring: 'ring-blue-200',
+    icon: Activity,
+  },
+  REABERTA: {
+    label: 'Reaberta',
+    color: 'text-amber-700',
+    bg: 'bg-amber-100',
+    ring: 'ring-amber-200',
+    icon: Activity,
+  },
+  FINALIZADA: {
+    label: 'Finalizada',
+    color: 'text-emerald-700',
+    bg: 'bg-emerald-100',
+    ring: 'ring-emerald-200',
+    icon: Activity,
+  },
+  CANCELADA: {
+    label: 'Cancelada',
+    color: 'text-slate-600',
+    bg: 'bg-slate-100',
+    ring: 'ring-slate-200',
+    icon: Activity,
+  },
+};
+
+function TimelineHistorico({ historico }: { historico: ParadaHistorico[] }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 mt-6">
+      <div className="px-6 py-4 border-b border-slate-200">
+        <h4 className="font-medium text-slate-700 flex items-center gap-2">
+          <Activity className="w-4 h-4" /> Histórico ({historico.length})
+        </h4>
+        <p className="text-xs text-slate-400 mt-1">
+          Timeline imutável de todas as transições de estado. Cada reabertura/finalização cria uma nova entrada — auditoria completa.
+        </p>
+      </div>
+      {historico.length === 0 ? (
+        <p className="px-6 py-4 text-sm text-slate-400">Nenhum evento registrado</p>
+      ) : (
+        <ol className="relative px-6 py-4 space-y-4">
+          {historico.map((h, idx) => {
+            const cfg = eventoConfig[h.tipoEvento];
+            const Icon = cfg.icon;
+            const isLast = idx === historico.length - 1;
+            const meta = h.metadata as
+              | { fim?: string; duracaoMinutos?: number; foiReaberta?: boolean; tipo?: string; impacto?: string }
+              | null;
+            return (
+              <li key={h.id} className="flex gap-3">
+                <div className="flex flex-col items-center">
+                  <span
+                    className={`inline-flex items-center justify-center w-8 h-8 rounded-full ${cfg.bg} ring-2 ${cfg.ring}`}
+                  >
+                    <Icon className={`w-4 h-4 ${cfg.color}`} />
+                  </span>
+                  {!isLast && <span className="flex-1 w-px bg-slate-200 my-1" />}
+                </div>
+                <div className="flex-1 pb-2">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className={`text-sm font-medium ${cfg.color}`}>{cfg.label}</span>
+                    <span className="text-xs text-slate-400">
+                      {new Date(h.createdAt).toLocaleString('pt-BR')}
+                    </span>
+                    {h.usuario && (
+                      <span className="text-xs text-slate-500">
+                        por <span className="font-medium text-slate-700">{h.usuario.nome}</span>
+                      </span>
+                    )}
+                  </div>
+                  {h.observacoes && (
+                    <p className="mt-1 text-sm text-slate-700 whitespace-pre-wrap">{h.observacoes}</p>
+                  )}
+                  {meta?.duracaoMinutos != null && (
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Duração: {meta.duracaoMinutos} min
+                      {meta.foiReaberta && ' (após reabertura)'}
+                    </p>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
   );
 }
 

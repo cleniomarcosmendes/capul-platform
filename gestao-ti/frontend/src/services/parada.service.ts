@@ -93,6 +93,11 @@ export const paradaService = {
     return data;
   },
 
+  async reabrir(id: string): Promise<RegistroParada> {
+    const { data } = await gestaoApi.post(`/paradas/${id}/reabrir`);
+    return data;
+  },
+
   async vincularChamado(paradaId: string, chamadoId: string): Promise<RegistroParada> {
     const { data } = await gestaoApi.post(`/paradas/${paradaId}/chamados`, { chamadoId });
     return data;

@@ -138,8 +138,18 @@ export class ParadaController {
 
   @Post(':id/cancelar')
   @Roles('ADMIN', 'GESTOR_TI')
-  cancelar(@Param('id') id: string) {
-    return this.service.cancelar(id);
+  cancelar(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.service.cancelar(id, user.sub);
+  }
+
+  /**
+   * Reabre parada FINALIZADA → EM_ANDAMENTO. Apenas ADMIN/GESTOR_TI —
+   * não cabe ao operador comum. CANCELADA não reabre (terminal).
+   */
+  @Post(':id/reabrir')
+  @Roles('ADMIN', 'GESTOR_TI')
+  reabrir(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.service.reabrir(id, user.sub);
   }
 
   @Post(':id/chamados')

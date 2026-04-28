@@ -27,9 +27,7 @@ export class ParadaAnexoService {
 
   async addAnexo(paradaId: string, file: Express.Multer.File, userId: string, descricao?: string) {
     const parada = await this.getParadaOrFail(paradaId);
-    if (parada.status === 'CANCELADA') {
-      throw new BadRequestException('Nao e possivel anexar arquivos em parada cancelada');
-    }
+    this.assertEditavel(parada, 'anexar arquivo');
     return this.prisma.anexoParada.create({
       data: {
         nomeOriginal: file.originalname,
@@ -59,9 +57,7 @@ export class ParadaAnexoService {
 
   async removeAnexo(paradaId: string, anexoId: string) {
     const parada = await this.getParadaOrFail(paradaId);
-    if (parada.status === 'CANCELADA') {
-      throw new BadRequestException('Nao e possivel remover anexo de parada cancelada');
-    }
+    this.assertEditavel(parada, 'remover anexo');
 
     const anexo = await this.prisma.anexoParada.findFirst({
       where: { id: anexoId, paradaId },
@@ -81,6 +77,24 @@ export class ParadaAnexoService {
     const parada = await this.prisma.registroParada.findUnique({ where: { id } });
     if (!parada) throw new NotFoundException('Parada nao encontrada');
     return parada;
+  }
+
+  /**
+   * Bloqueia mutações em paradas em estado terminal. Espelhada do
+   * ParadaService.assertParadaEditavel — não compartilhamos o helper
+   * porque os 2 services não compartilham módulo de utilidades comum.
+   */
+  private assertEditavel(parada: { status: string }, operacao: string): void {
+    if (parada.status === 'CANCELADA') {
+      throw new BadRequestException(
+        `Nao e possivel ${operacao} em parada cancelada. Cancelamento e estado terminal — registre uma nova parada se necessario.`,
+      );
+    }
+    if (parada.status === 'FINALIZADA') {
+      throw new BadRequestException(
+        `Nao e possivel ${operacao} em parada finalizada. Reabra a parada (botao "Reabrir") antes de modifica-la.`,
+      );
+    }
   }
 
   static getUploadsDir() {

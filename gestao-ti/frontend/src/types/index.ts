@@ -632,6 +632,19 @@ export interface MotivoParada {
   updatedAt: string;
 }
 
+export type TipoEventoParada = 'REGISTRADA' | 'REABERTA' | 'FINALIZADA' | 'CANCELADA';
+
+export interface ParadaHistorico {
+  id: string;
+  paradaId: string;
+  tipoEvento: TipoEventoParada;
+  usuarioId: string | null;
+  usuario: { id: string; nome: string; username: string } | null;
+  observacoes: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
 export interface RegistroParada {
   id: string;
   titulo: string;
@@ -654,6 +667,10 @@ export interface RegistroParada {
   registradoPor: { id: string; nome: string; username: string };
   finalizadoPorId: string | null;
   finalizadoPor: { id: string; nome: string; username: string } | null;
+  reabertaEm: string | null;
+  reabertaPorId: string | null;
+  reabertaPor: { id: string; nome: string; username: string } | null;
+  historico?: ParadaHistorico[];
   filiaisAfetadas: ParadaFilialAfetada[];
   colaboradores: ParadaColaborador[];
   _count: { filiaisAfetadas: number; chamados: number; colaboradores: number };

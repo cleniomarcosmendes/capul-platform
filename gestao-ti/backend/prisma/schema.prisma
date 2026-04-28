@@ -49,6 +49,8 @@ model Usuario {
   historicosContrato   ContratoHistorico[]
   paradasRegistradas   RegistroParada[]  @relation("ParadaRegistradoPor")
   paradasFinalizadas   RegistroParada[]  @relation("ParadaFinalizadoPor")
+  paradasReabertas     RegistroParada[]  @relation("ParadaReabertaPor")
+  paradaHistorico      ParadaHistorico[] @relation("HistoricoParadaUsuario")
   projetosResponsavel  Projeto[]          @relation("ProjetoResponsavel")
   membrosProjeto       MembroProjeto[]
   atividadesProjeto    AtividadeProjeto[] @relation("AtividadeProjetoUsuario")
@@ -767,6 +769,15 @@ enum StatusParada {
   @@schema("gestao_ti")
 }
 
+enum TipoEventoParada {
+  REGISTRADA
+  REABERTA
+  FINALIZADA
+  CANCELADA
+
+  @@schema("gestao_ti")
+}
+
 // ── Fase 5: Projetos de TI ──
 
 enum TipoProjeto {
@@ -1366,15 +1377,46 @@ model RegistroParada {
   finalizadoPorId String?  @map("finalizado_por_id")
   finalizadoPor   Usuario? @relation("ParadaFinalizadoPor", fields: [finalizadoPorId], references: [id])
 
+  /// Quando esta parada FOI reaberta (último reabrir). Se setado, indica que
+  /// a parada está em estado "EM_ANDAMENTO pós-reabertura" — finalizar exige
+  /// observações com mínimo 10 chars (rastreabilidade do que mudou).
+  /// Após nova finalização, é zerado.
+  reabertaEm      DateTime? @map("reaberta_em")
+  reabertaPorId   String?   @map("reaberta_por_id")
+  reabertaPor     Usuario?  @relation("ParadaReabertaPor", fields: [reabertaPorId], references: [id])
+
   filiaisAfetadas ParadaFilialAfetada[]
   chamados        ParadaChamado[]
   colaboradores   ParadaColaborador[]
   anexos          AnexoParada[]
+  historico       ParadaHistorico[]
 
   @@index([softwareId, status])
   @@index([status])
   @@index([inicio])
   @@map("registros_parada")
+  @@schema("gestao_ti")
+}
+
+/// Timeline imutável de eventos da parada. Cada transição de estado
+/// (REGISTRADA, REABERTA, FINALIZADA, CANCELADA) cria uma entrada com
+/// observações livres + metadata (JSON com dados extras tipo `fim`,
+/// `duracaoMinutos`). Auditoria completa: o campo `observacoes` da
+/// parada continua sendo snapshot da última observação, mas o
+/// histórico cresce indefinidamente.
+model ParadaHistorico {
+  id          String           @id @default(uuid())
+  paradaId    String           @map("parada_id")
+  parada      RegistroParada   @relation(fields: [paradaId], references: [id], onDelete: Cascade)
+  tipoEvento  TipoEventoParada @map("tipo_evento")
+  usuarioId   String?          @map("usuario_id")
+  usuario     Usuario?         @relation("HistoricoParadaUsuario", fields: [usuarioId], references: [id])
+  observacoes String?
+  metadata    Json?
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@index([paradaId, createdAt])
+  @@map("parada_historico")
   @@schema("gestao_ti")
 }
 
