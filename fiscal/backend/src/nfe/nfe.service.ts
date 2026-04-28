@@ -365,6 +365,29 @@ export class NfeService {
       };
     }
     const detalhe = this.parser.parseEventoXml(evento.xmlEvento);
+    // Shape Protheus 28/04 (`<infEvento>` puro) não tem `<retEvento>` —
+    // complementamos os campos de autorização SEFAZ com o que está persistido
+    // no documento_evento (vindo do JSON do /eventosNfe). Para
+    // `<procEventoNFe>` completo (XSD oficial), o parser já preenche e os
+    // valores do banco apenas confirmam.
+    if (!detalhe.autorizacaoCStat && evento.cStat) {
+      detalhe.autorizacaoCStat = evento.cStat;
+      detalhe.autorizacaoMotivo =
+        evento.cStat === '135' ? 'Evento registrado e vinculado a NF-e' : null;
+      detalhe.autorizacaoMensagem =
+        evento.cStat === '135'
+          ? '135 - Evento registrado e vinculado a NF-e'
+          : evento.cStat;
+    }
+    if (!detalhe.autorizacaoProtocolo && evento.protocoloEvento) {
+      detalhe.autorizacaoProtocolo = evento.protocoloEvento;
+    }
+    if (!detalhe.autorizacaoDataHora) {
+      // dhRegEvento (registro SEFAZ) não vem no shape Protheus puro.
+      // Usamos `dataEvento` (= `<dhEvento>` autoral) como aproximação —
+      // diferença típica de segundos para manifestações.
+      detalhe.autorizacaoDataHora = evento.dataEvento.toISOString();
+    }
     return {
       id: evento.id,
       tipoEvento: evento.tipoEvento,
@@ -795,6 +818,15 @@ export class NfeService {
       // geram (ex.: SPED156 autorização original) — normalizamos para null.
       const idEventoProtheus = ev.id_evento && ev.id_evento.trim() !== '' ? ev.id_evento.trim() : null;
       const protocoloProtheus = ev.protocolo && ev.protocolo.trim() !== '' ? ev.protocolo.trim() : null;
+      // Em 28/04/2026 Protheus passou a entregar também `xmlBase64` por evento —
+      // contém o `<infEvento>` autoral (com `<detEvento>` e `<xJust>` quando
+      // aplicável). Decodificamos aqui e persistimos em documento_evento.xmlEvento;
+      // o detalhe completo passa a ser parseado pelo `parseEventoXml` em vez
+      // do detalhe sintético.
+      const xmlEventoProtheus =
+        ev.xmlBase64 && ev.xmlBase64.trim() !== ''
+          ? Buffer.from(ev.xmlBase64.trim(), 'base64').toString('utf8')
+          : null;
       eventosParaPersistir.push({
         tipoEvento: tipoNormalizado,
         descricao,
@@ -803,6 +835,7 @@ export class NfeService {
         xMotivo: xMotivoComplementar,
         idEvento: idEventoProtheus,
         protocoloEvento: protocoloProtheus,
+        xmlEvento: xmlEventoProtheus,
       });
     }
 

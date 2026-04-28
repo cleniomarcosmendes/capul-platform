@@ -712,10 +712,17 @@ export class NfeParserService {
   // ---------- detalhe de evento (procEventoNFe) ----------
 
   /**
-   * Parseia o XML completo de um `<procEventoNFe>` persistido em
-   * `fiscal.documento_evento.xmlEvento` — equivalente à tela de detalhe do
-   * portal SEFAZ (imagem 2: Ciência da Operação, Detalhes do Evento,
-   * Autorização pela SEFAZ).
+   * Parseia o XML de um evento e retorna o detalhe pra UI. Aceita 3 shapes:
+   *
+   *   1. `<procEventoNFe>` completo (XSD oficial SEFAZ — `<evento>` autoral
+   *      + `<retEvento>` resposta + `<Signature>`). Caso ideal — todos os
+   *      campos chegam diretamente.
+   *   2. `<evento>` autoral isolado — sem `<retEvento>`. Campos de autorização
+   *      (cStat, protocolo, dhRegEvento) ficam null.
+   *   3. **`<infEvento>` puro** — formato compacto que a equipe Protheus passou
+   *      a entregar em 28/04/2026 via `eventosNfe.xmlBase64`. Diferenças do
+   *      XSD oficial: `Id`, `versao` e `verEvento` vêm como ELEMENTO em vez
+   *      de atributo. Sem `<retEvento>` (caller deve complementar).
    */
   parseEventoXml(xml: string): NfeEventoDetalhe {
     let root: any;
@@ -727,10 +734,12 @@ export class NfeParserService {
     const proc = root?.procEventoNFe ?? root;
     const evento = proc?.evento ?? proc?.Evento;
     const retEvento = proc?.retEvento ?? proc?.RetEvento;
-    if (!evento?.infEvento) {
+    // Caso 3: shape Protheus — `<infEvento>` puro como root.
+    const infEventoPuro = !evento && (root?.infEvento || proc?.infEvento);
+    const inf = evento?.infEvento ?? infEventoPuro;
+    if (!inf) {
       throw new BadRequestException('Bloco <infEvento> ausente no XML do evento.');
     }
-    const inf = evento.infEvento;
     const ret = retEvento?.infEvento ?? {};
     const detEvento = inf.detEvento ?? {};
 
@@ -743,14 +752,23 @@ export class NfeParserService {
     const cStatRet = str(ret.cStat);
     const xMotRet = str(ret.xMotivo);
 
+    // Id pode vir como atributo (`@_Id`, XSD oficial) ou elemento (`<Id>`, Protheus 28/04).
+    const idEvento = str(inf['@_Id']) ?? str(inf.Id) ?? '';
+    // Versão `<verEvento>` (Protheus 28/04 expõe como elemento) ou `@_versao` em <evento> wrapper.
+    const versaoEvento =
+      str(detEvento['@_versao']) ??
+      str(detEvento.versao) ??
+      str(inf.verEvento) ??
+      null;
+
     return {
       orgaoRecepcao: orgao,
       orgaoRecepcaoDescricao: orgao ? ORGAO_RECEPCAO_MAP[orgao] ?? null : null,
       ambiente,
       ambienteDescricao: ambiente === '1' ? '1 - Produção' : '2 - Homologação',
-      versao: str(evento['@_versao']) ?? str(inf['@_versao']),
+      versao: str(evento?.['@_versao']) ?? str(inf['@_versao']) ?? str(inf.verEvento),
       chave: String(inf.chNFe ?? ''),
-      idEvento: String(inf['@_Id'] ?? ''),
+      idEvento,
       autorCnpj: cnpj,
       autorCpf: cpf,
       dataEvento: String(inf.dhEvento ?? ''),
@@ -759,7 +777,7 @@ export class NfeParserService {
         ? `${tipoEvento} - ${TP_EVENTO_MAP[tipoEvento] ?? str(detEvento.descEvento) ?? 'Evento'}`
         : str(detEvento.descEvento) ?? '-',
       sequencial: Number(inf.nSeqEvento ?? 1),
-      versaoEvento: str(detEvento['@_versao']),
+      versaoEvento,
       descricaoEvento: str(detEvento.descEvento),
       justificativa: str(detEvento.xJust),
       autorizacaoCStat: cStatRet,

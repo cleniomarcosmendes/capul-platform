@@ -44,6 +44,13 @@ export interface EventoNfeRaw {
    * protocolo SEFAZ (autorização sintética, importação Protheus).
    */
   protocolo?: string;
+  /**
+   * XML autoral do evento (`<infEvento>` puro) codificado em base64.
+   * Disponibilizado em 28/04/2026 — fecha a pendência da `<xJust>` (Justificativa
+   * de Cancelamento/Op. Não Realizada/CC-e), que vive em `<infEvento><detEvento><xJust>`.
+   * String vazia para eventos não-SEFAZ (SPED156 autorização original, SZR010 importação).
+   */
+  xmlBase64?: string;
 }
 
 export interface EventosNfeResponse {
