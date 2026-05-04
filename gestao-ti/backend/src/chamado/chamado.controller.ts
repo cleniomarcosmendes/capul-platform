@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, Res, UseGuards, UseInterceptors, UploadedFile, BadRequestException,
+  Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, Res, UseGuards, UseInterceptors, UploadedFile, BadRequestException, InternalServerErrorException, Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -24,8 +24,25 @@ import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { StatusChamado, Visibilidade } from '@prisma/client';
 
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads', 'chamados');
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+const uploadsLogger = new Logger('ChamadoUploads');
+
+// Tenta garantir o diretório de uploads no startup. Se falhar (ex.: bind mount
+// com owner errado em produção), NÃO crasha o app — só loga claramente. O fix
+// real é em runtime na destination function abaixo, que dá mensagem clara ao
+// usuário com o comando de chown a ser executado pelo admin.
+try {
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    uploadsLogger.log(`✅ Diretório de uploads criado: ${UPLOADS_DIR}`);
+  }
+} catch (err: unknown) {
+  const e = err as NodeJS.ErrnoException;
+  uploadsLogger.error(
+    `❌ Falha ao criar diretório de uploads ${UPLOADS_DIR} ` +
+    `(code=${e.code || 'unknown'}). ` +
+    `Admin: docker compose exec -u root gestao-ti-backend sh -c ` +
+    `'mkdir -p ${UPLOADS_DIR} && chown -R appuser:appgroup ${UPLOADS_DIR}'`
+  );
 }
 
 // Whitelist de MIME types aceitos em upload de anexos.
@@ -223,7 +240,7 @@ export class ChamadoController {
   }
 
   @Patch(':id/vincular-projeto')
-  @Roles('ADMIN', 'GESTOR_TI', 'TECNICO', 'DESENVOLVEDOR')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   vincularProjeto(
     @Param('id') id: string,
     @Body('projetoId') projetoId: string,
@@ -250,7 +267,40 @@ export class ChamadoController {
   @Post(':id/anexos')
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
-      destination: UPLOADS_DIR,
+      // Destination como função (não string) — permite re-checar permissão/existência
+      // a cada upload e devolver mensagem clara em vez de erro 500 silencioso.
+      // Lição do bug do Fiscal/certs: bind mounts em produção podem ter owner errado
+      // após recriação de container — usuário precisa ver o comando exato pra corrigir.
+      destination: (_req, _file, cb) => {
+        // 1) Garantir que o diretório existe
+        try {
+          if (!fs.existsSync(UPLOADS_DIR)) {
+            fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+          }
+        } catch (err: unknown) {
+          const e = err as NodeJS.ErrnoException;
+          uploadsLogger.error(`Falha ao criar ${UPLOADS_DIR}: ${e.code} ${e.message}`);
+          return cb(new InternalServerErrorException(
+            `Diretório de upload não pôde ser criado (${e.code || 'erro'}). ` +
+            `Admin: docker compose exec -u root gestao-ti-backend sh -c ` +
+            `'mkdir -p ${UPLOADS_DIR} && chown -R appuser:appgroup ${UPLOADS_DIR}'`
+          ), '');
+        }
+
+        // 2) Checar permissão de escrita
+        fs.access(UPLOADS_DIR, fs.constants.W_OK, (err) => {
+          if (err) {
+            const e = err as NodeJS.ErrnoException;
+            uploadsLogger.error(`Sem permissão de escrita em ${UPLOADS_DIR}: ${e.code}`);
+            return cb(new InternalServerErrorException(
+              `Sem permissão de escrita no diretório de uploads (${e.code}). ` +
+              `Admin: docker compose exec -u root gestao-ti-backend sh -c ` +
+              `'chown -R appuser:appgroup ${UPLOADS_DIR}'`
+            ), '');
+          }
+          cb(null, UPLOADS_DIR);
+        });
+      },
       filename: (_req, file, cb) => {
         const ext = path.extname(file.originalname);
         cb(null, `${randomUUID()}${ext}`);
