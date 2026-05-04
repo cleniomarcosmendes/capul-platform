@@ -7,6 +7,7 @@ import { NfeParserService } from './parsers/nfe-parser.service.js';
 import { DocumentoConsultaService } from './documento-consulta.service.js';
 import { DocumentoEventoService } from './documento-evento.service.js';
 import { DanfeGeneratorService } from './pdf/danfe-generator.service.js';
+import { ResumoSefazGeneratorService } from './pdf/resumo-sefaz-generator.service.js';
 
 @Module({
   imports: [SefazModule, AmbienteModule],
@@ -17,12 +18,14 @@ import { DanfeGeneratorService } from './pdf/danfe-generator.service.js';
     DocumentoConsultaService,
     DocumentoEventoService,
     DanfeGeneratorService,
+    ResumoSefazGeneratorService,
   ],
   exports: [
     NfeParserService,
     DocumentoConsultaService,
     DocumentoEventoService,
     DanfeGeneratorService,
+    ResumoSefazGeneratorService,
   ],
 })
 export class NfeModule {}

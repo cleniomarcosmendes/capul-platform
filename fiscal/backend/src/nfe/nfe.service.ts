@@ -958,20 +958,99 @@ export class NfeService {
     const ufAutor = ufFromChave(chave);
     const cnpjConsulenteOverride = await this.resolverCnpjConsulentePorFilial(filial);
 
+    // Fila de tentativas — primeiro a filial original; se falhar com cStat
+    // não-terminal (típico: 138 SEM procNFe pós-consumo NSU pelo destinatário),
+    // tenta as outras filiais CAPUL como consulente. Erros terminais
+    // (641/632/137) NÃO disparam fallback — respondem o mesmo independente
+    // do consulente.
+    const tentativas: Array<{ codigo: string; cnpj: string | null; isFallback: boolean }> = [
+      { codigo: filial, cnpj: cnpjConsulenteOverride, isFallback: false },
+    ];
+    // Carrega fallbacks só se necessário (lazy) — evita query DB extra
+    // na maioria das chamadas (caso feliz: filial original responde).
+    let fallbacksCarregados = false;
+    let ultimoErroSefaz: SefazConsultaError | null = null;
+    let ultimoErroTecnico: Error | null = null;
+
     try {
-      const baixado = await this.sefazDistribuicao.consultarPorChave(
-        chave,
-        ufAutor,
-        ambienteStr,
-        cnpjConsulenteOverride,
-      );
-      this.logger.log(
-        `distDFe consChNFe (consulente=${baixado.cnpjConsulenteUsado.slice(0, 8)}…) ` +
-          `retornou XML para ${chave.slice(0, 6)}… filial=${filial}`,
-      );
-      return baixado.xml;
+      for (let i = 0; i < tentativas.length; i++) {
+        const tent = tentativas[i];
+        try {
+          const baixado = await this.sefazDistribuicao.consultarPorChave(
+            chave,
+            ufAutor,
+            ambienteStr,
+            tent.cnpj,
+          );
+          if (tent.isFallback) {
+            this.logger.warn(
+              `[FALLBACK_CONSULENTE] chave=${chave.slice(0, 6)}… filial-original=${filial} ` +
+                `falhou com cStat=${ultimoErroSefaz?.cStat}; ` +
+                `filial-fallback=${tent.codigo} consulente=${(tent.cnpj ?? '').slice(0, 8)}… retornou XML completo.`,
+            );
+          } else {
+            this.logger.log(
+              `distDFe consChNFe (consulente=${baixado.cnpjConsulenteUsado.slice(0, 8)}…) ` +
+                `retornou XML para ${chave.slice(0, 6)}… filial=${filial}`,
+            );
+          }
+          return baixado.xml;
+        } catch (err) {
+          if (err instanceof SefazConsultaError) {
+            // Terminais — não melhoram com troca de consulente: pula direto pro mapeamento
+            if (err.cStat === '641' || err.cStat === '632' || err.cStat === '137') {
+              throw err;
+            }
+            ultimoErroSefaz = err;
+            if (tent.isFallback) {
+              this.logger.warn(
+                `[FALLBACK_CONSULENTE] tentativa filial=${tent.codigo} também falhou: ` +
+                  `cStat=${err.cStat}. Próximo na fila.`,
+              );
+            }
+            // Carrega fallbacks na primeira falha (lazy)
+            if (!fallbacksCarregados) {
+              fallbacksCarregados = true;
+              const fallbacks = await this.listarFiliaisFallback(filial);
+              for (const fb of fallbacks) {
+                tentativas.push({ codigo: fb.codigo, cnpj: fb.cnpj, isFallback: true });
+              }
+              if (fallbacks.length > 0) {
+                this.logger.warn(
+                  `[FALLBACK_CONSULENTE] chave=${chave.slice(0, 6)}… filial-original=${filial} ` +
+                    `falhou (cStat=${err.cStat}). Vou tentar ${fallbacks.length} filial(is) CAPUL como consulente: ` +
+                    `${fallbacks.map((f) => f.codigo).join(', ')}.`,
+                );
+              }
+            }
+            continue;
+          }
+          // Erro técnico (rede, etc) — guarda e tenta próximo (pode ser instabilidade)
+          ultimoErroTecnico = err as Error;
+          if (!fallbacksCarregados) {
+            fallbacksCarregados = true;
+            const fallbacks = await this.listarFiliaisFallback(filial);
+            for (const fb of fallbacks) {
+              tentativas.push({ codigo: fb.codigo, cnpj: fb.cnpj, isFallback: true });
+            }
+          }
+          continue;
+        }
+      }
+
+      // Esgotou todas as tentativas — re-lança o erro mais recente para o
+      // mapeamento abaixo (404 com mensagem amigável).
+      if (ultimoErroSefaz) {
+        this.logger.error(
+          `[FALLBACK_CONSULENTE] esgotaram-se ${tentativas.length} consulente(s) para chave=${chave.slice(0, 6)}…. ` +
+            `Último cStat=${ultimoErroSefaz.cStat} xMotivo="${ultimoErroSefaz.xMotivo}".`,
+        );
+        throw ultimoErroSefaz;
+      }
+      if (ultimoErroTecnico) throw ultimoErroTecnico;
+      throw new Error(`Falha inesperada em baixarDoSefaz: nenhuma tentativa retornou XML nem erro.`);
     } catch (err) {
-      // Erro semântico tipado da SEFAZ (cStat ≠ 138)
+      // Erro semântico tipado da SEFAZ (cStat ≠ 138 ou 138 sem procNFe)
       if (err instanceof SefazConsultaError) {
         // cStat=641: "NF-e indisponível para o emitente" — a chave foi emitida
         // pelo próprio CNPJ consulente. NFeDistribuicaoDFe é só para destinatários;
@@ -1039,6 +1118,42 @@ export class NfeService {
         `Falha ao resolver CNPJ da filial ${codigo} — usando consulente padrão. ${(err as Error).message}`,
       );
       return null;
+    }
+  }
+
+  /**
+   * Lista filiais CAPUL ATIVAS com CNPJ válido, ordenadas (matriz '01'
+   * primeiro, depois ordem lexicográfica), EXCLUINDO a filial original.
+   * Usado pelo fallback de consulente em `baixarDoSefaz` quando o SEFAZ-AN
+   * devolve cStat=138 mas sem procNFe (cenário típico pós-consumo NSU pelo
+   * destinatário — outra filial pode ter o XML completo na fila dela).
+   * Retorna [] em caso de erro — não lança.
+   */
+  private async listarFiliaisFallback(
+    filialOriginal: string,
+  ): Promise<Array<{ codigo: string; cnpj: string }>> {
+    try {
+      const filiais = await this.prisma.filialCore.findMany({
+        where: {
+          status: 'ATIVO',
+          codigo: { not: filialOriginal },
+          cnpj: { not: null },
+        },
+        select: { codigo: true, cnpj: true },
+      });
+      return filiais
+        .map((f) => ({ codigo: f.codigo, cnpj: (f.cnpj ?? '').replace(/\D/g, '') }))
+        .filter((f) => f.cnpj.length === 14)
+        .sort((a, b) => {
+          if (a.codigo === '01') return -1;
+          if (b.codigo === '01') return 1;
+          return a.codigo.localeCompare(b.codigo);
+        });
+    } catch (err) {
+      this.logger.warn(
+        `Falha ao listar filiais para fallback de consulente: ${(err as Error).message}`,
+      );
+      return [];
     }
   }
 

@@ -780,6 +780,8 @@ export class NfeParserService {
       versaoEvento,
       descricaoEvento: str(detEvento.descEvento),
       justificativa: str(detEvento.xJust),
+      correcao: str(detEvento.xCorrecao),
+      condicoesUso: str(detEvento.xCondUso),
       autorizacaoCStat: cStatRet,
       autorizacaoMotivo: xMotRet,
       autorizacaoMensagem:

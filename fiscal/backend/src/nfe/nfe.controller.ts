@@ -19,6 +19,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { FiscalAuthenticatedUser } from '../common/interfaces/jwt-payload.interface.js';
 import { NfeService } from './nfe.service.js';
 import { DanfeGeneratorService } from './pdf/danfe-generator.service.js';
+import { ResumoSefazGeneratorService } from './pdf/resumo-sefaz-generator.service.js';
 
 @Controller('nfe')
 @UseGuards(JwtAuthGuard, FiscalGuard, RolesGuard)
@@ -26,6 +27,7 @@ export class NfeController {
   constructor(
     private readonly nfe: NfeService,
     private readonly danfe: DanfeGeneratorService,
+    private readonly resumoSefaz: ResumoSefazGeneratorService,
   ) {}
 
   /**
@@ -145,6 +147,40 @@ export class NfeController {
     const resultado = await this.nfe.consultarPorChave(chave, filial, user);
     const pdf = await this.danfe.generate(resultado.parsed);
     res.setHeader('Content-Disposition', `attachment; filename="DANFE_${chave}.pdf"`);
+    res.setHeader('Content-Length', pdf.length);
+    res.send(pdf);
+  }
+
+  /**
+   * Resumo SEFAZ — relatório de impressão estilo "Preparar documento para
+   * impressão" do portal nacional NFe. Usado pelo escritório fiscal para
+   * arquivamento, conferência e auditoria interna. Cabe em uma página A4.
+   *
+   * Diferente do DANFE, sincroniza eventos com o Protheus antes de gerar
+   * (sem consumo SEFAZ — lê SPED156/SPED150) para o papel sair com a
+   * timeline mais atualizada possível. Falha de sincronização não bloqueia
+   * a geração — usa o snapshot já consultado.
+   */
+  @Get(':chave/filial/:filial/resumo-pdf')
+  @RoleMinima('OPERADOR_ENTRADA')
+  @Header('content-type', 'application/pdf')
+  async downloadResumoSefaz(
+    @Param('chave') chave: string,
+    @Param('filial') filial: string,
+    @CurrentUser() user: FiscalAuthenticatedUser,
+    @Res() res: Response,
+  ) {
+    const resultado = await this.nfe.consultarPorChave(chave, filial, user);
+    // Best-effort sync com Protheus — se falhar, segue com o snapshot atual.
+    try {
+      const sync = await this.nfe.atualizarEventosProtheus(chave, filial, user);
+      resultado.parsed.eventos = sync.eventos;
+    } catch {
+      // Mantém eventos do snapshot. O setor prefere papel com timeline
+      // levemente desatualizada a não ter papel.
+    }
+    const pdf = await this.resumoSefaz.generate(resultado.parsed, filial);
+    res.setHeader('Content-Disposition', `inline; filename="ResumoNFe_${chave}.pdf"`);
     res.setHeader('Content-Length', pdf.length);
     res.send(pdf);
   }

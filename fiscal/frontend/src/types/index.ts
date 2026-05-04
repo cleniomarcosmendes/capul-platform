@@ -415,6 +415,8 @@ export interface NfeEventoDetalhe {
   versaoEvento?: string | null;
   descricaoEvento?: string | null;
   justificativa?: string | null;
+  correcao?: string | null;
+  condicoesUso?: string | null;
   autorizacaoCStat?: string | null;
   autorizacaoMotivo?: string | null;
   autorizacaoMensagem?: string | null;

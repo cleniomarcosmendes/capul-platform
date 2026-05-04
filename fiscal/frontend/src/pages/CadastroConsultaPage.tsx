@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertCircle, Check, Copy, Sparkles, AlertTriangle, Database, UserSearch, Info, Building2, GitCompareArrows, MapPin, ChevronDown, ChevronRight, FileText } from 'lucide-react';
+import { AlertCircle, Check, Copy, Sparkles, AlertTriangle, Database, UserSearch, Info, Building2, GitCompareArrows, MapPin, ChevronDown, ChevronRight, FileText, Printer } from 'lucide-react';
 import { fiscalApi } from '../services/api';
 import { PageWrapper } from '../components/PageWrapper';
 import { Button } from '../components/Button';
@@ -92,6 +92,34 @@ export function CadastroConsultaPage() {
     e.preventDefault();
     // UF vazia é permitida: backend tentará inferir a partir dos vínculos Protheus.
     await consultar(docDigits, uf || null);
+  }
+
+  /**
+   * Imprime comprovante CCC da IE principal (a do card "Dados oficiais SEFAZ").
+   * Sempre visível, independente de o CNPJ ter 1 IE ou várias. Para o caso de
+   * múltiplas IEs há também botão por linha no card detalhado.
+   */
+  async function imprimirIePrincipal() {
+    if (!result || !result.inscricaoEstadual) return;
+    try {
+      const r = await fiscalApi.get('/cadastro/comprovante-ie-pdf', {
+        params: {
+          cnpj: result.cnpj,
+          uf: result.uf,
+          ie: result.inscricaoEstadual,
+          filial: result.vinculosProtheus[0]?.filial ?? '',
+        },
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Falha ao gerar comprovante.';
+      alert(msg);
+    }
   }
 
   /**
@@ -279,8 +307,23 @@ export function CadastroConsultaPage() {
 
           {/* Dados SEFAZ (fonte de verdade) */}
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Dados oficiais do SEFAZ
+            <div className="mb-1 flex items-start justify-between gap-3">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Dados oficiais do SEFAZ
+              </div>
+              {/* Imprimir comprovante CCC da IE principal — sempre visível,
+                  independente do CNPJ ter 1 ou múltiplas IEs. Pra múltiplas
+                  IEs há botão por linha no card detalhado abaixo. */}
+              {result.inscricaoEstadual && (
+                <button
+                  type="button"
+                  onClick={imprimirIePrincipal}
+                  title={`Imprimir comprovante CCC da IE ${result.inscricaoEstadual} (${result.uf})`}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 shadow-sm hover:bg-amber-100"
+                >
+                  <Printer className="h-3.5 w-3.5" /> Imprimir Comprovante CCC
+                </button>
+              )}
             </div>
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <Badge variant={SITUACAO_VARIANT[result.situacao]}>
@@ -362,6 +405,8 @@ export function CadastroConsultaPage() {
               inscricoes={result.inscricoesSefaz}
               ufPrincipal={result.uf}
               iePrincipal={result.inscricaoEstadual}
+              cnpj={result.cnpj}
+              filial={result.vinculosProtheus[0]?.filial ?? ''}
             />
           )}
 
@@ -470,11 +515,36 @@ function InscricoesEstaduaisDetalhadasCard({
   inscricoes,
   ufPrincipal,
   iePrincipal,
+  cnpj,
+  filial,
 }: {
   inscricoes: InscricaoEstadualSefaz[];
   ufPrincipal: string;
   iePrincipal: string | null;
+  cnpj: string;
+  filial: string;
 }) {
+  /**
+   * Imprimir comprovante CCC desta IE — abre PDF gerado pelo backend
+   * (/cadastro/comprovante-ie-pdf) em nova aba. Reusa o token JWT já no
+   * fiscalApi via params + cookies.
+   */
+  async function imprimirIe(ie: InscricaoEstadualSefaz) {
+    try {
+      const r = await fiscalApi.get('/cadastro/comprovante-ie-pdf', {
+        params: { cnpj, uf: ie.uf, ie: ie.inscricaoEstadual, filial },
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Falha ao gerar comprovante.';
+      alert(msg);
+    }
+  }
   // Ordena: primeiro a IE habilitada/principal, depois as demais por UF + IE.
   const ordenadas = [...inscricoes].sort((a, b) => {
     const aPrincipal = a.inscricaoEstadual === iePrincipal && a.uf === ufPrincipal;
@@ -536,11 +606,24 @@ function InscricoesEstaduaisDetalhadasCard({
             ie.inscricaoEstadual === iePrincipal && ie.uf === ufPrincipal;
           const aberta = expandidas.has(key);
           return (
-            <div key={key}>
+            <div key={key} className="relative">
+              {/* Botão Imprimir IE — gera PDF backend (paleta SEFAZ) por IE.
+                  Posicionado absolute pra não ser parte do <button> de toggle. */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  imprimirIe(ie);
+                }}
+                title={`Imprimir comprovante CCC desta IE (${ie.uf} · ${ie.inscricaoEstadual})`}
+                className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300"
+              >
+                <Printer className="h-3 w-3" /> Imprimir
+              </button>
               <button
                 type="button"
                 onClick={() => toggleIe(key)}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-inset"
+                className="flex w-full items-center gap-3 px-4 py-3 pr-24 text-left transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-inset"
               >
                 {aberta ? (
                   <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
@@ -903,27 +986,43 @@ function ReceitaFederalCard({ result }: { result: CadastroConsultaResult }) {
         {r.email && <Row label="E-mail" value={r.email} />}
       </div>
 
+      {r.endereco && (r.endereco.logradouro || r.endereco.municipio) && (
+        <div className="mt-4 border-t border-slate-100 pt-3">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+            Endereço (Receita Federal)
+          </div>
+          <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+            {r.endereco.logradouro && (
+              <Row
+                label="Logradouro"
+                value={`${r.endereco.logradouro}${r.endereco.numero ? ', ' + r.endereco.numero : ''}${r.endereco.complemento ? ' — ' + r.endereco.complemento : ''}`}
+                wide
+              />
+            )}
+            {r.endereco.bairro && <Row label="Bairro" value={r.endereco.bairro} />}
+            {r.endereco.cep && <Row label="CEP" value={r.endereco.cep} />}
+            {r.endereco.municipio && <Row label="Município" value={r.endereco.municipio} />}
+            {r.endereco.uf && <Row label="UF" value={r.endereco.uf} />}
+          </div>
+        </div>
+      )}
+
       {r.cnaesSecundarios.length > 0 && (
         <div className="mt-4 border-t border-slate-100 pt-3">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
             CNAEs secundários ({r.cnaesSecundarios.length})
           </div>
-          <ul className="space-y-1 text-xs text-slate-600">
-            {r.cnaesSecundarios.slice(0, 8).map((c, idx) => (
+          <ul className="space-y-1 text-xs text-slate-600 max-h-48 overflow-y-auto">
+            {r.cnaesSecundarios.map((c, idx) => (
               <li key={idx}>
                 <span className="font-mono text-slate-500">{c.codigo}</span> — {c.descricao}
               </li>
             ))}
-            {r.cnaesSecundarios.length > 8 && (
-              <li className="italic text-slate-400">
-                … e mais {r.cnaesSecundarios.length - 8} CNAE(s)
-              </li>
-            )}
           </ul>
         </div>
       )}
 
-      <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-400">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3 text-xs text-slate-400">
         <span>
           Fonte:{' '}
           <strong className="text-slate-600">
@@ -931,6 +1030,15 @@ function ReceitaFederalCard({ result }: { result: CadastroConsultaResult }) {
           </strong>{' '}
           (API pública gratuita)
         </span>
+        <a
+          href="https://solucoes.receita.fazenda.gov.br/Servicos/cnpjreva/cnpjreva_solicitacao.asp"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 font-medium text-blue-700 hover:bg-blue-100"
+          title="Abre o portal da Receita Federal em nova aba — requer captcha humano para baixar o PDF oficial."
+        >
+          🔗 Comprovante oficial na Receita Federal
+        </a>
         <span>
           Consultado em{' '}
           {new Date(r.consultadoEm).toLocaleString('pt-BR')}

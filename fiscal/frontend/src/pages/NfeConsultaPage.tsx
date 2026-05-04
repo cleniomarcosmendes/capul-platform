@@ -196,6 +196,34 @@ export function NfeConsultaPage() {
     }
   }
 
+  /**
+   * Resumo SEFAZ-style para impressão. Backend sincroniza eventos com o
+   * Protheus internamente (sem consumo SEFAZ) e gera PDF com layout completo
+   * — paleta SEFAZ, caixinhas creme/dourado, sempre idêntico em qualquer
+   * navegador (não depende de "Gráficos de fundo" estar marcado).
+   */
+  async function handleImprimirResumo() {
+    if (!result) return;
+    try {
+      setLoading(true);
+      const r = await fiscalApi.get(`/nfe/${result.chave}/filial/${result.filial}/resumo-pdf`, {
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
+      // Abre em nova aba — usuário pode imprimir/salvar pelo viewer do navegador
+      window.open(url, '_blank');
+      // Revoke depois de tempo suficiente para a aba carregar
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      toast.error(
+        'Falha ao gerar resumo',
+        extractApiError(err, 'Tente novamente em alguns minutos.'),
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleAtualizarStatus() {
     if (!result) return;
     try {
@@ -386,6 +414,16 @@ export function NfeConsultaPage() {
                 loading={loading}
               >
                 Atualizar status no SEFAZ
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<Printer className="h-4 w-4" />}
+                onClick={handleImprimirResumo}
+                loading={loading}
+                title="Sincroniza eventos com o Protheus (sem consumo SEFAZ) e abre janela de impressão no padrão do portal SEFAZ"
+              >
+                Imprimir Resumo
               </Button>
             </div>
           </section>
@@ -1790,14 +1828,28 @@ function EventoDetalheModal({
                       value={valorOuVazio(det.descricaoEvento)}
                     />
                     <Row label="Versão" value={valorOuVazio(det.versaoEvento)} />
-                    <Row
-                      label="Justificativa"
-                      value={
-                        det.justificativa ??
-                        '(não disponível — XML do procEventoNFe não foi entregue pelo Protheus nem pela SEFAZ via consChNFe; consulte o portal SEFAZ para ver a justificativa registrada)'
-                      }
-                      wide
-                    />
+                    {det.tipoEvento === '110110' ? (
+                      <>
+                        <Row
+                          label="Texto da Carta de Correção"
+                          value={valorOuVazio(det.correcao)}
+                          wide
+                        />
+                        {det.condicoesUso ? (
+                          <Row
+                            label="Condições de Uso"
+                            value={det.condicoesUso}
+                            wide
+                          />
+                        ) : null}
+                      </>
+                    ) : det.justificativa ? (
+                      <Row
+                        label="Justificativa"
+                        value={det.justificativa}
+                        wide
+                      />
+                    ) : null}
                   </Secao>
 
                   <section>
@@ -1928,9 +1980,26 @@ function imprimirEventoPopup(data: NfeEventoDetalheResponse): void {
         ${campo('Descrição do Evento', det.descricaoEvento ?? '-')}
         ${campo('Versão', det.versaoEvento ?? '-')}
       </section>
+      ${
+        det.tipoEvento === '110110'
+          ? `
       <section class="grid-1">
-        ${campo('Justificativa', det.justificativa ?? '(não disponível — XML do procEventoNFe não foi entregue pelo Protheus nem pela SEFAZ via consChNFe; consulte o portal SEFAZ para ver a justificativa registrada)')}
-      </section>
+        ${campo('Texto da Carta de Correção', det.correcao ?? '-')}
+      </section>${
+        det.condicoesUso
+          ? `
+      <section class="grid-1">
+        ${campo('Condições de Uso', det.condicoesUso)}
+      </section>`
+          : ''
+      }`
+          : det.justificativa
+            ? `
+      <section class="grid-1">
+        ${campo('Justificativa', det.justificativa)}
+      </section>`
+            : ''
+      }
       <h2>Autorização pela SEFAZ</h2>
       <section class="grid-3">
         ${campo('Mensagem de Autorização', det.autorizacaoMensagem ?? '-')}
@@ -2037,3 +2106,4 @@ ${corpo}
   popup.document.write(html);
   popup.document.close();
 }
+

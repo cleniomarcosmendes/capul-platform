@@ -331,7 +331,9 @@ export interface NfeEventoDetalhe {
   sequencial: number | null;
   versaoEvento?: string | null;           // verEvento
   descricaoEvento?: string | null;        // detEvento/descEvento
-  justificativa?: string | null;          // detEvento/xJust
+  justificativa?: string | null;          // detEvento/xJust (cancelamento, op. não realizada)
+  correcao?: string | null;               // detEvento/xCorrecao (CC-e 110110)
+  condicoesUso?: string | null;           // detEvento/xCondUso (CC-e 110110)
   // Autorização pela SEFAZ (retEvento)
   autorizacaoCStat?: string | null;
   autorizacaoMotivo?: string | null;      // xMotivo
