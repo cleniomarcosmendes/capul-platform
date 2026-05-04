@@ -33,7 +33,9 @@ export function ProjetoFormPage() {
 
   const chamadoId = searchParams.get('chamadoId') || '';
   const chamadoNumero = searchParams.get('chamadoNumero') || '';
-  const solicitanteId = searchParams.get('solicitanteId') || '';
+  // solicitanteId era usado pra adicionar solicitante como usuário-chave
+  // automaticamente. Decisão 29/04: equipe TI decide os usuários-chave após
+  // criar o projeto — não puxamos mais via URL.
 
   const [nome, setNome] = useState(searchParams.get('nome') || '');
   const [descricao, setDescricao] = useState(searchParams.get('descricao') || '');
@@ -126,15 +128,27 @@ export function ProjetoFormPage() {
         await projetoService.atualizar(id, updatePayload);
       } else {
         const novoProjeto = await projetoService.criar(payload);
-        // Vincular chamado ao projeto se veio de um chamado
+        // Vincular chamado ao projeto se veio de um chamado.
+        // Decisão 29/04/2026: solicitante do chamado NÃO é mais adicionado
+        // automaticamente como usuário-chave. Quem decide a equipe-chave do
+        // projeto é a equipe TI (depois da criação), não a feature de origem.
         if (chamadoId && novoProjeto?.id) {
-          await chamadoService.vincularProjeto(chamadoId, novoProjeto.id).catch(() => {});
-          // Se o solicitante do chamado existe, adiciona-lo como usuario-chave do projeto
-          if (solicitanteId && solicitanteId !== responsavelId) {
-            await projetoService.adicionarUsuarioChave(novoProjeto.id, {
-              usuarioId: solicitanteId,
-              funcao: 'Solicitante do chamado',
-            }).catch(() => {});
+          const avisos: string[] = [];
+          try {
+            await chamadoService.vincularProjeto(chamadoId, novoProjeto.id);
+          } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+            avisos.push(`Projeto criado, mas não foi possível vincular ao chamado #${chamadoNumero}: ${msg ?? 'erro desconhecido'}.`);
+          }
+          if (avisos.length > 0) {
+            // Mostra os avisos mas não bloqueia o redirect — o projeto foi criado.
+            setError(avisos.join(' '));
+            // Espera 3s antes de redirecionar pra o usuário ler
+            setTimeout(() => {
+              setDirty(false);
+              navigate(`/gestao-ti/chamados/${chamadoId}`);
+            }, 3000);
+            return;
           }
         }
       }

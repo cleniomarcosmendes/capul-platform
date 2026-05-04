@@ -1,7 +1,9 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import * as path from 'path';
@@ -13,8 +15,44 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 }
 
 @Injectable()
-export class ParadaAnexoService {
+export class ParadaAnexoService implements OnModuleInit {
+  private readonly logger = new Logger(ParadaAnexoService.name);
+
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Verifica no startup se o diretório de uploads é gravável pelo usuário
+   * do container (appuser uid=100). Falha comum em PROD: o named volume
+   * `uploads_data` foi criado em deploy anterior quando o container rodava
+   * como root, ficou com ownership root:root, e após o hardening (USER
+   * non-root) o appuser não consegue mais escrever — gera "Erro ao enviar
+   * anexo" silencioso na UI. Esta verificação loga ERROR no boot com
+   * instrução exata pro admin corrigir.
+   */
+  async onModuleInit() {
+    const testPath = path.join(UPLOADS_DIR, '.write-test');
+    try {
+      await fs.promises.writeFile(testPath, 'ok', { flag: 'w' });
+      await fs.promises.unlink(testPath).catch(() => undefined);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'EACCES' || code === 'EPERM') {
+        this.logger.error(
+          `[UPLOADS_DIR_NAO_GRAVAVEL] ${UPLOADS_DIR} não é gravável pelo usuário do ` +
+            `container (appuser uid=100 gid=101). Anexos de Parada VÃO FALHAR. ` +
+            `Solução no host (executar uma vez): ` +
+            `\`docker volume inspect capul-platform_uploads_data --format '{{.Mountpoint}}'\` ` +
+            `para descobrir o caminho, e depois ` +
+            `\`sudo chown -R 100:101 <caminho>\` + \`docker compose restart gestao-ti-backend\`. ` +
+            `Detalhe técnico: ${(err as Error).message}`,
+        );
+      } else {
+        this.logger.warn(
+          `Falha ao validar UPLOADS_DIR ${UPLOADS_DIR} no startup (não-EACCES): ${(err as Error).message}`,
+        );
+      }
+    }
+  }
 
   async listAnexos(paradaId: string) {
     await this.getParadaOrFail(paradaId);

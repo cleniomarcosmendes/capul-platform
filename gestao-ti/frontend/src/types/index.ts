@@ -99,9 +99,9 @@ export interface CentroCusto {
 // === Fase 2 types ===
 
 export type Prioridade = 'CRITICA' | 'ALTA' | 'MEDIA' | 'BAIXA';
-export type StatusChamado = 'ABERTO' | 'EM_ATENDIMENTO' | 'PENDENTE' | 'RESOLVIDO' | 'FECHADO' | 'CANCELADO' | 'REABERTO';
+export type StatusChamado = 'ABERTO' | 'EM_ATENDIMENTO' | 'PENDENTE' | 'PENDENTE_USUARIO' | 'RESOLVIDO' | 'FECHADO' | 'CANCELADO' | 'REABERTO';
 export type Visibilidade = 'PUBLICO' | 'PRIVADO';
-export type TipoHistorico = 'ABERTURA' | 'ASSUMIDO' | 'COMENTARIO' | 'TRANSFERENCIA_EQUIPE' | 'TRANSFERENCIA_TECNICO' | 'RESOLVIDO' | 'FECHADO' | 'REABERTO' | 'CANCELADO' | 'AVALIADO';
+export type TipoHistorico = 'ABERTURA' | 'ASSUMIDO' | 'COMENTARIO' | 'SOLICITACAO_INFO' | 'RETOMADA_USUARIO' | 'TRANSFERENCIA_EQUIPE' | 'TRANSFERENCIA_TECNICO' | 'RESOLVIDO' | 'FECHADO' | 'REABERTO' | 'CANCELADO' | 'AVALIADO';
 export type StatusOS = 'ABERTA' | 'EM_EXECUCAO' | 'CONCLUIDA' | 'CANCELADA';
 
 // === Fase 2B — Portfólio types ===
@@ -704,7 +704,7 @@ export interface DashboardDisponibilidade {
 
 export type TipoProjeto = 'DESENVOLVIMENTO_INTERNO' | 'IMPLANTACAO_TERCEIRO' | 'INFRAESTRUTURA' | 'OUTRO';
 export type ModoProjeto = 'COMPLETO';
-export type StatusProjeto = 'PLANEJAMENTO' | 'EM_ANDAMENTO' | 'PAUSADO' | 'CONCLUIDO' | 'CANCELADO';
+export type StatusProjeto = 'PLANEJAMENTO' | 'EM_ANDAMENTO' | 'EM_HOMOLOGACAO' | 'LIBERADO_PARA_PRODUCAO' | 'PAUSADO' | 'CONCLUIDO' | 'CANCELADO';
 export type PapelRaci = 'RESPONSAVEL' | 'APROVADOR' | 'CONSULTADO' | 'INFORMADO';
 export type StatusFase = 'PENDENTE' | 'EM_ANDAMENTO' | 'APROVADA' | 'REJEITADA';
 

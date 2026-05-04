@@ -82,6 +82,20 @@ export class ProjetoService {
     return this.core.duplicar(id, userId);
   }
 
+  // --- Transições do ciclo HOM → PROD (29/04/2026) ---
+  liberarHomologacao(id: string, userId: string) {
+    return this.core.liberarHomologacao(id, userId);
+  }
+  liberarProducao(id: string, userId: string) {
+    return this.core.liberarProducao(id, userId);
+  }
+  concluirProducao(id: string, userId: string) {
+    return this.core.concluirProducao(id, userId);
+  }
+  voltarParaAndamento(id: string, userId: string, motivo?: string) {
+    return this.core.voltarParaAndamento(id, userId, motivo);
+  }
+
   visaoGeral(projetoId: string) {
     return this.core.visaoGeral(projetoId);
   }

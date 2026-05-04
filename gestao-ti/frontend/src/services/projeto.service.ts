@@ -116,6 +116,24 @@ export const projetoService = {
     return data;
   },
 
+  // --- Transições do ciclo HOM → PROD (29/04/2026) ---
+  async liberarHomologacao(id: string): Promise<Projeto> {
+    const { data } = await gestaoApi.patch(`/projetos/${id}/liberar-homologacao`);
+    return data;
+  },
+  async liberarProducao(id: string): Promise<Projeto> {
+    const { data } = await gestaoApi.patch(`/projetos/${id}/liberar-producao`);
+    return data;
+  },
+  async concluirProducao(id: string): Promise<Projeto> {
+    const { data } = await gestaoApi.patch(`/projetos/${id}/concluir-producao`);
+    return data;
+  },
+  async voltarParaAndamento(id: string, motivo?: string): Promise<Projeto> {
+    const { data } = await gestaoApi.patch(`/projetos/${id}/voltar-andamento`, { motivo });
+    return data;
+  },
+
   // Membros
   async listarMembros(id: string): Promise<MembroProjeto[]> {
     const { data } = await gestaoApi.get(`/projetos/${id}/membros`);

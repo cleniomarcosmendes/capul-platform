@@ -10,6 +10,7 @@ import {
   Req,
   Res,
   UseGuards,
+  UseFilters,
   UseInterceptors,
   UploadedFile,
   BadRequestException,
@@ -22,6 +23,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { ParadaService } from './parada.service';
 import { ParadaAnexoService } from './parada-anexo.service';
+import { UploadEaccesFilter } from './filters/upload-eacces.filter';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { GestaoTiGuard } from '../common/guards/gestao-ti.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -202,6 +204,7 @@ export class ParadaController {
 
   @Post(':id/anexos')
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @UseFilters(UploadEaccesFilter)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({

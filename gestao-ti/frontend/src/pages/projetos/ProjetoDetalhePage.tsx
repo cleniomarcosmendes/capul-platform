@@ -51,6 +51,8 @@ import type {
 const statusLabel: Record<string, string> = {
   PLANEJAMENTO: 'Planejamento',
   EM_ANDAMENTO: 'Em Andamento',
+  EM_HOMOLOGACAO: 'Em Homologação',
+  LIBERADO_PARA_PRODUCAO: 'Liberado p/ Produção',
   PAUSADO: 'Pausado',
   CONCLUIDO: 'Concluido',
   CANCELADO: 'Cancelado',
@@ -59,6 +61,8 @@ const statusLabel: Record<string, string> = {
 const statusCores: Record<string, string> = {
   PLANEJAMENTO: 'bg-blue-100 text-blue-700',
   EM_ANDAMENTO: 'bg-yellow-100 text-yellow-700',
+  EM_HOMOLOGACAO: 'bg-sky-100 text-sky-700 border border-sky-300',
+  LIBERADO_PARA_PRODUCAO: 'bg-teal-100 text-teal-800 border border-teal-300',
   PAUSADO: 'bg-orange-100 text-orange-700',
   CONCLUIDO: 'bg-green-100 text-green-700',
   CANCELADO: 'bg-slate-100 text-slate-600',
@@ -184,10 +188,13 @@ export function ProjetoDetalhePage() {
   const canManage = (isGestorOrAdmin || isMembro) && Boolean(gestaoTiRole);
   const canAddAtividade = canManage;
 
-  const { toast, confirm } = useToast();
+  const { toast, confirm, prompt } = useToast();
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('subprojetos');
   const [statusChanging, setStatusChanging] = useState(false);
+  // Erro distinto de "projeto null" — 403 (sem permissão de usuário-chave)
+  // tem tratamento próprio (modal informativo) vs 404 (não existe).
+  const [acessoNegado, setAcessoNegado] = useState(false);
 
   // Rastrear estado de edicao dos sub-componentes
   const [childEditing, setChildEditing] = useState(false);
@@ -205,19 +212,101 @@ export function ProjetoDetalhePage() {
 
   async function loadProjeto() {
     setLoading(true);
+    setAcessoNegado(false);
     try {
       const data = await projetoService.buscar(id!);
       setProjeto(data);
-    } catch { /* empty */ }
+    } catch (err: unknown) {
+      // Backend retorna 403 quando user não é membro/usuário-chave/terceirizado
+      // do projeto. Diferenciamos pra mostrar modal explicativo em vez de
+      // "Projeto não encontrado" genérico (confunde quando é só falta de acesso).
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 403) {
+        setAcessoNegado(true);
+      }
+      // 404 cai no fluxo padrão (projeto = null, mostra "Projeto não encontrado")
+    }
     setLoading(false);
   }
 
   async function handleStatusChange(newStatus: StatusProjeto) {
     if (!projeto || statusChanging) return;
+
+    // Cancelar/Pausar são ações de impacto — exigem confirmação explícita
+    // (pedido 29/04/2026 — equipe pode clicar acidentalmente no select).
+    if (newStatus === 'CANCELADO') {
+      const ok = await confirm(
+        'Cancelar projeto?',
+        `O projeto #${projeto.numero} "${projeto.nome}" será marcado como CANCELADO. Esta ação não tem reversão automática — você terá que reabrir manualmente caso erre. Confirma?`,
+        { confirmLabel: 'Sim, cancelar', cancelLabel: 'Voltar', variant: 'danger' },
+      );
+      if (!ok) return;
+    } else if (newStatus === 'PAUSADO') {
+      const ok = await confirm(
+        'Pausar projeto?',
+        `O projeto #${projeto.numero} "${projeto.nome}" será marcado como PAUSADO. Confirma?`,
+        { confirmLabel: 'Sim, pausar', cancelLabel: 'Voltar', variant: 'warning' },
+      );
+      if (!ok) return;
+    }
+
     setStatusChanging(true);
     try {
       await projetoService.atualizar(projeto.id, { status: newStatus });
       await loadProjeto();
+      toast('success', 'Status atualizado com sucesso');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+      toast('error', Array.isArray(msg) ? msg.join('. ') : msg || 'Erro ao alterar status do projeto');
+    }
+    setStatusChanging(false);
+  }
+
+  // Transições do ciclo HOM → PROD (29/04/2026) — endpoints dedicados em vez
+  // do PATCH genérico, com validação e notificação direcionada.
+  async function handleTransicao(
+    acao: 'liberar-homologacao' | 'liberar-producao' | 'concluir-producao' | 'voltar-andamento',
+    titulo: string,
+    mensagem: string,
+    motivoPrompt?: boolean,
+  ) {
+    if (!projeto || statusChanging) return;
+    const variant: 'danger' | 'warning' | 'default' =
+      acao === 'voltar-andamento' ? 'warning'
+      : acao === 'concluir-producao' ? 'default'
+      : 'default';
+    const ok = await confirm(titulo, mensagem, {
+      confirmLabel: 'Confirmar',
+      cancelLabel: 'Voltar',
+      variant,
+    });
+    if (!ok) return;
+
+    let motivo: string | undefined;
+    if (motivoPrompt) {
+      const respostaPrompt = await prompt(
+        'Motivo da reabertura',
+        'Descreva brevemente o motivo (opcional, mas recomendado para auditoria).',
+        {
+          placeholder: 'Ex.: bug encontrado em produção, ajuste solicitado pelo cliente...',
+          multiline: true,
+          variant: 'warning',
+          confirmLabel: 'Reabrir',
+        },
+      );
+      // null = usuário cancelou o prompt → aborta toda a transição
+      if (respostaPrompt === null) return;
+      motivo = respostaPrompt || undefined;
+    }
+
+    setStatusChanging(true);
+    try {
+      if (acao === 'liberar-homologacao') await projetoService.liberarHomologacao(projeto.id);
+      else if (acao === 'liberar-producao') await projetoService.liberarProducao(projeto.id);
+      else if (acao === 'concluir-producao') await projetoService.concluirProducao(projeto.id);
+      else if (acao === 'voltar-andamento') await projetoService.voltarParaAndamento(projeto.id, motivo);
+      await loadProjeto();
+      toast('success', 'Status atualizado com sucesso');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
       toast('error', Array.isArray(msg) ? msg.join('. ') : msg || 'Erro ao alterar status do projeto');
@@ -230,6 +319,52 @@ export function ProjetoDetalhePage() {
       <>
         <Header title="Projeto" />
         <div className="p-6"><p className="text-slate-500">Carregando...</p></div>
+      </>
+    );
+  }
+
+  // Acesso negado (403) — modal elegante explicando o motivo. Acontece
+  // quando usuário (ex.: solicitante de chamado vinculado a projeto) clica
+  // no link do projeto mas não é membro/usuário-chave/terceirizado nem TI.
+  if (acessoNegado) {
+    return (
+      <>
+        <Header title="Projeto" />
+        <div className="p-8 max-w-2xl mx-auto">
+          <div className="bg-white rounded-xl border border-amber-300 shadow-sm p-6">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <span className="text-2xl">🔒</span>
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold text-slate-800">Acesso restrito ao projeto</h2>
+                <p className="text-sm text-slate-600 mt-2">
+                  Você não é <strong>usuário-chave</strong> nem membro deste projeto, por isso não consegue
+                  visualizar os detalhes. O acesso a projetos é controlado: somente equipe TI, responsável,
+                  membros, usuários-chave cadastrados e terceirizados vinculados podem abrir.
+                </p>
+                <p className="text-sm text-slate-600 mt-3">
+                  Se você precisa acompanhar este projeto (por exemplo, é o solicitante do chamado de origem),
+                  peça ao responsável da equipe TI para te adicionar como <strong>usuário-chave</strong>.
+                </p>
+                <div className="mt-5 flex gap-3">
+                  <button
+                    onClick={() => navigate(-1)}
+                    className="px-4 py-2 bg-capul-600 text-white rounded-lg text-sm font-medium hover:bg-capul-700"
+                  >
+                    Voltar
+                  </button>
+                  <Link
+                    to="/gestao-ti/chamados"
+                    className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200"
+                  >
+                    Ver meus chamados
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </>
     );
   }
@@ -332,7 +467,80 @@ export function ProjetoDetalhePage() {
                 <span className="text-xs">Nivel {projeto.nivel}</span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {/* Botões dedicados de transição do ciclo HOM → PROD */}
+              {canManage && projeto.status === 'EM_ANDAMENTO' && (
+                <button
+                  onClick={() => handleTransicao(
+                    'liberar-homologacao',
+                    '🧪 Liberar para Homologação?',
+                    `O projeto #${projeto.numero} será marcado como EM_HOMOLOGACAO e os usuários-chave/solicitantes serão notificados para validar em HOM.`,
+                  )}
+                  disabled={statusChanging}
+                  className="bg-sky-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-sky-700 disabled:opacity-50 flex items-center gap-1.5"
+                  title="Move para EM_HOMOLOGACAO. Notifica solicitante e usuários-chave para validar em HOM."
+                >
+                  🧪 Liberar para Homologação
+                </button>
+              )}
+              {canManage && projeto.status === 'EM_HOMOLOGACAO' && (
+                <>
+                  <button
+                    onClick={() => handleTransicao(
+                      'liberar-producao',
+                      '🚀 Liberar para Produção?',
+                      `Confirma que a validação em HOM foi aprovada? O projeto vai para LIBERADO_PARA_PRODUCAO e a equipe Protheus poderá aplicar.`,
+                    )}
+                    disabled={statusChanging}
+                    className="bg-teal-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-teal-700 disabled:opacity-50 flex items-center gap-1.5"
+                    title="Move para LIBERADO_PARA_PRODUCAO. Equipe Protheus pode aplicar."
+                  >
+                    🚀 Liberar para Produção
+                  </button>
+                  <button
+                    onClick={() => handleTransicao(
+                      'voltar-andamento',
+                      '↩ Reabrir para correções?',
+                      `O projeto voltará para EM_ANDAMENTO. Use quando a homologação reprovou. Será solicitado o motivo a seguir.`,
+                      true,
+                    )}
+                    disabled={statusChanging}
+                    className="bg-amber-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-amber-600 disabled:opacity-50 flex items-center gap-1.5"
+                    title="HOM reprovou — volta para EM_ANDAMENTO."
+                  >
+                    ↩ Reabrir
+                  </button>
+                </>
+              )}
+              {canManage && projeto.status === 'LIBERADO_PARA_PRODUCAO' && (
+                <>
+                  <button
+                    onClick={() => handleTransicao(
+                      'concluir-producao',
+                      '✅ Concluir projeto?',
+                      `Confirma que o projeto foi aplicado em PRODUÇÃO com sucesso? Status muda para CONCLUIDO e o projeto será fechado.`,
+                    )}
+                    disabled={statusChanging}
+                    className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 disabled:opacity-50 flex items-center gap-1.5"
+                    title="Move para CONCLUIDO. Projeto fechado."
+                  >
+                    ✅ Concluir (aplicado em PROD)
+                  </button>
+                  <button
+                    onClick={() => handleTransicao(
+                      'voltar-andamento',
+                      '↩ Reabrir projeto liberado?',
+                      `O projeto voltará para EM_ANDAMENTO, cancelando a liberação. Use se foi encontrado bug em PROD ou problema de última hora. Será solicitado o motivo a seguir.`,
+                      true,
+                    )}
+                    disabled={statusChanging}
+                    className="bg-amber-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-amber-600 disabled:opacity-50 flex items-center gap-1.5"
+                    title="Volta para EM_ANDAMENTO. Cancela liberação."
+                  >
+                    ↩ Reabrir
+                  </button>
+                </>
+              )}
               {canManage && !['CONCLUIDO', 'CANCELADO'].includes(projeto.status) && (
                 <select
                   value=""
@@ -341,10 +549,13 @@ export function ProjetoDetalhePage() {
                   }}
                   disabled={statusChanging}
                   className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                  title="Outras alterações de status (Pausar, Cancelar, etc.)"
                 >
-                  <option value="">Alterar Status...</option>
+                  <option value="">Outras alterações...</option>
                   {Object.entries(statusLabel)
                     .filter(([k]) => k !== projeto.status)
+                    // Esconde transições do ciclo HOM→PROD (já têm botões dedicados)
+                    .filter(([k]) => !['EM_HOMOLOGACAO', 'LIBERADO_PARA_PRODUCAO'].includes(k))
                     .map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
               )}
@@ -3270,11 +3481,16 @@ function ModalVincularChamadosProjeto({ projetoId, itensVinculados, onDone, onCl
                     className={`cursor-pointer transition-colors ${selecionados.has(c.id) ? 'bg-capul-50' : 'hover:bg-slate-50'}`}
                   >
                     <td className="px-4 py-2.5">
+                      {/* stopPropagation no onClick evita que o clique propague
+                          pra <tr>, que também tem onClick={toggleSelecionado}.
+                          Sem isso, clicar no checkbox disparava 2 toggles
+                          (checkbox + tr) e o net era zero — bug 29/04. */}
                       <input
                         type="checkbox"
                         checked={selecionados.has(c.id)}
                         onChange={() => toggleSelecionado(c.id)}
-                        className="rounded border-slate-300"
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded border-slate-300 cursor-pointer"
                       />
                     </td>
                     <td className="px-4 py-2.5 font-medium text-slate-700">{c.numero}</td>

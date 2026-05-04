@@ -110,8 +110,17 @@ export const chamadoService = {
     return data;
   },
 
-  async comentar(id: string, descricao: string, publico = true): Promise<HistoricoChamado> {
-    const { data } = await gestaoApi.post(`/chamados/${id}/comentar`, { descricao, publico });
+  async comentar(
+    id: string,
+    descricao: string,
+    publico = true,
+    solicitarInfoUsuario = false,
+  ): Promise<HistoricoChamado> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/comentar`, {
+      descricao,
+      publico,
+      solicitarInfoUsuario,
+    });
     return data;
   },
 

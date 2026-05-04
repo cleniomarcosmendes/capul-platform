@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { projetoService } from '../../services/projeto.service';
 import { softwareService } from '../../services/software.service';
 import { compraService } from '../../services/compra.service';
-import { FolderKanban, Plus, Search, Download, Star } from 'lucide-react';
+import { FolderKanban, Plus, Search, Download, Star, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import type { Projeto, Software, TipoProjetoConfig } from '../../types';
 import { formatDateBR } from '../../utils/date';
@@ -14,6 +14,8 @@ import { Paginator } from '../../components/Paginator';
 const statusLabel: Record<string, string> = {
   PLANEJAMENTO: 'Planejamento',
   EM_ANDAMENTO: 'Em Andamento',
+  EM_HOMOLOGACAO: 'Em Homologação',
+  LIBERADO_PARA_PRODUCAO: 'Liberado p/ Produção',
   PAUSADO: 'Pausado',
   CONCLUIDO: 'Concluido',
   CANCELADO: 'Cancelado',
@@ -22,6 +24,8 @@ const statusLabel: Record<string, string> = {
 const statusCores: Record<string, string> = {
   PLANEJAMENTO: 'bg-blue-100 text-blue-700',
   EM_ANDAMENTO: 'bg-yellow-100 text-yellow-700',
+  EM_HOMOLOGACAO: 'bg-sky-100 text-sky-700 border border-sky-300',
+  LIBERADO_PARA_PRODUCAO: 'bg-teal-100 text-teal-800 border border-teal-300',
   PAUSADO: 'bg-orange-100 text-orange-700',
   CONCLUIDO: 'bg-green-100 text-green-700',
   CANCELADO: 'bg-slate-100 text-slate-600',
@@ -94,9 +98,33 @@ export function ProjetosListPage() {
     return true;
   });
 
+  // Sort por coluna (29/04/2026) — quando sortKey === null, usa o
+  // comportamento default (favoritos primeiro + numero asc dentro de cada
+  // nível da árvore). Quando user clica em coluna, troca por aquela coluna
+  // (perde favoritos-primeiro). DFS é preservado em qualquer caso — pai
+  // permanece acima dos filhos pra não quebrar a estrutura visual.
+  type SortKey = 'numero' | 'nome' | 'tipo' | 'status' | 'software' | 'responsavel' | 'dataInicio' | 'subprojetos';
+  type SortDir = 'asc' | 'desc';
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
+  function SortIcon({ col }: { col: SortKey }) {
+    if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300 inline" />;
+    return sortDir === 'asc'
+      ? <ArrowUp className="w-3 h-3 text-capul-600 inline" />
+      : <ArrowDown className="w-3 h-3 text-capul-600 inline" />;
+  }
+
   // Ordenação por árvore (DFS): pai primeiro, filhos abaixo, recursivo.
-  // Dentro de cada nível, ordena por (favorito desc, numero asc).
-  // Filhos cujo pai não está na página atual são apêndicados no final como "órfãos".
+  // O `cmp` interno usa sortKey/sortDir do user; quando null, mantém o
+  // comportamento legado (favoritos > numero asc).
   const projetosOrdenados = useMemo(() => {
     const byParent = new Map<string | null, typeof projetosFiltrados>();
     projetosFiltrados.forEach((p) => {
@@ -105,12 +133,50 @@ export function ProjetosListPage() {
       arr.push(p);
       byParent.set(key, arr);
     });
-    const cmp = (a: typeof projetosFiltrados[0], b: typeof projetosFiltrados[0]) => {
+
+    type ProjetoItem = typeof projetosFiltrados[0];
+    const cmpDefault = (a: ProjetoItem, b: ProjetoItem) => {
       const aFav = favoritoIds.has(a.id) ? 0 : 1;
       const bFav = favoritoIds.has(b.id) ? 0 : 1;
       if (aFav !== bFav) return aFav - bFav;
       return Number(a.numero) - Number(b.numero);
     };
+    const cmpCustom = (a: ProjetoItem, b: ProjetoItem) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      switch (sortKey) {
+        case 'numero':
+          va = Number(a.numero); vb = Number(b.numero); break;
+        case 'nome':
+          va = (a.nome ?? '').toLowerCase(); vb = (b.nome ?? '').toLowerCase(); break;
+        case 'tipo':
+          va = (a.tipoProjeto?.descricao ?? a.tipo ?? '').toLowerCase();
+          vb = (b.tipoProjeto?.descricao ?? b.tipo ?? '').toLowerCase();
+          break;
+        case 'status':
+          va = a.status ?? ''; vb = b.status ?? ''; break;
+        case 'software':
+          va = (a.software?.nome ?? '').toLowerCase();
+          vb = (b.software?.nome ?? '').toLowerCase();
+          break;
+        case 'responsavel':
+          va = (a.responsavel?.nome ?? '').toLowerCase();
+          vb = (b.responsavel?.nome ?? '').toLowerCase();
+          break;
+        case 'dataInicio':
+          va = a.dataInicio ? new Date(a.dataInicio).getTime() : 0;
+          vb = b.dataInicio ? new Date(b.dataInicio).getTime() : 0;
+          break;
+        case 'subprojetos':
+          va = a._count?.subProjetos ?? 0; vb = b._count?.subProjetos ?? 0; break;
+      }
+      let cmp: number;
+      if (typeof va === 'number' && typeof vb === 'number') cmp = va - vb;
+      else cmp = String(va).localeCompare(String(vb));
+      return sortDir === 'asc' ? cmp : -cmp;
+    };
+    const cmp = sortKey ? cmpCustom : cmpDefault;
+
     const result: typeof projetosFiltrados = [];
     const visitados = new Set<string>();
     const dfs = (parentId: string | null) => {
@@ -128,7 +194,7 @@ export function ProjetosListPage() {
       if (!visitados.has(p.id)) result.push(p);
     });
     return result;
-  }, [projetosFiltrados, favoritoIds]);
+  }, [projetosFiltrados, favoritoIds, sortKey, sortDir]);
 
   async function handleToggleFavorito(projetoId: string) {
     try {
@@ -143,7 +209,7 @@ export function ProjetosListPage() {
   }
 
   const totalAtivos = projetosFiltrados.filter((p) =>
-    ['PLANEJAMENTO', 'EM_ANDAMENTO', 'PAUSADO'].includes(p.status),
+    ['PLANEJAMENTO', 'EM_ANDAMENTO', 'EM_HOMOLOGACAO', 'LIBERADO_PARA_PRODUCAO', 'PAUSADO'].includes(p.status),
   ).length;
   const emAndamento = projetosFiltrados.filter((p) => p.status === 'EM_ANDAMENTO').length;
   const planejamento = projetosFiltrados.filter((p) => p.status === 'PLANEJAMENTO').length;
@@ -214,6 +280,8 @@ export function ProjetosListPage() {
           <select value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
             <option value="">Todos Status</option>
             <option value="EM_ANDAMENTO,PLANEJAMENTO">Ativos (Andamento + Planejamento)</option>
+            <option value="EM_HOMOLOGACAO">🧪 Aguardando validação HOM</option>
+            <option value="LIBERADO_PARA_PRODUCAO">🚀 Aguardando produção</option>
             {Object.entries(statusLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
           <select value={filtroSoftware} onChange={(e) => setFiltroSoftware(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
@@ -259,14 +327,46 @@ export function ProjetosListPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 text-left">
-                    <th className="px-4 py-3 font-medium text-slate-600">#</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Nome</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Tipo</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Status</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Software</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Responsavel</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Inicio</th>
-                    <th className="px-4 py-3 font-medium text-slate-600 text-right">Sub</th>
+                    <th className="px-4 py-3 font-medium text-slate-600">
+                      <button onClick={() => toggleSort('numero')} className="flex items-center gap-1 hover:text-slate-800">
+                        # <SortIcon col="numero" />
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 font-medium text-slate-600">
+                      <button onClick={() => toggleSort('nome')} className="flex items-center gap-1 hover:text-slate-800">
+                        Nome <SortIcon col="nome" />
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 font-medium text-slate-600">
+                      <button onClick={() => toggleSort('tipo')} className="flex items-center gap-1 hover:text-slate-800">
+                        Tipo <SortIcon col="tipo" />
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 font-medium text-slate-600">
+                      <button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-slate-800">
+                        Status <SortIcon col="status" />
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 font-medium text-slate-600">
+                      <button onClick={() => toggleSort('software')} className="flex items-center gap-1 hover:text-slate-800">
+                        Software <SortIcon col="software" />
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 font-medium text-slate-600">
+                      <button onClick={() => toggleSort('responsavel')} className="flex items-center gap-1 hover:text-slate-800">
+                        Responsavel <SortIcon col="responsavel" />
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 font-medium text-slate-600">
+                      <button onClick={() => toggleSort('dataInicio')} className="flex items-center gap-1 hover:text-slate-800">
+                        Inicio <SortIcon col="dataInicio" />
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 font-medium text-slate-600 text-right">
+                      <button onClick={() => toggleSort('subprojetos')} className="ml-auto flex items-center gap-1 hover:text-slate-800">
+                        Sub <SortIcon col="subprojetos" />
+                      </button>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">

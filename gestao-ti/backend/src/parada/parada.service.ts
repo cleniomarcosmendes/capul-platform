@@ -298,7 +298,7 @@ export class ParadaService {
 
     const duracaoMinutos = Math.round((fim.getTime() - parada.inicio.getTime()) / 60000);
 
-    const atualizada = await this.prisma.registroParada.update({
+    await this.prisma.registroParada.update({
       where: { id },
       data: {
         status: 'FINALIZADA',
@@ -311,14 +311,16 @@ export class ParadaService {
         reabertaEm: null,
         reabertaPorId: null,
       },
-      include: paradaDetailInclude,
     });
     await this.registrarHistorico(id, 'FINALIZADA', userId, dto.observacoes ?? null, {
       fim: fim.toISOString(),
       duracaoMinutos,
       foiReaberta: !!parada.reabertaEm,
     });
-    return atualizada;
+    // Recarrega após o registrarHistorico para incluir a nova linha do
+    // histórico no retorno — sem isso o frontend exibe a timeline sem o
+    // evento recém-criado até o usuário sair e voltar na tela.
+    return this.findOne(id);
   }
 
   async cancelar(id: string, userId?: string) {
@@ -328,13 +330,13 @@ export class ParadaService {
       throw new BadRequestException('So e possivel cancelar paradas em andamento');
     }
 
-    const atualizada = await this.prisma.registroParada.update({
+    await this.prisma.registroParada.update({
       where: { id },
       data: { status: 'CANCELADA' },
-      include: paradaDetailInclude,
     });
     await this.registrarHistorico(id, 'CANCELADA', userId ?? null, null);
-    return atualizada;
+    // Recarrega para incluir o evento CANCELADA novo no histórico retornado
+    return this.findOne(id);
   }
 
   /**
@@ -356,7 +358,7 @@ export class ParadaService {
     }
     // status === 'FINALIZADA'. Registra reabertura para que finalizar()
     // subsequente exija observações documentando o que foi alterado.
-    const atualizada = await this.prisma.registroParada.update({
+    await this.prisma.registroParada.update({
       where: { id },
       data: {
         status: 'EM_ANDAMENTO',
@@ -366,13 +368,13 @@ export class ParadaService {
         reabertaEm: new Date(),
         reabertaPorId: userId,
       },
-      include: paradaDetailInclude,
     });
     await this.registrarHistorico(id, 'REABERTA', userId, null, {
       fimAnterior: parada.fim?.toISOString(),
       duracaoMinutosAnterior: parada.duracaoMinutos,
     });
-    return atualizada;
+    // Recarrega para incluir o evento REABERTA novo no histórico retornado
+    return this.findOne(id);
   }
 
   async vincularChamado(paradaId: string, chamadoId: string) {

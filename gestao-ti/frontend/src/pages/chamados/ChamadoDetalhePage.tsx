@@ -5,19 +5,21 @@ import { useAuth } from '../../contexts/AuthContext';
 import { chamadoService } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
 import {
-  ArrowLeft, UserPlus, ArrowRightLeft, Send, CheckCircle,
+  ArrowLeft, UserPlus, ArrowRightLeft, CheckCircle,
   XCircle, RotateCcw, Lock, Star, Users, MessageSquare,
   Paperclip, Download, Trash2, FileText, Image, FileSpreadsheet, File,
-  Play, Square, Edit3, Check, X, Clock, Copy, Printer,
+  Play, Square, Edit3, Check, X, Clock, Copy, Printer, Bell,
 } from 'lucide-react';
 import { coreService } from '../../services/core.service';
 import { useToast } from '../../components/Toast';
-import type { Chamado, EquipeTI, AnexoChamado, StatusChamado, TipoHistorico, ChamadoColaborador, RegistroTempoChamado, UsuarioCore } from '../../types';
+import type { Chamado, EquipeTI, AnexoChamado, StatusChamado, ChamadoColaborador, RegistroTempoChamado, UsuarioCore } from '../../types';
 import { MentionInput } from '../../components/MentionInput';
+import { ChatBubbleList, type ChatEvent } from '../../components/ChatBubbleList';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 
 const statusLabels: Record<StatusChamado, string> = {
   ABERTO: 'Aberto', EM_ATENDIMENTO: 'Em Atendimento', PENDENTE: 'Pendente',
+  PENDENTE_USUARIO: 'Pendente Usuário',
   RESOLVIDO: 'Resolvido', FECHADO: 'Fechado', CANCELADO: 'Cancelado', REABERTO: 'Reaberto',
 };
 
@@ -25,6 +27,7 @@ const statusColors: Record<StatusChamado, string> = {
   ABERTO: 'bg-blue-100 text-blue-700 border-blue-200',
   EM_ATENDIMENTO: 'bg-yellow-100 text-yellow-700 border-yellow-200',
   PENDENTE: 'bg-orange-100 text-orange-700 border-orange-200',
+  PENDENTE_USUARIO: 'bg-pink-100 text-pink-800 border-pink-300',
   RESOLVIDO: 'bg-green-100 text-green-700 border-green-200',
   FECHADO: 'bg-slate-100 text-slate-600 border-slate-200',
   CANCELADO: 'bg-red-100 text-red-600 border-red-200',
@@ -40,12 +43,9 @@ const prioridadeLabels: Record<string, string> = {
   CRITICA: 'Critica', ALTA: 'Alta', MEDIA: 'Media', BAIXA: 'Baixa',
 };
 
-const tipoIcons: Record<TipoHistorico, typeof MessageSquare> = {
-  ABERTURA: Send, ASSUMIDO: UserPlus, COMENTARIO: MessageSquare,
-  TRANSFERENCIA_EQUIPE: ArrowRightLeft, TRANSFERENCIA_TECNICO: Users,
-  RESOLVIDO: CheckCircle, FECHADO: Lock, REABERTO: RotateCcw, CANCELADO: XCircle,
-  AVALIADO: Star,
-};
+// tipoIcons foi removido em 29/04/2026 — a renderização do histórico foi
+// migrada pro componente ChatBubbleList (estilo WhatsApp). Os ícones agora
+// vivem dentro de ChatBubbleList.
 
 function getFileIcon(mimeType: string) {
   if (mimeType.startsWith('image/')) return Image;
@@ -92,10 +92,6 @@ export function ChamadoDetalhePage() {
   const [csatNota, setCsatNota] = useState(5);
   const [csatComentario, setCsatComentario] = useState('');
 
-  // Editar comentario
-  const [editingHistoricoId, setEditingHistoricoId] = useState<string | null>(null);
-  const [editingTexto, setEditingTexto] = useState('');
-
   // Anexos
   const [anexos, setAnexos] = useState<AnexoChamado[]>([]);
   const [uploadingAnexo, setUploadingAnexo] = useState(false);
@@ -120,7 +116,7 @@ export function ChamadoDetalhePage() {
   const isEditing = Boolean(
     (showComentario && comentarioTexto.trim()) ||
     showTransferir || showResolver || showReabrir || showAvaliar ||
-    editingHistoricoId || editingReg || showAddColab
+    editingReg || showAddColab
   );
   const { ConfirmDialog, guardedNavigate } = useUnsavedChanges(isEditing);
 
@@ -240,7 +236,7 @@ export function ChamadoDetalhePage() {
   const temTecnico = !!chamado.tecnicoId;
   const finalizado = ['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status);
   const emAndamento = !finalizado;
-  const canAssumir = isTecnico && ['ABERTO', 'PENDENTE', 'REABERTO'].includes(chamado.status);
+  const canAssumir = isTecnico && ['ABERTO', 'PENDENTE', 'PENDENTE_USUARIO', 'REABERTO'].includes(chamado.status);
   const canTransferirEquipe = podeMovimentar && emAndamento;
   const canTransferirTecnico = podeMovimentar && emAndamento && temTecnico;
   const canResolver = podeMovimentar && emAndamento && temTecnico;
@@ -267,6 +263,30 @@ export function ChamadoDetalhePage() {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Main content */}
           <div className="lg:col-span-3 space-y-6">
+            {/* Banner Pendente Usuário — visível enquanto o chamado aguarda
+                a resposta do solicitante. Mostra desde quando (último evento
+                SOLICITACAO_INFO). Auto-some quando o solicitante responder
+                (status volta para EM_ATENDIMENTO automaticamente). */}
+            {chamado.status === 'PENDENTE_USUARIO' && (() => {
+              const ultimaSolicitacao = [...(chamado.historicos ?? [])]
+                .reverse()
+                .find((h) => h.tipo === 'SOLICITACAO_INFO');
+              const desde = ultimaSolicitacao?.createdAt
+                ? new Date(ultimaSolicitacao.createdAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+                : null;
+              const nomeSolic = chamado.solicitante?.nome ?? 'solicitante';
+              return (
+                <div className="bg-pink-50 border border-pink-300 rounded-xl p-4 flex items-start gap-3">
+                  <Bell className="w-5 h-5 text-pink-700 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-pink-900">
+                    <p className="font-medium">Aguardando resposta de {nomeSolic}</p>
+                    {desde && (
+                      <p className="text-xs text-pink-800 mt-0.5">Desde {desde} — chamado retorna automaticamente para "Em Atendimento" assim que o solicitante comentar.</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
             {/* Header info */}
             <div className="bg-white rounded-xl border border-slate-200 p-6">
               <div className="flex items-start justify-between gap-4 mb-4">
@@ -555,12 +575,29 @@ export function ChamadoDetalhePage() {
                     Visivel para o solicitante
                   </label>
                 )}
-                <div className="flex gap-2">
-                  <button onClick={() => runAction(async () => { await chamadoService.comentar(chamado.id, comentarioTexto, comentarioPublico); return chamadoService.buscar(chamado.id); })}
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => runAction(async () => { await chamadoService.comentar(chamado.id, comentarioTexto, comentarioPublico, false); return chamadoService.buscar(chamado.id); })}
                     disabled={actionLoading || !comentarioTexto.trim()}
                     className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
                     Salvar Comentario
                   </button>
+                  {/* Botão extra: técnico/colaborador/gestor pode solicitar info ao
+                      solicitante. Marca chamado como PENDENTE_USUARIO + força publico=true
+                      + envia notificação destacada. Solicitante volta o status pra
+                      EM_ATENDIMENTO automaticamente quando responder. */}
+                  {!isUsuarioFinal && ['EM_ATENDIMENTO', 'PENDENTE_USUARIO'].includes(chamado.status) && (
+                    <button
+                      onClick={() => runAction(async () => {
+                        await chamadoService.comentar(chamado.id, comentarioTexto, true, true);
+                        return chamadoService.buscar(chamado.id);
+                      })}
+                      disabled={actionLoading || !comentarioTexto.trim()}
+                      title="Solicita informações ao solicitante. Chamado vai para 'Pendente Usuário' até o solicitante responder, e volta automático para 'Em Atendimento'."
+                      className="bg-amber-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-amber-600 disabled:opacity-50 flex items-center gap-1.5">
+                      <span aria-hidden="true">🔔</span>
+                      Solicitar info ao usuário
+                    </button>
+                  )}
                   <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
                 </div>
               </div>
@@ -691,85 +728,27 @@ export function ChamadoDetalhePage() {
                 {!chamado.historicos || chamado.historicos.length === 0 ? (
                   <p className="text-sm text-slate-400">Nenhum historico</p>
                 ) : (
-                  <div className="space-y-4">
-                    {chamado.historicos.map((h) => {
-                      const Icon = tipoIcons[h.tipo] || MessageSquare;
-                      const papel = h.usuarioId === chamado.solicitanteId
+                  <ChatBubbleList
+                    eventos={chamado.historicos as unknown as ChatEvent[]}
+                    currentUserId={usuario?.id ?? ''}
+                    getPapel={(uid) =>
+                      uid === chamado.solicitanteId
                         ? { label: 'Solicitante', cls: 'bg-blue-100 text-blue-600' }
-                        : h.usuarioId === chamado.tecnicoId
+                        : uid === chamado.tecnicoId
                           ? { label: 'Responsavel', cls: 'bg-capul-100 text-capul-700' }
-                          : colaboradores.some((c) => c.usuarioId === h.usuarioId)
+                          : colaboradores.some((c) => c.usuarioId === uid)
                             ? { label: 'Colaborador', cls: 'bg-amber-100 text-amber-700' }
-                            : null;
-                      return (
-                        <div key={h.id} className="flex gap-3">
-                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
-                            <Icon className="w-4 h-4 text-slate-500" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-baseline gap-2 flex-wrap">
-                              <span className="text-sm font-medium text-slate-700">{h.usuario.nome}</span>
-                              {papel && <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${papel.cls}`}>{papel.label}</span>}
-                              <span className="text-xs text-slate-400">{new Date(h.createdAt).toLocaleString('pt-BR')}</span>
-                              {!h.publico && <span className="text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">INTERNO</span>}
-                            </div>
-                            {h.tipo === 'COMENTARIO' && editingHistoricoId === h.id ? (
-                              <div className="mt-1 space-y-2">
-                                <textarea
-                                  value={editingTexto}
-                                  onChange={(e) => setEditingTexto(e.target.value)}
-                                  rows={3}
-                                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                                  autoFocus
-                                />
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={async () => {
-                                      if (!editingTexto.trim()) return;
-                                      try {
-                                        await chamadoService.editarComentario(chamado.id, h.id, editingTexto);
-                                        const updated = await chamadoService.buscar(chamado.id);
-                                        setChamado(updated);
-                                        setEditingHistoricoId(null);
-                                      } catch { /* empty */ }
-                                    }}
-                                    disabled={!editingTexto.trim()}
-                                    className="flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-                                  >
-                                    <Check className="w-3.5 h-3.5" /> Salvar
-                                  </button>
-                                  <button
-                                    onClick={() => setEditingHistoricoId(null)}
-                                    className="text-sm text-slate-500 hover:text-slate-700"
-                                  >
-                                    Cancelar
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex items-start gap-2 mt-0.5 group/comment">
-                                <p className="text-sm text-slate-600 flex-1">{h.descricao}</p>
-                                {h.tipo === 'COMENTARIO' && (h.usuarioId === usuario?.id || isGestor) && (
-                                  <button
-                                    onClick={() => { setEditingHistoricoId(h.id); setEditingTexto(h.descricao); }}
-                                    className="opacity-0 group-hover/comment:opacity-100 text-slate-300 hover:text-capul-600 transition-all p-0.5 flex-shrink-0"
-                                    title="Editar comentario"
-                                  >
-                                    <Edit3 className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                            {h.equipeOrigem && h.equipeDestino && (
-                              <p className="text-xs text-slate-400 mt-1">
-                                {h.equipeOrigem.sigla} → {h.equipeDestino.sigla}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                            : null
+                    }
+                    canEdit={(ev) =>
+                      ev.tipo === 'COMENTARIO' && (ev.usuarioId === usuario?.id || isGestor)
+                    }
+                    onEditComentario={async (id, novoTexto) => {
+                      await chamadoService.editarComentario(chamado.id, id, novoTexto);
+                      const updated = await chamadoService.buscar(chamado.id);
+                      setChamado(updated);
+                    }}
+                  />
                 )}
               </div>
             </div>

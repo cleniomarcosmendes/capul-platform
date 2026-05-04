@@ -201,6 +201,10 @@ enum StatusChamado {
   ABERTO
   EM_ATENDIMENTO
   PENDENTE
+  /// Chamado em atendimento mas técnico solicitou informação ao solicitante
+  /// — fica parado até o solicitante responder (auto-volta para EM_ATENDIMENTO).
+  /// Adicionado em 29/04/2026 para reduzir ambiguidade do PENDENTE genérico.
+  PENDENTE_USUARIO
   RESOLVIDO
   FECHADO
   CANCELADO
@@ -222,6 +226,12 @@ enum TipoHistorico {
   TRANSFERENCIA_EQUIPE
   TRANSFERENCIA_TECNICO
   COMENTARIO
+  /// Técnico solicitou informações ao solicitante. Status muda para
+  /// PENDENTE_USUARIO. Adicionado em 29/04/2026.
+  SOLICITACAO_INFO
+  /// Solicitante respondeu chamado em PENDENTE_USUARIO. Auto-volta para
+  /// EM_ATENDIMENTO. Adicionado em 29/04/2026.
+  RETOMADA_USUARIO
   RESOLVIDO
   FECHADO
   REABERTO
@@ -813,6 +823,12 @@ enum ModoProjeto {
 enum StatusProjeto {
   PLANEJAMENTO
   EM_ANDAMENTO
+  /// Aplicado em HOM, em validação pelo solicitante / usuários-chave.
+  /// Adicionado em 29/04/2026 — antes "CONCLUIDO" cobria esse caso ambiguamente.
+  EM_HOMOLOGACAO
+  /// Validado em HOM, aguardando equipe Protheus aplicar em PROD.
+  /// Adicionado em 29/04/2026 — substitui "anotações informais" sobre o que pode subir.
+  LIBERADO_PARA_PRODUCAO
   PAUSADO
   CONCLUIDO
   CANCELADO

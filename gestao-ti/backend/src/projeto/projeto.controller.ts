@@ -146,6 +146,43 @@ export class ProjetoController {
     return this.service.update(id, dto);
   }
 
+  // --- Transições de status do ciclo HOM → PROD (29/04/2026) ---
+  // Endpoints dedicados (em vez de via PATCH /:id genérico) para auditoria
+  // clara, validação de origem específica e notificação direcionada.
+
+  @Patch(':id/liberar-homologacao')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  async liberarHomologacao(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
+    await this.service.assertMembroOuGestor(id, user.sub, role);
+    return this.service.liberarHomologacao(id, user.sub);
+  }
+
+  @Patch(':id/liberar-producao')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  async liberarProducao(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
+    await this.service.assertMembroOuGestor(id, user.sub, role);
+    return this.service.liberarProducao(id, user.sub);
+  }
+
+  @Patch(':id/concluir-producao')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  async concluirProducao(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
+    await this.service.assertMembroOuGestor(id, user.sub, role);
+    return this.service.concluirProducao(id, user.sub);
+  }
+
+  @Patch(':id/voltar-andamento')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  async voltarAndamento(
+    @Param('id') id: string,
+    @Body('motivo') motivo: string | undefined,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    await this.service.assertMembroOuGestor(id, user.sub, role);
+    return this.service.voltarParaAndamento(id, user.sub, motivo);
+  }
+
   @Delete(':id')
   @Roles('ADMIN', 'GESTOR_TI')
   remove(@Param('id') id: string) {
@@ -153,7 +190,7 @@ export class ProjetoController {
   }
 
   @Post(':id/duplicar')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   duplicar(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.service.duplicar(id, user.sub);
   }

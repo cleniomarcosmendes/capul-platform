@@ -61,7 +61,9 @@ function KpiCard({ label, value, sub, icon: Icon, color }: {
 
 const statusColors: Record<string, string> = {
   ABERTO: 'bg-blue-100 text-blue-700', EM_ATENDIMENTO: 'bg-yellow-100 text-yellow-700',
-  PENDENTE: 'bg-orange-100 text-orange-700', RESOLVIDO: 'bg-green-100 text-green-700',
+  PENDENTE: 'bg-orange-100 text-orange-700',
+  PENDENTE_USUARIO: 'bg-pink-100 text-pink-800',
+  RESOLVIDO: 'bg-green-100 text-green-700',
   FECHADO: 'bg-slate-100 text-slate-600', CANCELADO: 'bg-red-100 text-red-600',
   REABERTO: 'bg-purple-100 text-purple-700',
   ABERTA: 'bg-blue-100 text-blue-700', EM_EXECUCAO: 'bg-yellow-100 text-yellow-700',

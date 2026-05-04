@@ -97,26 +97,55 @@ export class ProjetoMembroService {
   }
 
   async addUsuarioChave(projetoId: string, dto: CreateUsuarioChaveDto) {
-    await this.helpers.ensureProjetoExists(projetoId);
+    // Buscar dados do projeto para usar na notificação. Usa findUnique direto
+    // (em vez de ensureProjetoExists) para já ter numero+nome em mãos.
+    const projeto = await this.prisma.projeto.findUnique({
+      where: { id: projetoId },
+      select: { id: true, numero: true, nome: true },
+    });
+    if (!projeto) throw new NotFoundException('Projeto nao encontrado');
+
     const usuario = await this.prisma.usuario.findUnique({ where: { id: dto.usuarioId } });
     if (!usuario) throw new BadRequestException('Usuario nao encontrado');
 
     const existente = await this.prisma.usuarioChaveProjeto.findUnique({
       where: { projetoId_usuarioId: { projetoId, usuarioId: dto.usuarioId } },
     });
+
+    let resultado;
+    let isNovoVinculo = false;
     if (existente) {
       if (existente.ativo) throw new BadRequestException('Usuario ja e usuario-chave deste projeto');
-      return this.prisma.usuarioChaveProjeto.update({
+      // Reativação — notifica do mesmo jeito (gap pode ser longo, ele esqueceu)
+      resultado = await this.prisma.usuarioChaveProjeto.update({
         where: { id: existente.id },
         data: { ativo: true, funcao: dto.funcao },
         include: { usuario: { select: { id: true, nome: true, username: true, email: true } } },
       });
+      isNovoVinculo = true;
+    } else {
+      resultado = await this.prisma.usuarioChaveProjeto.create({
+        data: { projetoId, usuarioId: dto.usuarioId, funcao: dto.funcao },
+        include: { usuario: { select: { id: true, nome: true, username: true, email: true } } },
+      });
+      isNovoVinculo = true;
     }
 
-    return this.prisma.usuarioChaveProjeto.create({
-      data: { projetoId, usuarioId: dto.usuarioId, funcao: dto.funcao },
-      include: { usuario: { select: { id: true, nome: true, username: true, email: true } } },
-    });
+    // Notificar o usuário-chave da inclusão. Antes (até 28/04) este método
+    // simplesmente persistia sem avisar — gap reportado pelo Marco em 29/04
+    // ("usuário-chave não recebeu notificação quanto à criação do projeto").
+    if (isNovoVinculo) {
+      const funcaoTrecho = dto.funcao ? ` como "${dto.funcao}"` : '';
+      this.notificacaoService.criarParaUsuario(
+        dto.usuarioId,
+        'PROJETO_ATUALIZADO',
+        `Voce foi adicionado ao projeto #${projeto.numero}`,
+        `Voce foi incluido${funcaoTrecho} no projeto "${projeto.nome}". Acesse o projeto pelo modulo Gestao TI > Projetos para acompanhar pendencias e atualizacoes.`,
+        { projetoId, usuarioChaveId: resultado.id },
+      ).catch((err) => console.error('Notificacao error:', err.message));
+    }
+
+    return resultado;
   }
 
   async removeUsuarioChave(projetoId: string, ucId: string) {

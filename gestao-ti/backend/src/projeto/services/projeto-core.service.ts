@@ -8,6 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { CreateProjetoDto } from '../dto/create-projeto.dto.js';
 import { UpdateProjetoDto } from '../dto/update-projeto.dto.js';
 import { ProjetoHelpersService } from './projeto-helpers.service.js';
+import { NotificacaoService } from '../../notificacao/notificacao.service.js';
 import { projetoListInclude, projetoDetailInclude } from './projeto.constants.js';
 import { isGestor, isTI } from '../../common/constants/roles.constant.js';
 import { ROLES_EXTERNOS } from '../../common/constants/roles.constant.js';
@@ -18,6 +19,7 @@ export class ProjetoCoreService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly helpers: ProjetoHelpersService,
+    private readonly notificacaoService: NotificacaoService,
   ) {}
 
   async findAll(filters: {
@@ -260,6 +262,160 @@ export class ProjetoCoreService {
     }
 
     return projeto;
+  }
+
+  /**
+   * Transições de status do ciclo HOM → PROD (29/04/2026):
+   *   EM_ANDAMENTO → EM_HOMOLOGACAO → LIBERADO_PARA_PRODUCAO → CONCLUIDO
+   *
+   * Cada transição é endpoint dedicado pra:
+   *  - Validação explícita de status de origem
+   *  - Notificação direcionada (público diferente em cada etapa)
+   *  - Auditoria clara no histórico (vs update genérico)
+   *
+   * Permissão: ADMIN/GESTOR_TI sempre; SUPORTE_TI se for membro do projeto.
+   * Verificação feita pelo controller via `assertMembroOuGestor`.
+   */
+
+  async liberarHomologacao(id: string, userId: string) {
+    const projeto = await this.prisma.projeto.findUnique({
+      where: { id },
+      select: this.transicaoSelect,
+    });
+    if (!projeto) throw new NotFoundException('Projeto nao encontrado');
+    if (projeto.status !== 'EM_ANDAMENTO') {
+      throw new BadRequestException(
+        `Transicao invalida: projeto deve estar EM_ANDAMENTO para liberar para homologacao (status atual: ${projeto.status}).`,
+      );
+    }
+    const atualizado = await this.prisma.projeto.update({
+      where: { id },
+      data: { status: 'EM_HOMOLOGACAO' },
+      include: projetoDetailInclude,
+    });
+    this.notificarTransicao(
+      projeto,
+      userId,
+      `🧪 Projeto #${projeto.numero} disponivel para validacao em HOM`,
+      `O projeto "${projeto.nome}" foi liberado para validacao em ambiente de homologacao. Valide antes de aprovar o envio para producao.`,
+    );
+    return atualizado;
+  }
+
+  async liberarProducao(id: string, userId: string) {
+    const projeto = await this.prisma.projeto.findUnique({
+      where: { id },
+      select: this.transicaoSelect,
+    });
+    if (!projeto) throw new NotFoundException('Projeto nao encontrado');
+    if (projeto.status !== 'EM_HOMOLOGACAO') {
+      throw new BadRequestException(
+        `Transicao invalida: projeto deve estar EM_HOMOLOGACAO para liberar para producao (status atual: ${projeto.status}).`,
+      );
+    }
+    const atualizado = await this.prisma.projeto.update({
+      where: { id },
+      data: { status: 'LIBERADO_PARA_PRODUCAO' },
+      include: projetoDetailInclude,
+    });
+    this.notificarTransicao(
+      projeto,
+      userId,
+      `🚀 Projeto #${projeto.numero} liberado para PRODUCAO`,
+      `O projeto "${projeto.nome}" foi validado em HOM e esta liberado para a equipe Protheus aplicar em producao.`,
+    );
+    return atualizado;
+  }
+
+  async concluirProducao(id: string, userId: string) {
+    const projeto = await this.prisma.projeto.findUnique({
+      where: { id },
+      select: this.transicaoSelect,
+    });
+    if (!projeto) throw new NotFoundException('Projeto nao encontrado');
+    if (projeto.status !== 'LIBERADO_PARA_PRODUCAO') {
+      throw new BadRequestException(
+        `Transicao invalida: projeto deve estar LIBERADO_PARA_PRODUCAO para concluir (status atual: ${projeto.status}).`,
+      );
+    }
+    const atualizado = await this.prisma.projeto.update({
+      where: { id },
+      data: { status: 'CONCLUIDO', dataFimReal: new Date() },
+      include: projetoDetailInclude,
+    });
+    this.notificarTransicao(
+      projeto,
+      userId,
+      `✅ Projeto #${projeto.numero} concluido em PRODUCAO`,
+      `O projeto "${projeto.nome}" foi aplicado em producao e esta concluido.`,
+    );
+    return atualizado;
+  }
+
+  async voltarParaAndamento(id: string, userId: string, motivo?: string) {
+    const projeto = await this.prisma.projeto.findUnique({
+      where: { id },
+      select: this.transicaoSelect,
+    });
+    if (!projeto) throw new NotFoundException('Projeto nao encontrado');
+    if (projeto.status !== 'EM_HOMOLOGACAO' && projeto.status !== 'LIBERADO_PARA_PRODUCAO') {
+      throw new BadRequestException(
+        `Transicao invalida: projeto deve estar EM_HOMOLOGACAO ou LIBERADO_PARA_PRODUCAO para voltar a EM_ANDAMENTO (status atual: ${projeto.status}).`,
+      );
+    }
+    const atualizado = await this.prisma.projeto.update({
+      where: { id },
+      data: { status: 'EM_ANDAMENTO' },
+      include: projetoDetailInclude,
+    });
+    const motivoTrecho = motivo ? ` Motivo: ${motivo}` : '';
+    this.notificarTransicao(
+      projeto,
+      userId,
+      `↩ Projeto #${projeto.numero} voltou para EM ANDAMENTO`,
+      `O projeto "${projeto.nome}" foi reaberto para correcoes/ajustes.${motivoTrecho}`,
+    );
+    return atualizado;
+  }
+
+  /** Select compartilhado pelos métodos de transição — só os campos necessários
+   *  para validação + notificação. Evita carregar relations grandes. */
+  private readonly transicaoSelect = {
+    id: true,
+    numero: true,
+    nome: true,
+    status: true,
+    responsavelId: true,
+    membros: { select: { usuarioId: true } },
+    usuariosChave: { where: { ativo: true }, select: { usuarioId: true } },
+  } as const;
+
+  /** Notifica todos os envolvidos no projeto (responsável, membros,
+   *  usuários-chave ativos), exceto quem disparou a ação. */
+  private notificarTransicao(
+    projeto: {
+      id: string;
+      responsavelId: string;
+      membros: { usuarioId: string }[];
+      usuariosChave: { usuarioId: string }[];
+    },
+    autorId: string,
+    titulo: string,
+    mensagem: string,
+  ) {
+    const ids = new Set<string>();
+    if (projeto.responsavelId) ids.add(projeto.responsavelId);
+    for (const m of projeto.membros) ids.add(m.usuarioId);
+    for (const uc of projeto.usuariosChave) ids.add(uc.usuarioId);
+    ids.delete(autorId);
+    if (ids.size === 0) return;
+    this.notificacaoService.criarParaUsuarios(
+      Array.from(ids),
+      'PROJETO_ATUALIZADO',
+      titulo,
+      mensagem,
+      { projetoId: projeto.id },
+    ).catch((err) => console.error('Notificacao error:', err.message));
   }
 
   async update(id: string, dto: UpdateProjetoDto) {

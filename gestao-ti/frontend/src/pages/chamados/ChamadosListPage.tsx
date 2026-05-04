@@ -20,6 +20,7 @@ const statusLabels: Record<StatusChamado, string> = {
   ABERTO: 'Aberto',
   EM_ATENDIMENTO: 'Em Atendimento',
   PENDENTE: 'Pendente',
+  PENDENTE_USUARIO: 'Pendente Usuário',
   RESOLVIDO: 'Resolvido',
   FECHADO: 'Fechado',
   CANCELADO: 'Cancelado',
@@ -30,6 +31,11 @@ const statusColors: Record<StatusChamado, string> = {
   ABERTO: 'bg-blue-100 text-blue-700',
   EM_ATENDIMENTO: 'bg-yellow-100 text-yellow-700',
   PENDENTE: 'bg-orange-100 text-orange-700',
+  // Rosa para destacar visualmente — diferente do amber/orange usado em
+  // PENDENTE genérico e dos amarelos de EM_ATENDIMENTO. Pedido 29/04 do
+  // setor: cor distintiva pra "Pendente Usuário" identificar rapidamente
+  // chamados que estão parados aguardando resposta do solicitante.
+  PENDENTE_USUARIO: 'bg-pink-100 text-pink-800 border border-pink-300',
   RESOLVIDO: 'bg-green-100 text-green-700',
   FECHADO: 'bg-slate-100 text-slate-600',
   CANCELADO: 'bg-red-100 text-red-600',
@@ -265,7 +271,7 @@ export function ChamadosListPage() {
                 className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
               >
                 <option value="">Todos os Status</option>
-                <option value="ATIVOS">Ativos (Aberto, Em Atendimento, Pendente, Reaberto)</option>
+                <option value="ATIVOS">Ativos (Aberto, Em Atendimento, Pendente, Pendente Usuário, Reaberto)</option>
                 {Object.entries(statusLabels).map(([k, v]) => (
                   <option key={k} value={k}>{v}</option>
                 ))}

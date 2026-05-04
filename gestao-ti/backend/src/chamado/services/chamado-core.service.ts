@@ -84,7 +84,7 @@ export class ChamadoCoreService {
     } else {
       if (filters.status) {
         if ((filters.status as string) === 'ATIVOS') {
-          where.status = { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE', 'REABERTO'] };
+          where.status = { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE', 'PENDENTE_USUARIO', 'REABERTO'] };
         } else {
           where.status = filters.status;
         }
@@ -357,7 +357,7 @@ export class ChamadoCoreService {
   async assumir(id: string, user: JwtPayload) {
     const chamado = await this.helpers.getChamadoOrFail(id);
 
-    if (!['ABERTO', 'PENDENTE', 'REABERTO'].includes(chamado.status)) {
+    if (!['ABERTO', 'PENDENTE', 'PENDENTE_USUARIO', 'REABERTO'].includes(chamado.status)) {
       throw new BadRequestException('Chamado nao pode ser assumido neste status');
     }
 
@@ -545,11 +545,40 @@ export class ChamadoCoreService {
       throw new BadRequestException('E necessario assumir o chamado antes de comentar');
     }
 
+    // ----- Validações específicas do "Solicitar info ao usuário" -----
+    // Apenas técnico/colaborador/gestor pode marcar como PENDENTE_USUARIO
+    // (não faz sentido o solicitante "solicitar info de si mesmo").
+    const isSolicitarInfo = dto.solicitarInfoUsuario === true;
+    if (isSolicitarInfo) {
+      if (chamado.solicitanteId === user.sub && !isGestor(role)) {
+        throw new BadRequestException(
+          'Apenas o tecnico/colaborador/gestor pode solicitar informacoes ao solicitante.',
+        );
+      }
+      if (chamado.status !== 'EM_ATENDIMENTO' && chamado.status !== 'PENDENTE_USUARIO') {
+        throw new BadRequestException(
+          'So e possivel solicitar info ao usuario quando o chamado esta em atendimento.',
+        );
+      }
+    }
+
+    // ----- Auto-transição PENDENTE_USUARIO → EM_ATENDIMENTO -----
+    // Quando solicitante comenta em chamado PENDENTE_USUARIO, o chamado
+    // volta para EM_ATENDIMENTO (sai da fila "aguardando usuário" e volta
+    // ao radar do técnico). Notificação dedicada.
+    const isRespostaSolicitante =
+      chamado.status === 'PENDENTE_USUARIO' && chamado.solicitanteId === user.sub;
+
+    // ----- Persistência -----
+    // Comentário sempre é registrado. Se for solicitação de info ou resposta
+    // do solicitante, registra também uma entrada MUDANCA_STATUS para que
+    // a timeline reflita a transição claramente.
     const historico = await this.prisma.historicoChamado.create({
       data: {
         tipo: 'COMENTARIO',
         descricao: dto.descricao,
-        publico: dto.publico ?? true,
+        // "Solicitar info" força publico=true (faz parte do contrato — solicitante PRECISA ver)
+        publico: isSolicitarInfo ? true : (dto.publico ?? true),
         chamadoId: id,
         usuarioId: user.sub,
       },
@@ -558,7 +587,37 @@ export class ChamadoCoreService {
       },
     });
 
-    // Notificar todos os envolvidos (solicitante + tecnico + colaboradores)
+    if (isSolicitarInfo) {
+      await this.prisma.chamado.update({
+        where: { id },
+        data: { status: 'PENDENTE_USUARIO' },
+      });
+      await this.prisma.historicoChamado.create({
+        data: {
+          tipo: 'SOLICITACAO_INFO',
+          descricao: 'Aguardando informacoes do solicitante',
+          publico: true,
+          chamadoId: id,
+          usuarioId: user.sub,
+        },
+      });
+    } else if (isRespostaSolicitante) {
+      await this.prisma.chamado.update({
+        where: { id },
+        data: { status: 'EM_ATENDIMENTO' },
+      });
+      await this.prisma.historicoChamado.create({
+        data: {
+          tipo: 'RETOMADA_USUARIO',
+          descricao: 'Solicitante respondeu — chamado retomado em atendimento',
+          publico: true,
+          chamadoId: id,
+          usuarioId: user.sub,
+        },
+      });
+    }
+
+    // ----- Notificações -----
     const destinatarios = await this.getDestinatariosChamado(id, [user.sub]);
 
     // Processar @mencoes para notificacao diferenciada
@@ -581,7 +640,34 @@ export class ChamadoCoreService {
       }
     }
 
-    // Mencionados recebem notificacao de mencao
+    // Caso especial 1: solicitação de info — notificação destacada SOMENTE pro solicitante,
+    // demais envolvidos recebem notificação regular de comentário.
+    if (isSolicitarInfo && chamado.solicitanteId) {
+      this.notificacaoService.criarParaUsuario(
+        chamado.solicitanteId,
+        'CHAMADO_ATUALIZADO',
+        `🔔 Tecnico precisa da sua resposta no chamado #${chamado.numero}`,
+        `O tecnico solicitou mais informacoes para continuar o atendimento de "${chamado.titulo}". Acesse e responda assim que possivel.`,
+        { chamadoId: id },
+      ).catch((err) => console.error('Notificacao error:', err.message));
+    }
+
+    // Caso especial 2: solicitante respondeu chamado PENDENTE_USUARIO —
+    // notificação destacada pro técnico (chamado voltou pra fila dele).
+    if (isRespostaSolicitante && chamado.tecnicoId) {
+      this.notificacaoService.criarParaUsuario(
+        chamado.tecnicoId,
+        'CHAMADO_ATUALIZADO',
+        `↩ Solicitante respondeu o chamado #${chamado.numero}`,
+        `O solicitante respondeu o chamado "${chamado.titulo}". Status voltou para Em Atendimento.`,
+        { chamadoId: id },
+      ).catch((err) => console.error('Notificacao error:', err.message));
+    }
+
+    // Mencionados recebem notificacao de mencao (não dispara para solicitante
+    // se já recebeu a destacada acima — evita duplicação)
+    if (isSolicitarInfo) mencionadoIds.delete(chamado.solicitanteId ?? '');
+    if (isRespostaSolicitante) mencionadoIds.delete(chamado.tecnicoId ?? '');
     if (mencionadoIds.size > 0) {
       this.notificacaoService.criarParaUsuarios(
         Array.from(mencionadoIds), 'CHAMADO_ATUALIZADO',
@@ -591,8 +677,14 @@ export class ChamadoCoreService {
       ).catch((err) => console.error('Notificacao error:', err.message));
     }
 
-    // Demais envolvidos (que nao foram mencionados) recebem notificacao de comentario
-    const idsComentario = destinatarios.filter((uid) => !mencionadoIds.has(uid));
+    // Demais envolvidos (que nao foram mencionados nem receberam destacada)
+    let idsComentario = destinatarios.filter((uid) => !mencionadoIds.has(uid));
+    if (isSolicitarInfo) {
+      idsComentario = idsComentario.filter((uid) => uid !== chamado.solicitanteId);
+    }
+    if (isRespostaSolicitante) {
+      idsComentario = idsComentario.filter((uid) => uid !== chamado.tecnicoId);
+    }
     if (idsComentario.length > 0) {
       this.notificacaoService.criarParaUsuarios(
         idsComentario, 'CHAMADO_ATUALIZADO',
