@@ -321,14 +321,13 @@ async def compare_inventories(
                 detail="Os inventários devem ser da mesma filial/loja"
             )
 
-        # Validação 2: Armazéns Diferentes
-        if inventory_a.warehouse == inventory_b.warehouse:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Os inventários são do mesmo armazém ({inventory_a.warehouse}). Selecione armazéns diferentes."
-            )
+        # Validação 2 — Onda 4: aceita mesmo armazém (Análise Histórica) e armazéns
+        # diferentes. A geração de transferências para Protheus passa pelo wizard
+        # /integracoes/nova (integration_protheus.py), não por este endpoint.
 
-        # Validação 3: Ambos ENCERRADOS (status COMPLETED)
+        # Validação 3 — Ambos com contagem consolidada (COMPLETED ou CLOSED).
+        # Onda 4: CLOSED (Efetivado/Integrado) é histórico válido para análise.
+        valid_statuses = {"COMPLETED", "CLOSED"}
         status_labels = {
             "DRAFT": "Em Preparacao",
             "IN_PROGRESS": "Em Andamento",
@@ -336,18 +335,18 @@ async def compare_inventories(
             "CLOSED": "Efetivado",
         }
 
-        if inventory_a.status.value != "COMPLETED":
+        if inventory_a.status.value not in valid_statuses:
             label = status_labels.get(inventory_a.status.value, inventory_a.status.value)
             raise HTTPException(
                 status_code=400,
-                detail=f"Inventario A ({inventory_a.name}) nao esta encerrado. Status atual: {label}"
+                detail=f"Inventario A ({inventory_a.name}) precisa estar Concluido ou Efetivado. Status atual: {label}"
             )
 
-        if inventory_b.status.value != "COMPLETED":
+        if inventory_b.status.value not in valid_statuses:
             label = status_labels.get(inventory_b.status.value, inventory_b.status.value)
             raise HTTPException(
                 status_code=400,
-                detail=f"Inventario B ({inventory_b.name}) nao esta encerrado. Status atual: {label}"
+                detail=f"Inventario B ({inventory_b.name}) precisa estar Concluido ou Efetivado. Status atual: {label}"
             )
 
         logger.info(f"✅ Validações OK: {inventory_a.warehouse} vs {inventory_b.warehouse}")

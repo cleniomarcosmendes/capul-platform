@@ -919,15 +919,18 @@ async def send_historico(
             )
             logger.error(f"Erro historico produto {product_code}: {error_msg}")
 
-        # Atualizar status do item (nao sobrescrever se ja foi SENT por outro endpoint)
+        # Atualizar status do item — mantém SENT e ERROR setados pelo digitacao.
+        # Historico é auditoria; mesmo se gravar com sucesso, NÃO promove um item
+        # que falhou no digitacao (ex.: "Produto bloqueado"). Apenas preenche o gap
+        # quando o status ainda está nulo.
         db.execute(text("""
             UPDATE inventario.protheus_integration_items
             SET item_status = CASE
-                    WHEN item_status = 'SENT' THEN 'SENT'
+                    WHEN item_status IN ('SENT', 'ERROR') THEN item_status
                     ELSE :status
                 END,
                 error_detail = CASE
-                    WHEN item_status = 'SENT' THEN error_detail
+                    WHEN item_status IN ('SENT', 'ERROR') THEN error_detail
                     ELSE :error
                 END
             WHERE id = :id
@@ -1062,6 +1065,31 @@ async def send_all(
             detail=f"Integracao nao pode ser enviada. Status atual: {integration['status']}"
         )
 
+    # Onda 3 — Gating: inventários referenciados precisam estar com análise concluída
+    inv_ids_to_check = [str(integration["inventory_a_id"])]
+    if integration.get("inventory_b_id"):
+        inv_ids_to_check.append(str(integration["inventory_b_id"]))
+
+    nao_analisados = db.execute(
+        text("""
+            SELECT id, name FROM inventario.inventory_lists
+             WHERE id = ANY(CAST(:ids AS uuid[]))
+               AND status::text != 'CLOSED'
+               AND analisado_em IS NULL
+        """),
+        {"ids": inv_ids_to_check}
+    ).fetchall()
+
+    if nao_analisados:
+        nomes = ", ".join([f'"{n.name}"' for n in nao_analisados])
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Marque a Análise como concluída antes de enviar ao Protheus. "
+                f"Inventários pendentes: {nomes}."
+            )
+        )
+
     # ✅ v2.19.55: Inicializar batch para esta rodada de envio
     next_batch = _get_next_batch(db, str(integration_id))
     _current_batch[str(integration_id)] = next_batch
@@ -1124,17 +1152,45 @@ async def send_all(
         "detalhes": results
     }
 
+    # Onda 4 — Resumir erros para o campo error_message (visível na UI sem abrir log)
+    error_summary = None
+    if total_erros > 0:
+        snippets = []
+        for bloco_nome, bloco in (results or {}).items():
+            if not isinstance(bloco, dict):
+                continue
+            err = bloco.get("error")
+            if err:
+                snippets.append(f"{bloco_nome}: {str(err)[:200]}")
+            erros_bloco = bloco.get("erros") or bloco.get("erros_detalhe")
+            if isinstance(erros_bloco, list) and erros_bloco:
+                # pega 1 exemplo por bloco
+                primeiro = erros_bloco[0]
+                if isinstance(primeiro, dict):
+                    snippets.append(f"{bloco_nome}: {str(primeiro.get('error') or primeiro)[:200]}")
+                else:
+                    snippets.append(f"{bloco_nome}: {str(primeiro)[:200]}")
+        if snippets:
+            error_summary = (
+                f"{total_erros} erro(s) no envio. "
+                + " | ".join(snippets[:3])
+            )[:1000]
+        else:
+            error_summary = f"{total_erros} erro(s) no envio. Veja os logs."
+
     try:
         db.execute(text("""
             UPDATE inventario.protheus_integrations
             SET status = :status,
                 sent_at = NOW(),
                 protheus_response = :response,
+                error_message = :error_msg,
                 updated_at = NOW()
             WHERE id = :id
         """), {
             "status": final_status,
             "response": json.dumps(protheus_response, default=str),
+            "error_msg": error_summary,
             "id": str(integration_id)
         })
 

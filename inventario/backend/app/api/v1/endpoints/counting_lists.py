@@ -14,7 +14,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.models import (
     User, InventoryList, InventoryItem, CountingList, CountingListItem,
-    CountingStatus, InventoryStatus
+    CountingStatus, InventoryStatus, CountingListHandoffHistory
 )
 from app.schemas.counting_list_schemas import (
     CountingListCreate, CountingListResponse, CountingListUpdate,
@@ -97,6 +97,9 @@ async def get_list_products(
 
         # Buscar descrições dos produtos da tabela sb1010
         product_descriptions = {}
+        # Buscar localizações dos produtos da tabela sbz010 (filial+produto+armazem)
+        # Chave: (product_code, warehouse) -> {local1, local2, local3}
+        product_locations = {}
         if products:
             product_codes = [p.product_code for p in products if p.product_code]
             if product_codes:
@@ -107,6 +110,20 @@ async def get_list_products(
                 """)
                 desc_results = db.execute(desc_query, {"codes": product_codes}).fetchall()
                 product_descriptions = {row[0]: row[1] for row in desc_results}
+
+                loc_query = text("""
+                    SELECT bz_cod, bz_local, bz_xlocal1, bz_xlocal2, bz_xlocal3
+                    FROM inventario.sbz010
+                    WHERE bz_cod = ANY(:codes)
+                """)
+                loc_results = db.execute(loc_query, {"codes": product_codes}).fetchall()
+                for row in loc_results:
+                    key = ((row[0] or '').strip(), (row[1] or '').strip())
+                    product_locations[key] = {
+                        'local1': (row[2] or '').strip(),
+                        'local2': (row[3] or '').strip(),
+                        'local3': (row[4] or '').strip(),
+                    }
 
         # Construir response similar ao endpoint original
         result_data = {
@@ -147,12 +164,20 @@ async def get_list_products(
             elif item.product and item.product.description:
                 product_desc = item.product.description
 
+            # Localizações (sbz010) por código+armazem
+            wh = (item.warehouse or "").strip()
+            loc_key = ((item.product_code or '').strip(), wh)
+            locs = product_locations.get(loc_key, {'local1': '', 'local2': '', 'local3': ''})
+
             product_data = {
                 "id": str(item.id),
                 "product_code": item.product_code or (item.product.code if item.product else ""),
                 "product_name": product_desc,
                 "product_description": product_desc,
                 "warehouse": item.warehouse or "01",
+                "product_local1": locs['local1'],
+                "product_local2": locs['local2'],
+                "product_local3": locs['local3'],
                 "expected_quantity": float(item.expected_quantity) if item.expected_quantity else 0.0,
                 "system_qty": float(item.system_qty) if item.system_qty else 0.0,
 
@@ -168,6 +193,10 @@ async def get_list_products(
                 "status": list_item.status.value if list_item and list_item.status else "PENDING",
                 "last_counted_at": list_item.last_counted_at.isoformat() if list_item and list_item.last_counted_at else None,
                 "last_counted_by": str(list_item.last_counted_by) if list_item and list_item.last_counted_by else None,
+                # Marcação de revisão (devolução do supervisor) — usado pelo frontend pra
+                # filtrar apenas itens que devem ser revistos (devolução parcial).
+                "revisar_no_ciclo": bool(list_item.revisar_no_ciclo) if list_item else False,
+                "motivo_revisao": (list_item.motivo_revisao or None) if list_item else None,
 
                 # Informações do produto
                 "sequence": item.sequence or 1,
@@ -210,7 +239,32 @@ async def get_list_products(
 
             result_data["data"]["products"].append(product_data)
 
-        logger.info(f"✅ Produtos da lista {list_id}: {len(result_data['data']['products'])} produtos encontrados")
+        # Aplica sort_order definido pelo supervisor no Liberar.
+        # Default 'ORIGINAL' = mantém a ordem natural (sequence).
+        sort_order = (counting_list.sort_order or 'ORIGINAL').upper()
+        if sort_order != 'ORIGINAL':
+            field_map = {
+                'PRODUCT_CODE':        'product_code',
+                'PRODUCT_DESCRIPTION': 'product_description',
+                'LOCAL1':              'product_local1',
+                'LOCAL2':              'product_local2',
+                'LOCAL3':              'product_local3',
+            }
+            field = field_map.get(sort_order)
+            if field:
+                # Vazios sempre no fim (independente de asc/desc) — produto sem local não some
+                result_data["data"]["products"].sort(
+                    key=lambda p: (
+                        not (p.get(field) or '').strip(),  # vazios viram True → fim
+                        (p.get(field) or '').lower(),
+                        p.get('sequence', 0),  # tiebreaker
+                    )
+                )
+        # Expor sort_order na resposta para frontend saber/mostrar
+        result_data["data"]["sort_order"] = sort_order
+        result_data["data"]["show_previous_counts"] = bool(counting_list.show_previous_counts)
+
+        logger.info(f"✅ Produtos da lista {list_id}: {len(result_data['data']['products'])} produtos (sort={sort_order})")
         return result_data
 
     except HTTPException:
@@ -329,9 +383,88 @@ async def get_inventory_counting_lists(
             "created_at": cl.created_at.isoformat() if cl.created_at else None,
             "created_by": str(cl.created_by) if cl.created_by else None,
             "updated_at": cl.updated_at.isoformat() if cl.updated_at else None,
+            "show_previous_counts": bool(cl.show_previous_counts),
         })
 
     return result
+
+
+# IMPORTANTE: rota /me deve vir ANTES de /{list_id} — senão FastAPI tenta parsear "me" como UUID.
+@router.get("/counting-lists/me")
+async def my_counting_lists(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Retorna as listas de contagem onde o usuário atual é o contador atribuído
+    para o ciclo atual da lista, status EM_CONTAGEM (prontas pra contar).
+
+    Cada item traz dados da própria LISTA (não do inventário pai), para a tela
+    "Minhas Listas" do contador. Informações do inventário vêm como sub-dados
+    de contexto (nome, armazém, prazo).
+    """
+    from sqlalchemy import text
+    uid = str(current_user.id)
+
+    query = text("""
+        SELECT
+            cl.id, cl.list_name, cl.current_cycle, cl.list_status, cl.sort_order,
+            cl.show_previous_counts,
+            cl.inventory_id,
+            il.name as inventory_name,
+            il.warehouse,
+            il.count_deadline,
+            il.reference_date,
+            -- Total de itens DA LISTA (não do inventário)
+            (SELECT COUNT(*) FROM inventario.counting_list_items cli
+             WHERE cli.counting_list_id = cl.id) as total_items,
+            -- Contados DA LISTA no ciclo atual (count_cycle_N preenchido)
+            (SELECT COUNT(*) FROM inventario.counting_list_items cli
+             WHERE cli.counting_list_id = cl.id
+               AND CASE cl.current_cycle
+                   WHEN 1 THEN cli.count_cycle_1 IS NOT NULL
+                   WHEN 2 THEN cli.count_cycle_2 IS NOT NULL
+                   WHEN 3 THEN cli.count_cycle_3 IS NOT NULL
+                   ELSE FALSE
+               END) as counted_items
+        FROM inventario.counting_lists cl
+        JOIN inventario.inventory_lists il ON il.id = cl.inventory_id
+        WHERE cl.list_status = 'EM_CONTAGEM'
+          AND il.status = 'IN_PROGRESS'
+          AND CASE cl.current_cycle
+              WHEN 1 THEN cl.counter_cycle_1::text = :uid
+              WHEN 2 THEN cl.counter_cycle_2::text = :uid
+              WHEN 3 THEN cl.counter_cycle_3::text = :uid
+              ELSE FALSE
+          END
+        ORDER BY il.created_at, cl.list_name
+    """)
+
+    rows = db.execute(query, {"uid": uid}).fetchall()
+
+    items = []
+    for row in rows:
+        total = int(row.total_items or 0)
+        counted = int(row.counted_items or 0)
+        items.append({
+            "id": str(row.id),
+            "list_name": row.list_name,
+            "current_cycle": row.current_cycle,
+            "list_status": row.list_status,
+            "sort_order": row.sort_order or 'ORIGINAL',
+            "show_previous_counts": bool(row.show_previous_counts),
+            "inventory_id": str(row.inventory_id),
+            "inventory_name": row.inventory_name,
+            "warehouse": row.warehouse,
+            "count_deadline": row.count_deadline.isoformat() if row.count_deadline else None,
+            "reference_date": row.reference_date.isoformat() if row.reference_date else None,
+            "total_items": total,
+            "counted_items": counted,
+            "pending_items": max(0, total - counted),
+            "progress_percentage": round((counted / total) * 100, 1) if total > 0 else 0.0,
+        })
+
+    return {"items": items, "total": len(items)}
 
 
 @router.get("/counting-lists/{list_id}")  # response_model=CountingListWithItems (temporariamente desabilitado)
@@ -493,6 +626,12 @@ async def add_items_to_counting_list(
     """
     Adicionar produtos a uma lista de contagem específica
     """
+    if current_user.role not in ["ADMIN", "SUPERVISOR"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas ADMIN e SUPERVISOR podem adicionar itens a listas de contagem"
+        )
+
     # Buscar a lista
     counting_list = db.query(CountingList).filter(CountingList.id == list_id).first()
     if not counting_list:
@@ -629,12 +768,26 @@ async def remove_item_from_counting_list(
 @router.post("/counting-lists/{list_id}/release")
 async def release_counting_list(
     list_id: UUID,
+    payload: dict | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Liberar uma lista de contagem para início das contagens
+    Liberar uma lista de contagem para início das contagens.
+
+    Body opcional:
+    - show_previous_counts (bool): permite ao contador ver C1/C2 anteriores.
+      Default false (contagem cega). Sempre resetado a cada release.
+    - sort_order (str): ordem em que os produtos aparecem para o contador.
+      Valores: ORIGINAL, PRODUCT_CODE, PRODUCT_DESCRIPTION, LOCAL1, LOCAL2, LOCAL3.
+      Default ORIGINAL. Imutável até a próxima liberação (devolver+liberar pra mudar).
     """
+    if current_user.role not in ["ADMIN", "SUPERVISOR"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas ADMIN e SUPERVISOR podem liberar listas para contagem"
+        )
+
     # Buscar a lista
     counting_list = db.query(CountingList).filter(CountingList.id == list_id).first()
     if not counting_list:
@@ -671,6 +824,20 @@ async def release_counting_list(
     counting_list.released_at = func.now()
     counting_list.released_by = current_user.id
 
+    # Visibilidade de C1/C2 — sempre resetada na liberação (default false = cega)
+    show_prev = bool((payload or {}).get('show_previous_counts', False))
+    counting_list.show_previous_counts = show_prev
+
+    # Ordem dos produtos — definida no Liberar, imutável até próxima liberação
+    valid_sort_orders = {'ORIGINAL', 'PRODUCT_CODE', 'PRODUCT_DESCRIPTION', 'LOCAL1', 'LOCAL2', 'LOCAL3'}
+    sort_order_in = ((payload or {}).get('sort_order') or 'ORIGINAL').upper()
+    if sort_order_in not in valid_sort_orders:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"sort_order inválido. Valores aceitos: {sorted(valid_sort_orders)}"
+        )
+    counting_list.sort_order = sort_order_in
+
     # Atualizar status do inventário para IN_PROGRESS se ainda estiver em DRAFT
     inventory = db.query(InventoryList).filter(
         InventoryList.id == counting_list.inventory_id
@@ -690,6 +857,251 @@ async def release_counting_list(
 # e audit log) esta em main.py @app.post("/api/v1/counting-lists/{list_id}/finalize-cycle")
 
 
+def _is_counter_for_current_cycle(cl: CountingList, user_id) -> bool:
+    """
+    Retorna True se o usuário é o contador do ciclo atual da lista.
+    Em UNIFIED_AUTH, user_id vem como string do JWT; counter_cycle_X é UUID.
+    Por isso comparamos sempre como string.
+    """
+    uid = str(user_id) if user_id is not None else None
+    if cl.current_cycle == 1:
+        return cl.counter_cycle_1 is not None and str(cl.counter_cycle_1) == uid
+    if cl.current_cycle == 2:
+        return cl.counter_cycle_2 is not None and str(cl.counter_cycle_2) == uid
+    if cl.current_cycle == 3:
+        return cl.counter_cycle_3 is not None and str(cl.counter_cycle_3) == uid
+    return False
+
+
+def _count_cycle_field(cycle: int) -> str:
+    return f"count_cycle_{cycle}"
+
+
+@router.post("/counting-lists/{list_id}/handoff")
+async def handoff_counting_list(
+    list_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Contador entrega a lista para revisão do supervisor.
+
+    Regras:
+    - Lista deve estar EM_CONTAGEM
+    - Usuário deve ser o contador do ciclo atual (ou ADMIN/SUPERVISOR)
+    - Itens não contados no ciclo atual são gravados como ZERO
+    - list_status → AGUARDANDO_REVISAO
+    - Registra evento ENTREGUE no histórico
+    """
+    counting_list = db.query(CountingList).filter(CountingList.id == list_id).first()
+    if not counting_list:
+        raise HTTPException(status_code=404, detail="Lista de contagem não encontrada")
+
+    inventory_check = db.query(InventoryList).filter(InventoryList.id == counting_list.inventory_id).first()
+    _check_not_closed(inventory_check)
+
+    if counting_list.list_status != 'EM_CONTAGEM':
+        raise HTTPException(
+            status_code=400,
+            detail=f"Lista deve estar em EM_CONTAGEM para ser entregue (atual: {counting_list.list_status})"
+        )
+
+    is_staff = current_user.role in ("ADMIN", "SUPERVISOR")
+    if not is_staff and not _is_counter_for_current_cycle(counting_list, current_user.id):
+        raise HTTPException(
+            status_code=403,
+            detail="Apenas o contador do ciclo atual (ou ADMIN/SUPERVISOR) pode entregar a lista"
+        )
+
+    cycle = counting_list.current_cycle or 1
+    field = _count_cycle_field(cycle)
+
+    # Itens não contados no ciclo atual viram zero
+    items = db.query(CountingListItem).filter(CountingListItem.counting_list_id == list_id).all()
+    zerados = 0
+    for it in items:
+        # No ciclo 2/3, considera apenas itens que precisavam ser contados nesse ciclo
+        needs_field = f"needs_count_cycle_{cycle}"
+        precisa = getattr(it, needs_field, True if cycle == 1 else False)
+        if not precisa:
+            continue
+        if getattr(it, field) is None:
+            setattr(it, field, 0)
+            it.last_counted_at = func.now()
+            it.last_counted_by = current_user.id
+            it.status = CountingStatus.COUNTED
+            zerados += 1
+
+    counting_list.list_status = 'AGUARDANDO_REVISAO'
+    counting_list.entregue_em = func.now()
+    counting_list.entregue_por_id = current_user.id
+
+    db.add(CountingListHandoffHistory(
+        list_id=list_id,
+        evento='ENTREGUE',
+        ator_id=current_user.id,
+        ciclo=cycle,
+        observacao=f"{zerados} item(ns) não contado(s) gravado(s) como zero" if zerados > 0 else None,
+    ))
+
+    db.commit()
+
+    logger.info(f"Lista {list_id} entregue para supervisor (EM_CONTAGEM → AGUARDANDO_REVISAO), {zerados} zerados")
+    return {
+        "message": "Lista entregue para o supervisor.",
+        "status": "AGUARDANDO_REVISAO",
+        "zerados": zerados,
+    }
+
+
+@router.post("/counting-lists/{list_id}/return")
+async def return_counting_list(
+    list_id: UUID,
+    payload: dict | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Supervisor devolve a lista para o contador (volta a EM_CONTAGEM).
+
+    As contagens existentes são MANTIDAS — o contador faz revisão (confirmar ou editar),
+    não recontagem do zero. Itens devolvidos ficam marcados com revisar_no_ciclo=True
+    para destaque visual; flag é limpa automaticamente quando uma nova contagem é salva.
+
+    Body (opcional):
+    - motivo (str): motivo geral da devolução
+    - item_ids (list[UUID]): se fornecido, devolução parcial — só esses itens recebem
+      a marcação. Default: marcar todos os itens contados no ciclo atual.
+    - sort_order (str): nova ordem dos produtos para o contador. Mesmos valores do release.
+      Se omitido, mantém o sort_order anterior. Default: mantém.
+    """
+    if current_user.role not in ("ADMIN", "SUPERVISOR"):
+        raise HTTPException(status_code=403, detail="Apenas ADMIN e SUPERVISOR podem devolver listas")
+
+    counting_list = db.query(CountingList).filter(CountingList.id == list_id).first()
+    if not counting_list:
+        raise HTTPException(status_code=404, detail="Lista de contagem não encontrada")
+
+    inventory_check = db.query(InventoryList).filter(InventoryList.id == counting_list.inventory_id).first()
+    _check_not_closed(inventory_check)
+
+    if counting_list.list_status != 'AGUARDANDO_REVISAO':
+        raise HTTPException(
+            status_code=400,
+            detail=f"Apenas listas em AGUARDANDO_REVISAO podem ser devolvidas (atual: {counting_list.list_status})"
+        )
+
+    body = payload or {}
+    motivo = (body.get('motivo') or '').strip() or None
+    item_ids_raw = body.get('item_ids') or []
+    item_ids = [str(x) for x in item_ids_raw] if isinstance(item_ids_raw, list) else []
+
+    cycle = counting_list.current_cycle or 1
+    count_field = _count_cycle_field(cycle)
+
+    base_q = db.query(CountingListItem).filter(CountingListItem.counting_list_id == list_id)
+    if item_ids:
+        # Devolução parcial — só os itens selecionados recebem a marcação
+        items = base_q.filter(CountingListItem.inventory_item_id.in_(item_ids)).all()
+    else:
+        # Devolução total — marca todos os itens contados no ciclo atual
+        items = [it for it in base_q.all() if getattr(it, count_field) is not None]
+
+    marcados = 0
+    for it in items:
+        it.revisar_no_ciclo = True
+        it.motivo_revisao = motivo
+        marcados += 1
+
+    counting_list.list_status = 'EM_CONTAGEM'
+    counting_list.devolvido_em = func.now()
+    counting_list.devolvido_por_id = current_user.id
+    counting_list.motivo_devolucao = motivo
+
+    # Permite supervisor mudar ordenação ao re-liberar (ex.: C1 era LOCAL1 walk-through;
+    # na re-liberação prefere PRODUCT_CODE pra revisar pendentes em ordem natural)
+    sort_order_in = (body.get('sort_order') or '').upper()
+    if sort_order_in:
+        valid_sort_orders = {'ORIGINAL', 'PRODUCT_CODE', 'PRODUCT_DESCRIPTION', 'LOCAL1', 'LOCAL2', 'LOCAL3'}
+        if sort_order_in not in valid_sort_orders:
+            raise HTTPException(
+                status_code=400,
+                detail=f"sort_order inválido. Valores aceitos: {sorted(valid_sort_orders)}"
+            )
+        counting_list.sort_order = sort_order_in
+
+    db.add(CountingListHandoffHistory(
+        list_id=list_id,
+        evento='DEVOLVIDA',
+        ator_id=current_user.id,
+        ciclo=cycle,
+        observacao=motivo,
+        itens_devolvidos=item_ids if item_ids else None,
+    ))
+
+    db.commit()
+
+    logger.info(f"Lista {list_id} devolvida ({marcados} itens marcados para revisão, parcial={bool(item_ids)})")
+    return {
+        "message": "Lista devolvida ao contador para revisão.",
+        "status": "EM_CONTAGEM",
+        "itens_marcados": marcados,
+        "parcial": bool(item_ids),
+    }
+
+
+@router.get("/counting-lists/aguardando-revisao/count")
+async def aguardando_revisao_count(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Conta listas em AGUARDANDO_REVISAO da loja do usuário (para badge no sidebar).
+    Retorna 0 para OPERATOR (ele não decide).
+    """
+    if current_user.role not in ("ADMIN", "SUPERVISOR"):
+        return {"count": 0}
+    n = (
+        db.query(func.count(CountingList.id))
+        .join(InventoryList, InventoryList.id == CountingList.inventory_id)
+        .filter(
+            CountingList.list_status == 'AGUARDANDO_REVISAO',
+            InventoryList.store_id == current_user.store_id,
+        )
+        .scalar()
+    )
+    return {"count": int(n or 0)}
+
+
+@router.get("/counting-lists/{list_id}/handoff-history")
+async def get_handoff_history(
+    list_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Histórico de handoffs (entrega/devolução/finalização) da lista."""
+    rows = (
+        db.query(CountingListHandoffHistory, User)
+        .join(User, CountingListHandoffHistory.ator_id == User.id)
+        .filter(CountingListHandoffHistory.list_id == list_id)
+        .order_by(CountingListHandoffHistory.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": str(h.id),
+            "evento": h.evento,
+            "ciclo": h.ciclo,
+            "ator_id": str(h.ator_id),
+            "ator_nome": u.full_name or u.username,
+            "observacao": h.observacao,
+            "itens_devolvidos": h.itens_devolvidos,
+            "created_at": h.created_at.isoformat() if h.created_at else None,
+        }
+        for h, u in rows
+    ]
+
+
 @router.post("/counting-lists/{list_id}/finalizar")
 async def force_finalize_counting_list(
     list_id: UUID,
@@ -704,6 +1116,12 @@ async def force_finalize_counting_list(
     - Não precisa passar por todo o processo de ciclos
     - Status = 'ENCERRADA' imediatamente
     """
+    if current_user.role not in ["ADMIN", "SUPERVISOR"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas ADMIN e SUPERVISOR podem encerrar listas"
+        )
+
     # Buscar a lista
     counting_list = db.query(CountingList).filter(CountingList.id == list_id).first()
     if not counting_list:
@@ -999,6 +1417,12 @@ async def update_individual_list_status(
     - EM_CONTAGEM: Lista liberada para contagem
     - ENCERRADA: Contagem finalizada
     """
+    if current_user.role not in ["ADMIN", "SUPERVISOR"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas ADMIN e SUPERVISOR podem atualizar status de listas"
+        )
+
     from app.models.models import CountingAssignment as CountingAssignmentModel
 
     # Validar status

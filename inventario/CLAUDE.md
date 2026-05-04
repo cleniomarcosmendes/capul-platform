@@ -9,8 +9,8 @@ Orientações para o Claude Code ao trabalhar neste repositório.
 ### Arquitetura
 - **Backend**: FastAPI (Python 3.11) + SQLAlchemy ORM
 - **Banco**: PostgreSQL 15 (schema `inventario`)
-- **Frontend**: HTML/JS vanilla + Bootstrap 5 (PWA)
-- **Infra**: Docker Compose (backend, postgres, redis, pgadmin)
+- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS (servido por nginx)
+- **Infra**: Docker Compose (backend, frontend, postgres, redis, pgadmin)
 - **Segurança**: HTTPS (mkcert), JWT, RBAC (ADMIN/SUPERVISOR/OPERATOR)
 
 ### Features Principais
@@ -67,9 +67,16 @@ backend/app/
 └── api/v1/endpoints/    # Endpoints REST
 
 frontend/
-├── *.html               # Páginas
-├── js/                  # auth.js, ui.js, export.js, utils.js
-└── static/              # Assets
+├── src/
+│   ├── pages/           # Páginas (rotas em App.tsx)
+│   ├── components/      # Componentes reutilizáveis
+│   ├── services/        # Clientes HTTP (axios) — inventory, counting-list, comparison, integration
+│   ├── contexts/        # AuthContext, ToastContext
+│   ├── layouts/         # MainLayout, Sidebar, Header
+│   ├── types/           # Tipos compartilhados
+│   └── utils/           # cycles, csv, export, security
+├── package.json         # React 19 + Vite 7 + Tailwind v4
+└── nginx.conf           # Proxy para o backend
 ```
 
 ### APIs REST
@@ -94,6 +101,21 @@ frontend/
    Se count_2 != count_1 AND != expected → CICLO 3
 8. Finalizar → Status "ENCERRADA"
 ```
+
+## Etapa do inventário (Onda 3 — v2.20.0+)
+
+Estado derivado do ciclo de vida, exibido como badge na UI (`inventory_lists.etapa_atual`):
+
+| Etapa | Condição | Próximo passo |
+|-------|----------|---------------|
+| EM_CONTAGEM | status DRAFT/IN_PROGRESS | Encerrar listas e o inventário |
+| ENCERRADO   | status COMPLETED && analisado_em IS NULL | Revisar divergências e marcar análise concluída |
+| ANALISADO   | analisado_em IS NOT NULL && status != CLOSED | Enviar ao Protheus |
+| INTEGRADO   | status CLOSED | Concluído |
+
+**Gating:** `POST /send/{id}/enviar-tudo` rejeita com 409 se algum inventário referenciado não tiver `analisado_em` (exceto se já estiver CLOSED).
+
+**Endpoint pra marcar:** `POST /inventory/lists/{id}/marcar-analisado` (SUPERVISOR/ADMIN). Migration `009_add_analise_inventario.sql` adiciona `analisado_em` + `analisado_por_id`.
 
 ---
 

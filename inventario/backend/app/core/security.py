@@ -317,6 +317,21 @@ def verify_store_access(user, store_id: str) -> bool:
         return True
     return str(user.store_id) == store_id
 
+def require_staff_role(current_user = Depends(get_current_active_user)):
+    """
+    Bloqueia OPERATOR de endpoints que expõem saldo do sistema, divergências
+    ou contagens de outros ciclos — preserva contagem cega.
+    Aceita apenas ADMIN e SUPERVISOR.
+    """
+    role = getattr(current_user, 'role', None)
+    if role not in ("ADMIN", "SUPERVISOR"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso restrito a SUPERVISOR/ADMIN — preserva a contagem cega do operador."
+        )
+    return current_user
+
+
 def require_permission(permission: str):
     """Decorator para verificar permissoes especificas"""
     def permission_checker(current_user = Depends(get_current_active_user)):

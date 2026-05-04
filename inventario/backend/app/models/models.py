@@ -344,6 +344,34 @@ class InventoryList(Base):
         finally:
             object.__setattr__(self, '_status_syncing', False)
         return value
+
+    @property
+    def etapa_atual(self) -> str:
+        """Etapa derivada do ciclo de vida do inventário (Onda 3)."""
+        if self.status == InventoryStatus.CLOSED:
+            return 'INTEGRADO'
+        if self.analisado_em is not None:
+            return 'ANALISADO'
+        if self.list_status == 'ENCERRADA' or self.status == InventoryStatus.COMPLETED:
+            return 'ENCERRADO'
+        if self.status == InventoryStatus.IN_PROGRESS:
+            return 'EM_CONTAGEM'
+        return 'EM_PREPARACAO'
+
+    @property
+    def proximo_passo(self) -> str:
+        """Próxima ação recomendada para o usuário, baseada na etapa."""
+        etapa = self.etapa_atual
+        if etapa == 'EM_PREPARACAO':
+            return 'Adicione produtos, crie listas e libere para contagem'
+        if etapa == 'EM_CONTAGEM':
+            return 'Encerre as listas e o inventário'
+        if etapa == 'ENCERRADO':
+            return 'Revise divergências e marque a análise como concluída'
+        if etapa == 'ANALISADO':
+            return 'Envie o resultado ao Protheus'
+        return 'Concluído'
+
     released_at = Column(DateTime(timezone=True))  # Data/hora da liberação para contagem
     released_by = Column(UUID(as_uuid=True), ForeignKey("inventario.users.id"))  # Usuário que liberou
     closed_at = Column(DateTime(timezone=True))  # Data/hora do encerramento da rodada
@@ -357,6 +385,10 @@ class InventoryList(Base):
 
     # Tipo de finalização (automatic, manual, forced)
     finalization_type = Column(String(20), default='automatic')
+
+    # Onda 3 — Marcação de "Análise Concluída" (habilita envio Protheus)
+    analisado_em = Column(DateTime(timezone=True), nullable=True)
+    analisado_por_id = Column(UUID(as_uuid=True), ForeignKey("inventario.users.id"), nullable=True)
 
     store_id = Column(UUID(as_uuid=True), ForeignKey("inventario.stores.id"), nullable=False)
     created_by = Column(UUID(as_uuid=True), ForeignKey("inventario.users.id"), nullable=False)
@@ -1029,14 +1061,31 @@ class CountingList(Base):
 
     # Controle de ciclos desta lista específica
     current_cycle = Column(Integer, default=1)
-    list_status = Column(String(20), default='PREPARACAO')  # PREPARACAO, ABERTA, EM_CONTAGEM, ENCERRADA
+    list_status = Column(String(20), default='PREPARACAO')  # PREPARACAO, ABERTA, EM_CONTAGEM, AGUARDANDO_REVISAO, ENCERRADA
     finalization_type = Column(String(20), default='automatic')  # automatic, manual
+
+    # Visibilidade de C1/C2 ao contador (decisão do supervisor no ato do Liberar)
+    # Default false = contagem cega real. Resetada a cada release.
+    show_previous_counts = Column(Boolean, default=False, nullable=False)
+
+    # Ordem em que os produtos aparecem para o contador (decisão do supervisor no Liberar).
+    # Migration 013. Valores: ORIGINAL, PRODUCT_CODE, PRODUCT_DESCRIPTION, LOCAL1, LOCAL2, LOCAL3.
+    # Imutável durante EM_CONTAGEM; pode ser alterado a cada novo release (incluindo re-liberação
+    # após devolução do contador). Default ORIGINAL = sequência original (retrocompatível).
+    sort_order = Column(String(30), default='ORIGINAL')
 
     # Timestamps de controle desta lista
     released_at = Column(DateTime(timezone=True))
     released_by = Column(UUID(as_uuid=True), ForeignKey("inventario.users.id"))
     closed_at = Column(DateTime(timezone=True))
     closed_by = Column(UUID(as_uuid=True), ForeignKey("inventario.users.id"))
+
+    # Handoff contador → supervisor (migration 011)
+    entregue_em = Column(DateTime(timezone=True))
+    entregue_por_id = Column(UUID(as_uuid=True), ForeignKey("inventario.users.id"))
+    devolvido_em = Column(DateTime(timezone=True))
+    devolvido_por_id = Column(UUID(as_uuid=True), ForeignKey("inventario.users.id"))
+    motivo_devolucao = Column(Text)
 
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -1080,6 +1129,10 @@ class CountingListItem(Base):
     last_counted_at = Column(DateTime(timezone=True))
     last_counted_by = Column(UUID(as_uuid=True), ForeignKey("inventario.users.id"))
 
+    # Migration 012: marcação de revisão pelo supervisor (handoff DEVOLVIDA)
+    revisar_no_ciclo = Column(Boolean, default=False, nullable=False)
+    motivo_revisao = Column(Text)
+
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -1087,6 +1140,27 @@ class CountingListItem(Base):
     # Relacionamentos
     counting_list = relationship("CountingList", back_populates="items")
     inventory_item = relationship("InventoryItem")
+
+
+class CountingListHandoffHistory(Base):
+    """
+    Histórico imutável de handoffs entre contador e supervisor (migration 011).
+    Eventos: ENTREGUE (contador → supervisor), DEVOLVIDA, FINALIZADA, ENCERRADA.
+    """
+    __tablename__ = "counting_list_handoff_history"
+    __table_args__ = {"schema": "inventario"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    list_id = Column(UUID(as_uuid=True), ForeignKey("inventario.counting_lists.id", ondelete="CASCADE"), nullable=False)
+    evento = Column(String(20), nullable=False)
+    ator_id = Column(UUID(as_uuid=True), ForeignKey("inventario.users.id"), nullable=False)
+    ciclo = Column(Integer, nullable=False)
+    observacao = Column(Text)
+    itens_devolvidos = Column(JSONB)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    counting_list = relationship("CountingList", foreign_keys=[list_id])
+    ator = relationship("User", foreign_keys=[ator_id])
 
 
 # =================================

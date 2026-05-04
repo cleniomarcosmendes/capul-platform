@@ -168,10 +168,18 @@ async def list_inventory_lists(
     # Calcular total de páginas
     pages = (total + size - 1) // size
 
+    # Onda 3 — incluir etapa_atual e proximo_passo (properties derivadas) no payload
+    from fastapi.encoders import jsonable_encoder
+    serialized = jsonable_encoder(inventories)
+    for i, inv in enumerate(inventories):
+        serialized[i]["etapa_atual"] = inv.etapa_atual
+        serialized[i]["proximo_passo"] = inv.proximo_passo
+        serialized[i]["analisado_em"] = inv.analisado_em.isoformat() if inv.analisado_em else None
+
     # ✅ CORREÇÃO: Retornar dict em vez de PaginatedResponse para evitar erro Pydantic
     return {
         "success": True,
-        "data": inventories,
+        "data": serialized,
         "total": total,
         "page": page,
         "size": size,
@@ -323,11 +331,14 @@ async def get_inventory_list(
         InventoryItemModel.inventory_list_id == inventory_id
     ).scalar() or 0
     
-    # Contar itens com pelo menos uma contagem
-    counted_items = db.query(func.count(func.distinct(InventoryItemModel.id))).filter(
+    # Contar itens com pelo menos uma contagem (qualquer ciclo)
+    counted_items = db.query(func.count(InventoryItemModel.id)).filter(
         InventoryItemModel.inventory_list_id == inventory_id,
-        InventoryItemModel.id.in_(
-            db.query(CountingModel.inventory_item_id).distinct()
+        or_(
+            InventoryItemModel.count_cycle_1.isnot(None),
+            InventoryItemModel.count_cycle_2.isnot(None),
+            InventoryItemModel.count_cycle_3.isnot(None),
+            InventoryItemModel.status.in_(["COUNTED", "ZERO_CONFIRMED", "APPROVED"]),
         )
     ).scalar() or 0
     
@@ -367,9 +378,14 @@ async def get_inventory_list(
         "store_name": store,
         "total_items": total_items,
         "counted_items": counted_items,
-        "progress_percentage": round((counted_items / total_items * 100) if total_items > 0 else 0, 2)
+        "progress_percentage": round((counted_items / total_items * 100) if total_items > 0 else 0, 2),
+        # Onda 3 — etapa derivada e próximo passo recomendado
+        "analisado_em": inventory.analisado_em.isoformat() if inventory.analisado_em else None,
+        "analisado_por_id": str(inventory.analisado_por_id) if inventory.analisado_por_id else None,
+        "etapa_atual": inventory.etapa_atual,
+        "proximo_passo": inventory.proximo_passo,
     }
-    
+
     print(f"🔍 DEBUG RESPONSE - warehouse in response: {response_data.get('warehouse')}")
     print(f"🔍 [DEBUG BACKEND] Response list_status: {response_data.get('list_status')}")
     print(f"🔍 [DEBUG BACKEND] Response current_cycle: {response_data.get('current_cycle')}")
@@ -696,7 +712,22 @@ async def add_inventory_item(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot modify closed inventory"
         )
-    
+
+    # Bloquear se houver lista de contagem já liberada/em contagem/encerrada
+    from app.models.models import CountingList
+    has_active_list = db.query(CountingList).filter(
+        CountingList.inventory_id == inventory_id,
+        CountingList.list_status.in_(['LIBERADA', 'EM_CONTAGEM', 'ENCERRADA'])
+    ).first()
+    if has_active_list:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Não é possível adicionar produtos: existe lista de contagem já liberada. "
+                "Adicione produtos antes de liberar a primeira lista para contagem."
+            )
+        )
+
     # Verificar se produto existe na mesma loja
     product = db.query(ProductModel).filter(
         and_(
@@ -1735,6 +1766,12 @@ async def release_inventory_for_counting(
     """
     Libera um inventário para contagem (muda status de ABERTA para EM_CONTAGEM)
     """
+    if current_user.role not in ["ADMIN", "SUPERVISOR"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas ADMIN e SUPERVISOR podem liberar inventário para contagem"
+        )
+
     # Buscar inventário
     inventory = db.query(InventoryListModel).filter(
         InventoryListModel.id == inventory_id
@@ -2005,6 +2042,89 @@ async def finalize_inventory(
 
 
 # =================================
+# ENDPOINT PARA MARCAR ANÁLISE CONCLUÍDA (Onda 3)
+# =================================
+
+@router.post("/lists/{inventory_id}/marcar-analisado")
+async def marcar_analisado(
+    inventory_id: str,
+    current_user: UserModel = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+) -> APIResponse:
+    """
+    Marca a etapa do inventário como ANALISADO.
+
+    Pré-condição: inventário precisa estar ENCERRADO (status COMPLETED).
+    Habilita o envio ao Protheus (gating em send-protheus/finalize).
+
+    **Permissão:** SUPERVISOR ou ADMIN.
+    """
+    if current_user.role not in ["SUPERVISOR", "ADMIN"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas SUPERVISOR e ADMIN podem marcar a análise como concluída"
+        )
+
+    inventory = db.query(InventoryListModel).filter(
+        InventoryListModel.id == inventory_id
+    ).first()
+
+    if not inventory:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Inventário não encontrado"
+        )
+
+    if not verify_store_access(current_user, str(inventory.store_id)):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sem acesso a esta loja"
+        )
+
+    if inventory.status == InventoryStatus.CLOSED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Inventário já foi integrado ao Protheus (CLOSED)"
+        )
+
+    # Exige inventário encerrado (todas as listas terminadas)
+    if inventory.list_status != "ENCERRADA" and inventory.status != InventoryStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Encerre o inventário antes de marcar a análise como concluída"
+        )
+
+    if inventory.analisado_em is not None:
+        return APIResponse(
+            success=True,
+            message="Análise já estava marcada como concluída",
+            data={
+                "inventory_id": str(inventory.id),
+                "etapa_atual": inventory.etapa_atual,
+                "analisado_em": inventory.analisado_em.isoformat(),
+                "analisado_por_id": str(inventory.analisado_por_id) if inventory.analisado_por_id else None,
+            }
+        )
+
+    inventory.analisado_em = datetime.utcnow()
+    inventory.analisado_por_id = current_user.id
+    db.commit()
+    db.refresh(inventory)
+
+    return APIResponse(
+        success=True,
+        message="Análise concluída. O inventário está pronto para envio ao Protheus.",
+        data={
+            "inventory_id": str(inventory.id),
+            "etapa_atual": inventory.etapa_atual,
+            "proximo_passo": inventory.proximo_passo,
+            "analisado_em": inventory.analisado_em.isoformat(),
+            "analisado_por_id": str(inventory.analisado_por_id),
+        }
+    )
+
+
+# =================================
 # ENDPOINT PARA REDISTRIBUIR PRODUTOS
 # =================================
 
@@ -2034,6 +2154,12 @@ async def redistribute_products(
     **Retorna:**
     - Resumo da distribuição de produtos entre as listas
     """
+    if current_user.role not in ["ADMIN", "SUPERVISOR"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas ADMIN e SUPERVISOR podem redistribuir produtos entre listas"
+        )
+
     try:
         # Verificar se inventário existe
         inventory = db.query(InventoryListModel).filter(

@@ -5,7 +5,7 @@ Versão SIMPLIFICADA para funcionar
 """
 
 from fastapi import FastAPI, Depends, HTTPException, status, Query, Request
-from sqlalchemy import and_, text
+from sqlalchemy import and_, or_, text
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -27,7 +27,7 @@ from app.core.constants import (
 from app.core.exceptions import safe_error_response
 
 # Importar autenticação do módulo correto
-from app.core.security import get_current_user as get_current_user_from_security
+from app.core.security import get_current_user as get_current_user_from_security, require_staff_role
 
 # Configurar logging em JSON + correlation ID via X-Request-ID.
 # Auditoria observabilidade 26/04/2026 #1 — alinha com auth/gestao/fiscal.
@@ -800,10 +800,10 @@ def _resolve_location(sbz, szb):
 async def get_inventory_items(
     inventory_id: str,
     status_filter: str = None,  # 🎯 NOVO: Filtro por status para sistema de 3 ciclos
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_staff_role),
     db: Session = Depends(get_db)
 ):
-    """Obter itens de um inventário com suas atribuições
+    """Obter itens de um inventário com suas atribuições [STAFF only — expõe saldo do sistema]
     
     Args:
         status_filter: Filtrar por status específico para contagem por ciclo:
@@ -2270,6 +2270,21 @@ async def add_products_to_inventory(
         # Buscar inventário de forma resiliente
         inventory_for_check = check_inventory_access(db, inventory_uuid, current_user)
         check_inventory_not_closed(inventory_for_check)
+
+        # Bloquear se houver lista de contagem já liberada/em contagem/encerrada
+        from app.models.models import CountingList as _CL
+        _has_active = db.query(_CL).filter(
+            _CL.inventory_id == inventory_uuid,
+            _CL.list_status.in_(['LIBERADA', 'EM_CONTAGEM', 'ENCERRADA'])
+        ).first()
+        if _has_active:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Não é possível adicionar produtos: existe lista de contagem já liberada. "
+                    "Adicione produtos antes de liberar a primeira lista para contagem."
+                )
+            )
 
         inventory = safe_query(
             db,
@@ -4701,13 +4716,20 @@ async def list_inventories(
                 InventoryItem.inventory_list_id == inv.id
             ).count()
             
+            # Conta como "contado" qualquer item com pelo menos uma contagem registrada
+            # em qualquer ciclo (mesmo divergente, que fica status=PENDING aguardando recontagem)
             counted_items = db.query(InventoryItem).filter(
                 InventoryItem.inventory_list_id == inv.id,
-                InventoryItem.status == "COUNTED"
+                or_(
+                    InventoryItem.count_cycle_1.isnot(None),
+                    InventoryItem.count_cycle_2.isnot(None),
+                    InventoryItem.count_cycle_3.isnot(None),
+                    InventoryItem.status.in_(["COUNTED", "ZERO_CONFIRMED", "APPROVED"]),
+                )
             ).count()
-            
+
             progress_percentage = (counted_items / total_items * 100) if total_items > 0 else 0
-            
+
             # SEGUNDA VALIDAÇÃO: Detectar qual contagem está ativa para este usuário
             from app.models.models import Counting, Discrepancy
             
@@ -4793,6 +4815,10 @@ async def list_inventories(
                 # ✅ CORREÇÃO: Adicionar current_cycle para badges na interface
                 "current_cycle": inv.current_cycle,
                 "list_status": inv.list_status,
+                # Onda 3 — etapa derivada e proximo passo
+                "etapa_atual": inv.etapa_atual,
+                "proximo_passo": inv.proximo_passo,
+                "analisado_em": inv.analisado_em.isoformat() if inv.analisado_em else None,
                 # INFORMAÇÕES DA CONTAGEM ATIVA
                 "active_count": active_count_info
             })
@@ -5021,6 +5047,89 @@ async def distribute_products_for_inventory(
         raise HTTPException(status_code=500, detail=safe_error_response(e, "interno"))
 
 
+@app.get("/api/v1/inventory/lists/available-for-integration", tags=["Inventory"])
+async def list_available_for_integration(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista inventários elegíveis para criar nova integração Protheus.
+
+    Critérios:
+    - status = 'COMPLETED' (Encerrado)
+    - analisado_em IS NOT NULL (Análise concluída)
+    - Não está em integração ativa (qualquer status != CANCELLED, em inventory_a_id ou inventory_b_id)
+
+    Excluídos:
+    - DRAFT/IN_PROGRESS (ainda em contagem)
+    - CLOSED (já integrado)
+    - COMPLETED sem análise concluída
+    - Já vinculado a integração DRAFT/SENT/etc.
+    """
+    try:
+        from app.models.models import InventoryList, Store, InventoryItem
+        from sqlalchemy import func
+
+        # ORM query — etapa_atual e proximo_passo são @property no modelo, não colunas
+        q = db.query(InventoryList).filter(
+            InventoryList.status == 'COMPLETED',
+            InventoryList.analisado_em.isnot(None),
+        )
+
+        # Filtro de loja para SUPERVISOR (ADMIN vê todas)
+        if current_user.role == 'SUPERVISOR':
+            q = q.filter(InventoryList.store_id == current_user.store_id)
+
+        # Excluir os que já estão em integração ativa (qualquer status != CANCELLED)
+        from sqlalchemy import text as sa_text
+        active_inv_ids = db.execute(sa_text("""
+            SELECT inventory_a_id FROM inventario.protheus_integrations
+             WHERE status NOT IN ('CANCELLED') AND inventory_a_id IS NOT NULL
+            UNION
+            SELECT inventory_b_id FROM inventario.protheus_integrations
+             WHERE status NOT IN ('CANCELLED') AND inventory_b_id IS NOT NULL
+        """)).fetchall()
+        excluded_ids = {row[0] for row in active_inv_ids}
+        if excluded_ids:
+            q = q.filter(~InventoryList.id.in_(excluded_ids))
+
+        inventories = q.order_by(InventoryList.created_at.desc()).all()
+
+        items = []
+        for inv in inventories:
+            store = db.query(Store).filter(Store.id == inv.store_id).first()
+            total_items = db.query(func.count(InventoryItem.id)).filter(
+                InventoryItem.inventory_list_id == inv.id
+            ).scalar() or 0
+            items.append({
+                "id": str(inv.id),
+                "name": inv.name,
+                "description": inv.description or "",
+                "reference_date": inv.reference_date.isoformat() if inv.reference_date else None,
+                "count_deadline": inv.count_deadline.isoformat() if inv.count_deadline else None,
+                "warehouse": inv.warehouse,
+                "status": inv.status.value if hasattr(inv.status, 'value') else inv.status,
+                "created_at": inv.created_at.isoformat() if inv.created_at else None,
+                "updated_at": inv.updated_at.isoformat() if inv.updated_at else (inv.created_at.isoformat() if inv.created_at else None),
+                "store_name": store.name if store else "Loja",
+                "total_items": int(total_items),
+                "counted_items": int(total_items),  # COMPLETED + analisado = todos contados
+                "progress_percentage": 100.0,
+                "current_cycle": inv.current_cycle,
+                "list_status": inv.list_status,
+                "etapa_atual": inv.etapa_atual,  # property do model
+                "proximo_passo": inv.proximo_passo,  # property do model
+                "analisado_em": inv.analisado_em.isoformat() if inv.analisado_em else None,
+            })
+
+        logger.info(f"✅ Inventários elegíveis para integração: {len(items)}")
+        return {"items": items, "total": len(items)}
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao listar inventários elegíveis: {e}")
+        raise HTTPException(status_code=500, detail=safe_error_response(e, "ao listar inventários elegíveis"))
+
+
 @app.post("/api/v1/inventory/lists", tags=["Inventory"])
 async def create_inventory(
     inventory_data: dict,
@@ -5219,16 +5328,23 @@ async def get_inventory(
         
         # Calcular estatísticas reais do inventário
         from app.models.models import InventoryItem
-        
+
         total_items = db.query(InventoryItem).filter(
             InventoryItem.inventory_list_id == inventory.id
         ).count()
-        
+
+        # Conta como "contado" qualquer item com count_cycle_X preenchido
+        # (divergentes ficam status=PENDING mas já foram contados em pelo menos 1 ciclo)
         counted_items = db.query(InventoryItem).filter(
             InventoryItem.inventory_list_id == inventory.id,
-            InventoryItem.status == "COUNTED"
+            or_(
+                InventoryItem.count_cycle_1.isnot(None),
+                InventoryItem.count_cycle_2.isnot(None),
+                InventoryItem.count_cycle_3.isnot(None),
+                InventoryItem.status.in_(["COUNTED", "ZERO_CONFIRMED", "APPROVED"]),
+            )
         ).count()
-        
+
         progress_percentage = (counted_items / total_items * 100) if total_items > 0 else 0
         
         logger.info(f"✅ Inventário {inventory_id} consultado por {current_user.username} - {counted_items}/{total_items} itens contados ({progress_percentage:.1f}%)")
@@ -5249,9 +5365,14 @@ async def get_inventory(
             "store_name": store.name if store else "Loja",
             "total_items": total_items,
             "counted_items": counted_items,
-            "progress_percentage": round(progress_percentage, 1)
+            "progress_percentage": round(progress_percentage, 1),
+            # Onda 3 — etapa derivada e proximo passo
+            "etapa_atual": inventory.etapa_atual,
+            "proximo_passo": inventory.proximo_passo,
+            "analisado_em": inventory.analisado_em.isoformat() if inventory.analisado_em else None,
+            "analisado_por_id": str(inventory.analisado_por_id) if inventory.analisado_por_id else None,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -5275,15 +5396,15 @@ async def get_pending_zero_expected(
         except ValueError:
             raise HTTPException(status_code=400, detail="ID de inventário inválido")
         
-        # Buscar produtos com expected_quantity = 0 que não estão ZERO_CONFIRMED
-        # Usar a mesma estrutura do endpoint /items
+        # Buscar produtos com expected_quantity = 0 que ainda estão PENDING
+        # (não pega COUNTED, REVIEWED, APPROVED — esses já foram processados)
         pending_items = db.query(InventoryItem, SB1010).outerjoin(
             SB1010,
             func.trim(SB1010.b1_cod) == func.trim(InventoryItem.product_code)
         ).filter(
             InventoryItem.inventory_list_id == inventory_uuid,
             InventoryItem.expected_quantity == 0,
-            InventoryItem.status != "COUNTED"
+            InventoryItem.status == "PENDING"
         ).all()
         
         result = []
@@ -6364,17 +6485,28 @@ async def confirm_zero_expected_items(
         
         if not inventory_list:
             raise HTTPException(status_code=404, detail="Lista de inventário não encontrada")
-        
+
+        # Bloquear se inventário já passou da etapa de contagem — não faz sentido auto-confirmar
+        # zeros em inventário ENCERRADO/ANALISADO/INTEGRADO (status REVIEWED/COMPLETED/CLOSED)
+        if inventory_list.status not in ("DRAFT", "IN_PROGRESS"):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Inventário não está em fase de contagem (status atual: {inventory_list.status}). "
+                    "Use 'Confirmar Zeros' apenas durante DRAFT ou IN_PROGRESS."
+                )
+            )
+
         # Buscar itens com expected_quantity = 0 que precisam de correção
         # Incluir produtos que:
-        # 1. Não estão COUNTED ainda, OU
+        # 1. Estão PENDING (caso normal — produto com saldo 0 que ninguém precisa contar), OU
         # 2. Estão COUNTED mas não têm count_cycle_1 preenchido (dados inconsistentes), OU
         # 3. ✅ CORREÇÃO CONSERVADORA: Expected=0, count_cycle_1>0, mas count_cycle_2 é NULL (casos 00010299, 00010560)
         items_to_confirm = db.query(InventoryItem).filter(
             InventoryItem.inventory_list_id == inventory_list_id,
             InventoryItem.expected_quantity == 0,
             or_(
-                InventoryItem.status != "COUNTED",  # Não contado ainda
+                InventoryItem.status == "PENDING",  # Caso normal
                 and_(
                     InventoryItem.status == "COUNTED",  # Contado mas...
                     InventoryItem.count_cycle_1.is_(None)  # ...sem count_cycle_1
@@ -6909,6 +7041,10 @@ async def register_count(
                         cli_upd.count_cycle_3 = count_data.quantity
                     cli_upd.last_counted_at = datetime.utcnow()
                     cli_upd.last_counted_by = str(current_user.id)
+                    # Migration 012: nova contagem após handoff DEVOLVIDA limpa marcação de revisão
+                    if cli_upd.revisar_no_ciclo:
+                        cli_upd.revisar_no_ciclo = False
+                        cli_upd.motivo_revisao = None
 
                 db.commit()
                 
@@ -7079,6 +7215,10 @@ async def register_count(
                 cli.needs_count_cycle_3 = False
             cli.last_counted_at = datetime.utcnow()
             cli.last_counted_by = str(current_user.id)
+            # Migration 012: nova contagem após handoff DEVOLVIDA limpa marcação de revisão
+            if cli.revisar_no_ciclo:
+                cli.revisar_no_ciclo = False
+                cli.motivo_revisao = None
 
         db.commit()
         
@@ -7565,10 +7705,11 @@ async def get_my_closed_rounds_simple(
 @app.get("/api/v1/discrepancies", tags=["Discrepancies"])
 async def get_all_discrepancies(
     round_key: str = None,
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_staff_role),
     db: Session = Depends(get_db)
 ):
-    """Listar divergências a partir das listas de contagem (counting_list_items)"""
+    """Listar divergências a partir das listas de contagem (counting_list_items)
+    [STAFF only — preserva contagem cega]"""
     try:
         # Buscar itens contados com divergência em relação ao saldo do sistema
         inv_filter = ""
@@ -7650,10 +7791,10 @@ async def get_all_discrepancies(
 @app.get("/api/v1/discrepancies/adjustments", tags=["Discrepancies"])
 async def get_discrepancy_adjustments(
     inventory_id: str = None,
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_staff_role),
     db: Session = Depends(get_db)
 ):
-    """Listar ajustes e transferências gerados nas integrações Protheus"""
+    """Listar ajustes e transferências gerados nas integrações Protheus [STAFF only]"""
     try:
         inv_filter = ""
         inv_wh_filter = ""
@@ -8053,10 +8194,10 @@ async def request_item_recount(
 async def resolve_discrepancy(
     discrepancy_id: str,
     request: dict,  # {"resolution": "APPROVED|REJECTED", "observation": "motivo"}
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_staff_role),
     db: Session = Depends(get_db)
 ):
-    """Resolver uma divergência (aprovar ou rejeitar)"""
+    """Resolver uma divergência (aprovar ou rejeitar) [STAFF only]"""
     try:
         from app.models.models import Discrepancy
         import uuid
@@ -8724,9 +8865,10 @@ async def filter_products_by_range(  # 🔥 RENOMEADO para evitar conflito com l
     local3_to: str = Query(None, description="Localização 3 ATÉ"),
     limit: int = Query(50, description="Limite de produtos por página"),
     offset: int = Query(0, description="Offset para paginação"),
+    current_user=Depends(require_staff_role),
     db: Session = Depends(get_db)
 ):
-    """Filtrar produtos para adição ao inventário usando filtros de faixa"""
+    """Filtrar produtos para adição ao inventário usando filtros de faixa [STAFF only — preserva contagem cega]"""
     try:
         from app.models.models import SB1010, SB2010, SBZ010, InventoryList
         
@@ -8930,6 +9072,7 @@ async def filter_products_by_range(  # 🔥 RENOMEADO para evitar conflito com l
 @app.get("/api/v1/products/filters", tags=["Products"])
 async def get_product_filters(
     filial: str = Query(None, description="Código da filial para filtrar armazéns"),
+    current_user=Depends(require_staff_role),
     db: Session = Depends(get_db)
 ):
     """Obter filtros disponíveis - OTIMIZADO sem JOINs pesados"""
@@ -8989,8 +9132,11 @@ async def get_product_filters(
         raise HTTPException(status_code=500, detail=safe_error_response(e, "ao buscar filtros"))
 
 @app.get("/api/v1/products/statistics", tags=["Products"])
-async def get_product_statistics(db: Session = Depends(get_db)):
-    """Obter estatísticas dos produtos para os cards do dashboard"""
+async def get_product_statistics(
+    current_user=Depends(require_staff_role),
+    db: Session = Depends(get_db),
+):
+    """Obter estatísticas dos produtos para os cards do dashboard [STAFF only]"""
     try:
         from app.models.models import SB1010, SB2010, SZD010
         from sqlalchemy import func, distinct
@@ -9041,9 +9187,10 @@ async def list_products(
     filial: str = Query(None, description="Filtrar por filial"),
     grupo: str = Query(None, description="Filtrar por grupo"),
     segmento: str = Query(None, description="Filtrar por segmento"),
-    db: Session = Depends(get_db)
+    current_user=Depends(require_staff_role),
+    db: Session = Depends(get_db),
 ):
-    """Listar produtos com paginação e filtros"""
+    """Listar produtos com paginação e filtros [STAFF only — expõe saldo do sistema]"""
     try:
         from app.models.models import SB1010, SB2010, SBM010, SZD010, SZE010, SZF010
         from sqlalchemy import func, or_, and_
@@ -9228,8 +9375,12 @@ async def list_products(
         raise HTTPException(status_code=500, detail=safe_error_response(e, "ao listar produtos"))
 
 @app.get("/api/v1/products/{product_id}", tags=["Products"])
-async def get_product_details(product_id: str, db: Session = Depends(get_db)):
-    """Obter detalhes completos de um produto - VERSÃO OTIMIZADA"""
+async def get_product_details(
+    product_id: str,
+    current_user=Depends(require_staff_role),
+    db: Session = Depends(get_db),
+):
+    """Obter detalhes completos de um produto - VERSÃO OTIMIZADA [STAFF only]"""
     try:
         from app.models.models import SB1010, SLK010, SBZ010, SB2010, SB8010, SBM010, SZD010, SZE010
         from sqlalchemy import func
@@ -10624,10 +10775,11 @@ async def get_list_products(
                 raise ValueError("ID de lista inválido")
 
         # Buscar info da lista para o response wrapper
-        _list_info_q = text("SELECT list_name, current_cycle FROM inventario.counting_lists WHERE id = :lid LIMIT 1")
+        _list_info_q = text("SELECT list_name, current_cycle, show_previous_counts FROM inventario.counting_lists WHERE id = :lid LIMIT 1")
         _list_info = db.execute(_list_info_q, {"lid": str(list_uuid)}).fetchone()
         _list_name = _list_info.list_name if _list_info else ""
         _current_cycle = _list_info.current_cycle if _list_info else 1
+        _show_previous_counts = bool(_list_info.show_previous_counts) if _list_info else False
 
         # 🎯 Construir query com filtro condicional por ciclo
         # ✅ CORREÇÃO CRÍTICA: Buscar contagens de counting_list_items, não de inventory_items
@@ -10647,6 +10799,8 @@ async def get_list_products(
                 COALESCE(cli.needs_count_cycle_1, ii.needs_recount_cycle_1) as needs_count_cycle_1,
                 COALESCE(cli.needs_count_cycle_2, ii.needs_recount_cycle_2) as needs_count_cycle_2,
                 COALESCE(cli.needs_count_cycle_3, ii.needs_recount_cycle_3) as needs_count_cycle_3,
+                COALESCE(cli.revisar_no_ciclo, false) as revisar_no_ciclo,
+                cli.motivo_revisao,
                 ii.warehouse,
                 ii.sequence,
                 COALESCE(p.unit, 'UN') as unit,
@@ -10713,6 +10867,7 @@ async def get_list_products(
                 ii.id, ii.product_code, ii.expected_quantity, ii.warehouse, ii.sequence,
                 cli.count_cycle_1, cli.count_cycle_2, cli.count_cycle_3,
                 cli.needs_count_cycle_1, cli.needs_count_cycle_2, cli.needs_count_cycle_3,
+                cli.revisar_no_ciclo, cli.motivo_revisao,
                 ii.needs_recount_cycle_1, ii.needs_recount_cycle_2, ii.needs_recount_cycle_3,
                 p.description, p.unit, cl.current_cycle,
                 iis.b1_desc, iis.b2_qatu, iis.b2_xentpos, iis.b2_cm1, iis.b1_rastro,
@@ -10877,6 +11032,9 @@ async def get_list_products(
                 "needs_count_cycle_1": row.needs_count_cycle_1 if hasattr(row, 'needs_count_cycle_1') else True,
                 "needs_count_cycle_2": row.needs_count_cycle_2 if hasattr(row, 'needs_count_cycle_2') else False,
                 "needs_count_cycle_3": row.needs_count_cycle_3 if hasattr(row, 'needs_count_cycle_3') else False,
+                # Migration 012: marcação de revisão pelo supervisor
+                "revisar_no_ciclo": bool(row.revisar_no_ciclo) if hasattr(row, 'revisar_no_ciclo') else False,
+                "motivo_revisao": row.motivo_revisao if hasattr(row, 'motivo_revisao') else None,
                 "counted_at": None,  # Por simplicidade, removido por enquanto
                 "warehouse": row.warehouse or "01",
                 "unit": row.unit or "UN",
@@ -10925,6 +11083,7 @@ async def get_list_products(
                 "current_cycle": _current_cycle,
                 "list_id": str(list_uuid),
                 "list_name": _list_name,
+                "show_previous_counts": _show_previous_counts,
             }
         }
 

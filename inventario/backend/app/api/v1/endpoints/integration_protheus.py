@@ -1174,6 +1174,14 @@ async def preview_integration(
     # Calcular integração
     if integration_type == "SIMPLE":
         adjustments_a = calculate_simple_adjustments(inv_a, items_a)
+        # Conta apenas ajustes efetivos (exclui NO_CHANGE) — alinha com o que o save_integration grava
+        # em protheus_integration_items e com o que o COMPARATIVE faz em eff_adjustments.
+        effective_adjustments_a = [a for a in adjustments_a if a.get("adjustment_type") != "NO_CHANGE"]
+        # Produtos contados sem divergência (nível agregado, lot_number=None)
+        no_change_products_a = [
+            a for a in adjustments_a
+            if a.get("adjustment_type") == "NO_CHANGE" and a.get("lot_number") is None
+        ]
 
         result = {
             "integration_type": "SIMPLE",
@@ -1185,9 +1193,10 @@ async def preview_integration(
             "adjustments": adjustments_a,     # Compatibilidade
             "summary": {
                 "total_transfers": 0,
-                "total_adjustments": len(adjustments_a),
+                "total_adjustments": len(effective_adjustments_a),
+                "total_no_change": len(no_change_products_a),
                 "total_transfer_value": 0,
-                "total_adjustment_value": sum(a["total_value"] for a in adjustments_a),
+                "total_adjustment_value": sum(a["total_value"] for a in effective_adjustments_a),
                 "warehouses": [inv_a["warehouse"]]
             },
             "existing_integration": existing
@@ -1196,6 +1205,34 @@ async def preview_integration(
         calc_result = calculate_comparative_integration(db, inv_a, inv_b, items_a, items_b)
 
         all_adjustments = calc_result["adjustments_a"] + calc_result["adjustments_b"]
+
+        # Onda 4 (fix lotes): contar/somar apenas linhas EFETIVAS — descarta a AGGREGATE
+        # quando há LOT_DETAIL do mesmo produto (evita dupla contagem no summary),
+        # exclui NO_CHANGE (não vira movimentação no Protheus) e exclui qty<=0
+        # (caso quando agg_qty=0 porque nenhum lote casou).
+        def _effective_lines(lines, *, exclude_no_change=False, require_qty=False):
+            with_detail = {l["product_code"] for l in lines if l.get("row_type") == "LOT_DETAIL"}
+            out = []
+            for l in lines:
+                if l.get("row_type") == "AGGREGATE" and l["product_code"] in with_detail:
+                    continue
+                if exclude_no_change and l.get("adjustment_type") == "NO_CHANGE":
+                    continue
+                if require_qty:
+                    qty = l.get("quantity")
+                    if qty is None or float(qty) == 0:
+                        continue
+                out.append(l)
+            return out
+
+        eff_transfers = _effective_lines(calc_result["transfers"], require_qty=True)
+        eff_adjustments = _effective_lines(all_adjustments, exclude_no_change=True)
+        # Produtos sem divergência — conta apenas linhas a nível de produto (não LOT_DETAIL)
+        # para casar com a contagem visível no painel
+        no_change_products = [
+            a for a in all_adjustments
+            if a.get("adjustment_type") == "NO_CHANGE" and a.get("row_type") != "LOT_DETAIL"
+        ]
 
         result = {
             "integration_type": "COMPARATIVE",
@@ -1206,10 +1243,11 @@ async def preview_integration(
             "adjustments_b": calc_result["adjustments_b"],
             "adjustments": all_adjustments,
             "summary": {
-                "total_transfers": len(calc_result["transfers"]),
-                "total_adjustments": len(all_adjustments),
-                "total_transfer_value": sum(t["total_value"] for t in calc_result["transfers"]),
-                "total_adjustment_value": sum(a["total_value"] for a in all_adjustments),
+                "total_transfers": len(eff_transfers),
+                "total_adjustments": len(eff_adjustments),
+                "total_no_change": len(no_change_products),
+                "total_transfer_value": sum(t["total_value"] for t in eff_transfers),
+                "total_adjustment_value": sum(a["total_value"] for a in eff_adjustments),
                 "warehouses": [inv_a["warehouse"], inv_b["warehouse"]]
             },
             "existing_integration": existing
@@ -1238,6 +1276,43 @@ async def save_integration(
         raise HTTPException(
             status_code=400,
             detail="Inventário já efetivado. Não é possível criar nova integração."
+        )
+
+    # Lock: 1 integração ATIVA por inventário (qualquer status exceto CANCELLED).
+    # Inclui DRAFT/PENDING/ERROR/PARTIAL para evitar múltiplas DRAFT do mesmo inventário —
+    # se o usuário precisa recriar, deve cancelar a anterior primeiro.
+    # Quando estiver atualizando uma integração existente (UPDATE), permitir reusar a própria.
+    inv_ids_to_check = [str(inventory_a_id)]
+    if inventory_b_id:
+        inv_ids_to_check.append(str(inventory_b_id))
+
+    # Detectar se já existe integração ATIVA pra esse mesmo par (será UPDATE, não INSERT)
+    existing_check = get_existing_integration(db, inventory_a_id, inventory_b_id)
+    existing_id = existing_check["id"] if existing_check else None
+
+    integracao_em_uso = db.execute(
+        text("""
+            SELECT pi.id, pi.status, pi.integration_type, pi.created_at,
+                   pi.inventory_a_id, pi.inventory_b_id
+            FROM inventario.protheus_integrations pi
+            WHERE pi.status NOT IN ('CANCELLED')
+              AND (pi.inventory_a_id = ANY(CAST(:ids AS uuid[]))
+                   OR pi.inventory_b_id = ANY(CAST(:ids AS uuid[])))
+              AND (CAST(:existing_id AS uuid) IS NULL OR pi.id != CAST(:existing_id AS uuid))
+            ORDER BY pi.created_at DESC
+            LIMIT 1
+        """),
+        {"ids": inv_ids_to_check, "existing_id": str(existing_id) if existing_id else None}
+    ).fetchone()
+
+    if integracao_em_uso:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Inventário já está em integração #{integracao_em_uso.id} "
+                f"(tipo {integracao_em_uso.integration_type}, status {integracao_em_uso.status}). "
+                "Cancele essa integração antes de criar uma nova."
+            )
         )
 
     # Gerar preview primeiro
@@ -1309,7 +1384,24 @@ async def save_integration(
         """), {"id": str(integration_id)})
 
         # Inserir transferências
-        for transfer in preview.get("transfers", []):
+        # Onda 4 (fix lotes): para produtos COM lote, calculate_comparative_integration retorna
+        # AGGREGATE (linha do produto, lot_number=NULL) seguido das LOT_DETAIL.
+        # Pra evitar dupla contagem na tabela e no envio Protheus, descartamos o AGGREGATE
+        # quando há LOT_DETAIL para o mesmo produto.
+        all_transfers = preview.get("transfers", [])
+        products_with_lot_detail = {
+            t["product_code"] for t in all_transfers
+            if t.get("row_type") == "LOT_DETAIL"
+        }
+        for transfer in all_transfers:
+            # Pula a linha agregada quando há detalhe por lote
+            if (transfer.get("row_type") == "AGGREGATE"
+                    and transfer["product_code"] in products_with_lot_detail):
+                continue
+            # Pula transferências com quantidade zero (caso quando lotes não casam — nada a transferir)
+            qty = transfer.get("quantity")
+            if qty is None or float(qty) == 0:
+                continue
             # Para transferências, expected_qty = saldo origem, counted_qty = contagem origem
             src_balance = transfer.get("source_balance_before", 0)
             src_counted = transfer.get("source_counted", 0)
@@ -1340,8 +1432,17 @@ async def save_integration(
             })
 
         # Inserir ajustes (excluir NO_CHANGE — sem ajuste necessario)
-        for adj in preview.get("adjustments", []):
+        # Mesma lógica de filtragem AGGREGATE vs LOT_DETAIL aplica aos ajustes
+        all_adjustments = preview.get("adjustments", [])
+        adj_products_with_lot_detail = {
+            a["product_code"] for a in all_adjustments
+            if a.get("row_type") == "LOT_DETAIL"
+        }
+        for adj in all_adjustments:
             if adj.get("adjustment_type") == "NO_CHANGE":
+                continue
+            if (adj.get("row_type") == "AGGREGATE"
+                    and adj["product_code"] in adj_products_with_lot_detail):
                 continue
             db.execute(text("""
                 INSERT INTO inventario.protheus_integration_items (
@@ -1600,9 +1701,185 @@ async def get_integration_details(
     """)
     items = db.execute(items_query, {"id": str(integration_id)}).fetchall()
 
+    # Extrair produtos NO_CHANGE do integration_data (não persistidos em protheus_integration_items
+    # porque não viram movimentação Protheus, mas listamos para o usuário ter visibilidade total)
+    no_change_items = []
+    integration_dict = dict(result._mapping)
+    integration_data = integration_dict.get("integration_data") or {}
+    if isinstance(integration_data, str):
+        try:
+            integration_data = json.loads(integration_data)
+        except Exception:
+            integration_data = {}
+    raw_adjustments = (
+        integration_data.get("adjustments_a")
+        or integration_data.get("adjustments")
+        or []
+    )
+    for adj in raw_adjustments:
+        if not isinstance(adj, dict):
+            continue
+        if adj.get("adjustment_type") != "NO_CHANGE":
+            continue
+        # Só linha-pai do produto (agregada). Filtra COMPARATIVE (row_type='LOT_DETAIL')
+        # e SIMPLE (lot_number != None nas linhas por lote).
+        if adj.get("row_type") == "LOT_DETAIL":
+            continue
+        if adj.get("lot_number") is not None:
+            continue
+        no_change_items.append({
+            "product_code": adj.get("product_code"),
+            "product_description": adj.get("product_description"),
+            "warehouse": adj.get("warehouse") or adj.get("target_warehouse") or adj.get("source_warehouse"),
+            "expected_qty": adj.get("expected_qty"),
+            "counted_qty": adj.get("counted_qty"),
+        })
+
+    # Extrair erros detalhados da resposta do Protheus (pra UI exibir em painel próprio)
+    protheus_errors = _extract_protheus_errors(integration_dict.get("protheus_response"))
+
     return {
-        "integration": dict(result._mapping),
-        "items": [dict(item._mapping) for item in items]
+        "integration": integration_dict,
+        "items": [dict(item._mapping) for item in items],
+        "no_change_items": no_change_items,
+        "protheus_errors": protheus_errors,
+    }
+
+
+def _extract_protheus_errors(protheus_response):
+    """
+    Lê o protheus_response e extrai a lista de produtos com status='ERRO'
+    do detalhe do digitacao. Retorna [] se não houver erros ou estrutura inesperada.
+    """
+    if not protheus_response:
+        return []
+    if isinstance(protheus_response, str):
+        try:
+            protheus_response = json.loads(protheus_response)
+        except Exception:
+            return []
+    errors = []
+    try:
+        digitacao = (protheus_response.get("detalhes") or {}).get("digitacao") or {}
+        for armazem_resp in (digitacao.get("detalhes") or []):
+            response = armazem_resp.get("response") or {}
+            for det in (response.get("detalhes") or []):
+                if (det.get("status") or "").upper() == "ERRO":
+                    errors.append({
+                        "product_code": det.get("codigo"),
+                        "lot_number": det.get("lote") or None,
+                        "warehouse": armazem_resp.get("armazem"),
+                        "quantity": det.get("quantidade"),
+                        "message": det.get("mensagem"),
+                    })
+    except Exception:
+        pass
+    return errors
+
+
+@router.post("/{integration_id}/reset-errors")
+async def reset_errors_for_resend(
+    integration_id: UUID,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Marca para reenvio os itens que voltaram com erro do Protheus na última tentativa.
+
+    Uso típico: integração ficou PARTIAL/ERROR. Usuário identificou o problema (ex.: "Produto
+    bloqueado" no SB1), pediu correção à equipe Protheus, e agora quer reenviar APENAS os
+    itens que falharam — sem duplicar os que já foram gravados com sucesso.
+
+    Lógica:
+    - Lê protheus_response da integração e extrai os product_code que voltaram com status=ERRO
+    - Adiciona também itens cujo item_status já está marcado como 'ERROR' no banco
+    - Para esses itens, reseta item_status para NULL (volta a ser elegível pra envio)
+    - Mantém intactos os itens que foram realmente gravados (item_status='SENT' permanece)
+
+    Retorna:
+        - reset_count: quantidade de itens marcados pra reenvio
+        - products: lista de product_codes resetados
+    """
+    # Buscar a integração
+    row = db.execute(text("""
+        SELECT id, status, protheus_response
+        FROM inventario.protheus_integrations
+        WHERE id = :id
+    """), {"id": str(integration_id)}).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Integração não encontrada")
+
+    if row.status not in ("PARTIAL", "ERROR", "SENT"):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Reset não aplicável no status atual ({row.status}). "
+                "Use apenas em integrações com status PARTIAL ou ERROR."
+            )
+        )
+
+    # 1) Erros do protheus_response (mesmo que item_status esteja 'SENT' por bug histórico)
+    errors_from_response = _extract_protheus_errors(row.protheus_response)
+    error_codes = {e["product_code"] for e in errors_from_response if e.get("product_code")}
+
+    # 2) Itens explicitamente marcados como ERROR
+    error_items = db.execute(text("""
+        SELECT id, product_code FROM inventario.protheus_integration_items
+        WHERE integration_id = :id AND item_status = 'ERROR'
+    """), {"id": str(integration_id)}).fetchall()
+    for it in error_items:
+        if it.product_code:
+            error_codes.add(it.product_code)
+
+    if not error_codes:
+        return {
+            "success": True,
+            "reset_count": 0,
+            "products": [],
+            "message": "Nenhum item com erro encontrado para resetar."
+        }
+
+    # Reset: item_status = NULL e error_detail preservada (referência do que ocorreu)
+    result = db.execute(text("""
+        UPDATE inventario.protheus_integration_items
+        SET item_status = NULL
+        WHERE integration_id = :id
+          AND product_code = ANY(:codes)
+        RETURNING product_code
+    """), {
+        "id": str(integration_id),
+        "codes": list(error_codes),
+    })
+    reset_products = [r.product_code for r in result.fetchall()]
+
+    # Voltar status da integração para ERROR (assinala que precisa ser reenviada)
+    db.execute(text("""
+        UPDATE inventario.protheus_integrations
+        SET status = 'ERROR',
+            error_message = :msg,
+            updated_at = NOW()
+        WHERE id = :id
+    """), {
+        "id": str(integration_id),
+        "msg": f"{len(reset_products)} item(ns) marcado(s) para reenvio após correção no Protheus.",
+    })
+
+    db.commit()
+
+    logger.info(
+        f"✅ Reset errors integração {integration_id}: "
+        f"{len(reset_products)} produtos prontos pra reenvio: {reset_products}"
+    )
+
+    return {
+        "success": True,
+        "reset_count": len(reset_products),
+        "products": sorted(reset_products),
+        "message": (
+            f"{len(reset_products)} item(ns) marcado(s) para reenvio. "
+            "Resolva o problema no Protheus e depois clique em 'Reenviar ao Protheus'."
+        )
     }
 
 
@@ -1624,10 +1901,16 @@ async def cancel_integration(
     if not result:
         raise HTTPException(status_code=404, detail="Integração não encontrada")
 
-    if result[0] in ["CONFIRMED", "CANCELLED"]:
+    # Onda 4 — Só permite cancelar em estados não-finais (DRAFT/PENDING/ERROR/PARTIAL).
+    # SENT/PROCESSING/CONFIRMED já foram aceitos pelo Protheus — reversão exige ação manual no ERP.
+    cancellable_statuses = ["DRAFT", "PENDING", "ERROR", "PARTIAL"]
+    if result[0] not in cancellable_statuses:
         raise HTTPException(
             status_code=400,
-            detail=f"Integração não pode ser cancelada. Status: {result[0]}"
+            detail=(
+                f"Integração não pode ser cancelada. Status atual: {result[0]}. "
+                f"Apenas {', '.join(cancellable_statuses)} podem ser canceladas."
+            )
         )
 
     try:
