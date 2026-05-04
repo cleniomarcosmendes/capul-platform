@@ -1,7 +1,7 @@
 # Roteiro de Finalizacao - Capul Platform
 
-**Versao**: 1.2
-**Data**: 12/04/2026
+**Versao**: 1.3
+**Data**: 04/05/2026
 **Objetivo**: Procedimento padrao apos finalizar ajustes no sistema
 
 **Modulos cobertos**: auth-gateway, hub, gestao-ti, inventario, configurador, **fiscal**
@@ -171,20 +171,61 @@ ls fiscal/backend/prisma/alters/ 2>/dev/null || echo "(sem ALTERs pendentes)"
 # Arquivos nao rastreados pelo git
 git ls-files --others --exclude-standard
 
-# Arquivos grandes (>5MB) excluindo node_modules e .git
-find . -type f -size +5M ! -path "./.git/*" ! -path "*/node_modules/*" -exec ls -lh {} \;
+# Arquivos grandes (>5MB) excluindo node_modules, .git, dist
+find . -type f -size +5M ! -path "./.git/*" ! -path "*/node_modules/*" ! -path "*/dist/*" -exec ls -lh {} \;
 
 # Verificar se ha .env ou credenciais expostas
 git ls-files | grep -E "\.env$|credentials|secret"
 ```
 
+**Procedimento para arquivos > 5MB encontrados:**
+
+1. **PERGUNTAR ao usuario, arquivo por arquivo** — nunca deletar automatico.
+   Mostrar caminho + tamanho + data, ele decide.
+2. Tipicos candidatos a remocao (com confirmacao):
+   - `estrutura.txt` na raiz (snapshot da arvore — gera grande)
+   - JSONs de teste em `*/docs/archive/tests/` (resquicios de testes antigos)
+   - Logs em `*.log` se nao estiverem em `.gitignore`
+3. **Apos remover arquivos**, verificar pastas vazias:
+   ```bash
+   find . -type d -empty ! -path "./.git/*" ! -path "*/node_modules/*"
+   ```
+   E remover com `rmdir` (so remove se vazia — seguro).
+4. **NUNCA adicionar arquivos > 5MB ao git** sem alinhamento (poluiria o repo).
+
 ### 2.5 Limpeza Docker (com confirmacao)
 ```bash
-# Imagens nao utilizadas (PERGUNTAR antes)
+# Mostrar uso atual de disco (sempre primeiro — visibilidade)
+docker system df
+
+# Imagens dangling (sem tag) — seguro, sem confirmacao
 docker image prune -f
 
-# Build cache antigo (PERGUNTAR antes)
-docker builder prune -f --filter "until=168h"
+# Build cache antigo > 24h — preserva cache da sessao atual
+# (foi 168h ate 04/05/2026; trocado pra 24h porque sessoes longas geram
+#  muito cache e 168h quase nada e antigo o suficiente pra liberar)
+docker builder prune -f --filter "until=24h"
+```
+
+**Por que 24h e nao 168h?** Em desenvolvimento ativo (multiplos builds/dia),
+cache de 168h libera quase nada. Cache de 24h libera ~8-15GB tipicamente,
+preservando o que acelerou builds da sessao atual.
+
+#### Inspecao de volumes dangling — uso de container temporario (sem sudo)
+
+Em WSL2, `sudo ls` no Mountpoint do volume pede senha (sem TTY).
+Use container Alpine temporario:
+```bash
+# Listar volumes dangling
+docker volume ls -q --filter dangling=true
+
+# Inspecionar conteudo SEM sudo (para cada volume)
+for v in $(docker volume ls -q --filter dangling=true | grep -E "^[a-f0-9]{64}$"); do
+  echo "=== Volume: $v ==="
+  docker volume inspect $v --format 'Criado: {{.CreatedAt}}'
+  docker run --rm -v $v:/data alpine sh -c 'du -sh /data; ls -la /data | head -10'
+  echo ""
+done
 ```
 
 #### ⚠️ Volumes órfãos — NUNCA prune automático
@@ -205,19 +246,23 @@ pré-multi-schema, backups de migração, dados de dev que nunca foram transferi
 2. **Separar** em dois grupos visualmente:
    - **Anônimos** (hash de 64 chars `[a-f0-9]`): gerados pelo próprio build/runtime, seguros
    - **Nomeados** (começam com `capul_*`, `fiscal_*`, etc.): dados nomeados do projeto
-3. Para os **anônimos**, pode remover direto:
+3. **Inspecionar conteúdo** dos anônimos primeiro (snippet acima) — ver o que tem dentro.
+   Pode haver volume de PgAdmin/etc. com configurações que o usuário queira preservar.
+4. Para os **anônimos**, remover apenas após confirmar com o usuário:
    ```bash
    docker volume ls -q --filter dangling=true | grep -E "^[a-f0-9]{64}$" | xargs -r docker volume rm
    ```
-4. Para cada **volume nomeado**, PARAR e **PERGUNTAR ao usuário antes de deletar**.
-   Se ele não souber de cabeça, inspecionar:
-   ```bash
-   docker volume inspect <nome_do_volume>
-   sudo ls -la $(docker volume inspect <nome> --format '{{.Mountpoint}}')
-   ```
-   Mostrar tamanho + mountpoint + últimos arquivos modificados. Só deletar após confirmação explícita.
+5. Para cada **volume nomeado**, PARAR e **PERGUNTAR ao usuário antes de deletar**.
+   Se ele não souber de cabeça, mostrar inspeção (mesmo snippet) — tamanho + mountpoint
+   + últimos arquivos modificados. Só deletar após confirmação explícita.
 
-**Incidente de referência:** 13/04/2026 — durante limpeza rotineira encontrados 12 volumes órfãos, dos quais 3 eram `capul_inventario_*_data` (resquícios do setup antigo quando o inventário tinha seu próprio PostgreSQL separado, antes da migração para a plataforma unificada). Um `docker volume prune -f` automático teria deletado dados históricos potencialmente importantes e irreversíveis.
+**Incidentes de referência:**
+- **13/04/2026**: encontrados 12 volumes órfãos, dos quais 3 eram `capul_inventario_*_data`
+  (resquícios do setup antigo quando o inventário tinha seu próprio PostgreSQL).
+  `docker volume prune -f` teria deletado dados históricos.
+- **04/05/2026**: 2 volumes anônimos detectados eram `pgadmin4.db` antigos (24/04 e 27/04).
+  Volume ATIVO do PgAdmin tinha nome diferente (configurações preservadas), os 2 órfãos
+  eram realmente sobras de redeploys. Inspeção via container Alpine confirmou antes de remover.
 
 ### 2.6 Limpeza de Cache Local
 ```bash
@@ -368,5 +413,13 @@ Aplicar este checklist **sempre que houver alteracoes em `fiscal/`**:
 
 ---
 
-**Ultima Atualizacao**: 12/04/2026
-**Versao**: 1.2
+**Ultima Atualizacao**: 04/05/2026
+**Versao**: 1.3
+
+## Changelog
+
+- **1.3 (04/05/2026)**: Build cache de 168h → 24h (libera mais espaco em dev ativo).
+  Volume dangling: inspecao via container Alpine (sem sudo). Procedimento explicito
+  para arquivos > 5MB (perguntar caso a caso, remover pastas vazias depois).
+  Incidente PgAdmin 04/05 documentado.
+- **1.2 (12/04/2026)**: Versao base.

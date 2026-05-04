@@ -18,7 +18,7 @@ Plataforma corporativa modular com microservicos independentes:
                    /    |    |    \
                   /     |    |     \
             [Hub]  [Auth GW]  [Gestao TI]  [Inventario]
-            :5170   :3000      :3001/:5173   :8000/:8443
+            :5170   :3000      :3001/:5173   :8000/:5174
                \      |        /       /
                 \     |       /       /
               [ PostgreSQL :5432 ]
@@ -38,7 +38,7 @@ Plataforma corporativa modular com microservicos independentes:
 | **Gestao TI Backend** | NestJS 11 + Prisma 6 | 3001 | `core` (RO) + `gestao_ti` |
 | **Gestao TI Frontend** | React 19 + Vite 7 + Tailwind v4 | 5173 | - |
 | **Inventario Backend** | FastAPI + Python 3.11 | 8000 | `inventario` |
-| **Inventario Frontend** | HTML + Bootstrap 5 (PWA) | 8443 | - |
+| **Inventario Frontend** | React 19 + Vite 7 + Tailwind v4 | 5174 | - |
 | **PostgreSQL** | PostgreSQL 16 | 5432 | Multi-schema |
 | **Redis** | Redis 7 | 6379 | Cache/sessoes |
 
@@ -114,7 +114,7 @@ docker compose exec auth-gateway npx prisma db seed
 |---------|-----|-------------|
 | Hub | https://localhost/ | - |
 | Gestao TI | https://localhost/gestao-ti/ | admin |
-| Inventario | https://localhost:8443/ | admin/admin123 |
+| Inventario | https://localhost/inventario/ | admin/admin123 |
 | Fiscal | https://localhost/fiscal/ | admin (role ADMIN_TI) |
 | PgAdmin | http://localhost:5050 | Ver .env |
 | API Docs (Inventario) | http://localhost:8000/docs | - |
@@ -250,4 +250,4 @@ Este arquivo serve como ponto de entrada para o Claude Code entender a estrutura
 
 ---
 
-*Ultima atualizacao: 28/04/2026*
+*Ultima atualizacao: 04/05/2026*
