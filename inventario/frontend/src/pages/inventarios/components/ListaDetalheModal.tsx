@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, Package, AlertTriangle, CheckCircle2, Clock, Search, History } from 'lucide-react';
 import { HistoricoContagemModal } from '../../contagem/components/HistoricoContagemModal';
+import { EtapaStepper, ETAPAS_LISTA } from '../../../components/EtapaStepper';
 import { countingListService } from '../../../services/counting-list.service';
 import { calcularQuantidadeFinal, getExpectedQty, hasAnyEntregasPosterior } from '../../../utils/cycles';
 import type { CountingList, CountingListProduct } from '../../../types';
@@ -110,21 +111,26 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
     <div className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-200 ${visible ? 'bg-black/40' : 'bg-transparent'}`}>
       <div className={`bg-white rounded-xl shadow-xl w-full max-w-7xl mx-4 h-[92vh] flex flex-col transition-all duration-200 ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0">
-          <div>
-            <div className="flex items-center gap-3">
-              <h3 className="text-lg font-semibold text-slate-800">{lista.list_name}</h3>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${lsc.color}`}>
-                {lsc.label}
-              </span>
+        <div className="px-5 py-3 border-b border-slate-200 shrink-0 space-y-3">
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-semibold text-slate-800">{lista.list_name}</h3>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${lsc.color}`}>
+                  {lsc.label}
+                </span>
+              </div>
+              {lista.description && (
+                <p className="text-xs text-slate-500 mt-0.5">{lista.description}</p>
+              )}
             </div>
-            {lista.description && (
-              <p className="text-xs text-slate-500 mt-0.5">{lista.description}</p>
-            )}
+            <button onClick={handleClose} className="p-1 text-slate-400 hover:text-slate-600">
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button onClick={handleClose} className="p-1 text-slate-400 hover:text-slate-600">
-            <X className="w-5 h-5" />
-          </button>
+
+          {/* Stepper de etapas da lista */}
+          <EtapaStepper steps={ETAPAS_LISTA} currentStep={lista.list_status} />
         </div>
 
         {/* Stats bar compacta */}

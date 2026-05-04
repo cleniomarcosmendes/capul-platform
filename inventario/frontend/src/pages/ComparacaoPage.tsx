@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Header } from '../layouts/Header';
 import { comparisonService } from '../services/comparison.service';
 import { inventoryService } from '../services/inventory.service';
@@ -7,7 +7,7 @@ import { PageSkeleton } from '../components/LoadingSkeleton';
 import { ErrorState } from '../components/ErrorState';
 import { useToast } from '../contexts/ToastContext';
 import type { ComparisonResult, ComparisonItem, InventoryList } from '../types';
-import { ArrowLeftRight, FileSpreadsheet, FileJson, Warehouse, Send } from 'lucide-react';
+import { ArrowLeftRight, FileSpreadsheet, FileJson, Warehouse, Info } from 'lucide-react';
 import { downloadCSV } from '../utils/csv';
 import { ExportDropdown } from '../components/ExportDropdown';
 import { downloadExcel, printTable } from '../utils/export';
@@ -20,8 +20,39 @@ const modeLabels: Record<Mode, string> = {
   manual: 'Analise Manual',
 };
 
+const etapaConfig: Record<string, { label: string; color: string }> = {
+  ENCERRADO: { label: 'Encerrado', color: 'bg-blue-100 text-blue-700' },
+  ANALISADO: { label: 'Analisado', color: 'bg-purple-100 text-purple-700' },
+  INTEGRADO: { label: 'Integrado', color: 'bg-emerald-100 text-emerald-700' },
+};
+
+function fallbackEtapa(status: string): string {
+  if (status === 'CLOSED') return 'INTEGRADO';
+  if (status === 'COMPLETED') return 'ENCERRADO';
+  return status;
+}
+
 const formatCurrency = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+function AnaliseHistoricaBanner() {
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-3">
+      <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+      <div className="text-sm text-slate-700 space-y-1">
+        <p className="font-medium text-blue-900">Análise Histórica — comparação entre inventários do mesmo armazém</p>
+        <p className="text-xs text-slate-600">
+          Compara dois inventários do <strong>mesmo armazém</strong> para acompanhar a evolução do processo de
+          estoque ao longo do tempo. É <strong>somente análise gerencial</strong> — não gera movimentação no Protheus.
+        </p>
+        <p className="text-xs text-slate-500 mt-1">
+          <strong>Não confunda com Integração Comparativa</strong> (menu <em>Integrações &gt; Nova Integração</em>),
+          que compara armazéns <strong>diferentes</strong> (CD ↔ Venda) e gera transferências SD3 + ajustes SB7 no ERP.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function cellColor(divergence: number, difFinal: number): string {
   if (Math.abs(difFinal) < 0.01) return 'text-green-600 font-medium';
@@ -29,9 +60,12 @@ function cellColor(divergence: number, difFinal: number): string {
   return 'text-red-600';
 }
 
-export default function ComparacaoPage() {
+interface ComparacaoPageProps {
+  embedded?: boolean;
+}
+
+export default function ComparacaoPage({ embedded = false }: ComparacaoPageProps = {}) {
   const [params, setParams] = useSearchParams();
-  const navigate = useNavigate();
   const invAId = params.get('inv_a') ?? '';
   const invBId = params.get('inv_b') ?? '';
   const mode = (params.get('mode') as Mode) || 'manual';
@@ -45,21 +79,27 @@ export default function ComparacaoPage() {
   const [availableInventarios, setAvailableInventarios] = useState<InventoryList[]>([]);
   const [selectorLoading, setSelectorLoading] = useState(false);
 
-  // Load available inventories for selector when only inv_a
+  // Load all comparable inventories
   useEffect(() => {
-    if (invAId && !invBId) {
+    if (!invAId || !invBId) {
       setSelectorLoading(true);
-      inventoryService.listar({ status: 'COMPLETED', size: '50' })
-        .then((res) => {
-          // Also include CLOSED inventories
-          inventoryService.listar({ status: 'CLOSED', size: '50' })
-            .then((res2) => {
-              const all = [...res.items, ...res2.items].filter((inv) => inv.id !== invAId);
-              setAvailableInventarios(all);
-            })
-            .catch(() => setAvailableInventarios(res.items.filter((inv) => inv.id !== invAId)));
+      Promise.all([
+        inventoryService.listar({ status: 'COMPLETED', size: '50' }).catch(() => ({ items: [] })),
+        inventoryService.listar({ status: 'CLOSED', size: '50' }).catch(() => ({ items: [] })),
+      ])
+        .then(([res1, res2]) => {
+          const all = [...(res1.items ?? []), ...(res2.items ?? [])];
+          // Análise Histórica: filtra inventários do MESMO armazém de inv_a
+          // (transferências entre armazéns diferentes vão pelo wizard /integracoes/nova)
+          let filtered = all;
+          if (invAId) {
+            const invA = all.find((i) => i.id === invAId);
+            filtered = all.filter((inv) =>
+              inv.id !== invAId && (!invA || inv.warehouse === invA.warehouse)
+            );
+          }
+          setAvailableInventarios(filtered);
         })
-        .catch(() => {})
         .finally(() => setSelectorLoading(false));
     }
   }, [invAId, invBId]);
@@ -143,9 +183,48 @@ export default function ComparacaoPage() {
   if (!invAId) {
     return (
       <>
-        <Header title="Comparacao de Inventarios" />
-        <div className="p-4 md:p-6">
-          <ErrorState message="Parametro inv_a e obrigatorio na URL." />
+        {!embedded && <Header title="Análise Histórica de Inventários" />}
+        <div className="p-4 md:p-6 space-y-4">
+          <AnaliseHistoricaBanner />
+          <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+            <h3 className="font-semibold text-slate-800">Selecione o inventário base</h3>
+            {selectorLoading ? (
+              <p className="text-sm text-slate-400">Carregando inventarios...</p>
+            ) : availableInventarios.length === 0 ? (
+              <p className="text-sm text-amber-600">
+                Nenhum inventario disponivel. Conclua a contagem de pelo menos um inventario antes de comparar.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {availableInventarios.map((inv) => {
+                  const etapa = inv.etapa_atual || fallbackEtapa(inv.status);
+                  const ec = etapaConfig[etapa] || { label: etapa, color: 'bg-slate-100 text-slate-700' };
+                  return (
+                    <button
+                      key={inv.id}
+                      type="button"
+                      onClick={() => {
+                        const next = new URLSearchParams();
+                        next.set('inv_a', inv.id);
+                        setParams(next);
+                      }}
+                      className="text-left border border-slate-200 hover:border-capul-500 hover:bg-capul-50 rounded-lg p-3 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="font-medium text-slate-800 text-sm truncate">{inv.name}</p>
+                        <span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${ec.color}`}>
+                          {ec.label}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Armazem <strong>{inv.warehouse}</strong> · {inv.total_items} itens
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </>
     );
@@ -154,36 +233,58 @@ export default function ComparacaoPage() {
   if (!invBId) {
     return (
       <>
-        <Header title="Comparacao de Inventarios" />
+        {!embedded && <Header title="Análise Histórica de Inventários" />}
         <div className="p-4 md:p-6 space-y-4">
+          <AnaliseHistoricaBanner />
+          {/* Botao trocar A */}
+          <div className="flex justify-end">
+            <button
+              onClick={() => setParams(new URLSearchParams())}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50"
+            >
+              <ArrowLeftRight className="w-4 h-4" />
+              Trocar Inventario Base
+            </button>
+          </div>
+
           <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-            <h3 className="font-semibold text-slate-800">Selecione o inventario para comparar</h3>
+            <h3 className="font-semibold text-slate-800">Selecione o inventário para comparar</h3>
             <p className="text-sm text-slate-500">
-              Escolha um segundo inventario (preferencialmente de armazem diferente) para realizar a comparacao.
+              Inventário base já escolhido. Listamos abaixo os outros inventários do <strong>mesmo armazém</strong>
+              {' '}para você comparar a evolução do processo.
             </p>
             {selectorLoading ? (
               <p className="text-sm text-slate-400">Carregando inventarios...</p>
             ) : availableInventarios.length === 0 ? (
-              <p className="text-sm text-amber-600">Nenhum outro inventario encerrado disponivel para comparacao.</p>
+              <p className="text-sm text-amber-600">Nenhum outro inventario disponivel para comparacao.</p>
             ) : (
-              <div className="space-y-3">
-                <select
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      const next = new URLSearchParams(params);
-                      next.set('inv_b', e.target.value);
-                      setParams(next);
-                    }
-                  }}
-                  className="w-full max-w-md px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-capul-500 focus:border-capul-500"
-                >
-                  <option value="">Selecione um inventario...</option>
-                  {availableInventarios.map((inv) => (
-                    <option key={inv.id} value={inv.id}>
-                      {inv.name} (Armazem {inv.warehouse}) — {inv.total_items} itens
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {availableInventarios.map((inv) => {
+                  const etapa = inv.etapa_atual || fallbackEtapa(inv.status);
+                  const ec = etapaConfig[etapa] || { label: etapa, color: 'bg-slate-100 text-slate-700' };
+                  return (
+                    <button
+                      key={inv.id}
+                      type="button"
+                      onClick={() => {
+                        const next = new URLSearchParams(params);
+                        next.set('inv_b', inv.id);
+                        setParams(next);
+                      }}
+                      className="text-left border border-slate-200 hover:border-capul-500 hover:bg-capul-50 rounded-lg p-3 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="font-medium text-slate-800 text-sm truncate">{inv.name}</p>
+                        <span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${ec.color}`}>
+                          {ec.label}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Armazem <strong>{inv.warehouse}</strong> · {inv.total_items} itens
+                      </p>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -194,8 +295,20 @@ export default function ComparacaoPage() {
 
   return (
     <>
-      <Header title="Comparacao de Inventarios" />
+      {!embedded && <Header title="Análise Histórica de Inventários" />}
       <div className="p-4 md:p-6 space-y-6">
+        <AnaliseHistoricaBanner />
+        {/* Acao: trocar inventarios — sempre disponivel no topo */}
+        <div className="flex justify-end">
+          <button
+            onClick={() => setParams(new URLSearchParams())}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50"
+          >
+            <ArrowLeftRight className="w-4 h-4" />
+            Trocar Inventarios
+          </button>
+        </div>
+
         {loading ? (
           <PageSkeleton />
         ) : error ? (
@@ -295,29 +408,6 @@ export default function ComparacaoPage() {
               <ManualTable items={sortedItems} invA={result.inventory_a} invB={result.inventory_b} />
             )}
 
-            {/* Gerar Integração Protheus */}
-            <div className="bg-white rounded-xl border-2 border-green-200 p-5">
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
-                    <Send className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-slate-800">Gerar Integracao Protheus</h4>
-                    <p className="text-xs text-slate-500">
-                      Envie os dados comparativos para o Protheus no modo COMPARATIVO (transferencias + ajustes).
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => navigate(`/inventario/sincronizacao?mode=comparativo&inv_a=${invAId}&inv_b=${invBId}`)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm rounded-lg font-medium hover:bg-green-700 transition-colors"
-                >
-                  <Send className="w-4 h-4" />
-                  Ir para Integracao
-                </button>
-              </div>
-            </div>
           </>
         ) : null}
       </div>

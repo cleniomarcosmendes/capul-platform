@@ -33,6 +33,12 @@ const tabConfig: { key: Tab; label: string; icon: React.ComponentType<{ classNam
   { key: 'transferencias', label: 'Transferencias', icon: ArrowRightLeft },
 ];
 
+interface RelatoriosPageProps {
+  /** Se embedded, esconde Header e filtra tabs visíveis. Default: false (renderiza standalone). */
+  embedded?: boolean;
+  tabsAllowed?: Tab[];
+}
+
 const formatCurrency = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
@@ -51,12 +57,17 @@ interface DivergenceRow {
   count_cycle_3: number | null;
 }
 
-export function RelatoriosPage() {
+export function RelatoriosPage({ embedded = false, tabsAllowed }: RelatoriosPageProps = {}) {
+  const visibleTabs = tabsAllowed
+    ? tabConfig.filter((t) => tabsAllowed.includes(t.key))
+    : tabConfig;
+  const defaultTab: Tab = visibleTabs[0]?.key ?? 'divergencias';
+
   const [inventarios, setInventarios] = useState<InventoryList[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [selectedInv, setSelectedInv] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<Tab>('divergencias');
+  const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
   const [tolerance, setTolerance] = useState<number>(0);
 
   // Fonte unificada: final-report para todas as tabs
@@ -140,7 +151,7 @@ export function RelatoriosPage() {
 
   return (
     <>
-      <Header title="Relatorios" />
+      {!embedded && <Header title="Relatorios" />}
       <div className="p-4 md:p-6 space-y-4">
         {loading ? (
           <PageSkeleton />
@@ -150,7 +161,7 @@ export function RelatoriosPage() {
           <>
             {/* Tabs */}
             <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit overflow-x-auto scrollbar-hide">
-              {tabConfig.map((t) => {
+              {visibleTabs.map((t) => {
                 const Icon = t.icon;
                 return (
                   <button
@@ -680,7 +691,7 @@ function SubTabIntegradas() {
   );
 
   const statusLabel: Record<string, { text: string; color: string }> = {
-    DRAFT: { text: 'Rascunho', color: 'bg-slate-100 text-slate-600' },
+    DRAFT: { text: 'Aguardando Envio', color: 'bg-slate-100 text-slate-600' },
     SENT: { text: 'Enviada', color: 'bg-blue-100 text-blue-700' },
     CONFIRMED: { text: 'Confirmada', color: 'bg-green-100 text-green-700' },
     PARTIAL: { text: 'Parcial', color: 'bg-amber-100 text-amber-700' },

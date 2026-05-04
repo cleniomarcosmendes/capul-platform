@@ -9,6 +9,14 @@ import type {
   SendLogsResult,
 } from '../types';
 
+export type ProtheusError = {
+  product_code: string | null;
+  lot_number: string | null;
+  warehouse: string | null;
+  quantity: number | null;
+  message: string | null;
+};
+
 export const integrationService = {
   async listarCompativeis(inventoryId: string): Promise<unknown[]> {
     const { data } = await inventarioApi.get(`/integration/protheus/compatible-inventories/${inventoryId}`);
@@ -67,8 +75,25 @@ export const integrationService = {
     return data;
   },
 
-  async cancelar(integrationId: string): Promise<unknown> {
-    const { data } = await inventarioApi.patch(`/integration/protheus/${integrationId}/cancel`);
+  async detalhe(integrationId: string): Promise<{
+    integration: Record<string, unknown>;
+    items: unknown[];
+    no_change_items?: unknown[];
+    protheus_errors?: ProtheusError[];
+  }> {
+    const { data } = await inventarioApi.get(`/integration/protheus/${integrationId}`);
+    return data;
+  },
+
+  async resetarErros(integrationId: string): Promise<{ success: boolean; reset_count: number; products: string[]; message: string }> {
+    const { data } = await inventarioApi.post(`/integration/protheus/${integrationId}/reset-errors`);
+    return data;
+  },
+
+  async cancelar(integrationId: string, reason: string): Promise<unknown> {
+    const { data } = await inventarioApi.patch(`/integration/protheus/${integrationId}/cancel`, null, {
+      params: { reason },
+    });
     return data;
   },
 

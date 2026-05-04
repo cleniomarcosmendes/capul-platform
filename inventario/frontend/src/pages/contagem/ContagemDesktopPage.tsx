@@ -1,13 +1,15 @@
 import { useState, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { inventoryService } from '../../services/inventory.service';
+import { countingListService } from '../../services/counting-list.service';
 import { ScannerInput } from './components/ScannerInput';
 import { CountingProgress } from './components/CountingProgress';
 import { LoteContagemModal } from './components/LoteContagemModal';
+import { ListasResponsaveis } from './components/ListasResponsaveis';
 import { useCountingData } from './hooks/useCountingData';
 import type { CountingFilter } from './hooks/useCountingData';
-import { ArrowLeft, RefreshCw, Package, Search, Layers, History } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Package, Search, Layers, History, Send } from 'lucide-react';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
 import { useToast } from '../../contexts/ToastContext';
 import { HistoricoContagemModal } from './components/HistoricoContagemModal';
@@ -19,6 +21,7 @@ const filterOptions: { key: CountingFilter; label: string }[] = [
   { key: 'pending', label: 'Pendentes' },
   { key: 'counted', label: 'Contados' },
   { key: 'divergent', label: 'Divergentes' },
+  { key: 'revisar', label: 'Revisar' },
 ];
 
 const itemStatusConfig: Record<string, { label: string; color: string }> = {
@@ -36,11 +39,14 @@ const cycleColors = ['', 'text-green-700 bg-green-50', 'text-amber-700 bg-amber-
 export function ContagemDesktopPage() {
   const { inventoryId } = useParams<{ inventoryId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const listIdHint = searchParams.get('list') || undefined;
   const {
     inventario, products, allProducts, loading, filter, setFilter, stats,
-    currentCycle, getCountedQty, countCycleKey, updateProduct, reload,
-    noAssignedList, listNotReleased,
-  } = useCountingData(inventoryId!);
+    currentListId, currentCycle, currentListName, getCountedQty, countCycleKey, updateProduct, reload,
+    noAssignedList, listNotReleased, notCounterOfRequested, partialReviewMode,
+    allLists, assignedLists, counterNames, showPreviousCounts,
+  } = useCountingData(inventoryId!, listIdHint);
   const toast = useToast();
   const showEntregasPost = hasAnyEntregasPosterior(allProducts);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -50,6 +56,8 @@ export function ContagemDesktopPage() {
   const [searchText, setSearchText] = useState('');
   const [lotProduct, setLotProduct] = useState<CountingListProduct | null>(null);
   const [historyProduct, setHistoryProduct] = useState<CountingListProduct | null>(null);
+  const [showHandoffConfirm, setShowHandoffConfirm] = useState(false);
+  const [handoffLoading, setHandoffLoading] = useState(false);
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
 
   // Filter by search text
@@ -99,6 +107,27 @@ export function ContagemDesktopPage() {
     }
   }, [updateProduct, countCycleKey, currentCycle]);
 
+  async function handleHandoff() {
+    if (!currentListId) return;
+    setHandoffLoading(true);
+    try {
+      const res = await countingListService.liberarParaSupervisor(currentListId);
+      const zerados = res.zerados || 0;
+      toast.success(
+        zerados > 0
+          ? `Lista entregue ao supervisor. ${zerados} item(ns) nao contado(s) registrado(s) como zero.`
+          : 'Lista entregue ao supervisor.'
+      );
+      setShowHandoffConfirm(false);
+      navigate('/inventario/contagem');
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Erro ao liberar lista para supervisor.');
+    } finally {
+      setHandoffLoading(false);
+    }
+  }
+
   // Save lot-based count
   const handleSaveLotCount = useCallback(async (totalQty: number, lotCounts: LotCount[]) => {
     if (!lotProduct) return;
@@ -145,6 +174,106 @@ export function ContagemDesktopPage() {
     );
   }
 
+  // Bloqueio: lista solicitada existe mas user não é contador dela no ciclo atual
+  if (notCounterOfRequested) {
+    const ownerName = notCounterOfRequested.counterId
+      ? counterNames[notCounterOfRequested.counterId] || 'outro contador'
+      : 'ninguém';
+    return (
+      <>
+        <Header title="Contagem" />
+        <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-4">
+          <div className="bg-amber-50 border border-amber-300 rounded-xl p-5">
+            <h2 className="text-lg font-bold text-amber-900 mb-2">Você não é o contador desta lista</h2>
+            <p className="text-sm text-amber-800">
+              A lista <strong>{notCounterOfRequested.listName}</strong> está atribuída a{' '}
+              <strong>{ownerName}</strong> no {notCounterOfRequested.counterCycle}º ciclo.
+              Apenas o contador atribuído pode realizar a contagem (mesmo administradores
+              não devem contar pelo outro — mantém a auditoria limpa).
+            </p>
+          </div>
+          {assignedLists.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-xl p-4">
+              <p className="text-sm text-slate-700 font-medium mb-3">Suas listas neste inventário:</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {assignedLists.map((l) => (
+                  <button
+                    key={l.id}
+                    onClick={() => navigate(`/inventario/contagem/${inventoryId}/desktop?list=${l.id}`)}
+                    className="text-left bg-white border border-slate-200 rounded-lg p-3 hover:border-capul-400 hover:bg-capul-50/30"
+                  >
+                    <p className="font-semibold text-slate-800">{l.list_name}</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {l.current_cycle}º ciclo · {l.total_items ?? 0} itens
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <button
+            onClick={() => navigate('/inventario/contagem')}
+            className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50"
+          >
+            ← Voltar para listas
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  // Quando o usuario tem 2+ listas atribuidas e nao escolheu uma → mostra selecao
+  if (!currentListId && assignedLists.length >= 2) {
+    return (
+      <>
+        <Header title={`Contagem — ${inventario?.name || 'Inventario'}`} />
+        <div className="p-4 md:p-6 space-y-4">
+          <button
+            onClick={() => navigate('/inventario/contagem')}
+            className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Voltar
+          </button>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800">Selecione uma lista</h2>
+            <p className="text-sm text-slate-500">Voce e contador de {assignedLists.length} listas neste inventario.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {assignedLists.map((l) => {
+              const total = l.total_items ?? 0;
+              const counted = l.counted_items ?? 0;
+              const pending = total - counted;
+              const pct = total > 0 ? Math.round((counted / total) * 100) : 0;
+              return (
+                <button
+                  key={l.id}
+                  onClick={() => navigate(`/inventario/contagem/${inventoryId}/desktop?list=${l.id}`)}
+                  className="text-left bg-white border border-slate-200 rounded-xl p-4 hover:border-capul-400 hover:bg-capul-50/30 transition-colors"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-slate-800">{l.list_name}</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                      {l.current_cycle}o Ciclo
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-slate-500 mb-2">
+                    <span>Itens: <strong className="text-slate-700">{total}</strong></span>
+                    <span>Contados: <strong className="text-green-600">{counted}</strong></span>
+                    <span>Pendentes: <strong className="text-amber-600">{pending}</strong></span>
+                  </div>
+                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-capul-500 rounded-full" style={{ width: `${pct}%` }} />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </>
+    );
+  }
+
   if (noAssignedList || listNotReleased) {
     return (
       <>
@@ -170,6 +299,7 @@ export function ContagemDesktopPage() {
                 <p className="text-sm text-slate-400 mt-1">Voce nao e contador de nenhuma lista neste inventario para o ciclo atual.</p>
               </>
             )}
+            <ListasResponsaveis listas={allLists} counterNames={counterNames} />
           </div>
         </div>
       </>
@@ -178,7 +308,7 @@ export function ContagemDesktopPage() {
 
   return (
     <>
-      <Header title={`Contagem — ${inventario?.name || 'Inventario'}`} />
+      <Header title={`Contagem — ${inventario?.name || 'Inventario'}${currentListName ? ` › ${currentListName}` : ''}`} />
       <div className="p-3 md:p-4 space-y-3">
         {/* Voltar + info compacta */}
         <div className="flex items-center justify-between">
@@ -201,6 +331,21 @@ export function ContagemDesktopPage() {
           </div>
 
           <div className="flex items-center gap-3 text-sm">
+            {currentListName && (
+              <span className="px-2.5 py-0.5 rounded-md bg-slate-800 text-white text-xs font-semibold">
+                Lista: {currentListName}
+              </span>
+            )}
+            <span
+              className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                showPreviousCounts ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+              }`}
+              title={showPreviousCounts
+                ? 'Modo aberto: contador ve saldo do sistema e contagens anteriores'
+                : 'Modo cego: contador NAO ve saldo do sistema'}
+            >
+              {showPreviousCounts ? 'Modo aberto' : 'Modo cego'}
+            </span>
             <span className="text-slate-500">Armazem: <strong className="text-slate-700">{inventario?.warehouse || '—'}</strong></span>
             <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${cycleColors[currentCycle] || cycleColors[1]}`}>
               {currentCycle}o Ciclo
@@ -214,14 +359,39 @@ export function ContagemDesktopPage() {
             <span className="text-slate-500">Total: <strong className="text-slate-800">{stats.total}</strong></span>
             <span className="text-slate-500">Contados: <strong className="text-green-600">{stats.counted}</strong></span>
             <span className="text-slate-500">Pendentes: <strong className="text-amber-600">{stats.pending}</strong></span>
-            {stats.divergent > 0 && (
+            {showPreviousCounts && stats.divergent > 0 && (
               <span className="text-slate-500">Diverg.: <strong className="text-red-600">{stats.divergent}</strong></span>
+            )}
+            {stats.revisar > 0 && (
+              <span className="text-slate-500">Revisar: <strong className="text-purple-600">{stats.revisar}</strong></span>
             )}
           </div>
           <div className="w-32">
             <CountingProgress total={stats.total} counted={stats.counted} compact />
           </div>
+          {currentListId && (
+            <button
+              onClick={() => setShowHandoffConfirm(true)}
+              disabled={handoffLoading}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 whitespace-nowrap shadow-sm"
+              title="Bipou todos os produtos físicos disponíveis? Clique aqui para entregar a lista ao supervisor. Itens não bipados serão registrados como zero."
+            >
+              <Send className="w-4 h-4" />
+              Liberar para supervisor
+            </button>
+          )}
         </div>
+
+        {/* Banner: modo revisão parcial */}
+        {partialReviewMode && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-3">
+            <p className="text-sm text-amber-900">
+              <strong>Modo revisão:</strong> mostrando apenas {products.length} item{products.length === 1 ? '' : 's'}{' '}
+              marcado{products.length === 1 ? '' : 's'} pelo supervisor para revisão. Itens já aprovados não aparecem
+              — você não deve editá-los neste momento.
+            </p>
+          </div>
+        )}
 
         {/* Toolbar: scanner + busca + filtros */}
         <div className="flex flex-wrap items-center gap-2">
@@ -241,19 +411,25 @@ export function ContagemDesktopPage() {
           </div>
 
           <div className="flex gap-1">
-            {filterOptions.map((opt) => (
-              <button
-                key={opt.key}
-                onClick={() => setFilter(opt.key)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                  filter === opt.key
-                    ? 'bg-capul-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+            {filterOptions
+              .filter((opt) => opt.key !== 'divergent' || showPreviousCounts)
+              .map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => setFilter(opt.key)}
+                  disabled={partialReviewMode && opt.key !== 'revisar'}
+                  title={partialReviewMode && opt.key !== 'revisar'
+                    ? 'Bloqueado em modo revisão parcial — você só deve revisar os itens marcados pelo supervisor.'
+                    : undefined}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                    filter === opt.key
+                      ? 'bg-capul-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
           </div>
 
           <div className="flex-1" />
@@ -286,25 +462,29 @@ export function ContagemDesktopPage() {
                     <th className="text-left py-2 px-2 font-medium text-slate-600">Descricao</th>
                     <th className="text-center py-2 px-2 font-medium text-slate-600">Arm.</th>
                     <th className="text-left py-2 px-2 font-medium text-slate-600">Localizacao</th>
-                    {showEntregasPost ? (
-                      <>
-                        <th className="text-right py-2 px-2 font-medium text-slate-600">Saldo Est.</th>
-                        <th className="text-right py-2 px-2 font-medium text-sky-600">Ent. Post.</th>
-                        <th className="text-right py-2 px-2 font-semibold text-slate-700">Esperado</th>
-                      </>
-                    ) : (
-                      <th className="text-right py-2 px-2 font-medium text-slate-600">Saldo Sist.</th>
+                    {showPreviousCounts && (
+                      showEntregasPost ? (
+                        <>
+                          <th className="text-right py-2 px-2 font-medium text-slate-600">Saldo Est.</th>
+                          <th className="text-right py-2 px-2 font-medium text-sky-600">Ent. Post.</th>
+                          <th className="text-right py-2 px-2 font-semibold text-slate-700">Esperado</th>
+                        </>
+                      ) : (
+                        <th className="text-right py-2 px-2 font-medium text-slate-600">Saldo Sist.</th>
+                      )
                     )}
-                    {currentCycle >= 2 && (
+                    {showPreviousCounts && currentCycle >= 2 && (
                       <th className="text-right py-2 px-2 font-medium text-green-700 bg-green-50/50">C1</th>
                     )}
-                    {currentCycle >= 3 && (
+                    {showPreviousCounts && currentCycle >= 3 && (
                       <th className="text-right py-2 px-2 font-medium text-amber-700 bg-amber-50/50">C2</th>
                     )}
-                    <th className={`text-right py-2 px-2 font-semibold ${cycleColors[currentCycle] || 'text-capul-700 bg-capul-50'}`}>
+                    <th className={`text-center py-2 px-2 font-semibold whitespace-nowrap w-28 ${cycleColors[currentCycle] || 'text-capul-700 bg-capul-50'}`}>
                       Qtd C{currentCycle}
                     </th>
-                    <th className="text-right py-2 px-2 font-medium text-slate-600">Diferenca</th>
+                    {showPreviousCounts && (
+                      <th className="text-right py-2 px-2 font-medium text-slate-600">Diferenca</th>
+                    )}
                     <th className="text-center py-2 px-2 font-medium text-slate-600 w-20">Status</th>
                     <th className="py-2 px-1 w-8"></th>
                   </tr>
@@ -314,11 +494,25 @@ export function ContagemDesktopPage() {
                     const isEditing = editingId === p.id;
                     const isSaving = savingId === p.id;
                     const isHighlighted = highlightId === p.id;
-                    const isc = itemStatusConfig[p.status] || itemStatusConfig.PENDING;
                     const countedQty = getCountedQty(p);
                     const expectedQty = getExpectedQty(p.system_qty, p.b2_xentpos);
                     const diff = countedQty !== null ? countedQty - expectedQty : null;
                     const hasDivergence = diff !== null && Math.abs(diff) >= 0.01;
+                    const needsRecount = currentCycle === 2 ? p.needs_count_cycle_2
+                      : currentCycle === 3 ? p.needs_count_cycle_3
+                      : p.needs_count_cycle_1;
+                    // Status visual derivado da contagem real do ciclo, não do status cru
+                    // Em contagem cega (showPreviousCounts=false) não revelamos divergência
+                    // Marcação de revisão (supervisor devolveu) tem prioridade visual
+                    const isc = p.revisar_no_ciclo
+                      ? { label: 'Revisar', color: 'bg-purple-100 text-purple-700' }
+                      : countedQty === null
+                        ? (currentCycle > 1 && !needsRecount
+                            ? { label: 'Resolvido', color: 'bg-green-100 text-green-700' }
+                            : itemStatusConfig.PENDING)
+                        : (showPreviousCounts && hasDivergence)
+                          ? { label: 'Divergente', color: 'bg-amber-100 text-amber-700' }
+                          : itemStatusConfig.COUNTED;
 
                     return (
                       <tr
@@ -327,7 +521,9 @@ export function ContagemDesktopPage() {
                         className={`border-b border-slate-100 transition-colors ${
                           isHighlighted
                             ? 'bg-yellow-100'
-                            : hasDivergence
+                            : p.revisar_no_ciclo
+                            ? 'bg-purple-50/50'
+                            : (showPreviousCounts && hasDivergence)
                             ? 'bg-amber-50/40'
                             : countedQty !== null
                             ? 'bg-green-50/20'
@@ -343,20 +539,22 @@ export function ContagemDesktopPage() {
                         </td>
                         <td className="py-1.5 px-2 text-center text-slate-500 font-mono text-xs">{p.warehouse || '—'}</td>
                         <td className="py-1.5 px-2 text-slate-500 font-mono text-xs">{p.location || '—'}</td>
-                        {showEntregasPost ? (
-                          <>
+                        {showPreviousCounts && (
+                          showEntregasPost ? (
+                            <>
+                              <td className="py-1.5 px-2 text-right text-slate-600 tabular-nums">{p.system_qty.toFixed(2)}</td>
+                              <td className="py-1.5 px-2 text-right text-sky-600 tabular-nums">
+                                {(p.b2_xentpos || 0) > 0.001 ? `+${(p.b2_xentpos || 0).toFixed(2)}` : '0.00'}
+                              </td>
+                              <td className="py-1.5 px-2 text-right font-semibold text-slate-800 tabular-nums">{expectedQty.toFixed(2)}</td>
+                            </>
+                          ) : (
                             <td className="py-1.5 px-2 text-right text-slate-600 tabular-nums">{p.system_qty.toFixed(2)}</td>
-                            <td className="py-1.5 px-2 text-right text-sky-600 tabular-nums">
-                              {(p.b2_xentpos || 0) > 0.001 ? `+${(p.b2_xentpos || 0).toFixed(2)}` : '0.00'}
-                            </td>
-                            <td className="py-1.5 px-2 text-right font-semibold text-slate-800 tabular-nums">{expectedQty.toFixed(2)}</td>
-                          </>
-                        ) : (
-                          <td className="py-1.5 px-2 text-right text-slate-600 tabular-nums">{p.system_qty.toFixed(2)}</td>
+                          )
                         )}
 
-                        {/* Ciclos anteriores (somente leitura) */}
-                        {currentCycle >= 2 && (
+                        {/* Ciclos anteriores (somente leitura) — só se permitido */}
+                        {showPreviousCounts && currentCycle >= 2 && (
                           <td className="py-1.5 px-2 text-right bg-green-50/30 tabular-nums">
                             {p.count_cycle_1 !== null ? (
                               <span className="text-green-700">{p.count_cycle_1.toFixed(2)}</span>
@@ -365,7 +563,7 @@ export function ContagemDesktopPage() {
                             )}
                           </td>
                         )}
-                        {currentCycle >= 3 && (
+                        {showPreviousCounts && currentCycle >= 3 && (
                           <td className="py-1.5 px-2 text-right bg-amber-50/30 tabular-nums">
                             {p.count_cycle_2 !== null ? (
                               <span className="text-amber-700">{p.count_cycle_2.toFixed(2)}</span>
@@ -376,7 +574,7 @@ export function ContagemDesktopPage() {
                         )}
 
                         {/* Qtd Contada do ciclo atual — editavel */}
-                        <td className={`py-1.5 px-2 text-right ${cycleColors[currentCycle]?.replace('text-', 'bg-').split(' ')[1] || 'bg-capul-50/30'}`}>
+                        <td className={`py-1.5 px-2 text-center w-28 ${cycleColors[currentCycle]?.replace('text-', 'bg-').split(' ')[1] || 'bg-capul-50/30'}`}>
                           {isEditing && !(p.requires_lot || p.has_lot) ? (
                             <input
                               type="number"
@@ -394,7 +592,7 @@ export function ContagemDesktopPage() {
                           ) : (
                             <button
                               onClick={() => handleCountClick(p)}
-                              className={`min-w-[60px] text-right font-medium tabular-nums flex items-center justify-end gap-1 ${
+                              className={`min-w-[60px] mx-auto font-medium tabular-nums flex items-center justify-center gap-1 ${
                                 countedQty !== null
                                   ? 'text-capul-700'
                                   : 'text-slate-300 hover:text-capul-500'
@@ -406,14 +604,16 @@ export function ContagemDesktopPage() {
                           )}
                         </td>
 
-                        {/* Diferenca */}
-                        <td className={`py-1.5 px-2 text-right font-medium tabular-nums ${
-                          diff !== null && diff > 0 ? 'text-green-600' : diff !== null && diff < 0 ? 'text-red-600' : 'text-slate-400'
-                        }`}>
-                          {diff !== null ? (
-                            <>{diff > 0 ? '+' : ''}{diff.toFixed(2)}</>
-                          ) : '—'}
-                        </td>
+                        {/* Diferenca — só visível quando lista foi liberada com permissão (não-cega) */}
+                        {showPreviousCounts && (
+                          <td className={`py-1.5 px-2 text-right font-medium tabular-nums ${
+                            diff !== null && diff > 0 ? 'text-green-600' : diff !== null && diff < 0 ? 'text-red-600' : 'text-slate-400'
+                          }`}>
+                            {diff !== null ? (
+                              <>{diff > 0 ? '+' : ''}{diff.toFixed(2)}</>
+                            ) : '—'}
+                          </td>
+                        )}
 
                         {/* Status */}
                         <td className="py-1.5 px-2 text-center">
@@ -453,6 +653,7 @@ export function ContagemDesktopPage() {
         <LoteContagemModal
           product={lotProduct}
           currentCycle={currentCycle}
+          showPreviousCounts={showPreviousCounts}
           onSave={handleSaveLotCount}
           onClose={() => setLotProduct(null)}
         />
@@ -466,6 +667,44 @@ export function ContagemDesktopPage() {
           productDescription={historyProduct.product_description || historyProduct.product_name}
           onClose={() => setHistoryProduct(null)}
         />
+      )}
+
+      {/* Modal de confirmacao Liberar para supervisor */}
+      {showHandoffConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-lg font-bold text-slate-800">Liberar para supervisor?</h3>
+            <p className="text-sm text-slate-600">
+              A lista <strong>{currentListName}</strong> sera entregue ao supervisor para revisao.
+            </p>
+            {stats.pending > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                <strong>{stats.pending} item(ns) nao contado(s)</strong> serao registrados como <strong>zero</strong>.
+                Use isso quando o produto nao foi encontrado fisicamente.
+              </div>
+            )}
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600">
+              Apos liberar, voce nao podera mais alterar contagens. O supervisor pode devolver a lista
+              caso precise refazer alguma contagem.
+            </div>
+            <div className="flex gap-2 pt-2 justify-end">
+              <button
+                onClick={() => setShowHandoffConfirm(false)}
+                disabled={handoffLoading}
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleHandoff}
+                disabled={handoffLoading}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50"
+              >
+                {handoffLoading ? 'Liberando...' : 'Liberar'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

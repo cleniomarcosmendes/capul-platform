@@ -19,6 +19,10 @@ export function CriarListaModal({ inventoryId, onClose, onCreated }: Props) {
   const [counterCycle2, setCounterCycle2] = useState('');
   const [counterCycle3, setCounterCycle3] = useState('');
 
+  // Nome customizado pelo usuário
+  const [listName, setListName] = useState('');
+  const [listNameTouched, setListNameTouched] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -40,12 +44,22 @@ export function CriarListaModal({ inventoryId, onClose, onCreated }: Props) {
     setTimeout(onClose, 200);
   }
 
-  // Gerar nome automático baseado no contador selecionado
-  function generateListName(counterId: string): string {
+  // Gerar sugestão de nome curto baseado no primeiro nome do contador
+  function suggestedListName(counterId: string): string {
     const counter = counters.find((c) => c.user_id === counterId);
-    if (!counter) return 'Lista de Contagem';
-    return `Lista ${counter.full_name || counter.username}`;
+    if (!counter) return '';
+    const fullName = counter.full_name || counter.username || '';
+    const firstName = fullName.split(/\s+/)[0] || fullName;
+    return `Lista ${firstName}`;
   }
+
+  // Pré-preencher nome quando o contador 1 é selecionado, se usuário ainda não tocou no campo
+  useEffect(() => {
+    if (!listNameTouched && counterCycle1) {
+      setListName(suggestedListName(counterCycle1));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [counterCycle1, counters]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -55,10 +69,11 @@ export function CriarListaModal({ inventoryId, onClose, onCreated }: Props) {
       return;
     }
 
+    const finalName = listName.trim() || suggestedListName(counterCycle1) || 'Lista de Contagem';
+
     setSaving(true);
     setError('');
 
-    const listName = generateListName(counterCycle1);
     const counter = counters.find((c) => c.user_id === counterCycle1);
     const description = `Lista de contagem do(a) ${counter?.full_name || counter?.username || 'Contador'}`;
 
@@ -68,7 +83,7 @@ export function CriarListaModal({ inventoryId, onClose, onCreated }: Props) {
 
     try {
       await countingListService.criar(inventoryId, {
-        list_name: listName,
+        list_name: finalName,
         description,
         counter_cycle_1: counterCycle1,
         counter_cycle_2: resolvedCycle2,
@@ -122,15 +137,23 @@ export function CriarListaModal({ inventoryId, onClose, onCreated }: Props) {
             </div>
           ) : (
             <>
-              {/* Preview do nome */}
-              {counterCycle1 && (
-                <div className="p-3 bg-capul-50 border border-capul-200 rounded-lg">
-                  <p className="text-xs text-capul-600 font-medium">Nome da lista (auto-gerado)</p>
-                  <p className="text-sm text-capul-800 font-semibold mt-0.5">
-                    {generateListName(counterCycle1)}
-                  </p>
-                </div>
-              )}
+              {/* Nome da lista (editável, pré-preenchido) */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Nome da lista *
+                </label>
+                <input
+                  type="text"
+                  value={listName}
+                  onChange={(e) => { setListName(e.target.value); setListNameTouched(true); }}
+                  maxLength={50}
+                  placeholder="Ex: Frente A, Setor 02, Marcia..."
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Sugerimos um nome curto e descritivo. Pre-preenchido com base no contador escolhido — voce pode editar.
+                </p>
+              </div>
 
               {/* Contador 1o Ciclo (obrigatório) */}
               <div>
@@ -210,7 +233,7 @@ export function CriarListaModal({ inventoryId, onClose, onCreated }: Props) {
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-500">
                 <p className="font-medium text-slate-600 mb-1">Como funciona:</p>
                 <ul className="space-y-0.5 list-disc list-inside">
-                  <li>O nome da lista sera gerado automaticamente com o nome do contador</li>
+                  <li>O nome da lista pode ser editado livremente (sugestao baseada no contador)</li>
                   <li>Apos criar, distribua os produtos entre as listas</li>
                   <li>Cada lista pode ter contadores diferentes por ciclo</li>
                   <li>Voce pode criar varias listas com contadores distintos</li>

@@ -16,11 +16,12 @@ interface LotRow {
 interface Props {
   product: CountingListProduct;
   currentCycle: number;
+  showPreviousCounts?: boolean;
   onSave: (totalQty: number, lotCounts: LotCount[]) => Promise<void>;
   onClose: () => void;
 }
 
-export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Props) {
+export function LoteContagemModal({ product, currentCycle, showPreviousCounts = false, onSave, onClose }: Props) {
   const [lots, setLots] = useState<LotRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -31,10 +32,23 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
 
   const previousCycleCounts = useMemo(() => {
     const map = new Map<string, number>();
+    // Sem permissão de visualizar contagens anteriores → contagem cega total no lote
+    if (!showPreviousCounts) return map;
     if (currentCycle <= 1) return map;
     const prevCycle = currentCycle - 1;
     for (const c of product.countings ?? []) {
       if (c.count_number === prevCycle && c.lot_number) {
+        map.set(c.lot_number, c.quantity);
+      }
+    }
+    return map;
+  }, [currentCycle, product.countings, showPreviousCounts]);
+
+  // Recontagens já feitas no ciclo ATUAL (em caso de reabrir o modal após salvar)
+  const currentCycleCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of product.countings ?? []) {
+      if (c.count_number === currentCycle && c.lot_number) {
         map.set(c.lot_number, c.quantity);
       }
     }
@@ -51,6 +65,19 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
           const savedMap = new Map(savedLots.map((l) => [l.lot_number, l.counted_qty]));
 
           setLots(res.lots.map((l) => {
+            // Pri 1: recontagem deste ciclo (modal reaberto após salvar)
+            if (currentCycleCounts.has(l.lot_number)) {
+              const qty = currentCycleCounts.get(l.lot_number)!;
+              return {
+                lot_number: l.lot_number,
+                b8_lotefor: l.b8_lotefor || '',
+                system_qty: l.system_qty,
+                counted_qty: String(qty),
+                prefilled: false,
+                prefilledValue: 0,
+              };
+            }
+
             const savedQty = savedMap.get(l.lot_number);
             if (savedQty !== null && savedQty !== undefined) {
               return {
@@ -102,7 +129,7 @@ export function LoteContagemModal({ product, currentCycle, onSave, onClose }: Pr
       })
       .catch(() => setError('Erro ao carregar lotes do produto.'))
       .finally(() => setLoading(false));
-  }, [product.id, product.snapshot_lots, currentCycle, previousCycleCounts]);
+  }, [product.id, product.snapshot_lots, currentCycle, previousCycleCounts, currentCycleCounts]);
 
   useEffect(() => {
     if (!loading && lots.length > 0) {

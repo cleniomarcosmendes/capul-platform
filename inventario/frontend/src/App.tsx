@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { MainLayout } from './layouts/MainLayout';
@@ -11,13 +11,21 @@ import { ContagemDesktopPage } from './pages/contagem/ContagemDesktopPage';
 import { ContagemMobilePage } from './pages/contagem/ContagemMobilePage';
 import { ProdutosPage } from './pages/ProdutosPage';
 import { ArmazensPage } from './pages/ArmazensPage';
-import { RelatoriosPage } from './pages/RelatoriosPage';
-import { SincronizacaoPage } from './pages/SincronizacaoPage';
 import { ImportPage } from './pages/ImportPage';
 import MonitoramentoPage from './pages/MonitoramentoPage';
 import DivergenciasPage from './pages/DivergenciasPage';
-import ComparacaoPage from './pages/ComparacaoPage';
+import IntegracoesPage from './pages/IntegracoesPage';
+import IntegracaoDetalhePage from './pages/IntegracaoDetalhePage';
+import IntegracaoNovaPage from './pages/IntegracaoNovaPage';
 import type { ReactNode } from 'react';
+
+/** Redireciona /inventario/comparacao e /inventario/relatorios pra a tab equivalente em /divergencias. */
+function RedirectToAnaliseTab({ tab }: { tab: 'historica' | 'relatorios' }) {
+  const [params] = useSearchParams();
+  const queryStr = params.toString();
+  const target = `/inventario/divergencias?tab=${tab}${queryStr ? '&' + queryStr : ''}`;
+  return <Navigate to={target} replace />;
+}
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { usuario, loading } = useAuth();
@@ -70,12 +78,15 @@ function AppRoutes() {
         <Route path="contagem/:inventoryId/desktop" element={<ContagemDesktopPage />} />
         <Route path="produtos" element={<ProdutosPage />} />
         <Route path="armazens" element={<ArmazensPage />} />
-        <Route path="relatorios" element={<RelatoriosPage />} />
-        <Route path="sincronizacao" element={<SincronizacaoPage />} />
         <Route path="importacao" element={<ImportPage />} />
         <Route path="monitoramento" element={<MonitoramentoPage />} />
         <Route path="divergencias" element={<DivergenciasPage />} />
-        <Route path="comparacao" element={<ComparacaoPage />} />
+        {/* Redirects de URLs antigas (compat: bookmarks externos) */}
+        <Route path="comparacao" element={<RedirectToAnaliseTab tab="historica" />} />
+        <Route path="relatorios" element={<RedirectToAnaliseTab tab="relatorios" />} />
+        <Route path="integracoes" element={<IntegracoesPage />} />
+        <Route path="integracoes/nova" element={<IntegracaoNovaPage />} />
+        <Route path="integracoes/:id" element={<IntegracaoDetalhePage />} />
       </Route>
 
       {/* Contagem Mobile — fullscreen, SEM sidebar */}

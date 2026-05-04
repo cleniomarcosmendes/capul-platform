@@ -38,7 +38,7 @@ export interface PaginatedResponse<T> {
 // === Enums ===
 
 export type InventoryStatus = 'DRAFT' | 'IN_PROGRESS' | 'COMPLETED' | 'CLOSED';
-export type ListStatus = 'PREPARACAO' | 'ABERTA' | 'LIBERADA' | 'EM_CONTAGEM' | 'ENCERRADA';
+export type ListStatus = 'PREPARACAO' | 'ABERTA' | 'LIBERADA' | 'EM_CONTAGEM' | 'AGUARDANDO_REVISAO' | 'ENCERRADA';
 export type ItemStatus = 'PENDING' | 'COUNTED' | 'REVIEWED' | 'APPROVED' | 'ZERO_CONFIRMED';
 
 // === Inventory List ===
@@ -63,6 +63,11 @@ export interface InventoryList {
   counted_items: number;
   pending_items?: number;
   progress_percentage: number;
+  // Onda 3 — etapa derivada e analise concluida
+  etapa_atual?: 'EM_PREPARACAO' | 'EM_CONTAGEM' | 'ENCERRADO' | 'ANALISADO' | 'INTEGRADO';
+  proximo_passo?: string;
+  analisado_em?: string | null;
+  analisado_por_id?: string | null;
 }
 
 export interface InventoryListCreate {
@@ -139,6 +144,15 @@ export interface CountingList {
   total_items?: number;
   counted_items?: number;
   pending_items?: number;
+  show_previous_counts?: boolean;
+  // Sort order definido no Liberar (migration 013) — define ordem dos produtos para o contador
+  sort_order?: 'ORIGINAL' | 'PRODUCT_CODE' | 'PRODUCT_DESCRIPTION' | 'LOCAL1' | 'LOCAL2' | 'LOCAL3';
+  // Handoff (migration 011)
+  entregue_em?: string | null;
+  entregue_por_id?: string | null;
+  devolvido_em?: string | null;
+  devolvido_por_id?: string | null;
+  motivo_devolucao?: string | null;
 }
 
 export interface CountingListCreate {
@@ -306,6 +320,9 @@ export interface CountingListProduct {
   needs_count_cycle_1: boolean;
   needs_count_cycle_2: boolean;
   needs_count_cycle_3: boolean;
+  // Migration 012: marcação do supervisor para revisão (após handoff DEVOLVIDA)
+  revisar_no_ciclo?: boolean;
+  motivo_revisao?: string | null;
   status: string;
   last_counted_at: string | null;
   last_counted_by: string | null;
@@ -347,6 +364,7 @@ export interface CountingListProductsResponse {
     list_id: string;
     list_name: string;
     products: CountingListProduct[];
+    show_previous_counts?: boolean;
   };
 }
 
@@ -714,6 +732,7 @@ export interface IntegrationHistory {
   summary: {
     total_transfers: number;
     total_adjustments: number;
+    total_no_change?: number;
     total_transfer_value: number;
     total_adjustment_value: number;
     warehouses?: string[];

@@ -92,7 +92,7 @@ export function HistoricoContagemModal({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-lg font-bold text-slate-800">
-                        {entry.quantity.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        {entry.quantity.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                       <span className="text-xs text-slate-400">un</span>
                     </div>

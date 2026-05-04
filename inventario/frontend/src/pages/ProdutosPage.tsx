@@ -1,9 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Header } from '../layouts/Header';
+import { useAuth } from '../contexts/AuthContext';
 import { productService } from '../services/product.service';
 import { TableSkeleton } from '../components/LoadingSkeleton';
 import { ErrorState } from '../components/ErrorState';
 import { Package, Search, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { useTableSort } from '../hooks/useTableSort';
+import { SortableTh } from '../components/SortableTh';
 import type { ProtheusProduct, ProtheusProductResponse } from '../types';
 import { ProdutoDetalheModal } from './ProdutoDetalheModal';
 import { ExportDropdown } from '../components/ExportDropdown';
@@ -11,6 +14,8 @@ import { downloadCSV } from '../utils/csv';
 import { downloadExcel, printTable } from '../utils/export';
 
 export function ProdutosPage() {
+  const { inventarioRole } = useAuth();
+  const isStaff = inventarioRole === 'ADMIN' || inventarioRole === 'SUPERVISOR';
   const [data, setData] = useState<ProtheusProductResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -43,9 +48,26 @@ export function ProdutosPage() {
 
   const produtos = data?.products ?? [];
   const total = data?.total ?? 0;
+  const { sortedRows, sortKey, sortDir, handleSort } = useTableSort<ProtheusProduct>(produtos, 'b1_desc', 'asc');
   const pages = data?.pages ?? 0;
   const from = total > 0 ? (page - 1) * limit + 1 : 0;
   const to = Math.min(page * limit, total);
+
+  if (!isStaff) {
+    return (
+      <>
+        <Header title="Produtos" />
+        <div className="p-6">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
+            <p className="text-amber-800 font-semibold mb-1">Acesso restrito</p>
+            <p className="text-sm text-amber-700">
+              A consulta de produtos expoe saldo do sistema. Disponivel apenas para SUPERVISOR e ADMIN.
+            </p>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -118,18 +140,18 @@ export function ProdutosPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="text-left py-3 px-4 font-medium text-slate-600">Codigo</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-600">Descricao</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-600">Grupo</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-600">Categoria</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-600">Subcategoria</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-600">Segmento</th>
-                    <th className="text-right py-3 px-4 font-medium text-slate-600">Estoque</th>
+                    <SortableTh label="Codigo" sortKey="b1_cod" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-3 px-4" />
+                    <SortableTh label="Descricao" sortKey="b1_desc" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-3 px-4" />
+                    <SortableTh label="Grupo" sortKey="grupo_desc" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-3 px-4" />
+                    <SortableTh label="Categoria" sortKey="categoria_desc" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-3 px-4" />
+                    <SortableTh label="Subcategoria" sortKey="subcategoria_desc" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-3 px-4" />
+                    <SortableTh label="Segmento" sortKey="segmento_desc" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-3 px-4" />
+                    <SortableTh label="Estoque" sortKey="total_stock" align="right" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-3 px-4" />
                     <th className="py-3 px-3 w-10"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {produtos.map((p: ProtheusProduct) => (
+                  {sortedRows.map((p: ProtheusProduct) => (
                     <tr
                       key={p.id}
                       className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"

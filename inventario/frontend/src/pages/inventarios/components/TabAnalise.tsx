@@ -3,6 +3,8 @@ import { countingListService } from '../../../services/counting-list.service';
 import { calcularQuantidadeFinal } from '../../../utils/cycles';
 import { BarChart2, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, Download, Clock, ChevronRight, ChevronDown, Layers } from 'lucide-react';
 import type { CountingList, CountingListProduct } from '../../../types';
+import { useTableSort } from '../../../hooks/useTableSort';
+import { SortableTh } from '../../../components/SortableTh';
 
 interface Props {
   inventoryId: string;
@@ -17,33 +19,47 @@ const cycleColors: Record<number, { badge: string; bg: string }> = {
   3: { badge: 'bg-red-100 text-red-700 border-red-300', bg: 'border-red-500' },
 };
 
+// Produto enriquecido com referência à lista de origem (analise filtrada por lista)
+type AnalysisProduct = CountingListProduct & { _list_id: string; _list_name: string };
+
 export function TabAnalise({ inventoryId, listas }: Props) {
-  const [allProducts, setAllProducts] = useState<CountingListProduct[]>([]);
+  const [rawProducts, setRawProducts] = useState<AnalysisProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('cycle1');
+  // Filtro por lista — null = todas as listas (agregado)
+  const [selectedListId, setSelectedListId] = useState<string | null>(null);
 
-  // Load all products from all counting lists
+  // Load all products from all counting lists (anota lista de origem em cada produto)
   useEffect(() => {
     if (listas.length === 0) {
-      setAllProducts([]);
+      setRawProducts([]);
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    Promise.all(listas.map((l) => countingListService.listarItens(l.id, true)))
+    Promise.all(listas.map((l) =>
+      countingListService.listarItens(l.id, true)
+        .then((res) => ({ list: l, products: res.data?.products || [] }))
+    ))
       .then((responses) => {
-        const products: CountingListProduct[] = [];
-        for (const res of responses) {
-          if (res.data?.products) {
-            products.push(...res.data.products);
-          }
-        }
-        setAllProducts(products);
+        const enriched: AnalysisProduct[] = responses.flatMap((r) =>
+          r.products.map((p) => ({ ...p, _list_id: r.list.id, _list_name: r.list.list_name }))
+        );
+        setRawProducts(enriched);
       })
-      .catch(() => setAllProducts([]))
+      .catch(() => setRawProducts([]))
       .finally(() => setLoading(false));
   }, [listas, inventoryId]);
+
+  // Aplica filtro por lista
+  const allProducts: AnalysisProduct[] = useMemo(() => {
+    if (!selectedListId) return rawProducts;
+    return rawProducts.filter((p) => p._list_id === selectedListId);
+  }, [rawProducts, selectedListId]);
+
+  // Lista selecionada (para mostrar ciclo/status no header) ou null
+  const selectedLista = useMemo(() => listas.find((l) => l.id === selectedListId) || null, [listas, selectedListId]);
 
   // Determine max cycle with data
   const maxCycleWithData = useMemo(() => {
@@ -85,11 +101,20 @@ export function TabAnalise({ inventoryId, listas }: Props) {
     else setActiveSubTab('cycle1');
   }, [maxCycleWithData]);
 
+  // Conta itens por lista para o seletor (usa rawProducts pra mostrar o real, não o filtrado)
+  const listOptions = useMemo(() => listas.map((l) => ({
+    id: l.id,
+    name: l.list_name,
+    cycle: l.current_cycle,
+    status: l.list_status,
+    total: rawProducts.filter((p) => p._list_id === l.id).length,
+  })), [listas, rawProducts]);
+
   if (loading) {
     return <div className="text-center py-8 text-slate-500">Carregando analise...</div>;
   }
 
-  if (allProducts.length === 0) {
+  if (rawProducts.length === 0) {
     return (
       <div className="text-center py-8">
         <BarChart2 className="w-10 h-10 text-slate-300 mx-auto mb-2" />
@@ -108,6 +133,48 @@ export function TabAnalise({ inventoryId, listas }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Seletor de lista — listas podem estar em ciclos/status diferentes */}
+      {listas.length > 1 && (
+        <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3 flex-wrap">
+          <span className="text-sm font-medium text-slate-700 whitespace-nowrap">Analisar:</span>
+          <button
+            onClick={() => setSelectedListId(null)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+              selectedListId === null
+                ? 'bg-capul-600 text-white'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            Todas as listas <span className="opacity-70">({rawProducts.length})</span>
+          </button>
+          {listOptions.map((l) => (
+            <button
+              key={l.id}
+              onClick={() => setSelectedListId(l.id)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                selectedListId === l.id
+                  ? 'bg-capul-600 text-white'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+              title={`Lista ${l.name} — ${l.cycle}o ciclo, status ${l.status}`}
+            >
+              <span>{l.name}</span>
+              <span className="opacity-70">({l.total})</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                selectedListId === l.id ? 'bg-white/20' : 'bg-slate-200 text-slate-600'
+              }`}>
+                C{l.cycle}
+              </span>
+            </button>
+          ))}
+          {selectedLista && (
+            <span className="text-xs text-slate-500 ml-auto">
+              Status: <strong className="text-slate-700">{selectedLista.list_status}</strong>
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Sub-tabs */}
       <div className="flex gap-1 border-b border-slate-200 overflow-x-auto">
         {subTabs.filter((t) => t.show).map((tab) => (
@@ -416,12 +483,9 @@ function CycleAnalysis({ products, cycleNumber }: { products: CountingListProduc
         lot_details: lotDetails,
       };
     }).sort((a, b) => {
-      // Not counted first, then divergent, then OK
-      if (!a.counted && b.counted) return -1;
-      if (a.counted && !b.counted) return 1;
-      if (a.is_divergent && !b.is_divergent) return -1;
-      if (!a.is_divergent && b.is_divergent) return 1;
-      return Math.abs(b.variance_pct) - Math.abs(a.variance_pct);
+      // Ordenacao estavel por codigo do produto — mesma ordem em todos os ciclos
+      // (criticidade fica visivel pelas colunas Variacao % e Situacao).
+      return a.product_code.localeCompare(b.product_code, 'pt-BR', { numeric: true });
     });
   }, [products, cycleNumber]);
 
@@ -438,9 +502,11 @@ function CycleAnalysis({ products, cycleNumber }: { products: CountingListProduc
 
   const colors = cycleColors[cycleNumber] || cycleColors[1];
 
+  const { sortedRows: analyzedSorted, sortKey, sortDir, handleSort } = useTableSort(analyzed, null, null);
+
   function handleExportCSV() {
     const header = `Codigo;Descricao;Saldo Sistema;Contagem ${cycleNumber}o Ciclo;Diferenca;Variacao %;Situacao\n`;
-    const rows = analyzed.map((a) =>
+    const rows = analyzedSorted.map((a) =>
       `${a.product_code};${a.product_name};${a.system_qty.toFixed(2)};${a.counted ? a.cycle_qty!.toFixed(2) : 'NAO CONTADO'};${a.counted ? a.variance.toFixed(2) : ''};${a.counted ? a.variance_pct.toFixed(1) + '%' : ''};${!a.counted ? 'Nao Contado' : a.is_divergent ? 'Divergente' : 'OK'}`,
     ).join('\n');
     const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
@@ -532,19 +598,17 @@ function CycleAnalysis({ products, cycleNumber }: { products: CountingListProduc
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left py-2.5 px-3 font-medium text-slate-600">Codigo</th>
-                <th className="text-left py-2.5 px-3 font-medium text-slate-600">Descricao</th>
-                <th className="text-right py-2.5 px-3 font-medium text-slate-600">Sistema</th>
-                <th className={`text-right py-2.5 px-3 font-medium ${colors.bg.replace('border-', 'text-').replace('500', '700')}`}>
-                  {cycleNumber}o Ciclo
-                </th>
-                <th className="text-right py-2.5 px-3 font-medium text-slate-600">Diferenca</th>
-                <th className="text-right py-2.5 px-3 font-medium text-slate-600">Var %</th>
-                <th className="text-center py-2.5 px-3 font-medium text-slate-600">Situacao</th>
+                <SortableTh label="Codigo" sortKey="product_code" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-2.5 px-3" />
+                <SortableTh label="Descricao" sortKey="product_name" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-2.5 px-3" />
+                <SortableTh label="Sistema" sortKey="system_qty" align="right" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-2.5 px-3" />
+                <SortableTh label={`${cycleNumber}o Ciclo`} sortKey="cycle_qty" align="right" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className={`font-medium py-2.5 px-3 ${colors.bg.replace('border-', '!text-').replace('500', '700')}`} />
+                <SortableTh label="Diferenca" sortKey="variance" align="right" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-2.5 px-3" />
+                <SortableTh label="Var %" sortKey="variance_pct" align="right" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-2.5 px-3" />
+                <SortableTh label="Situacao" sortKey="is_divergent" align="center" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-2.5 px-3" />
               </tr>
             </thead>
             <tbody>
-              {analyzed.map((a) => {
+              {analyzedSorted.map((a) => {
                 const isExpanded = expandedRows.has(a.product_code);
                 const canExpand = a.has_lot && a.lot_details.length > 0;
                 return (
@@ -685,18 +749,17 @@ function FinalAnalysis({ products }: { products: CountingListProduct[] }) {
         has_lot: hasLot,
         lot_details: lotDetails,
       };
-    }).sort((a, b) => {
-      if (!a.has_count && b.has_count) return -1;
-      if (a.has_count && !b.has_count) return 1;
-      if (a.is_divergent && !b.is_divergent) return -1;
-      if (!a.is_divergent && b.is_divergent) return 1;
-      return Math.abs(b.variance_pct) - Math.abs(a.variance_pct);
-    });
+    }).sort((a, b) =>
+      // Ordem default por codigo de produto — usuário pode reordenar via cabeçalho
+      a.product_code.localeCompare(b.product_code, 'pt-BR', { numeric: true })
+    );
   }, [products]);
+
+  const { sortedRows: itemsSorted, sortKey, sortDir, handleSort } = useTableSort(items, null, null);
 
   function handleExportCSV() {
     const header = 'Codigo;Descricao;Saldo Sistema;C1;C2;C3;Qtd Final;Diferenca;Variacao %;Situacao\n';
-    const rows = items.map((d) =>
+    const rows = itemsSorted.map((d) =>
       `${d.product_code};${d.product_name};${d.system_qty.toFixed(2)};${d.count_cycle_1?.toFixed(2) ?? ''};${d.count_cycle_2?.toFixed(2) ?? ''};${d.count_cycle_3?.toFixed(2) ?? ''};${d.has_count ? d.final_qty.toFixed(2) : 'NAO CONTADO'};${d.has_count ? d.variance.toFixed(2) : ''};${d.has_count ? d.variance_pct.toFixed(1) + '%' : ''};${!d.has_count ? 'Nao Contado' : d.is_divergent ? 'Divergente' : 'OK'}`,
     ).join('\n');
     const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
@@ -789,20 +852,20 @@ function FinalAnalysis({ products }: { products: CountingListProduct[] }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left py-2.5 px-3 font-medium text-slate-600">Codigo</th>
-                <th className="text-left py-2.5 px-3 font-medium text-slate-600">Descricao</th>
-                <th className="text-right py-2.5 px-3 font-medium text-slate-600">Sistema</th>
-                <th className="text-right py-2.5 px-3 font-medium text-green-700 bg-green-50/50">C1</th>
-                <th className="text-right py-2.5 px-3 font-medium text-amber-700 bg-amber-50/50">C2</th>
-                <th className="text-right py-2.5 px-3 font-medium text-red-700 bg-red-50/50">C3</th>
-                <th className="text-right py-2.5 px-3 font-medium text-capul-700">Final</th>
-                <th className="text-right py-2.5 px-3 font-medium text-slate-600">Diferenca</th>
-                <th className="text-right py-2.5 px-3 font-medium text-slate-600">Var %</th>
-                <th className="text-center py-2.5 px-3 font-medium text-slate-600">Situacao</th>
+                <SortableTh label="Codigo" sortKey="product_code" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-2.5 px-3" />
+                <SortableTh label="Descricao" sortKey="product_name" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-2.5 px-3" />
+                <SortableTh label="Sistema" sortKey="system_qty" align="right" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-2.5 px-3" />
+                <SortableTh label="C1" sortKey="count_cycle_1" align="right" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-2.5 px-3 !text-green-700 bg-green-50/50" />
+                <SortableTh label="C2" sortKey="count_cycle_2" align="right" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-2.5 px-3 !text-amber-700 bg-amber-50/50" />
+                <SortableTh label="C3" sortKey="count_cycle_3" align="right" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-2.5 px-3 !text-red-700 bg-red-50/50" />
+                <SortableTh label="Final" sortKey="final_qty" align="right" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-2.5 px-3 !text-capul-700" />
+                <SortableTh label="Diferenca" sortKey="variance" align="right" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-2.5 px-3" />
+                <SortableTh label="Var %" sortKey="variance_pct" align="right" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-2.5 px-3" />
+                <SortableTh label="Situacao" sortKey="is_divergent" align="center" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-2.5 px-3" />
               </tr>
             </thead>
             <tbody>
-              {items.map((d) => {
+              {itemsSorted.map((d) => {
                 const isExpanded = expandedRows.has(d.product_code);
                 const canExpand = d.has_lot && d.lot_details.length > 0;
                 return (

@@ -4,6 +4,8 @@ import { Header } from '../../layouts/Header';
 import { inventoryService } from '../../services/inventory.service';
 import { warehouseService } from '../../services/warehouse.service';
 import { ClipboardList, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useTableSort } from '../../hooks/useTableSort';
+import { SortableTh } from '../../components/SortableTh';
 import { downloadCSV } from '../../utils/csv';
 import { ExportDropdown } from '../../components/ExportDropdown';
 import { downloadExcel, printTable } from '../../utils/export';
@@ -59,6 +61,8 @@ export function InventariosListPage() {
   }
 
   useEffect(() => { loadData(); }, [page, statusFilter, warehouseFilter]);
+
+  const { sortedRows, sortKey, sortDir, handleSort } = useTableSort(inventarios, 'created_at', 'desc');
 
   function resetFilters() {
     setStatusFilter('');
@@ -154,18 +158,18 @@ export function InventariosListPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="text-left py-3 px-4 font-medium text-slate-600">Nome</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-600">Armazem</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-600">Status</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-600">Ciclo</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-600">Progresso</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-600">Itens</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-600">Criado em</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-600">Criado por</th>
+                    <SortableTh label="Nome" sortKey="name" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-3 px-4" />
+                    <SortableTh label="Armazem" sortKey="warehouse" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-3 px-4" />
+                    <SortableTh label="Status" sortKey="status" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-3 px-4" />
+                    <SortableTh label="Ciclo" sortKey="current_cycle" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-3 px-4" />
+                    <SortableTh label="Progresso" sortKey="progress_percentage" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-3 px-4" />
+                    <SortableTh label="Itens" sortKey="total_items" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-3 px-4" />
+                    <SortableTh label="Criado em" sortKey="created_at" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-3 px-4" />
+                    <SortableTh label="Criado por" sortKey="created_by_name" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="font-medium py-3 px-4" />
                   </tr>
                 </thead>
                 <tbody>
-                  {inventarios.map((inv) => {
+                  {sortedRows.map((inv) => {
                     const sc = statusConfig[inv.status] || statusConfig.DRAFT;
                     return (
                       <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">

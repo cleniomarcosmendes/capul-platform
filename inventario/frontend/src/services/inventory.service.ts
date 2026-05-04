@@ -19,6 +19,11 @@ export const inventoryService = {
     return { items: data.items ?? data.data ?? [], total: data.total ?? 0, page: data.page ?? 1, size: data.size ?? 20 };
   },
 
+  async listarDisponiveisIntegracao(): Promise<{ items: InventoryList[]; total: number }> {
+    const { data } = await inventarioApi.get('/inventory/lists/available-for-integration');
+    return { items: data.items ?? [], total: data.total ?? 0 };
+  },
+
   async buscarPorId(id: string): Promise<InventoryList> {
     const { data } = await inventarioApi.get(`/inventory/lists/${id}`);
     return data;
@@ -36,6 +41,19 @@ export const inventoryService = {
 
   async excluir(id: string): Promise<void> {
     await inventarioApi.delete(`/inventory/lists/${id}`);
+  },
+
+  async finalizarInventario(id: string, closureNotes?: string): Promise<unknown> {
+    const { data } = await inventarioApi.post(`/inventory/lists/${id}/finalize-inventory`, {
+      closure_notes: closureNotes ?? '',
+      finalize_type: 'COMPLETE_INVENTORY',
+    });
+    return data;
+  },
+
+  async marcarAnalisado(id: string): Promise<unknown> {
+    const { data } = await inventarioApi.post(`/inventory/lists/${id}/marcar-analisado`);
+    return data;
   },
 
   // === Itens do Inventario ===

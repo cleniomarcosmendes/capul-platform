@@ -48,10 +48,6 @@ export function TabVisaoGeral({
   const pending = inventario.total_items - inventario.counted_items;
   const hasNoCounting = inventario.total_items > 0 && inventario.counted_items === 0;
 
-  function handleFinalizar() {
-    setConfirmAction('finalize');
-  }
-
   function handleEncerrar() {
     setConfirmAction('close');
   }
@@ -125,8 +121,6 @@ export function TabVisaoGeral({
           pending={pending}
           allListsClosed={allListsClosed}
           onNavigateTab={onNavigateTab}
-          onFinalizar={handleFinalizar}
-          actionLoading={actionLoading}
         />
       )}
 
@@ -408,16 +402,12 @@ function InProgressPanel({
   pending,
   allListsClosed,
   onNavigateTab,
-  onFinalizar,
-  actionLoading,
 }: {
   inventario: InventoryList;
   listas: CountingList[];
   pending: number;
   allListsClosed: boolean;
   onNavigateTab: (tab: 'itens' | 'listas' | 'analise') => void;
-  onFinalizar: () => void;
-  actionLoading: string | null;
 }) {
   const navigate = useNavigate();
   const listasEmContagem = listas.filter(
@@ -468,8 +458,8 @@ function InProgressPanel({
         <ActionCard
           icon={Lock}
           iconColor="bg-amber-100 text-amber-600"
-          title="Encerrar Rodada"
-          description="Encerre o ciclo atual de contagem de uma lista."
+          title="Encerrar Lista de Contagem"
+          description="Acesse a aba Listas para encerrar/avançar uma lista específica."
           actionLabel="Ver Listas"
           onClick={() => onNavigateTab('listas')}
         />
@@ -483,45 +473,31 @@ function InProgressPanel({
         />
       </div>
 
-      {/* Concluir Contagens */}
-      <div
-        className={`bg-white rounded-xl border-2 p-5 ${
-          allListsClosed ? 'border-capul-300' : 'border-slate-200'
-        }`}
-      >
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div
-              className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                allListsClosed ? 'bg-capul-100 text-capul-600' : 'bg-slate-100 text-slate-400'
-              }`}
-            >
-              <CheckCircle2 className="w-5 h-5" />
+      {/* Aviso de progresso até as listas encerrarem.
+          Quando todas as listas estão encerradas, o banner verde no topo do
+          InventarioDetalhePage cobre a ação "Encerrar Inventario" — não duplicamos aqui. */}
+      {!allListsClosed && (
+        <div className="bg-white rounded-xl border-2 border-slate-200 p-5">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-slate-100 text-slate-400">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-slate-800">Próximo passo: Encerrar todas as listas</h4>
+                <p className="text-xs text-slate-500">
+                  Quando todas as listas estiverem encerradas, o inventario podera ser encerrado
+                  e seguir para Análise + Integração Protheus.
+                </p>
+              </div>
             </div>
-            <div>
-              <h4 className="text-sm font-semibold text-slate-800">Concluir Contagens</h4>
-              <p className="text-xs text-slate-500">
-                Conclua as contagens para liberar o inventario para analise e integracao Protheus.
-              </p>
-            </div>
-          </div>
-          <div>
-            <button
-              onClick={onFinalizar}
-              disabled={!allListsClosed || actionLoading === 'finalize'}
-              className="px-4 py-2 bg-capul-600 text-white text-sm rounded-lg font-medium hover:bg-capul-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {actionLoading === 'finalize' ? 'Concluindo...' : 'Concluir Contagens'}
-            </button>
-            {!allListsClosed && (
-              <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3 shrink-0" />
-                Encerre todas as listas antes
-              </p>
-            )}
+            <p className="text-xs text-amber-600 flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3 shrink-0" />
+              Encerre todas as listas antes
+            </p>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -651,7 +627,7 @@ function CompletedSummary({
           title="Comparar Inventarios"
           description="Compare com outro inventario para identificar transferencias logicas."
           actionLabel="Comparar"
-          onClick={() => navigate(`/inventario/comparacao?inv_a=${inventario.id}`)}
+          onClick={() => navigate(`/inventario/divergencias?tab=historica&inv_a=${inventario.id}`)}
         />
         <ActionCard
           icon={Send}
@@ -659,7 +635,7 @@ function CompletedSummary({
           title={status === 'CLOSED' ? 'Ver Integracao' : 'Integracao Protheus'}
           description={status === 'CLOSED' ? 'Visualize os dados da integracao enviada ao Protheus.' : 'Envie os resultados do inventario para o ERP Protheus.'}
           actionLabel={status === 'CLOSED' ? 'Ver Detalhes' : 'Ir para Integracao'}
-          onClick={() => navigate('/inventario/sincronizacao')}
+          onClick={() => navigate(status === 'CLOSED' ? '/inventario/integracoes' : `/inventario/integracoes/nova?inv_a=${inventario.id}`)}
         />
       </div>
 

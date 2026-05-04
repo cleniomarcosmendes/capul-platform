@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { countingListService } from '../services/counting-list.service';
 import {
   LayoutDashboard,
   ArrowLeft,
@@ -9,7 +11,6 @@ import {
   Warehouse,
   RefreshCw,
   Send,
-  BarChart2,
   ScanLine,
   Activity,
   BarChart3,
@@ -24,17 +25,23 @@ const ALL = ['ADMIN', 'SUPERVISOR', 'OPERATOR'];
 
 const menuItems: MenuItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/inventario/' },
-  { section: 'INVENTARIO' },
-  { label: 'Inventarios', icon: ClipboardList, path: '/inventario/inventarios', roles: ALL },
-  { label: 'Contagem', icon: ScanLine, path: '/inventario/contagem', roles: ALL },
-  { label: 'Produtos', icon: Package, path: '/inventario/produtos', roles: ALL },
+
+  { section: 'CADASTROS', roles: STAFF },
+  // Produtos expõe saldo do sistema (preço/qtd) — restrito a staff para preservar contagem cega.
+  { label: 'Produtos', icon: Package, path: '/inventario/produtos', roles: STAFF },
   { label: 'Armazens', icon: Warehouse, path: '/inventario/armazens', roles: STAFF },
-  { section: 'OPERACOES', roles: STAFF },
-  { label: 'Importacao Protheus', icon: RefreshCw, path: '/inventario/importacao', roles: STAFF },
-  { label: 'Envio Protheus', icon: Send, path: '/inventario/sincronizacao', roles: STAFF },
-  { label: 'Relatorios', icon: BarChart2, path: '/inventario/relatorios', roles: STAFF },
+
+  { section: 'INVENTARIOS' },
+  // Inventários (gestão completa) — só staff. OPERATOR usa apenas "Contagem" para ver suas listas
+  // atribuídas, sem expor saldo do sistema (mantém contagem cega).
+  { label: 'Inventarios', icon: ClipboardList, path: '/inventario/inventarios', roles: STAFF },
+  { label: 'Contagem', icon: ScanLine, path: '/inventario/contagem', roles: ALL },
+  { label: 'Análise', icon: BarChart3, path: '/inventario/divergencias', roles: STAFF },
+
+  { section: 'INTEGRACAO PROTHEUS', roles: STAFF },
+  { label: 'Importacao', icon: RefreshCw, path: '/inventario/importacao', roles: STAFF },
+  { label: 'Integracoes', icon: Send, path: '/inventario/integracoes', roles: STAFF },
   { label: 'Monitoramento', icon: Activity, path: '/inventario/monitoramento', roles: STAFF },
-  { label: 'Analise', icon: BarChart3, path: '/inventario/divergencias', roles: STAFF },
 ];
 
 function filterMenuByRole(items: MenuItem[], role: string | null): MenuItem[] {
@@ -60,6 +67,22 @@ interface SidebarProps {
 export function Sidebar({ open, onClose }: SidebarProps) {
   const { usuario, inventarioRole, logout } = useAuth();
   const visibleItems = filterMenuByRole(menuItems, inventarioRole);
+  const isStaff = inventarioRole === 'ADMIN' || inventarioRole === 'SUPERVISOR';
+
+  // Badge: listas em AGUARDANDO_REVISAO (só staff). Polling leve a cada 60s.
+  const [aguardandoRevisao, setAguardandoRevisao] = useState(0);
+  useEffect(() => {
+    if (!isStaff) return;
+    let active = true;
+    const fetch = () => {
+      countingListService.contarAguardandoRevisao()
+        .then((n) => { if (active) setAguardandoRevisao(n); })
+        .catch(() => {});
+    };
+    fetch();
+    const t = window.setInterval(fetch, 60_000);
+    return () => { active = false; window.clearInterval(t); };
+  }, [isStaff]);
 
   return (
     <>
@@ -100,6 +123,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             }
 
             const Icon = item.icon;
+            const showBadge = item.path === '/inventario/inventarios' && isStaff && aguardandoRevisao > 0;
             return (
               <NavLink
                 key={item.path}
@@ -115,7 +139,15 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                 }
               >
                 <Icon className="w-5 h-5" />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {showBadge && (
+                  <span
+                    className="ml-auto px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-purple-600 text-white"
+                    title={`${aguardandoRevisao} lista(s) aguardando revisao`}
+                  >
+                    {aguardandoRevisao}
+                  </span>
+                )}
               </NavLink>
             );
           })}

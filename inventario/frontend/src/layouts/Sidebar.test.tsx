@@ -41,18 +41,17 @@ describe('Sidebar', () => {
 
   it('renders staff-only items for ADMIN', () => {
     renderSidebar('ADMIN');
-    expect(screen.getByText('Sincronizacao')).toBeInTheDocument();
-    expect(screen.getByText('Relatorios')).toBeInTheDocument();
+    expect(screen.getByText('Integracoes')).toBeInTheDocument();
     expect(screen.getByText('Monitoramento')).toBeInTheDocument();
-    expect(screen.getByText('Analise')).toBeInTheDocument();
+    expect(screen.getByText('Análise')).toBeInTheDocument();
     expect(screen.getByText('Armazens')).toBeInTheDocument();
   });
 
   it('hides staff items from OPERATOR', () => {
     renderSidebar('OPERATOR');
-    expect(screen.queryByText('Sincronizacao')).not.toBeInTheDocument();
-    expect(screen.queryByText('Relatorios')).not.toBeInTheDocument();
+    expect(screen.queryByText('Integracoes')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitoramento')).not.toBeInTheDocument();
+    expect(screen.queryByText('Análise')).not.toBeInTheDocument();
   });
 
   it('displays user info and branch', () => {

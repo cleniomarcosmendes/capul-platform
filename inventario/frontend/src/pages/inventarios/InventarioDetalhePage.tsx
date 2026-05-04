@@ -1,19 +1,25 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
+import { useAuth } from '../../contexts/AuthContext';
 import { inventoryService } from '../../services/inventory.service';
 import { countingListService } from '../../services/counting-list.service';
 import { CriarListaModal } from './components/CriarListaModal';
 import { AddProductsModal } from './components/AddProductsModal';
 import { ListaDetalheModal } from './components/ListaDetalheModal';
 import { AtribuirProdutosModal } from './components/AtribuirProdutosModal';
+import { DevolverListaModal } from './components/DevolverListaModal';
+import { HistoricoHandoffModal } from './components/HistoricoHandoffModal';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { EtapaStepper, ETAPAS_INVENTARIO } from '../../components/EtapaStepper';
 import { TabAnalise } from './components/TabAnalise';
 import { TabVisaoGeral } from './components/TabVisaoGeral';
 import { cycleBadgeColor, cycleLabel } from '../../utils/cycles';
 import { downloadCSV } from '../../utils/csv';
 import { ExportDropdown } from '../../components/ExportDropdown';
 import { downloadExcel, printTable } from '../../utils/export';
+import { useTableSort } from '../../hooks/useTableSort';
+import { SortableTh } from '../../components/SortableTh';
 import {
   ArrowLeft,
   LayoutDashboard,
@@ -27,6 +33,8 @@ import {
   CheckCircle2,
   Lock,
   UserCog,
+  RotateCcw,
+  Clock,
   Loader2,
   Send,
   ArrowLeftRight,
@@ -50,7 +58,17 @@ const listStatusConfig: Record<string, { label: string; color: string }> = {
   ABERTA: { label: 'Aberta', color: 'bg-sky-100 text-sky-700' },
   LIBERADA: { label: 'Liberada', color: 'bg-blue-100 text-blue-700' },
   EM_CONTAGEM: { label: 'Em Contagem', color: 'bg-amber-100 text-amber-700' },
+  AGUARDANDO_REVISAO: { label: 'Aguarda revisao', color: 'bg-purple-100 text-purple-700' },
   ENCERRADA: { label: 'Encerrada', color: 'bg-green-100 text-green-700' },
+};
+
+// Onda 3 — etapa derivada do ciclo de vida do inventario
+const etapaConfig: Record<string, { label: string; color: string }> = {
+  EM_PREPARACAO: { label: 'Em Preparacao', color: 'bg-slate-100 text-slate-700' },
+  EM_CONTAGEM:   { label: 'Em Contagem', color: 'bg-amber-100 text-amber-700' },
+  ENCERRADO:     { label: 'Encerrado', color: 'bg-blue-100 text-blue-700' },
+  ANALISADO:     { label: 'Analisado', color: 'bg-purple-100 text-purple-700' },
+  INTEGRADO:     { label: 'Integrado', color: 'bg-emerald-100 text-emerald-700' },
 };
 
 const itemStatusConfig: Record<string, { label: string; color: string }> = {
@@ -67,11 +85,22 @@ export function InventarioDetalhePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const toast = useToast();
+  const { inventarioRole } = useAuth();
+  const isStaff = inventarioRole === 'ADMIN' || inventarioRole === 'SUPERVISOR';
+  // Fallback: OPERATOR só acessa Visao Geral — força fallback se cair em outra
+  useEffect(() => {
+    if (!isStaff && activeTab !== 'visao-geral') {
+      setActiveTab('visao-geral');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStaff]);
   const [inventario, setInventario] = useState<InventoryList | null>(null);
   const [itens, setItens] = useState<InventoryItem[]>([]);
   const [listas, setListas] = useState<CountingList[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('Erro ao carregar inventario.');
+  const [errorIsForbidden, setErrorIsForbidden] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('visao-geral');
   const [itemsPage, setItemsPage] = useState(1);
   const [itemsTotal, setItemsTotal] = useState(0);
@@ -116,7 +145,19 @@ export function InventarioDetalhePage() {
         setItemsTotalPages(Math.ceil(itemsRes.total / itemsRes.size) || 1);
         setListas(listasRes);
       })
-      .catch(() => setError(true))
+      .catch((err: unknown) => {
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+        if (status === 403) {
+          setErrorIsForbidden(true);
+          setErrorMessage(detail || 'Você não tem permissão para acessar este inventário.');
+        } else if (status === 404) {
+          setErrorMessage('Inventário não encontrado.');
+        } else {
+          setErrorMessage(detail || 'Erro ao carregar inventário. Verifique sua conexão e tente novamente.');
+        }
+        setError(true);
+      })
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -134,6 +175,10 @@ export function InventarioDetalhePage() {
   }, [id, itemsPage, itemStatusFilter, activeTab]);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showFinalizarInventarioConfirm, setShowFinalizarInventarioConfirm] = useState(false);
+  const [finalizarInventarioLoading, setFinalizarInventarioLoading] = useState(false);
+  const [showMarcarAnalisadoConfirm, setShowMarcarAnalisadoConfirm] = useState(false);
+  const [marcarAnalisadoLoading, setMarcarAnalisadoLoading] = useState(false);
 
   async function handleDeleteConfirmed() {
     if (!id) return;
@@ -144,6 +189,38 @@ export function InventarioDetalhePage() {
       navigate('/inventario/inventarios');
     } catch {
       toast.error('Erro ao excluir inventario.');
+    }
+  }
+
+  async function handleFinalizarInventarioConfirmed() {
+    if (!id) return;
+    setShowFinalizarInventarioConfirm(false);
+    setFinalizarInventarioLoading(true);
+    try {
+      await inventoryService.finalizarInventario(id);
+      toast.success('Inventario encerrado. Acesse Análise para revisar divergências antes de enviar ao Protheus.');
+      reloadInventario();
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Erro ao encerrar inventario.');
+    } finally {
+      setFinalizarInventarioLoading(false);
+    }
+  }
+
+  async function handleMarcarAnalisadoConfirmed() {
+    if (!id) return;
+    setShowMarcarAnalisadoConfirm(false);
+    setMarcarAnalisadoLoading(true);
+    try {
+      await inventoryService.marcarAnalisado(id);
+      toast.success('Analise marcada como concluida. Pode enviar ao Protheus.');
+      reloadInventario();
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Erro ao marcar analise como concluida.');
+    } finally {
+      setMarcarAnalisadoLoading(false);
     }
   }
 
@@ -160,7 +237,27 @@ export function InventarioDetalhePage() {
     return (
       <>
         <Header title="Inventario" />
-        <div className="p-4 md:p-6"><ErrorState message="Erro ao carregar inventario." onRetry={() => window.location.reload()} /></div>
+        <div className="p-4 md:p-6 max-w-2xl mx-auto">
+          {errorIsForbidden ? (
+            <div className="bg-amber-50 border border-amber-300 rounded-xl p-5 space-y-3">
+              <h2 className="text-lg font-bold text-amber-900">Acesso restrito</h2>
+              <p className="text-sm text-amber-800">{errorMessage}</p>
+              <p className="text-xs text-amber-700">
+                Esta tela mostra dados completos do inventário (saldos do sistema, divergências) que ficam ocultos
+                ao contador para preservar a contagem cega. Acesse <strong>Contagem</strong> no menu lateral para
+                ver suas listas atribuídas.
+              </p>
+              <button
+                onClick={() => navigate('/inventario/contagem')}
+                className="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+              >
+                Ir para Minhas Listas de Contagem
+              </button>
+            </div>
+          ) : (
+            <ErrorState message={errorMessage} onRetry={() => window.location.reload()} />
+          )}
+        </div>
       </>
     );
   }
@@ -180,31 +277,19 @@ export function InventarioDetalhePage() {
     : inventario.current_cycle;
 
   const allListsClosed = listas.length > 0 && listas.every((l) => l.list_status === 'ENCERRADA');
-  const anyListCounting = listas.some((l) => l.list_status === 'EM_CONTAGEM');
-  const derivedListStatus = allListsClosed
-    ? 'ENCERRADA'
-    : anyListCounting
-      ? 'EM_CONTAGEM'
-      : listas.length > 0
-        ? listas[0].list_status
-        : inventario.list_status;
-  const lsc = listStatusConfig[derivedListStatus] || listStatusConfig.PREPARACAO;
-
   const isEfetivado = inventario.status === 'CLOSED';
 
-  // Labels amigáveis para o status do inventário
-  const statusLabel: Record<string, string> = {
-    DRAFT: 'Em Preparacao',
-    IN_PROGRESS: 'Em Andamento',
-    COMPLETED: 'Concluido',
-    CLOSED: 'Efetivado',
-  };
-
+  // Itens/Listas/Análise expõem saldo do sistema, divergências e contagens de outros ciclos —
+  // restritas a SUPERVISOR/ADMIN para preservar a contagem cega do OPERATOR.
   const tabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { key: 'visao-geral', label: 'Visao Geral', icon: LayoutDashboard },
-    { key: 'itens', label: `Itens (${itemsTotal})`, icon: Package },
-    { key: 'listas', label: `Listas (${listas.length})`, icon: ListChecks },
-    { key: 'analise', label: 'Analise', icon: BarChart2 },
+    ...(isStaff
+      ? [
+          { key: 'itens' as Tab, label: `Itens (${itemsTotal})`, icon: Package },
+          { key: 'listas' as Tab, label: `Listas (${listas.length})`, icon: ListChecks },
+          { key: 'analise' as Tab, label: 'Analise', icon: BarChart2 },
+        ]
+      : []),
   ];
 
   return (
@@ -234,24 +319,96 @@ export function InventarioDetalhePage() {
           </div>
         )}
 
+        {/* Banner: todas as listas encerradas, falta encerrar o inventario */}
+        {!isEfetivado && allListsClosed && inventario.list_status !== 'ENCERRADA' && (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start gap-3">
+            <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-green-800">Todas as listas estao encerradas</p>
+              <p className="text-xs text-green-700 mt-0.5">
+                Encerre o inventario para liberar as etapas seguintes (Análise e Integração Protheus).
+              </p>
+            </div>
+            <button
+              onClick={() => setShowFinalizarInventarioConfirm(true)}
+              disabled={finalizarInventarioLoading}
+              className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 flex-shrink-0"
+            >
+              {finalizarInventarioLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Lock className="w-4 h-4" />
+              )}
+              Encerrar Inventario
+            </button>
+          </div>
+        )}
+
+        {/* Banner Onda 3: etapa ENCERRADO → próximo passo é Analisar */}
+        {!isEfetivado && inventario.etapa_atual === 'ENCERRADO' && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+            <BarChart2 className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-blue-800">Inventario encerrado — proxima etapa: Analise</p>
+              <p className="text-xs text-blue-700 mt-0.5">
+                Revise as divergencias na aba Analise (e, opcionalmente, compare com outros inventarios).
+                Quando terminar, marque a analise como concluida para liberar o envio ao Protheus.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowMarcarAnalisadoConfirm(true)}
+              disabled={marcarAnalisadoLoading}
+              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 flex-shrink-0"
+            >
+              {marcarAnalisadoLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4" />
+              )}
+              Marcar Analise Concluida
+            </button>
+          </div>
+        )}
+
+        {/* Banner Onda 3: etapa ANALISADO → próximo passo é criar integração ao Protheus */}
+        {!isEfetivado && inventario.etapa_atual === 'ANALISADO' && (
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-start gap-3">
+            <Send className="w-5 h-5 text-purple-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-purple-800">Analise concluida — proxima etapa: Integracao com Protheus</p>
+              <p className="text-xs text-purple-700 mt-0.5">
+                O inventario esta pronto. Crie uma integracao (Simples ou Comparativa) para enviar ao Protheus.
+              </p>
+            </div>
+            <Link
+              to={`/inventario/integracoes/nova?inv_a=${inventario.id}`}
+              className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 flex-shrink-0"
+            >
+              <Send className="w-4 h-4" />
+              Criar Integracao
+            </Link>
+          </div>
+        )}
+
         {/* Cabecalho info */}
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <div className="flex items-center gap-3 mb-1">
+              <div className="flex items-center gap-3 mb-1 flex-wrap">
                 <h2 className="text-xl font-bold text-slate-800">{inventario.name}</h2>
-                {isEfetivado ? (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
-                    Efetivado
-                  </span>
-                ) : (
-                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${lsc.color}`}>
-                    {lsc.label}
+                {inventario.etapa_atual && etapaConfig[inventario.etapa_atual] && (
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${etapaConfig[inventario.etapa_atual].color}`}
+                    title={inventario.proximo_passo ? `Proximo passo: ${inventario.proximo_passo}` : undefined}
+                  >
+                    {etapaConfig[inventario.etapa_atual].label}
                   </span>
                 )}
-                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
-                  {statusLabel[inventario.status] ?? inventario.status}
-                </span>
+                {inventario.proximo_passo && !isEfetivado && (
+                  <span className="text-xs text-slate-500 italic">
+                    → {inventario.proximo_passo}
+                  </span>
+                )}
               </div>
               {inventario.description && (
                 <p className="text-sm text-slate-500">{inventario.description}</p>
@@ -260,7 +417,7 @@ export function InventarioDetalhePage() {
             <div className="flex gap-2">
               {(inventario.status === 'COMPLETED' || isEfetivado) && (
                 <Link
-                  to={`/inventario/comparacao?inv_a=${id}`}
+                  to={`/inventario/divergencias?tab=historica&inv_a=${id}`}
                   className="flex items-center gap-1.5 px-3 py-1.5 border border-purple-300 text-purple-600 text-sm rounded-lg hover:bg-purple-50"
                 >
                   <ArrowLeftRight className="w-4 h-4" />
@@ -269,11 +426,11 @@ export function InventarioDetalhePage() {
               )}
               {(inventario.status === 'COMPLETED' || isEfetivado) && (
                 <Link
-                  to={`/inventario/sincronizacao`}
+                  to={isEfetivado ? '/inventario/integracoes' : `/inventario/integracoes/nova?inv_a=${inventario.id}`}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
                 >
                   <Send className="w-4 h-4" />
-                  Integracao Protheus
+                  {isEfetivado ? 'Ver Integracoes' : 'Integracao Protheus'}
                 </Link>
               )}
               {inventario.status === 'DRAFT' && (
@@ -287,6 +444,13 @@ export function InventarioDetalhePage() {
               )}
             </div>
           </div>
+
+          {/* Stepper de etapas do inventário */}
+          {inventario.etapa_atual && (
+            <div className="mb-4 pb-4 border-b border-slate-100">
+              <EtapaStepper steps={ETAPAS_INVENTARIO} currentStep={inventario.etapa_atual} />
+            </div>
+          )}
 
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -356,7 +520,7 @@ export function InventarioDetalhePage() {
             onReload={() => { reloadItens(); reloadListas(); reloadInventario(); }}
           />
         )}
-        {activeTab === 'itens' && (
+        {activeTab === 'itens' && isStaff && (
           <TabItens
             itens={itens}
             page={itemsPage}
@@ -364,13 +528,14 @@ export function InventarioDetalhePage() {
             statusFilter={itemStatusFilter}
             inventoryStatus={inventario.status}
             inventoryId={id!}
+            listas={listas}
             onPageChange={setItemsPage}
             onStatusChange={(s) => { setItemStatusFilter(s); setItemsPage(1); }}
             onAddProducts={() => setShowAddProducts(true)}
             onReloadItens={reloadItens}
           />
         )}
-        {activeTab === 'listas' && (
+        {activeTab === 'listas' && isStaff && (
           <TabListas
             listas={listas}
             inventoryId={id!}
@@ -378,7 +543,7 @@ export function InventarioDetalhePage() {
             onReload={() => { reloadListas(); reloadInventario(); }}
           />
         )}
-        {activeTab === 'analise' && <TabAnalise inventoryId={id!} listas={listas} />}
+        {activeTab === 'analise' && isStaff && <TabAnalise inventoryId={id!} listas={listas} />}
 
         {/* Modal adicionar produtos */}
         {showAddProducts && (
@@ -401,6 +566,30 @@ export function InventarioDetalhePage() {
           onConfirm={handleDeleteConfirmed}
           onCancel={() => setShowDeleteConfirm(false)}
         />
+
+        {/* Confirm dialog encerrar inventario */}
+        <ConfirmDialog
+          open={showFinalizarInventarioConfirm}
+          title="Encerrar Inventario"
+          description="Apos encerrar, o inventario fica pronto para Análise e Integração Protheus. Esta acao consolida o resultado de todas as listas."
+          details={[`Inventario: ${inventario.name}`, `Total de itens: ${inventario.total_items}`]}
+          variant="info"
+          confirmLabel="Encerrar Inventario"
+          onConfirm={handleFinalizarInventarioConfirmed}
+          onCancel={() => setShowFinalizarInventarioConfirm(false)}
+        />
+
+        {/* Confirm dialog marcar análise concluída */}
+        <ConfirmDialog
+          open={showMarcarAnalisadoConfirm}
+          title="Marcar Analise Concluida"
+          description="Voce confirma que revisou as divergencias e o inventario esta pronto para envio ao Protheus? O envio so e liberado apos esta marcacao."
+          details={[`Inventario: ${inventario.name}`]}
+          variant="info"
+          confirmLabel="Marcar Concluida"
+          onConfirm={handleMarcarAnalisadoConfirmed}
+          onCancel={() => setShowMarcarAnalisadoConfirm(false)}
+        />
       </div>
     </>
   );
@@ -408,22 +597,28 @@ export function InventarioDetalhePage() {
 
 // === Tab Itens ===
 
-function TabItens({ itens, page, totalPages, statusFilter, inventoryStatus, inventoryId, onPageChange, onStatusChange, onAddProducts, onReloadItens }: {
+function TabItens({ itens, page, totalPages, statusFilter, inventoryStatus, inventoryId, listas, onPageChange, onStatusChange, onAddProducts, onReloadItens }: {
   itens: InventoryItem[];
   page: number;
   totalPages: number;
   statusFilter: ItemStatus | '';
   inventoryStatus: string;
   inventoryId: string;
+  listas: CountingList[];
   onPageChange: (p: number) => void;
   onStatusChange: (s: ItemStatus | '') => void;
   onAddProducts: () => void;
   onReloadItens: () => void;
 }) {
   const toast = useToast();
-  const canAdd = inventoryStatus === 'DRAFT' || inventoryStatus === 'IN_PROGRESS';
+  const hasActiveList = listas.some((l) =>
+    l.list_status === 'LIBERADA' || l.list_status === 'EM_CONTAGEM' || l.list_status === 'ENCERRADA'
+  );
+  const inventoryEditable = inventoryStatus === 'DRAFT' || inventoryStatus === 'IN_PROGRESS';
+  const canAdd = inventoryEditable && !hasActiveList;
   const [pendingZeros, setPendingZeros] = useState(0);
   const [confirmingZeros, setConfirmingZeros] = useState(false);
+  const { sortedRows, sortKey, sortDir, handleSort } = useTableSort<InventoryItem>(itens, null, null);
   const [showConfirmZeros, setShowConfirmZeros] = useState(false);
 
   // Check pending zeros
@@ -506,14 +701,25 @@ function TabItens({ itens, page, totalPages, statusFilter, inventoryStatus, inve
           />
         )}
 
-        {canAdd && (
-          <button
-            onClick={onAddProducts}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-capul-600 text-white text-sm rounded-lg hover:bg-capul-700"
-          >
-            <Plus className="w-4 h-4" />
-            Adicionar Produtos
-          </button>
+        {inventoryEditable && (
+          canAdd ? (
+            <button
+              onClick={onAddProducts}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-capul-600 text-white text-sm rounded-lg hover:bg-capul-700"
+            >
+              <Plus className="w-4 h-4" />
+              Adicionar Produtos
+            </button>
+          ) : (
+            <button
+              disabled
+              title="Nao e possivel adicionar produtos: existe lista de contagem liberada. Adicione produtos antes de liberar a primeira lista."
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 text-slate-400 text-sm rounded-lg cursor-not-allowed"
+            >
+              <Plus className="w-4 h-4" />
+              Adicionar Produtos
+            </button>
+          )
         )}
       </div>
 
@@ -527,32 +733,37 @@ function TabItens({ itens, page, totalPages, statusFilter, inventoryStatus, inve
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] w-10">SEQ</th>
-                <th className="text-left py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Codigo</th>
-                <th className="text-left py-2 px-2 font-medium text-slate-600 text-[11px]">Descricao</th>
-                <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Arm.</th>
-                <th className="text-left py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Localizacao</th>
-                <th className="text-right py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Saldo Est.</th>
-                <th className="text-right py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Ent. Post.</th>
-                <th className="text-left py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Grupo</th>
-                <th className="text-left py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Grp. Inv</th>
-                <th className="text-left py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Categoria</th>
-                <th className="text-left py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Subcateg.</th>
-                <th className="text-left py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Segmento</th>
-                <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Loc 1</th>
-                <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Loc 2</th>
-                <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Loc 3</th>
-                <th className="text-center py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Lote</th>
-                <th className="text-right py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Esperado</th>
-                <th className="text-right py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Contado</th>
-                <th className="text-right py-2 px-2 font-medium text-slate-600 text-[11px] whitespace-nowrap">Variacao</th>
-                <th className="text-left py-2 px-1 font-medium text-slate-600 text-[11px] whitespace-nowrap">Status</th>
+                <SortableTh label="SEQ" sortKey="sequence" align="center" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-1 w-10" />
+                <SortableTh label="Codigo" sortKey="product_code" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-2 whitespace-nowrap" />
+                <SortableTh label="Descricao" sortKey="product_name" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-2" />
+                <SortableTh label="Arm." sortKey="warehouse" align="center" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-1 whitespace-nowrap" />
+                <SortableTh label="Localizacao" sortKey="product_local1" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-1 whitespace-nowrap" />
+                <SortableTh label="Saldo Est." sortKey="product_estoque" align="right" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-2 whitespace-nowrap" />
+                <SortableTh label="Ent. Post." sortKey="product_entregas_post" align="right" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-2 whitespace-nowrap" />
+                <SortableTh label="Grupo" sortKey="product_grupo" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-1 whitespace-nowrap" />
+                <SortableTh label="Grp. Inv" sortKey="product_grupo_inv" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-1 whitespace-nowrap" />
+                <SortableTh label="Categoria" sortKey="product_categoria" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-1 whitespace-nowrap" />
+                <SortableTh label="Subcateg." sortKey="product_subcategoria" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-1 whitespace-nowrap" />
+                <SortableTh label="Segmento" sortKey="product_segmento" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-1 whitespace-nowrap" />
+                <SortableTh label="Loc 1" sortKey="product_local1" align="center" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-1 whitespace-nowrap" />
+                <SortableTh label="Loc 2" sortKey="product_local2" align="center" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-1 whitespace-nowrap" />
+                <SortableTh label="Loc 3" sortKey="product_local3" align="center" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-1 whitespace-nowrap" />
+                <SortableTh label="Lote" sortKey="product_lote" align="center" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-1 whitespace-nowrap" />
+                <SortableTh label="Esperado" sortKey="expected_quantity" align="right" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-2 whitespace-nowrap" />
+                <SortableTh label="Contado" sortKey="counted_quantity" align="right" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-2 whitespace-nowrap" />
+                <SortableTh label="Variacao" sortKey="variance" align="right" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-2 whitespace-nowrap" />
+                <SortableTh label="Status" sortKey="status" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="text-[11px] font-medium py-2 px-1 whitespace-nowrap" />
               </tr>
             </thead>
             <tbody>
-              {itens.map((item) => {
-                const isc = itemStatusConfig[item.status] || itemStatusConfig.PENDING;
-                const hasVariance = item.variance !== 0 && item.status !== 'PENDING';
+              {sortedRows.map((item) => {
+                const wasCounted = (item.count_rounds ?? 0) > 0;
+                // PENDING + já contou = divergência aguardando ciclo seguinte
+                const isDivergent = item.status === 'PENDING' && wasCounted;
+                const isc = isDivergent
+                  ? { label: 'Divergente', color: 'bg-amber-100 text-amber-700' }
+                  : (itemStatusConfig[item.status] || itemStatusConfig.PENDING);
+                const hasVariance = item.variance !== 0 && wasCounted;
                 const loteDisplay = item.product_lote === 'L' ? 'Sim' : item.product_lote === 'S' ? 'Serie' : '';
                 return (
                   <tr
@@ -588,7 +799,7 @@ function TabItens({ itens, page, totalPages, statusFilter, inventoryStatus, inve
                     <td className={`py-2 px-2 text-right text-[11px] font-mono tabular-nums font-medium whitespace-nowrap ${
                       item.variance > 0 ? 'text-green-600' : item.variance < 0 ? 'text-red-600' : 'text-slate-400'
                     }`}>
-                      {item.status !== 'PENDING' ? (
+                      {wasCounted ? (
                         <>
                           {item.variance > 0 ? '+' : ''}{item.variance.toFixed(2)}
                           {item.variance_percentage !== 0 && (
@@ -656,6 +867,19 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
 }) {
   const navigate = useNavigate();
   const toast = useToast();
+  const aguardandoRevisaoCount = listas.filter((l) => l.list_status === 'AGUARDANDO_REVISAO').length;
+  const aguardandoToastShown = useRef(false);
+
+  // Toast informativo: ao montar a tab, avisa supervisor de listas pendentes (uma vez)
+  useEffect(() => {
+    if (aguardandoToastShown.current) return;
+    if (aguardandoRevisaoCount > 0) {
+      toast.info(`${aguardandoRevisaoCount} lista${aguardandoRevisaoCount > 1 ? 's' : ''} aguardando sua revisao.`);
+      aguardandoToastShown.current = true;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aguardandoRevisaoCount]);
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [detalheLista, setDetalheLista] = useState<CountingList | null>(null);
   const [statusFilter, setStatusFilter] = useState<ListStatus | ''>('');
@@ -674,6 +898,18 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
     confirmLabel: string;
     onConfirm: () => void;
   } | null>(null);
+
+  // Modal "Liberar Lista" com escolha de visibilidade e ordenação
+  const [liberarDialog, setLiberarDialog] = useState<CountingList | null>(null);
+  const [liberarShowPrev, setLiberarShowPrev] = useState(false);
+  type SortOrder = 'ORIGINAL' | 'PRODUCT_CODE' | 'PRODUCT_DESCRIPTION' | 'LOCAL1' | 'LOCAL2' | 'LOCAL3';
+  const [liberarSortOrder, setLiberarSortOrder] = useState<SortOrder>('ORIGINAL');
+
+  // Modal "Devolver lista" (supervisor → contador)
+  const [devolverDialog, setDevolverDialog] = useState<CountingList | null>(null);
+
+  // Modal "Histórico de handoffs"
+  const [historicoDialog, setHistoricoDialog] = useState<CountingList | null>(null);
 
   // Mapa de UUID → nome para exibir nomes dos contadores
   const [counterNames, setCounterNames] = useState<Record<string, string>>({});
@@ -699,27 +935,58 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
 
   function handleLiberar(listId: string) {
     const lista = listas.find((l) => l.id === listId);
-    setConfirmDialog({
-      title: 'Liberar Lista para Contagem',
-      description: 'Ao liberar, os contadores atribuidos poderao iniciar a contagem dos produtos desta lista.',
-      details: lista ? [`Lista: ${lista.list_name}`, `Itens: ${lista.total_items ?? 0} produtos`] : undefined,
-      variant: 'info',
-      confirmLabel: 'Liberar',
-      onConfirm: async () => {
-        setConfirmDialog(null);
-        setActionLoading(listId);
-        try {
-          await countingListService.liberar(listId);
-          onReload();
-          toast.success('Lista liberada para contagem.');
-        } catch (err: unknown) {
-          const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-          toast.error(detail || 'Erro ao liberar lista.');
-        } finally {
-          setActionLoading(null);
-        }
-      },
-    });
+    if (!lista) return;
+    setLiberarShowPrev(false); // sempre default false a cada liberação
+    setLiberarSortOrder('ORIGINAL'); // sort_order default a cada liberação
+    setLiberarDialog(lista);
+  }
+
+  async function handleLiberarConfirmed() {
+    if (!liberarDialog) return;
+    const listId = liberarDialog.id;
+    setLiberarDialog(null);
+    setActionLoading(listId);
+    try {
+      await countingListService.liberar(listId, liberarShowPrev, liberarSortOrder);
+      onReload();
+      toast.success('Lista liberada para contagem.');
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Erro ao liberar lista.');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  function handleDevolver(lista: CountingList) {
+    setDevolverDialog(lista);
+  }
+
+  async function handleDevolverConfirmed(motivo: string, itemIds: string[], sortOrder?: SortOrder) {
+    if (!devolverDialog) return;
+    const listId = devolverDialog.id;
+    setDevolverDialog(null);
+    setActionLoading(listId);
+    try {
+      const res = await countingListService.devolverAoContador(
+        listId,
+        motivo || undefined,
+        itemIds.length > 0 ? itemIds : undefined,
+        sortOrder,
+      );
+      onReload();
+      const total = res.itens_marcados || 0;
+      toast.success(
+        res.parcial
+          ? `Lista devolvida — ${total} item(ns) marcado(s) para revisao.`
+          : `Lista devolvida — ${total} item(ns) marcado(s) para revisao (todos os contados).`
+      );
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Erro ao devolver lista.');
+    } finally {
+      setActionLoading(null);
+    }
   }
 
   function handleFinalizarCiclo(listId: string) {
@@ -840,6 +1107,9 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
           <option value="ABERTA">Aberta</option>
           <option value="LIBERADA">Liberada</option>
           <option value="EM_CONTAGEM">Em Contagem</option>
+          <option value="AGUARDANDO_REVISAO">
+            Aguarda revisao{aguardandoRevisaoCount > 0 ? ` (${aguardandoRevisaoCount})` : ''}
+          </option>
           <option value="ENCERRADA">Encerrada</option>
         </select>
 
@@ -855,6 +1125,26 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
           </button>
         )}
       </div>
+
+      {/* Banner: listas avançaram para próximo ciclo, aguardando liberação */}
+      {(() => {
+        const advancedLists = listas.filter((l) => l.list_status === 'ABERTA' && (l.current_cycle ?? 1) > 1);
+        if (advancedLists.length === 0) return null;
+        return (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-3">
+            <UserCog className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1 text-sm">
+              <p className="font-medium text-amber-800">
+                {advancedLists.length} lista(s) avancaram para o proximo ciclo.
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Antes de liberar, revise o contador atribuido para o ciclo atual de cada lista.
+                Use o botao <strong>Contador</strong> se precisar trocar.
+              </p>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Tabela */}
       {filtered.length === 0 ? (
@@ -942,6 +1232,15 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
                             Detalhes
                           </button>
 
+                          <button
+                            onClick={() => setHistoricoDialog(lista)}
+                            title="Historico de entregas e devolucoes"
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md hover:bg-indigo-100 transition-colors"
+                          >
+                            <Clock className="w-3.5 h-3.5" />
+                            Historico
+                          </button>
+
                           {lista.list_status === 'PREPARACAO' && (
                             <button
                               onClick={() => setAtribuirLista(lista)}
@@ -953,7 +1252,7 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
                             </button>
                           )}
 
-                          {lista.list_status === 'ABERTA' && (
+                          {(lista.list_status === 'ABERTA' || lista.list_status === 'PREPARACAO') && (
                             <button
                               onClick={() => handleOpenChangeCounter(lista)}
                               title="Alterar Contador"
@@ -964,20 +1263,31 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
                             </button>
                           )}
 
-                          {isPrepOrAberta && (lista.total_items ?? 0) > 0 && (
-                            <button
-                              onClick={() => handleLiberar(lista.id)}
-                              title="Liberar para Contagem"
-                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors"
-                            >
-                              <Unlock className="w-3.5 h-3.5" />
-                              Liberar
-                            </button>
+                          {isPrepOrAberta && (
+                            (lista.total_items ?? 0) > 0 ? (
+                              <button
+                                onClick={() => handleLiberar(lista.id)}
+                                title="Marca a lista como pronta para contagem (exige contador atribuído)"
+                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors"
+                              >
+                                <Unlock className="w-3.5 h-3.5" />
+                                Liberar
+                              </button>
+                            ) : (
+                              <button
+                                disabled
+                                title="Adicione produtos a esta lista antes de liberar"
+                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-slate-400 bg-slate-100 border border-slate-200 rounded-md cursor-not-allowed"
+                              >
+                                <Unlock className="w-3.5 h-3.5" />
+                                Liberar
+                              </button>
+                            )
                           )}
 
                           {(lista.list_status === 'LIBERADA' || lista.list_status === 'EM_CONTAGEM') && (
                             <button
-                              onClick={() => navigate(`/inventario/contagem/${inventoryId}/desktop`)}
+                              onClick={() => navigate(`/inventario/contagem/${inventoryId}/desktop?list=${lista.id}`)}
                               title="Abrir tela de contagem"
                               className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-white bg-capul-600 rounded-md hover:bg-capul-700 transition-colors"
                             >
@@ -986,11 +1296,22 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
                             </button>
                           )}
 
-                          {(lista.list_status === 'LIBERADA' || lista.list_status === 'EM_CONTAGEM') && (
+                          {lista.list_status === 'AGUARDANDO_REVISAO' && (
+                            <button
+                              onClick={() => handleDevolver(lista)}
+                              title="Devolver a lista ao contador para nova contagem"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-md hover:bg-purple-100 transition-colors"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              Devolver
+                            </button>
+                          )}
+
+                          {(lista.list_status === 'LIBERADA' || lista.list_status === 'EM_CONTAGEM' || lista.list_status === 'AGUARDANDO_REVISAO') && (
                             lista.current_cycle >= 3 ? (
                               <button
                                 onClick={() => handleEncerrar(lista.id)}
-                                title="Encerrar Lista (ultimo ciclo)"
+                                title="Encerra a lista no 3º ciclo (último ciclo permitido)"
                                 className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors"
                               >
                                 <Lock className="w-3.5 h-3.5" />
@@ -999,7 +1320,7 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
                             ) : (
                               <button
                                 onClick={() => handleFinalizarCiclo(lista.id)}
-                                title="Finalizar Ciclo"
+                                title="Avança para o próximo ciclo se houver divergências; encerra a lista se nenhum produto precisar recontagem"
                                 className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md hover:bg-amber-100 transition-colors"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -1011,7 +1332,7 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
                           {lista.list_status !== 'ENCERRADA' && lista.list_status !== 'PREPARACAO' && lista.current_cycle < 3 && (
                             <button
                               onClick={() => handleEncerrar(lista.id)}
-                              title="Encerrar Lista"
+                              title="Encerra a lista no ciclo atual (use quando a contagem do ciclo já for suficiente)"
                               className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors"
                             >
                               <Lock className="w-3.5 h-3.5" />
@@ -1137,6 +1458,104 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal Liberar Lista (com escolha de visibilidade C1/C2) */}
+      {liberarDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">Liberar Lista para Contagem</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                Ao liberar, o contador atribuido podera iniciar a contagem.
+              </p>
+            </div>
+
+            <div className="text-xs bg-slate-50 rounded-lg p-3 space-y-1">
+              <div><span className="text-slate-500">Lista:</span> <strong className="text-slate-800">{liberarDialog.list_name}</strong></div>
+              <div><span className="text-slate-500">Ciclo:</span> <strong className="text-slate-800">{liberarDialog.current_cycle}o</strong></div>
+              <div><span className="text-slate-500">Itens:</span> <strong className="text-slate-800">{liberarDialog.total_items ?? 0}</strong></div>
+            </div>
+
+            {/* Checkbox visibilidade — controla saldo do sistema + contagens anteriores */}
+            <label className="flex items-start gap-2 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+              <input
+                type="checkbox"
+                checked={liberarShowPrev}
+                onChange={(e) => setLiberarShowPrev(e.target.checked)}
+                className="mt-0.5"
+              />
+              <div className="flex-1 text-sm">
+                <p className="font-medium text-slate-800">Permitir ao contador ver o saldo do sistema e contagens anteriores</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Por padrao a contagem e cega. Marque apenas se for necessario (ex: contagem-piloto,
+                  validacao rapida pelo supervisor{liberarDialog.current_cycle >= 2 ? `, resolucao de divergencias C1${liberarDialog.current_cycle === 3 ? '/C2' : ''}` : ''}).
+                </p>
+              </div>
+            </label>
+
+            {/* Ordenação dos produtos para o contador */}
+            <div className="border border-slate-200 rounded-lg p-3 space-y-2">
+              <div>
+                <p className="text-sm font-medium text-slate-800">Ordem dos produtos para o contador</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Define a sequência em que os produtos aparecem na contagem (mobile e desktop).
+                </p>
+              </div>
+              <select
+                value={liberarSortOrder}
+                onChange={(e) => setLiberarSortOrder(e.target.value as SortOrder)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-capul-500"
+              >
+                <option value="ORIGINAL">Ordem original (sequência da lista)</option>
+                <option value="LOCAL1">Localização 1 ⭐ (ordem física das prateleiras — recomendado)</option>
+                <option value="LOCAL2">Localização 2 (ordem física das prateleiras)</option>
+                <option value="LOCAL3">Localização 3 (ordem física das prateleiras)</option>
+                <option value="PRODUCT_CODE">Código do produto</option>
+                <option value="PRODUCT_DESCRIPTION">Descrição (alfabético)</option>
+              </select>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Produtos sem o campo escolhido vão pro fim da lista. Imutável durante a contagem
+                — pode ser alterado quando supervisor re-liberar após devolução.
+              </p>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setLiberarDialog(null)}
+                className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleLiberarConfirmed}
+                disabled={actionLoading === liberarDialog.id}
+                className="px-4 py-2 text-sm text-white bg-capul-600 rounded-lg hover:bg-capul-700 disabled:opacity-50"
+              >
+                {actionLoading === liberarDialog.id ? 'Liberando...' : 'Liberar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Devolver lista ao contador (com selecao parcial e re-escolha de ordenação) */}
+      {devolverDialog && (
+        <DevolverListaModal
+          lista={devolverDialog}
+          loading={actionLoading === devolverDialog.id}
+          onCancel={() => setDevolverDialog(null)}
+          onConfirm={handleDevolverConfirmed}
+          currentSortOrder={(devolverDialog.sort_order as SortOrder | undefined) || 'ORIGINAL'}
+        />
+      )}
+
+      {/* Modal Historico de handoffs */}
+      {historicoDialog && (
+        <HistoricoHandoffModal
+          lista={historicoDialog}
+          onClose={() => setHistoricoDialog(null)}
+        />
       )}
 
       {/* Confirm dialog generico (listas) */}
