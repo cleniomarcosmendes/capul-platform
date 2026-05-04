@@ -134,6 +134,55 @@ ls -ld /opt/capul-platform/fiscal/backend/certs/
 ⚠ Pular este passo causa falhas silenciosas em runtime quando o usuário tenta
 upload pela UI (descoberto 28/04/2026 com cert A1 do Douglas).
 
+### 3.4 Permissões de named volumes Docker (uploads e similares)
+
+Diferente de bind mounts, **named volumes Docker** (`uploads_data:/app/uploads`)
+herdam a permissão do **primeiro container** que escreveu neles. Se o volume
+foi criado em deploy anterior com container rodando como `root` (antes do
+hardening 25/04), o ownership ficou `root:root` no host e após hardening
+o `appuser` (uid=100) não consegue mais escrever — gera "Erro ao enviar
+anexo" silencioso na UI.
+
+> **Como diferenciar do 3.3:** bind mount aparece como `./caminho:/app/X` no
+> docker-compose; named volume aparece como `nome_volume:/app/X` (sem ./).
+
+Volumes afetados (validar a cada deploy que mude `USER` em Dockerfile ou que
+recrie volume após mudança de hardening):
+
+| Named volume | Container que escreve | Path no container |
+|---|---|---|
+| `uploads_data` | `gestao-ti-backend` | `/app/uploads` (anexos de chamados, paradas) |
+| (outros que vierem) | ... | ... |
+
+Setup (executar uma vez por deploy de hardening, OU quando container reportar EACCES):
+
+```bash
+# 1. Localizar o caminho físico do volume no host
+VOL_PATH=$(docker volume inspect capul-platform_uploads_data --format '{{.Mountpoint}}')
+echo "Volume em: $VOL_PATH"
+
+# 2. Conferir ownership atual
+sudo ls -ld "$VOL_PATH"
+# Esperado para evitar EACCES: drwx... 100 101 ...
+# Se aparecer "0 0" (root) ou outro UID = bug, prossiga
+
+# 3. Aplicar chown 100:101 (appuser:appgroup do gestao-ti-backend)
+sudo chown -R 100:101 "$VOL_PATH"
+
+# 4. Restartar o container que escreve no volume
+docker compose restart gestao-ti-backend
+```
+
+**Validação:** ao tentar anexar um arquivo via UI (Gestão TI → Paradas → editar →
+adicionar anexo), o upload deve completar sem mensagem de erro. Se ainda falhar,
+ver `docker compose logs gestao-ti-backend | grep -E 'UPLOADS_DIR_NAO_GRAVAVEL|UPLOAD_EACCES'`
+— a partir de 28/04/2026 o sistema loga avisos detalhados no boot e em runtime.
+
+⚠ Acontece **silenciosamente**: o boot continua, o usuário só descobre quando
+tenta anexar. Por isso o check no startup (`OnModuleInit` do `ParadaAnexoService`)
+loga **ERROR** quando detecta o problema — varrer logs do gestao-ti-backend
+após qualquer deploy de hardening.
+
 ---
 
 ## 4. PASSO 0 — Backup completo
@@ -156,6 +205,37 @@ sudo ./scripts/backup.sh full
 ---
 
 ## 5. PASSO 0.5 — Diagnóstico do estado atual
+
+### 5.0 Audit local schema vs migrations (rodar ANTES de gerar o roteiro)
+
+Antes mesmo de empacotar este roteiro, rodar o audit que detecta tabelas
+declaradas no `schema.prisma` mas **sem migration commitada** (caso típico:
+alguém usou `prisma db push` em DEV mas esqueceu de commitar a migration —
+em PROD a tabela nunca é criada e o endpoint que a usa retorna 500):
+
+```bash
+cd /mnt/c/meus_projetos/capul-platform   # ou o caminho local do repo
+./scripts/check-migrations-all.sh
+```
+
+**Esperado:**
+```
+✓ Todos os 3 backends estão consistentes (schema vs migrations).
+```
+
+**Se aparecer `✗ N tabela(s) declarada(s) no schema SEM migration`:** PARE, gere
+as migrations idempotentes faltantes (`CREATE TABLE IF NOT EXISTS` + FKs via
+`DO $$ EXCEPTION` para rodarem sem efeito quando a tabela já existe), commite
+e regere este roteiro. Sem essas migrations, o `prisma migrate deploy` em PROD
+não vai criar as tabelas e a feature ficará quebrada lá silenciosamente.
+
+> **Histórico:** descoberto em 28/04/2026 quando `projetos_favorito`,
+> `anexos_parada` e `atividade_responsaveis` (gestao-ti) estavam no schema
+> mas sem migration — Douglas reportou erros 500 em PROD enquanto local
+> funcionava. O script `check-prisma-migrations.mjs` foi adicionado nessa
+> mesma data para evitar repetição.
+
+### 5.1 Diagnóstico do banco
 
 Antes de aplicar qualquer mudança, validar o estado do banco. Cole estes SQLs no `psql`
 e compare com o esperado.
@@ -340,6 +420,7 @@ sudo ./scripts/backup.sh restore /opt/capul-platform/backups/backup_full_<data>.
 Pós-incidente 19/04/2026 (memory `feedback_deploy_cenarios_iniciais.md`).
 Marcar **todos** antes de enviar:
 
+- [ ] Rodei `./scripts/check-migrations-all.sh` localmente e **passou** com `✓ OK` nos 3 backends (Seção 5.0)
 - [ ] Rodei `git diff <commit_servidor>..HEAD --stat` e **cada arquivo** está mencionado no documento (não apenas "modificado")
 - [ ] Listei TODOS os `.sql` (Prisma **e** scripts manuais) em passos próprios
 - [ ] Inclui PASSO 0.5 de diagnóstico se houver schema/módulo novo

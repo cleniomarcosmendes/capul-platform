@@ -21,7 +21,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "ts-node prisma/seed.ts",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "check:migrations": "node ../scripts/check-prisma-migrations.mjs --root ."
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

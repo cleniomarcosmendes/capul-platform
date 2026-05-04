@@ -132,7 +132,9 @@ não resolver, considerar automatizar parte do checklist (script que lê
 
 ### ⏳ 2026-04-25 — Bubbles estilo WhatsApp na interação de equipes (Chamado e Projeto)
 
-**Contexto:** Hoje as áreas de "interação entre equipes" em **Chamado** e
+**Status (29/04/2026):** ✅ aplicado em **Chamado** (`ChatBubbleList` em `gestao-ti/frontend/src/components/`). Pendente em **Projeto** porque o shape de `ComentarioTarefa` é diferente (`texto`/`visivelPendencia`, sem `tipo`, operação de remover) — adaptar o componente exigiria abstração extra que não vale agora. Fica como item separado do backlog para sessão dedicada.
+
+**Contexto original:** Hoje as áreas de "interação entre equipes" em **Chamado** e
 **Projeto** mostram comentários/mensagens em uma lista vertical homogênea —
 sem distinção visual clara entre quem escreveu o quê. Em conversas longas
 fica difícil seguir o fluxo.
