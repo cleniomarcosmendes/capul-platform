@@ -234,10 +234,18 @@ export class ChamadoCoreService {
       throw new ForbiddenException('Esta equipe nao aceita chamados externos');
     }
 
-    const visibilidade = dto.visibilidade ?? (role === 'USUARIO_FINAL' ? 'PUBLICO' : 'PUBLICO');
+    // Visibilidade PRIVADO restrita a equipe de TI (ROLES_TI). Outros roles
+    // (USUARIO_FINAL, DESENVOLVEDOR, MANUTENCAO, INFRAESTRUTURA, USUARIO_CHAVE,
+    // TERCEIRIZADO) só podem criar PUBLICO — solicitante tem direito de
+    // acompanhar. Defesa em profundidade — frontend já oculta a opção,
+    // backend valida pra defender contra request manipulado.
+    const ROLES_PODE_PRIVADO = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
+    const visibilidade = dto.visibilidade ?? 'PUBLICO';
 
-    if (role === 'USUARIO_FINAL' && visibilidade === 'PRIVADO') {
-      throw new ForbiddenException('Usuario final nao pode criar chamados privados');
+    if (visibilidade === 'PRIVADO' && !ROLES_PODE_PRIVADO.includes(role)) {
+      throw new ForbiddenException(
+        'Apenas equipe de TI (ADMIN/GESTOR_TI/SUPORTE_TI) pode criar chamados PRIVADOS',
+      );
     }
 
     const sla = await this.prisma.slaDefinicao.findUnique({

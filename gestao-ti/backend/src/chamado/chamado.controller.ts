@@ -47,9 +47,7 @@ try {
 
 // Whitelist de MIME types aceitos em upload de anexos.
 // NAO incluir 'application/octet-stream' aqui — permitiria upload de qualquer
-// binario (ex: .exe renomeado para .pdf). Em caso de tipos legitimos que
-// chegam como octet-stream (alguns navegadores/browsers antigos), considerar
-// validacao cruzada por extensao do nome do arquivo.
+// binario (ex: .exe renomeado para .pdf).
 const ALLOWED_MIMES = [
   'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
   'application/pdf',
@@ -59,6 +57,12 @@ const ALLOWED_MIMES = [
   'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
   'application/x-pkcs12', 'application/pkcs12',
 ];
+
+// Extensoes permitidas com MIME generico (octet-stream / text/plain).
+// Util para tipos legitimos que browsers nao detectam corretamente, como
+// .trc (trace files Oracle/SQL Server — debug de chamados de banco).
+// Validacao por extensao + nome de arquivo (case-insensitive).
+const ALLOWED_EXTENSIONS = ['.trc', '.log'];
 
 @Controller('chamados')
 @UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
@@ -308,10 +312,13 @@ export class ChamadoController {
     }),
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
-      if (!ALLOWED_MIMES.includes(file.mimetype)) {
-        return cb(new BadRequestException('Tipo de arquivo nao permitido'), false);
+      // Aceita se MIME está na whitelist OU extensão está na whitelist
+      // (cobre tipos legítimos que chegam como octet-stream — ex: .trc).
+      const ext = path.extname(file.originalname).toLowerCase();
+      if (ALLOWED_MIMES.includes(file.mimetype) || ALLOWED_EXTENSIONS.includes(ext)) {
+        return cb(null, true);
       }
-      cb(null, true);
+      return cb(new BadRequestException('Tipo de arquivo nao permitido'), false);
     },
   }))
   addAnexo(
@@ -340,10 +347,15 @@ export class ChamadoController {
       throw new BadRequestException('Caminho de arquivo invalido');
     }
 
-    // Validar MIME type contra whitelist
+    // Validar MIME type contra whitelist; tipos por extensão (ex: .trc)
+    // descem como octet-stream e força download (não inline) — seguro.
+    const extensaoAnexo = path.extname(anexo.nomeOriginal ?? '').toLowerCase();
+    const extensaoPermitida = ALLOWED_EXTENSIONS.includes(extensaoAnexo);
     const mimeType = ALLOWED_MIMES.includes(anexo.mimeType)
       ? anexo.mimeType
-      : 'application/octet-stream';
+      : extensaoPermitida
+        ? 'application/octet-stream'
+        : 'application/octet-stream';
 
     // Tipos que podem ser visualizados inline no browser
     const inlineMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];

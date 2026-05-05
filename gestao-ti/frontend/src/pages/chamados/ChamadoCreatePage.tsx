@@ -24,6 +24,12 @@ export function ChamadoCreatePage() {
   const duplicarDeParam = searchParams.get('duplicarDe');
   const { usuario, gestaoTiRole } = useAuth();
   const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
+  // Visibilidade PRIVADO restrita à equipe de TI (ADMIN/GESTOR_TI/SUPORTE_TI —
+  // espelha ROLES_TI do backend em common/constants/roles.constant.ts).
+  // Demais roles (USUARIO_FINAL, DESENVOLVEDOR, MANUTENCAO, INFRAESTRUTURA,
+  // USUARIO_CHAVE, TERCEIRIZADO) sempre criam chamado PUBLICO — solicitante
+  // tem direito de acompanhar resoluções.
+  const podeEscolherVisibilidade = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole ?? '');
   const [projetoVinculado, setProjetoVinculado] = useState<Projeto | null>(null);
 
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);
@@ -222,7 +228,7 @@ export function ChamadoCreatePage() {
         titulo,
         descricao,
         equipeAtualId,
-        visibilidade: isUsuarioFinal ? 'PUBLICO' : visibilidade,
+        visibilidade: podeEscolherVisibilidade ? visibilidade : 'PUBLICO',
         prioridade,
         softwareId: softwareId || undefined,
         softwareModuloId: softwareModuloId || undefined,
@@ -428,7 +434,7 @@ export function ChamadoCreatePage() {
             </div>
           </div>
 
-          {!isUsuarioFinal && (
+          {podeEscolherVisibilidade && (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Visibilidade</label>
               <select
