@@ -98,6 +98,22 @@ services:
   # =======================================
   # CORE — Auth Gateway + Portal Hub
   # =======================================
+  # Init job — aplica migrations Prisma antes do auth-gateway subir.
+  # Padronizacao 05/05/2026 (incidente deploy 04/05 — gestao-ti subiu com 5 migrations
+  # pendentes porque Dockerfile/CMD ia direto pra `node dist/main.js`). Roda 1x, sai
+  # com exit 0/1 e o backend so inicia se este sair com sucesso (service_completed_successfully).
+  auth-migrate:
+    build: ./auth-gateway
+    container_name: capul-auth-migrate
+    command: ["sh", "-c", "npx prisma migrate deploy"]
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=core
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    logging: *default-logging
+
   auth-gateway:
     build: ./auth-gateway
     container_name: capul-auth
@@ -116,6 +132,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      auth-migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     logging: *default-logging
     # Limites de recursos — auditoria 25/04/2026 #5 (NestJS + Prisma + bcrypt)
@@ -229,6 +247,21 @@ services:
   # =======================================
   # MODULO — Gestao de T.I.
   # =======================================
+  # Init job — ver comentario em auth-migrate. Mesma logica para gestao-ti.
+  gestao-ti-migrate:
+    build: ./gestao-ti/backend
+    container_name: capul-gestao-ti-migrate
+    command: ["sh", "-c", "npx prisma migrate deploy"]
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public
+      DB_SCHEMA: gestao_ti
+      CORE_SCHEMA: core
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    logging: *default-logging
+
   gestao-ti-backend:
     build: ./gestao-ti/backend
     container_name: capul-gestao-ti-api
@@ -248,6 +281,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      gestao-ti-migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     logging: *default-logging
     # Limites de recursos — auditoria 25/04/2026 #5 (NestJS + Prisma + uploads)
@@ -285,6 +320,21 @@ services:
   # =======================================
   # MODULO — Fiscal
   # =======================================
+  # Init job — ver comentario em auth-migrate. Mesma logica para fiscal.
+  fiscal-migrate:
+    build: ./fiscal/backend
+    container_name: capul-fiscal-migrate
+    command: ["sh", "-c", "npx prisma migrate deploy"]
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public
+      DB_SCHEMA: fiscal
+      CORE_SCHEMA: core
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    logging: *default-logging
+
   fiscal-backend:
     build: ./fiscal/backend
     container_name: capul-fiscal-api
@@ -324,6 +374,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      fiscal-migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     logging: *default-logging
     # Limites de recursos — auditoria 25/04/2026 #5 (NestJS + BullMQ + parsers XML)
