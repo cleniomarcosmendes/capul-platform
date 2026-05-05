@@ -22,6 +22,7 @@ import { LimitesTab } from './pages/operacao/tabs/LimitesTab';
 import { CircuitBreakerTab } from './pages/operacao/tabs/CircuitBreakerTab';
 import { CadeiaTlsTab } from './pages/operacao/tabs/CadeiaTlsTab';
 import { CteDistribuicaoTab } from './pages/operacao/tabs/CteDistribuicaoTab';
+import { CteHistoricoTab } from './pages/operacao/tabs/CteHistoricoTab';
 import type { RoleFiscal } from './types';
 
 function ProtectedRoute({
@@ -175,6 +176,14 @@ function App() {
                 element={
                   <ProtectedRoute minRole="GESTOR_FISCAL">
                     <CteDistribuicaoTab />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="cte-historico"
+                element={
+                  <ProtectedRoute minRole="GESTOR_FISCAL">
+                    <CteHistoricoTab />
                   </ProtectedRoute>
                 }
               />

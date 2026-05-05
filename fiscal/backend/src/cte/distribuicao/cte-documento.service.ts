@@ -136,6 +136,22 @@ export class CteDocumentoService {
     this.logger.log(
       `Doc persistido id=${doc.id} cnpj=${p.cnpj} nsu=${p.nsu} schema=${p.schema} chave=${meta.chave ?? '(sem)'}`,
     );
+
+    // Reconciliação retroativa: eventos podem ter chegado ANTES do documento
+    // alvo (caso raro mas possível em distNSU paginado). Vincula agora pelos
+    // eventos que tinham chave igual mas documentoId NULL.
+    if (meta.chave) {
+      const reconciliados = await this.prisma.client.cteEvento.updateMany({
+        where: { chave: meta.chave, documentoId: null },
+        data: { documentoId: doc.id },
+      });
+      if (reconciliados.count > 0) {
+        this.logger.log(
+          `Reconciliação retroativa: ${reconciliados.count} evento(s) vinculado(s) ao doc id=${doc.id} chave=${meta.chave.slice(0, 8)}…`,
+        );
+      }
+    }
+
     return { tipo: 'documento', documento: doc, novo: true };
   }
 

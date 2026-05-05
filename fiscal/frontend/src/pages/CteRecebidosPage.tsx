@@ -63,7 +63,11 @@ interface CteEvento {
 }
 
 interface DetalheResp {
-  documento: CteDocumentoListItem & { xml: string; xmlSha256: string };
+  documento: CteDocumentoListItem & {
+    xml: string;
+    xmlSha256: string;
+    protheusTentativas?: number;
+  };
   eventos: CteEvento[];
 }
 
@@ -501,6 +505,49 @@ export function CteRecebidosPage() {
                       <span className="font-mono text-xs">{detalhe.documento.xmlSha256.slice(0, 16)}…</span>
                     </div>
                   </div>
+
+                  {/* Bloco "Status Protheus" — só aparece se tem alguma info */}
+                  {detalhe.documento.protheusStatus && (
+                    <div className="border rounded p-3 bg-slate-50">
+                      <h4 className="font-medium text-sm mb-2">Status Protheus (SZR010 + SZQ010)</h4>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-gray-500">Status:</span>{' '}
+                          {detalhe.documento.protheusStatus === 'GRAVADO' ||
+                          detalhe.documento.protheusStatus === 'JA_EXISTIA' ? (
+                            <Badge variant="green">✓ {detalhe.documento.protheusStatus}</Badge>
+                          ) : detalhe.documento.protheusStatus === 'PROTHEUS_DESISTIU' ? (
+                            <Badge variant="red">✗ DESISTIU (limite tentativas)</Badge>
+                          ) : (
+                            <Badge variant="red">✗ {detalhe.documento.protheusStatus}</Badge>
+                          )}
+                        </div>
+                        {detalhe.documento.protheusGravadoEm && (
+                          <div>
+                            <span className="text-gray-500">Gravado em:</span>{' '}
+                            {new Date(detalhe.documento.protheusGravadoEm).toLocaleString('pt-BR')}
+                          </div>
+                        )}
+                        {typeof detalhe.documento.protheusTentativas === 'number' && (
+                          <div>
+                            <span className="text-gray-500">Tentativas:</span>{' '}
+                            {detalhe.documento.protheusTentativas}
+                            {detalhe.documento.protheusStatus === 'PROTHEUS_DESISTIU' && (
+                              <span className="text-red-600 ml-1">(limite atingido)</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {detalhe.documento.protheusErro && (
+                        <div className="mt-2">
+                          <span className="text-gray-500 text-xs">Último erro:</span>
+                          <pre className="mt-1 bg-red-50 border border-red-200 rounded p-2 text-xs text-red-800 whitespace-pre-wrap break-all">
+                            {detalhe.documento.protheusErro}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {detalhe.eventos.length > 0 && (
                     <div>

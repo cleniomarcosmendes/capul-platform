@@ -24,6 +24,7 @@ import { CteEnriquecimentoService } from './distribuicao/cte-enriquecimento.serv
 import { PapelDetectorService } from './distribuicao/papel-detector.service.js';
 import { CteDocumentoService } from './distribuicao/cte-documento.service.js';
 import { SincronizacaoFiliaisService } from './distribuicao/sincronizacao-filiais.service.js';
+import { CteLoteConsultaService } from './distribuicao/cte-lote-consulta.service.js';
 import { NotFoundException } from '@nestjs/common';
 
 @Controller('cte')
@@ -37,6 +38,7 @@ export class CteController {
     private readonly papelDetector: PapelDetectorService,
     private readonly documento: CteDocumentoService,
     private readonly sincronizacao: SincronizacaoFiliaisService,
+    private readonly lote: CteLoteConsultaService,
   ) {}
 
   @Post('consulta')
@@ -196,6 +198,21 @@ export class CteController {
   }
 
   /**
+   * Reseta contador de tentativas + status PROTHEUS_DESISTIU pra forçar
+   * nova tentativa de gravação no Protheus. Usar quando operador resolveu
+   * causa raiz (ex: religou Protheus, corrigiu XML inválido).
+   *
+   * Query opcional `apenasDesistidos=false` reseta tambem FALHA_TECNICA
+   * (não-terminal). Default true: só os PROTHEUS_DESISTIU.
+   */
+  @Post('distribuicao/resetar-tentativas-protheus')
+  @RoleMinima('ADMIN_TI')
+  async resetarTentativasProtheus(@Query('apenasDesistidos') apenasDesistidos?: string) {
+    const apenas = apenasDesistidos !== 'false';
+    return this.enriquecimento.resetarTentativasProtheus({ apenasDesistidos: apenas });
+  }
+
+  /**
    * Lista CT-es recebidos via distNSU — Fase 3 frontend.
    *
    * Query params (todos opcionais):
@@ -231,6 +248,34 @@ export class CteController {
       schema,
       ambiente: ambiente ? Number(ambiente) : undefined,
       cnpjConsulente,
+      dataInicio: dataInicio ? new Date(dataInicio) : undefined,
+      dataFim: dataFim ? new Date(dataFim) : undefined,
+    });
+  }
+
+  /**
+   * Histórico de execuções do scheduler/manual — `cte_lote_consulta`.
+   * Útil pra debug operacional ("o que rodou ontem 14h?", "por que iter=0?").
+   *
+   * Query params: page, limit, status, origem, ambiente, dataInicio, dataFim.
+   */
+  @Get('lotes')
+  @RoleMinima('GESTOR_FISCAL')
+  async listarLotes(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('origem') origem?: string,
+    @Query('ambiente') ambiente?: string,
+    @Query('dataInicio') dataInicio?: string,
+    @Query('dataFim') dataFim?: string,
+  ) {
+    return this.lote.listarPaginado({
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      status,
+      origem,
+      ambiente: ambiente ? Number(ambiente) : undefined,
       dataInicio: dataInicio ? new Date(dataInicio) : undefined,
       dataFim: dataFim ? new Date(dataFim) : undefined,
     });

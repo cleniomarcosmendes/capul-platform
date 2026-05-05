@@ -87,4 +87,44 @@ export class CteLoteConsultaService {
       take: limit,
     });
   }
+
+  /**
+   * Listagem paginada — usada pela aba "Histórico" do Controle Operacional.
+   * Filtros opcionais: status, origem, ambiente, range de iniciadoEm.
+   */
+  async listarPaginado(filtros: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    origem?: string;
+    ambiente?: number;
+    dataInicio?: Date;
+    dataFim?: Date;
+  }) {
+    const page = Math.max(1, filtros.page ?? 1);
+    const limit = Math.min(100, Math.max(1, filtros.limit ?? 20));
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (filtros.status) where.status = filtros.status;
+    if (filtros.origem) where.origem = filtros.origem;
+    if (filtros.ambiente === 1 || filtros.ambiente === 2) where.ambiente = filtros.ambiente;
+    if (filtros.dataInicio || filtros.dataFim) {
+      where.iniciadoEm = {};
+      if (filtros.dataInicio) where.iniciadoEm.gte = filtros.dataInicio;
+      if (filtros.dataFim) where.iniciadoEm.lte = filtros.dataFim;
+    }
+
+    const [total, items] = await Promise.all([
+      this.prisma.client.cteLoteConsulta.count({ where }),
+      this.prisma.client.cteLoteConsulta.findMany({
+        where,
+        orderBy: { iniciadoEm: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
 }

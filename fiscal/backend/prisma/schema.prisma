@@ -652,9 +652,12 @@ model CteDocumento {
   // protheusGravadoEm IS NULL = nunca foi tentado.
   // protheusStatus contém GRAVADO / JA_EXISTIA / FALHA_TECNICA (TentativaGravacaoResult.gravacao).
   // protheusErro guarda código+mensagem se FALHA_TECNICA — pra retentativa futura.
-  protheusGravadoEm DateTime?  @map("protheus_gravado_em")
-  protheusStatus    String?    @map("protheus_status") @db.VarChar(20)
-  protheusErro      String?    @map("protheus_erro")
+  protheusGravadoEm  DateTime?  @map("protheus_gravado_em")
+  protheusStatus     String?    @map("protheus_status") @db.VarChar(20)
+  protheusErro       String?    @map("protheus_erro")
+  // Tentativas acumuladas pra retry exponencial. Após MAX_TENTATIVAS,
+  // status vira PROTHEUS_DESISTIU (terminal). Endpoint admin reseta.
+  protheusTentativas Int        @default(0) @map("protheus_tentativas")
 
   // CT-e referencia NF-es transportadas via <infDoc><infNFe><chave>.
   // Fase 3 extrai essas chaves; por ora coluna fica NULL.

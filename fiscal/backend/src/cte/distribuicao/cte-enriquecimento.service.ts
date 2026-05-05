@@ -26,6 +26,14 @@ export interface ResultadoEnriquecimento {
 const BATCH_SIZE = 100;
 
 /**
+ * Limite de tentativas de gravação Protheus por documento. Após N falhas,
+ * status vira `PROTHEUS_DESISTIU` (terminal — sai da fila de retry).
+ * Operador reseta via endpoint admin se quiser nova tentativa após
+ * resolver causa raiz (ex: corrigir XML inválido, religar Protheus).
+ */
+const MAX_TENTATIVAS_PROTHEUS = 5;
+
+/**
  * Cron de enriquecimento de `cte_documento`. Faz 2 coisas em sequência:
  *
  *   1. **Enriquecer** — varre `processado_em IS NULL`, aplica
@@ -119,13 +127,17 @@ export class CteEnriquecimentoService {
     if (protheusAtivo) {
       while (true) {
         // Candidatos: já enriquecidos (papel_capul preenchido), schema documento
-        // (não evento), ainda não gravados no Protheus.
+        // (não evento), ainda não gravados no Protheus, tentativas abaixo do limite
+        // (PROTHEUS_DESISTIU é terminal e fica fora da fila).
         const lote = await this.prisma.client.cteDocumento.findMany({
           where: {
             processadoEm: { not: null },
             papelCapul: { not: null },
             protheusGravadoEm: null,
             schema: { in: ['procCTe', 'procCTeSimp'] },
+            protheusTentativas: { lt: MAX_TENTATIVAS_PROTHEUS },
+            // Exclui status terminal (caso já tenha desistido)
+            NOT: { protheusStatus: 'PROTHEUS_DESISTIU' },
           },
           orderBy: { id: 'asc' },
           take: BATCH_SIZE,
@@ -273,18 +285,63 @@ export class CteEnriquecimentoService {
       usuarioEmail: 'sistema:cte-enriquecimento',
     });
 
-    // Persiste resultado
+    const sucesso = r.gravacao === 'GRAVADO' || r.gravacao === 'JA_EXISTIA';
+    const novasTentativas = doc.protheusTentativas + 1;
+    const desistir = !sucesso && novasTentativas >= MAX_TENTATIVAS_PROTHEUS;
+
+    // Persiste resultado + contador. Se atingiu MAX, marca status terminal
+    // PROTHEUS_DESISTIU pra sair da fila de retry e exigir intervenção do
+    // operador (que reseta via endpoint admin).
     await this.prisma.client.cteDocumento.update({
       where: { id: doc.id },
       data: {
-        protheusGravadoEm: r.gravacao === 'GRAVADO' || r.gravacao === 'JA_EXISTIA' ? new Date() : null,
-        protheusStatus: r.gravacao,
-        protheusErro: r.gravacaoErro,
+        protheusGravadoEm: sucesso ? new Date() : null,
+        protheusStatus: desistir ? 'PROTHEUS_DESISTIU' : r.gravacao,
+        protheusErro: desistir
+          ? `Desistido após ${novasTentativas} tentativas. Última: ${r.gravacaoErro ?? '(sem detalhe)'}`
+          : r.gravacaoErro,
+        protheusTentativas: novasTentativas,
       },
     });
 
     if (r.gravacao === 'GRAVADO') acc.protheusGravados++;
     else if (r.gravacao === 'JA_EXISTIA') acc.protheusJaExistia++;
     else acc.protheusFalhas++;
+
+    if (desistir) {
+      this.logger.warn(
+        `Doc id=${doc.id} chave=${doc.chave.slice(0, 8)}… atingiu MAX_TENTATIVAS_PROTHEUS (${MAX_TENTATIVAS_PROTHEUS}) — marcado PROTHEUS_DESISTIU. Reset via endpoint admin pra retentar após resolver causa raiz.`,
+      );
+    }
+  }
+
+  /**
+   * Reseta contador de tentativas + status pra forçar nova tentativa
+   * de gravação no Protheus. Usado quando operador resolveu causa raiz
+   * (ex: religou Protheus, corrigiu XML inválido) e quer reprocessar
+   * documentos PROTHEUS_DESISTIU.
+   *
+   * Modo `apenasDesistidos=true` (default): só reseta os que estão em
+   * status PROTHEUS_DESISTIU. False: reseta tudo com FALHA_TECNICA também.
+   */
+  async resetarTentativasProtheus(opts: { apenasDesistidos?: boolean } = {}): Promise<{ resetados: number }> {
+    const apenasDesistidos = opts.apenasDesistidos ?? true;
+    const r = await this.prisma.client.cteDocumento.updateMany({
+      where: {
+        protheusGravadoEm: null,
+        protheusStatus: apenasDesistidos
+          ? 'PROTHEUS_DESISTIU'
+          : { in: ['PROTHEUS_DESISTIU', 'FALHA_TECNICA'] },
+      },
+      data: {
+        protheusTentativas: 0,
+        protheusStatus: null,
+        protheusErro: null,
+      },
+    });
+    this.logger.log(
+      `Reset Protheus: ${r.count} documentos voltaram pra fila de retry (apenasDesistidos=${apenasDesistidos})`,
+    );
+    return { resetados: r.count };
   }
 }
