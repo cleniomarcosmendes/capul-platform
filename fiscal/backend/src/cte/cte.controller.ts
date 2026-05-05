@@ -22,6 +22,8 @@ import { DacteGeneratorService } from './pdf/dacte-generator.service.js';
 import { DistribuicaoNsuService } from './distribuicao/distribuicao-nsu.service.js';
 import { CteEnriquecimentoService } from './distribuicao/cte-enriquecimento.service.js';
 import { PapelDetectorService } from './distribuicao/papel-detector.service.js';
+import { CteDocumentoService } from './distribuicao/cte-documento.service.js';
+import { NotFoundException } from '@nestjs/common';
 
 @Controller('cte')
 @UseGuards(JwtAuthGuard, FiscalGuard, RolesGuard)
@@ -32,6 +34,7 @@ export class CteController {
     private readonly distribuicao: DistribuicaoNsuService,
     private readonly enriquecimento: CteEnriquecimentoService,
     private readonly papelDetector: PapelDetectorService,
+    private readonly documento: CteDocumentoService,
   ) {}
 
   @Post('consulta')
@@ -184,5 +187,59 @@ export class CteController {
   async recarregarCnpjsCapul() {
     const total = await this.papelDetector.atualizarCacheCnpjs();
     return { ok: true, totalCnpjsCapul: total };
+  }
+
+  /**
+   * Lista CT-es recebidos via distNSU — Fase 3 frontend.
+   *
+   * Query params (todos opcionais):
+   *   page, limit (default 1, 20 — máx 100)
+   *   search        - chave parcial
+   *   papel         - DEST/TOMA/REM/EXPED/RECEB/AUTXML/TERCEIRO
+   *   schema        - procCTe/procCTeSimp/resCTe/...
+   *   ambiente      - 1 (PROD) ou 2 (HOM)
+   *   cnpjConsulente - CNPJ Capul que recebeu (matriz/filial)
+   *   dataInicio, dataFim - range de dh_emi (ISO 8601)
+   *
+   * Retorno: { items, total, page, limit, totalPages }.
+   * Sumário leve — XML completo via /cte/recebidos/:id.
+   */
+  @Get('recebidos')
+  @RoleMinima('OPERADOR_ENTRADA')
+  async listarRecebidos(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('papel') papel?: string,
+    @Query('schema') schema?: string,
+    @Query('ambiente') ambiente?: string,
+    @Query('cnpjConsulente') cnpjConsulente?: string,
+    @Query('dataInicio') dataInicio?: string,
+    @Query('dataFim') dataFim?: string,
+  ) {
+    return this.documento.listarPaginado({
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      search,
+      papel,
+      schema,
+      ambiente: ambiente ? Number(ambiente) : undefined,
+      cnpjConsulente,
+      dataInicio: dataInicio ? new Date(dataInicio) : undefined,
+      dataFim: dataFim ? new Date(dataFim) : undefined,
+    });
+  }
+
+  /**
+   * Detalhe de 1 CT-e recebido — inclui XML completo + eventos vinculados.
+   */
+  @Get('recebidos/:id')
+  @RoleMinima('OPERADOR_ENTRADA')
+  async detalheRecebido(@Param('id') id: string) {
+    const idNum = Number(id);
+    if (isNaN(idNum)) throw new NotFoundException('ID inválido');
+    const r = await this.documento.detalhe(idNum);
+    if (!r) throw new NotFoundException('CT-e não encontrado');
+    return r;
   }
 }

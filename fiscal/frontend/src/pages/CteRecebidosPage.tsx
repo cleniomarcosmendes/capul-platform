@@ -1,0 +1,522 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  FileText,
+  Filter,
+  RefreshCw,
+  Search,
+  X,
+} from 'lucide-react';
+import { fiscalApi } from '../services/api';
+import { PageWrapper } from '../components/PageWrapper';
+import { Badge } from '../components/Badge';
+import { Button } from '../components/Button';
+import { useToast } from '../components/Toast';
+import { useAuth } from '../contexts/AuthContext';
+import { extractApiError } from '../utils/errors';
+import { fmtChaveMascara } from '../utils/format';
+
+type PapelCapul = 'DEST' | 'TOMA' | 'REM' | 'EXPED' | 'RECEB' | 'AUTXML' | 'TERCEIRO';
+type SchemaCte = 'procCTe' | 'procCTeSimp' | 'resCTe' | 'procEventoCTe' | 'resEventoCTe' | 'DESCONHECIDO';
+
+interface CteDocumentoListItem {
+  id: number;
+  cnpjConsulente: string;
+  ambiente: number;
+  nsu: string;
+  schema: SchemaCte;
+  chave: string | null;
+  modelo: number | null;
+  dhEmi: string | null;
+  papelCapul: PapelCapul | null;
+  xmlBytes: number;
+  recebidoEm: string;
+  processadoEm: string | null;
+  erroParse: string | null;
+}
+
+interface ListResp {
+  items: CteDocumentoListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+interface CteEvento {
+  id: number;
+  chave: string;
+  idEvento: string;
+  tipoEvento: string;
+  tpEventoNum: number;
+  nSeqEvento: number;
+  dhEvento: string;
+  cStat: string;
+  xMotivo: string;
+  protocolo: string | null;
+}
+
+interface DetalheResp {
+  documento: CteDocumentoListItem & { xml: string; xmlSha256: string };
+  eventos: CteEvento[];
+}
+
+const PAPEL_OPTIONS: { v: '' | PapelCapul; l: string; cor: string }[] = [
+  { v: '', l: 'Todos', cor: '' },
+  { v: 'TOMA', l: 'Tomador', cor: 'bg-blue-100 text-blue-800' },
+  { v: 'DEST', l: 'Destinatário', cor: 'bg-green-100 text-green-800' },
+  { v: 'REM', l: 'Remetente', cor: 'bg-amber-100 text-amber-800' },
+  { v: 'EXPED', l: 'Expedidor', cor: 'bg-purple-100 text-purple-800' },
+  { v: 'RECEB', l: 'Recebedor', cor: 'bg-cyan-100 text-cyan-800' },
+  { v: 'AUTXML', l: 'Aut. XML', cor: 'bg-gray-100 text-gray-800' },
+  { v: 'TERCEIRO', l: 'Terceiro', cor: 'bg-slate-100 text-slate-700' },
+];
+
+const SCHEMA_OPTIONS: { v: '' | SchemaCte; l: string }[] = [
+  { v: '', l: 'Todos' },
+  { v: 'procCTe', l: 'CT-e completo' },
+  { v: 'procCTeSimp', l: 'CT-e simplificado' },
+  { v: 'resCTe', l: 'Resumo CT-e' },
+  { v: 'procEventoCTe', l: 'Evento (completo)' },
+  { v: 'resEventoCTe', l: 'Evento (resumo)' },
+  { v: 'DESCONHECIDO', l: '⚠️ Desconhecido' },
+];
+
+const PAGE_SIZE = 20;
+
+export function CteRecebidosPage() {
+  const toast = useToast();
+  const { usuario } = useAuth();
+  const isAdmin = useMemo(
+    () => usuario?.modulos?.some((m) => m.codigo === 'FISCAL' && m.role === 'ADMIN_TI'),
+    [usuario],
+  );
+
+  const [items, setItems] = useState<CteDocumentoListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+
+  // Filtros
+  const [search, setSearch] = useState('');
+  const [papel, setPapel] = useState<'' | PapelCapul>('');
+  const [schema, setSchema] = useState<'' | SchemaCte>('');
+  const [ambiente, setAmbiente] = useState<'' | '1' | '2'>('');
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
+
+  // Modal detalhe
+  const [detalhe, setDetalhe] = useState<DetalheResp | null>(null);
+  const [carregandoDetalhe, setCarregandoDetalhe] = useState(false);
+
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params: Record<string, string> = {
+        page: String(page),
+        limit: String(PAGE_SIZE),
+      };
+      if (search) params.search = search.replace(/\D/g, '');
+      if (papel) params.papel = papel;
+      if (schema) params.schema = schema;
+      if (ambiente) params.ambiente = ambiente;
+      if (dataInicio) params.dataInicio = new Date(dataInicio).toISOString();
+      if (dataFim) {
+        const fim = new Date(dataFim);
+        fim.setHours(23, 59, 59, 999);
+        params.dataFim = fim.toISOString();
+      }
+      const r = await fiscalApi.get<ListResp>('/cte/recebidos', { params });
+      setItems(r.data.items);
+      setTotal(r.data.total);
+      setTotalPages(r.data.totalPages);
+    } catch (err) {
+      toast.error('Erro ao carregar CT-es', extractApiError(err) ?? undefined);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, search, papel, schema, ambiente, dataInicio, dataFim, toast]);
+
+  useEffect(() => {
+    void carregar();
+  }, [carregar]);
+
+  const limparFiltros = () => {
+    setSearch('');
+    setPapel('');
+    setSchema('');
+    setAmbiente('');
+    setDataInicio('');
+    setDataFim('');
+    setPage(1);
+  };
+
+  const aplicarFiltros = () => {
+    setPage(1);
+    void carregar();
+  };
+
+  const abrirDetalhe = async (id: number) => {
+    setCarregandoDetalhe(true);
+    setDetalhe(null);
+    try {
+      const r = await fiscalApi.get<DetalheResp>(`/cte/recebidos/${id}`);
+      setDetalhe(r.data);
+    } catch (err) {
+      toast.error('Erro ao abrir detalhe', extractApiError(err) ?? undefined);
+    } finally {
+      setCarregandoDetalhe(false);
+    }
+  };
+
+  const enriquecer = async () => {
+    setLoading(true);
+    try {
+      const r = await fiscalApi.post<{
+        varridos: number;
+        enriquecidos: number;
+        comAnomalia: number;
+      }>('/cte/distribuicao/enriquecer');
+      toast.success(
+        'Enriquecimento concluído',
+        `${r.data.varridos} varridos, ${r.data.enriquecidos} atualizados${
+          r.data.comAnomalia > 0 ? `, ${r.data.comAnomalia} anomalias` : ''
+        }`,
+      );
+      void carregar();
+    } catch (err) {
+      toast.error('Erro ao enriquecer', extractApiError(err) ?? undefined);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <PageWrapper title="Consulta CT-e — Recebidos">
+      <div className="space-y-4">
+        {/* Header com info + ações */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="text-sm text-gray-600">
+            <p>
+              CT-es recebidos via SEFAZ Distribuição (modo distNSU). Capul é{' '}
+              <strong>tomadora/destinatária</strong> — não emite CT-e. Documentos chegam
+              automaticamente conforme transportadoras emitem contra a Capul.
+            </p>
+            <p className="mt-1">
+              <Link
+                to="/cte/consulta-por-chave"
+                className="text-blue-600 hover:underline inline-flex items-center gap-1"
+              >
+                Consulta por chave (limitada — Nacional não suporta)
+                <ExternalLink size={14} />
+              </Link>
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {isAdmin && (
+              <Button variant="ghost" onClick={enriquecer} disabled={loading}>
+                <RefreshCw size={16} className="mr-1" />
+                Enriquecer pendentes
+              </Button>
+            )}
+            <Button variant="ghost" onClick={() => carregar()} disabled={loading}>
+              <RefreshCw size={16} />
+            </Button>
+          </div>
+        </div>
+
+        {/* Filtros */}
+        <div className="bg-white border rounded-lg p-4 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <Filter size={16} />
+            Filtros
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Chave (parcial)</label>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Ex: 31250500..."
+                className="w-full px-3 py-1.5 border rounded text-sm"
+                onKeyDown={(e) => e.key === 'Enter' && aplicarFiltros()}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Papel da Capul</label>
+              <select
+                value={papel}
+                onChange={(e) => setPapel(e.target.value as any)}
+                className="w-full px-3 py-1.5 border rounded text-sm"
+              >
+                {PAPEL_OPTIONS.map((p) => (
+                  <option key={p.v} value={p.v}>
+                    {p.l}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Tipo de documento</label>
+              <select
+                value={schema}
+                onChange={(e) => setSchema(e.target.value as any)}
+                className="w-full px-3 py-1.5 border rounded text-sm"
+              >
+                {SCHEMA_OPTIONS.map((s) => (
+                  <option key={s.v} value={s.v}>
+                    {s.l}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Ambiente</label>
+              <select
+                value={ambiente}
+                onChange={(e) => setAmbiente(e.target.value as any)}
+                className="w-full px-3 py-1.5 border rounded text-sm"
+              >
+                <option value="">Todos</option>
+                <option value="1">Produção</option>
+                <option value="2">Homologação</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Emissão (de)</label>
+              <input
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+                className="w-full px-3 py-1.5 border rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Emissão (até)</label>
+              <input
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+                className="w-full px-3 py-1.5 border rounded text-sm"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-2 border-t">
+            <Button onClick={aplicarFiltros} disabled={loading}>
+              <Search size={16} className="mr-1" />
+              Aplicar
+            </Button>
+            <Button variant="ghost" onClick={limparFiltros} disabled={loading}>
+              Limpar
+            </Button>
+          </div>
+        </div>
+
+        {/* Tabela */}
+        <div className="bg-white border rounded-lg overflow-hidden">
+          <div className="px-4 py-2 text-sm text-gray-600 border-b flex justify-between">
+            <span>
+              {total} resultado(s) — página {page} de {Math.max(totalPages, 1)}
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-gray-700 text-xs uppercase">
+                <tr>
+                  <th className="px-3 py-2 text-left">Chave</th>
+                  <th className="px-3 py-2 text-left">Tipo</th>
+                  <th className="px-3 py-2 text-left">Papel Capul</th>
+                  <th className="px-3 py-2 text-left">dh Emissão</th>
+                  <th className="px-3 py-2 text-left">CNPJ Consulente</th>
+                  <th className="px-3 py-2 text-left">NSU</th>
+                  <th className="px-3 py-2 text-left">Ambiente</th>
+                  <th className="px-3 py-2 text-left">Recebido em</th>
+                  <th className="px-3 py-2 text-right">Tamanho</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {loading && items.length === 0 && (
+                  <tr>
+                    <td colSpan={10} className="px-3 py-8 text-center text-gray-500">
+                      Carregando...
+                    </td>
+                  </tr>
+                )}
+                {!loading && items.length === 0 && (
+                  <tr>
+                    <td colSpan={10} className="px-3 py-8 text-center text-gray-500">
+                      Nenhum CT-e encontrado.
+                    </td>
+                  </tr>
+                )}
+                {items.map((it) => {
+                  const papelOpt = PAPEL_OPTIONS.find((p) => p.v === it.papelCapul);
+                  return (
+                    <tr key={it.id} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 font-mono text-xs">
+                        {it.chave ? fmtChaveMascara(it.chave) : <span className="text-gray-400">—</span>}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="text-xs px-2 py-0.5 bg-gray-100 rounded">{it.schema}</span>
+                      </td>
+                      <td className="px-3 py-2">
+                        {it.papelCapul ? (
+                          <span className={`text-xs px-2 py-0.5 rounded ${papelOpt?.cor ?? 'bg-gray-100'}`}>
+                            {papelOpt?.l ?? it.papelCapul}
+                          </span>
+                        ) : it.processadoEm ? (
+                          <span className="text-xs text-gray-400">sem papel</span>
+                        ) : (
+                          <span className="text-xs text-amber-600">aguardando enriquec.</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        {it.dhEmi ? new Date(it.dhEmi).toLocaleString('pt-BR') : '—'}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs">{it.cnpjConsulente}</td>
+                      <td className="px-3 py-2 font-mono text-xs">{it.nsu}</td>
+                      <td className="px-3 py-2">
+                        <Badge variant={it.ambiente === 1 ? 'red' : 'blue'}>
+                          {it.ambiente === 1 ? 'PROD' : 'HOM'}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        {new Date(it.recebidoEm).toLocaleString('pt-BR')}
+                      </td>
+                      <td className="px-3 py-2 text-right text-xs">
+                        {(it.xmlBytes / 1024).toFixed(1)} KB
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <Button
+                          variant="ghost"
+                          onClick={() => abrirDetalhe(it.id)}
+                          disabled={carregandoDetalhe}
+                        >
+                          <FileText size={14} />
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {totalPages > 1 && (
+            <div className="px-4 py-2 border-t flex items-center justify-end gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1 || loading}
+              >
+                <ChevronLeft size={16} />
+              </Button>
+              <span className="text-sm">
+                {page} / {totalPages}
+              </span>
+              <Button
+                variant="ghost"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages || loading}
+              >
+                <ChevronRight size={16} />
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modal detalhe */}
+      {(carregandoDetalhe || detalhe) && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={() => setDetalhe(null)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 border-b flex items-center justify-between">
+              <h3 className="font-semibold">CT-e — Detalhe</h3>
+              <button onClick={() => setDetalhe(null)} className="text-gray-500 hover:text-gray-800">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {carregandoDetalhe && <p className="text-gray-500">Carregando...</p>}
+              {detalhe && (
+                <>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <span className="text-gray-500">Chave:</span>
+                      <div className="font-mono text-xs">
+                        {detalhe.documento.chave
+                          ? fmtChaveMascara(detalhe.documento.chave)
+                          : '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Schema:</span> {detalhe.documento.schema}
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Papel Capul:</span>{' '}
+                      {detalhe.documento.papelCapul ?? <span className="text-gray-400">—</span>}
+                    </div>
+                    <div>
+                      <span className="text-gray-500">CNPJ Consulente:</span>{' '}
+                      <span className="font-mono">{detalhe.documento.cnpjConsulente}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">NSU:</span>{' '}
+                      <span className="font-mono">{detalhe.documento.nsu}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">SHA-256:</span>{' '}
+                      <span className="font-mono text-xs">{detalhe.documento.xmlSha256.slice(0, 16)}…</span>
+                    </div>
+                  </div>
+
+                  {detalhe.eventos.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-sm mb-2">Eventos vinculados ({detalhe.eventos.length})</h4>
+                      <div className="border rounded divide-y">
+                        {detalhe.eventos.map((ev) => (
+                          <div key={ev.id} className="p-2 text-xs">
+                            <div className="flex justify-between">
+                              <span className="font-medium">
+                                {ev.tipoEvento} (tp={ev.tpEventoNum})
+                              </span>
+                              <span className="text-gray-500">
+                                {new Date(ev.dhEvento).toLocaleString('pt-BR')}
+                              </span>
+                            </div>
+                            <div className="text-gray-600">
+                              cStat={ev.cStat} • {ev.xMotivo}
+                              {ev.protocolo && ` • protocolo=${ev.protocolo}`}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <h4 className="font-medium text-sm mb-2">XML completo</h4>
+                    <pre className="bg-gray-50 border rounded p-3 text-xs overflow-x-auto max-h-96">
+                      {detalhe.documento.xml}
+                    </pre>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </PageWrapper>
+  );
+}

@@ -27,6 +27,8 @@ const menuItems: MenuItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/', minRole: 'GESTOR_FISCAL' },
   { section: 'CONSULTAS' },
   { label: 'Consulta NF-e', icon: FileText, path: '/nfe' },
+  // /cte aponta para CteRecebidosPage (listagem dos CT-es baixados via distNSU).
+  // /cte/consulta-por-chave fica como rota secundaria (limitada pelo Nacional).
   { label: 'Consulta CT-e', icon: Truck, path: '/cte' },
   { label: 'Consulta Cadastral', icon: UserSearch, path: '/cadastro' },
   { section: 'CRUZAMENTO', minRole: 'GESTOR_FISCAL' },

@@ -373,4 +373,92 @@ export class CteDocumentoService {
     const d = new Date(dateStr);
     return isNaN(d.getTime()) ? null : d;
   }
+
+  // ============================================================
+  // Listagem paginada — Fase 3 frontend
+  // ============================================================
+
+  /**
+   * Lista CT-es persistidos com paginação + filtros. Sumário leve por linha
+   * (não inclui XML completo — endpoint dedicado pra isso).
+   *
+   * Filtros opcionais:
+   * - search: chave parcial (ILIKE %search%)
+   * - papel: PapelCapul exato
+   * - schema: SchemaCte exato
+   * - ambiente: 1 ou 2
+   * - cnpjConsulente: CNPJ exato (14 dígitos)
+   * - dataInicio / dataFim: filtra por dh_emi (range)
+   */
+  async listarPaginado(filtros: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    papel?: string;
+    schema?: string;
+    ambiente?: number;
+    cnpjConsulente?: string;
+    dataInicio?: Date;
+    dataFim?: Date;
+  }) {
+    const page = Math.max(1, filtros.page ?? 1);
+    const limit = Math.min(100, Math.max(1, filtros.limit ?? 20));
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (filtros.search) where.chave = { contains: filtros.search.replace(/\D/g, '') };
+    if (filtros.papel) where.papelCapul = filtros.papel;
+    if (filtros.schema) where.schema = filtros.schema;
+    if (filtros.ambiente === 1 || filtros.ambiente === 2) where.ambiente = filtros.ambiente;
+    if (filtros.cnpjConsulente) where.cnpjConsulente = filtros.cnpjConsulente.replace(/\D/g, '');
+    if (filtros.dataInicio || filtros.dataFim) {
+      where.dhEmi = {};
+      if (filtros.dataInicio) where.dhEmi.gte = filtros.dataInicio;
+      if (filtros.dataFim) where.dhEmi.lte = filtros.dataFim;
+    }
+
+    const [total, items] = await Promise.all([
+      this.prisma.client.cteDocumento.count({ where }),
+      this.prisma.client.cteDocumento.findMany({
+        where,
+        select: {
+          id: true,
+          cnpjConsulente: true,
+          ambiente: true,
+          nsu: true,
+          schema: true,
+          chave: true,
+          modelo: true,
+          dhEmi: true,
+          papelCapul: true,
+          xmlBytes: true,
+          recebidoEm: true,
+          processadoEm: true,
+          erroParse: true,
+        },
+        orderBy: [{ recebidoEm: 'desc' }, { id: 'desc' }],
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  /**
+   * Detalhe de 1 CT-e — inclui XML completo + eventos relacionados (FK).
+   */
+  async detalhe(id: number) {
+    const documento = await this.prisma.client.cteDocumento.findUnique({
+      where: { id },
+    });
+    if (!documento) return null;
+    const eventos = documento.chave
+      ? await this.prisma.client.cteEvento.findMany({
+          where: { OR: [{ documentoId: id }, { chave: documento.chave }] },
+          orderBy: { dhEvento: 'asc' },
+        })
+      : [];
+    return { documento, eventos };
+  }
 }

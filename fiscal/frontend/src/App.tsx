@@ -7,6 +7,7 @@ import { MainLayout } from './layouts/MainLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { NfeConsultaPage } from './pages/NfeConsultaPage';
 import { CteConsultaPage } from './pages/CteConsultaPage';
+import { CteRecebidosPage } from './pages/CteRecebidosPage';
 import { CadastroConsultaPage } from './pages/CadastroConsultaPage';
 import { ExecucoesListPage } from './pages/ExecucoesListPage';
 import { ExecucaoDetalhePage } from './pages/ExecucaoDetalhePage';
@@ -91,7 +92,8 @@ function App() {
               }
             />
             <Route path="nfe" element={<NfeConsultaPage />} />
-            <Route path="cte" element={<CteConsultaPage />} />
+            <Route path="cte" element={<CteRecebidosPage />} />
+            <Route path="cte/consulta-por-chave" element={<CteConsultaPage />} />
             <Route path="cadastro" element={<CadastroConsultaPage />} />
             <Route
               path="execucoes"
