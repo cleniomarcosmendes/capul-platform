@@ -167,6 +167,66 @@ extras + 4 pendências menores). Tudo testado tecnicamente, mas com:
 **Por quê está aqui:** validação técnica completa. Próximo gate é uso real.
 Item não codável até dados reais aparecerem.
 
+### ⏳ 2026-05-05 — Otimizar `chown -R /app` nos Dockerfiles Node (deploy ~1h → ~45min)
+
+**Contexto:** Douglas/Marco reportaram em 05/05/2026 que o build Docker do
+deploy está demorando ~1h. Em análise visual (screenshot do `docker compose
+build`), o gargalo é o layer:
+
+```dockerfile
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
+    && chown -R appuser:appgroup /app
+```
+
+Tempos observados na imagem do Douglas:
+- `auth-migrate stage-1`: **173.5s** (~3min)
+- `fiscal-backend runtime`: **169.1s** (~3min)
+- `gestao-ti-migrate stage-1`: **117.9s** (~2min)
+
+São 6 builds (3 backends Node + 3 init-migrate que usam mesma imagem) =
+~12-15min só nesse layer.
+
+**Causa raiz:** `chown -R /app` percorre o `node_modules` recursivamente
+(~80-150k arquivos por backend NestJS). Cada arquivo = 1 syscall `chown()`.
+No filesystem overlay2 do Docker, cada chown vira copy-on-write (duplica
+inode no layer), inflando tempo + tamanho da imagem.
+
+**Solução (padrão idiomático Docker):**
+
+```dockerfile
+# 1. Cria user/group ANTES do COPY
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+WORKDIR /app
+
+# 2. COPY com --chown — owner já fica correto na cópia
+COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
+COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
+COPY --from=builder --chown=appuser:appgroup /app/package.json ./
+COPY --from=builder --chown=appuser:appgroup /app/prisma ./prisma
+
+USER appuser
+```
+
+**Ganho estimado:** 170s/imagem → 10-20s/imagem. Total: **12-15min →
+1-2min** no deploy. Imagens também ficam menores (sem layer de chown
+duplicado).
+
+**Riscos:** primeiro deploy invalida cache (rebuild completo, ~1h),
+depois melhora pra sempre. Comportamento idêntico (appuser dono dos
+arquivos). Reversível.
+
+**Onde alterar:**
+- `auth-gateway/Dockerfile`
+- `gestao-ti/backend/Dockerfile`
+- `fiscal/backend/Dockerfile`
+
+**Pré-requisito:** validar com Douglas em janela de manutenção
+(primeiro build completo é lento). Diagnóstico técnico completo
+em `C:\Arquivos-de-projeto\PlatformCapul_20260505_Diagnostico_BuildLento.md`.
+
+**Esforço:** ~20min de implementação + 1 deploy lento de transição.
+**Impacto:** todo deploy futuro ~10-13min mais rápido.
+
 ### ⏳ 2026-04-25 — Bubbles estilo WhatsApp na interação de equipes (Chamado e Projeto)
 
 **Status (29/04/2026):** ✅ aplicado em **Chamado** (`ChatBubbleList` em `gestao-ti/frontend/src/components/`). Pendente em **Projeto** porque o shape de `ComentarioTarefa` é diferente (`texto`/`visivelPendencia`, sem `tipo`, operação de remover) — adaptar o componente exigiria abstração extra que não vale agora. Fica como item separado do backlog para sessão dedicada.
