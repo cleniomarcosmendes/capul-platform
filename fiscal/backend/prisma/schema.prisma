@@ -459,6 +459,10 @@ enum AmbienteSefaz {
   @@schema("fiscal")
 }
 
+/// Configuração singleton (id=1) do módulo fiscal.
+/// Centraliza estado operacional: ambiente SEFAZ global (NF-e/Cadastro),
+/// freio de mão, crons de cruzamento, e — desde 05/05/2026 — controle
+/// específico do CT-e Distribuição (ativo + ambiente próprio).
 model AmbienteConfig {
   id                         Int           @id @default(1)
   ambienteAtivo              AmbienteSefaz @default(HOMOLOGACAO) @map("ambiente_ativo")
@@ -466,6 +470,13 @@ model AmbienteConfig {
   cronMovimentoMeioDia       String        @default("0 12 * * *") @map("cron_movimento_meio_dia")       // todo dia 12:00
   cronMovimentoManhaSeguinte String?       @map("cron_movimento_manha_seguinte") // NULL = desabilitado. 22/04/2026: janela semanal tornou 2ª corrida redundante.
   pauseSync                  Boolean       @default(false) @map("pause_sync") // freio de mão
+  // CT-e Distribuição — controle independente do NF-e (Plano v2.0 + decisão 05/05).
+  // Permite cenário "CT-e em HOM enquanto NF-e roda PROD" durante implantação.
+  // Substitui env var FISCAL_CTE_DISTRIBUICAO_ENABLED (removida no mesmo deploy).
+  cteDistribuicaoAtivo       Boolean       @default(false)         @map("cte_distribuicao_ativo")
+  cteDistribuicaoAmbiente    AmbienteSefaz @default(HOMOLOGACAO)  @map("cte_distribuicao_ambiente")
+  cteDistribuicaoAlteradoEm  DateTime?     @map("cte_distribuicao_alterado_em")
+  cteDistribuicaoAlteradoPor String?       @map("cte_distribuicao_alterado_por")
   ultimaAlteracaoEm          DateTime      @updatedAt @map("ultima_alteracao_em")
   ultimaAlteracaoPor         String?       @map("ultima_alteracao_por")
 

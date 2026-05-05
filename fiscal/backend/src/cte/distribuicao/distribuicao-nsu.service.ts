@@ -1,5 +1,4 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { CteDistribuicaoClient, type CteDocZip } from '../../sefaz/cte-distribuicao.client.js';
 import { SefazConsultaError } from '../../sefaz/nfe-distribuicao.client.js';
 import { LimiteDiarioService } from '../../limite-diario/limite-diario.service.js';
@@ -73,50 +72,23 @@ export class DistribuicaoNsuService {
     private readonly nsuControle: NsuControleService,
     private readonly limiteDiario: LimiteDiarioService,
     private readonly ambiente: AmbienteService,
-    private readonly config: ConfigService,
     private readonly documento: CteDocumentoService,
     private readonly lote: CteLoteConsultaService,
   ) {}
 
   /**
-   * Feature flag estrutural — controla se o serviço CT-e Distribuição pode
-   * efetivamente disparar consultas SEFAZ em ambiente PRODUCAO.
+   * Consulta a configuração do CT-e Distribuição em `fiscal.ambiente_config`
+   * — substitui a env var `FISCAL_CTE_DISTRIBUICAO_ENABLED` (removida em 05/05).
    *
-   * Default `false` por defesa: enquanto o módulo está em desenvolvimento
-   * (Fase 1+2 do PLANO_CTE_DISTRIBUICAO_v2.md), nenhuma chamada em PROD
-   * acontece sem ativação explícita do operador. Configurar via
-   * `FISCAL_CTE_DISTRIBUICAO_ENABLED=true` no `.env` quando alinhado com
-   * o setor fiscal e os scheduler/ingestão estiverem prontos.
-   *
-   * Em HOMOLOGACAO esta flag é IGNORADA — HOM sempre permite (ambiente
-   * de teste por design).
-   *
-   * Fase 2 promove esta flag para tela no Configurador (memory
-   * `feedback_funcionalidade_visivel_no_configurador.md`) — env var fica
-   * como fallback de bootstrap.
-   */
-  private isHabilitadoEmProd(): boolean {
-    return this.config.get<string>('FISCAL_CTE_DISTRIBUICAO_ENABLED') === 'true';
-  }
-
-  /**
-   * Resolve ambiente efetivo da consulta com possibilidade de override.
-   *
-   * - Sem `ambienteOverride`: usa `ambienteAtivo` do AmbienteConfig global
-   *   (comportamento normal — produção e scheduler).
-   * - Com `ambienteOverride='HOMOLOGACAO'`: força HOM mesmo se global=PROD.
-   *   ⚠️ TEMPORÁRIO — só usado pelo endpoint admin manual durante a Fase 1
-   *   de desenvolvimento (smoke test contra HOM SEFAZ enquanto o sistema
-   *   local está apontando pra PROD por estar sendo usado pelo setor fiscal
-   *   pra consultas reais). Remover quando ativação for normalizada e
-   *   serviço entrar em rotina.
+   * Estado é controlado pela aba "CT-e Distribuição" do Controle Operacional
+   * (ADMIN_TI). Ambiente é independente do global (`ambienteAtivo`) — permite
+   * cenário "CT-e em HOM enquanto NF-e roda PROD" durante implantação.
    */
   async consultarFilial(
     cnpjRaw: string,
     opts: {
       dryRun?: boolean;
       cUFAutor?: string;
-      ambienteOverride?: 'PRODUCAO' | 'HOMOLOGACAO';
       origem?: OrigemLote;
     } = {},
   ): Promise<ResultadoConsultaFilial> {
@@ -128,26 +100,19 @@ export class DistribuicaoNsuService {
     const dryRun = opts.dryRun ?? false;
     const inicio = Date.now();
 
-    // Resolve ambiente: override (admin manual) > global (cron + chamada normal)
-    const cfgAmb = await this.ambiente.getStatus();
-    const ambienteStr: 'PRODUCAO' | 'HOMOLOGACAO' = opts.ambienteOverride ?? cfgAmb.ambienteAtivo;
+    // Resolve config CT-e (ativo + ambiente próprio) da DB — independente do global.
+    const cfgCte = await this.ambiente.getCteDistribuicaoConfig();
+    const ambienteStr: 'PRODUCAO' | 'HOMOLOGACAO' = cfgCte.ambiente;
     const ambienteInt: 1 | 2 = ambienteStr === 'PRODUCAO' ? 1 : 2;
 
-    // Defesa: bloqueia execução em PROD enquanto FISCAL_CTE_DISTRIBUICAO_ENABLED!=true.
-    // HOM sempre passa.
-    if (ambienteStr === 'PRODUCAO' && !this.isHabilitadoEmProd()) {
+    // Gating: serviço deve estar ATIVO. Default false em PROD por defesa
+    // (operador liga via UI quando autorizar ativação real).
+    if (!cfgCte.ativo) {
       this.logger.warn(
-        `[CTeDist] BLOQUEADO POR FEATURE FLAG cnpj=${cnpj} ambiente=PRODUCAO. ` +
-        `Defina FISCAL_CTE_DISTRIBUICAO_ENABLED=true no .env quando autorizar ativação em PROD.`,
+        `[CTeDist] BLOQUEADO cnpj=${cnpj} — serviço CT-e Distribuição desativado em ambiente_config.cte_distribuicao_ativo. Ative na aba "CT-e Distribuição" do Controle Operacional (ADMIN_TI).`,
       );
       throw new ForbiddenException(
-        'Serviço CT-e Distribuição não ativado em PRODUÇÃO. Configurar FISCAL_CTE_DISTRIBUICAO_ENABLED=true ou usar ambienteOverride=HOMOLOGACAO no endpoint admin.',
-      );
-    }
-
-    if (opts.ambienteOverride) {
-      this.logger.warn(
-        `[CTeDist] ⚠️ AMBIENTE OVERRIDE em uso: forçado ${opts.ambienteOverride} (global=${cfgAmb.ambienteAtivo}). Mecanismo TEMPORÁRIO — só smoke test admin Fase 1.`,
+        'Serviço CT-e Distribuição desativado. Ative em /operacao/controle/cte-distribuicao (ADMIN_TI).',
       );
     }
 

@@ -44,8 +44,10 @@ export class SincronizacaoFiliaisService {
 
   async sincronizar(): Promise<ResultadoSincronizacao> {
     const inicio = Date.now();
-    const cfg = await this.ambiente.getStatus();
-    const ambienteStr: 'PRODUCAO' | 'HOMOLOGACAO' = cfg.ambienteAtivo;
+    // Usa o ambiente do CT-e (independente do global) — sincroniza cursores
+    // só pro ambiente onde o serviço está apontando.
+    const cfgCte = await this.ambiente.getCteDistribuicaoConfig();
+    const ambienteStr: 'PRODUCAO' | 'HOMOLOGACAO' = cfgCte.ambiente;
     const ambienteInt: 1 | 2 = ambienteStr === 'PRODUCAO' ? 1 : 2;
 
     // 1. Cache CNPJs Capul (usado pelo PapelDetector durante enriquecimento)

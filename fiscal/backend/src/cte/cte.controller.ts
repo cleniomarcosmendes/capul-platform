@@ -128,13 +128,12 @@ export class CteController {
    *
    * Query params:
    *   - dryRun=true (opcional): não persiste docZips em disco/banco; apenas
-   *     loga preview. Útil pra primeiro smoke test contra HOM.
-   *   - ambiente=HOMOLOGACAO|PRODUCAO (opcional, ⚠️ TEMPORÁRIO):
-   *     força ambiente independente do AmbienteConfig global. Mecanismo
-   *     introduzido na Fase 1 porque o ambiente de desenvolvimento local
-   *     está apontando pra PRODUCAO (em uso pelo setor fiscal pra consultas
-   *     reais durante o desenvolvimento). Remover quando ativação for
-   *     normalizada — Fase 2 do plano CT-e v2 + flag em Configurador.
+   *     loga preview. Útil pra smoke test sem afetar dados.
+   *
+   * Ambiente é resolvido pelo `DistribuicaoNsuService` via
+   * `fiscal.ambiente_config.cte_distribuicao_ambiente` (independente do global).
+   * Mudança de ambiente é feita via PUT /ambiente/cte-distribuicao/ambiente
+   * (ADMIN_TI) ou pela aba "CT-e Distribuição" do Controle Operacional.
    *
    * Resposta inclui sumário (iteracoes, ultNSU/maxNSU, docs recebidos,
    * status final) sem expor XMLs completos pra não inflar response.
@@ -145,15 +144,9 @@ export class CteController {
   async consultarFilial(
     @Param('cnpj') cnpj: string,
     @Query('dryRun') dryRun?: string,
-    @Query('ambiente') ambiente?: string,
   ) {
-    let ambienteOverride: 'PRODUCAO' | 'HOMOLOGACAO' | undefined;
-    if (ambiente === 'HOMOLOGACAO' || ambiente === 'PRODUCAO') {
-      ambienteOverride = ambiente;
-    }
     return this.distribuicao.consultarFilial(cnpj, {
       dryRun: dryRun === 'true' || dryRun === '1',
-      ambienteOverride,
     });
   }
 

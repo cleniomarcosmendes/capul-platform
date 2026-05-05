@@ -30,7 +30,59 @@ export class AmbienteService {
       cronMovimentoManhaSeguinte: cfg.cronMovimentoManhaSeguinte,
       ultimaAlteracaoEm: cfg.ultimaAlteracaoEm,
       ultimaAlteracaoPor: cfg.ultimaAlteracaoPor,
+      // CT-e Distribuição (controle independente do ambiente global NF-e)
+      cteDistribuicaoAtivo: cfg.cteDistribuicaoAtivo,
+      cteDistribuicaoAmbiente: cfg.cteDistribuicaoAmbiente,
+      cteDistribuicaoAlteradoEm: cfg.cteDistribuicaoAlteradoEm,
+      cteDistribuicaoAlteradoPor: cfg.cteDistribuicaoAlteradoPor,
     };
+  }
+
+  /**
+   * Estado leve do CT-e Distribuição — usado por DistribuicaoNsuService e
+   * CteSchedulerService no gating (substitui a env var FISCAL_CTE_DISTRIBUICAO_ENABLED).
+   */
+  async getCteDistribuicaoConfig(): Promise<{
+    ativo: boolean;
+    ambiente: AmbienteSefaz;
+  }> {
+    const cfg = await this.getOrCreate();
+    return {
+      ativo: cfg.cteDistribuicaoAtivo,
+      ambiente: cfg.cteDistribuicaoAmbiente,
+    };
+  }
+
+  /**
+   * Liga/desliga o serviço CT-e Distribuição. Operacional crítico —
+   * controlled via UI por ADMIN_TI (toggle no Controle Operacional → aba CT-e).
+   * Quando ativo=false, scheduler fica silencioso (não toca SEFAZ).
+   */
+  async setCteDistribuicaoAtivo(ativo: boolean, usuario: string) {
+    return this.prisma.ambienteConfig.update({
+      where: { id: 1 },
+      data: {
+        cteDistribuicaoAtivo: ativo,
+        cteDistribuicaoAlteradoEm: new Date(),
+        cteDistribuicaoAlteradoPor: usuario,
+      },
+    });
+  }
+
+  /**
+   * Define ambiente SEFAZ específico do CT-e (independente do `ambienteAtivo`
+   * global usado por NF-e/Cadastro). Permite cenário "CT-e em HOM enquanto
+   * NF-e está em PROD" durante implantação. Operacional crítico — ADMIN_TI.
+   */
+  async setCteDistribuicaoAmbiente(ambiente: AmbienteSefaz, usuario: string) {
+    return this.prisma.ambienteConfig.update({
+      where: { id: 1 },
+      data: {
+        cteDistribuicaoAmbiente: ambiente,
+        cteDistribuicaoAlteradoEm: new Date(),
+        cteDistribuicaoAlteradoPor: usuario,
+      },
+    });
   }
 
   async alterarAmbiente(ambiente: AmbienteSefaz, usuario: string) {

@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { AmbienteService } from '../../ambiente/ambiente.service.js';
 import { NsuControleService } from './nsu-controle.service.js';
@@ -34,7 +33,6 @@ export class CteSchedulerService {
   private readonly logger = new Logger(CteSchedulerService.name);
 
   constructor(
-    private readonly config: ConfigService,
     private readonly ambiente: AmbienteService,
     private readonly nsuControle: NsuControleService,
     private readonly distribuicao: DistribuicaoNsuService,
@@ -53,18 +51,20 @@ export class CteSchedulerService {
       this.logger.error(`[CTeScheduler] sync filiais falhou: ${(err as Error).message}`);
     }
 
-    const habilitado = this.config.get<string>('FISCAL_CTE_DISTRIBUICAO_ENABLED') === 'true';
-    if (!habilitado) {
-      // Silencioso — esperado em PROD enquanto módulo está em desenvolvimento.
+    const cfgCte = await this.ambiente.getCteDistribuicaoConfig();
+    if (!cfgCte.ativo) {
+      // Silencioso — operador desativou na aba CT-e Distribuição do
+      // Controle Operacional (ou nunca ativou — default false).
       return;
     }
 
     const cfgAmb = await this.ambiente.getStatus();
     if (cfgAmb.pauseSync) {
-      this.logger.log(`[CTeScheduler] tick suprimido — ambiente_config.pause_sync=true`);
+      this.logger.log(`[CTeScheduler] tick suprimido — ambiente_config.pause_sync=true (freio de mão global)`);
       return;
     }
-    const ambienteInt: 1 | 2 = cfgAmb.ambienteAtivo === 'PRODUCAO' ? 1 : 2;
+    // Ambiente do CT-e é INDEPENDENTE do global (NF-e/Cadastro).
+    const ambienteInt: 1 | 2 = cfgCte.ambiente === 'PRODUCAO' ? 1 : 2;
 
     const elegiveis = await this.nsuControle.listarElegiveisParaConsulta(ambienteInt);
     if (elegiveis.length === 0) {

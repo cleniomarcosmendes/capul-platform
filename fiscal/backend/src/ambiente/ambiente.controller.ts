@@ -53,4 +53,33 @@ export class AmbienteController {
   async resumeSync(@CurrentUser() user: FiscalAuthenticatedUser) {
     return this.ambiente.resumeSync(user.email);
   }
+
+  /**
+   * Liga/desliga o serviço CT-e Distribuição. Operacional crítico — ADMIN_TI.
+   * Substitui a env var FISCAL_CTE_DISTRIBUICAO_ENABLED (removida).
+   * Quando ativo=false: scheduler @Cron silencioso, endpoint admin
+   * consultar-filial bloqueia 403. Sync de filiais e enriquecimento
+   * continuam (DB-only, não tocam SEFAZ).
+   */
+  @Put('cte-distribuicao/ativo')
+  @RoleMinima('ADMIN_TI')
+  async setCteAtivo(
+    @Body() body: { ativo: boolean },
+    @CurrentUser() user: FiscalAuthenticatedUser,
+  ) {
+    return this.ambiente.setCteDistribuicaoAtivo(body.ativo, user.email);
+  }
+
+  /**
+   * Define ambiente do CT-e Distribuição. Independente do `ambienteAtivo`
+   * global (NF-e/Cadastro) — permite "CT-e em HOM enquanto NF-e em PROD".
+   */
+  @Put('cte-distribuicao/ambiente')
+  @RoleMinima('ADMIN_TI')
+  async setCteAmbiente(
+    @Body() body: { ambiente: AmbienteSefaz },
+    @CurrentUser() user: FiscalAuthenticatedUser,
+  ) {
+    return this.ambiente.setCteDistribuicaoAmbiente(body.ambiente, user.email);
+  }
 }
