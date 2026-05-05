@@ -21,6 +21,7 @@ import { FreioDeMaoTab } from './pages/operacao/tabs/FreioDeMaoTab';
 import { LimitesTab } from './pages/operacao/tabs/LimitesTab';
 import { CircuitBreakerTab } from './pages/operacao/tabs/CircuitBreakerTab';
 import { CadeiaTlsTab } from './pages/operacao/tabs/CadeiaTlsTab';
+import { CteDistribuicaoTab } from './pages/operacao/tabs/CteDistribuicaoTab';
 import type { RoleFiscal } from './types';
 
 function ProtectedRoute({
@@ -166,6 +167,14 @@ function App() {
                 element={
                   <ProtectedRoute minRole="GESTOR_FISCAL">
                     <LimitesTab />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="cte-distribuicao"
+                element={
+                  <ProtectedRoute minRole="GESTOR_FISCAL">
+                    <CteDistribuicaoTab />
                   </ProtectedRoute>
                 }
               />

@@ -358,11 +358,9 @@ services:
       PROTHEUS_API_URL: ${PROTHEUS_API_URL:?PROTHEUS_API_URL obrigatoria no .env (consultas cadastrais dependem dela)}
       PROTHEUS_API_AUTH: ${PROTHEUS_API_AUTH:?PROTHEUS_API_AUTH obrigatoria no .env (sem isto Fiscal nao autentica no Protheus)}
       FISCAL_PROTHEUS_MOCK: ${FISCAL_PROTHEUS_MOCK:-true}
-      # CT-e Distribuição (Fase 1+ do PLANO_CTE_DISTRIBUICAO_v2.md).
-      # Default false — bloqueia execucao em PRODUCAO ate operador autorizar
-      # explicitamente. HOMOLOGACAO sempre permite (ignora esta flag).
-      # Fase 2 promove pra tela no Configurador (memory feedback_funcionalidade_visivel_no_configurador).
-      FISCAL_CTE_DISTRIBUICAO_ENABLED: ${FISCAL_CTE_DISTRIBUICAO_ENABLED:-false}
+      # NOTA 05/05/2026: env var FISCAL_CTE_DISTRIBUICAO_ENABLED removida —
+      # controle migrado pra fiscal.ambiente_config.cte_distribuicao_ativo
+      # (UI: /operacao/controle/cte-distribuicao, role ADMIN_TI).
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
