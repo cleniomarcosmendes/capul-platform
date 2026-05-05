@@ -20,6 +20,8 @@ import type { FiscalAuthenticatedUser } from '../common/interfaces/jwt-payload.i
 import { CteService } from './cte.service.js';
 import { DacteGeneratorService } from './pdf/dacte-generator.service.js';
 import { DistribuicaoNsuService } from './distribuicao/distribuicao-nsu.service.js';
+import { CteEnriquecimentoService } from './distribuicao/cte-enriquecimento.service.js';
+import { PapelDetectorService } from './distribuicao/papel-detector.service.js';
 
 @Controller('cte')
 @UseGuards(JwtAuthGuard, FiscalGuard, RolesGuard)
@@ -28,6 +30,8 @@ export class CteController {
     private readonly cte: CteService,
     private readonly dacte: DacteGeneratorService,
     private readonly distribuicao: DistribuicaoNsuService,
+    private readonly enriquecimento: CteEnriquecimentoService,
+    private readonly papelDetector: PapelDetectorService,
   ) {}
 
   @Post('consulta')
@@ -146,5 +150,39 @@ export class CteController {
       dryRun: dryRun === 'true' || dryRun === '1',
       ambienteOverride,
     });
+  }
+
+  /**
+   * Endpoint admin — Fase 3 do CT-e Distribuição.
+   *
+   * Dispara o `CteEnriquecimentoService` manualmente: varre `cte_documento`
+   * com `processado_em IS NULL` e aplica `PapelDetectorService` pra popular
+   * `papel_capul`. Usado pra:
+   *   - Re-processar histórico após melhoria do detector (zerar processado_em
+   *     via SQL e chamar este endpoint)
+   *   - Forçar enriquecimento entre os ciclos do cron (que roda hh:30)
+   *   - Smoke test pós-deploy
+   *
+   * Resposta: sumário com varridos/enriquecidos/semPapel/comAnomalia/erros/duracaoMs.
+   *
+   * Idempotente — chamar várias vezes em sequência só processa pendentes
+   * (que ficam = 0 após o primeiro run).
+   */
+  @Post('distribuicao/enriquecer')
+  @RoleMinima('ADMIN_TI')
+  async enriquecer() {
+    return this.enriquecimento.processarPendentes();
+  }
+
+  /**
+   * Endpoint admin — recarrega cache de CNPJs Capul do `PapelDetectorService`
+   * (lê de `core.filiais`). Chamar quando uma filial nova for cadastrada
+   * para que o detector a reconheça sem precisar reiniciar o backend.
+   */
+  @Post('distribuicao/recarregar-cnpjs-capul')
+  @RoleMinima('ADMIN_TI')
+  async recarregarCnpjsCapul() {
+    const total = await this.papelDetector.atualizarCacheCnpjs();
+    return { ok: true, totalCnpjsCapul: total };
   }
 }

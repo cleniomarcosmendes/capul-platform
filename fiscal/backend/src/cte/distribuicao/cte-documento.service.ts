@@ -2,31 +2,41 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { XMLParser } from 'fast-xml-parser';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import type { SchemaCte, CteDocumento } from '@prisma/client';
+import type { SchemaCte, CteDocumento, CteEvento, TipoEventoCte } from '@prisma/client';
 import type { CteDocZip } from '../../sefaz/cte-distribuicao.client.js';
 
 export interface PersistirResultado {
-  /** Documento persistido (novo ou já existente quando dedup bate) */
-  documento: CteDocumento;
-  /** true = registro novo criado; false = já existia (mesmo SHA-256) */
+  /** Tipo do registro persistido — documento ou evento (cada schema vai pra sua tabela) */
+  tipo: 'documento' | 'evento' | 'ignorado';
+  /** Registro persistido — null se ignorado (schema desconhecido sem dados) */
+  documento?: CteDocumento;
+  evento?: CteEvento;
+  /** true = registro novo criado; false = já existia (dedup natural) */
   novo: boolean;
+  motivoIgnorado?: string;
 }
 
 /**
  * Persiste docZips retornados pelo `CteDistribuicaoClient.consultarPorNsu`
- * em `fiscal.cte_documento`.
+ * em uma das duas tabelas `fiscal.cte_documento` ou `fiscal.cte_evento`,
+ * dependendo do schema:
  *
- * Fluxo:
- *   1. Calcula SHA-256 do XML pra dedup global
- *   2. Identifica schema do XML (SchemaCte enum)
- *   3. Extrai metadados básicos (chave, modelo, dhEmi) — sem PapelDetector
- *      (Fase 3 popula `papel_capul`)
- *   4. Faz upsert por (cnpj_consulente, ambiente, nsu) — chave natural
- *      do par (consulente, NSU) que SEFAZ entrega
+ * | Schema retornado pelo SEFAZ | Tabela alvo  |
+ * |-----------------------------|--------------|
+ * | procCTe / procCTeSimp       | cte_documento |
+ * | resCTe                      | cte_documento (com papel_capul=TERCEIRO no enriquecimento) |
+ * | procEventoCTe               | cte_evento (xml completo do evento) |
+ * | resEventoCTe                | cte_evento (resumo) |
+ * | DESCONHECIDO                | cte_documento com erro_parse preenchido (pra triagem manual) |
  *
- * Parser de eventos vinculados (cte_evento) é responsabilidade da Fase 3.
- * Por ora, eventos chegam aqui como cte_documento com schema=procEventoCTe
- * e ficam pra Fase 3 ser desdobrar em cte_evento.
+ * Dedup natural:
+ *   - cte_documento: chave natural (cnpj_consulente, ambiente, nsu)
+ *   - cte_evento: id_evento UNIQUE (ID atributo do <infEvento>)
+ *
+ * `papel_capul` (em cte_documento) NÃO é preenchido aqui — fica NULL
+ * até `CteEnriquecimentoService` rodar (cron + endpoint admin) e aplicar
+ * `PapelDetectorService`. Idem `documento_id` em cte_evento — reconciliação
+ * acontece quando documento alvo aparece (mesma chave).
  */
 @Injectable()
 export class CteDocumentoService {
@@ -45,9 +55,8 @@ export class CteDocumentoService {
   }
 
   /**
-   * Persiste 1 docZip. Se já existe (mesma chave natural cnpj+ambiente+nsu),
-   * retorna o registro existente sem alterar (idempotente — re-execução
-   * do orquestrador é segura).
+   * Persiste 1 docZip. Retorna `tipo: 'evento'` quando schema é evento,
+   * `tipo: 'documento'` caso contrário. Idempotente — re-execução é segura.
    */
   async persistir(params: {
     cnpjConsulente: string;
@@ -57,158 +66,305 @@ export class CteDocumentoService {
     const cnpj = params.cnpjConsulente.replace(/\D/g, '');
     const xml = params.docZip.xml;
     const xmlSha256 = createHash('sha256').update(xml).digest('hex');
+    const schemaCte = this.identificarSchema(params.docZip.schema);
 
-    // Idempotência: se mesmo (cnpj, ambiente, nsu) já existe, devolve.
+    // Roteia: eventos vão pra cte_evento; demais vão pra cte_documento
+    if (schemaCte === 'procEventoCTe' || schemaCte === 'resEventoCTe') {
+      return this.persistirEvento({
+        cnpj,
+        ambiente: params.ambiente,
+        nsu: params.docZip.nsu,
+        schema: schemaCte,
+        xml,
+        xmlSha256,
+      });
+    }
+
+    return this.persistirDocumento({
+      cnpj,
+      ambiente: params.ambiente,
+      nsu: params.docZip.nsu,
+      schema: schemaCte,
+      xml,
+      xmlSha256,
+    });
+  }
+
+  // ============================================================
+  // cte_documento — procCTe / procCTeSimp / resCTe / DESCONHECIDO
+  // ============================================================
+
+  private async persistirDocumento(p: {
+    cnpj: string;
+    ambiente: 1 | 2;
+    nsu: string;
+    schema: SchemaCte;
+    xml: string;
+    xmlSha256: string;
+  }): Promise<PersistirResultado> {
     const existente = await this.prisma.client.cteDocumento.findUnique({
       where: {
         doc_consulente_ambiente_nsu: {
-          cnpjConsulente: cnpj,
-          ambiente: params.ambiente,
-          nsu: params.docZip.nsu,
+          cnpjConsulente: p.cnpj,
+          ambiente: p.ambiente,
+          nsu: p.nsu,
         },
       },
     });
     if (existente) {
-      this.logger.debug(
-        `Doc já existente: cnpj=${cnpj} amb=${params.ambiente} nsu=${params.docZip.nsu} sha256=${xmlSha256.slice(0, 8)}`,
-      );
-      return { documento: existente, novo: false };
+      this.logger.debug(`Doc já existente: cnpj=${p.cnpj} amb=${p.ambiente} nsu=${p.nsu}`);
+      return { tipo: 'documento', documento: existente, novo: false };
     }
 
-    const schemaCte = this.identificarSchema(params.docZip.schema);
-    const metadados = this.extrairMetadados(xml, schemaCte);
+    const meta = this.extrairMetadadosDocumento(p.xml, p.schema);
 
-    try {
-      const doc = await this.prisma.client.cteDocumento.create({
-        data: {
-          cnpjConsulente: cnpj,
-          ambiente: params.ambiente,
-          nsu: params.docZip.nsu,
-          schema: schemaCte,
-          chave: metadados.chave,
-          modelo: metadados.modelo,
-          dhEmi: metadados.dhEmi,
-          xmlSha256,
-          xml,
-          xmlBytes: Buffer.byteLength(xml, 'utf8'),
-          erroParse: metadados.erro,
-        },
-      });
-      this.logger.log(
-        `Doc persistido id=${doc.id} cnpj=${cnpj} nsu=${params.docZip.nsu} schema=${schemaCte} chave=${metadados.chave ?? '(sem)'}`,
-      );
-      return { documento: doc, novo: true };
-    } catch (err) {
-      this.logger.error(
-        `Falha persistir doc cnpj=${cnpj} nsu=${params.docZip.nsu}: ${(err as Error).message}`,
-      );
-      throw err;
-    }
+    const doc = await this.prisma.client.cteDocumento.create({
+      data: {
+        cnpjConsulente: p.cnpj,
+        ambiente: p.ambiente,
+        nsu: p.nsu,
+        schema: p.schema,
+        chave: meta.chave,
+        modelo: meta.modelo,
+        dhEmi: meta.dhEmi,
+        xmlSha256: p.xmlSha256,
+        xml: p.xml,
+        xmlBytes: Buffer.byteLength(p.xml, 'utf8'),
+        erroParse: meta.erro,
+      },
+    });
+    this.logger.log(
+      `Doc persistido id=${doc.id} cnpj=${p.cnpj} nsu=${p.nsu} schema=${p.schema} chave=${meta.chave ?? '(sem)'}`,
+    );
+    return { tipo: 'documento', documento: doc, novo: true };
   }
 
-  /**
-   * Mapeia atributo `@schema` do <docZip> SEFAZ para enum SchemaCte.
-   * Schemas conhecidos vêm com extensão `.xsd`. Tudo que não bate vira
-   * `DESCONHECIDO` — XML é persistido pra análise manual posterior.
-   */
-  private identificarSchema(schemaAttr: string): SchemaCte {
-    const limpo = schemaAttr.replace(/\.xsd$/, '').replace(/_v\d.*$/, '');
-    switch (limpo) {
-      case 'procCTe':
-        return 'procCTe';
-      case 'procCTeSimp':
-        return 'procCTeSimp';
-      case 'resCTe':
-        return 'resCTe';
-      case 'procEventoCTe':
-        return 'procEventoCTe';
-      case 'resEventoCTe':
-        return 'resEventoCTe';
-      default:
-        this.logger.warn(`Schema CT-e desconhecido: "${schemaAttr}" — persistindo como DESCONHECIDO`);
-        return 'DESCONHECIDO';
-    }
-  }
-
-  /**
-   * Extrai metadados básicos do XML (chave, modelo, data de emissão).
-   * Tolerante a falha — qualquer erro vira `erroParse` na coluna pra
-   * análise depois sem perder o XML bruto.
-   */
-  private extrairMetadados(
+  private extrairMetadadosDocumento(
     xml: string,
     schema: SchemaCte,
   ): { chave: string | null; modelo: number | null; dhEmi: Date | null; erro: string | null } {
     try {
       const parsed = this.parser.parse(xml);
 
-      // Cada schema tem caminho diferente até <infCte> ou similar
-      let infCte: any;
-      switch (schema) {
-        case 'procCTe':
-        case 'procCTeSimp':
-          // <cteProc><CTe><infCte Id="CTe<chave>"><ide><dhEmi>...</dhEmi><mod>...</mod></ide></infCte></CTe></cteProc>
-          infCte = parsed?.cteProc?.CTe?.infCte ?? parsed?.CTe?.infCte;
-          break;
-        case 'resCTe':
-          // <resCTe><chCTe>44</chCTe><dhEmi>...</dhEmi>...</resCTe>
-          infCte = parsed?.resCTe;
-          if (infCte) {
-            return {
-              chave: typeof infCte.chCTe === 'string' ? infCte.chCTe : null,
-              modelo: 57, // resCTe é sempre modelo 57
-              dhEmi: this.parseDateSafe(infCte.dhEmi),
-              erro: null,
-            };
-          }
-          break;
-        case 'procEventoCTe':
-          // <procEventoCTe><eventoCTe><infEvento Id="ID<tpEvento><chave><nSeq>"><chCTe>...</chCTe></infEvento></eventoCTe></procEventoCTe>
-          infCte = parsed?.procEventoCTe?.eventoCTe?.infEvento ?? parsed?.eventoCTe?.infEvento;
-          if (infCte) {
-            const id = typeof infCte['@_Id'] === 'string' ? infCte['@_Id'] : '';
-            // Id formato: "ID" + tpEvento(6) + chave(44) + nSeq(2)
-            const chave = id.length === 54 ? id.substring(8, 52) : (typeof infCte.chCTe === 'string' ? infCte.chCTe : null);
-            return {
-              chave,
-              modelo: 57,
-              dhEmi: this.parseDateSafe(infCte.dhEvento),
-              erro: null,
-            };
-          }
-          break;
-        case 'resEventoCTe':
-          // <resEventoCTe><chCTe>...</chCTe>...</resEventoCTe>
-          infCte = parsed?.resEventoCTe;
-          if (infCte) {
-            return {
-              chave: typeof infCte.chCTe === 'string' ? infCte.chCTe : null,
-              modelo: 57,
-              dhEmi: this.parseDateSafe(infCte.dhEvento ?? infCte.dhRegEvento),
-              erro: null,
-            };
-          }
-          break;
-        case 'DESCONHECIDO':
-          return { chave: null, modelo: null, dhEmi: null, erro: 'Schema desconhecido' };
+      if (schema === 'procCTe' || schema === 'procCTeSimp') {
+        const infCte = parsed?.cteProc?.CTe?.infCte ?? parsed?.CTe?.infCte;
+        if (!infCte) {
+          return { chave: null, modelo: null, dhEmi: null, erro: `Estrutura ${schema} inesperada` };
+        }
+        const idAttr = typeof infCte['@_Id'] === 'string' ? infCte['@_Id'] : '';
+        const chave = idAttr.startsWith('CTe') && idAttr.length === 47 ? idAttr.substring(3) : null;
+        const modelo = infCte.ide?.mod ? Number(infCte.ide.mod) : null;
+        return {
+          chave,
+          modelo,
+          dhEmi: this.parseDateSafe(infCte.ide?.dhEmi),
+          erro: null,
+        };
       }
 
-      if (!infCte) {
-        return { chave: null, modelo: null, dhEmi: null, erro: `Estrutura XML inesperada para schema=${schema}` };
+      if (schema === 'resCTe') {
+        // resCTe: <resCTe><chCTe>44</chCTe><CNPJ>...</CNPJ><dhEmi>...</dhEmi>...
+        const r = parsed?.resCTe;
+        if (!r) return { chave: null, modelo: null, dhEmi: null, erro: 'Estrutura resCTe inesperada' };
+        return {
+          chave: typeof r.chCTe === 'string' ? r.chCTe : null,
+          modelo: 57,
+          dhEmi: this.parseDateSafe(r.dhEmi),
+          erro: null,
+        };
       }
 
-      // procCTe / procCTeSimp
-      const idAttr = typeof infCte['@_Id'] === 'string' ? infCte['@_Id'] : '';
-      const chave = idAttr.startsWith('CTe') && idAttr.length === 47 ? idAttr.substring(3) : null;
-      const ide = infCte.ide;
-      const modelo = ide?.mod ? Number(ide.mod) : null;
-      const dhEmi = this.parseDateSafe(ide?.dhEmi);
-
-      return { chave, modelo, dhEmi, erro: null };
+      return { chave: null, modelo: null, dhEmi: null, erro: 'Schema desconhecido — XML preservado' };
     } catch (err) {
-      const msg = (err as Error).message;
-      this.logger.warn(`Falha extrair metadados schema=${schema}: ${msg}`);
-      return { chave: null, modelo: null, dhEmi: null, erro: msg };
+      return { chave: null, modelo: null, dhEmi: null, erro: (err as Error).message };
+    }
+  }
+
+  // ============================================================
+  // cte_evento — procEventoCTe / resEventoCTe
+  // ============================================================
+
+  private async persistirEvento(p: {
+    cnpj: string;
+    ambiente: 1 | 2;
+    nsu: string;
+    schema: SchemaCte;
+    xml: string;
+    xmlSha256: string;
+  }): Promise<PersistirResultado> {
+    const meta = this.extrairMetadadosEvento(p.xml, p.schema);
+    if (meta.erro || !meta.idEvento || !meta.chave) {
+      this.logger.warn(
+        `Evento sem metadados essenciais — ignorando: cnpj=${p.cnpj} nsu=${p.nsu} schema=${p.schema} erro="${meta.erro}"`,
+      );
+      return {
+        tipo: 'ignorado',
+        novo: false,
+        motivoIgnorado: meta.erro ?? 'idEvento ou chave ausente',
+      };
+    }
+
+    // Dedup: idEvento é UNIQUE
+    const existente = await this.prisma.client.cteEvento.findUnique({
+      where: { idEvento: meta.idEvento },
+    });
+    if (existente) {
+      this.logger.debug(`Evento já existente: idEvento=${meta.idEvento}`);
+      return { tipo: 'evento', evento: existente, novo: false };
+    }
+
+    // Reconcilia documento_id se documento da chave já estiver persistido
+    const docExistente = await this.prisma.client.cteDocumento.findFirst({
+      where: { chave: meta.chave },
+      select: { id: true },
+    });
+
+    const evento = await this.prisma.client.cteEvento.create({
+      data: {
+        documentoId: docExistente?.id ?? null,
+        chave: meta.chave,
+        idEvento: meta.idEvento,
+        tipoEvento: meta.tipoEvento,
+        tpEventoNum: meta.tpEventoNum,
+        nSeqEvento: meta.nSeqEvento,
+        dhEvento: meta.dhEvento ?? new Date(),
+        cStat: meta.cStat ?? '',
+        xMotivo: meta.xMotivo ?? '',
+        protocolo: meta.protocolo,
+        xmlSha256: p.xmlSha256,
+        xml: p.xml,
+      },
+    });
+    this.logger.log(
+      `Evento persistido id=${evento.id} chave=${meta.chave.slice(0, 8)}… tipo=${meta.tipoEvento} (tp=${meta.tpEventoNum}) docId=${docExistente?.id ?? 'null'}`,
+    );
+    return { tipo: 'evento', evento, novo: true };
+  }
+
+  private extrairMetadadosEvento(
+    xml: string,
+    schema: SchemaCte,
+  ): {
+    idEvento: string | null;
+    chave: string | null;
+    tipoEvento: TipoEventoCte;
+    tpEventoNum: number;
+    nSeqEvento: number;
+    dhEvento: Date | null;
+    cStat: string | null;
+    xMotivo: string | null;
+    protocolo: string | null;
+    erro: string | null;
+  } {
+    const empty = {
+      idEvento: null,
+      chave: null,
+      tipoEvento: 'OUTRO' as TipoEventoCte,
+      tpEventoNum: 0,
+      nSeqEvento: 1,
+      dhEvento: null,
+      cStat: null,
+      xMotivo: null,
+      protocolo: null,
+    };
+    try {
+      const parsed = this.parser.parse(xml);
+
+      if (schema === 'procEventoCTe') {
+        // <procEventoCTe>
+        //   <eventoCTe>
+        //     <infEvento Id="ID..."><chCTe>...</chCTe><tpEvento>...</tpEvento>
+        //              <nSeqEvento>...</nSeqEvento><dhEvento>...</dhEvento>
+        //              <detEvento>...</detEvento></infEvento>
+        //   </eventoCTe>
+        //   <retEventoCTe><infEvento><cStat>...</cStat><xMotivo>...</xMotivo>
+        //              <nProt>...</nProt></infEvento></retEventoCTe>
+        // </procEventoCTe>
+        const proc = parsed?.procEventoCTe;
+        const infEvento = proc?.eventoCTe?.infEvento ?? proc?.evento?.infEvento;
+        const retInfEvento = proc?.retEventoCTe?.infEvento ?? proc?.retEvento?.infEvento;
+        if (!infEvento) {
+          return { ...empty, erro: 'procEventoCTe sem <infEvento>' };
+        }
+        const idEvento = typeof infEvento['@_Id'] === 'string' ? infEvento['@_Id'] : null;
+        const chave = idEvento && idEvento.length === 54 ? idEvento.substring(8, 52) : (typeof infEvento.chCTe === 'string' ? infEvento.chCTe : null);
+        const tpEventoNum = infEvento.tpEvento ? Number(infEvento.tpEvento) : 0;
+        const nSeqEvento = infEvento.nSeqEvento ? Number(infEvento.nSeqEvento) : 1;
+        return {
+          erro: null,
+          idEvento,
+          chave,
+          tpEventoNum,
+          nSeqEvento,
+          tipoEvento: this.mapearTipoEvento(tpEventoNum),
+          dhEvento: this.parseDateSafe(infEvento.dhEvento),
+          cStat: typeof retInfEvento?.cStat === 'string' || typeof retInfEvento?.cStat === 'number' ? String(retInfEvento.cStat) : null,
+          xMotivo: typeof retInfEvento?.xMotivo === 'string' ? retInfEvento.xMotivo : null,
+          protocolo: typeof retInfEvento?.nProt === 'string' || typeof retInfEvento?.nProt === 'number' ? String(retInfEvento.nProt) : null,
+        };
+      }
+
+      if (schema === 'resEventoCTe') {
+        // <resEventoCTe><chCTe>...</chCTe><tpEvento>...</tpEvento>
+        //   <nSeqEvento>...</nSeqEvento><dhEvento>...</dhEvento>
+        //   <cStat>...</cStat><xMotivo>...</xMotivo><nProt>...</nProt></resEventoCTe>
+        const r = parsed?.resEventoCTe;
+        if (!r) return { ...empty, erro: 'resEventoCTe sem corpo' };
+        const chave = typeof r.chCTe === 'string' ? r.chCTe : null;
+        const tpEventoNum = r.tpEvento ? Number(r.tpEvento) : 0;
+        const nSeqEvento = r.nSeqEvento ? Number(r.nSeqEvento) : 1;
+        // resEvento não tem Id explícito — sintetiza:
+        const idEvento = chave && tpEventoNum && nSeqEvento ? `ID${String(tpEventoNum).padStart(6, '0')}${chave}${String(nSeqEvento).padStart(2, '0')}` : null;
+        return {
+          erro: null,
+          idEvento,
+          chave,
+          tpEventoNum,
+          nSeqEvento,
+          tipoEvento: this.mapearTipoEvento(tpEventoNum),
+          dhEvento: this.parseDateSafe(r.dhEvento ?? r.dhRegEvento),
+          cStat: typeof r.cStat === 'string' || typeof r.cStat === 'number' ? String(r.cStat) : null,
+          xMotivo: typeof r.xMotivo === 'string' ? r.xMotivo : null,
+          protocolo: typeof r.nProt === 'string' || typeof r.nProt === 'number' ? String(r.nProt) : null,
+        };
+      }
+
+      return { ...empty, erro: `schema=${schema} inesperado em persistirEvento` };
+    } catch (err) {
+      return { ...empty, erro: (err as Error).message };
+    }
+  }
+
+  /**
+   * Mapeia o tpEvento numérico (NT 2014) pra enum TipoEventoCte. Códigos
+   * extras viram OUTRO (preserva tpEventoNum original na coluna).
+   */
+  private mapearTipoEvento(tpEventoNum: number): TipoEventoCte {
+    switch (tpEventoNum) {
+      case 110110: return 'CCE';
+      case 110111: return 'CANCELAMENTO';
+      case 110114: return 'PRESTACAO_DESACORDO';
+      case 110160: return 'GTV_PRESTACAO';
+      case 210200: return 'CONFIRMACAO_PRESTACAO';
+      default: return 'OUTRO';
+    }
+  }
+
+  // ============================================================
+  // helpers
+  // ============================================================
+
+  private identificarSchema(schemaAttr: string): SchemaCte {
+    const limpo = schemaAttr.replace(/\.xsd$/, '').replace(/_v\d.*$/, '');
+    switch (limpo) {
+      case 'procCTe':       return 'procCTe';
+      case 'procCTeSimp':   return 'procCTeSimp';
+      case 'resCTe':        return 'resCTe';
+      case 'procEventoCTe': return 'procEventoCTe';
+      case 'resEventoCTe':  return 'resEventoCTe';
+      default:
+        this.logger.warn(`Schema CT-e desconhecido: "${schemaAttr}" — persistindo como DESCONHECIDO`);
+        return 'DESCONHECIDO';
     }
   }
 

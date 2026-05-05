@@ -11,6 +11,8 @@ import { DistribuicaoNsuService } from './distribuicao/distribuicao-nsu.service.
 import { CteDocumentoService } from './distribuicao/cte-documento.service.js';
 import { CteLoteConsultaService } from './distribuicao/cte-lote-consulta.service.js';
 import { CteSchedulerService } from './distribuicao/cte-scheduler.service.js';
+import { PapelDetectorService } from './distribuicao/papel-detector.service.js';
+import { CteEnriquecimentoService } from './distribuicao/cte-enriquecimento.service.js';
 
 @Module({
   // LimiteDiarioModule é @Global no app.module — não precisa importar.
@@ -27,6 +29,8 @@ import { CteSchedulerService } from './distribuicao/cte-scheduler.service.js';
     CteDocumentoService,
     CteLoteConsultaService,
     CteSchedulerService,
+    PapelDetectorService,
+    CteEnriquecimentoService,
   ],
   exports: [CteParserService, DacteGeneratorService],
 })

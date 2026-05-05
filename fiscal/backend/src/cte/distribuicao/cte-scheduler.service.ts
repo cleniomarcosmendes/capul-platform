@@ -4,6 +4,7 @@ import { Cron } from '@nestjs/schedule';
 import { AmbienteService } from '../../ambiente/ambiente.service.js';
 import { NsuControleService } from './nsu-controle.service.js';
 import { DistribuicaoNsuService } from './distribuicao-nsu.service.js';
+import { CteEnriquecimentoService } from './cte-enriquecimento.service.js';
 
 /**
  * Scheduler do CT-e Distribuição — varre filiais ativas a cada 15min e
@@ -36,6 +37,7 @@ export class CteSchedulerService {
     private readonly ambiente: AmbienteService,
     private readonly nsuControle: NsuControleService,
     private readonly distribuicao: DistribuicaoNsuService,
+    private readonly enriquecimento: CteEnriquecimentoService,
   ) {}
 
   @Cron('0 */15 * * * *', { name: 'fiscal:cte-distribuicao' })
@@ -78,6 +80,30 @@ export class CteSchedulerService {
       }
       // Espaçamento mínimo entre filiais — defesa contra burst SEFAZ
       await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+
+  /**
+   * Cron de enriquecimento — varre `cte_documento` com `processado_em IS NULL`
+   * e popula `papel_capul` via PapelDetector.
+   *
+   * Roda a cada hora no minuto 30 — offset proposital do scheduler de varredura
+   * SEFAZ (que roda nos minutos 0/15/30/45) pra evitar carga simultânea.
+   *
+   * Idempotente: registros já processados não são revisitados. Roda mesmo
+   * sem feature flag — não toca SEFAZ, só processa o que já está no banco.
+   */
+  @Cron('0 30 * * * *', { name: 'fiscal:cte-enriquecimento' })
+  async tickEnriquecimento(): Promise<void> {
+    try {
+      const r = await this.enriquecimento.processarPendentes();
+      if (r.varridos > 0) {
+        this.logger.log(
+          `[CTeEnriquec] tick varridos=${r.varridos} enriq=${r.enriquecidos} anomalias=${r.comAnomalia} erros=${r.erros}`,
+        );
+      }
+    } catch (err) {
+      this.logger.error(`[CTeEnriquec] tick falhou: ${(err as Error).message}`);
     }
   }
 }
