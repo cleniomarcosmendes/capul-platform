@@ -2,7 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { XMLParser } from 'fast-xml-parser';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { PapelDetectorService } from './papel-detector.service.js';
-import type { CteDocumento } from '@prisma/client';
+import { ProtheusGravacaoHelper } from '../../protheus/protheus-gravacao.helper.js';
+import { AmbienteService } from '../../ambiente/ambiente.service.js';
+import type { CteDocumento, PapelCapul } from '@prisma/client';
 
 export interface ResultadoEnriquecimento {
   varridos: number;
@@ -10,28 +12,42 @@ export interface ResultadoEnriquecimento {
   semPapel: number;
   comAnomalia: number;
   erros: number;
+  /** Tentativas de gravação no Protheus que retornaram GRAVADO */
+  protheusGravados: number;
+  /** Tentativas de gravação que retornaram JA_EXISTIA (race condition — OK) */
+  protheusJaExistia: number;
+  /** Tentativas de gravação com FALHA_TECNICA — mantém em pendência pra retry */
+  protheusFalhas: number;
+  /** Pulos por flag desligada ou doc já gravado anteriormente */
+  protheusPulados: number;
   duracaoMs: number;
 }
 
 const BATCH_SIZE = 100;
 
 /**
- * Cron de enriquecimento de `cte_documento` — varre registros com
- * `processado_em IS NULL`, aplica `PapelDetectorService` no XML e popula
- * `papel_capul` + marca `processado_em`.
+ * Cron de enriquecimento de `cte_documento`. Faz 2 coisas em sequência:
  *
- * Idempotente: registros já processados não são reaberta. Pra re-processar
- * (ex: após melhoria do detector), zerar `processado_em` via SQL e rodar
- * de novo.
+ *   1. **Enriquecer** — varre `processado_em IS NULL`, aplica
+ *      `PapelDetectorService` no XML e popula `papel_capul` + `processado_em`.
  *
- * Lida com schemas:
- *   - procCTe / procCTeSimp → busca ator papel via PapelDetector em <infCte>
- *   - resCTe                → papel = TERCEIRO (Capul aparece referenciada
- *                             mas não é ator direto — definição da NT)
- *   - DESCONHECIDO          → papel = null (mantém erro_parse pra triagem)
+ *   2. **Gravar no Protheus** (se flag `cte_protheus_grava_ativo` em
+ *      `ambiente_config` estiver ATIVA) — após enriquecer, chama
+ *      `ProtheusGravacaoHelper.tentarGravar` pra escrever em SZR010+SZQ010
+ *      via grvXML. Best-effort: falha não trava o cron, marca
+ *      `protheus_status = FALHA_TECNICA` pra retry depois.
  *
- * Eventos (procEventoCTe/resEventoCTe) já vão pra `cte_evento` direto e
- * não passam por aqui.
+ * Idempotente: registros já enriquecidos OU já gravados no Protheus são
+ * pulados na próxima execução (re-enriquecer não regrava).
+ *
+ * Schemas tratados:
+ *   - procCTe / procCTeSimp → enriquecimento + (se flag ativa) gravação Protheus
+ *   - resCTe                → papel=TERCEIRO; **NÃO grava no Protheus** (Capul
+ *                             só referenciada, sem carga real)
+ *   - DESCONHECIDO          → papel=null; também não grava
+ *
+ * Eventos (procEventoCTe/resEventoCTe) vão pra `cte_evento` direto e não
+ * passam por aqui.
  */
 @Injectable()
 export class CteEnriquecimentoService {
@@ -41,6 +57,8 @@ export class CteEnriquecimentoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly papelDetector: PapelDetectorService,
+    private readonly protheusGravacao: ProtheusGravacaoHelper,
+    private readonly ambiente: AmbienteService,
   ) {
     this.parser = new XMLParser({
       ignoreAttributes: false,
@@ -53,8 +71,9 @@ export class CteEnriquecimentoService {
   }
 
   /**
-   * Processa todos os registros pendentes em batches de 100. Retorna sumário.
-   * Pode ser chamado pelo cron OU pelo endpoint admin (debug/manutenção).
+   * Processa em 2 fases:
+   *   Fase 1: enriquece pendentes (papel_capul)
+   *   Fase 2: grava no Protheus (se flag ativa + papel preenchido + ainda não gravado)
    */
   async processarPendentes(): Promise<ResultadoEnriquecimento> {
     const inicio = Date.now();
@@ -64,10 +83,14 @@ export class CteEnriquecimentoService {
       semPapel: 0,
       comAnomalia: 0,
       erros: 0,
+      protheusGravados: 0,
+      protheusJaExistia: 0,
+      protheusFalhas: 0,
+      protheusPulados: 0,
       duracaoMs: 0,
     };
 
-    // Processa em loops de batch — evita carregar 50k+ XMLs em memória de uma vez
+    // Fase 1 — enriquecimento (papel_capul)
     while (true) {
       const lote = await this.prisma.client.cteDocumento.findMany({
         where: { processadoEm: null },
@@ -88,14 +111,46 @@ export class CteEnriquecimentoService {
         }
       }
 
-      // Sai do loop se foi um lote parcial (não há mais)
       if (lote.length < BATCH_SIZE) break;
     }
 
+    // Fase 2 — gravação Protheus (apenas se flag ativa)
+    const protheusAtivo = await this.ambiente.getCteProtheusGravaAtivo();
+    if (protheusAtivo) {
+      while (true) {
+        // Candidatos: já enriquecidos (papel_capul preenchido), schema documento
+        // (não evento), ainda não gravados no Protheus.
+        const lote = await this.prisma.client.cteDocumento.findMany({
+          where: {
+            processadoEm: { not: null },
+            papelCapul: { not: null },
+            protheusGravadoEm: null,
+            schema: { in: ['procCTe', 'procCTeSimp'] },
+          },
+          orderBy: { id: 'asc' },
+          take: BATCH_SIZE,
+        });
+        if (lote.length === 0) break;
+
+        for (const doc of lote) {
+          try {
+            await this.gravarProtheusUm(doc, resultado);
+          } catch (err) {
+            resultado.protheusFalhas++;
+            this.logger.error(
+              `Falha gravar doc id=${doc.id} no Protheus: ${(err as Error).message}`,
+            );
+          }
+        }
+
+        if (lote.length < BATCH_SIZE) break;
+      }
+    }
+
     resultado.duracaoMs = Date.now() - inicio;
-    if (resultado.varridos > 0) {
+    if (resultado.varridos > 0 || resultado.protheusGravados > 0 || resultado.protheusFalhas > 0) {
       this.logger.log(
-        `Enriquecimento: varridos=${resultado.varridos} enriquecidos=${resultado.enriquecidos} semPapel=${resultado.semPapel} anomalias=${resultado.comAnomalia} erros=${resultado.erros} ${resultado.duracaoMs}ms`,
+        `Enriquecimento: varridos=${resultado.varridos} enriq=${resultado.enriquecidos} semPapel=${resultado.semPapel} anomalias=${resultado.comAnomalia} erros=${resultado.erros} | Protheus: gravados=${resultado.protheusGravados} jaExistia=${resultado.protheusJaExistia} falhas=${resultado.protheusFalhas} pulados=${resultado.protheusPulados} ${resultado.duracaoMs}ms`,
       );
     }
     return resultado;
@@ -105,7 +160,7 @@ export class CteEnriquecimentoService {
     doc: CteDocumento,
     acc: ResultadoEnriquecimento,
   ): Promise<void> {
-    let papel: ResultadoEnriquecimentoUm['papel'] = null;
+    let papel: PapelCapul | null = null;
     let anomalia: string | null = null;
 
     if (doc.schema === 'resCTe') {
@@ -135,7 +190,6 @@ export class CteEnriquecimentoService {
       data: {
         papelCapul: papel,
         processadoEm: new Date(),
-        // Se tiver anomalia nova e erro_parse vazio, registra
         ...(anomalia && !doc.erroParse ? { erroParse: anomalia } : {}),
       },
     });
@@ -144,8 +198,93 @@ export class CteEnriquecimentoService {
     else acc.semPapel++;
     if (anomalia) acc.comAnomalia++;
   }
-}
 
-interface ResultadoEnriquecimentoUm {
-  papel: import('@prisma/client').PapelCapul | null;
+  /**
+   * Tenta gravar 1 documento no Protheus (SZR010+SZQ010) via grvXML.
+   * Resolve o código de filial Protheus a partir do CNPJ Capul detectado
+   * pelo PapelDetector — re-aplica o detector pra obter cnpjCapul (não
+   * persistido na cte_documento; apenas papelCapul).
+   */
+  private async gravarProtheusUm(
+    doc: CteDocumento,
+    acc: ResultadoEnriquecimento,
+  ): Promise<void> {
+    if (!doc.chave || !doc.papelCapul) {
+      acc.protheusPulados++;
+      return;
+    }
+
+    // Re-aplica detector pra obter cnpjCapul (a coluna armazena só papel,
+    // não o CNPJ específico — economiza espaço, recálculo é trivial).
+    let cnpjCapulDetectado: string | null = null;
+    try {
+      const parsed = this.parser.parse(doc.xml);
+      const infCte = parsed?.cteProc?.CTe?.infCte ?? parsed?.CTe?.infCte;
+      if (infCte) {
+        const r = this.papelDetector.detectar(infCte);
+        cnpjCapulDetectado = r.cnpjCapul;
+      }
+    } catch {
+      // Se parse falhou, não dá pra continuar. Pula.
+      acc.protheusPulados++;
+      return;
+    }
+
+    if (!cnpjCapulDetectado) {
+      acc.protheusPulados++;
+      return;
+    }
+
+    // Resolve código de filial Protheus (2 dígitos) por CNPJ.
+    // core.filiais.codigo é o que o Protheus espera no body do grvXML.
+    // Comparação tolerante a máscara: core.filiais grava CNPJ formatado
+    // ("25.834.847/0001-00") enquanto detector retorna CNPJ limpo
+    // ("25834847000100"). Limpa em memória (35 filiais — custo O(n) trivial).
+    const filiaisAtivas = await this.prisma.client.filialCore.findMany({
+      where: { status: 'ATIVO', cnpj: { not: null } },
+      select: { codigo: true, cnpj: true },
+    });
+    const filial = filiaisAtivas.find(
+      (f) => (f.cnpj ?? '').replace(/\D/g, '') === cnpjCapulDetectado,
+    );
+    if (!filial?.codigo) {
+      this.logger.warn(
+        `Doc id=${doc.id} chave=${doc.chave.slice(0, 8)}… CNPJ Capul ${cnpjCapulDetectado} sem filial em core.filiais (ATIVO) — pulando gravação Protheus`,
+      );
+      acc.protheusPulados++;
+      // Marca status pra evitar retentativa indefinida; admin precisa
+      // cadastrar a filial em core.filiais ou ignorar manualmente.
+      await this.prisma.client.cteDocumento.update({
+        where: { id: doc.id },
+        data: {
+          protheusStatus: 'FALHA_TECNICA',
+          protheusErro: `CNPJ ${cnpjCapulDetectado} sem filial cadastrada em core.filiais (ATIVO)`,
+        },
+      });
+      return;
+    }
+
+    // Tenta gravar — best-effort (não lança).
+    const r = await this.protheusGravacao.tentarGravar({
+      chave: doc.chave,
+      tipoDocumento: 'CTE',
+      filial: filial.codigo,
+      xml: doc.xml,
+      usuarioEmail: 'sistema:cte-enriquecimento',
+    });
+
+    // Persiste resultado
+    await this.prisma.client.cteDocumento.update({
+      where: { id: doc.id },
+      data: {
+        protheusGravadoEm: r.gravacao === 'GRAVADO' || r.gravacao === 'JA_EXISTIA' ? new Date() : null,
+        protheusStatus: r.gravacao,
+        protheusErro: r.gravacaoErro,
+      },
+    });
+
+    if (r.gravacao === 'GRAVADO') acc.protheusGravados++;
+    else if (r.gravacao === 'JA_EXISTIA') acc.protheusJaExistia++;
+    else acc.protheusFalhas++;
+  }
 }

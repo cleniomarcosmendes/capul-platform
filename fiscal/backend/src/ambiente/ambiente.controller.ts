@@ -82,4 +82,21 @@ export class AmbienteController {
   ) {
     return this.ambiente.setCteDistribuicaoAmbiente(body.ambiente, user.email);
   }
+
+  /**
+   * Liga/desliga gravação automática no Protheus (SZR010+SZQ010) após
+   * enriquecimento de CT-e. Operacional crítico — ADMIN_TI.
+   *
+   * Quando ativa, cron de enriquecimento (hh:30) tenta gravar todo
+   * CT-e schema=procCTe/procCTeSimp com papel_capul preenchido em
+   * SZR010+SZQ010 via grvXML. Best-effort: falha não trava o cron.
+   */
+  @Put('cte-distribuicao/protheus-grava')
+  @RoleMinima('ADMIN_TI')
+  async setCteProtheusGrava(
+    @Body() body: { ativo: boolean },
+    @CurrentUser() user: FiscalAuthenticatedUser,
+  ) {
+    return this.ambiente.setCteProtheusGravaAtivo(body.ativo, user.email);
+  }
 }

@@ -477,6 +477,12 @@ model AmbienteConfig {
   cteDistribuicaoAmbiente    AmbienteSefaz @default(HOMOLOGACAO)  @map("cte_distribuicao_ambiente")
   cteDistribuicaoAlteradoEm  DateTime?     @map("cte_distribuicao_alterado_em")
   cteDistribuicaoAlteradoPor String?       @map("cte_distribuicao_alterado_por")
+  // Gravação automática no Protheus (SZR010+SZQ010) após enriquecimento
+  // (Fase 4 simplificada — reusa ProtheusGravacaoHelper da Onda 1).
+  // Default false: setor fiscal valida fluxo na tela primeiro, depois ADMIN_TI ativa.
+  cteProtheusGravaAtivo      Boolean       @default(false)         @map("cte_protheus_grava_ativo")
+  cteProtheusGravaAlteradoEm DateTime?     @map("cte_protheus_grava_alterado_em")
+  cteProtheusGravaAlteradoPor String?      @map("cte_protheus_grava_alterado_por")
   ultimaAlteracaoEm          DateTime      @updatedAt @map("ultima_alteracao_em")
   ultimaAlteracaoPor         String?       @map("ultima_alteracao_por")
 
@@ -642,6 +648,13 @@ model CteDocumento {
   // Quando processadoEm IS NULL, documento ainda não foi enriquecido
   // pelo PapelDetectorService da Fase 3. Cron de enriquecimento varre.
   processadoEm    DateTime?    @map("processado_em")
+  // Gravação automática no Protheus (Fase 4 simplificada — após enriquecimento).
+  // protheusGravadoEm IS NULL = nunca foi tentado.
+  // protheusStatus contém GRAVADO / JA_EXISTIA / FALHA_TECNICA (TentativaGravacaoResult.gravacao).
+  // protheusErro guarda código+mensagem se FALHA_TECNICA — pra retentativa futura.
+  protheusGravadoEm DateTime?  @map("protheus_gravado_em")
+  protheusStatus    String?    @map("protheus_status") @db.VarChar(20)
+  protheusErro      String?    @map("protheus_erro")
 
   // CT-e referencia NF-es transportadas via <infDoc><infNFe><chave>.
   // Fase 3 extrai essas chaves; por ora coluna fica NULL.

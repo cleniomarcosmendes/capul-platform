@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { SefazModule } from '../sefaz/sefaz.module.js';
 import { AmbienteModule } from '../ambiente/ambiente.module.js';
 import { NfeModule } from '../nfe/nfe.module.js';
+import { ProtheusModule } from '../protheus/protheus.module.js';
 import { CteController } from './cte.controller.js';
 import { CteService } from './cte.service.js';
 import { CteParserService } from './parsers/cte-parser.service.js';
@@ -19,7 +20,7 @@ import { SincronizacaoFiliaisService } from './distribuicao/sincronizacao-filiai
   // LimiteDiarioModule é @Global no app.module — não precisa importar.
   // PrismaModule também é @Global.
   // ScheduleModule já registrado no app.module (usado por outros schedulers).
-  imports: [SefazModule, AmbienteModule, NfeModule],
+  imports: [SefazModule, AmbienteModule, NfeModule, ProtheusModule],
   controllers: [CteController],
   providers: [
     CteService,

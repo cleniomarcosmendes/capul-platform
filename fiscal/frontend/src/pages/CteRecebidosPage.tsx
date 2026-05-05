@@ -36,6 +36,9 @@ interface CteDocumentoListItem {
   recebidoEm: string;
   processadoEm: string | null;
   erroParse: string | null;
+  protheusGravadoEm: string | null;
+  protheusStatus: string | null;
+  protheusErro: string | null;
 }
 
 interface ListResp {
@@ -218,14 +221,18 @@ export function CteRecebidosPage() {
           </div>
           <div className="flex gap-2">
             {isAdmin && (
-              <Button variant="ghost" onClick={enriquecer} disabled={loading}>
-                <RefreshCw size={16} className="mr-1" />
-                Enriquecer pendentes
-              </Button>
+              <span title="Aplica PapelDetector em CT-es ainda não classificados (papel_capul = NULL) e preenche TOMA/DEST/REM/EXPED/RECEB/AUTXML/TERCEIRO. NÃO consulta SEFAZ — apenas processa XMLs já recebidos. Cron automático roda toda hora no minuto 30; este botão força execução imediata.">
+                <Button variant="ghost" onClick={enriquecer} disabled={loading}>
+                  <RefreshCw size={16} className="mr-1" />
+                  Enriquecer pendentes
+                </Button>
+              </span>
             )}
-            <Button variant="ghost" onClick={() => carregar()} disabled={loading}>
-              <RefreshCw size={16} />
-            </Button>
+            <span title="Recarregar a listagem">
+              <Button variant="ghost" onClick={() => carregar()} disabled={loading}>
+                <RefreshCw size={16} />
+              </Button>
+            </span>
           </div>
         </div>
 
@@ -336,6 +343,7 @@ export function CteRecebidosPage() {
                   <th className="px-3 py-2 text-left">NSU</th>
                   <th className="px-3 py-2 text-left">Ambiente</th>
                   <th className="px-3 py-2 text-left">Recebido em</th>
+                  <th className="px-3 py-2 text-left">Protheus</th>
                   <th className="px-3 py-2 text-right">Tamanho</th>
                   <th className="px-3 py-2"></th>
                 </tr>
@@ -343,14 +351,14 @@ export function CteRecebidosPage() {
               <tbody className="divide-y">
                 {loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-3 py-8 text-center text-gray-500">
+                    <td colSpan={11} className="px-3 py-8 text-center text-gray-500">
                       Carregando...
                     </td>
                   </tr>
                 )}
                 {!loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-3 py-8 text-center text-gray-500">
+                    <td colSpan={11} className="px-3 py-8 text-center text-gray-500">
                       Nenhum CT-e encontrado.
                     </td>
                   </tr>
@@ -388,6 +396,19 @@ export function CteRecebidosPage() {
                       </td>
                       <td className="px-3 py-2 text-xs">
                         {new Date(it.recebidoEm).toLocaleString('pt-BR')}
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        {it.protheusStatus === 'GRAVADO' || it.protheusStatus === 'JA_EXISTIA' ? (
+                          <span title={`Gravado em SZR010+SZQ010 ${it.protheusGravadoEm ? new Date(it.protheusGravadoEm).toLocaleString('pt-BR') : ''}`}>
+                            <Badge variant="green">✓ {it.protheusStatus}</Badge>
+                          </span>
+                        ) : it.protheusStatus === 'FALHA_TECNICA' ? (
+                          <span title={it.protheusErro ?? 'Erro técnico — retry no próximo ciclo'}>
+                            <Badge variant="red">✗ FALHA</Badge>
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-xs" title="Ainda não tentou gravar (flag desligada ou doc novo)">—</span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-right text-xs">
                         {(it.xmlBytes / 1024).toFixed(1)} KB

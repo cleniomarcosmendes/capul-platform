@@ -35,6 +35,12 @@ export class AmbienteService {
       cteDistribuicaoAmbiente: cfg.cteDistribuicaoAmbiente,
       cteDistribuicaoAlteradoEm: cfg.cteDistribuicaoAlteradoEm,
       cteDistribuicaoAlteradoPor: cfg.cteDistribuicaoAlteradoPor,
+      // Gravação automática Protheus (Fase 4 simplificada — flag separada
+      // por defesa: setor fiscal valida tela primeiro, só depois ADMIN_TI
+      // libera gravação no Protheus PROD).
+      cteProtheusGravaAtivo: cfg.cteProtheusGravaAtivo,
+      cteProtheusGravaAlteradoEm: cfg.cteProtheusGravaAlteradoEm,
+      cteProtheusGravaAlteradoPor: cfg.cteProtheusGravaAlteradoPor,
     };
   }
 
@@ -81,6 +87,35 @@ export class AmbienteService {
         cteDistribuicaoAmbiente: ambiente,
         cteDistribuicaoAlteradoEm: new Date(),
         cteDistribuicaoAlteradoPor: usuario,
+      },
+    });
+  }
+
+  /**
+   * Estado da gravação Protheus do CT-e — usado pelo CteEnriquecimentoService
+   * pra decidir se chama o ProtheusGravacaoHelper após enriquecer.
+   */
+  async getCteProtheusGravaAtivo(): Promise<boolean> {
+    const cfg = await this.getOrCreate();
+    return cfg.cteProtheusGravaAtivo;
+  }
+
+  /**
+   * Liga/desliga gravação automática no Protheus (SZR010+SZQ010) após
+   * enriquecimento. Operacional crítico — ADMIN_TI. Quando ativa, cron
+   * de enriquecimento (hh:30) tenta gravar todo CT-e schema=procCTe/procCTeSimp
+   * com papel_capul preenchido em SZR010+SZQ010 via grvXML.
+   *
+   * Protheus é fail-safe: gravação é best-effort (TentativaGravacaoResult),
+   * não trava o cron de enriquecimento.
+   */
+  async setCteProtheusGravaAtivo(ativo: boolean, usuario: string) {
+    return this.prisma.ambienteConfig.update({
+      where: { id: 1 },
+      data: {
+        cteProtheusGravaAtivo: ativo,
+        cteProtheusGravaAlteradoEm: new Date(),
+        cteProtheusGravaAlteradoPor: usuario,
       },
     });
   }

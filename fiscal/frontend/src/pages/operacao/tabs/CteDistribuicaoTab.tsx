@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Truck, ShieldAlert, ShieldCheck, RefreshCw, Sparkles } from 'lucide-react';
+import { Truck, ShieldAlert, ShieldCheck, RefreshCw, Sparkles, Database } from 'lucide-react';
 import { fiscalApi } from '../../../services/api';
 import { Badge } from '../../../components/Badge';
 import { Button } from '../../../components/Button';
@@ -17,6 +17,9 @@ interface AmbienteStatus {
   cteDistribuicaoAmbiente: 'PRODUCAO' | 'HOMOLOGACAO';
   cteDistribuicaoAlteradoEm: string | null;
   cteDistribuicaoAlteradoPor: string | null;
+  cteProtheusGravaAtivo: boolean;
+  cteProtheusGravaAlteradoEm: string | null;
+  cteProtheusGravaAlteradoPor: string | null;
 }
 
 /**
@@ -134,6 +137,36 @@ export function CteDistribuicaoTab() {
     }
   }
 
+  async function handleToggleProtheusGrava() {
+    if (!status) return;
+    const novoEstado = !status.cteProtheusGravaAtivo;
+    const ok = await confirm({
+      title: novoEstado
+        ? 'Ativar gravação automática no Protheus?'
+        : 'Desativar gravação automática no Protheus?',
+      description: novoEstado
+        ? 'A cada execução do enriquecimento (cron hh:30 ou botão), CT-es procCTe/procCTeSimp já enriquecidos serão gravados em SZR010+SZQ010 do Protheus via grvXML. É best-effort — falhas de gravação não param o cron, mas podem deixar CT-es marcados FALHA_TECNICA pra retry. Confirme só após validar tela e fluxo em HOM.'
+        : 'CT-es novos param de ser gravados no Protheus pelo enriquecimento. Os já gravados permanecem (idempotente). Schedulers de varredura e enriquecimento continuam.',
+      variant: novoEstado ? 'warning' : 'info',
+      confirmLabel: novoEstado ? 'Ativar gravação' : 'Desativar',
+    });
+    if (!ok) return;
+    setActing(true);
+    try {
+      await fiscalApi.put('/ambiente/cte-distribuicao/protheus-grava', { ativo: novoEstado });
+      toast.success(
+        novoEstado
+          ? 'Gravação Protheus ATIVADA'
+          : 'Gravação Protheus DESATIVADA',
+      );
+      load();
+    } catch (err) {
+      toast.error('Falha ao alterar', extractApiError(err) ?? undefined);
+    } finally {
+      setActing(false);
+    }
+  }
+
   async function handleEnriquecer() {
     setActing(true);
     try {
@@ -160,6 +193,7 @@ export function CteDistribuicaoTab() {
 
   const ativo = status.cteDistribuicaoAtivo;
   const ambiente = status.cteDistribuicaoAmbiente;
+  const protheusGrava = status.cteProtheusGravaAtivo;
 
   return (
     <>
@@ -241,7 +275,61 @@ export function CteDistribuicaoTab() {
         </div>
       </div>
 
-      {/* Card 3 — Ações de manutenção (GESTOR_FISCAL+) */}
+      {/* Card 3 — Gravação automática no Protheus (SZR010+SZQ010) */}
+      <div
+        className={`mb-6 rounded-lg border p-5 ${
+          protheusGrava ? 'border-emerald-200 bg-emerald-50' : 'border-slate-300 bg-slate-50'
+        }`}
+      >
+        <div className="flex items-start gap-4">
+          <div
+            className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${
+              protheusGrava ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'
+            }`}
+          >
+            <Database className="h-6 w-6" />
+          </div>
+          <div className="flex-1">
+            <h3
+              className={`text-sm font-semibold ${
+                protheusGrava ? 'text-emerald-900' : 'text-slate-700'
+              }`}
+            >
+              Gravação automática no Protheus (SZR010 + SZQ010)
+            </h3>
+            <p className={`mt-1 text-xs ${protheusGrava ? 'text-emerald-800' : 'text-slate-600'}`}>
+              {protheusGrava
+                ? 'CT-es procCTe/procCTeSimp enriquecidos são gravados automaticamente no Protheus via grvXML após cada execução do enriquecimento. Best-effort — falhas marcam protheus_status=FALHA_TECNICA pra retry no próximo ciclo.'
+                : 'CT-es novos NÃO são gravados no Protheus pelo enriquecimento — apenas persistidos em fiscal.cte_documento. Setor fiscal vê na tela /fiscal/cte mas Protheus não recebe. Ative quando fluxo estiver validado.'}
+            </p>
+            <div className="mt-3 flex items-center gap-3">
+              <Badge variant={protheusGrava ? 'green' : 'gray'}>
+                {protheusGrava ? 'GRAVANDO' : 'NÃO GRAVA'}
+              </Badge>
+              {isAdmin && (
+                <Button
+                  variant={protheusGrava ? 'danger' : 'primary'}
+                  size="sm"
+                  onClick={handleToggleProtheusGrava}
+                  loading={acting}
+                >
+                  {protheusGrava ? 'Desativar gravação' : 'Ativar gravação Protheus'}
+                </Button>
+              )}
+            </div>
+            {status.cteProtheusGravaAlteradoEm && (
+              <p className="mt-3 text-xs text-slate-500">
+                Última alteração:{' '}
+                {new Date(status.cteProtheusGravaAlteradoEm).toLocaleString('pt-BR')}
+                {status.cteProtheusGravaAlteradoPor &&
+                  ` por ${status.cteProtheusGravaAlteradoPor}`}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Card 4 — Ações de manutenção (GESTOR_FISCAL+) */}
       {isGestor && (
         <div className="mb-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-semibold text-slate-900 mb-3">Manutenção</h3>
@@ -256,9 +344,11 @@ export function CteDistribuicaoTab() {
                 filiais ativas em <code>core.filiais</code>. Roda automático a cada 15min;
                 aqui força execução imediata após cadastro de filial nova.
               </p>
-              <Button variant="ghost" size="sm" onClick={handleSincronizarFiliais} loading={acting}>
-                Forçar sync
-              </Button>
+              <span title="Lê core.filiais (status=ATIVO) e: (1) atualiza cache do PapelDetector com os 35 CNPJs Capul; (2) cria cursor em cte_controle_nsu para filiais novas; (3) reativa cursor de filiais que voltaram a ATIVO; (4) desativa cursor de filiais inativadas. NÃO consulta SEFAZ — apenas DB. Use após cadastrar/inativar filial no Configurador para aplicar imediatamente sem esperar 15min do scheduler.">
+                <Button variant="ghost" size="sm" onClick={handleSincronizarFiliais} loading={acting}>
+                  Forçar sync
+                </Button>
+              </span>
             </div>
             <div className="rounded border border-slate-200 p-3 flex flex-col">
               <div className="flex items-center gap-2 mb-1">
@@ -270,9 +360,11 @@ export function CteDistribuicaoTab() {
                 aplica PapelDetector e popula <code>papel_capul</code>. Cron de 1h (hh:30)
                 roda automático; aqui força execução imediata.
               </p>
-              <Button variant="ghost" size="sm" onClick={handleEnriquecer} loading={acting}>
-                Forçar enriquecimento
-              </Button>
+              <span title="Aplica PapelDetector em CT-es ainda não classificados (papel_capul = NULL) e preenche TOMA/DEST/REM/EXPED/RECEB/AUTXML/TERCEIRO. NÃO consulta SEFAZ — apenas processa XMLs já recebidos. Idempotente: registros já processados são pulados. Use após cadastrar filial nova (junto com Forçar sync) para reprocessar histórico, ou para aparecer categorização imediata em vez de esperar até hh:30.">
+                <Button variant="ghost" size="sm" onClick={handleEnriquecer} loading={acting}>
+                  Forçar enriquecimento
+                </Button>
+              </span>
             </div>
           </div>
         </div>
