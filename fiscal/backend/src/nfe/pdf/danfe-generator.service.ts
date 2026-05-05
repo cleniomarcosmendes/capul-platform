@@ -1602,14 +1602,23 @@ export class DanfeGeneratorService {
   }
 
   /**
-   * Garante que o CST/CSOSN sempre tem 3 dígitos (O/CST: origem + código).
-   * CST tem 2 dígitos → mantém 2; CSOSN tem 3 dígitos → mantém 3.
+   * Formata o CST/CSOSN do DANFE conforme padrão ABNT NBR 15530:
+   * - CST (Regime Normal):    2 dígitos → coluna O/CST = origem + CST  = 3 chars (ex: "041", "010")
+   * - CSOSN (Simples Nacional): 3 dígitos → coluna O/CST = origem + CSOSN = 4 chars (ex: "0102", "0500")
+   *
+   * Bug pré-05/05/2026: forçava `padStart(3, '0')` em tudo, fazendo CST de
+   * 2 chars virar 3 chars (ex: "51" → "051"), resultando em coluna O/CST
+   * com 4 chars ("0051") quando deveria ter 3 ("051"). Setor fiscal
+   * Capul reportou em 05/05.
+   *
+   * Detecta o regime pelo comprimento do código original (após remover
+   * não-dígitos): 3 = CSOSN; 1-2 = CST. Vazio/null assume CST "00".
    */
   private padCst(cst: string | null | undefined): string {
-    if (!cst) return '000';
+    if (!cst) return '00';
     const d = cst.replace(/\D/g, '');
-    if (d.length >= 3) return d.slice(0, 3);
-    return d.padStart(3, '0');
+    if (d.length >= 3) return d.slice(0, 3);  // CSOSN — preserva 3 dígitos
+    return d.padStart(2, '0');                // CST — preserva 2 dígitos
   }
 }
 

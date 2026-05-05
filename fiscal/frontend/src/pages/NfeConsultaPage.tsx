@@ -412,8 +412,12 @@ export function NfeConsultaPage() {
                 leftIcon={<RefreshCw className="h-4 w-4" />}
                 onClick={handleAtualizarStatus}
                 loading={loading}
+                title="Consulta direta na SEFAZ (cStat ao vivo + procEventoNFe com assinatura). Consome 1 slot do limite diário (2.000/dia, compartilhado entre todas as filiais). Use apenas quando precisar do status atualíssimo da SEFAZ ou do XML do evento com assinatura — no dia-a-dia, prefira 'Atualizar eventos (Protheus)' na seção de eventos abaixo."
               >
                 Atualizar status no SEFAZ
+                <span className="ml-1.5 inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                  1 slot/dia
+                </span>
               </Button>
               <Button
                 variant="secondary"
@@ -688,10 +692,13 @@ function AbaNfe({
             onClick={onAtualizarEventosProtheus}
             disabled={atualizandoEventos}
             className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            title="Lê SPED156/SPED150 do Protheus — não consome slot SEFAZ"
+            title="Lê SPED156/SPED150 do Protheus — captura cancelamentos, CC-e, ciência da operação e demais eventos posteriores. Não consome slot SEFAZ. Use no dia-a-dia toda vez que quiser ver eventos atualizados sem ir à SEFAZ."
           >
             <RefreshCw className={`h-3.5 w-3.5 ${atualizandoEventos ? 'animate-spin' : ''}`} />
             Atualizar eventos (Protheus)
+            <span className="ml-1 inline-flex items-center rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">
+              sem custo
+            </span>
           </button>
         </div>
 
@@ -750,12 +757,15 @@ function AbaNfe({
             </p>
           </div>
         ) : (
-          <p className="text-sm text-slate-500">
-            Nenhum evento registrado.{' '}
-            <span className="italic">
-              Clique em &quot;Atualizar eventos (Protheus)&quot; para carregar a timeline do SPED156.
-            </span>
-          </p>
+          <div className="text-sm text-slate-500">
+            <p>Nenhum evento registrado.</p>
+            <p className="mt-1 italic">
+              Clique em &quot;Atualizar eventos (Protheus)&quot; acima para carregar a timeline do SPED156 —
+              <span className="font-semibold"> dia-a-dia, comece sempre por aqui</span> (sem custo SEFAZ).
+              Se não aparecer o evento esperado, aí sim &quot;Atualizar status no SEFAZ&quot; no topo da tela
+              força consulta direta (consome 1 slot do limite diário).
+            </p>
+          </div>
         )}
       </section>
     </>

@@ -115,6 +115,8 @@ export interface ProtheusStatus {
   gravacaoErro: string | null;
   permiteReexecucao: boolean;
   modoMock: boolean;
+  /** Body JSON da última tentativa grvXML — pra debug fiscal autoatendido. */
+  grvRequest: string | null;
 }
 
 // ----- NF-e parsed -----

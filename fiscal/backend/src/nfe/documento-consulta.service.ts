@@ -19,6 +19,8 @@ export interface RegistrarConsultaInput {
   valorTotal?: number | null;
   statusAtual?: string | null;
   erroMensagem?: string | null;
+  /** Body JSON da última tentativa grvXML — debug fiscal autoatendido. */
+  protheusGrvRequest?: string | null;
 }
 
 /**
@@ -54,6 +56,7 @@ export class DocumentoConsultaService {
         valorTotal: valorTotal !== null ? valorTotal : undefined,
         statusAtual: input.statusAtual,
         erroMensagem: input.erroMensagem,
+        protheusGrvRequest: input.protheusGrvRequest ?? undefined,
       },
       update: {
         origem: input.origem,
@@ -68,6 +71,10 @@ export class DocumentoConsultaService {
         numeroNF: input.numeroNF ?? undefined,
         serie: input.serie ?? undefined,
         valorTotal: valorTotal !== null ? valorTotal : undefined,
+        // protheusGrvRequest atualizado a cada nova tentativa de gravação,
+        // mesmo se o request anterior teve sucesso — permite debug de
+        // problemas que aparecem só em algumas chaves.
+        protheusGrvRequest: input.protheusGrvRequest ?? undefined,
       },
     });
   }

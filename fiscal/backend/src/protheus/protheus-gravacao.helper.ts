@@ -13,6 +13,15 @@ export interface TentativaGravacaoResult {
   gravacaoErro: string | null;
   /** true quando o Protheus indicou que o XML já existia (corrida entre leitura e post). */
   raceCondition: boolean;
+  /**
+   * Body JSON serializado que foi enviado ao POST /grvXML. Persistido
+   * em `documento_consulta.protheus_grv_request` ou
+   * `cte_documento.protheus_grv_request` pelo caller — pra setor fiscal
+   * autoatender debug sem depender de logs do container. NULL quando
+   * a montagem do body falhou antes da chamada (gravacao=FALHA_TECNICA
+   * com `gravacaoErro` indicando erro de parser).
+   */
+  requestBody: string | null;
 }
 
 /**
@@ -68,8 +77,20 @@ export class ProtheusGravacaoHelper {
         gravacaoMensagem: `Não foi possível montar o payload para gravar o ${docLabel}: ${errMsg}`,
         gravacaoErro: errMsg,
         raceCondition: false,
+        requestBody: null,
       };
     }
+
+    // Body serializado pra persistência (visível pelo setor fiscal no modal
+    // de detalhe) e pra log estruturado.
+    const requestBody = JSON.stringify(body, null, 2);
+
+    // Log do body completo antes do POST — necessário pra debug com a equipe
+    // Protheus quando uma chave específica falha (request real enviado).
+    // Pode ser silenciado em prod via LOG_LEVEL=warn (logger nestjs-pino respeita).
+    this.logger.log(
+      `grvXML ${docLabel} ${chave} filial=${filial} request: ${JSON.stringify(body)}`,
+    );
 
     try {
       const resp = (await this.protheusXml.grvXml(body)) as
@@ -90,6 +111,7 @@ export class ProtheusGravacaoHelper {
             'XML já havia sido gravado por outro processo — sem ação necessária.',
           gravacaoErro: null,
           raceCondition: true,
+          requestBody,
         };
       }
 
@@ -101,6 +123,7 @@ export class ProtheusGravacaoHelper {
         gravacaoMensagem: 'XML gravado no Protheus (SZR010 + SZQ010).',
         gravacaoErro: null,
         raceCondition: false,
+        requestBody,
       };
     } catch (err) {
       if (err instanceof XmlFiscalProtheusError) {
@@ -113,6 +136,7 @@ export class ProtheusGravacaoHelper {
           gravacaoMensagem: `Não foi possível gravar o ${docLabel} em SZR010/SZQ010. ${mapearCodigoProtheus(err.code)}`,
           gravacaoErro: `${err.code}: ${err.message}`,
           raceCondition: false,
+          requestBody,
         };
       }
 
@@ -125,6 +149,7 @@ export class ProtheusGravacaoHelper {
           `A consulta à SEFAZ continua válida.`,
         gravacaoErro: errMsg,
         raceCondition: false,
+        requestBody,
       };
     }
   }

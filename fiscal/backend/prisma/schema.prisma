@@ -166,6 +166,11 @@ model DocumentoConsulta {
   valorTotal                  Decimal?            @map("valor_total") @db.Decimal(15, 2)
   statusAtual                 String?             @db.VarChar(30)
   erroMensagem                String?             @map("erro_mensagem")
+  // Body JSON da última tentativa de gravação no Protheus (POST /grvXML).
+  // Persistido pra setor fiscal autoatender debug com equipe Protheus
+  // sem precisar pedir SSH — botão "Copiar JSON" no modal de detalhe
+  // expõe o conteúdo. Atualizado a cada tentarGravar.
+  protheusGrvRequest          String?             @map("protheus_grv_request")
   createdAt                   DateTime            @default(now()) @map("created_at")
   updatedAt                   DateTime            @updatedAt @map("updated_at")
 
@@ -658,6 +663,9 @@ model CteDocumento {
   // Tentativas acumuladas pra retry exponencial. Após MAX_TENTATIVAS,
   // status vira PROTHEUS_DESISTIU (terminal). Endpoint admin reseta.
   protheusTentativas Int        @default(0) @map("protheus_tentativas")
+  // Body JSON da última tentativa grvXML — pra setor fiscal autoatender
+  // debug (botão "Copiar JSON" no modal de detalhe).
+  protheusGrvRequest String?    @map("protheus_grv_request")
 
   // CT-e referencia NF-es transportadas via <infDoc><infNFe><chave>.
   // Fase 3 extrai essas chaves; por ora coluna fica NULL.

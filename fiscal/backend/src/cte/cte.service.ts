@@ -161,6 +161,11 @@ export class CteService {
       gravacaoErro,
       permiteReexecucao: leitura === 'FALHA_TECNICA',
       modoMock: this.protheusXml.isMockAtivo(),
+      // CteService Onda 1 não dispara grvXML aqui — gravação fica delegada
+      // ao Protheus via /xmlNfe (lazy). grvRequest persistido em
+      // documento_consulta.protheus_grv_request quando regravarNoProtheus
+      // ou tentarGravar forem chamados em outro fluxo.
+      grvRequest: null,
     };
     const alertaProtheus = construirAlertaLegado(protheusStatus);
 

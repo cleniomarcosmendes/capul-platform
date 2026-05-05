@@ -165,6 +165,9 @@ export class NfeService {
     let gravacao: ProtheusGravacaoStatus = 'NAO_TENTADO';
     let gravacaoMensagem: string | null = null;
     let gravacaoErro: string | null = null;
+    // Body JSON da última tentativa grvXML — persistido em documento_consulta
+    // pra setor fiscal autoatender debug com equipe Protheus.
+    let protheusGrvRequest: string | null = null;
 
     // ---------- passo 1: GET /xmlNfe (busca SZR010 → fallback SPED156) ----------
     let xmlNfeResp: XmlNfeResult | null = null;
@@ -237,6 +240,7 @@ export class NfeService {
         gravacao = result.gravacao;
         gravacaoMensagem = result.gravacaoMensagem;
         gravacaoErro = result.gravacaoErro;
+        protheusGrvRequest = result.requestBody;
         if (result.raceCondition) origem = 'PROTHEUS_CACHE_RACE';
       }
     } else {
@@ -257,6 +261,7 @@ export class NfeService {
       gravacao = result.gravacao;
       gravacaoMensagem = result.gravacaoMensagem;
       gravacaoErro = result.gravacaoErro;
+      protheusGrvRequest = result.requestBody;
       if (result.raceCondition) origem = 'PROTHEUS_CACHE_RACE';
     }
 
@@ -269,6 +274,7 @@ export class NfeService {
       gravacaoErro,
       permiteReexecucao: gravacao === 'FALHA_TECNICA' || leitura === 'FALHA_TECNICA',
       modoMock: this.protheusXml.isMockAtivo(),
+      grvRequest: protheusGrvRequest,
     };
 
     // Back-compat: monta uma mensagem consolidada (legado)
@@ -297,6 +303,7 @@ export class NfeService {
       serie: parsed.dadosGerais.serie || null,
       valorTotal: parsed.totais.valorNota,
       statusAtual: parsed.protocoloAutorizacao?.motivo ?? null,
+      protheusGrvRequest,
     });
 
     // --- passo 4: garantir evento de AUTORIZACAO persistido (idempotente) + carregar timeline ---

@@ -194,6 +194,19 @@ export function OrigemBadge({
                     Erro técnico: {status.gravacaoErro}
                   </div>
                 )}
+                {status.grvRequest && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(status.grvRequest ?? '');
+                      window.alert('Request JSON copiado pra área de transferência. Cole pra equipe Protheus debugar.');
+                    }}
+                    className="mt-2 text-[11px] px-2 py-0.5 bg-blue-100 text-blue-800 hover:bg-blue-200 rounded border border-blue-300 inline-flex items-center gap-1"
+                    title="Copia o body JSON enviado ao POST /grvXML do Protheus pra debug com a equipe Protheus."
+                  >
+                    📋 Copiar request grvXML (debug Protheus)
+                  </button>
+                )}
               </div>
             )}
 

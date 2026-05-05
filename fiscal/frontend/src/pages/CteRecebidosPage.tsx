@@ -67,6 +67,7 @@ interface DetalheResp {
     xml: string;
     xmlSha256: string;
     protheusTentativas?: number;
+    protheusGrvRequest?: string | null;
   };
   eventos: CteEvento[];
 }
@@ -543,6 +544,28 @@ export function CteRecebidosPage() {
                           <span className="text-gray-500 text-xs">Último erro:</span>
                           <pre className="mt-1 bg-red-50 border border-red-200 rounded p-2 text-xs text-red-800 whitespace-pre-wrap break-all">
                             {detalhe.documento.protheusErro}
+                          </pre>
+                        </div>
+                      )}
+                      {detalhe.documento.protheusGrvRequest && (
+                        <div className="mt-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-gray-500 text-xs">
+                              Request enviado ao Protheus (debug — copiar pra equipe Protheus):
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(detalhe.documento.protheusGrvRequest ?? '');
+                                toast.success('JSON copiado pra área de transferência');
+                              }}
+                              className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded border border-blue-200"
+                            >
+                              📋 Copiar JSON
+                            </button>
+                          </div>
+                          <pre className="bg-slate-100 border border-slate-300 rounded p-2 text-xs text-slate-700 whitespace-pre-wrap break-all max-h-64 overflow-y-auto">
+                            {detalhe.documento.protheusGrvRequest}
                           </pre>
                         </div>
                       )}

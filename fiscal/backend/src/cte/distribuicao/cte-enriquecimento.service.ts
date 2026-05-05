@@ -292,6 +292,8 @@ export class CteEnriquecimentoService {
     // Persiste resultado + contador. Se atingiu MAX, marca status terminal
     // PROTHEUS_DESISTIU pra sair da fila de retry e exigir intervenção do
     // operador (que reseta via endpoint admin).
+    // protheusGrvRequest atualizado a cada tentativa — pra setor fiscal
+    // autoatender debug com equipe Protheus (botão "Copiar JSON" no modal).
     await this.prisma.client.cteDocumento.update({
       where: { id: doc.id },
       data: {
@@ -301,6 +303,7 @@ export class CteEnriquecimentoService {
           ? `Desistido após ${novasTentativas} tentativas. Última: ${r.gravacaoErro ?? '(sem detalhe)'}`
           : r.gravacaoErro,
         protheusTentativas: novasTentativas,
+        protheusGrvRequest: r.requestBody,
       },
     });
 

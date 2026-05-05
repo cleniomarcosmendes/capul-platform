@@ -36,6 +36,14 @@ export interface ProtheusStatus {
    * o frontend deve exibir um aviso destacado para nao confundir o usuario.
    */
   modoMock: boolean;
+  /**
+   * Body JSON da última tentativa grvXML (POST /grvXML enviado ao Protheus).
+   * Persistido em `documento_consulta.protheus_grv_request`. NULL quando
+   * gravação ainda não foi tentada ou montagem do body falhou. Frontend
+   * mostra botão "Copiar JSON" no modal de detalhe pra setor fiscal
+   * autoatender debug com equipe Protheus sem precisar de SSH.
+   */
+  grvRequest: string | null;
 }
 
 /**
