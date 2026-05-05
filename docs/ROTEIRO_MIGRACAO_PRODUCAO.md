@@ -1,8 +1,16 @@
 # Roteiro de Migracao para Producao — Capul Platform
 
-**Versao**: 1.1
-**Data**: 19/04/2026
+**Versao**: 1.2
+**Data**: 05/05/2026
 **Objetivo**: Procedimento padrao para deploy e atualizacoes em producao
+
+**Mudancas v1.2 (05/05/2026)**: Init jobs `*-migrate` para aplicar migrations
+Prisma automaticamente no `docker compose up -d` (auth-migrate, gestao-ti-migrate,
+fiscal-migrate). Pos-incidente deploy 04/05 onde 5 migrations ficaram pendentes
+silenciosamente porque o `CMD` do backend ia direto para `node dist/main.js`
+sem rodar `prisma migrate deploy`. A partir desta versao, NAO e mais necessario
+rodar `prisma migrate deploy` manualmente — Compose dispara o init job antes
+de subir o backend correspondente (`depends_on: service_completed_successfully`).
 
 **Mudancas v1.1 (19/04/2026)**: inclusao do Modulo Fiscal (Onda 1 do Plano v2.0) —
 migration SQL manual, seed de endpoints Protheus em `core.integracoes_api`, tabela
@@ -12,16 +20,27 @@ migration SQL manual, seed de endpoints Protheus em `core.integracoes_api`, tabe
 
 ## Arquitetura de Migrations
 
-| Modulo | Estrategia | Ferramenta | Controle |
-|--------|-----------|------------|----------|
-| **Auth Gateway** | Prisma Migrations | `prisma migrate deploy` | Tabela `core._prisma_migrations` |
-| **Gestao TI** | Prisma Migrations | `prisma migrate deploy` | Tabela `gestao_ti._prisma_migrations` |
-| **Inventario** | SQL Manual | `inventario/database/migrate.sh` | Tabela `inventario.schema_migrations` |
-| **Fiscal** | SQL Manual (via `prisma migrate diff` + `psql`) | `fiscal/backend/prisma/migrations/*.sql` | Versionamento manual (nao ha tabela de controle) |
+| Modulo | Estrategia | Aplicacao | Controle |
+|--------|-----------|-----------|----------|
+| **Auth Gateway** | Prisma Migrations | **Init job `auth-migrate`** (automatico no `up -d`) | Tabela `core._prisma_migrations` |
+| **Gestao TI** | Prisma Migrations | **Init job `gestao-ti-migrate`** (automatico no `up -d`) | Tabela `gestao_ti._prisma_migrations` |
+| **Fiscal** | Prisma Migrations | **Init job `fiscal-migrate`** (automatico no `up -d`) | Tabela `fiscal._prisma_migrations` |
+| **Inventario** | SQL Manual | `inventario/database/migrate.sh` (manual ou via `scripts/migrate.sh`) | Tabela `inventario.schema_migrations` |
 
-**Ordem obrigatoria**: Auth Gateway → Gestao TI → Inventario → Fiscal (por dependencia de FK cross-schema: `fiscal.usuario_core` → `core.usuarios`)
+**Como funciona o init job (a partir de 05/05/2026):**
 
-**Por que Fiscal usa SQL manual?** Schema `fiscal` compartilha o mesmo banco `capul_platform` com outros schemas (`core`, `gestao_ti`, `inventario`). `prisma migrate deploy` do Fiscal tentaria reescrever o schema `core` inteiro (que o auth-gateway gerencia), quebrando tudo. Por isso migrations do Fiscal sao geradas via `prisma migrate diff` e aplicadas via `psql`.
+Cada backend Node tem um servico irmao no `docker-compose.yml` que roda exclusivamente
+`npx prisma migrate deploy` e termina (exit 0/1). O backend tem `depends_on:
+service_completed_successfully` apontando para o init job — Compose so inicia o
+backend depois que o init terminou com exit 0. Em caso de falha do migrate
+(`exit 1`), o backend nao sobe e o `docker compose ps` mostra o init em estado
+`exited (1)` — falha visivel, sem janela de "codigo novo + schema velho".
+
+**Ordem obrigatoria** (gerenciada automaticamente pelo Compose via `depends_on`):
+postgres healthy → init jobs em paralelo → backends → frontends.
+
+**Inventario** continua com SQL manual (sem init job equivalente — ainda nao
+foi padronizado). Aplicar via `bash scripts/migrate.sh` apos o `up -d`.
 
 ---
 
@@ -45,13 +64,18 @@ cp .env.example .env
 # - JWT_SECRET, JWT_REFRESH_SECRET (gerar com: openssl rand -hex 64)
 # - CORS_ORIGINS (IPs da intranet)
 
-# 3. Subir containers
+# 3. Subir containers (init jobs *-migrate aplicam Prisma automaticamente)
 docker compose up -d
 
 # 4. Aguardar PostgreSQL ficar healthy
 docker compose exec postgres pg_isready -U $DB_USER
 
-# 5. Executar migrations + seeds
+# 4.1. Confirmar que init jobs sairam com sucesso (auditoria)
+docker compose ps --all | grep -E "auth-migrate|gestao-ti-migrate|fiscal-migrate"
+# Esperado: cada um em "Exited (0)" — exit code 0 = sucesso, NAO e erro
+# Se aparecer "Exited (1)": ver `docker compose logs <servico>-migrate` para diagnostico
+
+# 5. Inventario SQL + seeds (NAO ha init job do Inventario — ainda manual)
 bash scripts/migrate.sh
 
 # 6. Verificar
@@ -84,9 +108,16 @@ git pull origin main
 docker compose build
 
 # 4. Subir servicos
+#    Init jobs *-migrate rodam ANTES dos backends (Prisma migrate deploy automatico).
+#    Se algum init falhar, o backend correspondente NAO sobe.
 docker compose up -d
 
-# 5. Executar migrations pendentes (sem seed)
+# 4.1. Auditoria: confirmar exit 0 dos init jobs e logs limpos
+docker compose ps --all | grep -E "auth-migrate|gestao-ti-migrate|fiscal-migrate"
+docker compose logs auth-migrate gestao-ti-migrate fiscal-migrate 2>&1 | tail -20
+# Esperado: cada init com "Exited (0)" + log "No pending migrations" OU "Applying migration X..."
+
+# 5. Inventario (init job nao existe — manter manual)
 bash scripts/migrate.sh --skip-seed
 
 # 6. Recriar nginx (para pegar novos IPs dos containers)
@@ -264,14 +295,16 @@ Templates em `scripts/systemd/`. Veja `scripts/systemd/README.md` para instalaca
 
 | Acao | Comando |
 |------|---------|
-| **Primeiro deploy** | `bash scripts/migrate.sh` |
-| **Atualizacao** | `bash scripts/migrate.sh --skip-seed` |
+| **Primeiro deploy** | `docker compose up -d` (init jobs Prisma) + `bash scripts/migrate.sh` (Inventario SQL + seeds) |
+| **Atualizacao Prisma** | `docker compose up -d --build` (init jobs aplicam migrations automaticamente) |
+| **Atualizacao Inventario** | `bash scripts/migrate.sh --skip-seed` (init job ainda nao existe) |
 | **Baseline inventario** | `bash scripts/migrate.sh --baseline-inventario` |
+| **Auditoria init jobs** | `docker compose ps --all \| grep migrate` → todos `Exited (0)` |
 | **Status Auth GW** | `docker compose exec auth-gateway npx prisma migrate status` |
 | **Status Gestao TI** | `docker compose exec gestao-ti-backend npx prisma migrate status` |
+| **Status Fiscal** | `docker compose exec fiscal-backend npx prisma migrate status` |
 | **Status Inventario** | `docker compose exec postgres psql -U $DB_USER -d capul_platform -c "SELECT * FROM inventario.schema_migrations ORDER BY id"` |
-| **Status Fiscal** | `ls fiscal/backend/prisma/migrations/` (versionamento manual — ver Secao 9) |
-| **Aplicar migration Fiscal** | `docker compose exec -T postgres sh -c "psql -U \$POSTGRES_USER -d \$POSTGRES_DB -v ON_ERROR_STOP=1" < fiscal/backend/prisma/migrations/XXX/migration.sql` |
+| **Forcar reaplicacao manual (excecao)** | `docker compose run --rm <servico>-migrate` (auth-migrate, gestao-ti-migrate, fiscal-migrate) |
 | **Seed endpoints Fiscal** | `docker compose exec -T postgres sh -c "psql -U \$POSTGRES_USER -d \$POSTGRES_DB" < fiscal/backend/prisma/seed-integracoes-fiscal.sql` |
 | **Health Fiscal** | `curl -sk https://localhost/api/v1/fiscal/health \| jq .` |
 | **Limite diario** | `curl -sk -H "Authorization: Bearer $TOKEN" https://localhost/api/v1/fiscal/operacao/limites \| jq .` |
@@ -359,9 +392,13 @@ DESENVOLVIMENTO                           PRODUCAO
                                           5. git pull
                                           6. docker compose build
                                           7. docker compose up -d
-                                          8. bash scripts/migrate.sh --skip-seed
-                                             (aplica apenas migrations pendentes)
-                                          9. Verificar
+                                             (init jobs *-migrate aplicam Prisma automaticamente
+                                              ANTES dos backends subirem)
+                                          8. Auditoria: docker compose ps --all | grep migrate
+                                             (cada init em "Exited (0)" = sucesso)
+                                          9. bash scripts/migrate.sh --skip-seed
+                                             (apenas para Inventario SQL — ainda manual)
+                                          10. Verificar
 ```
 
 **Regra de ouro**: NUNCA usar `prisma migrate dev` ou `prisma db push` em producao.
@@ -449,22 +486,30 @@ docker compose stop fiscal-backend fiscal-frontend
 git pull origin main
 
 # 3. Rebuild
-docker compose build fiscal-backend fiscal-frontend
+docker compose build fiscal-backend fiscal-frontend fiscal-migrate
 
-# 4. Verificar se ha migration nova em fiscal/backend/prisma/migrations/
-ls -t fiscal/backend/prisma/migrations/
-
-# 5. Se sim, aplicar apenas a migration nova:
-docker compose exec -T postgres sh -c "psql -U \$POSTGRES_USER -d \$POSTGRES_DB -v ON_ERROR_STOP=1" \
-  < fiscal/backend/prisma/migrations/20260XXX_descricao/migration.sql
-
-# 6. Subir
+# 4. Subir — init job fiscal-migrate aplica migrations Prisma novas automaticamente
+#    antes do fiscal-backend iniciar. NAO e mais necessario aplicar manual via psql.
 docker compose up -d fiscal-backend fiscal-frontend
 
-# 7. Verificar
+# 5. Auditoria do init job
+docker compose ps --all | grep fiscal-migrate
+# Esperado: "Exited (0)"
+docker compose logs fiscal-migrate | tail -20
+# Esperado: "Applying migration X..." OU "No pending migrations to apply."
+
+# 6. Verificar
 curl -sk https://PRODUCAO/api/v1/fiscal/health
 docker compose logs --tail 30 fiscal-backend | grep -iE "started|error"
 ```
+
+> **Nota historica (v1.1):** ate 04/05/2026, migrations do Fiscal eram aplicadas
+> manualmente via `psql` por preocupacao de o Prisma reescrever schemas alheios.
+> A partir de 05/05/2026, com `multiSchema` configurado e schemas isolados
+> (`fiscal._prisma_migrations` rastreia so as do schema fiscal), o init job
+> `fiscal-migrate` aplica de forma segura. O fluxo manual via `psql` continua
+> disponivel como fallback (rodar `prisma migrate deploy` localmente, exportar
+> SQL, aplicar via psql) caso necessario em incidente especifico.
 
 ### 9.4. Flags de producao obrigatorias (`.env`)
 
@@ -573,5 +618,16 @@ Ver: `docs/PENDENCIAS_PROTHEUS_18ABR2026.md` para a lista formal de pendencias c
 
 ---
 
-**Ultima Atualizacao**: 19/04/2026
-**Versao**: 1.1
+**Ultima Atualizacao**: 05/05/2026
+**Versao**: 1.2
+
+## Changelog
+
+- **1.2 (05/05/2026)**: Init jobs `*-migrate` aplicam Prisma migrations no
+  `docker compose up -d`. Fluxo manual via `psql` removido como caminho
+  primario; mantido como fallback. Pos-incidente deploy 04/05 (5 migrations
+  pendentes silenciosas no gestao-ti porque o `CMD` ia direto para
+  `node dist/main.js`). Tabela "Arquitetura de Migrations" reorganizada
+  com coluna "Aplicacao" deixando claro que cada modulo Prisma agora tem
+  init job. Inventario continua manual ate ter init equivalente.
+- **1.1 (19/04/2026)**: Inclusao do Modulo Fiscal — Onda 1 do Plano v2.0.

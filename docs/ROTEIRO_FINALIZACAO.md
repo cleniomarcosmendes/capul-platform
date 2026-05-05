@@ -1,7 +1,7 @@
 # Roteiro de Finalizacao - Capul Platform
 
-**Versao**: 1.3
-**Data**: 04/05/2026
+**Versao**: 1.4
+**Data**: 05/05/2026
 **Objetivo**: Procedimento padrao apos finalizar ajustes no sistema
 
 **Modulos cobertos**: auth-gateway, hub, gestao-ti, inventario, configurador, **fiscal**
@@ -153,17 +153,36 @@ docker compose exec fiscal-backend sh -c 'ls -la /app/certs/'
 ```
 
 ### 2.3 Verificacao de Migrations
+
+A partir de 05/05/2026 (v1.4), Prisma migrations sao aplicadas automaticamente
+pelos init jobs `*-migrate` no `docker compose up -d`. Esta verificacao serve
+como **auditoria pos-deploy**, nao como passo de aplicacao.
+
 ```bash
-# Auth gateway
+# Auditoria dos init jobs (devem ter saido com exit 0)
+docker compose ps --all | grep -E "auth-migrate|gestao-ti-migrate|fiscal-migrate"
+# Esperado: cada um em "Exited (0)"
+
+# Status detalhado por backend (deve mostrar "Database schema is up to date")
 docker compose exec auth-gateway npx prisma migrate status
-
-# Gestao TI
 docker compose exec gestao-ti-backend npx prisma migrate status
+docker compose exec fiscal-backend npx prisma migrate status
+```
 
-# Fiscal (multi-schema: fiscal + core — nao usa Prisma migrate system)
-# ALTERs diretos sao rastreados em `fiscal/backend/prisma/alters/*.sql`
-docker compose exec fiscal-backend sh -c 'ls -la /app/prisma/'
-ls fiscal/backend/prisma/alters/ 2>/dev/null || echo "(sem ALTERs pendentes)"
+**Se algum init job aparecer "Exited (1)":**
+```bash
+# Investigar logs do init que falhou
+docker compose logs <servico>-migrate | tail -50
+
+# Apos corrigir a causa raiz (migration mal escrita, FK quebrada, etc.):
+docker compose run --rm <servico>-migrate
+# Idempotente — re-aplica apenas migrations pendentes.
+```
+
+**Inventario** continua com SQL manual (sem init job equivalente):
+```bash
+docker compose exec postgres psql -U capul_user -d capul_platform \
+  -c "SELECT * FROM inventario.schema_migrations ORDER BY id"
 ```
 
 ### 2.4 Analise de Arquivos Orfaos
@@ -413,11 +432,15 @@ Aplicar este checklist **sempre que houver alteracoes em `fiscal/`**:
 
 ---
 
-**Ultima Atualizacao**: 04/05/2026
-**Versao**: 1.3
+**Ultima Atualizacao**: 05/05/2026
+**Versao**: 1.4
 
 ## Changelog
 
+- **1.4 (05/05/2026)**: Secao 2.3 "Verificacao de Migrations" reescrita —
+  init jobs `*-migrate` aplicam automaticamente no `docker compose up -d`,
+  o passo agora e auditoria pos-deploy + diagnostico de falha. Pos-incidente
+  deploy 04/05 (5 migrations gestao-ti pendentes silenciosas).
 - **1.3 (04/05/2026)**: Build cache de 168h → 24h (libera mais espaco em dev ativo).
   Volume dangling: inspecao via container Alpine (sem sudo). Procedimento explicito
   para arquivos > 5MB (perguntar caso a caso, remover pastas vazias depois).
