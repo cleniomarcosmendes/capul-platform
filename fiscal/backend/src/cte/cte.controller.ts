@@ -23,6 +23,7 @@ import { DistribuicaoNsuService } from './distribuicao/distribuicao-nsu.service.
 import { CteEnriquecimentoService } from './distribuicao/cte-enriquecimento.service.js';
 import { PapelDetectorService } from './distribuicao/papel-detector.service.js';
 import { CteDocumentoService } from './distribuicao/cte-documento.service.js';
+import { SincronizacaoFiliaisService } from './distribuicao/sincronizacao-filiais.service.js';
 import { NotFoundException } from '@nestjs/common';
 
 @Controller('cte')
@@ -35,6 +36,7 @@ export class CteController {
     private readonly enriquecimento: CteEnriquecimentoService,
     private readonly papelDetector: PapelDetectorService,
     private readonly documento: CteDocumentoService,
+    private readonly sincronizacao: SincronizacaoFiliaisService,
   ) {}
 
   @Post('consulta')
@@ -182,11 +184,22 @@ export class CteController {
    * (lê de `core.filiais`). Chamar quando uma filial nova for cadastrada
    * para que o detector a reconheça sem precisar reiniciar o backend.
    */
+  /**
+   * Sincronização imediata pós-cadastro de filial Capul.
+   *
+   * Antes só recarregava cache do PapelDetector — agora sincroniza tudo:
+   *   1. Cache `PapelDetector` (CNPJs reconhecidos no enriquecimento)
+   *   2. Cursores em `cte_controle_nsu` (filiais novas ganham cursor pra
+   *      o scheduler começar a varrer; inativadas têm cursor desativado)
+   *
+   * Mesma lógica que o scheduler aplica a cada 15min — endpoint serve pra
+   * forçar sync imediato após cadastro/edição de filial no Configurador.
+   */
   @Post('distribuicao/recarregar-cnpjs-capul')
   @RoleMinima('ADMIN_TI')
   async recarregarCnpjsCapul() {
-    const total = await this.papelDetector.atualizarCacheCnpjs();
-    return { ok: true, totalCnpjsCapul: total };
+    const r = await this.sincronizacao.sincronizar();
+    return { ok: true, ...r };
   }
 
   /**

@@ -54,20 +54,30 @@ export class PapelDetectorService implements OnApplicationBootstrap {
   }
 
   /**
-   * Recarrega o Set de CNPJs Capul de `core.filiais` em memória. Chamar
-   * manualmente quando uma nova filial for cadastrada (ou via endpoint
-   * admin futuro). Custo: 1 query, ~6-12 linhas hoje.
+   * Recarrega o Set de CNPJs Capul de `core.filiais` em memória + retorna
+   * a lista (usada pela `SincronizacaoFiliaisService` pra também sincronizar
+   * cursores em `cte_controle_nsu`).
+   *
+   * Filtra apenas filiais com `status='ATIVO'` — filiais inativadas saem
+   * do cache (não reconhecidas em CT-es novos), mas CT-es históricos delas
+   * permanecem com `papel_capul` correto (foi preenchido quando ativa).
+   *
+   * Chamar:
+   *   - boot do backend (`OnApplicationBootstrap` desta classe)
+   *   - cada tick do scheduler (via SincronizacaoFiliaisService)
+   *   - manualmente via endpoint admin pós cadastro de filial nova
    */
-  async atualizarCacheCnpjs(): Promise<number> {
+  async atualizarCacheCnpjs(): Promise<{ total: number; cnpjs: string[] }> {
     const filiais = await this.prisma.client.filialCore.findMany({
-      where: { cnpj: { not: null } },
+      where: { cnpj: { not: null }, status: 'ATIVO' },
       select: { cnpj: true },
     });
-    this.cnpjsCapul = new Set(
-      filiais.map((f) => (f.cnpj ?? '').replace(/\D/g, '')).filter((c) => c.length === 14),
-    );
-    this.logger.log(`PapelDetector: ${this.cnpjsCapul.size} CNPJs Capul cacheados`);
-    return this.cnpjsCapul.size;
+    const cnpjs = filiais
+      .map((f) => (f.cnpj ?? '').replace(/\D/g, ''))
+      .filter((c) => c.length === 14);
+    this.cnpjsCapul = new Set(cnpjs);
+    this.logger.log(`PapelDetector: ${this.cnpjsCapul.size} CNPJs Capul cacheados (filiais ATIVO)`);
+    return { total: this.cnpjsCapul.size, cnpjs };
   }
 
   /**

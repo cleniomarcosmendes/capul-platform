@@ -61,6 +61,66 @@ export class NsuControleService {
   }
 
   /**
+   * Sincroniza `cte_controle_nsu` com a lista de CNPJs ativos da Capul
+   * (vinda de `core.filiais`). Garante que toda filial nova ganha cursor
+   * automaticamente no próximo tick do scheduler — sem ação manual.
+   *
+   * Comportamento:
+   *   - Filial **nova** (CNPJ ativo sem cursor) → cria cursor com defaults
+   *   - Filial **reativada** (CNPJ ativo com cursor `ativo=false`) → re-ativa
+   *   - Filial **inativada** (cursor existe mas CNPJ não está mais ativo) → marca `ativo=false`
+   *
+   * Roda 1× por tick do scheduler (15min) — barato (1-2 queries simples).
+   * Idempotente: chamar várias vezes em sequência sem dados novos = no-op.
+   *
+   * @returns sumário de mudanças aplicadas
+   */
+  async sincronizarComFiliais(
+    cnpjsAtivos: string[],
+    ambiente: 1 | 2,
+  ): Promise<{ criados: number; reativados: number; inativados: number }> {
+    const cnpjsLimpos = cnpjsAtivos
+      .map((c) => c.replace(/\D/g, ''))
+      .filter((c) => c.length === 14);
+
+    let criados = 0;
+    let reativados = 0;
+
+    // 1. Garante cursor pra cada CNPJ ativo (cria se não existe; reativa se inativo)
+    for (const cnpj of cnpjsLimpos) {
+      const existente = await this.prisma.client.cteControleNsu.findUnique({
+        where: { cnpj_ambiente: { cnpj, ambiente } },
+        select: { id: true, ativo: true },
+      });
+      if (!existente) {
+        await this.prisma.client.cteControleNsu.create({ data: { cnpj, ambiente } });
+        criados++;
+      } else if (!existente.ativo) {
+        await this.prisma.client.cteControleNsu.update({
+          where: { id: existente.id },
+          data: { ativo: true },
+        });
+        reativados++;
+      }
+    }
+
+    // 2. Inativa cursores cujo CNPJ não está mais na lista de ativos.
+    //    Guarda contra `notIn: []` (PostgreSQL aceita, mas semântica
+    //    "todos vão pra inativos" é exatamente o que queremos no caso
+    //    degenerado de não haver filial ativa).
+    const inativados = await this.prisma.client.cteControleNsu.updateMany({
+      where: {
+        ambiente,
+        ativo: true,
+        cnpj: cnpjsLimpos.length > 0 ? { notIn: cnpjsLimpos } : undefined,
+      },
+      data: { ativo: false },
+    });
+
+    return { criados, reativados, inativados: inativados.count };
+  }
+
+  /**
    * Lista filiais ativas elegíveis pra próxima consulta — usado pelo scheduler.
    * Critério:
    *   - ativo = true

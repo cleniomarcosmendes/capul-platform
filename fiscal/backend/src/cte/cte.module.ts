@@ -13,6 +13,7 @@ import { CteLoteConsultaService } from './distribuicao/cte-lote-consulta.service
 import { CteSchedulerService } from './distribuicao/cte-scheduler.service.js';
 import { PapelDetectorService } from './distribuicao/papel-detector.service.js';
 import { CteEnriquecimentoService } from './distribuicao/cte-enriquecimento.service.js';
+import { SincronizacaoFiliaisService } from './distribuicao/sincronizacao-filiais.service.js';
 
 @Module({
   // LimiteDiarioModule é @Global no app.module — não precisa importar.
@@ -31,6 +32,7 @@ import { CteEnriquecimentoService } from './distribuicao/cte-enriquecimento.serv
     CteSchedulerService,
     PapelDetectorService,
     CteEnriquecimentoService,
+    SincronizacaoFiliaisService,
   ],
   exports: [CteParserService, DacteGeneratorService],
 })

@@ -5,6 +5,7 @@ import { AmbienteService } from '../../ambiente/ambiente.service.js';
 import { NsuControleService } from './nsu-controle.service.js';
 import { DistribuicaoNsuService } from './distribuicao-nsu.service.js';
 import { CteEnriquecimentoService } from './cte-enriquecimento.service.js';
+import { SincronizacaoFiliaisService } from './sincronizacao-filiais.service.js';
 
 /**
  * Scheduler do CT-e Distribuição — varre filiais ativas a cada 15min e
@@ -38,10 +39,20 @@ export class CteSchedulerService {
     private readonly nsuControle: NsuControleService,
     private readonly distribuicao: DistribuicaoNsuService,
     private readonly enriquecimento: CteEnriquecimentoService,
+    private readonly sincronizacao: SincronizacaoFiliaisService,
   ) {}
 
   @Cron('0 */15 * * * *', { name: 'fiscal:cte-distribuicao' })
   async tick(): Promise<void> {
+    // Sincronização de filiais Capul roda SEMPRE (mesmo com flag off ou
+    // pause_sync) — não consome SEFAZ, só DB. Garante que cadastro de
+    // filial nova é detectado em ≤15min sem ação manual.
+    try {
+      await this.sincronizacao.sincronizar();
+    } catch (err) {
+      this.logger.error(`[CTeScheduler] sync filiais falhou: ${(err as Error).message}`);
+    }
+
     const habilitado = this.config.get<string>('FISCAL_CTE_DISTRIBUICAO_ENABLED') === 'true';
     if (!habilitado) {
       // Silencioso — esperado em PROD enquanto módulo está em desenvolvimento.
