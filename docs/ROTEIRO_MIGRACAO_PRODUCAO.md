@@ -22,10 +22,18 @@ migration SQL manual, seed de endpoints Protheus em `core.integracoes_api`, tabe
 
 | Modulo | Estrategia | Aplicacao | Controle |
 |--------|-----------|-----------|----------|
-| **Auth Gateway** | Prisma Migrations | **Init job `auth-migrate`** (automatico no `up -d`) | Tabela `core._prisma_migrations` |
-| **Gestao TI** | Prisma Migrations | **Init job `gestao-ti-migrate`** (automatico no `up -d`) | Tabela `gestao_ti._prisma_migrations` |
-| **Fiscal** | Prisma Migrations | **Init job `fiscal-migrate`** (automatico no `up -d`) | Tabela `fiscal._prisma_migrations` |
-| **Inventario** | SQL Manual | `inventario/database/migrate.sh` (manual ou via `scripts/migrate.sh`) | Tabela `inventario.schema_migrations` |
+| **Auth Gateway** | Prisma Migrations | **Init job `auth-migrate`** (automatico no `up -d`) | Tabela `_prisma_migrations` (schema do `?schema=` da URL) |
+| **Gestao TI** | Prisma Migrations | **Init job `gestao-ti-migrate`** (automatico no `up -d`) | Tabela `_prisma_migrations` (schema do `?schema=` da URL) |
+| **Fiscal** | Prisma Migrations | **Init job `fiscal-migrate`** (automatico no `up -d`) | Tabela `_prisma_migrations` (schema do `?schema=` da URL) |
+| **Inventario** | SQL Manual | `inventario/database/migrate.sh` (manual ou via `scripts/migrate.sh`) | Tabela `inventario.schema_migrations` (coluna `filename`, nao `name`) |
+
+> **Importante:** o schema da tabela `_prisma_migrations` depende do parametro
+> `?schema=` na DATABASE_URL — NAO do schema dos modelos. Em multi-schema
+> com `?schema=public` (gestao-ti, fiscal), a tabela costuma ficar em
+> `public._prisma_migrations`. Para auditar, use `docker compose exec
+> <servico> npx prisma migrate status` (CLI canonica) em vez de SQL direta.
+> Pegadinha descoberta no deploy 05/05/2026 em HOM (Douglas/Marco) —
+> ver memory `feedback_prisma_multi_schema_migrations_table.md`.
 
 **Como funciona o init job (a partir de 05/05/2026):**
 
@@ -303,7 +311,7 @@ Templates em `scripts/systemd/`. Veja `scripts/systemd/README.md` para instalaca
 | **Status Auth GW** | `docker compose exec auth-gateway npx prisma migrate status` |
 | **Status Gestao TI** | `docker compose exec gestao-ti-backend npx prisma migrate status` |
 | **Status Fiscal** | `docker compose exec fiscal-backend npx prisma migrate status` |
-| **Status Inventario** | `docker compose exec postgres psql -U $DB_USER -d capul_platform -c "SELECT * FROM inventario.schema_migrations ORDER BY id"` |
+| **Status Inventario** | `docker compose exec postgres psql -U $DB_USER -d capul_platform -c "SELECT id, filename, applied_at FROM inventario.schema_migrations ORDER BY id"` |
 | **Forcar reaplicacao manual (excecao)** | `docker compose run --rm <servico>-migrate` (auth-migrate, gestao-ti-migrate, fiscal-migrate) |
 | **Seed endpoints Fiscal** | `docker compose exec -T postgres sh -c "psql -U \$POSTGRES_USER -d \$POSTGRES_DB" < fiscal/backend/prisma/seed-integracoes-fiscal.sql` |
 | **Health Fiscal** | `curl -sk https://localhost/api/v1/fiscal/health \| jq .` |
@@ -505,11 +513,12 @@ docker compose logs --tail 30 fiscal-backend | grep -iE "started|error"
 
 > **Nota historica (v1.1):** ate 04/05/2026, migrations do Fiscal eram aplicadas
 > manualmente via `psql` por preocupacao de o Prisma reescrever schemas alheios.
-> A partir de 05/05/2026, com `multiSchema` configurado e schemas isolados
-> (`fiscal._prisma_migrations` rastreia so as do schema fiscal), o init job
-> `fiscal-migrate` aplica de forma segura. O fluxo manual via `psql` continua
-> disponivel como fallback (rodar `prisma migrate deploy` localmente, exportar
-> SQL, aplicar via psql) caso necessario em incidente especifico.
+> A partir de 05/05/2026, com `multiSchema` configurado e o init job
+> `fiscal-migrate` rodando `prisma migrate deploy` (CLI rastreia migrations
+> aplicadas via tabela propria, no schema do `?schema=` da URL — geralmente
+> `public._prisma_migrations` para o fiscal). O fluxo manual via `psql`
+> continua disponivel como fallback (rodar `prisma migrate deploy` localmente,
+> exportar SQL, aplicar via psql) caso necessario em incidente especifico.
 
 ### 9.4. Flags de producao obrigatorias (`.env`)
 
@@ -619,10 +628,18 @@ Ver: `docs/PENDENCIAS_PROTHEUS_18ABR2026.md` para a lista formal de pendencias c
 ---
 
 **Ultima Atualizacao**: 05/05/2026
-**Versao**: 1.2
+**Versao**: 1.3
 
 ## Changelog
 
+- **1.3 (05/05/2026, tarde — pos-deploy HOM)**: Pegadinha de schema das tabelas
+  `_prisma_migrations` documentada. Hardcoding de `core._prisma_migrations`,
+  `gestao_ti._prisma_migrations`, `fiscal._prisma_migrations` removido —
+  schema real depende do `?schema=` da DATABASE_URL (geralmente `public`
+  para gestao-ti e fiscal). Tabela `inventario.schema_migrations` tem
+  coluna `filename`, NAO `name`. Recomendacao: usar `npx prisma migrate
+  status` em vez de SQL direta. Memory de referencia:
+  `feedback_prisma_multi_schema_migrations_table.md`.
 - **1.2 (05/05/2026)**: Init jobs `*-migrate` aplicam Prisma migrations no
   `docker compose up -d`. Fluxo manual via `psql` removido como caminho
   primario; mantido como fallback. Pos-incidente deploy 04/05 (5 migrations
