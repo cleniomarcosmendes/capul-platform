@@ -73,7 +73,7 @@ Plataforma corporativa modular com microservicos independentes:
 - Gestao de usuarios e permissoes
 - Atribuicao de modulos por usuario
 
-### 6. Fiscal (`/fiscal`) *(em desenvolvimento — Abril/2026 — Onda 1 do Plano v2.0 completa)*
+### 6. Fiscal (`/fiscal`) *(em desenvolvimento — Abril/2026 — Onda 1 do Plano v2.0 completa; Fase 1 CT-e Distribuição distNSU completa em 05/05)*
 - Consulta cadastral (CCC/Sintegra) por CNPJ/CPF + UF + Receita Federal + Vínculo Protheus (SA1/SA2)
 - Consulta NF-e/CT-e por chave (SEFAZ direto; Onda 2 migra para SZR → SPED156 → SEFAZ via Protheus)
 - Cruzamento cadastral **movimento-based 2×/dia** (12:00 + 06:00 D+1) dentro da janela de 24h de cancelamento NF-e

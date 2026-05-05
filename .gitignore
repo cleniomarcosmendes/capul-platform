@@ -54,3 +54,8 @@ coverage/
 # Convenção .local segue o mesmo padrão de .env.*.local — config compartilhada
 # fica em .claude/settings.json (se existir); local fica fora do repo.
 .claude/settings.local.json
+
+# Artefatos descartáveis — commit messages, scripts ad-hoc, debug temporário
+# Convenção 05/05/2026: gravar mensagens de commit em tmp/commit_msg_*.txt
+# e usar `git commit -F tmp/commit_msg_*.txt` (workaround PS 5.1 sem HEREDOC bash).
+tmp/

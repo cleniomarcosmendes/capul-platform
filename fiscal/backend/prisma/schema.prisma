@@ -534,3 +534,33 @@ model AuditLog {
   @@map("audit_log")
   @@schema("fiscal")
 }
+
+// ============================================================
+// CT-e — Distribuição NSU (Fase 1 do PLANO_CTE_DISTRIBUICAO_v2.md)
+// PoC validada em 05/05/2026 contra HOM SEFAZ (memory project_cte_poc_resultados_05mai.md)
+// Capul é tomadora/destinatária — NÃO emite CT-e. Esta tabela rastreia
+// o cursor sequencial NSU por CNPJ+ambiente para o serviço SEFAZ
+// CTeDistribuicaoDFe modo distNSU.
+// ============================================================
+
+model CteControleNsu {
+  id                  Int       @id @default(autoincrement())
+  cnpj                String    @db.VarChar(14)
+  ambiente            Int       // 1=PRODUCAO, 2=HOMOLOGACAO (mesmo padrão SEFAZ tpAmb)
+  ultimoNsuProcessado String    @default("000000000000000") @map("ultimo_nsu_processado") @db.VarChar(15)
+  maxNsuConhecido     String    @default("000000000000000") @map("max_nsu_conhecido")     @db.VarChar(15)
+  ultimaConsulta      DateTime? @map("ultima_consulta")
+  proximaConsulta     DateTime? @map("proxima_consulta")
+  bloqueadoAte        DateTime? @map("bloqueado_ate")
+  motivoBloqueio      String?   @map("motivo_bloqueio")
+  consultasNaJanela   Int       @default(0) @map("consultas_na_janela")
+  janelaInicio        DateTime? @map("janela_inicio")
+  ativo               Boolean   @default(true)
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt      @map("updated_at")
+
+  @@unique([cnpj, ambiente])
+  @@index([ativo])
+  @@map("cte_controle_nsu")
+  @@schema("fiscal")
+}

@@ -9,12 +9,41 @@ import { soapPost } from './sefaz-http.helper.js';
 import { SefazConsultaError } from './nfe-distribuicao.client.js';
 import { cufFromUf } from '../common/helpers/chave.helper.js';
 
+export interface CteDocZip {
+  /** NSU do documento no atributo @NSU do <docZip> */
+  nsu: string;
+  /** schema do XML (ex: procCTe_v4.00.xsd, resCTe_v4.00.xsd) */
+  schema: string;
+  /** XML completo descomprimido (UTF-8) */
+  xml: string;
+}
+
+export interface RetDistDFeIntCte {
+  cStat: string;
+  xMotivo: string;
+  /** NSU mais alto retornado neste lote (cliente usa como próximo ultNSU) */
+  ultNSU: string;
+  /** NSU mais alto disponível na SEFAZ pra este consulente */
+  maxNSU: string;
+  dhResp?: string;
+  tpAmb: string;
+  /** Documentos retornados (vazio quando cStat=137) */
+  docZips: CteDocZip[];
+}
+
 /**
  * Cliente do web service CTeDistribuicaoDFe — análogo ao NFeDistribuicaoDFe,
  * mas para modelo 57 (CT-e).
  *
- * Mesmo padrão: consulta por chave, cStat=138 sucesso, docZip base64+gzip,
- * mTLS via SefazAgentService.
+ * Mesmo padrão: cStat=138 sucesso, docZip base64+gzip, mTLS via SefazAgentService.
+ *
+ * Modos:
+ * - `consultarPorNsu` — modo distNSU (descoberta sequencial). É o modo principal
+ *   suportado pelo Ambiente Nacional. Use este para ingestão automática.
+ * - `consultarPorChave` — modo consChCTe. ATENÇÃO: o Nacional NÃO suporta este
+ *   modo (limitação documentada na NT 2014.002 e confirmada na PoC 05/05/2026).
+ *   Mantido por compatibilidade histórica; será movido para CTeConsultaProtocolo
+ *   (per UF) ou SVRS_CTE em sprint futura.
  */
 @Injectable()
 export class CteDistribuicaoClient {
@@ -36,6 +65,135 @@ export class CteDistribuicaoClient {
     });
   }
 
+  /**
+   * Consulta documentos por NSU sequencial (modo distNSU).
+   *
+   * Comportamento confirmado na PoC 05/05/2026 contra HOM SEFAZ:
+   * - SEFAZ varre até 50 NSUs por chamada e retorna `ultNSU` do bloco processado
+   *   (não do último doc localizado).
+   * - Cliente deve fazer loop até `ultNSU == maxNSU`.
+   * - cStat=137 ("Nenhum documento localizado") é resposta normal — não é erro;
+   *   `ultNSU`/`maxNSU` retornados informam ao cliente o estado do cursor.
+   * - cStat=138 indica que `loteDistDFeInt.docZip` tem documentos.
+   *
+   * Documentos podem ser de qualquer schema (procCTe, procCTeSimp, resCTe,
+   * procEventoCTe, resEventoCTe). Caller decide como processar via @schema.
+   *
+   * @param params.cnpj            CNPJ consulente (14 dígitos, sem máscara)
+   * @param params.cUFAutor        Código IBGE da UF do consulente (ex: "31" = MG)
+   * @param params.ultNSU          Último NSU já processado (cliente envia 0 na 1ª vez)
+   * @param params.ambiente        'PRODUCAO' | 'HOMOLOGACAO'
+   *
+   * @throws SefazConsultaError quando cStat ∉ {137, 138} (ex: 280 cert vencido,
+   *   656 consumo indevido, 215 falha schema). Caller decide se é fatal.
+   */
+  async consultarPorNsu(params: {
+    cnpj: string;
+    cUFAutor: string;
+    ultNSU: string;
+    ambiente: AmbienteSefazStr;
+  }): Promise<RetDistDFeIntCte> {
+    const cnpj = params.cnpj.replace(/\D/g, '');
+    if (!/^\d{14}$/.test(cnpj)) {
+      throw new Error(`CNPJ inválido para consulta CT-e distNSU: ${params.cnpj}`);
+    }
+    const ultNSU = String(params.ultNSU).padStart(15, '0');
+    const tpAmb = params.ambiente === 'PRODUCAO' ? '1' : '2';
+
+    const distDFeXml =
+      `<distDFeInt xmlns="http://www.portalfiscal.inf.br/cte" versao="1.00">` +
+      `<tpAmb>${tpAmb}</tpAmb>` +
+      `<cUFAutor>${params.cUFAutor}</cUFAutor>` +
+      `<CNPJ>${cnpj}</CNPJ>` +
+      `<distNSU><ultNSU>${ultNSU}</ultNSU></distNSU>` +
+      `</distDFeInt>`;
+    const inner =
+      `<cteDistDFeInteresse xmlns="http://www.portalfiscal.inf.br/cte/wsdl/CTeDistribuicaoDFe">` +
+      `<cteDadosMsg xmlns="http://www.portalfiscal.inf.br/cte/wsdl/CTeDistribuicaoDFe">${distDFeXml}</cteDadosMsg>` +
+      `</cteDistDFeInteresse>`;
+    const envelope = buildSoapEnvelope(inner);
+    const url = getCteDistribuicaoUrl(params.ambiente);
+    const agent = await this.agentService.getAgent();
+
+    this.logger.log(
+      `CTeDistribuicaoDFe distNSU: cnpj=${cnpj} cUFAutor=${params.cUFAutor} ultNSU=${ultNSU} ambiente=${params.ambiente}`,
+    );
+
+    const { statusCode, rawResponse } = await soapPost({
+      url,
+      envelope,
+      agent,
+      soapAction: 'http://www.portalfiscal.inf.br/cte/wsdl/CTeDistribuicaoDFe/cteDistDFeInteresse',
+      timeoutMs: 30_000,
+    });
+
+    if (statusCode !== 200) {
+      this.logger.error(
+        `CTeDistribuicaoDFe distNSU HTTP ${statusCode}: ${rawResponse.slice(0, 300)}`,
+      );
+      throw new Error(`CTeDistribuicaoDFe retornou HTTP ${statusCode}`);
+    }
+
+    return this.parseDistNsuResponse(rawResponse);
+  }
+
+  private parseDistNsuResponse(raw: string): RetDistDFeIntCte {
+    const parsed = this.parser.parse(raw);
+    const envelope = parsed?.Envelope;
+    const body = envelope?.Body;
+    const result = body?.cteDistDFeInteresseResponse?.cteDistDFeInteresseResult;
+    const retDistDFeInt = result?.retDistDFeInt;
+    if (!retDistDFeInt) {
+      throw new Error(`Resposta CT-e distNSU sem <retDistDFeInt>. Raw: ${raw.slice(0, 500)}`);
+    }
+
+    const cStat = String(retDistDFeInt.cStat ?? '');
+    const xMotivo = String(retDistDFeInt.xMotivo ?? '');
+
+    // 137 e 138 são respostas normais com cursor. Outros cStat são erro
+    // que deve subir como exceção pra orquestrador decidir (ex: 656 → bloqueia 1h).
+    if (cStat !== '137' && cStat !== '138') {
+      throw new SefazConsultaError(cStat, xMotivo);
+    }
+
+    const docZips: CteDocZip[] = [];
+    const lote = retDistDFeInt.loteDistDFeInt;
+    if (cStat === '138' && lote?.docZip) {
+      const items = Array.isArray(lote.docZip) ? lote.docZip : [lote.docZip];
+      for (const dz of items) {
+        const base64 = typeof dz === 'string' ? dz : (dz['#text'] ?? '');
+        const nsu = String(dz?.['@_NSU'] ?? '');
+        const schema = String(dz?.['@_schema'] ?? '');
+        if (!base64) {
+          this.logger.warn(`docZip vazio em NSU=${nsu} — ignorando`);
+          continue;
+        }
+        try {
+          const xml = gunzipSync(Buffer.from(base64, 'base64')).toString('utf8');
+          docZips.push({ nsu, schema, xml });
+        } catch (err) {
+          this.logger.error(`Falha ao descomprimir docZip NSU=${nsu}: ${err instanceof Error ? err.message : err}`);
+        }
+      }
+    }
+
+    return {
+      cStat,
+      xMotivo,
+      ultNSU: String(retDistDFeInt.ultNSU ?? '0').padStart(15, '0'),
+      maxNSU: String(retDistDFeInt.maxNSU ?? '0').padStart(15, '0'),
+      dhResp: retDistDFeInt.dhResp ? String(retDistDFeInt.dhResp) : undefined,
+      tpAmb: String(retDistDFeInt.tpAmb ?? ''),
+      docZips,
+    };
+  }
+
+  /**
+   * @deprecated O Ambiente Nacional NÃO suporta `<consChCTe>` — limitação
+   * documentada na NT 2014.002 e confirmada na PoC 05/05/2026. Para consulta
+   * por chave use `CTeConsultaProtocolo` (per UF) ou `SVRS_CTE`. Este método
+   * será movido em sprint futura. Mantido para compatibilidade.
+   */
   async consultarPorChave(
     chave: string,
     ufAutor: string,
