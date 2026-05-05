@@ -130,6 +130,43 @@ não resolver, considerar automatizar parte do checklist (script que lê
 
 ## Gestão TI — UX
 
+### ⏳ 2026-05-05 — CT-e Distribuição: validar comportamento com dados reais SEFAZ
+
+**Contexto:** Módulo CT-e Distribuição entregou 10 commits hoje (Fases 1-4 +
+extras + 4 pendências menores). Tudo testado tecnicamente, mas com:
+- 1 CT-e mock inserido manualmente pra exercitar PapelDetector
+- Smoke test contra HOM SEFAZ que tem 402 NSUs vazios
+- **Nunca testou com CT-e real chegando da SEFAZ via distNSU**
+
+**O que pode aparecer só em uso real:**
+- XMLs com estruturas de schema fora do esperado (parser fail-safe registra
+  `erro_parse` automaticamente — não trava sistema, mas vale auditar)
+- Casos edge do PapelDetector (toma4 com valores inesperados, AUTXML
+  como array, CT-e sem `<infCte>`, schema custom de transportadora, etc)
+- Performance com volume real (10k+ NSUs no histórico de uma filial grande)
+- Comportamento real do Protheus PROD com XMLs SEFAZ válidos vs mock fictício
+  (smoke test deu HTTP 500 no mock — esperado, mas não validamos sucesso)
+
+**Plano:** após Douglas aplicar deploy HOM:
+1. Setor fiscal valida com `cte_distribuicao_ativo=true` por 2-3 dias
+2. Acompanhar coluna `erro_parse` em `cte_documento` (queries simples
+   no PgAdmin) — qualquer XML que falhou parse fica registrado com motivo
+3. Acompanhar aba "CT-e Histórico" pra ver `iteracoes`, `docsPersistidos`,
+   `motivoStop` por execução do scheduler
+4. Acompanhar `papel_capul=NULL` em docs já enriquecidos (sinal de XML
+   com Capul presente mas em campo não esperado)
+5. Quando confiar do fluxo, ativar `cte_protheus_grava_ativo` em HOM
+6. Soak Protheus 1 dia → ativar em PROD
+
+**Onde investigar se aparecer bug:**
+- Parsers em `fiscal/backend/src/cte/distribuicao/cte-documento.service.ts`
+  (`extrairMetadadosDocumento`, `extrairMetadadosEvento`)
+- PapelDetector em `papel-detector.service.ts` — pode precisar cobrir
+  novos campos da NT 2014/2015
+
+**Por quê está aqui:** validação técnica completa. Próximo gate é uso real.
+Item não codável até dados reais aparecerem.
+
 ### ⏳ 2026-04-25 — Bubbles estilo WhatsApp na interação de equipes (Chamado e Projeto)
 
 **Status (29/04/2026):** ✅ aplicado em **Chamado** (`ChatBubbleList` em `gestao-ti/frontend/src/components/`). Pendente em **Projeto** porque o shape de `ComentarioTarefa` é diferente (`texto`/`visivelPendencia`, sem `tipo`, operação de remover) — adaptar o componente exigiria abstração extra que não vale agora. Fica como item separado do backlog para sessão dedicada.
@@ -165,6 +202,43 @@ de adoção real pelos técnicos e usuários-chave.
 ---
 
 ## Histórico (feitos)
+
+### ✅ 2026-05-05 — Módulo CT-e Distribuição completo (Fases 1+2+3+4 + extras)
+
+10 commits no dia entregando o módulo end-to-end:
+
+- **Fase 1** (`3dc5d9d`): cliente `consultarPorNsu` (modo distNSU), tabela
+  `cte_controle_nsu`, services `NsuControle` + `DistribuicaoNsu`, endpoint
+  admin manual, 5 camadas de proteção.
+- **Fase 2** (`fdc73ae`): tabelas `cte_documento`/`cte_evento`/`cte_lote_consulta`
+  + 4 enums, persistência com dedup SHA-256, scheduler `@Cron('0 */15 * * * *')`
+  com **adaptive backoff** (60min synced / 15min com trabalho — aprendizado
+  de cStat 656 nos testes).
+- **Fase 3 backend** (`7ff69b4`): `PapelDetectorService` (TOMA/DEST/REM/etc),
+  roteamento de eventos pra `cte_evento`, parsers `resCTe`/`resEventoCTe`,
+  `CteEnriquecimentoService` + cron `@30min`, endpoint admin enriquecer.
+- **Fase 3 frontend** (`c069a9c`): `CteRecebidosPage` (lista paginada + 6
+  filtros + modal detalhe). `/cte` virou listagem; busca por chave virou
+  rota secundária `/cte/consulta-por-chave`.
+- **Sincronização auto filiais** (`08d84af`): `SincronizacaoFiliaisService`
+  no tick do scheduler — filial nova vira plug-and-play em ≤15min.
+- **Controle Operacional UI** (`c4be2b8` + `990fd12`): aba
+  `/operacao/controle/cte-distribuicao` com toggle ATIVO/INATIVO + radio
+  PROD/HOM **independente do global**. Substituiu env var
+  `FISCAL_CTE_DISTRIBUICAO_ENABLED` (movida pra DB com auditoria).
+- **Gravação Protheus** (`9012db1`): Fase 4 simplificada — reusa
+  `ProtheusGravacaoHelper` da Onda 1 ao invés de drop UNC. Flag separada
+  `cte_protheus_grava_ativo` + Fase 2 no enriquecimento + auditoria por
+  doc (protheus_status/erro). Card 3 na aba operacional + coluna na lista.
+- **Pendências menores fechadas** (`4d6102c`): limite retry Protheus
+  (MAX 5 + reset admin), reconciliação retroativa `cte_evento.documento_id`,
+  bloco "Status Protheus" no modal, aba "CT-e Histórico" listando
+  `cte_lote_consulta` paginado.
+
+**Memórias de referência:** `project_cte_fase1_concluida_05mai`,
+`project_cte_fase2_concluida_05mai`, `project_cte_fase3_completa_05mai`,
+`project_cte_sincronizacao_filiais_05mai`, `project_cte_controle_operacional_05mai`,
+`project_cte_protheus_grava_05mai`, `project_cte_pendencias_fechadas_05mai`.
 
 ### ✅ 2026-04-21 — Drop da coluna global `integracoes_api.ambiente`
 
