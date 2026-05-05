@@ -564,3 +564,167 @@ model CteControleNsu {
   @@map("cte_controle_nsu")
   @@schema("fiscal")
 }
+
+// ----- CT-e Fase 2 — Persistência de documentos + auditoria -----
+
+enum SchemaCte {
+  // schemas que aparecem no @schema do <docZip> retornado pelo SEFAZ.
+  // procCTe = CT-e completo (Capul é parte direta — DEST/TOMA/REM/etc).
+  // procCTeSimp = CT-e Simplificado (NT 1.05 nov/2024).
+  // resCTe = resumo (Capul é só "terceiro" — referenciada mas não ator direto).
+  // procEventoCTe = evento vinculado (CC-e, cancelamento, autorização).
+  // resEventoCTe = resumo de evento.
+  // DESCONHECIDO = schema não reconhecido; persistir XML inteiro pra análise.
+  procCTe
+  procCTeSimp
+  resCTe
+  procEventoCTe
+  resEventoCTe
+  DESCONHECIDO
+
+  @@schema("fiscal")
+}
+
+enum PapelCapul {
+  // papel da Capul no CT-e (preenchido pelo PapelDetectorService da Fase 3).
+  // Por ora, todos os documentos persistidos têm papelCapul = null
+  // até o PapelDetectorService rodar. Fase 3 popula.
+  DEST       // destinatário da carga
+  TOMA       // tomador do serviço
+  REM        // remetente
+  EXPED      // expedidor
+  RECEB      // recebedor
+  AUTXML     // autorizado a baixar XML
+  TERCEIRO   // só aparece referenciada (resCTe), não é ator
+
+  @@schema("fiscal")
+}
+
+model CteDocumento {
+  id              Int          @id @default(autoincrement())
+  // CNPJ consulente da Capul que disparou a consulta (matriz ou filial)
+  cnpjConsulente  String       @map("cnpj_consulente") @db.VarChar(14)
+  ambiente        Int          // 1=PRODUCAO, 2=HOMOLOGACAO
+  nsu             String       @db.VarChar(15)
+  schema          SchemaCte
+  // Chave de acesso 44 dígitos do CT-e (extraída do XML após persistir).
+  // NULL quando schema=DESCONHECIDO ou quando XML não tem chave (raro).
+  chave           String?      @db.VarChar(44)
+  // Modelo (57=CT-e, 67=CT-e Simplificado/OS); extraído do XML.
+  modelo          Int?
+  // Data de emissão extraída do XML (<dhEmi>). NULL se schema sem dado.
+  dhEmi           DateTime?    @map("dh_emi")
+  // Hash SHA-256 do XML descomprimido — chave pra dedup quando o mesmo
+  // documento aparece em mais de um NSU (raro, mas pode acontecer).
+  xmlSha256       String       @map("xml_sha256") @db.Char(64)
+  // XML completo em UTF-8. Fase 2 mantém em TEXT; migração futura pra
+  // S3/MinIO se volume passar de 50GB (plano v2 §10).
+  xml             String       @db.Text
+  // Tamanho do XML em bytes (calculado uma vez pra evitar OCTET_LENGTH).
+  xmlBytes        Int          @map("xml_bytes")
+  // Papel da Capul (preenchido pela Fase 3 — PapelDetectorService).
+  papelCapul      PapelCapul?  @map("papel_capul")
+  // Erro de parse (caso XML não bata com schema esperado). Permite
+  // diagnóstico sem perder o XML bruto.
+  erroParse       String?      @map("erro_parse")
+  recebidoEm      DateTime     @default(now()) @map("recebido_em")
+  // Quando processadoEm IS NULL, documento ainda não foi enriquecido
+  // pelo PapelDetectorService da Fase 3. Cron de enriquecimento varre.
+  processadoEm    DateTime?    @map("processado_em")
+
+  // CT-e referencia NF-es transportadas via <infDoc><infNFe><chave>.
+  // Fase 3 extrai essas chaves; por ora coluna fica NULL.
+  // (Não criamos tabela separada pra evitar over-engineering Fase 2.)
+
+  @@unique([cnpjConsulente, ambiente, nsu], name: "doc_consulente_ambiente_nsu")
+  @@index([chave])
+  @@index([xmlSha256])
+  @@index([recebidoEm])
+  @@index([processadoEm])
+  @@map("cte_documento")
+  @@schema("fiscal")
+}
+
+enum TipoEventoCte {
+  // tipos comuns da NT 2014 — coberta com TipoEvento bruto + label.
+  // Ainda preciso ver com os documentos reais quais aparecem mais.
+  CANCELAMENTO          // tpEvento=110111
+  CCE                   // CC-e CT-e tpEvento=110110
+  PRESTACAO_DESACORDO   // tpEvento=110114
+  CONFIRMACAO_PRESTACAO // tpEvento=210200
+  GTV_PRESTACAO         // tpEvento=110160
+  OUTRO                 // qualquer outro — preserva tpEvento original
+
+  @@schema("fiscal")
+}
+
+model CteEvento {
+  id          Int           @id @default(autoincrement())
+  // FK pra cte_documento — quando evento chega antes do CT-e principal,
+  // pode ser NULL inicialmente (Fase 3 reconcilia).
+  documentoId Int?          @map("documento_id")
+  // Chave de acesso do CT-e referenciado pelo evento.
+  chave       String        @db.VarChar(44)
+  // Identificador único do evento (Id atributo do <infEvento>).
+  // Formato: "ID" + tpEvento(6) + chave(44) + nSeqEvento(2) = 53 chars.
+  idEvento    String        @unique @map("id_evento") @db.VarChar(53)
+  tipoEvento  TipoEventoCte @map("tipo_evento")
+  tpEventoNum Int           @map("tp_evento_num")  // valor SEFAZ original (110110, etc)
+  nSeqEvento  Int           @map("n_seq_evento")
+  dhEvento    DateTime      @map("dh_evento")
+  cStat       String        @map("c_stat") @db.VarChar(3)
+  xMotivo     String        @map("x_motivo")
+  protocolo   String?       @db.VarChar(15)
+  xmlSha256   String        @map("xml_sha256") @db.Char(64)
+  xml         String        @db.Text
+  recebidoEm  DateTime      @default(now()) @map("recebido_em")
+
+  @@index([chave])
+  @@index([documentoId])
+  @@index([tipoEvento])
+  @@index([dhEvento])
+  @@map("cte_evento")
+  @@schema("fiscal")
+}
+
+enum StatusLoteConsulta {
+  // Idem ResultadoConsultaFilial.status do orquestrador, persistido
+  // pra auditoria histórica.
+  OK
+  BLOQUEADO
+  LIMITE_ATINGIDO
+  ERRO_SEFAZ
+  CIRCUIT_BREAK
+  ERRO_INTERNO
+
+  @@schema("fiscal")
+}
+
+model CteLoteConsulta {
+  id              Int                 @id @default(autoincrement())
+  cnpjConsulente  String              @map("cnpj_consulente") @db.VarChar(14)
+  ambiente        Int
+  iniciadoEm      DateTime            @default(now()) @map("iniciado_em")
+  finalizadoEm    DateTime?           @map("finalizado_em")
+  iteracoes       Int                 @default(0)
+  ultNsuInicial   String              @map("ult_nsu_inicial") @db.VarChar(15)
+  ultNsuFinal     String              @map("ult_nsu_final")   @db.VarChar(15)
+  maxNsuFinal     String              @map("max_nsu_final")   @db.VarChar(15)
+  docsPersistidos Int                 @default(0) @map("docs_persistidos")
+  docsDuplicados  Int                 @default(0) @map("docs_duplicados")
+  status          StatusLoteConsulta
+  cStatUltimo     String?             @map("c_stat_ultimo") @db.VarChar(3)
+  xMotivoUltimo   String?             @map("x_motivo_ultimo")
+  motivoStop      String?             @map("motivo_stop")
+  // origem da execução: 'manual' (endpoint admin), 'cron' (scheduler), 'retry' (re-execução)
+  origem          String              @db.VarChar(10)
+  dryRun          Boolean             @default(false) @map("dry_run")
+  duracaoMs       Int?                @map("duracao_ms")
+  erroDetalhe     String?             @map("erro_detalhe")
+
+  @@index([cnpjConsulente, ambiente])
+  @@index([iniciadoEm])
+  @@index([status])
+  @@map("cte_lote_consulta")
+  @@schema("fiscal")
+}

@@ -6,6 +6,8 @@ import { LimiteDiarioService } from '../../limite-diario/limite-diario.service.j
 import { LimiteDiarioAtingidoException } from '../../limite-diario/limite-diario.exception.js';
 import { AmbienteService } from '../../ambiente/ambiente.service.js';
 import { NsuControleService } from './nsu-controle.service.js';
+import { CteDocumentoService } from './cte-documento.service.js';
+import { CteLoteConsultaService, type OrigemLote } from './cte-lote-consulta.service.js';
 
 /**
  * Hard cap de iterações por chamada de `consultarFilial` — evita loop
@@ -31,13 +33,19 @@ export interface ResultadoConsultaFilial {
   ultNSUFinal: string;
   maxNSU: string;
   docsRecebidos: number;
+  /** Documentos novos persistidos em cte_documento (não conta dedup) */
+  docsPersistidos: number;
+  /** Documentos que já existiam por (cnpj, ambiente, nsu) — dedup natural */
+  docsDuplicados: number;
+  /** ID do lote em cte_lote_consulta (auditoria histórica) */
+  loteId: number;
   status: 'OK' | 'BLOQUEADO' | 'LIMITE_ATINGIDO' | 'ERRO_SEFAZ' | 'CIRCUIT_BREAK';
   cStatUltimo?: string;
   xMotivoUltimo?: string;
   motivoStop?: string;
   /** Sumário leve pra log/auditoria — sem incluir XMLs completos pra não inflar resposta */
-  documentosResumo: Array<Pick<CteDocZip, 'nsu' | 'schema'> & { tamanhoXml: number }>;
-  /** Modo dry-run: docZips são logados mas não persistidos (persistência é Fase 2) */
+  documentosResumo: Array<Pick<CteDocZip, 'nsu' | 'schema'> & { tamanhoXml: number; novo: boolean }>;
+  /** Modo dry-run: docZips são logados mas não persistidos */
   dryRun: boolean;
   duracaoMs: number;
 }
@@ -66,6 +74,8 @@ export class DistribuicaoNsuService {
     private readonly limiteDiario: LimiteDiarioService,
     private readonly ambiente: AmbienteService,
     private readonly config: ConfigService,
+    private readonly documento: CteDocumentoService,
+    private readonly lote: CteLoteConsultaService,
   ) {}
 
   /**
@@ -103,7 +113,12 @@ export class DistribuicaoNsuService {
    */
   async consultarFilial(
     cnpjRaw: string,
-    opts: { dryRun?: boolean; cUFAutor?: string; ambienteOverride?: 'PRODUCAO' | 'HOMOLOGACAO' } = {},
+    opts: {
+      dryRun?: boolean;
+      cUFAutor?: string;
+      ambienteOverride?: 'PRODUCAO' | 'HOMOLOGACAO';
+      origem?: OrigemLote;
+    } = {},
   ): Promise<ResultadoConsultaFilial> {
     const cnpj = cnpjRaw.replace(/\D/g, '');
     if (!/^\d{14}$/.test(cnpj)) {
@@ -148,6 +163,25 @@ export class DistribuicaoNsuService {
       this.logger.warn(
         `[CTeDist] BLOQUEADO cnpj=${cnpj} restam ${minutosRestantes}min motivo="${controle.motivoBloqueio}"`,
       );
+      // Lote registra mesmo em curto-circuito pra debug histórico
+      const loteBloq = await this.lote.abrir({
+        cnpjConsulente: cnpj,
+        ambiente: ambienteInt,
+        ultNsuInicial: controle.ultimoNsuProcessado,
+        origem: opts.origem ?? 'manual',
+        dryRun,
+      });
+      await this.lote.fechar({
+        loteId: loteBloq.id,
+        iteracoes: 0,
+        ultNsuFinal: controle.ultimoNsuProcessado,
+        maxNsuFinal: controle.maxNsuConhecido,
+        docsPersistidos: 0,
+        docsDuplicados: 0,
+        status: 'BLOQUEADO',
+        motivoStop: `Bloqueado até ${controle.bloqueadoAte?.toISOString()} — ${controle.motivoBloqueio}`,
+        duracaoMs: Date.now() - inicio,
+      });
       return {
         cnpj,
         ambiente: ambienteStr,
@@ -156,6 +190,9 @@ export class DistribuicaoNsuService {
         ultNSUFinal: controle.ultimoNsuProcessado,
         maxNSU: controle.maxNsuConhecido,
         docsRecebidos: 0,
+        docsPersistidos: 0,
+        docsDuplicados: 0,
+        loteId: loteBloq.id,
         status: 'BLOQUEADO',
         motivoStop: `Bloqueado até ${controle.bloqueadoAte?.toISOString()} — ${controle.motivoBloqueio}`,
         documentosResumo: [],
@@ -168,11 +205,22 @@ export class DistribuicaoNsuService {
     let ultNSU = ultNSUInicial;
     let maxNSU = controle.maxNsuConhecido;
     let docsAcum: ResultadoConsultaFilial['documentosResumo'] = [];
+    let docsPersistidos = 0;
+    let docsDuplicados = 0;
     let cStatUltimo: string | undefined;
     let xMotivoUltimo: string | undefined;
     let motivoStop: string | undefined;
     let status: ResultadoConsultaFilial['status'] = 'OK';
     let i = 0;
+
+    // Abre lote pra auditoria histórica
+    const loteAtual = await this.lote.abrir({
+      cnpjConsulente: cnpj,
+      ambiente: ambienteInt,
+      ultNsuInicial: ultNSUInicial,
+      origem: opts.origem ?? 'manual',
+      dryRun,
+    });
 
     // 2. Loop principal
     for (i = 0; i < MAX_ITERACOES; i++) {
@@ -231,15 +279,30 @@ export class DistribuicaoNsuService {
         `[CTeDist] iter=${i} cStat=${resp.cStat} ultNSU=${resp.ultNSU} maxNSU=${resp.maxNSU} docs=${resp.docZips.length}`,
       );
 
-      // Acumular sumário (apenas tamanho — XML completo só em logs detalhados)
+      // Persistência: dryRun apenas loga; modo normal grava em cte_documento.
       for (const dz of resp.docZips) {
-        docsAcum.push({ nsu: dz.nsu, schema: dz.schema, tamanhoXml: dz.xml.length });
+        let novo = false;
         if (dryRun) {
           this.logger.debug(
             `[CTeDist] dry-run: docZip NSU=${dz.nsu} schema=${dz.schema} bytes=${dz.xml.length} preview="${dz.xml.substring(0, 200).replace(/\s+/g, ' ')}..."`,
           );
+        } else {
+          try {
+            const r = await this.documento.persistir({
+              cnpjConsulente: cnpj,
+              ambiente: ambienteInt,
+              docZip: dz,
+            });
+            novo = r.novo;
+            if (r.novo) docsPersistidos++; else docsDuplicados++;
+          } catch (err) {
+            this.logger.error(
+              `[CTeDist] falha persistir doc nsu=${dz.nsu}: ${(err as Error).message}`,
+            );
+            // Não aborta o loop — segue capturando os outros docs do bloco.
+          }
         }
-        // Fase 2 persiste em `cte_documento` aqui — por ora apenas logar.
+        docsAcum.push({ nsu: dz.nsu, schema: dz.schema, tamanhoXml: dz.xml.length, novo });
       }
 
       // cStat 137 = sem docs no bloco; cursor segue mas geralmente é fim
@@ -258,20 +321,50 @@ export class DistribuicaoNsuService {
       this.logger.warn(`[CTeDist] ${motivoStop} cnpj=${cnpj}`);
     }
 
-    // 3. Atualizar cursor mesmo em erro parcial (preserva progresso)
+    // 3. Atualizar cursor mesmo em erro parcial (preserva progresso) e calcular
+    //    proxima_consulta com adaptive backoff (Aprendizado Fase 1: SEFAZ retorna
+    //    cStat=656 se chamada logo após `ultNSU == maxNSU`).
+    //    - Synced (ultNSU == maxNSU)  → 60min
+    //    - Com trabalho restante       → 15min
     if (status === 'OK' || status === 'LIMITE_ATINGIDO') {
       try {
+        const synced = ultNSU === maxNSU;
+        const proximaConsulta = new Date(Date.now() + (synced ? 60 : 15) * 60_000);
         await this.nsuControle.atualizarCursor({
           cnpj,
           ambiente: ambienteInt,
           ultNSU,
           maxNSU,
+          proximaConsulta,
         });
+        this.logger.log(
+          `[CTeDist] cursor atualizado cnpj=${cnpj} ultNSU=${ultNSU} maxNSU=${maxNSU} synced=${synced} proxima=${proximaConsulta.toISOString()}`,
+        );
       } catch (err) {
         this.logger.error(
           `[CTeDist] falha ao atualizar cursor cnpj=${cnpj}: ${(err as Error).message}`,
         );
       }
+    }
+
+    // Fecha lote (auditoria)
+    const duracaoMs = Date.now() - inicio;
+    try {
+      await this.lote.fechar({
+        loteId: loteAtual.id,
+        iteracoes: i,
+        ultNsuFinal: ultNSU,
+        maxNsuFinal: maxNSU,
+        docsPersistidos,
+        docsDuplicados,
+        status,
+        cStatUltimo,
+        xMotivoUltimo,
+        motivoStop,
+        duracaoMs,
+      });
+    } catch (err) {
+      this.logger.error(`[CTeDist] falha fechar lote ${loteAtual.id}: ${(err as Error).message}`);
     }
 
     return {
@@ -282,13 +375,16 @@ export class DistribuicaoNsuService {
       ultNSUFinal: ultNSU,
       maxNSU,
       docsRecebidos: docsAcum.length,
+      docsPersistidos,
+      docsDuplicados,
+      loteId: loteAtual.id,
       status,
       cStatUltimo,
       xMotivoUltimo,
       motivoStop,
       documentosResumo: docsAcum,
       dryRun,
-      duracaoMs: Date.now() - inicio,
+      duracaoMs,
     };
   }
 }

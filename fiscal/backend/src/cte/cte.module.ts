@@ -8,10 +8,14 @@ import { CteParserService } from './parsers/cte-parser.service.js';
 import { DacteGeneratorService } from './pdf/dacte-generator.service.js';
 import { NsuControleService } from './distribuicao/nsu-controle.service.js';
 import { DistribuicaoNsuService } from './distribuicao/distribuicao-nsu.service.js';
+import { CteDocumentoService } from './distribuicao/cte-documento.service.js';
+import { CteLoteConsultaService } from './distribuicao/cte-lote-consulta.service.js';
+import { CteSchedulerService } from './distribuicao/cte-scheduler.service.js';
 
 @Module({
   // LimiteDiarioModule é @Global no app.module — não precisa importar.
   // PrismaModule também é @Global.
+  // ScheduleModule já registrado no app.module (usado por outros schedulers).
   imports: [SefazModule, AmbienteModule, NfeModule],
   controllers: [CteController],
   providers: [
@@ -20,6 +24,9 @@ import { DistribuicaoNsuService } from './distribuicao/distribuicao-nsu.service.
     DacteGeneratorService,
     NsuControleService,
     DistribuicaoNsuService,
+    CteDocumentoService,
+    CteLoteConsultaService,
+    CteSchedulerService,
   ],
   exports: [CteParserService, DacteGeneratorService],
 })

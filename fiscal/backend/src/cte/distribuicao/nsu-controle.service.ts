@@ -36,12 +36,17 @@ export class NsuControleService {
   /**
    * Atualiza cursor após resposta SEFAZ (cStat 137 ou 138). Recebe `ultNSU`
    * e `maxNSU` retornados pela SEFAZ — ambos formato de 15 dígitos zero-padded.
+   *
+   * `proximaConsulta` opcional — usado pelo orquestrador para implementar
+   * adaptive backoff (60min se synced, 15min se há trabalho). Sem isso,
+   * scheduler chamaria SEFAZ logo após `ultNSU == maxNSU` e levaria cStat=656.
    */
   async atualizarCursor(params: {
     cnpj: string;
     ambiente: 1 | 2;
     ultNSU: string;
     maxNSU: string;
+    proximaConsulta?: Date;
   }): Promise<CteControleNsu> {
     const cnpjClean = params.cnpj.replace(/\D/g, '');
     return this.prisma.client.cteControleNsu.update({
@@ -50,7 +55,35 @@ export class NsuControleService {
         ultimoNsuProcessado: params.ultNSU,
         maxNsuConhecido: params.maxNSU,
         ultimaConsulta: new Date(),
+        ...(params.proximaConsulta ? { proximaConsulta: params.proximaConsulta } : {}),
       },
+    });
+  }
+
+  /**
+   * Lista filiais ativas elegíveis pra próxima consulta — usado pelo scheduler.
+   * Critério:
+   *   - ativo = true
+   *   - bloqueadoAte vencido OU NULL
+   *   - proximaConsulta vencida OU NULL (primeira execução)
+   *
+   * Retorna controles ordenados por `proximaConsulta ASC NULLS FIRST` —
+   * primeiro as nunca consultadas, depois as mais antigas.
+   */
+  async listarElegiveisParaConsulta(ambiente: 1 | 2): Promise<CteControleNsu[]> {
+    const agora = new Date();
+    return this.prisma.client.cteControleNsu.findMany({
+      where: {
+        ativo: true,
+        ambiente,
+        OR: [{ bloqueadoAte: null }, { bloqueadoAte: { lt: agora } }],
+        AND: [
+          {
+            OR: [{ proximaConsulta: null }, { proximaConsulta: { lte: agora } }],
+          },
+        ],
+      },
+      orderBy: [{ proximaConsulta: { sort: 'asc', nulls: 'first' } }],
     });
   }
 
