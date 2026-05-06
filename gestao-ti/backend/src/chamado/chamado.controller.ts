@@ -45,24 +45,9 @@ try {
   );
 }
 
-// Whitelist de MIME types aceitos em upload de anexos.
-// NAO incluir 'application/octet-stream' aqui — permitiria upload de qualquer
-// binario (ex: .exe renomeado para .pdf).
-const ALLOWED_MIMES = [
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
-  'application/pdf',
-  'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'text/plain', 'text/csv',
-  'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
-  'application/x-pkcs12', 'application/pkcs12',
-];
-
-// Extensoes permitidas com MIME generico (octet-stream / text/plain).
-// Util para tipos legitimos que browsers nao detectam corretamente, como
-// .trc (trace files Oracle/SQL Server — debug de chamados de banco).
-// Validacao por extensao + nome de arquivo (case-insensitive).
-const ALLOWED_EXTENSIONS = ['.trc', '.log'];
+// Whitelist de tipos aceitos em upload — agora centralizada em
+// common/constants/anexo-mime.constant.ts (padronizada 06/05/2026).
+import { ALLOWED_MIMES_ANEXO, isAnexoPermitido, mimeTypeParaDownload } from '../common/constants/anexo-mime.constant';
 
 @Controller('chamados')
 @UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
@@ -312,12 +297,7 @@ export class ChamadoController {
     }),
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
-      // Aceita se MIME está na whitelist OU extensão está na whitelist
-      // (cobre tipos legítimos que chegam como octet-stream — ex: .trc).
-      const ext = path.extname(file.originalname).toLowerCase();
-      if (ALLOWED_MIMES.includes(file.mimetype) || ALLOWED_EXTENSIONS.includes(ext)) {
-        return cb(null, true);
-      }
+      if (isAnexoPermitido(file)) return cb(null, true);
       return cb(new BadRequestException('Tipo de arquivo nao permitido'), false);
     },
   }))
@@ -347,15 +327,8 @@ export class ChamadoController {
       throw new BadRequestException('Caminho de arquivo invalido');
     }
 
-    // Validar MIME type contra whitelist; tipos por extensão (ex: .trc)
-    // descem como octet-stream e força download (não inline) — seguro.
-    const extensaoAnexo = path.extname(anexo.nomeOriginal ?? '').toLowerCase();
-    const extensaoPermitida = ALLOWED_EXTENSIONS.includes(extensaoAnexo);
-    const mimeType = ALLOWED_MIMES.includes(anexo.mimeType)
-      ? anexo.mimeType
-      : extensaoPermitida
-        ? 'application/octet-stream'
-        : 'application/octet-stream';
+    // MIME pra download (octet-stream pra tipos por extensão — força attachment).
+    const mimeType = mimeTypeParaDownload(anexo.mimeType);
 
     // Tipos que podem ser visualizados inline no browser
     const inlineMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];

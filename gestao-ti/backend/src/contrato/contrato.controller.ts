@@ -36,6 +36,7 @@ import { CreateNaturezaDto, UpdateNaturezaDto } from './dto/create-natureza.dto'
 import { CreateTipoContratoDto, UpdateTipoContratoDto } from './dto/create-tipo-contrato.dto';
 import { CreateFornecedorDto, UpdateFornecedorDto } from './dto/create-fornecedor.dto';
 import { CreateProdutoDto, UpdateProdutoDto } from './dto/create-produto.dto';
+import { isAnexoPermitido } from '../common/constants/anexo-mime.constant';
 
 const UPLOADS_DIR = path.resolve('./uploads/contratos');
 
@@ -396,7 +397,10 @@ export class ContratoController {
     }),
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
-      cb(null, true);
+      // Antes: cb(null, true) — aceitava QUALQUER arquivo (falha de segurança).
+      // Padronizado em 06/05/2026 com a whitelist canônica do Gestão TI.
+      if (isAnexoPermitido(file)) return cb(null, true);
+      return cb(new BadRequestException('Tipo de arquivo nao permitido'), false);
     },
   }))
   uploadAnexo(

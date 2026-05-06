@@ -23,14 +23,8 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
-const ALLOWED_MIMES = [
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
-  'application/pdf',
-  'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'text/plain', 'text/csv',
-  'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
-];
+// Whitelist centralizada — common/constants/anexo-mime.constant.ts (06/05/2026).
+import { isAnexoPermitido } from '../common/constants/anexo-mime.constant';
 
 @Controller('conhecimento')
 @UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
@@ -108,10 +102,8 @@ export class ConhecimentoController {
     }),
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
-      if (!ALLOWED_MIMES.includes(file.mimetype)) {
-        return cb(new BadRequestException('Tipo de arquivo nao permitido'), false);
-      }
-      cb(null, true);
+      if (isAnexoPermitido(file)) return cb(null, true);
+      return cb(new BadRequestException('Tipo de arquivo nao permitido'), false);
     },
   }))
   addAnexo(

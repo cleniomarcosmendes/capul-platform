@@ -27,6 +27,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
+import { isAnexoPermitido } from '../common/constants/anexo-mime.constant';
 import { CreateTipoProdutoDto, UpdateTipoProdutoDto } from './dto/create-tipo-produto.dto';
 import { CreateTipoProjetoDto, UpdateTipoProjetoDto } from './dto/create-tipo-projeto.dto';
 import { CreateNotaFiscalDto, UpdateNotaFiscalDto } from './dto/create-nota-fiscal.dto';
@@ -187,6 +188,12 @@ export class CompraController {
       filename: (_req, file, cb) => cb(null, `${randomUUID()}${path.extname(file.originalname)}`),
     }),
     limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      // Antes: sem fileFilter — aceitava QUALQUER arquivo (falha de segurança).
+      // Padronizado em 06/05/2026 com a whitelist canônica do Gestão TI.
+      if (isAnexoPermitido(file)) return cb(null, true);
+      return cb(new BadRequestException('Tipo de arquivo nao permitido'), false);
+    },
   }))
   addAnexoNF(
     @Param('id') id: string,
