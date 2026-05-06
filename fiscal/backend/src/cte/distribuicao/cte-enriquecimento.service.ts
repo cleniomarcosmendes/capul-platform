@@ -136,8 +136,13 @@ export class CteEnriquecimentoService {
             protheusGravadoEm: null,
             schema: { in: ['procCTe', 'procCTeSimp'] },
             protheusTentativas: { lt: MAX_TENTATIVAS_PROTHEUS },
-            // Exclui status terminal (caso já tenha desistido)
-            NOT: { protheusStatus: 'PROTHEUS_DESISTIU' },
+            // Exclui status terminal (caso já tenha desistido). Cobertura
+            // explícita do NULL — Prisma `NOT` em campo nullable usa SQL
+            // three-valued logic e descartaria linhas com status=NULL.
+            OR: [
+              { protheusStatus: null },
+              { protheusStatus: { not: 'PROTHEUS_DESISTIU' } },
+            ],
           },
           orderBy: { id: 'asc' },
           take: BATCH_SIZE,
