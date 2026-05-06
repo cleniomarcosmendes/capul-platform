@@ -19,6 +19,8 @@ import { HealthModule } from './health/health.module';
 import { BackupExecucaoModule } from './backup-execucao/backup-execucao.module';
 import { AlertNotifierModule } from './alert-notifier/alert-notifier.module';
 import { AuditLogRetentionModule } from './audit-log-retention/audit-log-retention.module';
+import { RedisModule } from './redis/redis.module';
+import { PresencaModule } from './presenca/presenca.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 
 @Injectable()
@@ -96,6 +98,8 @@ class ProxyAwareThrottlerGuard extends ThrottlerGuard {
     BackupExecucaoModule,
     AlertNotifierModule,
     AuditLogRetentionModule,
+    RedisModule,
+    PresencaModule,
   ],
   providers: [
     // Ordem: Throttler primeiro (rate limit antes de auth) → JwtAuthGuard depois.
