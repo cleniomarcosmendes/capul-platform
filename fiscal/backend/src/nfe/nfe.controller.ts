@@ -73,9 +73,15 @@ export class NfeController {
    *
    * Requer que a chave já tenha sido consultada ao menos uma vez (existe
    * registro em `fiscal.documento_consulta`).
+   *
+   * Liberado pra OPERADOR_ENTRADA (06/05/2026) — semantica e a mesma de
+   * POST /consulta (consome 1 slot SEFAZ/req). Mesmo throttle protege o
+   * limite diario. Quem pode consultar NF-e pode atualizar status — antes
+   * estava restrito a GESTOR_FISCAL por inconsistencia historica.
    */
   @Post(':chave/filial/:filial/atualizar-status')
-  @RoleMinima('GESTOR_FISCAL')
+  @RoleMinima('OPERADOR_ENTRADA')
+  @Throttle({ sefaz: { ttl: 60_000, limit: 20 } })
   async atualizarStatus(
     @Param('chave') chave: string,
     @Param('filial') filial: string,
