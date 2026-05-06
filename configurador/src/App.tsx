@@ -10,6 +10,7 @@ import { DepartamentosPage } from './pages/departamentos/DepartamentosPage';
 import { CentrosCustoPage } from './pages/centros-custo/CentrosCustoPage';
 import { UsuariosListPage } from './pages/usuarios/UsuariosListPage';
 import { UsuarioFormPage } from './pages/usuarios/UsuarioFormPage';
+import { UsuariosOnlinePage } from './pages/usuarios-online/UsuariosOnlinePage';
 import { IntegracoesPage } from './pages/integracoes/IntegracoesPage';
 import { BackupDrPage } from './pages/backup-dr/BackupDrPage';
 import { AuditRetentionPage } from './pages/observabilidade/AuditRetentionPage';
@@ -66,6 +67,7 @@ function AppRoutes() {
         <Route path="usuarios" element={<UsuariosListPage />} />
         <Route path="usuarios/novo" element={<UsuarioFormPage />} />
         <Route path="usuarios/:id" element={<UsuarioFormPage />} />
+        <Route path="usuarios-online" element={<UsuariosOnlinePage />} />
         <Route path="integracoes" element={<IntegracoesPage />} />
         <Route path="certificado-fiscal" element={<CertificadoFiscalPage />} />
         <Route path="backup-dr" element={<BackupDrPage />} />

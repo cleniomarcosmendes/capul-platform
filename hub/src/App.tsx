@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { usePresencaHeartbeat, AvisoPlataformaBanner } from './hooks/usePresencaHeartbeat';
 import LoginPage from './pages/LoginPage';
 import HubPage from './pages/HubPage';
 import PerfilPage from './pages/PerfilPage';
@@ -7,8 +8,14 @@ import './index.css';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { usuario } = useAuth();
+  const { aviso } = usePresencaHeartbeat(!!usuario);
   if (!usuario) return <Navigate to="/login" replace />;
-  return <>{children}</>;
+  return (
+    <>
+      <AvisoPlataformaBanner aviso={aviso} />
+      {children}
+    </>
+  );
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {

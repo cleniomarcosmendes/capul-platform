@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Outlet, useOutletContext, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
+import { useAuth } from '../contexts/AuthContext';
+import { usePresencaHeartbeat, AvisoPlataformaBanner } from '../hooks/usePresencaHeartbeat';
 
 interface SidebarContext {
   toggleSidebar: () => void;
@@ -11,6 +13,8 @@ export function useSidebarToggle() {
 }
 
 export function MainLayout() {
+  const { usuario } = useAuth();
+  const { aviso } = usePresencaHeartbeat(!!usuario);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const toggleSidebar = useCallback(() => setSidebarOpen((v) => !v), []);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
@@ -31,6 +35,7 @@ export function MainLayout() {
       <main
         className={`flex-1 flex flex-col min-w-0 overflow-y-auto transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`}
       >
+        <AvisoPlataformaBanner aviso={aviso} />
         <Outlet context={{ toggleSidebar } satisfies SidebarContext} />
       </main>
     </div>
