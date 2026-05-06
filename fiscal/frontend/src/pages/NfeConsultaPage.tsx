@@ -1,8 +1,9 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   ChevronDown,
   Download,
   FileText,
+  Info,
   Printer,
   RefreshCw,
   X,
@@ -87,6 +88,29 @@ export function NfeConsultaPage() {
       .catch(() => setFiliais([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Detecta se o CNPJ embutido na chave (posicoes 6-19) e de alguma filial
+   * CAPUL ativa — sinaliza emissao propria. Quando bate, retorna a filial
+   * emitente; quando nao bate (ou chave incompleta), retorna null.
+   *
+   * Usado pra exibir dica preventiva: "Esta NF foi emitida pela filial X.
+   * Se for transferencia interna, escolha a destinataria no campo Filial
+   * consulente acima."
+   */
+  const filialEmitenteCapul = useMemo<FilialResumo | null>(() => {
+    if (chave.length < 20 || filiais.length === 0) return null;
+    const cnpjChave = chave.slice(6, 20);
+    if (!/^\d{14}$/.test(cnpjChave)) return null;
+    return (
+      filiais.find((f) => (f.cnpj ?? '').replace(/\D/g, '') === cnpjChave) ?? null
+    );
+  }, [chave, filiais]);
+
+  const consulenteEhEmitente = useMemo(() => {
+    if (!filialEmitenteCapul) return false;
+    return filialEmitenteCapul.codigo === filialSelecionada;
+  }, [filialEmitenteCapul, filialSelecionada]);
 
   async function handleConsultar(
     e: React.FormEvent | null,
@@ -374,6 +398,43 @@ export function NfeConsultaPage() {
           </div>
         </div>
       </form>
+
+      {filialEmitenteCapul && !result && !error && (
+        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 print:hidden">
+          <div className="flex gap-3">
+            <Info className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" />
+            <div className="flex-1 text-sm">
+              <p className="mb-2 font-medium text-blue-900">
+                NF-e emitida por uma filial CAPUL ({filialEmitenteCapul.codigo} —{' '}
+                {filialEmitenteCapul.nomeFantasia})
+              </p>
+              <ul className="space-y-1.5 text-xs text-blue-800">
+                <li>
+                  <strong>Se for transferência interna</strong> entre filiais
+                  CAPUL: selecione a filial <em>destinatária</em> no campo{' '}
+                  <span className="rounded bg-white px-1.5 py-0.5 font-mono text-[11px] border border-blue-200">
+                    Filial consulente
+                  </span>{' '}
+                  acima antes de consultar — a SEFAZ entrega o XML para o
+                  destinatário, não para o emitente.
+                </li>
+                <li>
+                  <strong>Se foi emitida para cliente externo</strong>: o XML
+                  está no Protheus (SZR010), não na SEFAZ via NFeDistribuicaoDFe.
+                </li>
+                {consulenteEhEmitente && (
+                  <li className="mt-2 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-900">
+                    ⚠ A filial consulente atual ({filialSelecionada}) é a
+                    emitente. A consulta SEFAZ vai retornar erro 641 (NF-e
+                    indisponível para o emitente). Troque a filial acima ou
+                    use o Protheus.
+                  </li>
+                )}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       {error && (
         <ErrorCard
