@@ -77,12 +77,30 @@ export class AllExceptionsFilter implements ExceptionFilter {
         path: req.url,
         timestamp: new Date().toISOString(),
       };
+
+      // HttpException 5xx tambem deve logar stack — pino-http so registra
+      // o status, sem causa raiz. Cobre InternalServerErrorException disparada
+      // de dentro de service.
+      if (status >= 500) {
+        const userId = (req as Request & { user?: { sub?: string } }).user?.sub;
+        const tag = `[${req.method} ${req.url}]${userId ? ` user=${userId}` : ''}`;
+        this.logger.error(
+          `${tag} HttpException ${status}: ${exception.message ?? mensagem}`,
+          exception.stack,
+        );
+      }
     } else {
-      const err = exception as Error;
+      const err = exception as Error & { code?: string; meta?: unknown };
+      const userId = (req as Request & { user?: { sub?: string } }).user?.sub;
+      const tag = `[${req.method} ${req.url}]${userId ? ` user=${userId}` : ''}`;
+      const ctxExtra = err.code ? ` code=${err.code}` : '';
       this.logger.error(
-        `Erro não tratado em ${req.method} ${req.url}: ${err?.message}`,
+        `${tag} ${err?.message ?? 'unknown error'}${ctxExtra}`,
         err?.stack,
       );
+      if (err.meta) {
+        this.logger.error(`${tag} prisma meta: ${JSON.stringify(err.meta)}`);
+      }
       body = {
         statusCode: status,
         mensagem: 'Erro interno do servidor.',

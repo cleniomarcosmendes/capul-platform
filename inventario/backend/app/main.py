@@ -233,6 +233,45 @@ limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+
+# ============================================================
+#  Handler global de excecoes nao tratadas
+# ============================================================
+# Sem isso, FastAPI logaria o erro mas com pouco contexto. Captura
+# tudo que escapa de HTTPException (Exception generica), loga stack
+# completo + metodo + url + user_id se disponivel, e responde 500
+# limpo (nao vaza stack pro cliente).
+import traceback as _traceback
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    user_id = None
+    try:
+        # Tenta extrair user.id do state do request (depende de middleware
+        # de auth setar isso). Falha silenciosa — nao bloquear log.
+        user_id = getattr(getattr(request, "state", None), "user_id", None)
+    except Exception:
+        pass
+
+    tag = f"[{request.method} {request.url.path}]"
+    if user_id:
+        tag += f" user={user_id}"
+
+    logger.error(
+        f"{tag} Excecao nao tratada: {type(exc).__name__}: {exc}\n"
+        f"{_traceback.format_exc()}"
+    )
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Erro interno do servidor",
+            "type": type(exc).__name__,
+            "path": str(request.url.path),
+            "timestamp": datetime.utcnow().isoformat(),
+        },
+    )
+
 # CORS
 # ✅ SEGURANÇA v2.19.13: CORS configurável via config.py
 from app.core.config import settings as app_settings
