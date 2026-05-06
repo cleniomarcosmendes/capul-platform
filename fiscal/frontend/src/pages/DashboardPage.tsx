@@ -258,7 +258,7 @@ function AmbienteCard({ ambiente }: { ambiente: DashboardOverview['ambiente'] })
   const cor = ambiente.pauseSync ? 'red' : ambiente.ativo === 'PRODUCAO' ? 'emerald' : 'amber';
   return (
     <Link to="/operacao/controle/ambiente" className="block">
-      <Card titulo="Ambiente" icone={<Globe2 className="h-4 w-4" />} cor={cor}>
+      <Card titulo="Ambiente SEFAZ" icone={<Globe2 className="h-4 w-4" />} cor={cor}>
         <div className="flex items-center gap-2">
           <Badge variant={ambiente.ativo === 'PRODUCAO' ? 'green' : 'yellow'}>
             {ambiente.ativo}

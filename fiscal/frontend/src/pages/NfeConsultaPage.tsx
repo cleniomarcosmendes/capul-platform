@@ -1813,7 +1813,7 @@ function EventoDetalheModal({
                           : '-'
                       }
                     />
-                    <Row label="Ambiente" value={det.ambienteDescricao} />
+                    <Row label="Ambiente SEFAZ" value={det.ambienteDescricao} />
                     <Row label="Versão" value={valorOuVazio(det.versao)} />
                     <Row label="Chave de Acesso" value={fmtChave(det.chave)} wide />
                     <Row label="Id do Evento" value={valorOuVazio(det.idEvento)} wide />
@@ -1970,7 +1970,7 @@ function imprimirEventoPopup(data: NfeEventoDetalheResponse): void {
       <h1>${escape(titulo)}</h1>
       <section class="grid-3">
         ${campo('Órgão Recepção do Evento', det.orgaoRecepcao ? `${det.orgaoRecepcao}${det.orgaoRecepcaoDescricao ? ' - ' + det.orgaoRecepcaoDescricao : ''}` : '-')}
-        ${campo('Ambiente', det.ambienteDescricao)}
+        ${campo('Ambiente SEFAZ', det.ambienteDescricao)}
         ${campo('Versão', det.versao ?? '-')}
       </section>
       <section class="grid-2">

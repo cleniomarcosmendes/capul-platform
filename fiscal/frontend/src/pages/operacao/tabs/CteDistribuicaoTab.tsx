@@ -223,7 +223,7 @@ export function CteDistribuicaoTab() {
             <div className="mt-3 flex items-center gap-3">
               <Badge variant={ativo ? 'green' : 'gray'}>{ativo ? 'ATIVO' : 'INATIVO'}</Badge>
               <Badge variant={ambiente === 'PRODUCAO' ? 'red' : 'yellow'}>
-                Ambiente: {ambiente}
+                Ambiente SEFAZ: {ambiente}
               </Badge>
               {isAdmin && (
                 <>

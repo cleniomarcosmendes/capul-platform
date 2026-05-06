@@ -288,7 +288,7 @@ export function CteRecebidosPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-600 mb-1">Ambiente</label>
+              <label className="block text-xs text-gray-600 mb-1">Ambiente SEFAZ</label>
               <select
                 value={ambiente}
                 onChange={(e) => setAmbiente(e.target.value as any)}
@@ -346,7 +346,7 @@ export function CteRecebidosPage() {
                   <th className="px-3 py-2 text-left">dh Emissão</th>
                   <th className="px-3 py-2 text-left">CNPJ Consulente</th>
                   <th className="px-3 py-2 text-left">NSU</th>
-                  <th className="px-3 py-2 text-left">Ambiente</th>
+                  <th className="px-3 py-2 text-left">Ambiente SEFAZ</th>
                   <th className="px-3 py-2 text-left">Recebido em</th>
                   <th className="px-3 py-2 text-left">Protheus</th>
                   <th className="px-3 py-2 text-right">Tamanho</th>

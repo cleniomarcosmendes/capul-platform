@@ -147,7 +147,7 @@ export function CteHistoricoTab() {
             </select>
           </div>
           <div>
-            <label className="block text-xs text-slate-600 mb-1">Ambiente</label>
+            <label className="block text-xs text-slate-600 mb-1">Ambiente SEFAZ</label>
             <select
               value={ambiente}
               onChange={(e) => {
