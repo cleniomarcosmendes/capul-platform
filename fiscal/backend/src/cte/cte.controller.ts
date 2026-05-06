@@ -25,6 +25,7 @@ import { PapelDetectorService } from './distribuicao/papel-detector.service.js';
 import { CteDocumentoService } from './distribuicao/cte-documento.service.js';
 import { SincronizacaoFiliaisService } from './distribuicao/sincronizacao-filiais.service.js';
 import { CteLoteConsultaService } from './distribuicao/cte-lote-consulta.service.js';
+import { CteParserService } from './parsers/cte-parser.service.js';
 import { NotFoundException } from '@nestjs/common';
 
 @Controller('cte')
@@ -39,6 +40,7 @@ export class CteController {
     private readonly documento: CteDocumentoService,
     private readonly sincronizacao: SincronizacaoFiliaisService,
     private readonly lote: CteLoteConsultaService,
+    private readonly parser: CteParserService,
   ) {}
 
   @Post('consulta')
@@ -292,5 +294,36 @@ export class CteController {
     const r = await this.documento.detalhe(idNum);
     if (!r) throw new NotFoundException('CT-e não encontrado');
     return r;
+  }
+
+  /**
+   * DACTE em PDF para CT-e recebido via Distribuicao (XML ja persistido em
+   * fiscal.cte_documento — nao toca SEFAZ).
+   */
+  @Get('recebidos/:id/dacte')
+  @RoleMinima('OPERADOR_ENTRADA')
+  @Header('content-type', 'application/pdf')
+  async dacteRecebido(
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const idNum = Number(id);
+    if (isNaN(idNum)) throw new NotFoundException('ID inválido');
+    const r = await this.documento.detalhe(idNum);
+    if (!r) throw new NotFoundException('CT-e não encontrado');
+    const xml = r.documento.xml;
+    if (!xml) {
+      res.status(404).json({
+        erro: 'XML_INDISPONIVEL',
+        mensagem: 'XML do CT-e não está disponível no banco — DACTE não pode ser gerado.',
+      });
+      return;
+    }
+    const parsed = this.parser.parse(xml);
+    const pdf = await this.dacte.generate(parsed);
+    const chave = parsed.dadosGerais.chave || `id${idNum}`;
+    res.setHeader('Content-Disposition', `inline; filename="DACTE_${chave}.pdf"`);
+    res.setHeader('Content-Length', pdf.length);
+    res.send(pdf);
   }
 }

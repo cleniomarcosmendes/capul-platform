@@ -6,6 +6,7 @@ import {
   ExternalLink,
   FileText,
   Filter,
+  Printer,
   RefreshCw,
   Search,
   X,
@@ -178,6 +179,23 @@ export function CteRecebidosPage() {
       toast.error('Erro ao abrir detalhe', extractApiError(err) ?? undefined);
     } finally {
       setCarregandoDetalhe(false);
+    }
+  };
+
+  const imprimirDacte = async (id: number, chaveLabel?: string) => {
+    try {
+      const r = await fiscalApi.get(`/cte/recebidos/${id}/dacte`, {
+        responseType: 'blob',
+      });
+      const blob = new Blob([r.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      toast.error(
+        'Falha ao gerar DACTE',
+        extractApiError(err) ?? `CT-e ${chaveLabel ?? id}`,
+      );
     }
   };
 
@@ -419,13 +437,25 @@ export function CteRecebidosPage() {
                         {(it.xmlBytes / 1024).toFixed(1)} KB
                       </td>
                       <td className="px-3 py-2 text-right">
-                        <Button
-                          variant="ghost"
-                          onClick={() => abrirDetalhe(it.id)}
-                          disabled={carregandoDetalhe}
-                        >
-                          <FileText size={14} />
-                        </Button>
+                        <div className="inline-flex gap-1">
+                          {(it.schema === 'procCTe' || it.schema === 'procCTeSimp') && (
+                            <Button
+                              variant="ghost"
+                              onClick={() => imprimirDacte(it.id, it.chave ?? undefined)}
+                              title="Imprimir DACTE"
+                            >
+                              <Printer size={14} />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            onClick={() => abrirDetalhe(it.id)}
+                            disabled={carregandoDetalhe}
+                            title="Ver detalhe"
+                          >
+                            <FileText size={14} />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -469,9 +499,27 @@ export function CteRecebidosPage() {
           >
             <div className="px-4 py-3 border-b flex items-center justify-between">
               <h3 className="font-semibold">CT-e — Detalhe</h3>
-              <button onClick={() => setDetalhe(null)} className="text-gray-500 hover:text-gray-800">
-                <X size={20} />
-              </button>
+              <div className="flex items-center gap-2">
+                {detalhe &&
+                  (detalhe.documento.schema === 'procCTe' ||
+                    detalhe.documento.schema === 'procCTeSimp') && (
+                    <Button
+                      variant="secondary"
+                      onClick={() =>
+                        imprimirDacte(detalhe.documento.id, detalhe.documento.chave ?? undefined)
+                      }
+                    >
+                      <Printer size={14} className="mr-1" />
+                      Imprimir DACTE
+                    </Button>
+                  )}
+                <button
+                  onClick={() => setDetalhe(null)}
+                  className="text-gray-500 hover:text-gray-800"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {carregandoDetalhe && <p className="text-gray-500">Carregando...</p>}
