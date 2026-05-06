@@ -56,6 +56,11 @@ export function NfeConsultaPage() {
   const [chave, setChave] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorMeta, setErrorMeta] = useState<{
+    podeTentarOutrasFiliais: boolean;
+    totalFiliaisDisponiveis?: number;
+  } | null>(null);
+  const [tentandoOutras, setTentandoOutras] = useState(false);
   const [result, setResult] = useState<NfeConsultaResult | null>(null);
   const [tab, setTab] = useState<Tab>('nfe');
   const [eventoIdAberto, setEventoIdAberto] = useState<string | null>(null);
@@ -83,9 +88,13 @@ export function NfeConsultaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleConsultar(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleConsultar(
+    e: React.FormEvent | null,
+    opts?: { tentarTodasFiliais?: boolean },
+  ) {
+    if (e) e.preventDefault();
     setError(null);
+    setErrorMeta(null);
     setResult(null);
     const chaveLimpa = chave.replace(/\D/g, '');
     if (!/^\d{44}$/.test(chaveLimpa)) {
@@ -93,17 +102,31 @@ export function NfeConsultaPage() {
       return;
     }
     try {
-      setLoading(true);
+      if (opts?.tentarTodasFiliais) {
+        setTentandoOutras(true);
+      } else {
+        setLoading(true);
+      }
       const { data } = await fiscalApi.post<NfeConsultaResult>('/nfe/consulta', {
         chave: chaveLimpa,
         filial: filialSelecionada,
+        tentarTodasFiliais: opts?.tentarTodasFiliais === true,
       });
       setResult(data);
       setTab('nfe');
     } catch (err) {
       setError(extractApiError(err, 'Falha ao consultar NF-e.'));
+      // Captura `podeTentarOutrasFiliais` e `totalFiliaisDisponiveis` do erro
+      // estruturado do backend pra exibir botao no ErrorCard.
+      const errAny = err as { response?: { data?: { podeTentarOutrasFiliais?: boolean; totalFiliaisDisponiveis?: number } } };
+      const podeTentar = errAny.response?.data?.podeTentarOutrasFiliais === true;
+      const totalDisponiveis = errAny.response?.data?.totalFiliaisDisponiveis;
+      if (podeTentar) {
+        setErrorMeta({ podeTentarOutrasFiliais: true, totalFiliaisDisponiveis: totalDisponiveis });
+      }
     } finally {
       setLoading(false);
+      setTentandoOutras(false);
     }
   }
 
@@ -352,7 +375,16 @@ export function NfeConsultaPage() {
         </div>
       </form>
 
-      {error && <ErrorCard error={error} context="nfe" />}
+      {error && (
+        <ErrorCard
+          error={error}
+          context="nfe"
+          podeTentarOutrasFiliais={errorMeta?.podeTentarOutrasFiliais}
+          totalFiliaisDisponiveis={errorMeta?.totalFiliaisDisponiveis}
+          onTentarOutrasFiliais={() => handleConsultar(null, { tentarTodasFiliais: true })}
+          tentandoOutrasFiliais={tentandoOutras}
+        />
+      )}
 
       {result && (
         <div

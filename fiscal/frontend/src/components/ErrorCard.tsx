@@ -1,15 +1,56 @@
-import { AlertCircle, AlertTriangle, CalendarClock, FileSearch, Info, ShieldAlert } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CalendarClock, FileSearch, Info, RefreshCw, ShieldAlert } from 'lucide-react';
 
 interface ErrorCardProps {
   error: string;
   context?: 'nfe' | 'cte' | 'cadastro' | 'generico';
+  /**
+   * Quando o backend devolve `podeTentarOutrasFiliais=true` no erro, o card
+   * exibe botão "Tentar com outras filiais CAPUL" — usado em NF-e (cStat=641
+   * "emitida pela propria empresa" ou cStat=138 quando ainda sobram filiais
+   * nao testadas alem do MAX_FALLBACKS_PADRAO).
+   */
+  podeTentarOutrasFiliais?: boolean;
+  totalFiliaisDisponiveis?: number;
+  onTentarOutrasFiliais?: () => void;
+  tentandoOutrasFiliais?: boolean;
 }
 
 /**
  * Card de erro padronizado, com layout amigável e contextual.
  * Detecta o tipo de erro pelo conteúdo da mensagem e adapta o visual.
  */
-export function ErrorCard({ error, context = 'generico' }: ErrorCardProps) {
+export function ErrorCard({
+  error,
+  context = 'generico',
+  podeTentarOutrasFiliais = false,
+  totalFiliaisDisponiveis,
+  onTentarOutrasFiliais,
+  tentandoOutrasFiliais = false,
+}: ErrorCardProps) {
+  const tentarOutrasBtn = podeTentarOutrasFiliais && onTentarOutrasFiliais ? (
+    <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+      <p className="mb-2">
+        <strong>Quer tentar com outras filiais CAPUL?</strong> Em alguns casos
+        (transferência interna entre filiais, ou destinatária pouco comum) o XML
+        pode estar disponível por outra filial consulente.
+      </p>
+      <p className="mb-3 text-blue-700">
+        {totalFiliaisDisponiveis
+          ? `Vamos tentar até ${totalFiliaisDisponiveis} filial(is). Pode levar alguns segundos.`
+          : 'Vamos tentar todas as filiais ativas. Pode levar alguns segundos.'}
+      </p>
+      <button
+        type="button"
+        onClick={onTentarOutrasFiliais}
+        disabled={tentandoOutrasFiliais}
+        className="inline-flex items-center gap-2 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-wait"
+      >
+        <RefreshCw size={12} className={tentandoOutrasFiliais ? 'animate-spin' : ''} />
+        {tentandoOutrasFiliais ? 'Tentando…' : 'Tentar com outras filiais CAPUL'}
+      </button>
+    </div>
+  ) : null;
+
   const isEmitidaPeloConsulente =
     /emitida pelo CNPJ|indispon.vel para o emitente|NFE_EMITIDA_PELO_CONSULENTE|cStat=641/i.test(error);
   const isForaDePrazo =
@@ -94,13 +135,14 @@ export function ErrorCard({ error, context = 'generico' }: ErrorCardProps) {
             </div>
           </div>
         </div>
-        <div className="px-6 py-4 text-sm text-slate-700 space-y-2">
+        <div className="px-6 py-4 text-sm text-slate-700 space-y-3">
           <p>{error}</p>
           <p className="text-xs text-slate-500">
             Para baixar o XML de notas emitidas pela empresa, a origem correta é o
             <strong> Protheus (SZR010)</strong> ou o próprio ERP fiscal. A consulta
             via SEFAZ continua disponível para notas em que a empresa é destinatária.
           </p>
+          {tentarOutrasBtn}
         </div>
       </div>
     );
@@ -128,6 +170,9 @@ export function ErrorCard({ error, context = 'generico' }: ErrorCardProps) {
             </div>
           </div>
         </div>
+        {tentarOutrasBtn && (
+          <div className="px-6 py-4">{tentarOutrasBtn}</div>
+        )}
       </div>
     );
   }

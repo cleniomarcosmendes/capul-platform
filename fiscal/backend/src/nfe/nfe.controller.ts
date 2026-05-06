@@ -41,11 +41,13 @@ export class NfeController {
   @RoleMinima('OPERADOR_ENTRADA')
   @Throttle({ sefaz: { ttl: 60_000, limit: 20 } })
   async consultar(
-    @Body() body: { chave: string; filial?: string },
+    @Body() body: { chave: string; filial?: string; tentarTodasFiliais?: boolean },
     @CurrentUser() user: FiscalAuthenticatedUser,
   ) {
     const filial = body.filial ?? user.filialCodigo ?? '01';
-    return this.nfe.consultarPorChave(body.chave, filial, user);
+    return this.nfe.consultarPorChave(body.chave, filial, user, {
+      tentarTodasFiliais: body.tentarTodasFiliais === true,
+    });
   }
 
   /**

@@ -150,9 +150,12 @@ export class NfeService {
     chave: string,
     filial: string,
     user: FiscalAuthenticatedUser,
+    opcoes?: { tentarTodasFiliais?: boolean },
   ): Promise<NfeConsultaResult> {
     this.validateChave(chave);
     this.validateFilial(filial);
+
+    const tentarTodasFiliais = opcoes?.tentarTodasFiliais === true;
 
     let xmlString: string;
     let origem: OrigemConsulta;
@@ -248,7 +251,7 @@ export class NfeService {
       this.logger.log(
         `xmlNfe MISS — baixando do SEFAZ — chave ${chave.slice(0, 6)}… filial=${filial}`,
       );
-      xmlString = await this.baixarDoSefaz(chave, filial);
+      xmlString = await this.baixarDoSefaz(chave, filial, { tentarTodasFiliais });
       origem = 'SEFAZ_DOWNLOAD';
 
       const result = await this.gravacaoHelper.tentarGravar({
@@ -959,17 +962,41 @@ export class NfeService {
    * aparece na NF. O certificado matriz cobre toda a família 25834847 via
    * procuração e-CAC. Se a filial não for encontrada, mantém o default.
    */
-  private async baixarDoSefaz(chave: string, filial: string): Promise<string> {
+  /**
+   * Numero maximo de filiais fallback tentadas em modo padrao (sem o usuario
+   * solicitar explicitamente). Equilibra UX (latencia ~5*3s = 15s) e custo
+   * SEFAZ (limite diario 2.000 req/dia). Quando o usuario clica "Tentar com
+   * outras filiais CAPUL" no frontend, o servico recebe `tentarTodasFiliais=true`
+   * e ignora esse limite.
+   */
+  private readonly MAX_FALLBACKS_PADRAO = 5;
+
+  private async baixarDoSefaz(
+    chave: string,
+    filial: string,
+    opcoes?: { tentarTodasFiliais?: boolean },
+  ): Promise<string> {
+    const tentarTodasFiliais = opcoes?.tentarTodasFiliais === true;
     const ambienteCfg = await this.ambiente.getOrCreate();
     const ambienteStr = ambienteCfg.ambienteAtivo === 'PRODUCAO' ? 'PRODUCAO' : 'HOMOLOGACAO';
     const ufAutor = ufFromChave(chave);
     const cnpjConsulenteOverride = await this.resolverCnpjConsulentePorFilial(filial);
 
     // Fila de tentativas — primeiro a filial original; se falhar com cStat
-    // não-terminal (típico: 138 SEM procNFe pós-consumo NSU pelo destinatário),
-    // tenta as outras filiais CAPUL como consulente. Erros terminais
-    // (641/632/137) NÃO disparam fallback — respondem o mesmo independente
-    // do consulente.
+    // recoveravel (138 sem procNFe pos-consumo NSU pelo destinatario, ou
+    // 641 quando a filial atual e a emitente mas outra filial CAPUL pode
+    // ser destinataria/ator), tenta outras filiais CAPUL.
+    //
+    // Modo padrao (`tentarTodasFiliais=false`):
+    //   - 138 sem procNFe → tenta ate MAX_FALLBACKS_PADRAO=5 filiais
+    //   - 641 (CAPUL e emitente) → terminal — devolve erro com botao "tentar
+    //     outras" no frontend, usuario decide pagar custo SEFAZ
+    //   - 632/137 → terminal sempre
+    //
+    // Modo explicito (`tentarTodasFiliais=true`, acionado pelo botao):
+    //   - 138 sem procNFe → tenta TODAS as filiais ativas
+    //   - 641 → tambem dispara fallback (caso CAPUL→CAPUL transferencia interna)
+    //   - 632/137 → continuam terminais (nao melhoram com troca de consulente)
     const tentativas: Array<{ codigo: string; cnpj: string | null; isFallback: boolean }> = [
       { codigo: filial, cnpj: cnpjConsulenteOverride, isFallback: false },
     ];
@@ -978,6 +1005,7 @@ export class NfeService {
     let fallbacksCarregados = false;
     let ultimoErroSefaz: SefazConsultaError | null = null;
     let ultimoErroTecnico: Error | null = null;
+    let primeiroErroFoi641 = false; // marcador pra mensagem final mais clara
 
     try {
       for (let i = 0; i < tentativas.length; i++) {
@@ -1004,9 +1032,18 @@ export class NfeService {
           return baixado.xml;
         } catch (err) {
           if (err instanceof SefazConsultaError) {
-            // Terminais — não melhoram com troca de consulente: pula direto pro mapeamento
-            if (err.cStat === '641' || err.cStat === '632' || err.cStat === '137') {
+            // Terminais SEMPRE — nao melhoram com troca de consulente
+            if (err.cStat === '632' || err.cStat === '137') {
               throw err;
+            }
+            // 641 e terminal SO em modo padrao. Em modo "tentar todas" (botao
+            // do usuario), entra na fila — caso CAPUL→CAPUL transferencia
+            // interna onde outra filial e destinataria.
+            if (err.cStat === '641' && !tentarTodasFiliais) {
+              throw err;
+            }
+            if (err.cStat === '641' && !tent.isFallback) {
+              primeiroErroFoi641 = true;
             }
             ultimoErroSefaz = err;
             if (tent.isFallback) {
@@ -1018,15 +1055,26 @@ export class NfeService {
             // Carrega fallbacks na primeira falha (lazy)
             if (!fallbacksCarregados) {
               fallbacksCarregados = true;
-              const fallbacks = await this.listarFiliaisFallback(filial);
+              const todosFallbacks = await this.listarFiliaisFallback(filial);
+              // Em modo padrao, limita ao MAX_FALLBACKS_PADRAO; em modo
+              // "tentar todas" (botao), tenta todas (custo SEFAZ aceito pelo
+              // usuario explicitamente).
+              const fallbacks = tentarTodasFiliais
+                ? todosFallbacks
+                : todosFallbacks.slice(0, this.MAX_FALLBACKS_PADRAO);
               for (const fb of fallbacks) {
                 tentativas.push({ codigo: fb.codigo, cnpj: fb.cnpj, isFallback: true });
               }
               if (fallbacks.length > 0) {
+                const sufixo = tentarTodasFiliais
+                  ? `${fallbacks.length} filial(is) — modo "tentar todas" (acionado pelo usuario)`
+                  : `${fallbacks.length} filial(is) limitado a MAX_FALLBACKS_PADRAO=${this.MAX_FALLBACKS_PADRAO}` +
+                    (todosFallbacks.length > fallbacks.length
+                      ? ` (${todosFallbacks.length - fallbacks.length} filiais ficam de fora — usuario pode acionar "tentar todas")`
+                      : '');
                 this.logger.warn(
                   `[FALLBACK_CONSULENTE] chave=${chave.slice(0, 6)}… filial-original=${filial} ` +
-                    `falhou (cStat=${err.cStat}). Vou tentar ${fallbacks.length} filial(is) CAPUL como consulente: ` +
-                    `${fallbacks.map((f) => f.codigo).join(', ')}.`,
+                    `falhou (cStat=${err.cStat}). ${sufixo}: ${fallbacks.map((f) => f.codigo).join(', ')}.`,
                 );
               }
             }
@@ -1036,7 +1084,10 @@ export class NfeService {
           ultimoErroTecnico = err as Error;
           if (!fallbacksCarregados) {
             fallbacksCarregados = true;
-            const fallbacks = await this.listarFiliaisFallback(filial);
+            const todosFallbacks = await this.listarFiliaisFallback(filial);
+            const fallbacks = tentarTodasFiliais
+              ? todosFallbacks
+              : todosFallbacks.slice(0, this.MAX_FALLBACKS_PADRAO);
             for (const fb of fallbacks) {
               tentativas.push({ codigo: fb.codigo, cnpj: fb.cnpj, isFallback: true });
             }
@@ -1057,11 +1108,20 @@ export class NfeService {
       if (ultimoErroTecnico) throw ultimoErroTecnico;
       throw new Error(`Falha inesperada em baixarDoSefaz: nenhuma tentativa retornou XML nem erro.`);
     } catch (err) {
+      // Saber quantas filiais existem total, pra orientar mensagem do frontend
+      // (botao "tentar com outras filiais CAPUL" so faz sentido se houver)
+      const totalFallbacksDisponiveis = (await this.listarFiliaisFallback(filial)).length;
+      const ainda_sobram_filiais = !tentarTodasFiliais && totalFallbacksDisponiveis > this.MAX_FALLBACKS_PADRAO;
+
       // Erro semântico tipado da SEFAZ (cStat ≠ 138 ou 138 sem procNFe)
       if (err instanceof SefazConsultaError) {
         // cStat=641: "NF-e indisponível para o emitente" — a chave foi emitida
         // pelo próprio CNPJ consulente. NFeDistribuicaoDFe é só para destinatários;
         // para o próprio emitente o XML vem do Protheus (SZR010) ou do ERP.
+        // Em modo padrao: terminal direto com botao "tentar outras filiais".
+        // Em modo "tentar todas" (ja acionado pelo usuario): tudo foi tentado,
+        // ninguem na CAPUL e destinataria — caso de NF emitida pra cliente
+        // externo, origem real e Protheus.
         if (err.cStat === '641') {
           const cnpjChave = chave.slice(6, 20);
           throw new NotFoundException({
@@ -1071,6 +1131,9 @@ export class NfeService {
               `(a própria empresa). O serviço NFeDistribuicaoDFe da SEFAZ só permite ` +
               `download para destinatários — use o Protheus (módulo Fiscal / SZR010) ` +
               `para obter o XML de notas emitidas pela empresa.`,
+            // Botao no frontend so quando ainda nao tentamos tudo
+            podeTentarOutrasFiliais: !tentarTodasFiliais && totalFallbacksDisponiveis > 0,
+            totalFiliaisDisponiveis: totalFallbacksDisponiveis,
           });
         }
         // cStat=632: "Solicitação fora de prazo" — o serviço NFeDistribuicaoDFe
@@ -1089,9 +1152,19 @@ export class NfeService {
               `anteriormente e está em cache, ou (2) solicite o XML diretamente ao emitente.`,
           });
         }
+        // 138/outros — esgotou as tentativas. Se ainda sobram filiais nao
+        // testadas (modo padrao), oferecer botao "tentar com outras filiais".
+        const sufixo = ainda_sobram_filiais
+          ? ` Ja tentamos ${this.MAX_FALLBACKS_PADRAO} filiais sem sucesso — sobram ${totalFallbacksDisponiveis - this.MAX_FALLBACKS_PADRAO} ainda nao testadas.`
+          : tentarTodasFiliais
+            ? ` Ja tentamos todas as ${totalFallbacksDisponiveis + 1} filiais CAPUL.`
+            : '';
         throw new NotFoundException({
           erro: 'SEFAZ_NAO_RETORNOU_DOCUMENTO',
-          mensagem: `SEFAZ não retornou o documento: ${err.xMotivo} (cStat=${err.cStat})`,
+          mensagem:
+            `SEFAZ não retornou o documento: ${err.xMotivo} (cStat=${err.cStat}).${sufixo}`,
+          podeTentarOutrasFiliais: ainda_sobram_filiais,
+          totalFiliaisDisponiveis: totalFallbacksDisponiveis,
         });
       }
       // Erro técnico (rede, schema XML, parser, etc.) — log detalhado + mensagem amigável
