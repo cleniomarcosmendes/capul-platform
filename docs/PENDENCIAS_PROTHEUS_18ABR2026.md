@@ -486,6 +486,51 @@ Investigar a causa-raiz da perda silenciosa em `POST /grvXML`. Possibilidades a 
 
 **Status temporário:** Capul mantém pós-validação `xmlNfe` ativa até equipe Protheus identificar e resolver. Após fix, pós-validação fica como **defesa em profundidade** (não causa dano, custo 1 GET extra por gravação).
 
+**🎯 ATUALIZAÇÃO 07/05/2026 noite — Causa-raiz identificada:**
+
+Investigação dos 102 perdidos revelou **padrão único**: **100% têm `CODFOR=""` (vazio)** no body grvXML.
+
+| Análise | Resultado |
+|---|---|
+| 89 dos 102 | CNPJ emitente `00033613000125` (Santa Izabel Transportes) — não cadastrado em SA2 |
+| 13 outros | 12 transportadoras distintas — também não cadastradas em SA2 |
+| **Padrão comum** | **CODFOR vazio em 102/102 (100%)** |
+
+Quando Protheus recebe `grvXML` com `CODFOR=""`:
+1. Aceita request (response 200 OK status=GRAVADO)
+2. Internamente rejeita por validação SA2 (cadastro não existe)
+3. **Não persiste em SZR010, não retorna erro** — bug do contrato
+
+**Solução em duas frentes:**
+
+**(a) Operacional Capul** — cadastrar 13 transportadoras em SA2 do Protheus PROD:
+   - Santa Izabel Transportes (00033613000125) — 89 CT-es
+   - Patrus Transportes (17463456001081) — 2
+   - BRASPRESS (3 lojas: 48740351000831, 48740351002109, 48740351007178) — 3
+   - Mais 9 transportadoras com 1 CT-e cada
+
+**(b) Pedido C reforçado pra equipe Protheus**:
+
+Quando `grvXML` recebe `CODFOR=""` (ou inválido — não bate com SA2), retornar:
+
+```json
+// 400 Bad Request
+{
+  "code": 400,
+  "errorCode": "CODFOR_INVALIDO",
+  "message": "CODFOR vazio ou não cadastrado em SA2",
+  "chave": "..."
+}
+```
+
+Não silenciar a falha — sem isso, qualquer integração externa ao Protheus tem o mesmo problema.
+
+Quando esses 2 forem resolvidos:
+- Pré-check (Pedido B) protege auditoria de SZR010 manual
+- Pós-validação (Pedido D) garante persistência confirmada
+- 13 transportadoras cadastradas eliminam o caso CODFOR vazio
+- Cobertura: 100% dos cenários conhecidos
+
 ---
 
 ## 4. 🟢 Observações
