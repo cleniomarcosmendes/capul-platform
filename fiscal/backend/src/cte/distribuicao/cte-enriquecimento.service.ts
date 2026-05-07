@@ -173,6 +173,125 @@ export class CteEnriquecimentoService {
     return resultado;
   }
 
+  /**
+   * Re-tenta gravacao Protheus em UM documento especifico (por id).
+   * Usado pelo botao "Re-tentar gravacao" no modal /fiscal/cte quando o
+   * documento esta com status FALHA_TECNICA ou PROTHEUS_DESISTIU.
+   *
+   * NAO consome SEFAZ — pega XML direto do cte_documento e chama grvXML
+   * com pre-check + pos-validacao (Pedidos B + D).
+   *
+   * Reseta protheus_tentativas=0 antes da chamada — re-abre o ciclo de
+   * retry caso esteja em PROTHEUS_DESISTIU (>=5 tentativas).
+   */
+  async regravarUmDoc(id: number): Promise<{
+    ok: boolean;
+    chave: string | null;
+    statusAnterior: string | null;
+    statusNovo: string | null;
+    mensagem: string | null;
+  }> {
+    const doc = await this.prisma.client.cteDocumento.findUnique({ where: { id } });
+    if (!doc) {
+      return { ok: false, chave: null, statusAnterior: null, statusNovo: null, mensagem: 'Documento nao encontrado' };
+    }
+    if (doc.schema !== 'procCTe' && doc.schema !== 'procCTeSimp') {
+      return {
+        ok: false,
+        chave: doc.chave,
+        statusAnterior: doc.protheusStatus,
+        statusNovo: doc.protheusStatus,
+        mensagem: `Schema ${doc.schema} nao e gravavel (so procCTe e procCTeSimp).`,
+      };
+    }
+    if (!doc.papelCapul) {
+      return {
+        ok: false,
+        chave: doc.chave,
+        statusAnterior: doc.protheusStatus,
+        statusNovo: doc.protheusStatus,
+        mensagem: 'Documento sem papel_capul — execute "Forcar enriquecimento" antes.',
+      };
+    }
+
+    const statusAnterior = doc.protheusStatus;
+
+    // Reset tentativas pra reabrir ciclo (caso PROTHEUS_DESISTIU)
+    await this.prisma.client.cteDocumento.update({
+      where: { id },
+      data: { protheusStatus: null, protheusTentativas: 0, protheusGravadoEm: null },
+    });
+    const docResetado = await this.prisma.client.cteDocumento.findUnique({ where: { id } });
+    if (!docResetado) {
+      return { ok: false, chave: doc.chave, statusAnterior, statusNovo: null, mensagem: 'Documento sumiu durante reset.' };
+    }
+
+    const acc: ResultadoEnriquecimento = {
+      varridos: 0, enriquecidos: 0, semPapel: 0, comAnomalia: 0, erros: 0,
+      protheusGravados: 0, protheusJaExistia: 0, protheusFalhas: 0, protheusPulados: 0, duracaoMs: 0,
+    };
+    await this.gravarProtheusUm(docResetado, acc);
+
+    const docFinal = await this.prisma.client.cteDocumento.findUnique({ where: { id } });
+    return {
+      ok: docFinal?.protheusStatus === 'GRAVADO' || docFinal?.protheusStatus === 'JA_EXISTIA',
+      chave: doc.chave,
+      statusAnterior,
+      statusNovo: docFinal?.protheusStatus ?? null,
+      mensagem: docFinal?.protheusErro ?? docFinal?.protheusStatus ?? null,
+    };
+  }
+
+  /**
+   * Reseta status PROTHEUS_DESISTIU/FALHA_TECNICA pra null e dispara
+   * processarPendentes — re-tenta em batch todos os documentos que
+   * falharam gravacao no Protheus.
+   *
+   * Usado apos cadastrar transportadoras faltantes em SA2 (Pedido C —
+   * causa principal de FALHA_TECNICA hoje) ou apos equipe Protheus
+   * resolver bug E (duplicacao).
+   *
+   * Respeita whitelist atual (ambiente_config.cte_distribuicao_filiais_whitelist):
+   * se preenchida, so reseta docs cujo CNPJ consulente bate com filiais
+   * da whitelist.
+   *
+   * Nao consome SEFAZ — apenas re-chama grvXML pros XMLs ja persistidos.
+   */
+  async regravarFalhasBatch(): Promise<{
+    docsResetados: number;
+    enriquecimento: ResultadoEnriquecimento;
+  }> {
+    const cfg = await this.ambiente.getCteDistribuicaoConfig();
+    const whitelist = cfg.filiaisWhitelist ?? [];
+
+    // Resolve whitelist de codigos pra CNPJs (igual NsuControleService)
+    let cnpjsWhitelist: string[] | null = null;
+    if (whitelist.length > 0) {
+      const filiais = await this.prisma.client.filialCore.findMany({
+        where: { codigo: { in: whitelist }, status: 'ATIVO', cnpj: { not: null } },
+        select: { cnpj: true },
+      });
+      cnpjsWhitelist = filiais.map((f) => (f.cnpj ?? '').replace(/\D/g, '')).filter((c) => c.length === 14);
+    }
+
+    const resetResult = await this.prisma.client.cteDocumento.updateMany({
+      where: {
+        protheusStatus: { in: ['FALHA_TECNICA', 'PROTHEUS_DESISTIU'] },
+        ...(cnpjsWhitelist ? { cnpjConsulente: { in: cnpjsWhitelist } } : {}),
+      },
+      data: { protheusStatus: null, protheusTentativas: 0, protheusGravadoEm: null },
+    });
+
+    this.logger.log(
+      `[regravarFalhasBatch] resetados=${resetResult.count} docs (whitelist=${whitelist.length > 0 ? whitelist.join(',') : 'todas'}). Disparando enriquecimento.`,
+    );
+
+    // Dispara processamento — vai pegar os resetados + qualquer pendente normal
+    const enriquecimento = await this.processarPendentes();
+
+    return { docsResetados: resetResult.count, enriquecimento };
+  }
+
   private async enriquecerUm(
     doc: CteDocumento,
     acc: ResultadoEnriquecimento,

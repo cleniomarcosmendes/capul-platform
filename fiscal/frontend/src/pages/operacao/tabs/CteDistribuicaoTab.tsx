@@ -188,6 +188,39 @@ export function CteDistribuicaoTab() {
     }
   }
 
+  async function handleRegravarFalhas() {
+    const ok = await confirm({
+      title: 'Re-tentar todas falhas Protheus?',
+      description:
+        'Reseta status FALHA_TECNICA/PROTHEUS_DESISTIU pra null e dispara enriquecimento. ' +
+        'Pode demorar minutos pra muitas falhas. Respeita whitelist de filiais. NÃO consome SEFAZ.',
+      variant: 'warning',
+      confirmLabel: 'Re-tentar tudo',
+    });
+    if (!ok) return;
+    setActing(true);
+    try {
+      const r = await fiscalApi.post<{
+        docsResetados: number;
+        enriquecimento: {
+          protheusGravados: number;
+          protheusJaExistia: number;
+          protheusFalhas: number;
+          protheusPulados: number;
+        };
+      }>('/cte/distribuicao/regravar-falhas');
+      const e = r.data.enriquecimento;
+      toast.success(
+        'Re-gravação concluída',
+        `${r.data.docsResetados} resetados · gravados=${e.protheusGravados} jaExistia=${e.protheusJaExistia} falhas=${e.protheusFalhas}`,
+      );
+    } catch (err) {
+      toast.error('Falha ao re-gravar', extractApiError(err) ?? undefined);
+    } finally {
+      setActing(false);
+    }
+  }
+
   if (loading) return <div className="text-slate-500">Carregando…</div>;
   if (!status) return <div className="text-red-600">Falha ao carregar configuração CT-e.</div>;
 
@@ -333,7 +366,7 @@ export function CteDistribuicaoTab() {
       {isGestor && (
         <div className="mb-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-semibold text-slate-900 mb-3">Manutenção</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="rounded border border-slate-200 p-3 flex flex-col">
               <div className="flex items-center gap-2 mb-1">
                 <RefreshCw size={14} className="text-slate-500" />
@@ -363,6 +396,22 @@ export function CteDistribuicaoTab() {
               <span title="Aplica PapelDetector em CT-es ainda não classificados (papel_capul = NULL) e preenche TOMA/DEST/REM/EXPED/RECEB/AUTXML/TERCEIRO. NÃO consulta SEFAZ — apenas processa XMLs já recebidos. Idempotente: registros já processados são pulados. Use após cadastrar filial nova (junto com Forçar sync) para reprocessar histórico, ou para aparecer categorização imediata em vez de esperar até hh:30.">
                 <Button variant="ghost" size="sm" onClick={handleEnriquecer} loading={acting}>
                   Forçar enriquecimento
+                </Button>
+              </span>
+            </div>
+            <div className="rounded border border-amber-200 bg-amber-50/50 p-3 flex flex-col">
+              <div className="flex items-center gap-2 mb-1">
+                <RefreshCw size={14} className="text-amber-700" />
+                <span className="text-sm font-medium">Re-tentar falhas Protheus</span>
+              </div>
+              <p className="text-xs text-slate-600 flex-1 mb-2">
+                Reseta status de docs com <code>FALHA_TECNICA</code> ou{' '}
+                <code>PROTHEUS_DESISTIU</code> e tenta gravar de novo. Útil após cadastrar
+                transportadora em <strong>SA2</strong> ou Protheus resolver bug duplicação.
+              </p>
+              <span title="Reseta protheus_status pra null em todos os docs com FALHA_TECNICA ou PROTHEUS_DESISTIU. Respeita whitelist de filiais ativa em ambiente_config. Dispara enriquecimento que vai re-tentar gravação Protheus desses docs (com pré-check + pós-validação). Pode demorar minutos pra muitas falhas. NÃO consome SEFAZ — só re-grava XMLs já no DB local.">
+                <Button variant="primary" size="sm" onClick={handleRegravarFalhas} loading={acting}>
+                  Re-tentar todas falhas
                 </Button>
               </span>
             </div>

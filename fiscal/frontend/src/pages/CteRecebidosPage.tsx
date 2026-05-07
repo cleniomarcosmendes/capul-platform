@@ -182,6 +182,38 @@ export function CteRecebidosPage() {
     }
   };
 
+  const [regravandoId, setRegravandoId] = useState<number | null>(null);
+  const regravarLocal = async (id: number) => {
+    setRegravandoId(id);
+    try {
+      const { data } = await fiscalApi.post<{
+        ok: boolean;
+        chave: string | null;
+        statusAnterior: string | null;
+        statusNovo: string | null;
+        mensagem: string | null;
+      }>(`/cte/recebidos/${id}/regravar-protheus-local`);
+      if (data.ok) {
+        toast.success(
+          'Gravação retentada',
+          `Status: ${data.statusAnterior ?? '—'} → ${data.statusNovo ?? '—'}`,
+        );
+      } else {
+        toast.warning(
+          `Status: ${data.statusAnterior ?? '—'} → ${data.statusNovo ?? '—'}`,
+          data.mensagem ?? undefined,
+        );
+      }
+      // Recarrega detalhe
+      if (detalhe?.documento.id === id) await abrirDetalhe(id);
+      void carregar();
+    } catch (err) {
+      toast.error('Falha ao regravar', extractApiError(err) ?? undefined);
+    } finally {
+      setRegravandoId(null);
+    }
+  };
+
   const imprimirDacte = async (id: number, chaveLabel?: string) => {
     try {
       const r = await fiscalApi.get(`/cte/recebidos/${id}/dacte`, {
@@ -593,6 +625,24 @@ export function CteRecebidosPage() {
                           <pre className="mt-1 bg-red-50 border border-red-200 rounded p-2 text-xs text-red-800 whitespace-pre-wrap break-all">
                             {detalhe.documento.protheusErro}
                           </pre>
+                        </div>
+                      )}
+                      {(detalhe.documento.protheusStatus === 'FALHA_TECNICA' ||
+                        detalhe.documento.protheusStatus === 'PROTHEUS_DESISTIU') && (
+                        <div className="mt-3 rounded border border-amber-300 bg-amber-50 p-2 flex items-center justify-between gap-2">
+                          <span className="text-xs text-amber-900">
+                            Re-tentar gravação no Protheus (sem consumir SEFAZ — usa o XML do
+                            cache local). Útil após cadastrar SA2 da transportadora ou quando
+                            equipe Protheus resolver bug de duplicação.
+                          </span>
+                          <Button
+                            variant="primary"
+                            onClick={() => regravarLocal(detalhe.documento.id)}
+                            loading={regravandoId === detalhe.documento.id}
+                          >
+                            <RefreshCw size={14} className="mr-1" />
+                            Re-tentar
+                          </Button>
                         </div>
                       )}
                       {detalhe.documento.protheusGrvRequest && (

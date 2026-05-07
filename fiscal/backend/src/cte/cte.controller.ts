@@ -297,6 +297,32 @@ export class CteController {
   }
 
   /**
+   * Re-tenta gravacao Protheus de UM documento especifico — endpoint A
+   * (Pedido 07/05/2026). NAO consome SEFAZ. Usado pelo botao "Re-tentar
+   * gravacao" no modal /fiscal/cte quando status e FALHA_TECNICA ou
+   * PROTHEUS_DESISTIU.
+   */
+  @Post('recebidos/:id/regravar-protheus-local')
+  @RoleMinima('GESTOR_FISCAL')
+  async regravarProtheusLocal(@Param('id') id: string) {
+    const idNum = Number(id);
+    if (isNaN(idNum)) throw new NotFoundException('ID inválido');
+    return this.enriquecimento.regravarUmDoc(idNum);
+  }
+
+  /**
+   * Re-tenta gravacao Protheus em BATCH dos documentos com status
+   * FALHA_TECNICA ou PROTHEUS_DESISTIU. Respeita a whitelist de filiais
+   * em ambiente_config. Endpoint B (Pedido 07/05/2026). NAO consome SEFAZ.
+   * Usado pelo botao "Re-tentar todas falhas" na aba CT-e Distribuicao.
+   */
+  @Post('distribuicao/regravar-falhas')
+  @RoleMinima('GESTOR_FISCAL')
+  async regravarFalhasBatch() {
+    return this.enriquecimento.regravarFalhasBatch();
+  }
+
+  /**
    * DACTE em PDF para CT-e recebido via Distribuicao (XML ja persistido em
    * fiscal.cte_documento — nao toca SEFAZ).
    */
