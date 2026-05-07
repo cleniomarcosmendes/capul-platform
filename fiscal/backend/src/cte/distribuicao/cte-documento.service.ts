@@ -414,6 +414,7 @@ export class CteDocumentoService {
     schema?: string;
     ambiente?: number;
     cnpjConsulente?: string;
+    protheusStatus?: string;
     dataInicio?: Date;
     dataFim?: Date;
   }) {
@@ -427,6 +428,12 @@ export class CteDocumentoService {
     if (filtros.schema) where.schema = filtros.schema;
     if (filtros.ambiente === 1 || filtros.ambiente === 2) where.ambiente = filtros.ambiente;
     if (filtros.cnpjConsulente) where.cnpjConsulente = filtros.cnpjConsulente.replace(/\D/g, '');
+    // 'PENDENTE' = sem status (ainda não tentou gravar). Outros valores filtram literalmente.
+    if (filtros.protheusStatus === 'PENDENTE') {
+      where.protheusStatus = null;
+    } else if (filtros.protheusStatus) {
+      where.protheusStatus = filtros.protheusStatus;
+    }
     if (filtros.dataInicio || filtros.dataFim) {
       where.dhEmi = {};
       if (filtros.dataInicio) where.dhEmi.gte = filtros.dataInicio;

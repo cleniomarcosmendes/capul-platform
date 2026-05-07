@@ -239,6 +239,7 @@ export class CteController {
     @Query('schema') schema?: string,
     @Query('ambiente') ambiente?: string,
     @Query('cnpjConsulente') cnpjConsulente?: string,
+    @Query('protheusStatus') protheusStatus?: string,
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
   ) {
@@ -250,6 +251,7 @@ export class CteController {
       schema,
       ambiente: ambiente ? Number(ambiente) : undefined,
       cnpjConsulente,
+      protheusStatus,
       dataInicio: dataInicio ? new Date(dataInicio) : undefined,
       dataFim: dataFim ? new Date(dataFim) : undefined,
     });

@@ -115,6 +115,9 @@ export function CteRecebidosPage() {
   const [papel, setPapel] = useState<'' | PapelCapul>('');
   const [schema, setSchema] = useState<'' | SchemaCte>('');
   const [ambiente, setAmbiente] = useState<'' | '1' | '2'>('');
+  const [protheusStatus, setProtheusStatus] = useState<
+    '' | 'GRAVADO' | 'JA_EXISTIA' | 'FALHA_TECNICA' | 'PROTHEUS_DESISTIU' | 'NAO_APLICAVEL' | 'PENDENTE'
+  >('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
 
@@ -133,6 +136,7 @@ export function CteRecebidosPage() {
       if (papel) params.papel = papel;
       if (schema) params.schema = schema;
       if (ambiente) params.ambiente = ambiente;
+      if (protheusStatus) params.protheusStatus = protheusStatus;
       if (dataInicio) params.dataInicio = new Date(dataInicio).toISOString();
       if (dataFim) {
         const fim = new Date(dataFim);
@@ -148,7 +152,7 @@ export function CteRecebidosPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, papel, schema, ambiente, dataInicio, dataFim, toast]);
+  }, [page, search, papel, schema, ambiente, protheusStatus, dataInicio, dataFim, toast]);
 
   useEffect(() => {
     void carregar();
@@ -159,6 +163,7 @@ export function CteRecebidosPage() {
     setPapel('');
     setSchema('');
     setAmbiente('');
+    setProtheusStatus('');
     setDataInicio('');
     setDataFim('');
     setPage(1);
@@ -350,6 +355,22 @@ export function CteRecebidosPage() {
               </select>
             </div>
             <div>
+              <label className="block text-xs text-gray-600 mb-1">Status Protheus</label>
+              <select
+                value={protheusStatus}
+                onChange={(e) => setProtheusStatus(e.target.value as any)}
+                className="w-full px-3 py-1.5 border rounded text-sm"
+              >
+                <option value="">Todos</option>
+                <option value="GRAVADO">✓ GRAVADO</option>
+                <option value="JA_EXISTIA">✓ JA_EXISTIA</option>
+                <option value="FALHA_TECNICA">✗ FALHA_TECNICA</option>
+                <option value="PROTHEUS_DESISTIU">✗ PROTHEUS_DESISTIU</option>
+                <option value="NAO_APLICAVEL">— N/A</option>
+                <option value="PENDENTE">— Pendente (sem status)</option>
+              </select>
+            </div>
+            <div>
               <label className="block text-xs text-gray-600 mb-1">Emissão (de)</label>
               <input
                 type="date"
@@ -453,13 +474,25 @@ export function CteRecebidosPage() {
                         {new Date(it.recebidoEm).toLocaleString('pt-BR')}
                       </td>
                       <td className="px-3 py-2 text-xs">
-                        {it.protheusStatus === 'GRAVADO' || it.protheusStatus === 'JA_EXISTIA' ? (
+                        {it.protheusStatus === 'GRAVADO' ? (
                           <span title={`Gravado em SZR010+SZQ010 ${it.protheusGravadoEm ? new Date(it.protheusGravadoEm).toLocaleString('pt-BR') : ''}`}>
-                            <Badge variant="green">✓ {it.protheusStatus}</Badge>
+                            <Badge variant="green">✓ GRAVADO</Badge>
+                          </span>
+                        ) : it.protheusStatus === 'JA_EXISTIA' ? (
+                          <span title="XML já estava em SZR010 (importação manual prévia preservada pelo pré-check)">
+                            <Badge variant="green">✓ JA_EXISTIA</Badge>
                           </span>
                         ) : it.protheusStatus === 'FALHA_TECNICA' ? (
                           <span title={it.protheusErro ?? 'Erro técnico — retry no próximo ciclo'}>
                             <Badge variant="red">✗ FALHA</Badge>
+                          </span>
+                        ) : it.protheusStatus === 'PROTHEUS_DESISTIU' ? (
+                          <span title="Limite de 5 tentativas atingido — re-tente manual após cadastrar SA2">
+                            <Badge variant="red">✗ DESISTIU</Badge>
+                          </span>
+                        ) : it.protheusStatus === 'NAO_APLICAVEL' ? (
+                          <span title="Gravação não aplicável (ex: ambiente XML difere do Protheus)">
+                            <Badge variant="gray">— N/A</Badge>
                           </span>
                         ) : (
                           <span className="text-gray-400 text-xs" title="Ainda não tentou gravar (flag desligada ou doc novo)">—</span>
