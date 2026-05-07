@@ -8,6 +8,7 @@ import { buildSoapEnvelope } from './soap-envelope.helper.js';
 import { soapPost } from './sefaz-http.helper.js';
 import { SefazConsultaError } from './nfe-distribuicao.client.js';
 import { cufFromUf } from '../common/helpers/chave.helper.js';
+import { decodeXmlBytes } from './xml-encoding.util.js';
 
 export interface CteDocZip {
   /** NSU do documento no atributo @NSU do <docZip> */
@@ -169,8 +170,14 @@ export class CteDistribuicaoClient {
           continue;
         }
         try {
-          const xml = gunzipSync(Buffer.from(base64, 'base64')).toString('utf8');
-          docZips.push({ nsu, schema, xml });
+          const decompressed = gunzipSync(Buffer.from(base64, 'base64'));
+          const decoded = decodeXmlBytes(decompressed, `CTeDistribuicao NSU=${nsu}`);
+          if (decoded.encodingAnomaly) {
+            this.logger.warn(
+              `[CTeDistribuicao] docZip NSU=${nsu} com encoding anomaly (latin1 fallback) — emitente nao-conforme.`,
+            );
+          }
+          docZips.push({ nsu, schema, xml: decoded.xml });
         } catch (err) {
           this.logger.error(`Falha ao descomprimir docZip NSU=${nsu}: ${err instanceof Error ? err.message : err}`);
         }
@@ -263,9 +270,13 @@ export class CteDistribuicaoClient {
       throw new Error('docZip CT-e vazio.');
     }
     const compressed = Buffer.from(base64, 'base64');
-    const xml = gunzipSync(compressed).toString('utf8');
-
-    return { xml, cStat, xMotivo };
+    const decoded = decodeXmlBytes(gunzipSync(compressed), `CTeConsultaPorChave ${chave}`);
+    if (decoded.encodingAnomaly) {
+      this.logger.warn(
+        `[CTeConsulta] chave=${chave} com encoding anomaly (latin1 fallback) — emitente nao-conforme.`,
+      );
+    }
+    return { xml: decoded.xml, cStat, xMotivo };
   }
 
 }

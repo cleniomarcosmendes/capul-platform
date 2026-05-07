@@ -8,6 +8,7 @@ import { getNfeDistribuicaoUrl, type AmbienteSefazStr } from './sefaz-endpoints.
 import { buildSoapEnvelope } from './soap-envelope.helper.js';
 import { soapPost } from './sefaz-http.helper.js';
 import { cufFromUf } from '../common/helpers/chave.helper.js';
+import { decodeXmlBytes } from './xml-encoding.util.js';
 
 /**
  * Cliente do web service NFeDistribuicaoDFe (SOAP 1.2, nacional).
@@ -279,7 +280,15 @@ export class NfeDistribuicaoClient {
       if (!base64) continue;
       let xml: string;
       try {
-        xml = gunzipSync(Buffer.from(base64, 'base64')).toString('utf8');
+        const decompressed = gunzipSync(Buffer.from(base64, 'base64'));
+        const decoded = decodeXmlBytes(decompressed, 'NFeDistribuicao docZip');
+        xml = decoded.xml;
+        if (decoded.encodingAnomaly) {
+          this.logger.warn(
+            `[NFeDistribuicao] docZip com encoding anomaly (latin1 fallback) — emitente nao-conforme. ` +
+              `XML re-encodado pra UTF-8 limpo.`,
+          );
+        }
       } catch (err) {
         this.logger.warn(`Falha ao descomprimir docZip: ${(err as Error).message}`);
         continue;
