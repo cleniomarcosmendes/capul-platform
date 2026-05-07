@@ -127,7 +127,17 @@ export function CteRecebidosPage() {
   const [detalhe, setDetalhe] = useState<DetalheResp | null>(null);
   const [carregandoDetalhe, setCarregandoDetalhe] = useState(false);
 
+  // Validacao YYYY-MM-DD — input type=date em alguns browsers mobile
+  // aceita formatos livres (ex: "+052025-05-07") que viram dates malformadas
+  // no toISOString. Sem essa guarda, useEffect disparava request a cada
+  // keystroke do user, batendo rate-limit do throttler (429 em loop).
+  const isDataValida = (d: string) => !d || /^\d{4}-\d{2}-\d{2}$/.test(d);
+
   const carregar = useCallback(async () => {
+    if (!isDataValida(dataInicio) || !isDataValida(dataFim)) {
+      // Data invalida — nao chama backend (evita loop por keystroke)
+      return;
+    }
     setLoading(true);
     try {
       const params: Record<string, string> = {
@@ -139,10 +149,9 @@ export function CteRecebidosPage() {
       if (schema) params.schema = schema;
       if (ambiente) params.ambiente = ambiente;
       if (protheusStatus) params.protheusStatus = protheusStatus;
-      if (dataInicio) params.dataInicio = new Date(dataInicio).toISOString();
+      if (dataInicio) params.dataInicio = new Date(dataInicio + 'T00:00:00').toISOString();
       if (dataFim) {
-        const fim = new Date(dataFim);
-        fim.setHours(23, 59, 59, 999);
+        const fim = new Date(dataFim + 'T23:59:59.999');
         params.dataFim = fim.toISOString();
       }
       const r = await fiscalApi.get<ListResp>('/cte/recebidos', { params });
@@ -216,10 +225,14 @@ export function CteRecebidosPage() {
       confirmLabel: `Re-tentar ${total} docs`,
     });
     if (!ok) return;
+    if (!isDataValida(dataInicio) || !isDataValida(dataFim)) {
+      toast.error('Datas inválidas', 'Use formato AAAA-MM-DD nos filtros de Emissão.');
+      return;
+    }
     setRegravandoBatch(true);
     try {
-      const fim = new Date(dataFim);
-      fim.setHours(23, 59, 59, 999);
+      const fim = new Date(dataFim + 'T23:59:59.999');
+      const inicio = new Date(dataInicio + 'T00:00:00');
       const r = await fiscalApi.post<{
         docsResetados: number;
         enriquecimento: {
@@ -228,7 +241,7 @@ export function CteRecebidosPage() {
           protheusFalhas: number;
         };
       }>('/cte/distribuicao/regravar-falhas', {
-        dataInicio: new Date(dataInicio).toISOString(),
+        dataInicio: inicio.toISOString(),
         dataFim: fim.toISOString(),
         protheusStatus: [protheusStatus],
         papel: papel || undefined,
@@ -433,6 +446,8 @@ export function CteRecebidosPage() {
               <input
                 type="date"
                 value={dataInicio}
+                min="2020-01-01"
+                max="2099-12-31"
                 onChange={(e) => setDataInicio(e.target.value)}
                 className="w-full px-3 py-1.5 border rounded text-sm"
               />
@@ -442,6 +457,8 @@ export function CteRecebidosPage() {
               <input
                 type="date"
                 value={dataFim}
+                min="2020-01-01"
+                max="2099-12-31"
                 onChange={(e) => setDataFim(e.target.value)}
                 className="w-full px-3 py-1.5 border rounded text-sm"
               />
