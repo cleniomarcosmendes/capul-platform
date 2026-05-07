@@ -405,10 +405,10 @@ function StatusBanner({
         <div className="md:col-span-3 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
           <ShieldAlert className="h-4 w-4 flex-shrink-0" />
           <div className="flex-1">
-            <strong>Freio de mão ATIVO</strong> — todas as rotinas automáticas estão pausadas. Nenhuma
-            execução pode ser disparada. Desative em{' '}
+            <strong>Cruzamento NF-e × CCC PAUSADO</strong> — os cruzamentos cadastrais (cron + batch) estão
+            suspensos. Nenhuma execução pode ser disparada. Retome em{' '}
             <Link to="/operacao/controle/freio" className="underline hover:text-red-700">
-              Operação → Freio de Mão
+              Operação → Freio Cruzamento NF-e × CCC
             </Link>
             .
           </div>

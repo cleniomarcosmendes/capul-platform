@@ -15,13 +15,15 @@ interface AmbienteStatus {
 }
 
 /**
- * Aba "Freio de Mão" de /operacao/controle — pausa TODAS as rotinas
- * automaticas do Fiscal (cron 12:00, cron 06:00, cruzamentos manuais batch).
- * Consultas individuais sob demanda (NF-e por chave, CCC pontual) continuam
- * funcionando normalmente.
+ * Aba "Freio Cruzamento NF-e × CCC" de /operacao/controle — pausa as rotinas
+ * automaticas do cruzamento cadastral CCC (cron 12:00, cron 06:00, batches
+ * manuais em /execucoes). Consultas individuais sob demanda (NF-e por chave,
+ * CCC pontual) continuam funcionando normalmente.
  *
- * Antes estava embutido na pagina de Ambiente — separado para facilitar a
- * evolucao (futura adicao de historico de pauses/retomadas e motivo).
+ * Escopo (06/05/2026): este freio NAO afeta o CT-e Distribuicao — esse
+ * processo tem toggle proprio na aba "CT-e Distribuicao". Cada scheduler
+ * tem controle isolado pra setor fiscal poder operar com granularidade
+ * (ex: pausar Cruzamento durante incidente CCC sem perder coleta CT-e).
  */
 export function FreioDeMaoTab() {
   const [status, setStatus] = useState<AmbienteStatus | null>(null);
@@ -48,17 +50,17 @@ export function FreioDeMaoTab() {
 
   async function handlePauseSync() {
     const ok = await confirm({
-      title: 'Ativar freio de mão global?',
+      title: 'Ativar freio do Cruzamento NF-e × CCC?',
       description:
-        'Todas as rotinas automáticas (cruzamento CCC, scheduler 12:00/06:00) serão pausadas imediatamente. Use em caso de rate-limit SEFAZ ou incidente.',
+        'Os cruzamentos cadastrais CCC (cron 12:00, cron 06:00 e batches manuais) serão pausados imediatamente. Use em caso de rate-limit SEFAZ ou incidente. CT-e Distribuição e consultas individuais continuam funcionando.',
       variant: 'warning',
-      confirmLabel: 'Pausar rotinas',
+      confirmLabel: 'Pausar Cruzamento NF-e × CCC',
     });
     if (!ok) return;
     setActing(true);
     try {
       await fiscalApi.post('/ambiente/pause-sync');
-      toast.warning('Freio de mão ativado', 'Rotinas automáticas pausadas.');
+      toast.warning('Cruzamento NF-e × CCC pausado', 'Rotinas de cruzamento cadastral suspensas.');
       load();
     } catch (err) {
       toast.error('Falha ao pausar', extractApiError(err));
@@ -71,7 +73,7 @@ export function FreioDeMaoTab() {
     setActing(true);
     try {
       await fiscalApi.post('/ambiente/resume-sync');
-      toast.success('Rotinas retomadas.');
+      toast.success('Cruzamento NF-e × CCC retomado.');
       load();
     } catch (err) {
       toast.error('Falha ao retomar', extractApiError(err));
@@ -102,12 +104,12 @@ export function FreioDeMaoTab() {
           </div>
           <div className="flex-1">
             <h3 className={`text-sm font-semibold ${pausado ? 'text-red-900' : 'text-emerald-900'}`}>
-              {pausado ? 'Rotinas automáticas PAUSADAS' : 'Rotinas automáticas ATIVAS'}
+              {pausado ? 'Cruzamento NF-e × CCC PAUSADO' : 'Cruzamento NF-e × CCC ATIVO'}
             </h3>
             <p className={`mt-1 text-xs ${pausado ? 'text-red-800' : 'text-emerald-800'}`}>
               {pausado
-                ? 'Nenhum cron ou cruzamento batch vai executar. Consultas individuais sob demanda continuam funcionando.'
-                : 'Schedulers 12:00 / 06:00 rodarão normalmente. Cruzamentos manuais (botões em /execucoes) também.'}
+                ? 'Os cruzamentos cadastrais (cron + batch) estão pausados. CT-e Distribuição e consultas pontuais seguem funcionando.'
+                : 'Schedulers 12:00 / 06:00 rodam normalmente. Cruzamentos manuais (botões em /execucoes) também.'}
             </p>
             <div className="mt-3 flex items-center gap-3">
               <Badge variant={pausado ? 'red' : 'green'}>{pausado ? 'PAUSADO' : 'ATIVO'}</Badge>
@@ -115,11 +117,11 @@ export function FreioDeMaoTab() {
                 <>
                   {pausado ? (
                     <Button variant="secondary" size="sm" onClick={handleResumeSync} loading={acting}>
-                      Retomar sincronização
+                      Retomar Cruzamento
                     </Button>
                   ) : (
                     <Button variant="danger" size="sm" onClick={handlePauseSync} loading={acting}>
-                      Pausar sincronização
+                      Pausar Cruzamento
                     </Button>
                   )}
                 </>
@@ -130,13 +132,13 @@ export function FreioDeMaoTab() {
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
-        <h4 className="mb-2 text-xs font-semibold text-slate-700">O que o freio pausa</h4>
+        <h4 className="mb-2 text-xs font-semibold text-slate-700">O que este freio pausa</h4>
         <ul className="ml-4 list-disc space-y-1">
           <li>
-            Cron de cruzamento cadastral <strong>MOVIMENTO_MEIO_DIA</strong> (12:00 BRT)
+            Cron de cruzamento cadastral NF-e × CCC <strong>MOVIMENTO_MEIO_DIA</strong> (12:00 BRT)
           </li>
           <li>
-            Cron de cruzamento cadastral <strong>MOVIMENTO_MANHA_SEGUINTE</strong> (06:00 BRT D+1)
+            Cron de cruzamento cadastral NF-e × CCC <strong>MOVIMENTO_MANHA_SEGUINTE</strong> (06:00 BRT D+1)
           </li>
           <li>
             Disparos manuais em batch (<code>/execucoes</code> — botões "Manual", "Corrida meio-dia",
@@ -144,12 +146,15 @@ export function FreioDeMaoTab() {
           </li>
         </ul>
 
-        <h4 className="mb-2 mt-4 text-xs font-semibold text-slate-700">O que continua funcionando</h4>
+        <h4 className="mb-2 mt-4 text-xs font-semibold text-slate-700">O que NÃO é afetado</h4>
         <ul className="ml-4 list-disc space-y-1">
+          <li>
+            <strong>CT-e Distribuição</strong> — controle próprio na aba "CT-e Distribuição"
+          </li>
           <li>Consulta NF-e por chave (<code>/nfe</code>)</li>
           <li>Consulta CT-e por chave (<code>/cte</code>)</li>
           <li>Consulta cadastral pontual (<code>/cadastro</code>)</li>
-          <li>Todas as telas de leitura (Dashboard, Divergências, Histórico de Alertas)</li>
+          <li>Telas de leitura (Dashboard, Divergências, Histórico de Alertas)</li>
         </ul>
       </div>
 

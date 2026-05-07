@@ -14,7 +14,7 @@ interface TabDef {
 const TABS: TabDef[] = [
   { path: 'ambiente', label: 'Ambiente SEFAZ', icon: Globe, minRole: 'GESTOR_FISCAL' },
   { path: 'agendamentos', label: 'Agendamentos', icon: Clock, minRole: 'GESTOR_FISCAL' },
-  { path: 'freio', label: 'Freio de Mão', icon: ShieldAlert, minRole: 'GESTOR_FISCAL' },
+  { path: 'freio', label: 'Freio Cruzamento NF-e × CCC', icon: ShieldAlert, minRole: 'GESTOR_FISCAL' },
   { path: 'limites', label: 'Limites SEFAZ', icon: Gauge, minRole: 'GESTOR_FISCAL' },
   { path: 'cte-distribuicao', label: 'CT-e Distribuição', icon: Truck, minRole: 'GESTOR_FISCAL' },
   { path: 'cte-historico', label: 'CT-e Histórico', icon: History, minRole: 'GESTOR_FISCAL' },

@@ -21,8 +21,11 @@ import { SincronizacaoFiliaisService } from './sincronizacao-filiais.service.js'
  *   1. Cron tick a cada 15min (não controlamos isso direto)
  *   2. `proximaConsulta` na DB filtra quem realmente roda
  *   3. `bloqueadoAte` filtra CNPJ em CIRCUIT_BREAK (cStat 656 anterior)
- *   4. `feature flag FISCAL_CTE_DISTRIBUICAO_ENABLED` bloqueia em PROD se false
- *   5. Pause global do AmbienteService (`pause_sync`) bloqueia tudo
+ *   4. `cte_distribuicao_ativo` (toggle UI Configurador) bloqueia em PROD se false
+ *
+ * O `pause_sync` global NAO afeta este scheduler (06/05/2026) — esse freio
+ * e especifico do Cruzamento NF-e × CCC, processo independente. Pra parar
+ * SO o CT-e Distribuicao, usar `cte_distribuicao_ativo=false`.
  *
  * Não dispara em paralelo: filiais elegíveis processadas sequencialmente
  * (Promise.all se vier muita filial → racing limit SEFAZ). Espaçamento
@@ -58,22 +61,20 @@ export class CteSchedulerService {
       return;
     }
 
-    const cfgAmb = await this.ambiente.getStatus();
-    if (cfgAmb.pauseSync) {
-      this.logger.log(`[CTeScheduler] tick suprimido — ambiente_config.pause_sync=true (freio de mão global)`);
-      return;
-    }
-    // Ambiente do CT-e é INDEPENDENTE do global (NF-e/Cadastro).
+    // CT-e e INDEPENDENTE do `pause_sync` (que e o freio do Cruzamento
+    // NF-e × CCC) — controle isolado pra cada processo (06/05/2026).
+    // Ambiente do CT-e e tambem independente do global (NF-e/Cadastro).
     const ambienteInt: 1 | 2 = cfgCte.ambiente === 'PRODUCAO' ? 1 : 2;
+    const ambienteLabel = cfgCte.ambiente;
 
     const elegiveis = await this.nsuControle.listarElegiveisParaConsulta(ambienteInt);
     if (elegiveis.length === 0) {
-      this.logger.debug(`[CTeScheduler] tick — nenhuma filial elegível em ${cfgAmb.ambienteAtivo}`);
+      this.logger.debug(`[CTeScheduler] tick — nenhuma filial elegível em ${ambienteLabel}`);
       return;
     }
 
     this.logger.log(
-      `[CTeScheduler] tick — ${elegiveis.length} filial(is) elegíveis em ${cfgAmb.ambienteAtivo}`,
+      `[CTeScheduler] tick — ${elegiveis.length} filial(is) elegíveis em ${ambienteLabel}`,
     );
 
     for (const ctrl of elegiveis) {
