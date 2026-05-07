@@ -16,16 +16,17 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/tsconfig.json ./
-COPY --from=builder /app/tsconfig.seed.json ./
+# Cria appuser/appgroup ANTES do COPY — permite usar --chown em cada COPY
+# (evita `chown -R /app` recursivo no final, que demora ~2min em node_modules
+# com ~80k+ arquivos via copy-on-write do overlay2). Auditoria 25/04/2026 #2.
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-# Hardening — rodar como usuário não-root (auditoria 25/04/2026 #2)
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
-    && chown -R appuser:appgroup /app
+COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
+COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
+COPY --from=builder --chown=appuser:appgroup /app/package.json ./
+COPY --from=builder --chown=appuser:appgroup /app/prisma ./prisma
+COPY --from=builder --chown=appuser:appgroup /app/tsconfig.json ./
+COPY --from=builder --chown=appuser:appgroup /app/tsconfig.seed.json ./
 
 # Pré-criar diretórios de upload com owner correto (fix preventivo 04/05/2026)
 # Antes: pastas eram criadas em runtime via mkdirSync — quando container roda

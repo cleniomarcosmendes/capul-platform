@@ -167,7 +167,7 @@ extras + 4 pendências menores). Tudo testado tecnicamente, mas com:
 **Por quê está aqui:** validação técnica completa. Próximo gate é uso real.
 Item não codável até dados reais aparecerem.
 
-### ⏳ 2026-05-05 — Otimizar `chown -R /app` nos Dockerfiles Node (deploy ~1h → ~45min)
+### ✅ 2026-05-07 — Otimizar `chown -R /app` nos Dockerfiles Node (deploy ~1h → ~40min)
 
 **Contexto:** Douglas/Marco reportaram em 05/05/2026 que o build Docker do
 deploy está demorando ~1h. Em análise visual (screenshot do `docker compose
@@ -215,7 +215,7 @@ duplicado).
 depois melhora pra sempre. Comportamento idêntico (appuser dono dos
 arquivos). Reversível.
 
-**Onde alterar:**
+**Onde alterado:**
 - `auth-gateway/Dockerfile`
 - `gestao-ti/backend/Dockerfile`
 - `fiscal/backend/Dockerfile`
@@ -226,6 +226,25 @@ em `C:\Arquivos-de-projeto\PlatformCapul_20260505_Diagnostico_BuildLento.md`.
 
 **Esforço:** ~20min de implementação + 1 deploy lento de transição.
 **Impacto:** todo deploy futuro ~10-13min mais rápido.
+
+**Resultado real (07/05/2026, build do zero local sem cache):**
+
+| Backend | Antes | Depois | Ganho |
+|---|---|---|---|
+| auth-gateway | ~3-4min (chown layer 173s) | 47.9s | ~80% |
+| gestao-ti-backend | ~3min (chown 118s + COPY node_modules 37s) | 54.7s | ~70% |
+| fiscal-backend | ~3-4min (chown 169s) | 49.1s | ~75% |
+| **Total dos 3** | **~10-12min** | **~2.5min** | **~75%** |
+
+COPY `--chown=appuser:appgroup` ficou em 2-3s em todos (vs 30-40s da
+COPY sem chown + 170s do chown -R no final).
+
+Init jobs `*-migrate` reusam a mesma imagem dos backends → herdam o
+ganho automaticamente.
+
+Estimativa pro Douglas no deploy: **~1h → ~30-40min** (npm ci + prisma
+generate + build TypeScript continuam, mas o gargalo principal foi
+eliminado).
 
 ### ⏳ 2026-04-25 — Bubbles estilo WhatsApp na interação de equipes (Chamado e Projeto)
 

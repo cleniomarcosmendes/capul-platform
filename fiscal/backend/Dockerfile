@@ -32,20 +32,23 @@ RUN apk add --no-cache openssl libc6-compat tzdata && \
     echo "America/Sao_Paulo" > /etc/timezone && \
     apk del tzdata
 
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
+# Cria appuser/appgroup ANTES do COPY — permite usar --chown em cada COPY
+# (evita `chown -R /app` recursivo no final, que demora ~3min em node_modules
+# com ~80k+ arquivos via copy-on-write do overlay2). Auditoria 25/04/2026 #2.
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-# Diretório montado em runtime: /app/certs (read-write — Configurador faz upload do A1)
-# Diretório montado em runtime: /app/xmls (read-write) — XMLs baixados (cache de disco opcional)
-RUN mkdir -p /app/certs /app/xmls
+COPY --from=builder --chown=appuser:appgroup /app/package*.json ./
+COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
+COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
+COPY --from=builder --chown=appuser:appgroup /app/prisma ./prisma
 
-# Hardening — rodar como usuário não-root (auditoria 25/04/2026 #2)
-# chown abrange /app/certs e /app/xmls criados acima; o volume host ./fiscal/backend/certs
-# é montado por cima — appuser precisa ler o .pfx (cert pre-existente) e gravar novos uploads.
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
-    && chown -R appuser:appgroup /app
+# Diretórios montados em runtime:
+#   /app/certs — read-write — Configurador faz upload do A1; volume host
+#     ./fiscal/backend/certs é montado por cima (appuser precisa ler .pfx
+#     pre-existente e gravar novos uploads)
+#   /app/xmls  — read-write — cache de XMLs baixados (opcional)
+RUN mkdir -p /app/certs /app/xmls && chown -R appuser:appgroup /app/certs /app/xmls
+
 USER appuser
 
 ENV NODE_ENV=production
