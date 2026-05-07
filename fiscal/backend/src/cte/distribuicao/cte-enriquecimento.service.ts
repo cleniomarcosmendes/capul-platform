@@ -125,6 +125,24 @@ export class CteEnriquecimentoService {
     // Fase 2 — gravação Protheus (apenas se flag ativa)
     const protheusAtivo = await this.ambiente.getCteProtheusGravaAtivo();
     if (protheusAtivo) {
+      // Resolve whitelist de filiais ANTES do loop (consistencia com Fase 1
+      // do scheduler — bug detectado 07/05/2026 19:30: cron enriquecimento
+      // ignorava whitelist e processava docs da matriz mesmo com whitelist={08}).
+      const cfgCte = await this.ambiente.getCteDistribuicaoConfig();
+      let cnpjsWhitelist: string[] | null = null;
+      if (cfgCte.filiaisWhitelist && cfgCte.filiaisWhitelist.length > 0) {
+        const filiais = await this.prisma.client.filialCore.findMany({
+          where: { codigo: { in: cfgCte.filiaisWhitelist }, status: 'ATIVO', cnpj: { not: null } },
+          select: { cnpj: true },
+        });
+        cnpjsWhitelist = filiais
+          .map((f) => (f.cnpj ?? '').replace(/\D/g, ''))
+          .filter((c) => c.length === 14);
+        // Whitelist preenchida mas sem matchs reais → nao processa nada
+        // (defensivo contra codigos invalidos)
+        if (cnpjsWhitelist.length === 0) cnpjsWhitelist = ['__NUNCA_BATE__'];
+      }
+
       while (true) {
         // Candidatos: já enriquecidos (papel_capul preenchido), schema documento
         // (não evento), ainda não gravados no Protheus, tentativas abaixo do limite
@@ -143,6 +161,8 @@ export class CteEnriquecimentoService {
               { protheusStatus: null },
               { protheusStatus: { not: 'PROTHEUS_DESISTIU' } },
             ],
+            // Whitelist de filiais (vazio = todas; preenchido = só essas)
+            ...(cnpjsWhitelist ? { cnpjConsulente: { in: cnpjsWhitelist } } : {}),
           },
           orderBy: { id: 'asc' },
           take: BATCH_SIZE,
