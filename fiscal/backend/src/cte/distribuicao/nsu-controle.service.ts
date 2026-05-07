@@ -130,12 +130,34 @@ export class NsuControleService {
    * Retorna controles ordenados por `proximaConsulta ASC NULLS FIRST` —
    * primeiro as nunca consultadas, depois as mais antigas.
    */
-  async listarElegiveisParaConsulta(ambiente: 1 | 2): Promise<CteControleNsu[]> {
+  async listarElegiveisParaConsulta(
+    ambiente: 1 | 2,
+    opcoes?: { whitelistFiliais?: string[] },
+  ): Promise<CteControleNsu[]> {
     const agora = new Date();
+
+    // Resolve whitelist de codigos de filial pra CNPJs (join leve com core.filiais)
+    let cnpjsWhitelist: string[] | null = null;
+    const wl = opcoes?.whitelistFiliais ?? [];
+    if (wl.length > 0) {
+      const filiais = await this.prisma.client.filialCore.findMany({
+        where: { codigo: { in: wl }, status: 'ATIVO', cnpj: { not: null } },
+        select: { cnpj: true },
+      });
+      cnpjsWhitelist = filiais
+        .map((f) => (f.cnpj ?? '').replace(/\D/g, ''))
+        .filter((c) => c.length === 14);
+      // Whitelist preenchida mas sem matchs reais → resultado vazio (defensivo:
+      // evita processar todas as filiais por engano se whitelist tem so codigos
+      // invalidos)
+      if (cnpjsWhitelist.length === 0) return [];
+    }
+
     return this.prisma.client.cteControleNsu.findMany({
       where: {
         ativo: true,
         ambiente,
+        ...(cnpjsWhitelist ? { cnpj: { in: cnpjsWhitelist } } : {}),
         OR: [{ bloqueadoAte: null }, { bloqueadoAte: { lt: agora } }],
         AND: [
           {

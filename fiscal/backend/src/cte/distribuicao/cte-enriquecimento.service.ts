@@ -282,6 +282,8 @@ export class CteEnriquecimentoService {
     }
 
     // Tenta gravar — best-effort (não lança).
+    // Helper extrai tpAmb do XML automaticamente e aplica gating ambiente
+    // cruzado (XML HOM × Protheus PROD).
     const r = await this.protheusGravacao.tentarGravar({
       chave: doc.chave,
       tipoDocumento: 'CTE',

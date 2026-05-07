@@ -67,14 +67,26 @@ export class CteSchedulerService {
     const ambienteInt: 1 | 2 = cfgCte.ambiente === 'PRODUCAO' ? 1 : 2;
     const ambienteLabel = cfgCte.ambiente;
 
-    const elegiveis = await this.nsuControle.listarElegiveisParaConsulta(ambienteInt);
+    // Whitelist de filiais (rollout gradual — vazio = todas, preenchido = só essas)
+    const elegiveis = await this.nsuControle.listarElegiveisParaConsulta(
+      ambienteInt,
+      { whitelistFiliais: cfgCte.filiaisWhitelist },
+    );
     if (elegiveis.length === 0) {
-      this.logger.debug(`[CTeScheduler] tick — nenhuma filial elegível em ${ambienteLabel}`);
+      this.logger.debug(
+        `[CTeScheduler] tick — nenhuma filial elegível em ${ambienteLabel}` +
+          (cfgCte.filiaisWhitelist.length > 0
+            ? ` (whitelist=${cfgCte.filiaisWhitelist.join(',')})`
+            : ''),
+      );
       return;
     }
 
     this.logger.log(
-      `[CTeScheduler] tick — ${elegiveis.length} filial(is) elegíveis em ${ambienteLabel}`,
+      `[CTeScheduler] tick — ${elegiveis.length} filial(is) elegíveis em ${ambienteLabel}` +
+        (cfgCte.filiaisWhitelist.length > 0
+          ? ` [WHITELIST=${cfgCte.filiaisWhitelist.join(',')}]`
+          : ''),
     );
 
     for (const ctrl of elegiveis) {

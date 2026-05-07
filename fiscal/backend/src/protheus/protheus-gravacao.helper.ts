@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ProtheusXmlService } from './protheus-xml.service.js';
+import { IntegracaoApiResolver } from './integracao-api.resolver.js';
 import { XmlFiscalProtheusError } from './interfaces/xml-fiscal.interface.js';
 import {
   type ProtheusGravacaoStatus,
@@ -47,6 +48,7 @@ export class ProtheusGravacaoHelper {
   constructor(
     private readonly protheusXml: ProtheusXmlService,
     private readonly parser: XmlParserToSzrSzqService,
+    private readonly integracaoResolver: IntegracaoApiResolver,
   ) {}
 
   async tentarGravar(params: {
@@ -58,6 +60,47 @@ export class ProtheusGravacaoHelper {
   }): Promise<TentativaGravacaoResult> {
     const { chave, tipoDocumento, filial, xml, usuarioEmail } = params;
     const docLabel = tipoDocumento === 'CTE' ? 'CT-e' : 'NF-e';
+
+    // Gating ambiente cruzado (07/05/2026): se XML HOM e Protheus PROD (ou
+    // vice-versa), PULA gravacao por defesa. Caso real do tick 12:00 BRT 07/05:
+    // doc id=6 (XML tpAmb=2 HOM) acabou em Protheus PROD por mistura de
+    // configuracoes em transicao. Sem gating, XMLs de homologacao gravam
+    // em SZR010 de PROD, confundindo setor fiscal.
+    //
+    // Extrai tpAmb direto do XML — primeira ocorrencia (todos os schemas
+    // SEFAZ tem o campo no <ide> ou inicio do envelope). Regex e suficiente
+    // pra evitar parse XML completo (que e caro).
+    const tpAmbMatch = xml.match(/<tpAmb>(\d)<\/tpAmb>/);
+    const ambienteDocumento = tpAmbMatch ? parseInt(tpAmbMatch[1], 10) : null;
+    if (ambienteDocumento === 1 || ambienteDocumento === 2) {
+      try {
+        const integracao = await this.integracaoResolver.resolve('grvXML');
+        if (integracao) {
+          const ambienteIntegracaoNum = integracao.ambiente === 'PRODUCAO' ? 1 : 2;
+          if (ambienteDocumento !== ambienteIntegracaoNum) {
+            this.logger.warn(
+              `grvXML ${docLabel} ${chave.slice(0, 6)}… filial=${filial} SKIP — ` +
+                `ambiente XML=${ambienteDocumento === 1 ? 'PROD' : 'HOM'} difere de ` +
+                `integracao Protheus=${integracao.ambiente}. Gravacao pulada por defesa.`,
+            );
+            return {
+              gravacao: 'NAO_APLICAVEL',
+              gravacaoMensagem:
+                `Gravacao pulada — XML em ${ambienteDocumento === 1 ? 'PRODUCAO' : 'HOMOLOGACAO'} ` +
+                `e integracao Protheus em ${integracao.ambiente}. Ambientes precisam coincidir pra gravar.`,
+              gravacaoErro: null,
+              raceCondition: false,
+              requestBody: null,
+            };
+          }
+        }
+      } catch (err) {
+        // Falha do resolver nao bloqueia — segue gravacao (comportamento legado)
+        this.logger.warn(
+          `grvXML ${docLabel} ${chave.slice(0, 6)}… gating ambiente falhou: ${(err as Error).message} — seguindo gravacao padrao.`,
+        );
+      }
+    }
 
     // Pré-check (07/05/2026): Protheus grvXML SOBRESCREVE silenciosamente
     // quando a chave já existe em SZR010 — não retorna JA_EXISTIA conforme

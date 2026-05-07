@@ -51,11 +51,15 @@ export class AmbienteService {
   async getCteDistribuicaoConfig(): Promise<{
     ativo: boolean;
     ambiente: AmbienteSefaz;
+    filiaisWhitelist: string[];
   }> {
     const cfg = await this.getOrCreate();
     return {
       ativo: cfg.cteDistribuicaoAtivo,
       ambiente: cfg.cteDistribuicaoAmbiente,
+      // Whitelist de codigos de filial (vazio = processa todas). Usado pra
+      // rollout gradual da Fase 1 (07/05/2026).
+      filiaisWhitelist: cfg.cteDistribuicaoFiliaisWhitelist,
     };
   }
 

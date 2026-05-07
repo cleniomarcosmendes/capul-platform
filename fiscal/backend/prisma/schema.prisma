@@ -488,6 +488,11 @@ model AmbienteConfig {
   cteProtheusGravaAtivo      Boolean       @default(false)         @map("cte_protheus_grava_ativo")
   cteProtheusGravaAlteradoEm DateTime?     @map("cte_protheus_grava_alterado_em")
   cteProtheusGravaAlteradoPor String?      @map("cte_protheus_grava_alterado_por")
+  // Whitelist de filiais (codigos 2 digitos) pro CT-e Distribuicao. Vazio
+  // (default) = processa todas. Preenchido = scheduler so processa essas
+  // mesmo que SincronizacaoFiliaisService tenha ativo=true em outras.
+  // Usado pra rollout gradual (Fase 1 com 1 filial, Fase 2 com 5, etc).
+  cteDistribuicaoFiliaisWhitelist String[] @default([]) @map("cte_distribuicao_filiais_whitelist")
   ultimaAlteracaoEm          DateTime      @updatedAt @map("ultima_alteracao_em")
   ultimaAlteracaoPor         String?       @map("ultima_alteracao_por")
 
@@ -701,8 +706,11 @@ model CteEvento {
   // Chave de acesso do CT-e referenciado pelo evento.
   chave       String        @db.VarChar(44)
   // Identificador único do evento (Id atributo do <infEvento>).
-  // Formato: "ID" + tpEvento(6) + chave(44) + nSeqEvento(2) = 53 chars.
-  idEvento    String        @unique @map("id_evento") @db.VarChar(53)
+  // Formato: "ID" + tpEvento(6) + chave(44) + nSeqEvento(2) = 2+6+44+2 = 54 chars.
+  // Era VarChar(53) por bug de matemática no comentário original — corrigido em
+  // 07/05/2026 (migration 20260507180000_cte_evento_id_evento_54chars). Sem o fix,
+  // TODO evento SEFAZ falhava ao persistir com "value too long for the column type".
+  idEvento    String        @unique @map("id_evento") @db.VarChar(54)
   tipoEvento  TipoEventoCte @map("tipo_evento")
   tpEventoNum Int           @map("tp_evento_num")  // valor SEFAZ original (110110, etc)
   nSeqEvento  Int           @map("n_seq_evento")
