@@ -244,20 +244,30 @@ export class CteEnriquecimentoService {
 
   /**
    * Reseta status PROTHEUS_DESISTIU/FALHA_TECNICA pra null e dispara
-   * processarPendentes — re-tenta em batch todos os documentos que
-   * falharam gravacao no Protheus.
+   * processarPendentes — re-tenta em batch documentos que falharam.
    *
-   * Usado apos cadastrar transportadoras faltantes em SA2 (Pedido C —
-   * causa principal de FALHA_TECNICA hoje) ou apos equipe Protheus
-   * resolver bug E (duplicacao).
+   * **Janela de data obrigatoria** (07/05/2026): exige `dataInicio` e
+   * `dataFim` (filtra `dhEmi`). Sem isso, retorna BadRequest. Razao: evitar
+   * reprocessar docs antigos sem necessidade conforme sistema cresce ao
+   * longo do tempo.
    *
-   * Respeita whitelist atual (ambiente_config.cte_distribuicao_filiais_whitelist):
-   * se preenchida, so reseta docs cujo CNPJ consulente bate com filiais
-   * da whitelist.
+   * Aceita filtros adicionais alinhados com a tela /fiscal/cte:
+   *   - protheusStatus: array (default ['FALHA_TECNICA','PROTHEUS_DESISTIU'])
+   *   - papel: filtra papelCapul
+   *   - cnpjConsulente: filtra cnpjConsulente
+   *
+   * Tambem respeita whitelist em ambiente_config.cte_distribuicao_filiais_whitelist.
+   * Se whitelist preenchida E cnpjConsulente nao bate → retorna 0.
    *
    * Nao consome SEFAZ — apenas re-chama grvXML pros XMLs ja persistidos.
    */
-  async regravarFalhasBatch(): Promise<{
+  async regravarFalhasBatch(filtros: {
+    dataInicio: Date;
+    dataFim: Date;
+    protheusStatus?: string[];
+    papel?: string;
+    cnpjConsulente?: string;
+  }): Promise<{
     docsResetados: number;
     enriquecimento: ResultadoEnriquecimento;
   }> {
@@ -274,16 +284,29 @@ export class CteEnriquecimentoService {
       cnpjsWhitelist = filiais.map((f) => (f.cnpj ?? '').replace(/\D/g, '')).filter((c) => c.length === 14);
     }
 
+    const statusFiltro = filtros.protheusStatus && filtros.protheusStatus.length > 0
+      ? filtros.protheusStatus
+      : ['FALHA_TECNICA', 'PROTHEUS_DESISTIU'];
+
+    const where: any = {
+      protheusStatus: { in: statusFiltro },
+      dhEmi: { gte: filtros.dataInicio, lte: filtros.dataFim },
+    };
+    if (cnpjsWhitelist) where.cnpjConsulente = { in: cnpjsWhitelist };
+    if (filtros.papel) where.papelCapul = filtros.papel;
+    if (filtros.cnpjConsulente) where.cnpjConsulente = filtros.cnpjConsulente.replace(/\D/g, '');
+
     const resetResult = await this.prisma.client.cteDocumento.updateMany({
-      where: {
-        protheusStatus: { in: ['FALHA_TECNICA', 'PROTHEUS_DESISTIU'] },
-        ...(cnpjsWhitelist ? { cnpjConsulente: { in: cnpjsWhitelist } } : {}),
-      },
+      where,
       data: { protheusStatus: null, protheusTentativas: 0, protheusGravadoEm: null },
     });
 
     this.logger.log(
-      `[regravarFalhasBatch] resetados=${resetResult.count} docs (whitelist=${whitelist.length > 0 ? whitelist.join(',') : 'todas'}). Disparando enriquecimento.`,
+      `[regravarFalhasBatch] resetados=${resetResult.count} docs ` +
+        `dhEmi=[${filtros.dataInicio.toISOString()}..${filtros.dataFim.toISOString()}] ` +
+        `status=${statusFiltro.join(',')} ` +
+        `papel=${filtros.papel ?? '*'} cnpj=${filtros.cnpjConsulente ?? '*'} ` +
+        `whitelist=${whitelist.length > 0 ? whitelist.join(',') : 'todas'}. Disparando enriquecimento.`,
     );
 
     // Dispara processamento — vai pegar os resetados + qualquer pendente normal

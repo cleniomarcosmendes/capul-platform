@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -314,14 +315,56 @@ export class CteController {
 
   /**
    * Re-tenta gravacao Protheus em BATCH dos documentos com status
-   * FALHA_TECNICA ou PROTHEUS_DESISTIU. Respeita a whitelist de filiais
-   * em ambiente_config. Endpoint B (Pedido 07/05/2026). NAO consome SEFAZ.
-   * Usado pelo botao "Re-tentar todas falhas" na aba CT-e Distribuicao.
+   * FALHA_TECNICA ou PROTHEUS_DESISTIU dentro de uma janela de data
+   * obrigatoria. Endpoint B (Pedido 07/05/2026). NAO consome SEFAZ.
+   *
+   * Janela de data obrigatoria pra evitar reprocessamento desnecessario
+   * de docs antigos conforme sistema cresce.
+   *
+   * Body params:
+   *   - dataInicio (ISO, obrigatorio): filtra dhEmi >= este valor
+   *   - dataFim    (ISO, obrigatorio): filtra dhEmi <= este valor
+   *   - protheusStatus (string[], opcional): default
+   *     ['FALHA_TECNICA','PROTHEUS_DESISTIU']
+   *   - papel (string, opcional): filtra papelCapul
+   *   - cnpjConsulente (string, opcional): filtra cnpjConsulente
+   *
+   * Tambem respeita whitelist em ambiente_config.cte_distribuicao_filiais_whitelist.
+   *
+   * Usado pelo botao "Re-tentar falhas filtradas" na tela /fiscal/cte.
    */
   @Post('distribuicao/regravar-falhas')
   @RoleMinima('GESTOR_FISCAL')
-  async regravarFalhasBatch() {
-    return this.enriquecimento.regravarFalhasBatch();
+  async regravarFalhasBatch(
+    @Body()
+    body: {
+      dataInicio?: string;
+      dataFim?: string;
+      protheusStatus?: string[];
+      papel?: string;
+      cnpjConsulente?: string;
+    },
+  ) {
+    if (!body.dataInicio || !body.dataFim) {
+      throw new BadRequestException(
+        'dataInicio e dataFim sao obrigatorios pra evitar reprocessamento sem criterio temporal.',
+      );
+    }
+    const dataInicio = new Date(body.dataInicio);
+    const dataFim = new Date(body.dataFim);
+    if (isNaN(dataInicio.getTime()) || isNaN(dataFim.getTime())) {
+      throw new BadRequestException('dataInicio e dataFim precisam ser ISO date validos.');
+    }
+    if (dataFim < dataInicio) {
+      throw new BadRequestException('dataFim deve ser maior ou igual a dataInicio.');
+    }
+    return this.enriquecimento.regravarFalhasBatch({
+      dataInicio,
+      dataFim,
+      protheusStatus: body.protheusStatus,
+      papel: body.papel,
+      cnpjConsulente: body.cnpjConsulente,
+    });
   }
 
   /**

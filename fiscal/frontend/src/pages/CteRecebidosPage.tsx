@@ -16,6 +16,7 @@ import { PageWrapper } from '../components/PageWrapper';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 import { useAuth } from '../contexts/AuthContext';
 import { extractApiError } from '../utils/errors';
 import { fmtChaveMascara } from '../utils/format';
@@ -99,6 +100,7 @@ const PAGE_SIZE = 20;
 export function CteRecebidosPage() {
   const toast = useToast();
   const { usuario } = useAuth();
+  const confirm = useConfirm();
   const isAdmin = useMemo(
     () => usuario?.modulos?.some((m) => m.codigo === 'FISCAL' && m.role === 'ADMIN_TI'),
     [usuario],
@@ -188,6 +190,62 @@ export function CteRecebidosPage() {
   };
 
   const [regravandoId, setRegravandoId] = useState<number | null>(null);
+  const [regravandoBatch, setRegravandoBatch] = useState(false);
+
+  // Re-tentar habilitado: precisa filtro de status (FALHA_TECNICA ou PROTHEUS_DESISTIU)
+  // + janela de data obrigatoria (evita reprocessamento sem criterio temporal)
+  const podeRegravarFalhas =
+    (protheusStatus === 'FALHA_TECNICA' || protheusStatus === 'PROTHEUS_DESISTIU') &&
+    !!dataInicio &&
+    !!dataFim;
+
+  const tooltipRegravar = !dataInicio || !dataFim
+    ? 'Preencha dataInicio E dataFim no filtro de Emissao'
+    : (protheusStatus !== 'FALHA_TECNICA' && protheusStatus !== 'PROTHEUS_DESISTIU')
+      ? 'Selecione FALHA_TECNICA ou PROTHEUS_DESISTIU no filtro Status Protheus'
+      : `Vai re-tentar TODOS os ${total} docs filtrados`;
+
+  const regravarFalhasFiltradas = async () => {
+    const ok = await confirm({
+      title: 'Re-tentar gravação Protheus dos filtrados?',
+      description:
+        `Reseta status PROTHEUS_DESISTIU/FALHA_TECNICA pra null e dispara enriquecimento ` +
+        `dos ${total} documentos filtrados (${protheusStatus}, dhEmi entre ${dataInicio} e ${dataFim}). ` +
+        `NÃO consome SEFAZ. Pode demorar minutos pra muitas falhas.`,
+      variant: 'warning',
+      confirmLabel: `Re-tentar ${total} docs`,
+    });
+    if (!ok) return;
+    setRegravandoBatch(true);
+    try {
+      const fim = new Date(dataFim);
+      fim.setHours(23, 59, 59, 999);
+      const r = await fiscalApi.post<{
+        docsResetados: number;
+        enriquecimento: {
+          protheusGravados: number;
+          protheusJaExistia: number;
+          protheusFalhas: number;
+        };
+      }>('/cte/distribuicao/regravar-falhas', {
+        dataInicio: new Date(dataInicio).toISOString(),
+        dataFim: fim.toISOString(),
+        protheusStatus: [protheusStatus],
+        papel: papel || undefined,
+      });
+      const e = r.data.enriquecimento;
+      toast.success(
+        'Re-gravação concluída',
+        `${r.data.docsResetados} resetados · gravados=${e.protheusGravados} jaExistia=${e.protheusJaExistia} falhas=${e.protheusFalhas}`,
+      );
+      void carregar();
+    } catch (err) {
+      toast.error('Falha ao re-gravar', extractApiError(err) ?? undefined);
+    } finally {
+      setRegravandoBatch(false);
+    }
+  };
+
   const regravarLocal = async (id: number) => {
     setRegravandoId(id);
     try {
@@ -389,7 +447,7 @@ export function CteRecebidosPage() {
               />
             </div>
           </div>
-          <div className="flex gap-2 pt-2 border-t">
+          <div className="flex gap-2 pt-2 border-t items-center">
             <Button onClick={aplicarFiltros} disabled={loading}>
               <Search size={16} className="mr-1" />
               Aplicar
@@ -397,6 +455,19 @@ export function CteRecebidosPage() {
             <Button variant="ghost" onClick={limparFiltros} disabled={loading}>
               Limpar
             </Button>
+            <div className="ml-auto flex items-center gap-2">
+              <span title={tooltipRegravar}>
+                <Button
+                  variant="primary"
+                  onClick={regravarFalhasFiltradas}
+                  disabled={!podeRegravarFalhas || loading || total === 0}
+                  loading={regravandoBatch}
+                >
+                  <RefreshCw size={14} className="mr-1" />
+                  Re-tentar falhas filtradas {podeRegravarFalhas && total > 0 ? `(${total})` : ''}
+                </Button>
+              </span>
+            </div>
           </div>
         </div>
 
