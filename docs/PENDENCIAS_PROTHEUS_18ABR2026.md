@@ -349,6 +349,68 @@ Sugestão de contrato:
 
 ---
 
+### 3.9. ⚠ Comportamento atual sobrescreve sem checar duplicata (descoberto 07/05/2026)
+
+**Teste empírico — confirmação:** Em ambiente PROD, fizemos 2 chamadas idênticas de `POST /grvXML` para a mesma chave de CT-e:
+
+```
+1ª chamada → status=GRAVADO (SZR010 + SZQ010)
+2ª chamada → status=GRAVADO (SZR010 + SZQ010)   ← deveria ser JA_EXISTIA
+```
+
+**Conclusão:** o `grvXML` atual **sobrescreve silenciosamente** quando a chave já existe em SZR010 — não retorna `JA_EXISTIA` conforme contrato esperado em §3.8.
+
+**Impacto operacional na CAPUL:**
+
+Setor fiscal grava manualmente em SZR010 com `USRREC=fulano` (rotina diária). Quando nosso sistema baixa o mesmo CT-e via SEFAZ (CTeDistribuicaoDFe) e chama `grvXML`, **sobrescreve com `USRREC=sistema:cte-enriquecimento`**, perdendo a auditoria de quem importou primeiro.
+
+Validação real (07/05/2026): teste com 74 CT-es já gravados manualmente — todos seriam sobrescritos sem aviso.
+
+**🛡️ Defesa implementada do nosso lado (Pedido B — pré-check via xmlNfe):**
+
+Antes de chamar `grvXML`, fazemos um GET `xmlNfe` pela chave:
+- Se `found=true && origem=SZR010` → marcamos `JA_EXISTIA` e **NÃO chamamos grvXML** (preserva gravação manual)
+- Se `found=true && origem=SPED156` → seguimos grvXML normalmente (precisa popular SZR)
+- Se `found=false` (404) → seguimos grvXML normalmente
+- Erros de rede no pré-check → seguimos grvXML padrão (sem regressão)
+
+Custo: 1 GET extra por chave antes de cada gravação. Aceitável diante da segurança operacional.
+
+**📨 Pedido A à equipe Protheus:**
+
+Padronizar `POST /grvXML` para:
+
+1. **Antes de inserir**, checar se a chave já existe em SZR010
+2. Se existir, **NÃO sobrescrever** — retornar:
+   ```json
+   {
+     "chave": "...",
+     "status": "JA_EXISTIA",
+     "resultado": "JA_EXISTIA"
+   }
+   ```
+3. Se não existir, INSERT normal e retornar:
+   ```json
+   {
+     "chave": "...",
+     "status": "GRAVADO",
+     "resultado": "INSERIDO",
+     "registrosCabecalho": 1,
+     "registrosItens": N
+   }
+   ```
+
+**Quando a equipe Protheus implementar isso**, nosso pré-check fica redundante — mas é seguro mantê-lo (não causa dano, custo de 1 GET extra é desprezível).
+
+**Por que isso importa pra CAPUL:**
+
+- Setor fiscal mantém rotina manual de importação enquanto CT-e Distribuição não está em produção massa
+- Quando ativarmos em PROD, conviveremos com cenário "alguns gravados manualmente, outros pelo sistema"
+- Sem proteção, perdemos auditoria — não saberemos quem gravou cada chave
+- Com proteção (pré-check + Pedido A no Protheus), 0% de sobrescritas silenciosas
+
+---
+
 ## 4. 🟢 Observações
 
 ### 4.1. Troca de alias na documentação `szr010-szq010.txt` (erro de digitação)

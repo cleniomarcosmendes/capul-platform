@@ -59,6 +59,51 @@ export class ProtheusGravacaoHelper {
     const { chave, tipoDocumento, filial, xml, usuarioEmail } = params;
     const docLabel = tipoDocumento === 'CTE' ? 'CT-e' : 'NF-e';
 
+    // Pré-check (07/05/2026): Protheus grvXML SOBRESCREVE silenciosamente
+    // quando a chave já existe em SZR010 — não retorna JA_EXISTIA conforme
+    // contrato §3.8 esperado. Validado em teste local: 2 chamadas idênticas
+    // retornaram GRAVADO + GRAVADO em vez de GRAVADO + JA_EXISTIA.
+    //
+    // Risco real: setor fiscal grava manualmente em SZR010 com USRREC=fulano;
+    // depois nosso enriquecimento sobrescreve com USRREC=sistema:cte-enriq,
+    // perdendo auditoria de quem importou primeiro.
+    //
+    // Defesa: ANTES de chamar grvXML, GET xmlNfe pela chave. Se SZR010 já
+    // tem o XML, marca JA_EXISTIA sem gravar. Se está em SPED156 ou 404,
+    // segue pro grvXML normal. Erros de rede/auth no pré-check não bloqueiam:
+    // segue grvXML padrão (pior caso = sobrescreve, mesmo cenário sem o
+    // pré-check, sem regressão).
+    //
+    // Pendência paralela (Pedido A): equipe Protheus padronizar grvXML
+    // pra retornar JA_EXISTIA quando a chave já existe. Quando isso for
+    // resolvido, este pré-check vira redundante mas não causa dano (custo
+    // de 1 GET extra é desprezível diante da segurança operacional).
+    try {
+      const existente = await this.protheusXml.buscarXml(chave);
+      if (existente.found && existente.origem === 'SZR010') {
+        this.logger.log(
+          `grvXML ${docLabel} ${chave.slice(0, 6)}… filial=${filial} SKIP — pré-check xmlNfe encontrou em SZR010 (origem=${existente.origem}). Marcando JA_EXISTIA pra preservar auditoria de gravação manual.`,
+        );
+        return {
+          gravacao: 'JA_EXISTIA',
+          gravacaoMensagem:
+            `XML já existe em SZR010 do Protheus (verificado via xmlNfe pré-check). ` +
+            `Não regravado pra preservar auditoria de quem importou primeiro.`,
+          gravacaoErro: null,
+          raceCondition: false,
+          requestBody: null,
+        };
+      }
+      // found=true && origem=SPED156 → SZR010 vazia, precisa popular: segue
+      // found=false → 404, não existe em lugar nenhum: segue
+    } catch (err) {
+      // Erro no pré-check (rede, auth, timeout) — não bloqueia, segue grvXML
+      // (pior caso fica igual ao comportamento antes do pré-check).
+      this.logger.warn(
+        `grvXML ${docLabel} ${chave.slice(0, 6)}… pré-check xmlNfe falhou (${(err as Error).message}) — seguindo pro grvXML padrão.`,
+      );
+    }
+
     // Monta o body grvXML via parser (pendências 3.1/3.2/3.3 mantidas como
     // defaults enquanto equipe Protheus não confirma).
     let body;
