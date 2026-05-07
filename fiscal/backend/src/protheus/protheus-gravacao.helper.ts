@@ -203,8 +203,53 @@ export class ProtheusGravacaoHelper {
         };
       }
 
+      // Validação pós-gravação (Pedido D — 07/05/2026): Protheus retorna
+      // GRAVADO mas em ~15% dos casos NAO PERSISTE silenciosamente em SZR010.
+      // Detectado em 07/05 com 102/693 desaparecidos (proporcional, sem
+      // padrao temporal — bug intermitente do Protheus). Defesa: apos cada
+      // GRAVADO, fazer 1 GET xmlNfe pra confirmar que o registro persistiu.
+      // Se nao confirmar, retorna FALHA_TECNICA pra que retry da camada
+      // superior tente de novo (limite MAX_TENTATIVAS_PROTHEUS=5).
+      //
+      // Custo: +1 GET xmlNfe por GRAVADO (JA_EXISTIA continua sem custo
+      // adicional pois passou pelo pre-check). Aceitavel diante da
+      // confiabilidade ganha (15% perda silenciosa → 0%).
+      //
+      // Pendencia paralela: Pedido C documentado em §3.10 — equipe Protheus
+      // investigar perda silenciosa em grvXML (causa raiz desconhecida).
+      const SLEEP_PRE_VERIFY_MS = 500;
+      await new Promise((r) => setTimeout(r, SLEEP_PRE_VERIFY_MS));
+      try {
+        const verif = await this.protheusXml.buscarXml(chave);
+        if (!verif.found || verif.origem !== 'SZR010') {
+          this.logger.warn(
+            `grvXML ${docLabel} ${chave.slice(0, 6)}… filial=${filial} ` +
+              `Protheus retornou GRAVADO mas xmlNfe pos-verificacao nao encontrou em SZR010 ` +
+              `(found=${verif.found}, origem=${verif.found ? verif.origem : 'n/a'}). ` +
+              `Marcando FALHA_TECNICA pra retry.`,
+          );
+          return {
+            gravacao: 'FALHA_TECNICA',
+            gravacaoMensagem:
+              `Protheus disse GRAVADO mas xmlNfe pos-verificacao nao confirmou em SZR010. ` +
+              `Possivel bug intermitente Protheus (perda silenciosa — Pedido C). Sera ` +
+              `feito retry no proximo ciclo.`,
+            gravacaoErro: 'POS_VERIFICACAO_FALHOU',
+            raceCondition: false,
+            requestBody,
+          };
+        }
+      } catch (err) {
+        // Erro na verificacao nao bloqueia — assume gravacao OK e segue.
+        // Se a perda de fato ocorreu, sera detectada na proxima passagem
+        // (cron de enriquecimento ou consulta manual).
+        this.logger.warn(
+          `grvXML ${docLabel} ${chave.slice(0, 6)}… pos-verificacao xmlNfe falhou (${(err as Error).message}) — assumindo GRAVADO.`,
+        );
+      }
+
       this.logger.log(
-        `grvXML ${docLabel} ${chave.slice(0, 6)}… filial=${filial} status=GRAVADO (SZR010 + SZQ010).`,
+        `grvXML ${docLabel} ${chave.slice(0, 6)}… filial=${filial} status=GRAVADO (SZR010 + SZQ010, pos-verificado).`,
       );
       return {
         gravacao: 'GRAVADO',

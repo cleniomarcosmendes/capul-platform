@@ -411,6 +411,83 @@ Padronizar `POST /grvXML` para:
 
 ---
 
+### 3.10. 🚨 Perda silenciosa em `grvXML` — ~15% das gravações somem (descoberto 07/05/2026)
+
+**Mais grave que §3.9.** Detectado durante batch real de 693 CT-es:
+
+**Cenário do teste (07/05/2026, tarde):**
+
+1. CT-e Distribuição varreu SEFAZ-AN PROD da Capul (CNPJ matriz + filial 08)
+2. Baixou 788 documentos (papel TOMA/DEST/REM detectado em todos)
+3. Pré-check (Pedido B) identificou 95 já em SZR010 (importação manual prévia) → marca `JA_EXISTIA` sem chamar `grvXML`
+4. Restantes 693 → chamou `POST /grvXML` no Protheus PROD
+5. **Todas as 693 chamadas retornaram `200 OK` com `status=GRAVADO`**
+
+**Validação cruzada com SZR010 (mesma data):**
+
+```sql
+-- Query do setor fiscal (07/05/2026, ZR_DTREC=20260507, modelo 57)
+SELECT zr_chvnfe FROM szr010
+WHERE zr_dtrec='20260507' AND zr_modelo='57' AND d_e_l_e_t_=' ';
+```
+
+Resultado:
+
+| Categoria | Esperado | Encontrado | Diferença |
+|---|---|---|---|
+| Nosso DB GRAVADO | 693 | — | — |
+| SZR010 hoje (todas filiais) | 693 + manuais | **632** chaves únicas | — |
+| **Confirmados em ambos** | 693 | **591** | — |
+| **🔴 Nosso DB GRAVADO mas FALTA em SZR010** | 0 | **102** | **15% perda** |
+
+**Análise dos 102 desaparecidos — sem padrão:**
+
+- Distribuídos uniformemente no tempo (1-8 por minuto, das 17:51 às 19:35)
+- Distribuídos proporcionalmente por papel (DEST 559, TOMA 91, REM 19 — segue distribuição global)
+- Distribuídos por filial enviada no body (101 com `FILIAL=01`, 1 com `FILIAL=08`)
+- Verificadas com query direta: `SELECT * FROM szr010 WHERE zr_chvnfe IN (3 chaves problematicas)` retornou **VAZIO** — registros realmente não existem
+
+**Conclusão:** `grvXML` retorna `200 OK status=GRAVADO` mas **não persiste o registro em SZR010** em ~15% dos casos, sem aviso, sem padrão evidente. Aparenta ser bug intermitente do Protheus (timeout interno? rollback silencioso? race condition?).
+
+**Impacto operacional severo:**
+
+Setor fiscal vê "GRAVADO" em 100% dos modais, mas SZR010 só tem 85%. Sistema fica inconfiável — nem o nosso lado nem o Protheus reportam erro. Perda invisível.
+
+**🛡️ Defesa implementada (Pedido D — pós-validação `xmlNfe`):**
+
+Após cada `grvXML` retornar `GRAVADO`, o sistema espera 500ms e faz 1 GET `xmlNfe` pra confirmar persistência:
+
+- `found=true && origem=SZR010` → confirmou, retorna GRAVADO de fato
+- `!found` ou `origem!=SZR010` → grvXML mentiu, retorna FALHA_TECNICA pra retry da camada superior (até 5 tentativas)
+- Erro técnico no GET → loga warn, assume GRAVADO (degradação graciosa)
+
+Custo: +1 GET xmlNfe por GRAVADO (JA_EXISTIA continua sem custo extra). Aceitável diante da confiabilidade ganha (15% → 0% perda silenciosa).
+
+**📨 Pedido C à equipe Protheus:**
+
+Investigar a causa-raiz da perda silenciosa em `POST /grvXML`. Possibilidades a checar:
+
+1. **Timeout de transação** — DB demora >Xs e Protheus dá rollback mas API já respondeu OK
+2. **Race condition** — múltiplas conexões competem pelo lock de SZR010 e algumas perdem
+3. **Lock de tabela** — quando Protheus está em outro processo (importação manual concorrente, batch JOB), grvXML "passa" mas não persiste
+4. **Buffer não-flushed** — commit não completa antes do response ser enviado
+5. **Trigger SQL** que rejeita silenciosamente em alguns cenários
+
+**Solicitação:**
+
+1. Garantir que `200 OK status=GRAVADO` seja sempre acompanhado de **commit confirmado** em SZR010
+2. Se ocorrer falha de persistência após chamada aceita, retornar erro `5XX` com código específico (`GRAVACAO_NAO_PERSISTIU` ou similar) — pra que defesas client-side façam retry sem precisar de pós-verificação custosa
+3. Se possível, log Protheus interno dos casos de "aceitou mas não persistiu" pra investigação
+
+**Como reproduzir do lado Protheus:**
+
+- Disparar 100+ `grvXML` em sequência rápida (1-3 req/s) e comparar contagem antes/depois em SZR010
+- Verificar logs `system.log` do RPO no momento das chamadas — provavelmente há erros silenciosos que não chegam ao response
+
+**Status temporário:** Capul mantém pós-validação `xmlNfe` ativa até equipe Protheus identificar e resolver. Após fix, pós-validação fica como **defesa em profundidade** (não causa dano, custo 1 GET extra por gravação).
+
+---
+
 ## 4. 🟢 Observações
 
 ### 4.1. Troca de alias na documentação `szr010-szq010.txt` (erro de digitação)
