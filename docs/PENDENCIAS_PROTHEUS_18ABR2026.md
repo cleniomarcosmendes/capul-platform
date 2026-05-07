@@ -533,6 +533,69 @@ Quando esses 2 forem resolvidos:
 
 ---
 
+### 3.11. 🚨 grvXML insere REGISTRO DUPLICADO em SZR010 (~5% — descoberto 07/05/2026)
+
+**3º bug do `grvXML` descoberto na mesma sessão.** Comparação SZR010 (filial 01, ZR_DTREC=20260507) revelou **34 chaves duplicadas em SZR010** com mesma `HRREC` (mesmo segundo).
+
+**Análise empírica:**
+
+| Métrica | Resultado |
+|---|---|
+| Chaves duplicadas em SZR010 hoje | 34 |
+| Status no nosso DB | Todas `GRAVADO`, todas `protheus_tentativas=1` |
+| Origem | Nosso sistema enviou `grvXML` **1 única vez** |
+| Resultado | Protheus persistiu **2 INSERTs idênticos** com mesmo HRREC |
+
+Não é retry do nosso lado (ainda mais reforçado pelo `tentativas=1`). Não é race condition (timestamps idênticos no segundo). É **comportamento interno do Protheus duplicando** linhas em SZR010 em ~5% dos INSERTs.
+
+**Como reproduzir lado Protheus:**
+
+Disparar batch de 100+ `grvXML` em sequência rápida (1-3 req/s) com chaves novas (sem pré-existência em SZR010). Comparar:
+- Total de requests enviados (= N)
+- Total de linhas em SZR010 com `ZR_DTREC=hoje`
+
+Em ~5% dos casos: 1 request → 2 linhas em SZR010.
+
+**Hipóteses de causa-raiz:**
+
+1. **INSERT em duas etapas** (cabeçalho + itens) com transação não-atômica — re-tenta cabeçalho mas não verifica antes
+2. **Trigger duplicado** acionando 2 vezes pra mesma chamada
+3. **Pool de conexões** retransmitindo packet TCP que chegou parcial
+4. **Race entre INSERT e validação** — INSERT entra antes da validação completar, e re-INSERT acontece
+
+**🛡️ Defesa Capul ainda não implementada:**
+
+Diferente de §3.9 e §3.10, este bug é mais difícil de defender client-side:
+- Pre-check xmlNfe (Pedido B) só detecta presença, não duplicidade
+- Pós-validação xmlNfe (Pedido D) também só verifica presença
+- Detecção de duplicidade exigiria query especifica em SZR010 (`COUNT(*) WHERE ZR_CHVNFE=...`) — endpoint não existe hoje
+
+**Possível defesa server-side a estudar:**
+
+- **Endpoint Protheus** `GET /xmlNfe/duplicatas?CHVNFE=...` que retorne contagem em SZR010 (>1 = duplicata)
+- Ou: `GET /xmlNfe?CHVNFE=...` retornar campo `qtdRegistros` no response
+
+**📨 Pedido E à equipe Protheus:**
+
+Investigar e corrigir duplicação interna em `grvXML`:
+
+1. Reproduzir bug com batch de 100+ chaves novas em sequência rápida
+2. Identificar trigger/transação responsável pela duplicação
+3. Garantir **idempotência** — 1 request `grvXML` = no máximo 1 linha em SZR010 (mesmo em caso de retry interno do Protheus)
+4. Se duplicidade pré-existente em SZR010 (criada por bug anterior), oferecer endpoint de limpeza (DELETE de duplicatas mantendo a mais recente)
+
+**Impacto operacional Capul:**
+
+- Setor fiscal vê 2 entradas pra mesma NF/CT-e na visão SZR010 — pode confundir
+- Relatórios fiscais podem contar 2x — comprometimento de auditoria
+- 4.9% de duplicação em batch normal = volume não desprezível
+
+**Status:**
+
+Pedido E somado aos pedidos A, C — **3 bugs combinados em `grvXML` afetam confiabilidade da integração**. Sem fix completo, Capul opera com defesas client-side parciais (B e D cobrem A e C). Pedido E ainda sem defesa client-side viável.
+
+---
+
 ## 4. 🟢 Observações
 
 ### 4.1. Troca de alias na documentação `szr010-szq010.txt` (erro de digitação)
