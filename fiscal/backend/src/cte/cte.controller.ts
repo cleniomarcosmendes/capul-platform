@@ -243,6 +243,8 @@ export class CteController {
     @Query('protheusStatus') protheusStatus?: string,
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.documento.listarPaginado({
       page: page ? Number(page) : undefined,
@@ -255,6 +257,8 @@ export class CteController {
       protheusStatus,
       dataInicio: dataInicio ? new Date(dataInicio) : undefined,
       dataFim: dataFim ? new Date(dataFim) : undefined,
+      sortBy,
+      sortOrder: sortOrder === 'asc' ? 'asc' : sortOrder === 'desc' ? 'desc' : undefined,
     });
   }
 

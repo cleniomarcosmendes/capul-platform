@@ -41,6 +41,13 @@ interface CteDocumentoListItem {
   protheusGravadoEm: string | null;
   protheusStatus: string | null;
   protheusErro: string | null;
+  // Flags granulares (08/05/2026): fonte de verdade do retorno grvXML.
+  // Status acima eh derivado, mas filtros avancados usam estas colunas.
+  protheusGrvSucesso: boolean | null;
+  protheusGrvXmlGravado: boolean | null;
+  protheusGrvPendAmarracao: boolean | null;
+  protheusGrvPrenotaFalhou: boolean | null;
+  protheusGrvMensagem: string | null;
 }
 
 interface ListResp {
@@ -121,6 +128,7 @@ export function CteRecebidosPage() {
     | ''
     | 'GRAVADO'
     | 'GRAVADO_PRENOTA_FALHOU'
+    | 'GRAVADO_AGUARDANDO_AMARRACAO'
     | 'JA_EXISTIA'
     | 'FALHA_TECNICA'
     | 'PROTHEUS_DESISTIU'
@@ -129,6 +137,11 @@ export function CteRecebidosPage() {
   >('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
+
+  // Ordenacao por click no header (08/05/2026). null = ordem default
+  // (recebidoEm desc do backend). Click: nenhum → desc → asc → nenhum.
+  const [sortBy, setSortBy] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Modal detalhe
   const [detalhe, setDetalhe] = useState<DetalheResp | null>(null);
@@ -161,6 +174,10 @@ export function CteRecebidosPage() {
         const fim = new Date(dataFim + 'T23:59:59.999');
         params.dataFim = fim.toISOString();
       }
+      if (sortBy) {
+        params.sortBy = sortBy;
+        params.sortOrder = sortOrder;
+      }
       const r = await fiscalApi.get<ListResp>('/cte/recebidos', { params });
       setItems(r.data.items);
       setTotal(r.data.total);
@@ -170,7 +187,26 @@ export function CteRecebidosPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, papel, schema, ambiente, protheusStatus, dataInicio, dataFim, toast]);
+  }, [page, search, papel, schema, ambiente, protheusStatus, dataInicio, dataFim, sortBy, sortOrder, toast]);
+
+  // Click no header da coluna: nenhum → desc → asc → nenhum
+  const toggleSort = (column: string) => {
+    if (sortBy !== column) {
+      setSortBy(column);
+      setSortOrder('desc');
+    } else if (sortOrder === 'desc') {
+      setSortOrder('asc');
+    } else {
+      setSortBy(null);
+      setSortOrder('desc');
+    }
+    setPage(1);
+  };
+
+  const sortIcon = (column: string) => {
+    if (sortBy !== column) return <span className="text-gray-300">↕</span>;
+    return sortOrder === 'desc' ? <span>↓</span> : <span>↑</span>;
+  };
 
   useEffect(() => {
     void carregar();
@@ -442,6 +478,7 @@ export function CteRecebidosPage() {
                 <option value="">Todos</option>
                 <option value="GRAVADO">✓ GRAVADO</option>
                 <option value="GRAVADO_PRENOTA_FALHOU">⚠ Pré-nota pendente</option>
+                <option value="GRAVADO_AGUARDANDO_AMARRACAO">⚠ Aguarda amarração</option>
                 <option value="JA_EXISTIA">✓ JA_EXISTIA</option>
                 <option value="FALHA_TECNICA">✗ FALHA_TECNICA</option>
                 <option value="PROTHEUS_DESISTIU">✗ PROTHEUS_DESISTIU</option>
@@ -509,13 +546,43 @@ export function CteRecebidosPage() {
                 <tr>
                   <th className="px-3 py-2 text-left">Chave</th>
                   <th className="px-3 py-2 text-left">Tipo</th>
-                  <th className="px-3 py-2 text-left">Papel Capul</th>
-                  <th className="px-3 py-2 text-left">dh Emissão</th>
-                  <th className="px-3 py-2 text-left">CNPJ Consulente</th>
-                  <th className="px-3 py-2 text-left">NSU</th>
+                  <th
+                    className="px-3 py-2 text-left cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => toggleSort('papelCapul')}
+                  >
+                    Papel Capul {sortIcon('papelCapul')}
+                  </th>
+                  <th
+                    className="px-3 py-2 text-left cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => toggleSort('dhEmi')}
+                  >
+                    dh Emissão {sortIcon('dhEmi')}
+                  </th>
+                  <th
+                    className="px-3 py-2 text-left cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => toggleSort('cnpjConsulente')}
+                  >
+                    CNPJ Consulente {sortIcon('cnpjConsulente')}
+                  </th>
+                  <th
+                    className="px-3 py-2 text-left cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => toggleSort('nsu')}
+                  >
+                    NSU {sortIcon('nsu')}
+                  </th>
                   <th className="px-3 py-2 text-left">Ambiente SEFAZ</th>
-                  <th className="px-3 py-2 text-left">Recebido em</th>
-                  <th className="px-3 py-2 text-left">Protheus</th>
+                  <th
+                    className="px-3 py-2 text-left cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => toggleSort('recebidoEm')}
+                  >
+                    Recebido em {sortIcon('recebidoEm')}
+                  </th>
+                  <th
+                    className="px-3 py-2 text-left cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => toggleSort('protheusStatus')}
+                  >
+                    Protheus {sortIcon('protheusStatus')}
+                  </th>
                   <th className="px-3 py-2 text-right">Tamanho</th>
                   <th className="px-3 py-2"></th>
                 </tr>
@@ -577,6 +644,10 @@ export function CteRecebidosPage() {
                         ) : it.protheusStatus === 'GRAVADO_PRENOTA_FALHOU' ? (
                           <span title={it.protheusErro ?? 'XML gravado em SZR010+SZQ010, mas a pré-nota falhou. Conclua via UI no Protheus.'}>
                             <Badge variant="yellow">⚠ Pré-nota pendente</Badge>
+                          </span>
+                        ) : it.protheusStatus === 'GRAVADO_AGUARDANDO_AMARRACAO' ? (
+                          <span title={it.protheusErro ?? 'XML gravado em SZR010+SZQ010 e pré-nota OK, mas falta amarrar com pedido de compra. Conclua via UI no Protheus.'}>
+                            <Badge variant="yellow">⚠ Aguarda amarração</Badge>
                           </span>
                         ) : it.protheusStatus === 'JA_EXISTIA' ? (
                           <span title="XML já estava em SZR010 (importação manual prévia preservada pelo pré-check)">
@@ -732,6 +803,8 @@ export function CteRecebidosPage() {
                             <Badge variant="green">✓ {detalhe.documento.protheusStatus}</Badge>
                           ) : detalhe.documento.protheusStatus === 'GRAVADO_PRENOTA_FALHOU' ? (
                             <Badge variant="yellow">⚠ Pré-nota pendente</Badge>
+                          ) : detalhe.documento.protheusStatus === 'GRAVADO_AGUARDANDO_AMARRACAO' ? (
+                            <Badge variant="yellow">⚠ Aguarda amarração</Badge>
                           ) : detalhe.documento.protheusStatus === 'PROTHEUS_DESISTIU' ? (
                             <Badge variant="red">✗ DESISTIU (limite tentativas)</Badge>
                           ) : (
@@ -754,14 +827,47 @@ export function CteRecebidosPage() {
                           </div>
                         )}
                       </div>
+                      {/* Flags granulares do retorno grvXML — só aparece se o
+                          Protheus respondeu (sucesso/falha real, não skip). */}
+                      {detalhe.documento.protheusGrvSucesso !== null && (
+                        <div className="mt-3 border border-slate-200 rounded p-2 bg-white">
+                          <h5 className="text-xs font-semibold text-slate-700 mb-1.5">
+                            Resposta detalhada do Protheus:
+                          </h5>
+                          <ul className="text-xs space-y-0.5">
+                            <li>
+                              {detalhe.documento.protheusGrvSucesso ? '✅' : '❌'}{' '}
+                              <strong>Sucesso geral:</strong>{' '}
+                              {detalhe.documento.protheusGrvSucesso ? 'sim' : 'não'}
+                            </li>
+                            <li>
+                              {detalhe.documento.protheusGrvXmlGravado ? '✅' : '❌'}{' '}
+                              <strong>XML em SZR010+SZQ010:</strong>{' '}
+                              {detalhe.documento.protheusGrvXmlGravado ? 'gravado' : 'não gravado'}
+                            </li>
+                            <li>
+                              {detalhe.documento.protheusGrvPrenotaFalhou ? '❌' : '✅'}{' '}
+                              <strong>Pré-nota (U_PRENF/U_NFeSaida):</strong>{' '}
+                              {detalhe.documento.protheusGrvPrenotaFalhou ? 'falhou' : 'ok'}
+                            </li>
+                            <li>
+                              {detalhe.documento.protheusGrvPendAmarracao ? '⚠️' : '✅'}{' '}
+                              <strong>Amarração com pedido:</strong>{' '}
+                              {detalhe.documento.protheusGrvPendAmarracao ? 'pendente' : 'ok'}
+                            </li>
+                          </ul>
+                        </div>
+                      )}
                       {detalhe.documento.protheusErro && (
                         <div className="mt-2">
                           <span className="text-gray-500 text-xs">
-                            {detalhe.documento.protheusStatus === 'GRAVADO_PRENOTA_FALHOU'
+                            {detalhe.documento.protheusStatus === 'GRAVADO_PRENOTA_FALHOU' ||
+                            detalhe.documento.protheusStatus === 'GRAVADO_AGUARDANDO_AMARRACAO'
                               ? 'Mensagem do Protheus:'
                               : 'Último erro:'}
                           </span>
-                          {detalhe.documento.protheusStatus === 'GRAVADO_PRENOTA_FALHOU' ? (
+                          {detalhe.documento.protheusStatus === 'GRAVADO_PRENOTA_FALHOU' ||
+                          detalhe.documento.protheusStatus === 'GRAVADO_AGUARDANDO_AMARRACAO' ? (
                             <pre className="mt-1 bg-yellow-50 border border-yellow-300 rounded p-2 text-xs text-yellow-900 whitespace-pre-wrap break-all">
                               {detalhe.documento.protheusErro}
                             </pre>
@@ -778,6 +884,15 @@ export function CteRecebidosPage() {
                             <strong>Sucesso parcial:</strong> XML em SZR010+SZQ010 (XMLCAB/XMLIT) OK,
                             mas a pré-nota (U_PRENF/U_NFeSaida) falhou. Conclua manualmente via UI no
                             Protheus — re-tentar aqui não ajuda (root cause é validação no ERP).
+                          </span>
+                        </div>
+                      )}
+                      {detalhe.documento.protheusStatus === 'GRAVADO_AGUARDANDO_AMARRACAO' && (
+                        <div className="mt-3 rounded border border-yellow-300 bg-yellow-50 p-2">
+                          <span className="text-xs text-yellow-900">
+                            <strong>Sucesso parcial:</strong> XML em SZR010+SZQ010 e pré-nota OK,
+                            mas falta amarrar com pedido de compra. Conclua manualmente via UI no
+                            Protheus — re-tentar aqui não ajuda.
                           </span>
                         </div>
                       )}

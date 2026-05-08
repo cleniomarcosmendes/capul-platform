@@ -298,6 +298,8 @@ function textoGravacao(g: ProtheusStatus['gravacao']): string {
       return 'Gravado no Protheus (SZR010 + SZQ010)';
     case 'GRAVADO_PRENOTA_FALHOU':
       return 'XML gravado, pré-nota pendente — concluir manualmente no Protheus';
+    case 'GRAVADO_AGUARDANDO_AMARRACAO':
+      return 'XML gravado, aguarda amarração com pedido — concluir manualmente no Protheus';
     case 'JA_EXISTIA':
       return 'Já estava gravado no Protheus (race condition benigna)';
     case 'NAO_APLICAVEL':
