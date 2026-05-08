@@ -123,4 +123,106 @@ export class DocumentoConsultaService {
       take: limit,
     });
   }
+
+  /**
+   * Lista NF-es com pendencias de correcao (08/05/2026).
+   *
+   * NF-es onde nossa app gravou via grvXML e Protheus retornou pendencia
+   * operacional (preNotaFalhou OU pendenteAmarracao). Conjunto finito —
+   * nao inclui NF-es gravadas por outros meios (sem flags persistidas).
+   */
+  async listarPendencias(filtros: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    inconsistenciaFiltro?: 'pendentes' | 'resolvidas' | 'todas';
+  }) {
+    const page = Math.max(1, filtros.page ?? 1);
+    const limit = Math.min(100, Math.max(1, filtros.limit ?? 20));
+    const skip = (page - 1) * limit;
+
+    // Base: NF-es onde nossa app gravou via grvXML e teve pendencia.
+    const where: any = {
+      protheusGrvXmlGravado: true,
+      OR: [
+        { protheusGrvPrenotaFalhou: true },
+        { protheusGrvPendAmarracao: true },
+      ],
+    };
+
+    if (filtros.search) {
+      where.chave = { contains: filtros.search.replace(/\D/g, '') };
+    }
+
+    if (filtros.inconsistenciaFiltro === 'pendentes' || !filtros.inconsistenciaFiltro) {
+      where.inconsistenciaResolvidaEm = null;
+    } else if (filtros.inconsistenciaFiltro === 'resolvidas') {
+      where.inconsistenciaResolvidaEm = { not: null };
+    }
+    // 'todas' = sem filtro adicional
+
+    const [total, items] = await Promise.all([
+      this.prisma.documentoConsulta.count({ where }),
+      this.prisma.documentoConsulta.findMany({
+        where,
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  /**
+   * Marca pendencia como resolvida manualmente no Protheus.
+   */
+  async marcarInconsistenciaResolvida(params: {
+    id: string;
+    usuarioId: string;
+    usuarioNome: string;
+    observacao?: string;
+  }): Promise<DocumentoConsulta> {
+    const doc = await this.prisma.documentoConsulta.findUnique({ where: { id: params.id } });
+    if (!doc) {
+      throw new Error(`NF-e id=${params.id} nao encontrado em documento_consulta`);
+    }
+    const atualizado = await this.prisma.documentoConsulta.update({
+      where: { id: params.id },
+      data: {
+        inconsistenciaResolvidaEm: new Date(),
+        inconsistenciaResolvidaPorId: params.usuarioId,
+        inconsistenciaResolvidaPorNome: params.usuarioNome,
+        inconsistenciaObservacao: params.observacao?.trim() || null,
+      },
+    });
+    this.logger.log(
+      `Inconsistencia NF-e id=${params.id} chave=${doc.chave?.slice(0, 8)}… ` +
+        `marcada como resolvida por ${params.usuarioNome} (id=${params.usuarioId})`,
+    );
+    return atualizado;
+  }
+
+  /**
+   * Desmarca resolucao manual — caso operador tenha marcado por engano.
+   */
+  async desmarcarInconsistenciaResolvida(id: string): Promise<DocumentoConsulta> {
+    const doc = await this.prisma.documentoConsulta.findUnique({ where: { id } });
+    if (!doc) {
+      throw new Error(`NF-e id=${id} nao encontrado em documento_consulta`);
+    }
+    const atualizado = await this.prisma.documentoConsulta.update({
+      where: { id },
+      data: {
+        inconsistenciaResolvidaEm: null,
+        inconsistenciaResolvidaPorId: null,
+        inconsistenciaResolvidaPorNome: null,
+        inconsistenciaObservacao: null,
+      },
+    });
+    this.logger.log(
+      `Inconsistencia NF-e id=${id} chave=${doc.chave?.slice(0, 8)}… DESMARCADA`,
+    );
+    return atualizado;
+  }
 }

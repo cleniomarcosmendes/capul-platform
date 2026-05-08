@@ -41,6 +41,18 @@ import {
 } from '../protheus/interfaces/protheus-status.interface.js';
 import { ufFromChave, assertChaveFormato } from '../common/helpers/chave.helper.js';
 
+export interface InconsistenciaOverlay {
+  /** True quando ha pendencia registrada (xmlGravado + preNotaFalhou OR pendAmarracao) */
+  temPendencia: boolean;
+  preNotaFalhou: boolean;
+  pendenteAmarracao: boolean;
+  mensagemProtheus: string | null;
+  /** ISO timestamp se ja foi marcada resolvida; null caso contrario */
+  resolvidaEm: string | null;
+  resolvidaPorNome: string | null;
+  observacao: string | null;
+}
+
 export interface NfeConsultaResult {
   chave: string;
   filial: string;
@@ -51,6 +63,12 @@ export interface NfeConsultaResult {
   protheusStatus: ProtheusStatus;
   /** @deprecated usar `protheusStatus` — mantido para compatibilidade com frontend antigo */
   alertaProtheus?: string;
+  /**
+   * Overlay de pendencia (08/05/2026): se essa chave teve grvXML com
+   * preNotaFalhou ou pendenteAmarracao em consulta passada, expoe pra UI
+   * permitir marcar como resolvida sem precisar criar tela nova.
+   */
+  inconsistencia: InconsistenciaOverlay;
 }
 
 /**
@@ -380,6 +398,22 @@ export class NfeService {
       xml: xmlString,
       protheusStatus,
       alertaProtheus,
+      // Overlay de inconsistencia (08/05/2026): se existe pendencia registrada
+      // anteriormente (xmlGravado=true + prenotaFalhou ou pendAmarracao), expoe
+      // pra UI permitir marcar como resolvida sem precisar criar tela nova.
+      inconsistencia: {
+        temPendencia:
+          doc.protheusGrvXmlGravado === true &&
+          (doc.protheusGrvPrenotaFalhou === true || doc.protheusGrvPendAmarracao === true),
+        preNotaFalhou: doc.protheusGrvPrenotaFalhou ?? false,
+        pendenteAmarracao: doc.protheusGrvPendAmarracao ?? false,
+        mensagemProtheus: doc.protheusGrvMensagem ?? null,
+        resolvidaEm: doc.inconsistenciaResolvidaEm
+          ? doc.inconsistenciaResolvidaEm.toISOString()
+          : null,
+        resolvidaPorNome: doc.inconsistenciaResolvidaPorNome ?? null,
+        observacao: doc.inconsistenciaObservacao ?? null,
+      },
     };
   }
 

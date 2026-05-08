@@ -431,6 +431,12 @@ export class CteDocumentoService {
     dataFim?: Date;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    /**
+     * Filtro especial: 'pendentes' = só pendencias de correção ainda nao resolvidas
+     * (status problematico AND inconsistencia_resolvida_em IS NULL).
+     * 'resolvidas' = ja marcadas resolvidas. 'todas' = sem filtro de overlay.
+     */
+    inconsistenciaFiltro?: 'pendentes' | 'resolvidas' | 'todas';
   }) {
     const page = Math.max(1, filtros.page ?? 1);
     const limit = Math.min(100, Math.max(1, filtros.limit ?? 20));
@@ -453,6 +459,16 @@ export class CteDocumentoService {
       if (filtros.dataInicio) where.dhEmi.gte = filtros.dataInicio;
       if (filtros.dataFim) where.dhEmi.lte = filtros.dataFim;
     }
+
+    // Filtro overlay (08/05/2026): pendencias de correcao = status problematico
+    // AND ainda nao resolvido manualmente.
+    if (filtros.inconsistenciaFiltro === 'pendentes') {
+      where.protheusStatus = { in: ['GRAVADO_PRENOTA_FALHOU', 'GRAVADO_AGUARDANDO_AMARRACAO'] };
+      where.inconsistenciaResolvidaEm = null;
+    } else if (filtros.inconsistenciaFiltro === 'resolvidas') {
+      where.inconsistenciaResolvidaEm = { not: null };
+    }
+    // 'todas' ou undefined → sem filtro de overlay
 
     // Whitelist de colunas ordenaveis (08/05/2026): protege contra injection
     // via query param. Default = recebidoEm desc (mais recente primeiro).
@@ -497,6 +513,10 @@ export class CteDocumentoService {
           protheusGrvPendAmarracao: true,
           protheusGrvPrenotaFalhou: true,
           protheusGrvMensagem: true,
+          protheusGrvJaExistia: true,
+          inconsistenciaResolvidaEm: true,
+          inconsistenciaResolvidaPorNome: true,
+          inconsistenciaObservacao: true,
         },
         orderBy,
         skip,
@@ -522,5 +542,64 @@ export class CteDocumentoService {
         })
       : [];
     return { documento, eventos };
+  }
+
+  /**
+   * Marca uma inconsistencia como resolvida manualmente no Protheus pelo
+   * setor fiscal. Overlay sobre status do Protheus — status original eh
+   * preservado pra auditoria. Idempotente: chamar duas vezes nao gera lixo.
+   */
+  async marcarInconsistenciaResolvida(params: {
+    id: number;
+    usuarioId: string;
+    usuarioNome: string;
+    observacao?: string;
+  }) {
+    const documento = await this.prisma.client.cteDocumento.findUnique({
+      where: { id: params.id },
+    });
+    if (!documento) {
+      throw new Error(`CT-e id=${params.id} nao encontrado`);
+    }
+    const atualizado = await this.prisma.client.cteDocumento.update({
+      where: { id: params.id },
+      data: {
+        inconsistenciaResolvidaEm: new Date(),
+        inconsistenciaResolvidaPorId: params.usuarioId,
+        inconsistenciaResolvidaPorNome: params.usuarioNome,
+        inconsistenciaObservacao: params.observacao?.trim() || null,
+      },
+    });
+    this.logger.log(
+      `Inconsistencia CT-e id=${params.id} chave=${documento.chave?.slice(0, 8)}… ` +
+        `marcada como resolvida por ${params.usuarioNome} (id=${params.usuarioId})`,
+    );
+    return atualizado;
+  }
+
+  /**
+   * Desmarca resolucao manual — caso operador tenha marcado por engano.
+   * Limpa todos campos do overlay.
+   */
+  async desmarcarInconsistenciaResolvida(id: number) {
+    const documento = await this.prisma.client.cteDocumento.findUnique({
+      where: { id },
+    });
+    if (!documento) {
+      throw new Error(`CT-e id=${id} nao encontrado`);
+    }
+    const atualizado = await this.prisma.client.cteDocumento.update({
+      where: { id },
+      data: {
+        inconsistenciaResolvidaEm: null,
+        inconsistenciaResolvidaPorId: null,
+        inconsistenciaResolvidaPorNome: null,
+        inconsistenciaObservacao: null,
+      },
+    });
+    this.logger.log(
+      `Inconsistencia CT-e id=${id} chave=${documento.chave?.slice(0, 8)}… DESMARCADA`,
+    );
+    return atualizado;
   }
 }

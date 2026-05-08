@@ -245,6 +245,7 @@ export class CteController {
     @Query('dataFim') dataFim?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: string,
+    @Query('inconsistenciaFiltro') inconsistenciaFiltro?: string,
   ) {
     return this.documento.listarPaginado({
       page: page ? Number(page) : undefined,
@@ -259,6 +260,12 @@ export class CteController {
       dataFim: dataFim ? new Date(dataFim) : undefined,
       sortBy,
       sortOrder: sortOrder === 'asc' ? 'asc' : sortOrder === 'desc' ? 'desc' : undefined,
+      inconsistenciaFiltro:
+        inconsistenciaFiltro === 'pendentes' ||
+        inconsistenciaFiltro === 'resolvidas' ||
+        inconsistenciaFiltro === 'todas'
+          ? inconsistenciaFiltro
+          : undefined,
     });
   }
 
@@ -315,6 +322,39 @@ export class CteController {
     const idNum = Number(id);
     if (isNaN(idNum)) throw new NotFoundException('ID inválido');
     return this.enriquecimento.regravarUmDoc(idNum);
+  }
+
+  /**
+   * Marca inconsistencia (preNotaFalhou ou pendenteAmarracao) como resolvida
+   * manualmente no Protheus pelo setor fiscal. Overlay sobre status do Protheus —
+   * status original eh preservado pra auditoria.
+   */
+  @Post('recebidos/:id/marcar-resolvida')
+  @RoleMinima('GESTOR_FISCAL')
+  async marcarResolvida(
+    @Param('id') id: string,
+    @Body() body: { observacao?: string },
+    @CurrentUser() user: FiscalAuthenticatedUser,
+  ) {
+    const idNum = Number(id);
+    if (isNaN(idNum)) throw new NotFoundException('ID inválido');
+    return this.documento.marcarInconsistenciaResolvida({
+      id: idNum,
+      usuarioId: user.id,
+      usuarioNome: user.nome || user.email,
+      observacao: body.observacao,
+    });
+  }
+
+  /**
+   * Desmarca resolucao manual (caso operador tenha marcado por engano).
+   */
+  @Post('recebidos/:id/desmarcar-resolvida')
+  @RoleMinima('GESTOR_FISCAL')
+  async desmarcarResolvida(@Param('id') id: string) {
+    const idNum = Number(id);
+    if (isNaN(idNum)) throw new NotFoundException('ID inválido');
+    return this.documento.desmarcarInconsistenciaResolvida(idNum);
   }
 
   /**

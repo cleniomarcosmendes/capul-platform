@@ -18,6 +18,7 @@ import { RoleMinima } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { FiscalAuthenticatedUser } from '../common/interfaces/jwt-payload.interface.js';
 import { NfeService } from './nfe.service.js';
+import { DocumentoConsultaService } from './documento-consulta.service.js';
 import { DanfeGeneratorService } from './pdf/danfe-generator.service.js';
 import { ResumoSefazGeneratorService } from './pdf/resumo-sefaz-generator.service.js';
 
@@ -26,6 +27,7 @@ import { ResumoSefazGeneratorService } from './pdf/resumo-sefaz-generator.servic
 export class NfeController {
   constructor(
     private readonly nfe: NfeService,
+    private readonly documentoConsulta: DocumentoConsultaService,
     private readonly danfe: DanfeGeneratorService,
     private readonly resumoSefaz: ResumoSefazGeneratorService,
   ) {}
@@ -212,5 +214,62 @@ export class NfeController {
   @RoleMinima('OPERADOR_ENTRADA')
   async health() {
     return { ok: true, modulo: 'nfe', etapas_implementadas: [4, 5, 7, 8] };
+  }
+
+  /**
+   * Lista NF-es com pendencias de correcao no Protheus (08/05/2026).
+   *
+   * Lista APENAS NF-es onde nossa aplicacao chamou grvXML e Protheus reportou
+   * pendencia operacional (preNotaFalhou ou pendenteAmarracao). NF-es gravadas
+   * por outros meios (importacao manual, integracao legada) nao aparecem aqui —
+   * nao temos as flags persistidas pra elas.
+   *
+   * Filtro overlay: 'pendentes' (default) = ainda nao resolvidas;
+   * 'resolvidas' = ja marcadas; 'todas' = sem filtro overlay.
+   */
+  @Get('pendencias')
+  @RoleMinima('OPERADOR_ENTRADA')
+  async listarPendencias(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('inconsistenciaFiltro') inconsistenciaFiltro?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.documentoConsulta.listarPendencias({
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      search,
+      inconsistenciaFiltro:
+        inconsistenciaFiltro === 'pendentes' ||
+        inconsistenciaFiltro === 'resolvidas' ||
+        inconsistenciaFiltro === 'todas'
+          ? inconsistenciaFiltro
+          : 'pendentes',
+    });
+  }
+
+  /**
+   * Marca pendencia (preNotaFalhou ou pendenteAmarracao) como resolvida
+   * manualmente no Protheus pelo setor fiscal.
+   */
+  @Post(':id/marcar-resolvida')
+  @RoleMinima('GESTOR_FISCAL')
+  async marcarResolvida(
+    @Param('id') id: string,
+    @Body() body: { observacao?: string },
+    @CurrentUser() user: FiscalAuthenticatedUser,
+  ) {
+    return this.documentoConsulta.marcarInconsistenciaResolvida({
+      id,
+      usuarioId: user.id,
+      usuarioNome: user.nome || user.email,
+      observacao: body.observacao,
+    });
+  }
+
+  @Post(':id/desmarcar-resolvida')
+  @RoleMinima('GESTOR_FISCAL')
+  async desmarcarResolvida(@Param('id') id: string) {
+    return this.documentoConsulta.desmarcarInconsistenciaResolvida(id);
   }
 }

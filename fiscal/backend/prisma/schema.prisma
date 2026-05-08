@@ -181,6 +181,12 @@ model DocumentoConsulta {
   protheusGrvPrenotaFalhou    Boolean?            @map("protheus_grv_prenota_falhou")
   protheusGrvMensagem         String?             @map("protheus_grv_mensagem")
   protheusGrvJaExistia        Boolean?            @map("protheus_grv_ja_existia")
+  // Overlay de resolucao manual — operador marcou a pendencia como resolvida
+  // no Protheus. Simetrico a cte_documento.
+  inconsistenciaResolvidaEm        DateTime?       @map("inconsistencia_resolvida_em")
+  inconsistenciaResolvidaPorId     String?         @map("inconsistencia_resolvida_por_id") @db.Uuid
+  inconsistenciaResolvidaPorNome   String?         @map("inconsistencia_resolvida_por_nome") @db.VarChar(120)
+  inconsistenciaObservacao         String?         @map("inconsistencia_observacao")
   createdAt                   DateTime            @default(now()) @map("created_at")
   updatedAt                   DateTime            @updatedAt @map("updated_at")
 
@@ -698,6 +704,13 @@ model CteDocumento {
   // Idempotencia (08/05/2026): true quando XML ja estava em SZR010+SZQ010
   // antes desta chamada. Evita retry-loop falso quando pre-check xmlNfe falha.
   protheusGrvJaExistia      Boolean? @map("protheus_grv_ja_existia")
+  // Overlay de resolucao manual (08/05/2026): operador resolveu a pendencia
+  // (preNotaFalhou/pendenteAmarracao) diretamente no Protheus e marcou aqui.
+  // Status do Protheus continua imutavel — overlay indica desfecho operacional.
+  inconsistenciaResolvidaEm        DateTime? @map("inconsistencia_resolvida_em")
+  inconsistenciaResolvidaPorId     String?   @map("inconsistencia_resolvida_por_id") @db.Uuid
+  inconsistenciaResolvidaPorNome   String?   @map("inconsistencia_resolvida_por_nome") @db.VarChar(120)
+  inconsistenciaObservacao         String?   @map("inconsistencia_observacao")
 
   // CT-e referencia NF-es transportadas via <infDoc><infNFe><chave>.
   // Fase 3 extrai essas chaves; por ora coluna fica NULL.
