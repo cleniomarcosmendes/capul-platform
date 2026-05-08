@@ -244,6 +244,9 @@ function inferirCor(status: ProtheusStatus): 'verde' | 'amarelo' | 'vermelho' | 
   )
     return 'verde';
 
+  // XML gravado mas pré-nota falhou → amarelo (sucesso parcial — exige conclusão manual)
+  if (status.gravacao === 'GRAVADO_PRENOTA_FALHOU') return 'amarelo';
+
   // Leitura OK mas gravação falhou → amarelo (dados disponíveis, só não persistidos)
   if (status.gravacao === 'FALHA_TECNICA' && status.leitura !== 'FALHA_TECNICA') return 'amarelo';
 
@@ -262,6 +265,7 @@ function inferirCor(status: ProtheusStatus): 'verde' | 'amarelo' | 'vermelho' | 
 function inferirTitulo(status: ProtheusStatus): string {
   if (status.leitura === 'CACHE_HIT') return 'Obtido do Protheus';
   if (status.gravacao === 'GRAVADO') return 'Baixado da SEFAZ e gravado no Protheus';
+  if (status.gravacao === 'GRAVADO_PRENOTA_FALHOU') return 'Gravado no Protheus, pré-nota pendente (concluir manualmente)';
   if (status.gravacao === 'JA_EXISTIA') return 'Baixado da SEFAZ (já estava no Protheus)';
   if (status.gravacao === 'FALHA_TECNICA' && status.leitura === 'FALHA_TECNICA') {
     return 'Protheus indisponível — dados só em memória';
@@ -292,6 +296,8 @@ function textoGravacao(g: ProtheusStatus['gravacao']): string {
   switch (g) {
     case 'GRAVADO':
       return 'Gravado no Protheus (SZR010 + SZQ010)';
+    case 'GRAVADO_PRENOTA_FALHOU':
+      return 'XML gravado, pré-nota pendente — concluir manualmente no Protheus';
     case 'JA_EXISTIA':
       return 'Já estava gravado no Protheus (race condition benigna)';
     case 'NAO_APLICAVEL':

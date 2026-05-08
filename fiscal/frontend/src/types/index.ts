@@ -101,6 +101,7 @@ export type ProtheusLeituraStatus =
 
 export type ProtheusGravacaoStatus =
   | 'GRAVADO'
+  | 'GRAVADO_PRENOTA_FALHOU'
   | 'JA_EXISTIA'
   | 'NAO_APLICAVEL'
   | 'NAO_TENTADO'

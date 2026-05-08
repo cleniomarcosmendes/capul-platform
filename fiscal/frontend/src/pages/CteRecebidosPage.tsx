@@ -118,7 +118,14 @@ export function CteRecebidosPage() {
   const [schema, setSchema] = useState<'' | SchemaCte>('');
   const [ambiente, setAmbiente] = useState<'' | '1' | '2'>('');
   const [protheusStatus, setProtheusStatus] = useState<
-    '' | 'GRAVADO' | 'JA_EXISTIA' | 'FALHA_TECNICA' | 'PROTHEUS_DESISTIU' | 'NAO_APLICAVEL' | 'PENDENTE'
+    | ''
+    | 'GRAVADO'
+    | 'GRAVADO_PRENOTA_FALHOU'
+    | 'JA_EXISTIA'
+    | 'FALHA_TECNICA'
+    | 'PROTHEUS_DESISTIU'
+    | 'NAO_APLICAVEL'
+    | 'PENDENTE'
   >('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
@@ -434,6 +441,7 @@ export function CteRecebidosPage() {
               >
                 <option value="">Todos</option>
                 <option value="GRAVADO">✓ GRAVADO</option>
+                <option value="GRAVADO_PRENOTA_FALHOU">⚠ Pré-nota pendente</option>
                 <option value="JA_EXISTIA">✓ JA_EXISTIA</option>
                 <option value="FALHA_TECNICA">✗ FALHA_TECNICA</option>
                 <option value="PROTHEUS_DESISTIU">✗ PROTHEUS_DESISTIU</option>
@@ -565,6 +573,10 @@ export function CteRecebidosPage() {
                         {it.protheusStatus === 'GRAVADO' ? (
                           <span title={`Gravado em SZR010+SZQ010 ${it.protheusGravadoEm ? new Date(it.protheusGravadoEm).toLocaleString('pt-BR') : ''}`}>
                             <Badge variant="green">✓ GRAVADO</Badge>
+                          </span>
+                        ) : it.protheusStatus === 'GRAVADO_PRENOTA_FALHOU' ? (
+                          <span title={it.protheusErro ?? 'XML gravado em SZR010+SZQ010, mas a pré-nota falhou. Conclua via UI no Protheus.'}>
+                            <Badge variant="yellow">⚠ Pré-nota pendente</Badge>
                           </span>
                         ) : it.protheusStatus === 'JA_EXISTIA' ? (
                           <span title="XML já estava em SZR010 (importação manual prévia preservada pelo pré-check)">
@@ -718,6 +730,8 @@ export function CteRecebidosPage() {
                           {detalhe.documento.protheusStatus === 'GRAVADO' ||
                           detalhe.documento.protheusStatus === 'JA_EXISTIA' ? (
                             <Badge variant="green">✓ {detalhe.documento.protheusStatus}</Badge>
+                          ) : detalhe.documento.protheusStatus === 'GRAVADO_PRENOTA_FALHOU' ? (
+                            <Badge variant="yellow">⚠ Pré-nota pendente</Badge>
                           ) : detalhe.documento.protheusStatus === 'PROTHEUS_DESISTIU' ? (
                             <Badge variant="red">✗ DESISTIU (limite tentativas)</Badge>
                           ) : (
@@ -742,10 +756,29 @@ export function CteRecebidosPage() {
                       </div>
                       {detalhe.documento.protheusErro && (
                         <div className="mt-2">
-                          <span className="text-gray-500 text-xs">Último erro:</span>
-                          <pre className="mt-1 bg-red-50 border border-red-200 rounded p-2 text-xs text-red-800 whitespace-pre-wrap break-all">
-                            {detalhe.documento.protheusErro}
-                          </pre>
+                          <span className="text-gray-500 text-xs">
+                            {detalhe.documento.protheusStatus === 'GRAVADO_PRENOTA_FALHOU'
+                              ? 'Mensagem do Protheus:'
+                              : 'Último erro:'}
+                          </span>
+                          {detalhe.documento.protheusStatus === 'GRAVADO_PRENOTA_FALHOU' ? (
+                            <pre className="mt-1 bg-yellow-50 border border-yellow-300 rounded p-2 text-xs text-yellow-900 whitespace-pre-wrap break-all">
+                              {detalhe.documento.protheusErro}
+                            </pre>
+                          ) : (
+                            <pre className="mt-1 bg-red-50 border border-red-200 rounded p-2 text-xs text-red-800 whitespace-pre-wrap break-all">
+                              {detalhe.documento.protheusErro}
+                            </pre>
+                          )}
+                        </div>
+                      )}
+                      {detalhe.documento.protheusStatus === 'GRAVADO_PRENOTA_FALHOU' && (
+                        <div className="mt-3 rounded border border-yellow-300 bg-yellow-50 p-2">
+                          <span className="text-xs text-yellow-900">
+                            <strong>Sucesso parcial:</strong> XML em SZR010+SZQ010 (XMLCAB/XMLIT) OK,
+                            mas a pré-nota (U_PRENF/U_NFeSaida) falhou. Conclua manualmente via UI no
+                            Protheus — re-tentar aqui não ajuda (root cause é validação no ERP).
+                          </span>
                         </div>
                       )}
                       {(detalhe.documento.protheusStatus === 'FALHA_TECNICA' ||

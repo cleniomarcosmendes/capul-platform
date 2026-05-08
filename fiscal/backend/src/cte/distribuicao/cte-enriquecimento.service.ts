@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { XMLParser } from 'fast-xml-parser';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { PapelDetectorService } from './papel-detector.service.js';
@@ -124,6 +124,13 @@ export class CteEnriquecimentoService {
 
     // Fase 2 — gravação Protheus (apenas se flag ativa)
     const protheusAtivo = await this.ambiente.getCteProtheusGravaAtivo();
+    if (!protheusAtivo) {
+      this.logger.warn(
+        `[processarPendentes] Fase 2 (gravação Protheus) PULADA — ` +
+          `flag cte_protheus_grava_ativo=false. Habilite em ` +
+          `/operacao/controle/cte-distribuicao pra processar gravações.`,
+      );
+    }
     if (protheusAtivo) {
       // Resolve whitelist de filiais ANTES do loop (consistencia com Fase 1
       // do scheduler — bug detectado 07/05/2026 19:30: cron enriquecimento
@@ -294,6 +301,19 @@ export class CteEnriquecimentoService {
     docsResetados: number;
     enriquecimento: ResultadoEnriquecimento;
   }> {
+    // Pre-check (08/05/2026): bloquear retry batch se flag global desligada,
+    // pra nao deixar docs em limbo (status=NULL, sem retry, sem gravação).
+    // Antes desse fix: docs eram resetados de FALHA_TECNICA pra NULL e
+    // ficavam sem processamento porque processarPendentes pulava Fase 2.
+    const protheusAtivo = await this.ambiente.getCteProtheusGravaAtivo();
+    if (!protheusAtivo) {
+      throw new BadRequestException(
+        'Gravação Protheus está desligada (cte_protheus_grava_ativo=false). ' +
+          'Habilite em /operacao/controle/cte-distribuicao antes de usar retry em batch — ' +
+          'caso contrário, os documentos resetariam pra NULL sem ser processados.',
+      );
+    }
+
     const cfg = await this.ambiente.getCteDistribuicaoConfig();
     const whitelist = cfg.filiaisWhitelist ?? [];
 
