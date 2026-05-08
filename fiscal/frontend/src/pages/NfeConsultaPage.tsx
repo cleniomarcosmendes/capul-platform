@@ -14,6 +14,7 @@ import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
 import { ErrorCard } from '../components/ErrorCard';
 import { OrigemBadge } from '../components/OrigemBadge';
+import { InconsistenciaPanelNfe } from '../components/InconsistenciaPanelNfe';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
 import { extractApiError } from '../utils/errors';
@@ -468,6 +469,23 @@ export function NfeConsultaPage() {
               onReexecutar={(novo) => setResult({ ...result, protheusStatus: novo })}
             />
           </div>
+
+          {/* Overlay de inconsistência registrada anteriormente — aparece quando
+              alguma consulta passada gravou via grvXML e Protheus reportou
+              preNotaFalhou ou pendenteAmarracao. Permite operador marcar como
+              resolvida no Protheus. */}
+          {result.inconsistencia.temPendencia && (
+            <InconsistenciaPanelNfe
+              documentoId={result.documentoConsultaId}
+              inconsistencia={result.inconsistencia}
+              onChange={(novo) =>
+                setResult({
+                  ...result,
+                  inconsistencia: { ...result.inconsistencia, ...novo },
+                })
+              }
+            />
+          )}
 
           {/* Dados Gerais — sempre visível, replica o header do portal SEFAZ */}
           <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
