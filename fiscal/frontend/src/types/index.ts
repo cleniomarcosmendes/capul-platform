@@ -522,6 +522,16 @@ export interface TimelineNfeProtheusResponse {
   alertasEntrada: EventoProtheusNfe[];
 }
 
+export interface InconsistenciaOverlay {
+  temPendencia: boolean;
+  preNotaFalhou: boolean;
+  pendenteAmarracao: boolean;
+  mensagemProtheus: string | null;
+  resolvidaEm: string | null;
+  resolvidaPorNome: string | null;
+  observacao: string | null;
+}
+
 export interface NfeConsultaResult {
   chave: string;
   filial: string;
@@ -532,6 +542,8 @@ export interface NfeConsultaResult {
   protheusStatus: ProtheusStatus;
   /** @deprecated — usar protheusStatus */
   alertaProtheus?: string;
+  /** Overlay de pendência registrada anteriormente (08/05/2026) */
+  inconsistencia: InconsistenciaOverlay;
 }
 
 // ----- Cadastro (CCC) -----

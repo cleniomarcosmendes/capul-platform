@@ -49,6 +49,10 @@ interface CteDocumentoListItem {
   protheusGrvPrenotaFalhou: boolean | null;
   protheusGrvMensagem: string | null;
   protheusGrvJaExistia: boolean | null;
+  // Overlay de resolução manual (08/05/2026)
+  inconsistenciaResolvidaEm: string | null;
+  inconsistenciaResolvidaPorNome: string | null;
+  inconsistenciaObservacao: string | null;
 }
 
 interface ListResp {
@@ -144,6 +148,11 @@ export function CteRecebidosPage() {
   const [sortBy, setSortBy] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
+  // Filtro de pendencias de correcao (08/05/2026)
+  const [inconsistenciaFiltro, setInconsistenciaFiltro] = useState<
+    'pendentes' | 'resolvidas' | 'todas'
+  >('todas');
+
   // Modal detalhe
   const [detalhe, setDetalhe] = useState<DetalheResp | null>(null);
   const [carregandoDetalhe, setCarregandoDetalhe] = useState(false);
@@ -179,6 +188,9 @@ export function CteRecebidosPage() {
         params.sortBy = sortBy;
         params.sortOrder = sortOrder;
       }
+      if (inconsistenciaFiltro !== 'todas') {
+        params.inconsistenciaFiltro = inconsistenciaFiltro;
+      }
       const r = await fiscalApi.get<ListResp>('/cte/recebidos', { params });
       setItems(r.data.items);
       setTotal(r.data.total);
@@ -188,7 +200,7 @@ export function CteRecebidosPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, papel, schema, ambiente, protheusStatus, dataInicio, dataFim, sortBy, sortOrder, toast]);
+  }, [page, search, papel, schema, ambiente, protheusStatus, dataInicio, dataFim, sortBy, sortOrder, inconsistenciaFiltro, toast]);
 
   // Click no header da coluna: nenhum → desc → asc → nenhum
   const toggleSort = (column: string) => {
@@ -300,6 +312,55 @@ export function CteRecebidosPage() {
       toast.error('Falha ao re-gravar', extractApiError(err) ?? undefined);
     } finally {
       setRegravandoBatch(false);
+    }
+  };
+
+  const [marcandoResolvidaId, setMarcandoResolvidaId] = useState<number | null>(null);
+
+  const marcarResolvida = async (id: number) => {
+    const observacaoRaw = window.prompt(
+      'Marcar inconsistência como resolvida no Protheus.\n\n' +
+        'Observação (opcional): descreva brevemente o que foi feito\n' +
+        '(ex: "cadastrado SA2 da BRASPRESS").',
+      '',
+    );
+    if (observacaoRaw === null) return; // cancelou
+
+    setMarcandoResolvidaId(id);
+    try {
+      await fiscalApi.post(`/cte/recebidos/${id}/marcar-resolvida`, {
+        observacao: observacaoRaw.trim() || undefined,
+      });
+      toast.success('Inconsistência marcada como resolvida');
+      if (detalhe?.documento.id === id) await abrirDetalhe(id);
+      void carregar();
+    } catch (err) {
+      toast.error('Falha ao marcar', extractApiError(err) ?? undefined);
+    } finally {
+      setMarcandoResolvidaId(null);
+    }
+  };
+
+  const desmarcarResolvida = async (id: number) => {
+    const ok = await confirm({
+      title: 'Desmarcar resolução?',
+      description:
+        'Isso vai remover o registro de "resolvida manualmente". Use só se marcou por engano.',
+      variant: 'warning',
+      confirmLabel: 'Desmarcar',
+    });
+    if (!ok) return;
+
+    setMarcandoResolvidaId(id);
+    try {
+      await fiscalApi.post(`/cte/recebidos/${id}/desmarcar-resolvida`);
+      toast.success('Resolução desmarcada');
+      if (detalhe?.documento.id === id) await abrirDetalhe(id);
+      void carregar();
+    } catch (err) {
+      toast.error('Falha ao desmarcar', extractApiError(err) ?? undefined);
+    } finally {
+      setMarcandoResolvidaId(null);
     }
   };
 
@@ -488,6 +549,21 @@ export function CteRecebidosPage() {
               </select>
             </div>
             <div>
+              <label className="block text-xs text-gray-600 mb-1">Inconsistência</label>
+              <select
+                value={inconsistenciaFiltro}
+                onChange={(e) => {
+                  setInconsistenciaFiltro(e.target.value as any);
+                  setPage(1);
+                }}
+                className="w-full px-3 py-1.5 border rounded text-sm"
+              >
+                <option value="todas">Todas</option>
+                <option value="pendentes">⚠ Pendentes de correção</option>
+                <option value="resolvidas">✓ Resolvidas manualmente</option>
+              </select>
+            </div>
+            <div>
               <label className="block text-xs text-gray-600 mb-1">Emissão (de)</label>
               <input
                 type="date"
@@ -643,13 +719,25 @@ export function CteRecebidosPage() {
                             <Badge variant="green">✓ GRAVADO</Badge>
                           </span>
                         ) : it.protheusStatus === 'GRAVADO_PRENOTA_FALHOU' ? (
-                          <span title={it.protheusErro ?? 'XML gravado em SZR010+SZQ010, mas a pré-nota falhou. Conclua via UI no Protheus.'}>
-                            <Badge variant="yellow">⚠ Pré-nota pendente</Badge>
-                          </span>
+                          it.inconsistenciaResolvidaEm ? (
+                            <span title={`Resolvida manualmente por ${it.inconsistenciaResolvidaPorNome ?? '?'} em ${new Date(it.inconsistenciaResolvidaEm).toLocaleString('pt-BR')}${it.inconsistenciaObservacao ? ` — "${it.inconsistenciaObservacao}"` : ''}`}>
+                              <Badge variant="green">✓ Pré-nota resolvida</Badge>
+                            </span>
+                          ) : (
+                            <span title={it.protheusErro ?? 'XML gravado em SZR010+SZQ010, mas a pré-nota falhou. Conclua via UI no Protheus.'}>
+                              <Badge variant="yellow">⚠ Pré-nota pendente</Badge>
+                            </span>
+                          )
                         ) : it.protheusStatus === 'GRAVADO_AGUARDANDO_AMARRACAO' ? (
-                          <span title={it.protheusErro ?? 'XML gravado em SZR010+SZQ010 e pré-nota OK, mas falta amarrar com pedido de compra. Conclua via UI no Protheus.'}>
-                            <Badge variant="yellow">⚠ Aguarda amarração</Badge>
-                          </span>
+                          it.inconsistenciaResolvidaEm ? (
+                            <span title={`Resolvida manualmente por ${it.inconsistenciaResolvidaPorNome ?? '?'} em ${new Date(it.inconsistenciaResolvidaEm).toLocaleString('pt-BR')}${it.inconsistenciaObservacao ? ` — "${it.inconsistenciaObservacao}"` : ''}`}>
+                              <Badge variant="green">✓ Amarração resolvida</Badge>
+                            </span>
+                          ) : (
+                            <span title={it.protheusErro ?? 'XML gravado em SZR010+SZQ010 e pré-nota OK, mas falta amarrar com pedido de compra. Conclua via UI no Protheus.'}>
+                              <Badge variant="yellow">⚠ Aguarda amarração</Badge>
+                            </span>
+                          )
                         ) : it.protheusStatus === 'JA_EXISTIA' ? (
                           <span title="XML já estava em SZR010 (importação manual prévia preservada pelo pré-check)">
                             <Badge variant="green">✓ JA_EXISTIA</Badge>
@@ -884,23 +972,63 @@ export function CteRecebidosPage() {
                           )}
                         </div>
                       )}
-                      {detalhe.documento.protheusStatus === 'GRAVADO_PRENOTA_FALHOU' && (
-                        <div className="mt-3 rounded border border-yellow-300 bg-yellow-50 p-2">
-                          <span className="text-xs text-yellow-900">
-                            <strong>Sucesso parcial:</strong> XML em SZR010+SZQ010 (XMLCAB/XMLIT) OK,
-                            mas a pré-nota (U_PRENF/U_NFeSaida) falhou. Conclua manualmente via UI no
-                            Protheus — re-tentar aqui não ajuda (root cause é validação no ERP).
-                          </span>
-                        </div>
-                      )}
-                      {detalhe.documento.protheusStatus === 'GRAVADO_AGUARDANDO_AMARRACAO' && (
-                        <div className="mt-3 rounded border border-yellow-300 bg-yellow-50 p-2">
-                          <span className="text-xs text-yellow-900">
-                            <strong>Sucesso parcial:</strong> XML em SZR010+SZQ010 e pré-nota OK,
-                            mas falta amarrar com pedido de compra. Conclua manualmente via UI no
-                            Protheus — re-tentar aqui não ajuda.
-                          </span>
-                        </div>
+                      {(detalhe.documento.protheusStatus === 'GRAVADO_PRENOTA_FALHOU' ||
+                        detalhe.documento.protheusStatus === 'GRAVADO_AGUARDANDO_AMARRACAO') && (
+                        detalhe.documento.inconsistenciaResolvidaEm ? (
+                          // Já marcado como resolvido manualmente
+                          <div className="mt-3 rounded border border-green-300 bg-green-50 p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="text-xs text-green-900 flex-1">
+                                <p className="font-semibold mb-1">✓ Inconsistência resolvida manualmente no Protheus</p>
+                                <p>
+                                  Por <strong>{detalhe.documento.inconsistenciaResolvidaPorNome ?? '?'}</strong>
+                                  {' '}em{' '}
+                                  {new Date(detalhe.documento.inconsistenciaResolvidaEm).toLocaleString('pt-BR')}
+                                </p>
+                                {detalhe.documento.inconsistenciaObservacao && (
+                                  <p className="mt-1 italic text-green-700">
+                                    "{detalhe.documento.inconsistenciaObservacao}"
+                                  </p>
+                                )}
+                              </div>
+                              <Button
+                                variant="secondary"
+                                onClick={() => desmarcarResolvida(detalhe.documento.id)}
+                                loading={marcandoResolvidaId === detalhe.documento.id}
+                              >
+                                Desmarcar
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          // Pendente — bloco amarelo + botão de marcar
+                          <div className="mt-3 rounded border border-yellow-300 bg-yellow-50 p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <span className="text-xs text-yellow-900 flex-1">
+                                {detalhe.documento.protheusStatus === 'GRAVADO_PRENOTA_FALHOU' ? (
+                                  <>
+                                    <strong>Sucesso parcial:</strong> XML em SZR010+SZQ010 (XMLCAB/XMLIT) OK,
+                                    mas a pré-nota (U_PRENF/U_NFeSaida) falhou. Conclua manualmente via UI no
+                                    Protheus — re-tentar aqui não ajuda (root cause é validação no ERP).
+                                  </>
+                                ) : (
+                                  <>
+                                    <strong>Sucesso parcial:</strong> XML em SZR010+SZQ010 e pré-nota OK,
+                                    mas falta amarrar com pedido de compra. Conclua manualmente via UI no
+                                    Protheus — re-tentar aqui não ajuda.
+                                  </>
+                                )}
+                              </span>
+                              <Button
+                                variant="primary"
+                                onClick={() => marcarResolvida(detalhe.documento.id)}
+                                loading={marcandoResolvidaId === detalhe.documento.id}
+                              >
+                                ✓ Marcar resolvida
+                              </Button>
+                            </div>
+                          </div>
+                        )
                       )}
                       {(detalhe.documento.protheusStatus === 'FALHA_TECNICA' ||
                         detalhe.documento.protheusStatus === 'PROTHEUS_DESISTIU') && (
