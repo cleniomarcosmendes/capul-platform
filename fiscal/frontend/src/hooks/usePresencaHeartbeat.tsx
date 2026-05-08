@@ -64,27 +64,28 @@ export function AvisoPlataformaBanner({ aviso }: { aviso: AvisoAtivo | null }): 
 
   return (
     <div className="bg-amber-500 text-white shadow-md print:hidden">
-      <div className="max-w-7xl mx-auto px-4 py-3 flex items-start gap-3">
-        <svg className="w-5 h-5 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <div className="px-6 py-4 flex items-start gap-4">
+        <svg className="w-6 h-6 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <div className="flex-1 text-sm">
-          <p className="font-medium">Aviso da plataforma</p>
-          <p className="mt-0.5 whitespace-pre-wrap">{aviso.mensagem}</p>
-          <p className="mt-1 text-xs text-amber-100">
-            Visível por mais ~{minRestantes} min · enviado{' '}
+        <div className="flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wider text-amber-50">Aviso da plataforma</p>
+          <p className="mt-1 text-lg font-semibold leading-snug whitespace-pre-wrap">{aviso.mensagem}</p>
+          <p className="mt-2 text-sm text-amber-50/90">
+            Visível por mais ~{minRestantes} min · enviado em{' '}
             {new Date(aviso.criadoEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
           </p>
         </div>
         <button
           type="button"
           onClick={() => setDispensado(aviso.criadoEm)}
-          className="text-amber-100 hover:text-white"
-          title="Dispensar"
+          className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-amber-600/40 hover:bg-amber-600/70 transition-colors"
+          title="Dispensar este aviso"
         >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
+          Dispensar
         </button>
       </div>
     </div>
