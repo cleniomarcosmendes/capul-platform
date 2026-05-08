@@ -172,7 +172,7 @@ model DocumentoConsulta {
   // expõe o conteúdo. Atualizado a cada tentarGravar.
   protheusGrvRequest          String?             @map("protheus_grv_request")
   // Flags granulares do retorno grvXML (contrato 08/05/2026):
-  // resp.resultados[0].{sucesso,xmlGravado,pendenteAmarracao,preNotaFalhou,mensagem}.
+  // resp.resultados[0].{sucesso,xmlGravado,pendenteAmarracao,preNotaFalhou,mensagem,jaExistia}.
   // Persistido por simetria com cte_documento — cada consulta NF-e atualiza
   // os flags do ultimo grvXML chamado.
   protheusGrvSucesso          Boolean?            @map("protheus_grv_sucesso")
@@ -180,6 +180,7 @@ model DocumentoConsulta {
   protheusGrvPendAmarracao    Boolean?            @map("protheus_grv_pend_amarracao")
   protheusGrvPrenotaFalhou    Boolean?            @map("protheus_grv_prenota_falhou")
   protheusGrvMensagem         String?             @map("protheus_grv_mensagem")
+  protheusGrvJaExistia        Boolean?            @map("protheus_grv_ja_existia")
   createdAt                   DateTime            @default(now()) @map("created_at")
   updatedAt                   DateTime            @updatedAt @map("updated_at")
 
@@ -687,13 +688,16 @@ model CteDocumento {
   // debug (botão "Copiar JSON" no modal de detalhe).
   protheusGrvRequest String?    @map("protheus_grv_request")
   // Flags granulares do retorno grvXML (contrato 08/05/2026):
-  // resp.resultados[0].{sucesso,xmlGravado,pendenteAmarracao,preNotaFalhou,mensagem}.
+  // resp.resultados[0].{sucesso,xmlGravado,pendenteAmarracao,preNotaFalhou,mensagem,jaExistia}.
   // Permite filtros precisos sem inventar combinacoes de status agregado.
   protheusGrvSucesso        Boolean? @map("protheus_grv_sucesso")
   protheusGrvXmlGravado     Boolean? @map("protheus_grv_xml_gravado")
   protheusGrvPendAmarracao  Boolean? @map("protheus_grv_pend_amarracao")
   protheusGrvPrenotaFalhou  Boolean? @map("protheus_grv_prenota_falhou")
   protheusGrvMensagem       String?  @map("protheus_grv_mensagem")
+  // Idempotencia (08/05/2026): true quando XML ja estava em SZR010+SZQ010
+  // antes desta chamada. Evita retry-loop falso quando pre-check xmlNfe falha.
+  protheusGrvJaExistia      Boolean? @map("protheus_grv_ja_existia")
 
   // CT-e referencia NF-es transportadas via <infDoc><infNFe><chave>.
   // Fase 3 extrai essas chaves; por ora coluna fica NULL.

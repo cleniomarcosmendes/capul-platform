@@ -180,6 +180,7 @@ export class NfeService {
       pendenteAmarracao: boolean;
       preNotaFalhou: boolean;
       mensagem: string;
+      jaExistia: boolean;
     } | null = null;
 
     // ---------- passo 1: GET /xmlNfe (busca SZR010 → fallback SPED156) ----------

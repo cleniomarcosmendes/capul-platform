@@ -28,6 +28,7 @@ export interface RegistrarConsultaInput {
     pendenteAmarracao: boolean;
     preNotaFalhou: boolean;
     mensagem: string;
+    jaExistia: boolean;
   } | null;
 }
 
@@ -55,6 +56,7 @@ export class DocumentoConsultaService {
           protheusGrvPendAmarracao: input.grvFlags.pendenteAmarracao,
           protheusGrvPrenotaFalhou: input.grvFlags.preNotaFalhou,
           protheusGrvMensagem: input.grvFlags.mensagem,
+          protheusGrvJaExistia: input.grvFlags.jaExistia,
         }
       : {};
     return this.prisma.documentoConsulta.upsert({

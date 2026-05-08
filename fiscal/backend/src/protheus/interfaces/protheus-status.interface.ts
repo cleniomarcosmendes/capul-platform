@@ -35,21 +35,28 @@ export interface GrvXmlFlags {
   pendenteAmarracao: boolean;
   preNotaFalhou: boolean;
   mensagem: string;
+  /**
+   * Idempotencia (08/05/2026): true quando o XML ja estava em SZR010+SZQ010
+   * antes desta chamada. Opcional pra back-compat enquanto Protheus implementa.
+   */
+  jaExistia?: boolean;
 }
 
 /**
- * Deriva o ProtheusGravacaoStatus agregado a partir das 4 flags do retorno
+ * Deriva o ProtheusGravacaoStatus agregado a partir das flags do retorno
  * do Protheus. Centraliza a logica num so lugar pra UI/backend usarem
  * coerentemente.
  *
- * Ordem de precedencia (mais grave primeiro):
+ * Ordem de precedencia (mais especifica primeiro):
  *   1. !sucesso || !xmlGravado    → FALHA_TECNICA
- *   2. preNotaFalhou               → GRAVADO_PRENOTA_FALHOU
- *   3. pendenteAmarracao           → GRAVADO_AGUARDANDO_AMARRACAO
- *   4. tudo OK                     → GRAVADO
+ *   2. jaExistia                   → JA_EXISTIA (idempotencia explicita)
+ *   3. preNotaFalhou               → GRAVADO_PRENOTA_FALHOU
+ *   4. pendenteAmarracao           → GRAVADO_AGUARDANDO_AMARRACAO
+ *   5. tudo OK                     → GRAVADO
  */
 export function derivarStatusGravacao(flags: GrvXmlFlags): ProtheusGravacaoStatus {
   if (!flags.sucesso || !flags.xmlGravado) return 'FALHA_TECNICA';
+  if (flags.jaExistia) return 'JA_EXISTIA';
   if (flags.preNotaFalhou) return 'GRAVADO_PRENOTA_FALHOU';
   if (flags.pendenteAmarracao) return 'GRAVADO_AGUARDANDO_AMARRACAO';
   return 'GRAVADO';

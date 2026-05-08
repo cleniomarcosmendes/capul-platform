@@ -55,6 +55,17 @@ export interface GrvXmlResultado {
   pendenteAmarracao: boolean;
   preNotaFalhou: boolean;
   mensagem: string;
+  /**
+   * Flag de idempotencia (08/05/2026): true quando o XML ja estava em
+   * SZR010+SZQ010 antes desta chamada (gravado por execucao previa ou
+   * importacao manual). Combinado com sucesso=true, xmlGravado=true,
+   * indica que a operacao foi idempotente — caller deve interpretar
+   * como JA_EXISTIA em vez de GRAVADO novo.
+   *
+   * Opcional (back-compat): equipe Protheus implementa progressivamente.
+   * Se ausente/false e sucesso=true, assume gravacao nova.
+   */
+  jaExistia?: boolean;
 }
 
 export interface GrvXmlResponse {

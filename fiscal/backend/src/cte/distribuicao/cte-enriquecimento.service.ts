@@ -514,6 +514,7 @@ export class CteEnriquecimentoService {
         protheusGrvPendAmarracao: r.grvFlags?.pendenteAmarracao ?? null,
         protheusGrvPrenotaFalhou: r.grvFlags?.preNotaFalhou ?? null,
         protheusGrvMensagem: r.grvFlags?.mensagem ?? null,
+        protheusGrvJaExistia: r.grvFlags?.jaExistia ?? null,
       },
     });
 

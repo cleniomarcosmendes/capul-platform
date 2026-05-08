@@ -35,6 +35,9 @@ export interface TentativaGravacaoResult {
    * O `gravacao` (status agregado acima) eh DERIVADO desses flags via
    * `derivarStatusGravacao()`. Caller persiste ambos pra granularidade
    * + filtro rapido.
+   *
+   * Inclui `jaExistia` (idempotencia, opcional ate Protheus implementar
+   * — campo evolui com o contrato).
    */
   grvFlags: {
     sucesso: boolean;
@@ -42,6 +45,7 @@ export interface TentativaGravacaoResult {
     pendenteAmarracao: boolean;
     preNotaFalhou: boolean;
     mensagem: string;
+    jaExistia: boolean;
   } | null;
 }
 
@@ -226,13 +230,15 @@ export class ProtheusGravacaoHelper {
 
       const r0 = resp.resultados[0];
 
-      // Captura flags granulares pra persistir e expor no UI.
+      // Captura flags granulares pra persistir e expor no UI. jaExistia
+      // pode vir undefined da resposta (back-compat) — normalizamos pra false.
       const grvFlags = {
         sucesso: r0.sucesso,
         xmlGravado: r0.xmlGravado,
         pendenteAmarracao: r0.pendenteAmarracao,
         preNotaFalhou: r0.preNotaFalhou,
         mensagem: r0.mensagem,
+        jaExistia: r0.jaExistia ?? false,
       };
 
       // Status agregado derivado dos flags — fonte unica da derivacao
@@ -300,7 +306,26 @@ export class ProtheusGravacaoHelper {
         };
       }
 
-      // Caso 3: gravacao plena (XML + pre-nota OK).
+      // Caso 4: idempotencia — XML ja estava em SZR010+SZQ010 (jaExistia=true).
+      // Operacao foi sucesso (XML esta la), mas nao foi essa chamada que gravou.
+      // Skip pos-verify (XML ja esta la, redundante).
+      if (statusDerivado === 'JA_EXISTIA') {
+        this.logger.log(
+          `grvXML ${docLabel} ${chave.slice(0, 6)}… JA_EXISTIA (idempotencia — XML ja estava em SZR010+SZQ010). Mensagem Protheus: ${r0.mensagem}`,
+        );
+        return {
+          gravacao: 'JA_EXISTIA',
+          gravacaoMensagem:
+            r0.mensagem ||
+            'XML ja estava em SZR010+SZQ010 (gravado por execucao previa).',
+          gravacaoErro: null,
+          raceCondition: true,
+          requestBody,
+          grvFlags,
+        };
+      }
+
+      // Caso 5: gravacao plena (XML + pre-nota OK).
       // Pos-verify via xmlNfe — defesa do Pedido D (07/05/2026): Protheus
       // ja retornou GRAVADO em 15% dos casos sem persistir silenciosamente.
       // Apesar do response novo ser mais informativo, mantemos verificacao

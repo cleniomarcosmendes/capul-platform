@@ -48,6 +48,7 @@ interface CteDocumentoListItem {
   protheusGrvPendAmarracao: boolean | null;
   protheusGrvPrenotaFalhou: boolean | null;
   protheusGrvMensagem: string | null;
+  protheusGrvJaExistia: boolean | null;
 }
 
 interface ListResp {
@@ -845,6 +846,11 @@ export function CteRecebidosPage() {
                               <strong>XML em SZR010+SZQ010:</strong>{' '}
                               {detalhe.documento.protheusGrvXmlGravado ? 'gravado' : 'não gravado'}
                             </li>
+                            {detalhe.documento.protheusGrvJaExistia && (
+                              <li>
+                                ↻ <strong>Idempotência:</strong> XML já estava em SZR010+SZQ010 (gravado por execução prévia)
+                              </li>
+                            )}
                             <li>
                               {detalhe.documento.protheusGrvPrenotaFalhou ? '❌' : '✅'}{' '}
                               <strong>Pré-nota (U_PRENF/U_NFeSaida):</strong>{' '}

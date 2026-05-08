@@ -129,6 +129,7 @@ export class ProtheusXmlMock {
           xmlGravado: true,
           pendenteAmarracao: false,
           preNotaFalhou: false,
+          jaExistia: true,
           mensagem: 'XML ja existia no Protheus (mock idempotente).',
         };
       }
