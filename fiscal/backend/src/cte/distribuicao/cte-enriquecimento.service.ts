@@ -264,7 +264,8 @@ export class CteEnriquecimentoService {
       ok:
         docFinal?.protheusStatus === 'GRAVADO' ||
         docFinal?.protheusStatus === 'JA_EXISTIA' ||
-        docFinal?.protheusStatus === 'GRAVADO_PRENOTA_FALHOU',
+        docFinal?.protheusStatus === 'GRAVADO_PRENOTA_FALHOU' ||
+        docFinal?.protheusStatus === 'GRAVADO_AGUARDANDO_AMARRACAO',
       chave: doc.chave,
       statusAnterior,
       statusNovo: docFinal?.protheusStatus ?? null,
@@ -477,14 +478,16 @@ export class CteEnriquecimentoService {
       usuarioEmail: 'sistema:cte-enriquecimento',
     });
 
-    // GRAVADO_PRENOTA_FALHOU eh terminal — XML gravado em SZR010/SZQ010 OK,
-    // pre-nota precisa intervencao manual no Protheus. Retry nao ajuda
-    // (root cause e validacao no ERP). Tratado como sucesso pra nao subir
-    // tentativas e nao virar PROTHEUS_DESISTIU.
+    // GRAVADO_PRENOTA_FALHOU e GRAVADO_AGUARDANDO_AMARRACAO sao terminais —
+    // XML gravado em SZR010/SZQ010 OK, mas pre-nota ou amarracao com pedido
+    // precisam intervencao manual no Protheus. Retry nao ajuda (root cause
+    // e validacao no ERP). Tratados como sucesso pra nao subir tentativas e
+    // nao virar PROTHEUS_DESISTIU.
     const sucesso =
       r.gravacao === 'GRAVADO' ||
       r.gravacao === 'JA_EXISTIA' ||
-      r.gravacao === 'GRAVADO_PRENOTA_FALHOU';
+      r.gravacao === 'GRAVADO_PRENOTA_FALHOU' ||
+      r.gravacao === 'GRAVADO_AGUARDANDO_AMARRACAO';
     const novasTentativas = doc.protheusTentativas + 1;
     const desistir = !sucesso && novasTentativas >= MAX_TENTATIVAS_PROTHEUS;
 
@@ -493,6 +496,9 @@ export class CteEnriquecimentoService {
     // operador (que reseta via endpoint admin).
     // protheusGrvRequest atualizado a cada tentativa — pra setor fiscal
     // autoatender debug com equipe Protheus (botão "Copiar JSON" no modal).
+    // Flags granulares (08/05/2026): persistidos quando o Protheus respondeu
+    // (r.grvFlags != null) — fonte de verdade pra UI mostrar cada aspecto
+    // individualmente sem inventar combinacoes de status agregado.
     await this.prisma.client.cteDocumento.update({
       where: { id: doc.id },
       data: {
@@ -503,6 +509,11 @@ export class CteEnriquecimentoService {
           : r.gravacaoErro,
         protheusTentativas: novasTentativas,
         protheusGrvRequest: r.requestBody,
+        protheusGrvSucesso: r.grvFlags?.sucesso ?? null,
+        protheusGrvXmlGravado: r.grvFlags?.xmlGravado ?? null,
+        protheusGrvPendAmarracao: r.grvFlags?.pendenteAmarracao ?? null,
+        protheusGrvPrenotaFalhou: r.grvFlags?.preNotaFalhou ?? null,
+        protheusGrvMensagem: r.grvFlags?.mensagem ?? null,
       },
     });
 

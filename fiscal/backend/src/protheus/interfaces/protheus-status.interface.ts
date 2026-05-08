@@ -15,13 +15,45 @@ export type ProtheusLeituraStatus =
   | 'FALHA_TECNICA';  // Protheus retornou erro/timeout — fallback para SEFAZ
 
 export type ProtheusGravacaoStatus =
-  | 'GRAVADO'                 // POST /grvXML OK, SZR010+SZQ010 atualizados + pre-nota criada
-  | 'GRAVADO_PRENOTA_FALHOU'  // XML em SZR010+SZQ010 OK, mas pre-nota (U_PRENF/U_NFeSaida) falhou —
-                              //   exige conclusao manual no Protheus. Nao permite retry (08/05/2026).
-  | 'JA_EXISTIA'              // Race condition: outro processo gravou entre exists e post
-  | 'NAO_APLICAVEL'           // XML veio do cache Protheus, nao precisa gravar de novo
-  | 'NAO_TENTADO'             // Leitura SEFAZ falhou antes da gravacao ser alcancada
-  | 'FALHA_TECNICA';          // POST falhou com erro tipado ou inesperado
+  | 'GRAVADO'                       // POST /grvXML OK: SZR010+SZQ010 atualizados + pre-nota criada + amarracao OK
+  | 'GRAVADO_PRENOTA_FALHOU'        // XML em SZR010+SZQ010 OK, mas pre-nota (U_PRENF/U_NFeSaida) falhou —
+                                    //   exige conclusao manual no Protheus. Nao permite retry (08/05/2026).
+  | 'GRAVADO_AGUARDANDO_AMARRACAO'  // XML em SZR010+SZQ010 OK, pre-nota OK, mas pendenteAmarracao=true —
+                                    //   falta vincular o doc com pedido de compra no Protheus.
+  | 'JA_EXISTIA'                    // Race condition: outro processo gravou entre exists e post
+  | 'NAO_APLICAVEL'                 // XML veio do cache Protheus, nao precisa gravar de novo
+  | 'NAO_TENTADO'                   // Leitura SEFAZ falhou antes da gravacao ser alcancada
+  | 'FALHA_TECNICA';                // POST falhou com erro tipado ou inesperado
+
+/**
+ * Flags granulares retornadas pelo grvXML do Protheus (resp.resultados[0]).
+ * Sao a fonte de verdade — o ProtheusGravacaoStatus eh derivado deles.
+ */
+export interface GrvXmlFlags {
+  sucesso: boolean;
+  xmlGravado: boolean;
+  pendenteAmarracao: boolean;
+  preNotaFalhou: boolean;
+  mensagem: string;
+}
+
+/**
+ * Deriva o ProtheusGravacaoStatus agregado a partir das 4 flags do retorno
+ * do Protheus. Centraliza a logica num so lugar pra UI/backend usarem
+ * coerentemente.
+ *
+ * Ordem de precedencia (mais grave primeiro):
+ *   1. !sucesso || !xmlGravado    → FALHA_TECNICA
+ *   2. preNotaFalhou               → GRAVADO_PRENOTA_FALHOU
+ *   3. pendenteAmarracao           → GRAVADO_AGUARDANDO_AMARRACAO
+ *   4. tudo OK                     → GRAVADO
+ */
+export function derivarStatusGravacao(flags: GrvXmlFlags): ProtheusGravacaoStatus {
+  if (!flags.sucesso || !flags.xmlGravado) return 'FALHA_TECNICA';
+  if (flags.preNotaFalhou) return 'GRAVADO_PRENOTA_FALHOU';
+  if (flags.pendenteAmarracao) return 'GRAVADO_AGUARDANDO_AMARRACAO';
+  return 'GRAVADO';
+}
 
 export interface ProtheusStatus {
   leitura: ProtheusLeituraStatus;

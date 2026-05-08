@@ -4,6 +4,7 @@ import { IntegracaoApiResolver } from './integracao-api.resolver.js';
 import { XmlFiscalProtheusError } from './interfaces/xml-fiscal.interface.js';
 import {
   type ProtheusGravacaoStatus,
+  derivarStatusGravacao,
   mapearCodigoProtheus,
 } from './interfaces/protheus-status.interface.js';
 import type {
@@ -26,6 +27,22 @@ export interface TentativaGravacaoResult {
    * com `gravacaoErro` indicando erro de parser).
    */
   requestBody: string | null;
+  /**
+   * Flags granulares do retorno grvXML (contrato 08/05/2026):
+   * resp.resultados[0]. NULL quando gravacao nao foi tentada (skipped por
+   * gating ambiente, montagem do body falhou, etc.).
+   *
+   * O `gravacao` (status agregado acima) eh DERIVADO desses flags via
+   * `derivarStatusGravacao()`. Caller persiste ambos pra granularidade
+   * + filtro rapido.
+   */
+  grvFlags: {
+    sucesso: boolean;
+    xmlGravado: boolean;
+    pendenteAmarracao: boolean;
+    preNotaFalhou: boolean;
+    mensagem: string;
+  } | null;
 }
 
 /**
@@ -97,6 +114,7 @@ export class ProtheusGravacaoHelper {
               gravacaoErro: null,
               raceCondition: false,
               requestBody: null,
+              grvFlags: null,
             };
           }
         }
@@ -141,6 +159,10 @@ export class ProtheusGravacaoHelper {
           gravacaoErro: null,
           raceCondition: false,
           requestBody: null,
+          // Pre-check encontrou em SZR010 — sem grvXML real, sem flags.
+          // Conceitualmente eh "xmlGravado=true" mas nao houve resposta do
+          // Protheus pra extrair flags. Caller pode interpretar pelo gravacao.
+          grvFlags: null,
         };
       }
       // found=true && origem=SPED156 → SZR010 vazia, precisa popular: segue
@@ -198,13 +220,27 @@ export class ProtheusGravacaoHelper {
           gravacaoErro: 'RESPONSE_FORMAT_INVALID',
           raceCondition: false,
           requestBody,
+          grvFlags: null,
         };
       }
 
       const r0 = resp.resultados[0];
 
+      // Captura flags granulares pra persistir e expor no UI.
+      const grvFlags = {
+        sucesso: r0.sucesso,
+        xmlGravado: r0.xmlGravado,
+        pendenteAmarracao: r0.pendenteAmarracao,
+        preNotaFalhou: r0.preNotaFalhou,
+        mensagem: r0.mensagem,
+      };
+
+      // Status agregado derivado dos flags — fonte unica da derivacao
+      // garante consistencia UI/backend.
+      const statusDerivado = derivarStatusGravacao(grvFlags);
+
       // Caso 1: gravacao falhou completamente
-      if (!r0.sucesso || !r0.xmlGravado) {
+      if (statusDerivado === 'FALHA_TECNICA') {
         this.logger.warn(
           `grvXML ${docLabel} ${chave.slice(0, 6)}… falhou: sucesso=${r0.sucesso} xmlGravado=${r0.xmlGravado} mensagem="${r0.mensagem}"`,
         );
@@ -216,6 +252,7 @@ export class ProtheusGravacaoHelper {
           gravacaoErro: r0.mensagem || 'GRAVACAO_REJEITADA',
           raceCondition: false,
           requestBody,
+          grvFlags,
         };
       }
 
@@ -224,7 +261,7 @@ export class ProtheusGravacaoHelper {
       // a geracao da pre-nota (U_PRENF/U_NFeSaida) falhou. Exige conclusao
       // manual no Protheus. Retry nao ajuda — root cause e validacao no
       // ERP que o XML por si so nao resolve.
-      if (r0.preNotaFalhou) {
+      if (statusDerivado === 'GRAVADO_PRENOTA_FALHOU') {
         this.logger.warn(
           `grvXML ${docLabel} ${chave.slice(0, 6)}… XML gravado mas pre-nota falhou: ${r0.mensagem}`,
         );
@@ -239,6 +276,27 @@ export class ProtheusGravacaoHelper {
           gravacaoErro: mensagem,
           raceCondition: false,
           requestBody,
+          grvFlags,
+        };
+      }
+
+      // Caso 3: XML gravado, pre-nota OK, mas pendente amarracao com pedido.
+      // Setor fiscal precisa vincular manualmente o doc com o pedido de
+      // compra correspondente no Protheus. Retry nao ajuda.
+      if (statusDerivado === 'GRAVADO_AGUARDANDO_AMARRACAO') {
+        this.logger.warn(
+          `grvXML ${docLabel} ${chave.slice(0, 6)}… gravado mas aguardando amarracao com pedido: ${r0.mensagem}`,
+        );
+        const mensagem =
+          r0.mensagem ||
+          'XML gravado em SZR010/SZQ010 e pre-nota OK, mas falta amarrar com pedido de compra. Conclua via UI no Protheus.';
+        return {
+          gravacao: 'GRAVADO_AGUARDANDO_AMARRACAO',
+          gravacaoMensagem: mensagem,
+          gravacaoErro: mensagem,
+          raceCondition: false,
+          requestBody,
+          grvFlags,
         };
       }
 
@@ -266,6 +324,9 @@ export class ProtheusGravacaoHelper {
             gravacaoErro: 'POS_VERIFICACAO_FALHOU',
             raceCondition: false,
             requestBody,
+            // Flags vieram OK do Protheus mas pos-verify desmentiu —
+            // preservamos os flags pra rastreio.
+            grvFlags,
           };
         }
       } catch (err) {
@@ -283,6 +344,7 @@ export class ProtheusGravacaoHelper {
         gravacaoErro: null,
         raceCondition: false,
         requestBody,
+        grvFlags,
       };
     } catch (err) {
       if (err instanceof XmlFiscalProtheusError) {
@@ -296,6 +358,7 @@ export class ProtheusGravacaoHelper {
           gravacaoErro: `${err.code}: ${err.message}`,
           raceCondition: false,
           requestBody,
+          grvFlags: null,
         };
       }
 
@@ -309,6 +372,7 @@ export class ProtheusGravacaoHelper {
         gravacaoErro: errMsg,
         raceCondition: false,
         requestBody,
+        grvFlags: null,
       };
     }
   }

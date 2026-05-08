@@ -429,6 +429,8 @@ export class CteDocumentoService {
     protheusStatus?: string;
     dataInicio?: Date;
     dataFim?: Date;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
   }) {
     const page = Math.max(1, filtros.page ?? 1);
     const limit = Math.min(100, Math.max(1, filtros.limit ?? 20));
@@ -452,6 +454,23 @@ export class CteDocumentoService {
       if (filtros.dataFim) where.dhEmi.lte = filtros.dataFim;
     }
 
+    // Whitelist de colunas ordenaveis (08/05/2026): protege contra injection
+    // via query param. Default = recebidoEm desc (mais recente primeiro).
+    const SORTABLE_COLUMNS: Record<string, string> = {
+      dhEmi: 'dhEmi',
+      recebidoEm: 'recebidoEm',
+      cnpjConsulente: 'cnpjConsulente',
+      nsu: 'nsu',
+      protheusStatus: 'protheusStatus',
+      protheusTentativas: 'protheusTentativas',
+      papelCapul: 'papelCapul',
+    };
+    const sortColumn = filtros.sortBy && SORTABLE_COLUMNS[filtros.sortBy]
+      ? SORTABLE_COLUMNS[filtros.sortBy]
+      : 'recebidoEm';
+    const sortDirection = filtros.sortOrder === 'asc' ? 'asc' : 'desc';
+    const orderBy = [{ [sortColumn]: sortDirection } as any, { id: 'desc' as const }];
+
     const [total, items] = await Promise.all([
       this.prisma.client.cteDocumento.count({ where }),
       this.prisma.client.cteDocumento.findMany({
@@ -473,8 +492,13 @@ export class CteDocumentoService {
           protheusGravadoEm: true,
           protheusStatus: true,
           protheusErro: true,
+          protheusGrvSucesso: true,
+          protheusGrvXmlGravado: true,
+          protheusGrvPendAmarracao: true,
+          protheusGrvPrenotaFalhou: true,
+          protheusGrvMensagem: true,
         },
-        orderBy: [{ recebidoEm: 'desc' }, { id: 'desc' }],
+        orderBy,
         skip,
         take: limit,
       }),

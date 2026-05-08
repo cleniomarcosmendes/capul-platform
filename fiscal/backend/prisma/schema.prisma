@@ -171,6 +171,15 @@ model DocumentoConsulta {
   // sem precisar pedir SSH — botão "Copiar JSON" no modal de detalhe
   // expõe o conteúdo. Atualizado a cada tentarGravar.
   protheusGrvRequest          String?             @map("protheus_grv_request")
+  // Flags granulares do retorno grvXML (contrato 08/05/2026):
+  // resp.resultados[0].{sucesso,xmlGravado,pendenteAmarracao,preNotaFalhou,mensagem}.
+  // Persistido por simetria com cte_documento — cada consulta NF-e atualiza
+  // os flags do ultimo grvXML chamado.
+  protheusGrvSucesso          Boolean?            @map("protheus_grv_sucesso")
+  protheusGrvXmlGravado       Boolean?            @map("protheus_grv_xml_gravado")
+  protheusGrvPendAmarracao    Boolean?            @map("protheus_grv_pend_amarracao")
+  protheusGrvPrenotaFalhou    Boolean?            @map("protheus_grv_prenota_falhou")
+  protheusGrvMensagem         String?             @map("protheus_grv_mensagem")
   createdAt                   DateTime            @default(now()) @map("created_at")
   updatedAt                   DateTime            @updatedAt @map("updated_at")
 
@@ -662,11 +671,14 @@ model CteDocumento {
   processadoEm    DateTime?    @map("processado_em")
   // Gravação automática no Protheus (Fase 4 simplificada — após enriquecimento).
   // protheusGravadoEm IS NULL = nunca foi tentado.
-  // protheusStatus contém GRAVADO / GRAVADO_PRENOTA_FALHOU / JA_EXISTIA /
-  // FALHA_TECNICA / PROTHEUS_DESISTIU (TentativaGravacaoResult.gravacao).
-  // protheusErro guarda código+mensagem se FALHA_TECNICA — pra retentativa futura.
+  // protheusStatus eh DERIVADO dos flags granulares abaixo (08/05/2026).
+  // Mantido pra filtro rapido + badge agregado no UI. Valores possiveis:
+  // GRAVADO / GRAVADO_PRENOTA_FALHOU / GRAVADO_AGUARDANDO_AMARRACAO /
+  // JA_EXISTIA / FALHA_TECNICA / PROTHEUS_DESISTIU.
   protheusGravadoEm  DateTime?  @map("protheus_gravado_em")
   protheusStatus     String?    @map("protheus_status") @db.VarChar(30)
+  // protheusErro guarda código+mensagem se FALHA_TECNICA — pra retentativa futura.
+  // (Para sucesso parcial, mensagem do Protheus vai em protheusGrvMensagem.)
   protheusErro       String?    @map("protheus_erro")
   // Tentativas acumuladas pra retry exponencial. Após MAX_TENTATIVAS,
   // status vira PROTHEUS_DESISTIU (terminal). Endpoint admin reseta.
@@ -674,6 +686,14 @@ model CteDocumento {
   // Body JSON da última tentativa grvXML — pra setor fiscal autoatender
   // debug (botão "Copiar JSON" no modal de detalhe).
   protheusGrvRequest String?    @map("protheus_grv_request")
+  // Flags granulares do retorno grvXML (contrato 08/05/2026):
+  // resp.resultados[0].{sucesso,xmlGravado,pendenteAmarracao,preNotaFalhou,mensagem}.
+  // Permite filtros precisos sem inventar combinacoes de status agregado.
+  protheusGrvSucesso        Boolean? @map("protheus_grv_sucesso")
+  protheusGrvXmlGravado     Boolean? @map("protheus_grv_xml_gravado")
+  protheusGrvPendAmarracao  Boolean? @map("protheus_grv_pend_amarracao")
+  protheusGrvPrenotaFalhou  Boolean? @map("protheus_grv_prenota_falhou")
+  protheusGrvMensagem       String?  @map("protheus_grv_mensagem")
 
   // CT-e referencia NF-es transportadas via <infDoc><infNFe><chave>.
   // Fase 3 extrai essas chaves; por ora coluna fica NULL.

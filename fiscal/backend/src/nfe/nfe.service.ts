@@ -172,6 +172,15 @@ export class NfeService {
     // Body JSON da última tentativa grvXML — persistido em documento_consulta
     // pra setor fiscal autoatender debug com equipe Protheus.
     let protheusGrvRequest: string | null = null;
+    // Flags granulares do retorno grvXML (08/05/2026) — persistidos em
+    // documento_consulta pra UI mostrar cada aspecto individualmente.
+    let grvFlags: {
+      sucesso: boolean;
+      xmlGravado: boolean;
+      pendenteAmarracao: boolean;
+      preNotaFalhou: boolean;
+      mensagem: string;
+    } | null = null;
 
     // ---------- passo 1: GET /xmlNfe (busca SZR010 → fallback SPED156) ----------
     let xmlNfeResp: XmlNfeResult | null = null;
@@ -276,6 +285,7 @@ export class NfeService {
         gravacaoMensagem = result.gravacaoMensagem;
         gravacaoErro = result.gravacaoErro;
         protheusGrvRequest = result.requestBody;
+        grvFlags = result.grvFlags;
         if (result.raceCondition) origem = 'PROTHEUS_CACHE_RACE';
       }
     } else {
@@ -297,6 +307,7 @@ export class NfeService {
       gravacaoMensagem = result.gravacaoMensagem;
       gravacaoErro = result.gravacaoErro;
       protheusGrvRequest = result.requestBody;
+      grvFlags = result.grvFlags;
       if (result.raceCondition) origem = 'PROTHEUS_CACHE_RACE';
     }
 
@@ -339,6 +350,7 @@ export class NfeService {
       valorTotal: parsed.totais.valorNota,
       statusAtual: parsed.protocoloAutorizacao?.motivo ?? null,
       protheusGrvRequest,
+      grvFlags,
     });
 
     // --- passo 4: garantir evento de AUTORIZACAO persistido (idempotente) + carregar timeline ---

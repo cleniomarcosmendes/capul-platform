@@ -21,6 +21,14 @@ export interface RegistrarConsultaInput {
   erroMensagem?: string | null;
   /** Body JSON da última tentativa grvXML — debug fiscal autoatendido. */
   protheusGrvRequest?: string | null;
+  /** Flags granulares do retorno grvXML (08/05/2026). NULL = nao tentou ou skipped. */
+  grvFlags?: {
+    sucesso: boolean;
+    xmlGravado: boolean;
+    pendenteAmarracao: boolean;
+    preNotaFalhou: boolean;
+    mensagem: string;
+  } | null;
 }
 
 /**
@@ -37,6 +45,18 @@ export class DocumentoConsultaService {
 
   async registrar(input: RegistrarConsultaInput): Promise<DocumentoConsulta> {
     const valorTotal = input.valorTotal ?? null;
+    // Flags granulares (08/05/2026): undefined deixa Prisma nao alterar campo,
+    // null sobrescreve. So passamos null/valor quando a chamada teve gravacao
+    // real (grvFlags != null no helper).
+    const grvFields = input.grvFlags
+      ? {
+          protheusGrvSucesso: input.grvFlags.sucesso,
+          protheusGrvXmlGravado: input.grvFlags.xmlGravado,
+          protheusGrvPendAmarracao: input.grvFlags.pendenteAmarracao,
+          protheusGrvPrenotaFalhou: input.grvFlags.preNotaFalhou,
+          protheusGrvMensagem: input.grvFlags.mensagem,
+        }
+      : {};
     return this.prisma.documentoConsulta.upsert({
       where: { chave_filial: { chave: input.chave, filial: input.filial } },
       create: {
@@ -57,6 +77,7 @@ export class DocumentoConsultaService {
         statusAtual: input.statusAtual,
         erroMensagem: input.erroMensagem,
         protheusGrvRequest: input.protheusGrvRequest ?? undefined,
+        ...grvFields,
       },
       update: {
         origem: input.origem,
@@ -75,6 +96,7 @@ export class DocumentoConsultaService {
         // mesmo se o request anterior teve sucesso — permite debug de
         // problemas que aparecem só em algumas chaves.
         protheusGrvRequest: input.protheusGrvRequest ?? undefined,
+        ...grvFields,
       },
     });
   }
