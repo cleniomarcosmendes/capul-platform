@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ChevronDown,
   Download,
@@ -74,14 +75,27 @@ export function NfeConsultaPage() {
     usuario?.filialCodigo ?? '01',
   );
 
+  // Pre-preenche chave + filial via query params (?chave=...&filial=...).
+  // Usado quando navega de /fiscal/nfe/pendencias clicando numa chave —
+  // operador chega na consulta com form pronto e dispara automaticamente.
+  const [searchParams] = useSearchParams();
+  const autoConsultadoRef = useRef(false);
+
   useEffect(() => {
     fiscalApi
       .get<FilialResumo[]>('/filiais')
       .then((r) => {
         setFiliais(r.data);
-        // Se a filial atualmente selecionada nao esta na lista de acessiveis,
-        // ajusta para a default do usuario (ou primeira da lista).
-        if (r.data.length > 0 && !r.data.some((f) => f.codigo === filialSelecionada)) {
+        // Query params tem precedencia (vem de link externo, ex: /fiscal/nfe/pendencias).
+        // Sem query params: usa filial atualmente selecionada se existe, senao default.
+        const chaveParam = searchParams.get('chave');
+        const filialParam = searchParams.get('filial');
+        if (chaveParam && /^\d{44}$/.test(chaveParam)) {
+          setChave(chaveParam);
+        }
+        if (filialParam && r.data.some((f) => f.codigo === filialParam)) {
+          setFilialSelecionada(filialParam);
+        } else if (r.data.length > 0 && !r.data.some((f) => f.codigo === filialSelecionada)) {
           const defaultFilial = r.data.find((f) => f.isDefault) ?? r.data[0];
           setFilialSelecionada(defaultFilial.codigo);
         }
@@ -89,6 +103,23 @@ export function NfeConsultaPage() {
       .catch(() => setFiliais([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-consulta: se chave veio via query param e filiais ja foram carregadas,
+  // dispara consulta automaticamente (1x — controlado por ref pra evitar loop).
+  useEffect(() => {
+    const chaveParam = searchParams.get('chave');
+    if (
+      !autoConsultadoRef.current &&
+      chaveParam &&
+      /^\d{44}$/.test(chaveParam) &&
+      chave === chaveParam &&
+      filiais.length > 0
+    ) {
+      autoConsultadoRef.current = true;
+      void handleConsultar(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chave, filiais]);
 
   /**
    * Detecta se o CNPJ embutido na chave (posicoes 6-19) e de alguma filial
