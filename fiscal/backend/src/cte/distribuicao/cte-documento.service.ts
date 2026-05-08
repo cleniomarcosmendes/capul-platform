@@ -235,6 +235,18 @@ export class CteDocumentoService {
       select: { id: true },
     });
 
+    // Warn defensivo: se idEvento foge do tamanho padrao (54), loga pra
+    // detectarmos novas variacoes nao-padrao de emitentes no futuro. Em
+    // 08/05/2026 detectamos emitente que padded nSeqEvento com 3 digitos
+    // — bump da coluna pra varchar(60).
+    if (meta.idEvento && meta.idEvento.length !== 54) {
+      this.logger.warn(
+        `[persistirEvento] idEvento nao-padrao detectado: nsu=${p.nsu} ` +
+          `len=${meta.idEvento.length} (spec=54) idEvento="${meta.idEvento}" ` +
+          `tpEvento=${meta.tpEventoNum} nSeqEvento=${meta.nSeqEvento}`,
+      );
+    }
+
     const evento = await this.prisma.client.cteEvento.create({
       data: {
         documentoId: docExistente?.id ?? null,
