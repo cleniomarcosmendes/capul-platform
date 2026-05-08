@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { fiscalApi } from '../services/api';
 import { useToast } from './Toast';
 import { useConfirm } from './ConfirmDialog';
+import { PromptDialog } from './PromptDialog';
 import { Button } from './Button';
 import { extractApiError } from '../utils/errors';
 import type { InconsistenciaOverlay } from '../types';
@@ -30,6 +31,7 @@ export function InconsistenciaPanelNfe({ documentoId, inconsistencia, onChange }
   const toast = useToast();
   const confirm = useConfirm();
   const [carregando, setCarregando] = useState(false);
+  const [promptOpen, setPromptOpen] = useState(false);
 
   const tipo = inconsistencia.preNotaFalhou
     ? 'pre-nota'
@@ -51,13 +53,8 @@ export function InconsistenciaPanelNfe({ documentoId, inconsistencia, onChange }
         ? 'XML em SZR010+SZQ010 e pré-nota OK, mas falta amarrar com o pedido de compra correspondente no Protheus.'
         : 'Inconsistência registrada na última gravação no Protheus.';
 
-  const marcarResolvida = async () => {
-    const observacaoRaw = window.prompt(
-      'Marcar inconsistência como resolvida no Protheus.\n\n' +
-        'Observação (opcional): descreva brevemente o que foi feito.',
-      '',
-    );
-    if (observacaoRaw === null) return;
+  const confirmarMarcarResolvida = async (observacao: string) => {
+    setPromptOpen(false);
     setCarregando(true);
     try {
       const { data } = await fiscalApi.post<{
@@ -65,7 +62,7 @@ export function InconsistenciaPanelNfe({ documentoId, inconsistencia, onChange }
         inconsistenciaResolvidaPorNome: string;
         inconsistenciaObservacao: string | null;
       }>(`/nfe/${documentoId}/marcar-resolvida`, {
-        observacao: observacaoRaw.trim() || undefined,
+        observacao: observacao.trim() || undefined,
       });
       onChange({
         resolvidaEm: data.inconsistenciaResolvidaEm,
@@ -139,10 +136,23 @@ export function InconsistenciaPanelNfe({ documentoId, inconsistencia, onChange }
             pra remover esta NF-e da fila de pendências.
           </p>
         </div>
-        <Button variant="primary" onClick={marcarResolvida} loading={carregando}>
+        <Button variant="primary" onClick={() => setPromptOpen(true)} loading={carregando}>
           ✓ Marcar resolvida
         </Button>
       </div>
+      <PromptDialog
+        open={promptOpen}
+        title="Marcar inconsistência como resolvida"
+        description={`Confirma que a pendência de ${tituloPendencia.toLowerCase()} foi resolvida manualmente no Protheus?`}
+        label="Observação"
+        placeholder='Ex: "cadastrado SA2 da BRASPRESS e concluí pré-nota"'
+        inputType="textarea"
+        rows={3}
+        maxLength={500}
+        confirmLabel="Marcar resolvida"
+        onConfirm={confirmarMarcarResolvida}
+        onCancel={() => setPromptOpen(false)}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { fiscalApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
+import { PromptDialog } from '../components/PromptDialog';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { extractApiError } from '../utils/errors';
@@ -57,6 +58,7 @@ export function NfePendenciasPage() {
   const [search, setSearch] = useState('');
   const [filtro, setFiltro] = useState<'pendentes' | 'resolvidas' | 'todas'>('pendentes');
   const [marcandoId, setMarcandoId] = useState<string | null>(null);
+  const [promptDocId, setPromptDocId] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -82,18 +84,14 @@ export function NfePendenciasPage() {
     void carregar();
   }, [carregar]);
 
-  const marcarResolvida = async (id: string) => {
-    const observacaoRaw = window.prompt(
-      'Marcar inconsistência como resolvida no Protheus.\n\n' +
-        'Observação (opcional): descreva brevemente o que foi feito.',
-      '',
-    );
-    if (observacaoRaw === null) return;
-
+  const confirmarMarcarResolvida = async (observacao: string) => {
+    const id = promptDocId;
+    setPromptDocId(null);
+    if (!id) return;
     setMarcandoId(id);
     try {
       await fiscalApi.post(`/nfe/${id}/marcar-resolvida`, {
-        observacao: observacaoRaw.trim() || undefined,
+        observacao: observacao.trim() || undefined,
       });
       toast.success('Inconsistência marcada como resolvida');
       void carregar();
@@ -245,7 +243,7 @@ export function NfePendenciasPage() {
                   ) : (
                     <Button
                       variant="primary"
-                      onClick={() => marcarResolvida(it.id)}
+                      onClick={() => setPromptDocId(it.id)}
                       loading={marcandoId === it.id}
                     >
                       ✓ Marcar resolvida
@@ -281,6 +279,19 @@ export function NfePendenciasPage() {
           </div>
         </div>
       )}
+      <PromptDialog
+        open={!!promptDocId}
+        title="Marcar inconsistência como resolvida"
+        description="Confirma que a pendência foi resolvida manualmente no Protheus?"
+        label="Observação"
+        placeholder='Ex: "cadastrado SA2 da BRASPRESS e concluí pré-nota"'
+        inputType="textarea"
+        rows={3}
+        maxLength={500}
+        confirmLabel="Marcar resolvida"
+        onConfirm={confirmarMarcarResolvida}
+        onCancel={() => setPromptDocId(null)}
+      />
     </div>
   );
 }

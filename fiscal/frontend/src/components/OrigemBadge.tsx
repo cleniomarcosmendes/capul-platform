@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { fiscalApi } from '../services/api';
 import { extractApiError } from '../utils/errors';
+import { useToast } from './Toast';
 import type { ProtheusStatus } from '../types';
 
 interface OrigemBadgeProps {
@@ -46,6 +47,7 @@ export function OrigemBadge({
 }: OrigemBadgeProps) {
   const [reexecutando, setReexecutando] = useState(false);
   const [erroReexecucao, setErroReexecucao] = useState<string | null>(null);
+  const toast = useToast();
 
   // Modo mock: exibimos um banner dedicado informando que o Protheus NAO foi
   // realmente consultado — qualquer "cache hit" ou "gravado" é simulação em
@@ -199,7 +201,7 @@ export function OrigemBadge({
                     type="button"
                     onClick={() => {
                       navigator.clipboard.writeText(status.grvRequest ?? '');
-                      window.alert('Request JSON copiado pra área de transferência. Cole pra equipe Protheus debugar.');
+                      toast.success('JSON copiado pra área de transferência');
                     }}
                     className="mt-2 text-[11px] px-2 py-0.5 bg-blue-100 text-blue-800 hover:bg-blue-200 rounded border border-blue-300 inline-flex items-center gap-1"
                     title="Copia o body JSON enviado ao POST /grvXML do Protheus pra debug com a equipe Protheus."

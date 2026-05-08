@@ -17,6 +17,7 @@ import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
+import { PromptDialog } from '../components/PromptDialog';
 import { useAuth } from '../contexts/AuthContext';
 import { extractApiError } from '../utils/errors';
 import { fmtChaveMascara } from '../utils/format';
@@ -316,20 +317,16 @@ export function CteRecebidosPage() {
   };
 
   const [marcandoResolvidaId, setMarcandoResolvidaId] = useState<number | null>(null);
+  const [promptDocId, setPromptDocId] = useState<number | null>(null);
 
-  const marcarResolvida = async (id: number) => {
-    const observacaoRaw = window.prompt(
-      'Marcar inconsistência como resolvida no Protheus.\n\n' +
-        'Observação (opcional): descreva brevemente o que foi feito\n' +
-        '(ex: "cadastrado SA2 da BRASPRESS").',
-      '',
-    );
-    if (observacaoRaw === null) return; // cancelou
-
+  const confirmarMarcarResolvida = async (observacao: string) => {
+    const id = promptDocId;
+    setPromptDocId(null);
+    if (id === null) return;
     setMarcandoResolvidaId(id);
     try {
       await fiscalApi.post(`/cte/recebidos/${id}/marcar-resolvida`, {
-        observacao: observacaoRaw.trim() || undefined,
+        observacao: observacao.trim() || undefined,
       });
       toast.success('Inconsistência marcada como resolvida');
       if (detalhe?.documento.id === id) await abrirDetalhe(id);
@@ -1021,7 +1018,7 @@ export function CteRecebidosPage() {
                               </span>
                               <Button
                                 variant="primary"
-                                onClick={() => marcarResolvida(detalhe.documento.id)}
+                                onClick={() => setPromptDocId(detalhe.documento.id)}
                                 loading={marcandoResolvidaId === detalhe.documento.id}
                               >
                                 ✓ Marcar resolvida
@@ -1109,6 +1106,19 @@ export function CteRecebidosPage() {
           </div>
         </div>
       )}
+      <PromptDialog
+        open={promptDocId !== null}
+        title="Marcar inconsistência como resolvida"
+        description="Confirma que a pendência foi resolvida manualmente no Protheus?"
+        label="Observação"
+        placeholder='Ex: "cadastrado SA2 da BRASPRESS e concluí pré-nota"'
+        inputType="textarea"
+        rows={3}
+        maxLength={500}
+        confirmLabel="Marcar resolvida"
+        onConfirm={confirmarMarcarResolvida}
+        onCancel={() => setPromptDocId(null)}
+      />
     </PageWrapper>
   );
 }
