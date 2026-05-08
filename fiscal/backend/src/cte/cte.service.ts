@@ -10,6 +10,7 @@ import {
   CteConsultaProtocoloClient,
   CteConsultaProtocoloError,
 } from '../sefaz/cte-consulta-protocolo.client.js';
+import { decodeXmlBytes } from '../sefaz/xml-encoding.util.js';
 import { AmbienteService } from '../ambiente/ambiente.service.js';
 import { CteParserService } from './parsers/cte-parser.service.js';
 import { DocumentoConsultaService } from '../nfe/documento-consulta.service.js';
@@ -136,7 +137,16 @@ export class CteService {
     // --- passo 2: se o XML veio do Protheus, decodifica e parseia ---
     if (xmlNfeResp?.found) {
       try {
-        xmlString = Buffer.from(xmlNfeResp.xmlBase64, 'base64').toString('utf8');
+        const decoded = decodeXmlBytes(
+          Buffer.from(xmlNfeResp.xmlBase64, 'base64'),
+          `xmlNfe Protheus CT-e ${chave.slice(0, 6)}…`,
+        );
+        xmlString = decoded.xml;
+        if (decoded.encodingAnomaly) {
+          this.logger.warn(
+            `xmlNfe Protheus CT-e ${chave.slice(0, 6)}… retornou bytes nao-UTF-8 — fallback latin1 aplicado`,
+          );
+        }
         origem = 'PROTHEUS_CACHE';
         parsed = this.parser.parse(xmlString);
       } catch (err) {

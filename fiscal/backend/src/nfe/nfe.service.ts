@@ -11,6 +11,7 @@ import { ProtheusEventosService } from '../protheus/protheus-eventos.service.js'
 import type { EventoNfeRaw } from '../protheus/interfaces/eventos-nfe.interface.js';
 import type { XmlNfeResult } from '../protheus/interfaces/xml-nfe.interface.js';
 import { NfeDistribuicaoClient, SefazConsultaError } from '../sefaz/nfe-distribuicao.client.js';
+import { decodeXmlBytes } from '../sefaz/xml-encoding.util.js';
 import {
   NfeConsultaProtocoloClient,
   NfeConsultaProtocoloError,
@@ -197,8 +198,21 @@ export class NfeService {
       leituraErro = msg;
     }
 
+    let candidateXml: string | null = null;
     if (xmlNfeResp?.found) {
-      const candidateXml = Buffer.from(xmlNfeResp.xmlBase64, 'base64').toString('utf8');
+      // Decode robusto — Protheus pode devolver bytes latin1/cp1252 do SPED156
+      // (storage Windows). decodeXmlBytes detecta e cai pra latin1 se UTF-8 invalido.
+      const decoded = decodeXmlBytes(
+        Buffer.from(xmlNfeResp.xmlBase64, 'base64'),
+        `xmlNfe Protheus ${chave.slice(0, 6)}…`,
+      );
+      candidateXml = decoded.xml;
+      if (decoded.encodingAnomaly) {
+        this.logger.warn(
+          `xmlNfe Protheus ${chave.slice(0, 6)}… retornou bytes nao-UTF-8 — fallback latin1 aplicado`,
+        );
+      }
+
       // SPED156.DOCXMLRET às vezes guarda apenas o `<resNFe>` (resumo do
       // NFeDistribuicaoDFe quando só houve Ciência sem Confirmação). Sem o
       // `<NFe>` completo o parser quebra. Tratamos como cache miss e caímos
@@ -216,14 +230,32 @@ export class NfeService {
             ? 'Protheus tem apenas resumo (resNFe) em SPED156 — XML completo será baixado da SEFAZ.'
             : 'Protheus retornou conteúdo sem NF-e completa — buscando na SEFAZ.';
         xmlNfeResp = null;
+        candidateXml = null;
+      }
+
+      // Defesa adicional: se o XML do Protheus tem U+FFFD (caractere `�`),
+      // significa que a corrupcao foi PERSISTIDA em SPED156/SZR010 por uma
+      // gravacao anterior (antes do fix de encoding 07/05). decodeXmlBytes
+      // nao recupera caracteres ja perdidos — temos que rebaixar do SEFAZ
+      // (que ja decodifica certo desde o fix). Bug observado com VEJA GAS LTDA.
+      if (candidateXml && candidateXml.includes('�')) {
+        this.logger.warn(
+          `xmlNfe Protheus ${chave.slice(0, 6)}… contem caracteres de substituicao (U+FFFD) — ` +
+            `XML corrompido em ${xmlNfeResp?.origem}. Forcando fallback SEFAZ pra rebaixar limpo.`,
+        );
+        leitura = 'CACHE_MISS';
+        leituraMensagem =
+          'XML do Protheus está com caracteres corrompidos — rebaixando da SEFAZ.';
+        xmlNfeResp = null;
+        candidateXml = null;
       }
     }
 
-    if (xmlNfeResp?.found) {
+    if (xmlNfeResp?.found && candidateXml) {
       this.logger.log(
         `xmlNfe HIT origem=${xmlNfeResp.origem} — chave ${chave.slice(0, 6)}… filial=${filial}`,
       );
-      xmlString = Buffer.from(xmlNfeResp.xmlBase64, 'base64').toString('utf8');
+      xmlString = candidateXml;
       origem = 'PROTHEUS_CACHE';
 
       if (xmlNfeResp.origem === 'SZR010') {
@@ -835,7 +867,10 @@ export class NfeService {
       // do detalhe sintético.
       const xmlEventoProtheus =
         ev.xmlBase64 && ev.xmlBase64.trim() !== ''
-          ? Buffer.from(ev.xmlBase64.trim(), 'base64').toString('utf8')
+          ? decodeXmlBytes(
+              Buffer.from(ev.xmlBase64.trim(), 'base64'),
+              `xmlEvento Protheus ${chave.slice(0, 6)}…`,
+            ).xml
           : null;
       eventosParaPersistir.push({
         tipoEvento: tipoNormalizado,
