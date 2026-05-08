@@ -15,11 +15,13 @@ export type ProtheusLeituraStatus =
   | 'FALHA_TECNICA';  // Protheus retornou erro/timeout — fallback para SEFAZ
 
 export type ProtheusGravacaoStatus =
-  | 'GRAVADO'         // POST /xmlFiscal OK, SZR010+SZQ010 atualizados
-  | 'JA_EXISTIA'      // Race condition: outro processo gravou entre exists e post
-  | 'NAO_APLICAVEL'   // XML veio do cache Protheus, nao precisa gravar de novo
-  | 'NAO_TENTADO'     // Leitura SEFAZ falhou antes da gravacao ser alcancada
-  | 'FALHA_TECNICA';  // POST falhou com erro tipado ou inesperado
+  | 'GRAVADO'                 // POST /grvXML OK, SZR010+SZQ010 atualizados + pre-nota criada
+  | 'GRAVADO_PRENOTA_FALHOU'  // XML em SZR010+SZQ010 OK, mas pre-nota (U_PRENF/U_NFeSaida) falhou —
+                              //   exige conclusao manual no Protheus. Nao permite retry (08/05/2026).
+  | 'JA_EXISTIA'              // Race condition: outro processo gravou entre exists e post
+  | 'NAO_APLICAVEL'           // XML veio do cache Protheus, nao precisa gravar de novo
+  | 'NAO_TENTADO'             // Leitura SEFAZ falhou antes da gravacao ser alcancada
+  | 'FALHA_TECNICA';          // POST falhou com erro tipado ou inesperado
 
 export interface ProtheusStatus {
   leitura: ProtheusLeituraStatus;

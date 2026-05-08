@@ -24,7 +24,7 @@ import {
   XmlNfeProtheusError,
   type XmlNfeResult,
 } from '../interfaces/xml-nfe.interface.js';
-import type { GrvXmlBody } from '../interfaces/grv-xml.interface.js';
+import type { GrvXmlBody, GrvXmlResponse } from '../interfaces/grv-xml.interface.js';
 
 interface MockEntry {
   body: XmlFiscalPostBody;
@@ -90,43 +90,81 @@ export class ProtheusXmlMock {
   }
 
   /**
-   * Mock do `POST /grvXML`. Extrai a chave do campo CHVNFE do XMLCAB e
-   * reusa o cache para simular idempotência.
+   * Mock do `POST /grvXML` — formato simplificado 08/05/2026:
+   * recebe `{ itens: [{ xmlBase64 }] }` e retorna o response batch
+   * `{ totalItens, totalSucesso, totalFalha, resultados: [...] }`.
+   *
+   * Extrai a chave direto do XML (sem campos[]). Idempotente: se a chave
+   * ja existe no cache, retorna sucesso=true mas com mensagem distinguindo.
    */
-  async grvXml(body: GrvXmlBody): Promise<{ status: 'GRAVADO' | 'JA_EXISTIA'; chave: string; itensGravados: number }> {
-    const cab = body.itens.find((i) => i.alias === 'XMLCAB');
-    if (!cab || cab.alias !== 'XMLCAB') {
-      throw new XmlFiscalProtheusError('XML_MALFORMADO', 'Body grvXML sem XMLCAB (mock).', 400);
+  async grvXml(body: GrvXmlBody): Promise<GrvXmlResponse> {
+    if (!Array.isArray(body.itens) || body.itens.length === 0) {
+      throw new XmlFiscalProtheusError('XML_MALFORMADO', 'Body grvXML sem itens (mock).', 400);
     }
-    const chaveCampo = cab.campos.find((c) => c.campo === 'CHVNFE');
-    const chave = chaveCampo?.valor ?? '';
-    if (!/^\d{44}$/.test(chave)) {
-      throw new XmlFiscalProtheusError('CHAVE_INVALIDA', `CHVNFE inválido no XMLCAB (mock).`, 400);
-    }
-    const itensCount = body.itens.filter((i) => i.alias === 'XMLIT').length;
-    const existing = this.findByChave(chave);
-    if (existing) {
-      return { status: 'JA_EXISTIA', chave, itensGravados: existing.itensCount };
-    }
-    const filialCampo = cab.campos.find((c) => c.campo === 'FILIAL');
-    const tpXmlCampo = cab.campos.find((c) => c.campo === 'TPXML');
-    const modeloCampo = cab.campos.find((c) => c.campo === 'MODELO');
-    const userCampo = cab.campos.find((c) => c.campo === 'USRREC');
-    const entry: MockEntry = {
-      body: {
+
+    const resultados = body.itens.map((item, indice) => {
+      const xml = Buffer.from(item.xmlBase64, 'base64').toString('utf8');
+      // Extrai chave de Id="NFe<44digitos>" ou Id="CTe<44digitos>"
+      const matchChave = xml.match(/Id="(?:NFe|CTe)(\d{44})"/);
+      const chave = matchChave?.[1] ?? '';
+      if (!/^\d{44}$/.test(chave)) {
+        return {
+          indice,
+          chave: '',
+          sucesso: false,
+          xmlGravado: false,
+          pendenteAmarracao: false,
+          preNotaFalhou: false,
+          mensagem: 'Falha ao decodificar base64 ou XML sem Id NFe/CTe (mock).',
+        };
+      }
+      const tipoDocumento: 'NFE' | 'CTE' = /Id="CTe/.test(xml) ? 'CTE' : 'NFE';
+      const modelo = tipoDocumento === 'CTE' ? '57' : '55';
+      const existing = this.findByChave(chave);
+      if (existing) {
+        return {
+          indice,
+          chave,
+          sucesso: true,
+          xmlGravado: true,
+          pendenteAmarracao: false,
+          preNotaFalhou: false,
+          mensagem: 'XML ja existia no Protheus (mock idempotente).',
+        };
+      }
+      const itensCount = (xml.match(/<det\s+nItem=/g) || []).length;
+      const entry: MockEntry = {
+        body: {
+          chave,
+          tipoDocumento,
+          filial: '01',
+          xml,
+          usuarioCapulQueDisparou: 'mock',
+        },
+        gravadoEm: new Date().toISOString(),
+        usuarioRecebedor: 'API_FISCAL',
+        itensCount,
+        modelo,
+      };
+      this.cache.set(this.key(chave, '01'), entry);
+      return {
+        indice,
         chave,
-        tipoDocumento: tpXmlCampo?.valor === 'CTe' ? 'CTE' : 'NFE',
-        filial: filialCampo?.valor ?? '01',
-        xml: Buffer.from(cab.xmlBase64, 'base64').toString('utf8'),
-        usuarioCapulQueDisparou: userCampo?.valor,
-      },
-      gravadoEm: new Date().toISOString(),
-      usuarioRecebedor: userCampo?.valor ?? 'API_FISCAL',
-      itensCount,
-      modelo: modeloCampo?.valor ?? '55',
+        sucesso: true,
+        xmlGravado: true,
+        pendenteAmarracao: false,
+        preNotaFalhou: false,
+        mensagem: 'XML gravado em XMLCAB/XMLIT e pre-nota gerada (mock).',
+      };
+    });
+
+    const totalSucesso = resultados.filter((r) => r.sucesso).length;
+    return {
+      totalItens: resultados.length,
+      totalSucesso,
+      totalFalha: resultados.length - totalSucesso,
+      resultados,
     };
-    this.cache.set(this.key(chave, entry.body.filial), entry);
-    return { status: 'GRAVADO', chave, itensGravados: itensCount };
   }
 
   async exists(chave: string): Promise<XmlFiscalExistsResponse> {

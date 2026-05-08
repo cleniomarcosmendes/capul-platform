@@ -254,7 +254,10 @@ export class CteEnriquecimentoService {
 
     const docFinal = await this.prisma.client.cteDocumento.findUnique({ where: { id } });
     return {
-      ok: docFinal?.protheusStatus === 'GRAVADO' || docFinal?.protheusStatus === 'JA_EXISTIA',
+      ok:
+        docFinal?.protheusStatus === 'GRAVADO' ||
+        docFinal?.protheusStatus === 'JA_EXISTIA' ||
+        docFinal?.protheusStatus === 'GRAVADO_PRENOTA_FALHOU',
       chave: doc.chave,
       statusAnterior,
       statusNovo: docFinal?.protheusStatus ?? null,
@@ -454,7 +457,14 @@ export class CteEnriquecimentoService {
       usuarioEmail: 'sistema:cte-enriquecimento',
     });
 
-    const sucesso = r.gravacao === 'GRAVADO' || r.gravacao === 'JA_EXISTIA';
+    // GRAVADO_PRENOTA_FALHOU eh terminal — XML gravado em SZR010/SZQ010 OK,
+    // pre-nota precisa intervencao manual no Protheus. Retry nao ajuda
+    // (root cause e validacao no ERP). Tratado como sucesso pra nao subir
+    // tentativas e nao virar PROTHEUS_DESISTIU.
+    const sucesso =
+      r.gravacao === 'GRAVADO' ||
+      r.gravacao === 'JA_EXISTIA' ||
+      r.gravacao === 'GRAVADO_PRENOTA_FALHOU';
     const novasTentativas = doc.protheusTentativas + 1;
     const desistir = !sucesso && novasTentativas >= MAX_TENTATIVAS_PROTHEUS;
 
@@ -476,9 +486,13 @@ export class CteEnriquecimentoService {
       },
     });
 
-    if (r.gravacao === 'GRAVADO') acc.protheusGravados++;
-    else if (r.gravacao === 'JA_EXISTIA') acc.protheusJaExistia++;
-    else acc.protheusFalhas++;
+    if (r.gravacao === 'GRAVADO' || r.gravacao === 'GRAVADO_PRENOTA_FALHOU') {
+      acc.protheusGravados++;
+    } else if (r.gravacao === 'JA_EXISTIA') {
+      acc.protheusJaExistia++;
+    } else {
+      acc.protheusFalhas++;
+    }
 
     if (desistir) {
       this.logger.warn(

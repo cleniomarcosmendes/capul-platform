@@ -1,29 +1,15 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { XMLParser } from 'fast-xml-parser';
-import type {
-  GrvXmlBody,
-  GrvXmlContext,
-  GrvXmlExtracted,
-  GrvXmlItem,
-} from './interfaces/grv-xml.interface.js';
+import type { GrvXmlExtracted } from './interfaces/grv-xml.interface.js';
 
 /**
- * Parser que extrai campos do XML autorizado (nfeProc / cteProc) e monta o
- * body do endpoint `POST /grvXML` do Protheus.
+ * Parser que extrai campos do XML autorizado (nfeProc / cteProc) — usado
+ * para inspeção, debug e testes.
  *
- * Responsabilidades:
- *   1. Validar que o XML é um nfeProc (NF-e modelo 55/65) ou cteProc (CT-e 57/67)
- *   2. Extrair ~25 campos de cabeçalho (SZR010 / ZR_*)
- *   3. Extrair N campos por item (SZQ010 / ZQ_*)
- *   4. Montar o body JSON aceito pelo Protheus
- *
- * Não faz:
- *   - Consulta a `/cadastroFiscal` para resolver CODFOR/LOJSIG (cabe ao caller)
- *   - Cálculo de campos "siga" (cabe ao caller se houver — ver GrvXmlContext.siga)
- *   - Chamada HTTP ao Protheus (cabe ao ProtheusXmlService / futuro GrvXmlService)
- *
- * Para pendências do contrato (CODFOR/LOJSIG, siga, USRREC), ver
- * `docs/PENDENCIAS_PROTHEUS_18ABR2026.md` §3.1 a §3.3.
+ * Migration 08/05/2026: a montagem do body grvXML migrou pra
+ * `{ itens: [{ xmlBase64 }] }` (Protheus extrai do XML). Este service
+ * mantém apenas `extrair()` pra cenarios onde precisamos olhar campos
+ * estruturados (validação cruzada, alertas, telas de debug).
  */
 @Injectable()
 export class XmlParserToSzrSzqService {
@@ -61,79 +47,6 @@ export class XmlParserToSzrSzqService {
     throw new BadRequestException(
       'XML não reconhecido: esperado nfeProc / NFe (modelos 55/65) ou cteProc / CTe (modelos 57/67).',
     );
-  }
-
-  /**
-   * Monta o body completo do POST /grvXML a partir do XML + contexto de gravação.
-   *
-   * @param xml XML original (string, não base64)
-   * @param ctx dados externos ao XML (filial, usuário, codFor opcional, etc.)
-   */
-  montarBody(xml: string, ctx: GrvXmlContext): GrvXmlBody {
-    const extracted = this.extrair(xml);
-    const xmlBase64 = Buffer.from(xml, 'utf-8').toString('base64');
-    const agora = ctx.dataHoraRec ?? new Date();
-
-    const itens: GrvXmlItem[] = [
-      {
-        alias: 'XMLCAB',
-        xmlBase64,
-        campos: [
-          { campo: 'FILIAL', valor: ctx.filial },
-          { campo: 'TPXML', valor: extracted.tipoXml },
-          { campo: 'CHVNFE', valor: extracted.chave },
-          { campo: 'DTREC', valor: this.formatDate(agora) },
-          { campo: 'HRREC', valor: this.formatTime(agora) },
-          { campo: 'USRREC', valor: ctx.usuarioRec },
-          { campo: 'MODELO', valor: extracted.modelo },
-          { campo: 'EMISSA', valor: extracted.dataEmissao },
-          { campo: 'TPNF', valor: extracted.tipoNF },
-          { campo: 'TERCEIR', valor: ctx.terceir ?? 'F' },
-          { campo: 'NNF', valor: extracted.numeroNF },
-          { campo: 'SERIE', valor: extracted.serie },
-          { campo: 'ECNPJ', valor: extracted.emitente.cnpj },
-          { campo: 'ENOME', valor: extracted.emitente.nome },
-          { campo: 'EIE', valor: extracted.emitente.ie },
-          { campo: 'ELGR', valor: extracted.emitente.logradouro },
-          { campo: 'ENRO', valor: extracted.emitente.numero },
-          { campo: 'EBAIRR', valor: extracted.emitente.bairro },
-          { campo: 'ECMUN', valor: extracted.emitente.codMunicipio },
-          { campo: 'EXMUN', valor: extracted.emitente.municipio },
-          { campo: 'EUF', valor: extracted.emitente.uf },
-          { campo: 'ECEP', valor: extracted.emitente.cep },
-          { campo: 'EFONE', valor: extracted.emitente.fone },
-          { campo: 'CODFOR', valor: ctx.codFor ?? '' },
-          { campo: 'LOJSIG', valor: ctx.lojSig ?? '0001' },
-        ],
-      },
-    ];
-
-    for (const item of extracted.itens) {
-      const siga = ctx.siga?.[item.numItem] ?? {};
-      itens.push({
-        alias: 'XMLIT',
-        campos: [
-          { campo: 'FILIAL', valor: ctx.filial },
-          { campo: 'CHVNFE', valor: extracted.chave },
-          { campo: 'ITEM', valor: item.numItem },
-          { campo: 'PROD', valor: item.cProd },
-          { campo: 'EAN', valor: item.cEAN },
-          { campo: 'DESCRI', valor: item.xProd },
-          { campo: 'UM', valor: item.uCom },
-          { campo: 'QTDE', valor: item.qCom },
-          { campo: 'VLUNIT', valor: item.vUnCom },
-          { campo: 'TOTAL', valor: item.vProd },
-          { campo: 'CFOP', valor: item.cfop },
-          { campo: 'XMLIMP', valor: '' },
-          { campo: 'CODSIG', valor: siga.codSig ?? '' },
-          { campo: 'QTSIGA', valor: siga.qtSiga ?? '' },
-          { campo: 'VLSIGA', valor: siga.vlSiga ?? '' },
-          { campo: 'PEDCOM', valor: siga.pedCom ?? '' },
-        ],
-      });
-    }
-
-    return { itens };
   }
 
   // ----- internos -----
@@ -267,17 +180,4 @@ export class XmlParserToSzrSzqService {
     return s.replace(/\.?0+$/, '');
   }
 
-  private formatDate(d: Date): string {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${y}${m}${dd}`;
-  }
-
-  private formatTime(d: Date): string {
-    const h = String(d.getHours()).padStart(2, '0');
-    const m = String(d.getMinutes()).padStart(2, '0');
-    const s = String(d.getSeconds()).padStart(2, '0');
-    return `${h}:${m}:${s}`;
-  }
 }

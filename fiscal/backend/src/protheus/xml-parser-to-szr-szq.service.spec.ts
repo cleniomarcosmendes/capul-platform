@@ -1,6 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
 import { XmlParserToSzrSzqService } from './xml-parser-to-szr-szq.service.js';
-import type { GrvXmlItemCabecalho, GrvXmlItemDetalhe } from './interfaces/grv-xml.interface.js';
 
 /**
  * Amostra baseada no exemplo real recebido em `szr010-szq010.txt` (18/04/2026).
@@ -121,78 +120,7 @@ describe('XmlParserToSzrSzqService', () => {
     });
   });
 
-  describe('montarBody', () => {
-    it('monta body com XMLCAB contendo xmlBase64 e 25 campos obrigatórios', () => {
-      const body = service.montarBody(XML_SAMPLE_ENTRADA, {
-        filial: '02',
-        usuarioRec: 'FRANCIELE SILVA',
-        dataHoraRec: new Date('2026-04-17T07:56:08-03:00'),
-      });
-
-      const cab = body.itens.find((i) => i.alias === 'XMLCAB') as GrvXmlItemCabecalho;
-      expect(cab).toBeDefined();
-      expect(cab.xmlBase64.length).toBeGreaterThan(100);
-      expect(Buffer.from(cab.xmlBase64, 'base64').toString('utf-8')).toContain('<NFe');
-
-      const mapa = Object.fromEntries(cab.campos.map((c) => [c.campo, c.valor]));
-      expect(mapa.FILIAL).toBe('02');
-      expect(mapa.TPXML).toBe('NFe');
-      expect(mapa.CHVNFE).toBe('53260455087053000183550010000008961143366160');
-      expect(mapa.MODELO).toBe('55');
-      expect(mapa.EMISSA).toBe('20260416');
-      expect(mapa.TPNF).toBe('1');
-      expect(mapa.TERCEIR).toBe('F');
-      expect(mapa.NNF).toBe('000000896');
-      expect(mapa.SERIE).toBe('001');
-      expect(mapa.ECNPJ).toBe('55087053000183');
-      expect(mapa.USRREC).toBe('FRANCIELE SILVA');
-      expect(mapa.CODFOR).toBe(''); // default vazio (aguarda Protheus)
-      expect(mapa.LOJSIG).toBe('0001'); // default
-    });
-
-    it('monta 1 XMLIT por item da NF-e', () => {
-      const body = service.montarBody(XML_SAMPLE_ENTRADA, {
-        filial: '02',
-        usuarioRec: 'TESTE',
-      });
-      const itens = body.itens.filter((i) => i.alias === 'XMLIT') as GrvXmlItemDetalhe[];
-      expect(itens).toHaveLength(2);
-
-      const it1 = Object.fromEntries(itens[0].campos.map((c) => [c.campo, c.valor]));
-      expect(it1.ITEM).toBe('001');
-      expect(it1.PROD).toBe('01');
-      expect(it1.DESCRI).toBe('TOMATE COMUM');
-      expect(it1.QTDE).toBe('30');
-      expect(it1.VLUNIT).toBe('140');
-      expect(it1.TOTAL).toBe('4200.00');
-      expect(it1.CFOP).toBe('6102');
-      expect(it1.CHVNFE).toBe('53260455087053000183550010000008961143366160');
-      expect(it1.XMLIMP).toBe('');
-      // Campos "siga" vazios por default (aguardam decisão Protheus)
-      expect(it1.CODSIG).toBe('');
-      expect(it1.QTSIGA).toBe('');
-    });
-
-    it('preenche campos siga quando context fornece', () => {
-      const body = service.montarBody(XML_SAMPLE_ENTRADA, {
-        filial: '02',
-        usuarioRec: 'TESTE',
-        codFor: 'F14059',
-        lojSig: '0001',
-        siga: {
-          '001': { codSig: '00034164', qtSiga: '540', vlSiga: '7.7778', pedCom: '431037' },
-        },
-      });
-      const cab = body.itens.find((i) => i.alias === 'XMLCAB') as GrvXmlItemCabecalho;
-      expect(Object.fromEntries(cab.campos.map((c) => [c.campo, c.valor])).CODFOR).toBe('F14059');
-
-      const it1 = body.itens.find(
-        (i) => i.alias === 'XMLIT' && i.campos.find((c) => c.campo === 'ITEM')?.valor === '001',
-      ) as GrvXmlItemDetalhe;
-      const mapa = Object.fromEntries(it1.campos.map((c) => [c.campo, c.valor]));
-      expect(mapa.CODSIG).toBe('00034164');
-      expect(mapa.QTSIGA).toBe('540');
-      expect(mapa.PEDCOM).toBe('431037');
-    });
-  });
+  // montarBody removido em 08/05/2026 — Protheus passou a extrair os campos
+  // direto do XML, body grvXML simplificado pra { itens: [{ xmlBase64 }] }.
+  // Tests de extracao mantidos em 'extrair' acima continuam validos.
 });

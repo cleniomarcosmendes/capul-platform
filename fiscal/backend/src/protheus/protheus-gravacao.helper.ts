@@ -6,7 +6,10 @@ import {
   type ProtheusGravacaoStatus,
   mapearCodigoProtheus,
 } from './interfaces/protheus-status.interface.js';
-import { XmlParserToSzrSzqService } from './xml-parser-to-szr-szq.service.js';
+import type {
+  GrvXmlBody,
+  GrvXmlResponse,
+} from './interfaces/grv-xml.interface.js';
 
 export interface TentativaGravacaoResult {
   gravacao: ProtheusGravacaoStatus;
@@ -27,19 +30,23 @@ export interface TentativaGravacaoResult {
 
 /**
  * Helper compartilhado para gravação de XML no Protheus (POST /grvXML — contrato
- * 18/04/2026). Centraliza:
+ * SIMPLIFICADO 08/05/2026). Centraliza:
  *
- * 1. Extração dos campos SZR/SZQ via `XmlParserToSzrSzqService.montarBody()`
+ * 1. Montagem do body no formato novo: `{ itens: [{ xmlBase64 }] }`
+ *    (Protheus extrai todos os campos do XML — fim do array `campos`)
  * 2. Chamada a `ProtheusXmlService.grvXml()`
- * 3. Tratamento de `XmlFiscalProtheusError` (erro tipado da API)
- * 4. Tratamento de erros inesperados (rede, parser, etc)
- * 5. Mensagens amigáveis via `mapearCodigoProtheus`
+ * 3. Parse do response batch: `{ totalSucesso, resultados: [{ sucesso,
+ *    xmlGravado, preNotaFalhou, mensagem, ... }] }`
+ * 4. Mapeamento pra ProtheusGravacaoStatus (incluindo GRAVADO_PRENOTA_FALHOU
+ *    quando XML grava mas pre-nota falha)
+ * 5. Pos-verify via xmlNfe (defesa contra perda silenciosa — bug §3.10)
  *
  * Retorna sempre um `TentativaGravacaoResult` — **nunca lança exceção**, é best
  * effort por design (se Protheus cai, a consulta SEFAZ continua válida).
  *
- * Para pendências do contrato (CODFOR/LOJSIG, campos siga, USRREC, response
- * format), ver `docs/PENDENCIAS_PROTHEUS_18ABR2026.md` §3.1 a §3.8.
+ * Migration 08/05/2026: pendencias §3.1, §3.2, §3.3, §3.10 obsoletas
+ * (Protheus passou a extrair tudo do XML — sem CODFOR/LOJSIG/USRREC enviados
+ * no payload).
  */
 @Injectable()
 export class ProtheusGravacaoHelper {
@@ -47,7 +54,6 @@ export class ProtheusGravacaoHelper {
 
   constructor(
     private readonly protheusXml: ProtheusXmlService,
-    private readonly parser: XmlParserToSzrSzqService,
     private readonly integracaoResolver: IntegracaoApiResolver,
   ) {}
 
@@ -147,113 +153,133 @@ export class ProtheusGravacaoHelper {
       );
     }
 
-    // Monta o body grvXML via parser (pendências 3.1/3.2/3.3 mantidas como
-    // defaults enquanto equipe Protheus não confirma).
-    let body;
-    try {
-      body = this.parser.montarBody(xml, {
-        filial,
-        usuarioRec: usuarioEmail,
-      });
-    } catch (err) {
-      const errMsg = (err as Error).message;
-      this.logger.warn(
-        `Falha ao montar body grvXML para ${docLabel} ${chave.slice(0, 6)}…: ${errMsg}`,
-      );
-      return {
-        gravacao: 'FALHA_TECNICA',
-        gravacaoMensagem: `Não foi possível montar o payload para gravar o ${docLabel}: ${errMsg}`,
-        gravacaoErro: errMsg,
-        raceCondition: false,
-        requestBody: null,
-      };
-    }
+    // Body grvXML SIMPLIFICADO (08/05/2026): Protheus extrai todos os campos
+    // (chave, emitente, itens, etc.) diretamente do XML. Nao precisa mais
+    // enviar `campos[]` (FILIAL, ECNPJ, CODFOR, LOJSIG, etc.).
+    //
+    // Variaveis filial/usuarioEmail mantidas no metodo pra logs/auditoria mas
+    // nao vao mais no body (Protheus tira do XML + extrai usuario do header
+    // de auth).
+    void filial;
+    void usuarioEmail;
+
+    const xmlBase64 = Buffer.from(xml, 'utf-8').toString('base64');
+    const body: GrvXmlBody = {
+      itens: [{ xmlBase64 }],
+    };
 
     // Body serializado pra persistência (visível pelo setor fiscal no modal
-    // de detalhe) e pra log estruturado.
-    const requestBody = JSON.stringify(body, null, 2);
+    // de detalhe) — armazenamos sem o xmlBase64 expandido (~30KB) pra evitar
+    // ofuscar o conteudo util. Replace truncamos exibindo só os primeiros
+    // chars + tamanho.
+    const requestBody = JSON.stringify(
+      { itens: [{ xmlBase64: `${xmlBase64.slice(0, 80)}…(${xmlBase64.length}b)` }] },
+      null,
+      2,
+    );
 
-    // Log do body completo antes do POST — necessário pra debug com a equipe
-    // Protheus quando uma chave específica falha (request real enviado).
-    // Pode ser silenciado em prod via LOG_LEVEL=warn (logger nestjs-pino respeita).
     this.logger.log(
-      `grvXML ${docLabel} ${chave} filial=${filial} request: ${JSON.stringify(body)}`,
+      `grvXML ${docLabel} ${chave} body=1 item, xmlBase64=${xmlBase64.length}b`,
     );
 
     try {
-      const resp = (await this.protheusXml.grvXml(body)) as
-        | { status?: 'GRAVADO' | 'JA_EXISTIA' | 'JA_EXISTENTE' }
-        | null
-        | undefined;
+      const resp = (await this.protheusXml.grvXml(body)) as GrvXmlResponse | null;
 
-      // O contrato da resposta (§3.8) ainda é parcial — tratamos dois casos
-      // explícitos e qualquer outro status de sucesso como gravação OK.
-      const status = resp?.status;
-      if (status === 'JA_EXISTIA' || status === 'JA_EXISTENTE') {
-        this.logger.log(
-          `grvXML ${docLabel} ${chave.slice(0, 6)}… filial=${filial} status=JA_EXISTIA (race condition — outro processo já gravou).`,
+      // Defesa: se response inesperado (null, sem resultados, etc), trata
+      // como falha tecnica pra retry posterior.
+      if (!resp || !Array.isArray(resp.resultados) || resp.resultados.length === 0) {
+        this.logger.warn(
+          `grvXML ${docLabel} ${chave.slice(0, 6)}… resposta vazia/inesperada do Protheus: ${JSON.stringify(resp)?.slice(0, 200)}`,
         );
         return {
-          gravacao: 'JA_EXISTIA',
+          gravacao: 'FALHA_TECNICA',
           gravacaoMensagem:
-            'XML já havia sido gravado por outro processo — sem ação necessária.',
-          gravacaoErro: null,
-          raceCondition: true,
+            'Protheus respondeu em formato inesperado. Verifique com o time Protheus.',
+          gravacaoErro: 'RESPONSE_FORMAT_INVALID',
+          raceCondition: false,
           requestBody,
         };
       }
 
-      // Validação pós-gravação (Pedido D — 07/05/2026): Protheus retorna
-      // GRAVADO mas em ~15% dos casos NAO PERSISTE silenciosamente em SZR010.
-      // Detectado em 07/05 com 102/693 desaparecidos (proporcional, sem
-      // padrao temporal — bug intermitente do Protheus). Defesa: apos cada
-      // GRAVADO, fazer 1 GET xmlNfe pra confirmar que o registro persistiu.
-      // Se nao confirmar, retorna FALHA_TECNICA pra que retry da camada
-      // superior tente de novo (limite MAX_TENTATIVAS_PROTHEUS=5).
-      //
-      // Custo: +1 GET xmlNfe por GRAVADO (JA_EXISTIA continua sem custo
-      // adicional pois passou pelo pre-check). Aceitavel diante da
-      // confiabilidade ganha (15% perda silenciosa → 0%).
-      //
-      // Pendencia paralela: Pedido C documentado em §3.10 — equipe Protheus
-      // investigar perda silenciosa em grvXML (causa raiz desconhecida).
+      const r0 = resp.resultados[0];
+
+      // Caso 1: gravacao falhou completamente
+      if (!r0.sucesso || !r0.xmlGravado) {
+        this.logger.warn(
+          `grvXML ${docLabel} ${chave.slice(0, 6)}… falhou: sucesso=${r0.sucesso} xmlGravado=${r0.xmlGravado} mensagem="${r0.mensagem}"`,
+        );
+        return {
+          gravacao: 'FALHA_TECNICA',
+          gravacaoMensagem:
+            r0.mensagem ||
+            `Protheus rejeitou a gravacao do ${docLabel} sem mensagem detalhada.`,
+          gravacaoErro: r0.mensagem || 'GRAVACAO_REJEITADA',
+          raceCondition: false,
+          requestBody,
+        };
+      }
+
+      // Caso 2: XML gravado mas pre-nota falhou — sucesso parcial (08/05/2026)
+      // XML em SZR010/SZQ010 (XMLCAB/XMLIT) confirmado pelo Protheus, mas
+      // a geracao da pre-nota (U_PRENF/U_NFeSaida) falhou. Exige conclusao
+      // manual no Protheus. Retry nao ajuda — root cause e validacao no
+      // ERP que o XML por si so nao resolve.
+      if (r0.preNotaFalhou) {
+        this.logger.warn(
+          `grvXML ${docLabel} ${chave.slice(0, 6)}… XML gravado mas pre-nota falhou: ${r0.mensagem}`,
+        );
+        const mensagem =
+          r0.mensagem ||
+          'XML gravado em SZR010/SZQ010, mas a geracao da pre-nota falhou. Conclua via UI no Protheus.';
+        return {
+          gravacao: 'GRAVADO_PRENOTA_FALHOU',
+          gravacaoMensagem: mensagem,
+          // Persistimos a mensagem em gravacaoErro pra ela aparecer no modal
+          // (campo protheus_erro) — operador precisa saber instrucao do Protheus.
+          gravacaoErro: mensagem,
+          raceCondition: false,
+          requestBody,
+        };
+      }
+
+      // Caso 3: gravacao plena (XML + pre-nota OK).
+      // Pos-verify via xmlNfe — defesa do Pedido D (07/05/2026): Protheus
+      // ja retornou GRAVADO em 15% dos casos sem persistir silenciosamente.
+      // Apesar do response novo ser mais informativo, mantemos verificacao
+      // por seguranca.
       const SLEEP_PRE_VERIFY_MS = 500;
       await new Promise((r) => setTimeout(r, SLEEP_PRE_VERIFY_MS));
       try {
         const verif = await this.protheusXml.buscarXml(chave);
         if (!verif.found || verif.origem !== 'SZR010') {
           this.logger.warn(
-            `grvXML ${docLabel} ${chave.slice(0, 6)}… filial=${filial} ` +
-              `Protheus retornou GRAVADO mas xmlNfe pos-verificacao nao encontrou em SZR010 ` +
+            `grvXML ${docLabel} ${chave.slice(0, 6)}… ` +
+              `Protheus retornou sucesso mas xmlNfe pos-verificacao nao encontrou em SZR010 ` +
               `(found=${verif.found}, origem=${verif.found ? verif.origem : 'n/a'}). ` +
               `Marcando FALHA_TECNICA pra retry.`,
           );
           return {
             gravacao: 'FALHA_TECNICA',
             gravacaoMensagem:
-              `Protheus disse GRAVADO mas xmlNfe pos-verificacao nao confirmou em SZR010. ` +
-              `Possivel bug intermitente Protheus (perda silenciosa — Pedido C). Sera ` +
-              `feito retry no proximo ciclo.`,
+              'Protheus disse sucesso mas xmlNfe pos-verificacao nao confirmou em SZR010. ' +
+              'Possivel perda silenciosa. Sera feito retry no proximo ciclo.',
             gravacaoErro: 'POS_VERIFICACAO_FALHOU',
             raceCondition: false,
             requestBody,
           };
         }
       } catch (err) {
-        // Erro na verificacao nao bloqueia — assume gravacao OK e segue.
-        // Se a perda de fato ocorreu, sera detectada na proxima passagem
-        // (cron de enriquecimento ou consulta manual).
         this.logger.warn(
           `grvXML ${docLabel} ${chave.slice(0, 6)}… pos-verificacao xmlNfe falhou (${(err as Error).message}) — assumindo GRAVADO.`,
         );
       }
 
       this.logger.log(
-        `grvXML ${docLabel} ${chave.slice(0, 6)}… filial=${filial} status=GRAVADO (SZR010 + SZQ010, pos-verificado).`,
+        `grvXML ${docLabel} ${chave.slice(0, 6)}… status=GRAVADO (SZR010 + SZQ010 + pre-nota OK, pos-verificado).`,
       );
       return {
         gravacao: 'GRAVADO',
-        gravacaoMensagem: 'XML gravado no Protheus (SZR010 + SZQ010).',
+        gravacaoMensagem: r0.mensagem || 'XML gravado no Protheus (SZR010 + SZQ010).',
         gravacaoErro: null,
         raceCondition: false,
         requestBody,

@@ -115,16 +115,14 @@ export class ProtheusXmlService {
 
   /**
    * Grava XML em SZR010 (cabeçalho) + SZQ010 (itens) via `POST /grvXML`
-   * (contrato 18/04/2026).
+   * (contrato simplificado 08/05/2026).
    *
-   * O body segue o formato `{ itens: [XMLCAB, XMLIT, XMLIT, ...] }` conforme
-   * `grv-xml.interface.ts`. A montagem é responsabilidade do caller (geralmente
-   * via `XmlParserToSzrSzqService.montarBody`). Este método apenas transporta
-   * o body e traduz erros.
+   * Body: `{ itens: [{ xmlBase64 }] }` — Protheus extrai os campos do XML
+   * (chave, emitente, itens, etc.). Permite batch.
    *
-   * Retorna a resposta do Protheus (formato ainda parcialmente em aberto — ver
-   * `PENDENCIAS_PROTHEUS_18ABR2026.md` §3.8). Em modo MOCK, reusa o cache
-   * interno e devolve stub compatível.
+   * Resposta: `GrvXmlResponse` com `{ totalSucesso, totalFalha, resultados[] }`.
+   * Cada resultado tem `sucesso`, `xmlGravado`, `pendenteAmarracao`,
+   * `preNotaFalhou`, `mensagem`.
    */
   async grvXml(body: GrvXmlBody): Promise<unknown> {
     if (this.mockMode) return this.mock.grvXml(body);
