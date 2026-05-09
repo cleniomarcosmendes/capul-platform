@@ -218,6 +218,20 @@ export class CteEnriquecimentoService {
     statusNovo: string | null;
     mensagem: string | null;
   }> {
+    // Pre-check (09/05/2026): respeitar flag global cte_protheus_grava_ativo.
+    // Antes deste fix, o botao "Re-tentar Protheus" individual no modal
+    // bypassava a pausa global e batia direto no Protheus PROD — incoerente
+    // com a pausa de emergencia (operador desligou pra parar de bater no
+    // Protheus, mas individual continuava chamando). Padrao igual ao
+    // regravarFalhasBatch.
+    const protheusAtivo = await this.ambiente.getCteProtheusGravaAtivo();
+    if (!protheusAtivo) {
+      throw new BadRequestException(
+        'Gravação Protheus está desligada (cte_protheus_grava_ativo=false). ' +
+          'Habilite em /operacao/controle/cte-distribuicao antes de re-tentar.',
+      );
+    }
+
     const doc = await this.prisma.client.cteDocumento.findUnique({ where: { id } });
     if (!doc) {
       return { ok: false, chave: null, statusAnterior: null, statusNovo: null, mensagem: 'Documento nao encontrado' };
