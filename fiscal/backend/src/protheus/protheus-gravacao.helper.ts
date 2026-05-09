@@ -88,15 +88,20 @@ export class ProtheusGravacaoHelper {
     const { chave, tipoDocumento, filial, xml, usuarioEmail } = params;
     const docLabel = tipoDocumento === 'CTE' ? 'CT-e' : 'NF-e';
 
-    // Gating ambiente cruzado (07/05/2026): se XML HOM e Protheus PROD (ou
-    // vice-versa), PULA gravacao por defesa. Caso real do tick 12:00 BRT 07/05:
-    // doc id=6 (XML tpAmb=2 HOM) acabou em Protheus PROD por mistura de
-    // configuracoes em transicao. Sem gating, XMLs de homologacao gravam
-    // em SZR010 de PROD, confundindo setor fiscal.
+    // Detecao de ambiente cruzado (09/05/2026 — antes era SKIP, agora e ADVERTENCIA):
+    //
+    // Quando XML tpAmb difere da integracao Protheus configurada, antes
+    // PULAVAMOS a gravacao por defesa. Isso impedia o caso de uso legitimo
+    // de "validar fix do Protheus em HOM com XMLs reais de PROD" — pq SEFAZ
+    // de homologacao nao tem CT-es contra CAPUL (CAPUL real recebe so em PROD).
+    //
+    // Decisao 09/05/2026: trocar SKIP por WARN. ADMIN_TI escolhe se quer
+    // operar com ambientes alinhados (caso normal) ou misturados (caso
+    // pontual de teste). Defesa em profundidade fica no toggle global
+    // cte_protheus_grava_ativo — operador desliga quando nao quer gravar.
     //
     // Extrai tpAmb direto do XML — primeira ocorrencia (todos os schemas
-    // SEFAZ tem o campo no <ide> ou inicio do envelope). Regex e suficiente
-    // pra evitar parse XML completo (que e caro).
+    // SEFAZ tem o campo no <ide> ou inicio do envelope).
     const tpAmbMatch = xml.match(/<tpAmb>(\d)<\/tpAmb>/);
     const ambienteDocumento = tpAmbMatch ? parseInt(tpAmbMatch[1], 10) : null;
     if (ambienteDocumento === 1 || ambienteDocumento === 2) {
@@ -106,26 +111,18 @@ export class ProtheusGravacaoHelper {
           const ambienteIntegracaoNum = integracao.ambiente === 'PRODUCAO' ? 1 : 2;
           if (ambienteDocumento !== ambienteIntegracaoNum) {
             this.logger.warn(
-              `grvXML ${docLabel} ${chave.slice(0, 6)}… filial=${filial} SKIP — ` +
+              `grvXML ${docLabel} ${chave.slice(0, 6)}… filial=${filial} ⚠ ADVERTENCIA — ` +
                 `ambiente XML=${ambienteDocumento === 1 ? 'PROD' : 'HOM'} difere de ` +
-                `integracao Protheus=${integracao.ambiente}. Gravacao pulada por defesa.`,
+                `integracao Protheus=${integracao.ambiente}. Gravacao SEGUE conforme decisao do ADMIN. ` +
+                `Se nao for intencional, ajuste em /configurador/integracoes-api ou desligue ` +
+                `cte_protheus_grava_ativo em /operacao/controle/cte-distribuicao.`,
             );
-            return {
-              gravacao: 'NAO_APLICAVEL',
-              gravacaoMensagem:
-                `Gravacao pulada — XML em ${ambienteDocumento === 1 ? 'PRODUCAO' : 'HOMOLOGACAO'} ` +
-                `e integracao Protheus em ${integracao.ambiente}. Ambientes precisam coincidir pra gravar.`,
-              gravacaoErro: null,
-              raceCondition: false,
-              requestBody: null,
-              grvFlags: null,
-            };
           }
         }
       } catch (err) {
         // Falha do resolver nao bloqueia — segue gravacao (comportamento legado)
         this.logger.warn(
-          `grvXML ${docLabel} ${chave.slice(0, 6)}… gating ambiente falhou: ${(err as Error).message} — seguindo gravacao padrao.`,
+          `grvXML ${docLabel} ${chave.slice(0, 6)}… deteccao ambiente falhou: ${(err as Error).message} — seguindo gravacao padrao.`,
         );
       }
     }
