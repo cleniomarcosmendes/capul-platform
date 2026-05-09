@@ -999,13 +999,23 @@ async def return_counting_list(
     cycle = counting_list.current_cycle or 1
     count_field = _count_cycle_field(cycle)
 
-    base_q = db.query(CountingListItem).filter(CountingListItem.counting_list_id == list_id)
+    # Cada devolução é uma "declaração nova" do supervisor: estes são os itens
+    # que precisam de revisão AGORA. Limpa flags da devolução anterior antes de
+    # aplicar a nova — caso contrário, devolver TOTAL e depois PARCIAL deixava
+    # 100% dos itens marcados (bug detectado 09/05/2026 — INV_04 do Clenio).
+    todos_da_lista = db.query(CountingListItem).filter(
+        CountingListItem.counting_list_id == list_id
+    ).all()
+    for it in todos_da_lista:
+        it.revisar_no_ciclo = False
+        it.motivo_revisao = None
+
     if item_ids:
         # Devolução parcial — só os itens selecionados recebem a marcação
-        items = base_q.filter(CountingListItem.inventory_item_id.in_(item_ids)).all()
+        items = [it for it in todos_da_lista if str(it.inventory_item_id) in item_ids]
     else:
         # Devolução total — marca todos os itens contados no ciclo atual
-        items = [it for it in base_q.all() if getattr(it, count_field) is not None]
+        items = [it for it in todos_da_lista if getattr(it, count_field) is not None]
 
     marcados = 0
     for it in items:
