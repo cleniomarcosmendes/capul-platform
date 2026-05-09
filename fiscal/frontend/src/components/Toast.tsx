@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { AlertCircle, CheckCircle2, Info, X, AlertTriangle } from 'lucide-react';
 
 type ToastVariant = 'success' | 'error' | 'info' | 'warning';
@@ -43,12 +43,22 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }, duration);
   }, []);
 
-  const value: ToastContextValue = {
-    success: (t, d) => dispatch('success', t, d),
-    error: (t, d) => dispatch('error', t, d),
-    info: (t, d) => dispatch('info', t, d),
-    warning: (t, d) => dispatch('warning', t, d),
-  };
+  // Estabiliza referencia do value entre renders. Sem useMemo, cada toast
+  // exibido (setToasts) re-renderiza o Provider e gera value novo. Paginas
+  // que usam `toast` em deps de useCallback/useEffect entrariam em loop:
+  //   toast.error -> setToasts -> Provider re-render -> new value ref ->
+  //   useToast() retorna ref nova -> useCallback re-cria -> useEffect
+  //   re-dispara -> nova chamada -> 429 -> toast.error -> loop.
+  // Bug detectado em 09/05/2026 com filtros de data em CteRecebidosPage.
+  const value: ToastContextValue = useMemo(
+    () => ({
+      success: (t, d) => dispatch('success', t, d),
+      error: (t, d) => dispatch('error', t, d),
+      info: (t, d) => dispatch('info', t, d),
+      warning: (t, d) => dispatch('warning', t, d),
+    }),
+    [dispatch],
+  );
 
   return (
     <ToastContext.Provider value={value}>

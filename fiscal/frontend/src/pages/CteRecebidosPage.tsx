@@ -216,7 +216,11 @@ export function CteRecebidosPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, papel, schema, ambiente, protheusStatus, dataInicio, dataFim, recebimentoInicio, recebimentoFim, sortBy, sortOrder, inconsistenciaFiltro, toast]);
+    // toast NAO entra nas deps — referencia se mantem estavel (ToastProvider
+    // memoiza value), e mesmo se variasse, queremos evitar re-fetch quando
+    // a unica coisa mudada e um toast ter sido exibido.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, search, papel, schema, ambiente, protheusStatus, dataInicio, dataFim, recebimentoInicio, recebimentoFim, sortBy, sortOrder, inconsistenciaFiltro]);
 
   // Click no header da coluna: nenhum → desc → asc → nenhum
   const toggleSort = (column: string) => {
