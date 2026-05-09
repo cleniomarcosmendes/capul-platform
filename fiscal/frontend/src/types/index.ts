@@ -546,6 +546,357 @@ export interface NfeConsultaResult {
   inconsistencia: InconsistenciaOverlay;
 }
 
+// ===========================================================================
+// CT-e — paridade com o portal SEFAZ (todas as 17 seções).
+// Espelha CteParsed do backend (fiscal/backend/src/cte/parsers/cte-parsed.interface.ts).
+// ===========================================================================
+
+export interface CteEndereco {
+  logradouro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  municipio?: string | null;
+  codigoMunicipio?: string | null;
+  uf?: string | null;
+  cep?: string | null;
+  pais?: string | null;
+  codigoPais?: string | null;
+  fone?: string | null;
+}
+
+export interface CteParticipante {
+  cnpj?: string | null;
+  cpf?: string | null;
+  razaoSocial: string;
+  nomeFantasia?: string | null;
+  inscricaoEstadual?: string | null;
+  inscricaoEstadualST?: string | null;
+  inscricaoSUFRAMA?: string | null;
+  crt?: string | null;
+  crtDescricao?: string | null;
+  email?: string | null;
+  endereco?: CteEndereco | null;
+}
+
+export interface CteDadosGerais {
+  chave: string;
+  modelo: string;
+  serie: string;
+  numero: string;
+  dataEmissao: string;
+  tipoCte: '0' | '1' | '2' | '3';
+  tipoCteDescricao: string;
+  tipoServico: '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7';
+  tipoServicoDescricao: string;
+  modalidade: '01' | '02' | '03' | '04' | '05' | '06';
+  modalidadeDescricao: string;
+  naturezaOperacao: string;
+  ufInicio: string;
+  ufFim: string;
+  ambiente: '1' | '2';
+  cfop: string;
+  tipoEmissao?: string | null;
+  tipoEmissaoDescricao?: string | null;
+  dataContingencia?: string | null;
+  justificativaContingencia?: string | null;
+  digestValue?: string | null;
+  municipioInicioCodigo?: string | null;
+  municipioInicioNome?: string | null;
+  municipioFimCodigo?: string | null;
+  municipioFimNome?: string | null;
+}
+
+export interface CteCargaQuantidade {
+  tipoMedida: string;
+  descricao: string;
+  quantidade: number;
+}
+
+export interface CteCarga {
+  valorCarga: number;
+  produtoPredominante: string;
+  outrasCaracteristicas?: string | null;
+  quantidades: CteCargaQuantidade[];
+}
+
+export interface CteIcms {
+  cst?: string | null;
+  csosn?: string | null;
+  modalidadeBase?: string | null;
+  vBC?: number | null;
+  pICMS?: number | null;
+  vICMS?: number | null;
+  vBCSTRet?: number | null;
+  vICMSSTRet?: number | null;
+  pRedBC?: number | null;
+  vBCSubstituidoPorOutraUF?: number | null;
+  vICMSSubstituidoPorOutraUF?: number | null;
+  pCredSN?: number | null;
+  vCredICMSSN?: number | null;
+}
+
+export interface CteIcmsUFFim {
+  vBCUFFim?: number | null;
+  pFCPUFFim?: number | null;
+  pICMSUFFim?: number | null;
+  pICMSInter?: number | null;
+  vFCPUFFim?: number | null;
+  vICMSUFFim?: number | null;
+  vICMSUFIni?: number | null;
+}
+
+export interface CteIssqn {
+  vBC?: number | null;
+  vAliq?: number | null;
+  vISSQN?: number | null;
+  cMunFG?: string | null;
+  cListServ?: string | null;
+  vDeducao?: number | null;
+  vOutro?: number | null;
+  vDescIncond?: number | null;
+  vDescCond?: number | null;
+  cSitTrib?: string | null;
+  indISS?: string | null;
+  cServico?: string | null;
+  indIncentivo?: string | null;
+}
+
+export interface CteInfTribFed {
+  vPIS?: number | null;
+  vCOFINS?: number | null;
+  vIR?: number | null;
+  vCSLL?: number | null;
+  vINSS?: number | null;
+  infAdFisco?: string | null;
+}
+
+export interface CteValores {
+  valorTotalPrestacao: number;
+  valorReceber: number;
+  componentes: Array<{ nome: string; valor: number }>;
+  vTotTrib?: number | null;
+  icms?: CteIcms | null;
+  icmsUFFim?: CteIcmsUFFim | null;
+  issqn?: CteIssqn | null;
+  infTribFed?: CteInfTribFed | null;
+  // legados
+  icmsCst?: string | null;
+  icmsBase?: number | null;
+  icmsAliquota?: number | null;
+  icmsValor?: number | null;
+}
+
+export interface CteDocumentoTransportado {
+  chaveNFe?: string | null;
+  numeroNF?: string | null;
+  serie?: string | null;
+  pin?: string | null;
+  tipoOutro?: string | null;
+  descOutro?: string | null;
+  numeroOutro?: string | null;
+  valor?: number | null;
+  pesoTotal?: number | null;
+}
+
+export interface CteUnidadeTransporte {
+  tipoUnidade?: string | null;
+  identificacao?: string | null;
+  lacres: string[];
+  qtdRat?: number | null;
+}
+
+export interface CteUnidadeCarga {
+  tipoUnidade?: string | null;
+  identificacao?: string | null;
+  lacres: string[];
+  qtdRat?: number | null;
+}
+
+export interface CteSeguro {
+  responsavelSeguro?: string | null;
+  responsavelDescricao?: string | null;
+  nomeSeguradora?: string | null;
+  cnpjSeguradora?: string | null;
+  numeroApolice?: string | null;
+  numeroAverbacao?: string | null;
+  valorCarga?: number | null;
+  valorAverbado?: number | null;
+}
+
+export interface CteModalRodoviarioVeiculo {
+  placa?: string | null;
+  renavam?: string | null;
+  ufPlaca?: string | null;
+  proprietario?: {
+    cnpj?: string | null;
+    cpf?: string | null;
+    razaoSocial?: string | null;
+    rntrc?: string | null;
+    inscricaoEstadual?: string | null;
+    uf?: string | null;
+    tipoProprietario?: string | null;
+  } | null;
+  tipoRodado?: string | null;
+  tipoCarroceria?: string | null;
+  tara?: number | null;
+  capacidadeKG?: number | null;
+  capacidadeM3?: number | null;
+}
+
+export interface CteModalRodoviario {
+  modalidade: '01';
+  rntrc?: string | null;
+  ocorrencias: Array<{ descricao: string; data: string }>;
+  veiculo?: CteModalRodoviarioVeiculo | null;
+  reboques: CteModalRodoviarioVeiculo[];
+  motoristas: Array<{ cpf?: string | null; nome?: string | null }>;
+  valesPedagio: Array<{
+    cnpjFornecedor?: string | null;
+    cnpjResponsavel?: string | null;
+    numeroComprovante?: string | null;
+    valor?: number | null;
+    tipoVale?: string | null;
+  }>;
+}
+
+export interface CteModalAereo {
+  modalidade: '02';
+  numeroMinuta?: string | null;
+  numeroOperacionalAWB?: string | null;
+  dataPrevistaEntrega?: string | null;
+  natCarga?: { xDime?: string | null; cInfManu: string[] } | null;
+  tarifa?: {
+    classeTarifa?: string | null;
+    codigoTarifa?: string | null;
+    valorTarifa?: number | null;
+  } | null;
+}
+
+export interface CteModalAquaviario {
+  modalidade: '03';
+  vPrest?: number | null;
+  vAFRMM?: number | null;
+  xNavio?: string | null;
+  balsas: Array<{ xBalsa?: string | null }>;
+  numeroBookings?: string | null;
+  numeroCE?: string | null;
+  numeroBL?: string | null;
+  direcao?: string | null;
+  irinNavio?: string | null;
+  tipoNavegacao?: string | null;
+  detContainers: Array<{
+    nCont?: string | null;
+    lacres: string[];
+    detNFe: Array<{ nNF?: string | null; chave?: string | null }>;
+  }>;
+}
+
+export interface CteModalFerroviario {
+  modalidade: '04';
+  tipoTrafego?: string | null;
+  trafegoMutuo?: {
+    respFat?: string | null;
+    ferrEmi?: string | null;
+    fluxoPagamento?: string | null;
+    icmsTransporte?: number | null;
+    chaveCTe?: string | null;
+  } | null;
+  fluxoFerroviario?: string | null;
+}
+
+export interface CteModalDutoviario {
+  modalidade: '05';
+  valorTarifa?: number | null;
+  dataInicio?: string | null;
+  dataFim?: string | null;
+}
+
+export interface CteModalMultimodal {
+  modalidade: '06';
+  cotm?: string | null;
+  indicadorNegociavel?: string | null;
+  seguro?: CteSeguro | null;
+}
+
+export type CteModal =
+  | CteModalRodoviario
+  | CteModalAereo
+  | CteModalAquaviario
+  | CteModalFerroviario
+  | CteModalDutoviario
+  | CteModalMultimodal
+  | null;
+
+export interface CteDocumentoAnterior {
+  tipo: 'CTe' | 'NFe' | 'NF';
+  chave?: string | null;
+  serie?: string | null;
+  numero?: string | null;
+  dataEmissao?: string | null;
+  cnpjEmitente?: string | null;
+  modelo?: string | null;
+  subserie?: string | null;
+}
+
+export interface CteProtocoloAutorizacao {
+  protocolo: string;
+  dataRecebimento: string;
+  cStat: string;
+  motivo: string;
+  ambiente: '1' | '2';
+  digestValue?: string | null;
+  versaoAplicacao?: string | null;
+  chave?: string | null;
+}
+
+export interface CteInfoAdicionais {
+  observacoes?: string | null;
+  infAdFisco?: string | null;
+  infCpl?: string | null;
+  emailEntrega?: string | null;
+  observacoesFiscais: Array<{ xTexto: string; xCampo?: string | null }>;
+  observacoesContribuinte: Array<{ xTexto: string; xCampo?: string | null }>;
+  autorizadosBaixarXml: Array<{ cnpj?: string | null; cpf?: string | null }>;
+}
+
+export interface CteParsed {
+  dadosGerais: CteDadosGerais;
+  emitente: CteParticipante;
+  remetente: CteParticipante;
+  expedidor?: CteParticipante | null;
+  recebedor?: CteParticipante | null;
+  destinatario: CteParticipante;
+  tomador: 'Remetente' | 'Expedidor' | 'Recebedor' | 'Destinatário' | 'Outros';
+  tomadorOutros?: CteParticipante | null;
+  carga: CteCarga;
+  valores: CteValores;
+  documentosTransportados: CteDocumentoTransportado[];
+  unidadesTransporte: CteUnidadeTransporte[];
+  unidadesCarga: CteUnidadeCarga[];
+  documentosAnteriores: CteDocumentoAnterior[];
+  modal: CteModal;
+  seguro?: CteSeguro | null;
+  infoAdicionais: CteInfoAdicionais;
+  protocoloAutorizacao?: CteProtocoloAutorizacao | null;
+  observacoes?: string | null;
+}
+
+export interface CteConsultaResult {
+  chave: string;
+  filial: string;
+  origem: 'PROTHEUS_CACHE' | 'PROTHEUS_CACHE_RACE' | 'SEFAZ_DOWNLOAD' | 'SEFAZ_STATUS_ONLY';
+  documentoConsultaId: string;
+  parsed: CteParsed | null;
+  xml: string | null;
+  xmlDisponivel: boolean;
+  protheusStatus: ProtheusStatus;
+  eventos: TimelineEvento[];
+  consultaProtocoloStatus: ConsultaProtocoloStatus;
+  avisoXmlIndisponivel?: string | null;
+  alertaProtheus?: string;
+}
+
 // ----- Cadastro (CCC) -----
 
 export type SituacaoCadastral =
