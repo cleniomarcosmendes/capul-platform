@@ -25,12 +25,15 @@ type MenuItem =
 // GESTOR_FISCAL+. Dashboard também — tem KPIs operacionais sensíveis.
 const menuItems: MenuItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/', minRole: 'GESTOR_FISCAL' },
-  { section: 'CONSULTAS' },
+  { section: 'DOCUMENTOS FISCAIS' },
   { label: 'Consulta NF-e', icon: FileText, path: '/nfe' },
   { label: 'Pendências NF-e', icon: AlertTriangle, path: '/nfe/pendencias' },
   // /cte aponta para CteRecebidosPage (listagem dos CT-es baixados via distNSU).
   // /cte/consulta-por-chave fica como rota secundaria (limitada pelo Nacional).
   { label: 'Consulta CT-e', icon: Truck, path: '/cte' },
+  // Cadastro fica em secao separada (09/05/2026) — consulta CCC/Sintegra/Receita,
+  // nao e documento fiscal. Operadores entendem melhor com a divisao.
+  { section: 'CADASTRO' },
   { label: 'Consulta Cadastral', icon: UserSearch, path: '/cadastro' },
   { section: 'CRUZAMENTO', minRole: 'GESTOR_FISCAL' },
   { label: 'Execucoes', icon: Activity, path: '/execucoes', minRole: 'GESTOR_FISCAL' },
