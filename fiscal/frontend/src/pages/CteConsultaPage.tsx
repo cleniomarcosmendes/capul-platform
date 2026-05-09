@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   Download,
@@ -178,12 +179,25 @@ export function CteConsultaPage() {
     usuario?.filialCodigo ?? '01',
   );
 
+  // Deep-link via query params: /fiscal/cte/consulta-por-chave?chave=XXX&filial=YY
+  // Quando o operador clica numa chave em /fiscal/cte (lista de Recebidos),
+  // a tela abre ja com chave + filial preenchidas e dispara consulta automatica.
+  const [searchParams] = useSearchParams();
+  const autoConsultadoRef = useRef(false);
+
   useEffect(() => {
     fiscalApi
       .get<FilialResumo[]>('/filiais')
       .then((r) => {
         setFiliais(r.data);
-        if (r.data.length > 0 && !r.data.some((f) => f.codigo === filialSelecionada)) {
+        const chaveParam = searchParams.get('chave');
+        const filialParam = searchParams.get('filial');
+        if (chaveParam && /^\d{44}$/.test(chaveParam)) {
+          setChave(chaveParam);
+        }
+        if (filialParam && r.data.some((f) => f.codigo === filialParam)) {
+          setFilialSelecionada(filialParam);
+        } else if (r.data.length > 0 && !r.data.some((f) => f.codigo === filialSelecionada)) {
           const defaultFilial = r.data.find((f) => f.isDefault) ?? r.data[0];
           setFilialSelecionada(defaultFilial.codigo);
         }
@@ -192,8 +206,25 @@ export function CteConsultaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleConsultar(e: React.FormEvent) {
-    e.preventDefault();
+  // Auto-consulta quando chave veio via query param e filiais ja carregaram.
+  // Ref evita disparar 2x.
+  useEffect(() => {
+    const chaveParam = searchParams.get('chave');
+    if (
+      !autoConsultadoRef.current &&
+      chaveParam &&
+      /^\d{44}$/.test(chaveParam) &&
+      chave === chaveParam &&
+      filiais.length > 0
+    ) {
+      autoConsultadoRef.current = true;
+      void handleConsultar(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chave, filiais]);
+
+  async function handleConsultar(e: React.FormEvent | null) {
+    if (e) e.preventDefault();
     setError(null);
     setResult(null);
     setTab('cte');

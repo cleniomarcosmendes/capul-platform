@@ -143,6 +143,10 @@ export function CteRecebidosPage() {
   >('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
+  // Recebimento (recebidoEm na base) — independente de Emissao (dhEmi).
+  // Util pra "o que chegou hoje?" sem depender da data de emissao do CT-e.
+  const [recebimentoInicio, setRecebimentoInicio] = useState('');
+  const [recebimentoFim, setRecebimentoFim] = useState('');
 
   // Ordenacao por click no header (08/05/2026). null = ordem default
   // (recebidoEm desc do backend). Click: nenhum → desc → asc → nenhum.
@@ -165,7 +169,12 @@ export function CteRecebidosPage() {
   const isDataValida = (d: string) => !d || /^\d{4}-\d{2}-\d{2}$/.test(d);
 
   const carregar = useCallback(async () => {
-    if (!isDataValida(dataInicio) || !isDataValida(dataFim)) {
+    if (
+      !isDataValida(dataInicio) ||
+      !isDataValida(dataFim) ||
+      !isDataValida(recebimentoInicio) ||
+      !isDataValida(recebimentoFim)
+    ) {
       // Data invalida — nao chama backend (evita loop por keystroke)
       return;
     }
@@ -185,6 +194,12 @@ export function CteRecebidosPage() {
         const fim = new Date(dataFim + 'T23:59:59.999');
         params.dataFim = fim.toISOString();
       }
+      if (recebimentoInicio) {
+        params.recebimentoInicio = new Date(recebimentoInicio + 'T00:00:00').toISOString();
+      }
+      if (recebimentoFim) {
+        params.recebimentoFim = new Date(recebimentoFim + 'T23:59:59.999').toISOString();
+      }
       if (sortBy) {
         params.sortBy = sortBy;
         params.sortOrder = sortOrder;
@@ -201,7 +216,7 @@ export function CteRecebidosPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, papel, schema, ambiente, protheusStatus, dataInicio, dataFim, sortBy, sortOrder, inconsistenciaFiltro, toast]);
+  }, [page, search, papel, schema, ambiente, protheusStatus, dataInicio, dataFim, recebimentoInicio, recebimentoFim, sortBy, sortOrder, inconsistenciaFiltro, toast]);
 
   // Click no header da coluna: nenhum → desc → asc → nenhum
   const toggleSort = (column: string) => {
@@ -234,6 +249,8 @@ export function CteRecebidosPage() {
     setProtheusStatus('');
     setDataInicio('');
     setDataFim('');
+    setRecebimentoInicio('');
+    setRecebimentoFim('');
     setPage(1);
   };
 
@@ -582,6 +599,38 @@ export function CteRecebidosPage() {
                 className="w-full px-3 py-1.5 border rounded text-sm"
               />
             </div>
+            <div>
+              <label
+                className="block text-xs text-gray-600 mb-1"
+                title="Data em que o CT-e chegou via distNSU na nossa base (recebido_em)"
+              >
+                Recebimento (de)
+              </label>
+              <input
+                type="date"
+                value={recebimentoInicio}
+                min="2020-01-01"
+                max="2099-12-31"
+                onChange={(e) => setRecebimentoInicio(e.target.value)}
+                className="w-full px-3 py-1.5 border rounded text-sm"
+              />
+            </div>
+            <div>
+              <label
+                className="block text-xs text-gray-600 mb-1"
+                title="Data em que o CT-e chegou via distNSU na nossa base (recebido_em)"
+              >
+                Recebimento (até)
+              </label>
+              <input
+                type="date"
+                value={recebimentoFim}
+                min="2020-01-01"
+                max="2099-12-31"
+                onChange={(e) => setRecebimentoFim(e.target.value)}
+                className="w-full px-3 py-1.5 border rounded text-sm"
+              />
+            </div>
           </div>
           <div className="flex gap-2 pt-2 border-t items-center">
             <Button onClick={aplicarFiltros} disabled={loading}>
@@ -681,7 +730,17 @@ export function CteRecebidosPage() {
                   return (
                     <tr key={it.id} className="hover:bg-gray-50">
                       <td className="px-3 py-2 font-mono text-xs">
-                        {it.chave ? fmtChaveMascara(it.chave) : <span className="text-gray-400">—</span>}
+                        {it.chave ? (
+                          <Link
+                            to={`/cte/consulta-por-chave?chave=${it.chave}`}
+                            className="text-blue-600 hover:underline"
+                            title="Abrir consulta detalhada (17 abas — paridade com portal SEFAZ)"
+                          >
+                            {fmtChaveMascara(it.chave)}
+                          </Link>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         <span className="text-xs px-2 py-0.5 bg-gray-100 rounded">{it.schema}</span>

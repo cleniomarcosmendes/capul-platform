@@ -243,6 +243,8 @@ export class CteController {
     @Query('protheusStatus') protheusStatus?: string,
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
+    @Query('recebimentoInicio') recebimentoInicio?: string,
+    @Query('recebimentoFim') recebimentoFim?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: string,
     @Query('inconsistenciaFiltro') inconsistenciaFiltro?: string,
@@ -258,6 +260,8 @@ export class CteController {
       protheusStatus,
       dataInicio: dataInicio ? new Date(dataInicio) : undefined,
       dataFim: dataFim ? new Date(dataFim) : undefined,
+      recebimentoInicio: recebimentoInicio ? new Date(recebimentoInicio) : undefined,
+      recebimentoFim: recebimentoFim ? new Date(recebimentoFim) : undefined,
       sortBy,
       sortOrder: sortOrder === 'asc' ? 'asc' : sortOrder === 'desc' ? 'desc' : undefined,
       inconsistenciaFiltro:

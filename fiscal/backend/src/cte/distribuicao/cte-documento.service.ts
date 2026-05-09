@@ -427,8 +427,12 @@ export class CteDocumentoService {
     ambiente?: number;
     cnpjConsulente?: string;
     protheusStatus?: string;
+    /** Filtro por dh_emi (data de emissao do CT-e na origem) */
     dataInicio?: Date;
     dataFim?: Date;
+    /** Filtro por recebido_em (data em que o CT-e chegou via distNSU na nossa base) */
+    recebimentoInicio?: Date;
+    recebimentoFim?: Date;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
     /**
@@ -458,6 +462,11 @@ export class CteDocumentoService {
       where.dhEmi = {};
       if (filtros.dataInicio) where.dhEmi.gte = filtros.dataInicio;
       if (filtros.dataFim) where.dhEmi.lte = filtros.dataFim;
+    }
+    if (filtros.recebimentoInicio || filtros.recebimentoFim) {
+      where.recebidoEm = {};
+      if (filtros.recebimentoInicio) where.recebidoEm.gte = filtros.recebimentoInicio;
+      if (filtros.recebimentoFim) where.recebidoEm.lte = filtros.recebimentoFim;
     }
 
     // Filtro overlay (08/05/2026): pendencias de correcao = status problematico
