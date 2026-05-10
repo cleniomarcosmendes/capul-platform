@@ -100,9 +100,12 @@ export class AuthService {
 
     // Se MFA habilitado, retornar token parcial para segunda etapa
     if (usuario.mfaEnabled) {
+      // Auditoria 10/05/2026 #B1 — MFA token assinado com JWT_MFA_SECRET separado
+      // (princípio do menor privilégio: comprometimento de JWT_SECRET não permite
+      // forjar MFA bypass). JWT_MFA_SECRET é obrigatório no docker-compose.
       const mfaToken = this.jwtService.sign(
         { sub: usuario.id, purpose: 'mfa' },
-        { secret: this.config.get('JWT_SECRET'), expiresIn: '5m' },
+        { secret: this.config.get('JWT_MFA_SECRET'), expiresIn: '5m' },
       );
       this.auditLog.log({ action: 'LOGIN_MFA_REQUIRED', usuarioId: usuario.id, ipAddress: ip, userAgent });
       return { mfaRequired: true, mfaToken };
@@ -226,7 +229,8 @@ export class AuthService {
       throw new BadRequestException('Senha atual incorreta');
     }
 
-    const novaSenhaHash = await bcrypt.hash(dto.novaSenha, 10);
+    // Cost 12 — auditoria 10/05/2026 #M2 (recomendação 2026 vs hardware atual; ~400ms vs ~100ms)
+    const novaSenhaHash = await bcrypt.hash(dto.novaSenha, 12);
 
     await this.prisma.usuario.update({
       where: { id: userId },
@@ -289,7 +293,8 @@ export class AuthService {
   async mfaLogin(mfaToken: string, code: string, ip?: string, userAgent?: string) {
     let payload: { sub: string; purpose: string };
     try {
-      payload = this.jwtService.verify(mfaToken, { secret: this.config.get('JWT_SECRET') });
+      // Auditoria 10/05/2026 #B1 — verifica com JWT_MFA_SECRET (separado)
+      payload = this.jwtService.verify(mfaToken, { secret: this.config.get('JWT_MFA_SECRET') });
     } catch {
       throw new UnauthorizedException('Token MFA invalido ou expirado');
     }

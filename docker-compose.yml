@@ -136,11 +136,14 @@ services:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=core&connection_limit=10
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET obrigatorio no .env (64+ chars — gerar com openssl rand -hex 64)}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET obrigatorio (deve ser diferente de JWT_SECRET)}
+      # Auditoria 10/05/2026 #B1 — secret separado p/ MFA token (princípio menor privilégio)
+      JWT_MFA_SECRET: ${JWT_MFA_SECRET:?JWT_MFA_SECRET obrigatorio no .env (gerar com openssl rand -hex 64; deve ser DIFERENTE de JWT_SECRET)}
       JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-60m}
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-7d}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       NODE_ENV: production
-      CORS_ORIGINS: ${CORS_ORIGINS:-https://localhost}
+      # Auditoria 10/05/2026 #B3 — CORS_ORIGINS obrigatório (fallback localhost removido)
+      CORS_ORIGINS: "${CORS_ORIGINS:?CORS_ORIGINS obrigatoria no .env (lista separada por virgula, ex.: https://platform.capul.com.br,https://localhost)}"
     # Porta NAO exposta — acesso via Nginx reverse proxy
     depends_on:
       postgres:
@@ -287,7 +290,8 @@ services:
       CORE_SCHEMA: core
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       NODE_ENV: production
-      CORS_ORIGINS: ${CORS_ORIGINS:-https://localhost}
+      # Auditoria 10/05/2026 #B3 — CORS_ORIGINS obrigatório (fallback localhost removido)
+      CORS_ORIGINS: "${CORS_ORIGINS:?CORS_ORIGINS obrigatoria no .env (lista separada por virgula)}"
     # Porta NAO exposta — acesso via Nginx reverse proxy
     volumes:
       - uploads_data:/app/uploads
@@ -372,7 +376,10 @@ services:
       FISCAL_CNPJ_CONSULENTE: ${FISCAL_CNPJ_CONSULENTE:?FISCAL_CNPJ_CONSULENTE obrigatoria (CNPJ consulente SEFAZ)}
       PROTHEUS_API_URL: ${PROTHEUS_API_URL:?PROTHEUS_API_URL obrigatoria no .env (consultas cadastrais dependem dela)}
       PROTHEUS_API_AUTH: ${PROTHEUS_API_AUTH:?PROTHEUS_API_AUTH obrigatoria no .env (sem isto Fiscal nao autentica no Protheus)}
-      FISCAL_PROTHEUS_MOCK: ${FISCAL_PROTHEUS_MOCK:-true}
+      # Auditoria 10/05/2026 #B4 — default mudou de true para false. Quem precisar
+      # de mock em DEV local define FISCAL_PROTHEUS_MOCK=true no .env explicitamente.
+      # Default seguro evita PROD subir em modo mock por esquecimento.
+      FISCAL_PROTHEUS_MOCK: ${FISCAL_PROTHEUS_MOCK:-false}
       # NOTA 05/05/2026: env var FISCAL_CTE_DISTRIBUICAO_ENABLED removida —
       # controle migrado pra fiscal.ambiente_config.cte_distribuicao_ativo
       # (UI: /operacao/controle/cte-distribuicao, role ADMIN_TI).
