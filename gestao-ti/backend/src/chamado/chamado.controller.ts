@@ -48,6 +48,7 @@ try {
 // Whitelist de tipos aceitos em upload — agora centralizada em
 // common/constants/anexo-mime.constant.ts (padronizada 06/05/2026).
 import { ALLOWED_MIMES_ANEXO, isAnexoPermitido, mimeTypeParaDownload } from '../common/constants/anexo-mime.constant';
+import { createUploadConfig } from '../common/helpers/multer-upload.helper.js';
 
 @Controller('chamados')
 @UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
@@ -258,53 +259,11 @@ export class ChamadoController {
   }
 
   @Post(':id/anexos')
-  @UseInterceptors(FileInterceptor('file', {
-    storage: diskStorage({
-      // Destination como função (não string) — permite re-checar permissão/existência
-      // a cada upload e devolver mensagem clara em vez de erro 500 silencioso.
-      // Lição do bug do Fiscal/certs: bind mounts em produção podem ter owner errado
-      // após recriação de container — usuário precisa ver o comando exato pra corrigir.
-      destination: (_req, _file, cb) => {
-        // 1) Garantir que o diretório existe
-        try {
-          if (!fs.existsSync(UPLOADS_DIR)) {
-            fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-          }
-        } catch (err: unknown) {
-          const e = err as NodeJS.ErrnoException;
-          uploadsLogger.error(`Falha ao criar ${UPLOADS_DIR}: ${e.code} ${e.message}`);
-          return cb(new InternalServerErrorException(
-            `Diretório de upload não pôde ser criado (${e.code || 'erro'}). ` +
-            `Admin: docker compose exec -u root gestao-ti-backend sh -c ` +
-            `'mkdir -p ${UPLOADS_DIR} && chown -R appuser:appgroup ${UPLOADS_DIR}'`
-          ), '');
-        }
-
-        // 2) Checar permissão de escrita
-        fs.access(UPLOADS_DIR, fs.constants.W_OK, (err) => {
-          if (err) {
-            const e = err as NodeJS.ErrnoException;
-            uploadsLogger.error(`Sem permissão de escrita em ${UPLOADS_DIR}: ${e.code}`);
-            return cb(new InternalServerErrorException(
-              `Sem permissão de escrita no diretório de uploads (${e.code}). ` +
-              `Admin: docker compose exec -u root gestao-ti-backend sh -c ` +
-              `'chown -R appuser:appgroup ${UPLOADS_DIR}'`
-            ), '');
-          }
-          cb(null, UPLOADS_DIR);
-        });
-      },
-      filename: (_req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        cb(null, `${randomUUID()}${ext}`);
-      },
-    }),
-    limits: { fileSize: 10 * 1024 * 1024 },
-    fileFilter: (_req, file, cb) => {
-      if (isAnexoPermitido(file)) return cb(null, true);
-      return cb(new BadRequestException('Tipo de arquivo nao permitido'), false);
-    },
-  }))
+  // Auditoria 10/05/2026 #DT3-M2 — Multer config compartilhado (ver multer-upload.helper.ts)
+  @UseInterceptors(FileInterceptor('file', createUploadConfig({
+    uploadsDir: UPLOADS_DIR,
+    loggerName: 'ChamadoUploads',
+  })))
   addAnexo(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,

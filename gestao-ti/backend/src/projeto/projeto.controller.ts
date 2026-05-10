@@ -52,6 +52,7 @@ if (!fs.existsSync(PROJETO_UPLOADS_DIR)) {
 
 // Whitelist centralizada — common/constants/anexo-mime.constant.ts (06/05/2026).
 import { isAnexoPermitido } from '../common/constants/anexo-mime.constant';
+import { createUploadConfig } from '../common/helpers/multer-upload.helper.js';
 
 const PENDENCIA_UPLOADS_DIR = path.resolve('./uploads/pendencias');
 
@@ -556,20 +557,12 @@ export class ProjetoController {
 
   @Post(':id/anexos/upload')
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
-  @UseInterceptors(FileInterceptor('file', {
-    storage: diskStorage({
-      destination: PROJETO_UPLOADS_DIR,
-      filename: (_req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        cb(null, `${randomUUID()}${ext}`);
-      },
-    }),
-    limits: { fileSize: 10 * 1024 * 1024 },
-    fileFilter: (_req, file, cb) => {
-      if (isAnexoPermitido(file)) return cb(null, true);
-      return cb(new BadRequestException('Tipo de arquivo nao permitido'), false);
-    },
-  }))
+  // Auditoria 10/05/2026 #DT3-M2 — Multer config compartilhado (ver multer-upload.helper.ts)
+  // Ganhou bônus: verificação fs.existsSync + W_OK (antes só chamado tinha)
+  @UseInterceptors(FileInterceptor('file', createUploadConfig({
+    uploadsDir: PROJETO_UPLOADS_DIR,
+    loggerName: 'ProjetoUploads',
+  })))
   async uploadAnexo(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,

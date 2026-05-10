@@ -25,6 +25,7 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 
 // Whitelist centralizada — common/constants/anexo-mime.constant.ts (06/05/2026).
 import { isAnexoPermitido } from '../common/constants/anexo-mime.constant';
+import { createUploadConfig } from '../common/helpers/multer-upload.helper.js';
 
 @Controller('conhecimento')
 @UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
@@ -92,20 +93,11 @@ export class ConhecimentoController {
 
   @Post(':id/anexos')
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
-  @UseInterceptors(FileInterceptor('file', {
-    storage: diskStorage({
-      destination: UPLOADS_DIR,
-      filename: (_req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        cb(null, `${randomUUID()}${ext}`);
-      },
-    }),
-    limits: { fileSize: 10 * 1024 * 1024 },
-    fileFilter: (_req, file, cb) => {
-      if (isAnexoPermitido(file)) return cb(null, true);
-      return cb(new BadRequestException('Tipo de arquivo nao permitido'), false);
-    },
-  }))
+  // Auditoria 10/05/2026 #DT3-M2 — Multer config compartilhado (ver multer-upload.helper.ts)
+  @UseInterceptors(FileInterceptor('file', createUploadConfig({
+    uploadsDir: UPLOADS_DIR,
+    loggerName: 'ConhecimentoUploads',
+  })))
   addAnexo(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
