@@ -6,7 +6,7 @@ import type { IntegrationDetailItem } from '../types';
 import { useToast } from '../contexts/ToastContext';
 import { ErrorState } from '../components/ErrorState';
 import { PageSkeleton } from '../components/LoadingSkeleton';
-import { ArrowLeft, Ban, ArrowLeftRight, Package, FileText, Loader2, Send, Activity, RefreshCw, Search, ChevronLeft, ChevronRight, Download, AlertTriangle, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Ban, ArrowLeftRight, Package, FileText, Loader2, Send, Activity, RefreshCw, Search, ChevronLeft, ChevronRight, Download, AlertTriangle, RotateCcw, CheckCircle2, XCircle } from 'lucide-react';
 import { downloadExcel } from '../utils/export';
 import { useTableSort } from '../hooks/useTableSort';
 import { SortableTh } from '../components/SortableTh';
@@ -28,6 +28,44 @@ type ProtheusErrorItem = {
   quantity: number | null;
   message: string | null;
 };
+
+// Traduz endpoint Protheus pra nome amigável da operação fiscal/operacional.
+// Endpoint completo continua acessível via tooltip (title) pra debug.
+function operacaoLabel(endpoint: string | null | undefined, itemType?: string | null): string {
+  const ep = (endpoint ?? '').toLowerCase();
+  if (ep.includes('digitacao') || ep.includes('ajuste')) return 'Ajuste de estoque';
+  if (ep.includes('transferencia')) return 'Transferência entre lojas';
+  if (ep.includes('inventario')) return 'Lançamento no inventário';
+  // Fallback pelo item_type quando endpoint não casa nenhum padrão
+  if (itemType === 'ADJUSTMENT') return 'Ajuste de estoque';
+  if (itemType === 'TRANSFER') return 'Transferência entre lojas';
+  return endpoint ?? '—';
+}
+
+// 2194 → "2,2s" | 850 → "850ms" | null → "—"
+function formatDuration(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined) return '—';
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1).replace('.', ',')}s`;
+}
+
+// Status técnico → label humano + cor + ícone
+function statusVisual(status: string): {
+  label: string;
+  bg: string;
+  Icon: React.ComponentType<{ className?: string }>;
+} {
+  if (status === 'OK' || status === 'SUCCESS' || status === 'SENT') {
+    return { label: 'Enviado', bg: 'bg-emerald-100 text-emerald-700', Icon: CheckCircle2 };
+  }
+  if (status === 'PARTIAL') {
+    return { label: 'Parcial', bg: 'bg-orange-100 text-orange-700', Icon: AlertTriangle };
+  }
+  if (status === 'ERROR' || status === 'FAILED') {
+    return { label: 'Erro', bg: 'bg-red-100 text-red-700', Icon: XCircle };
+  }
+  return { label: status || '—', bg: 'bg-slate-100 text-slate-600', Icon: Activity };
+}
 
 function filterItems(items: IntegrationDetailItem[], q: string): IntegrationDetailItem[] {
   const term = q.trim().toLowerCase();
@@ -866,56 +904,72 @@ export default function IntegracaoDetalhePage() {
                 <thead className="bg-slate-50 border-y border-slate-200">
                   <tr>
                     <th className="text-left py-2 px-2 text-slate-500 whitespace-nowrap">Quando</th>
-                    <th className="text-left py-2 px-2 text-slate-500">Endpoint</th>
-                    <th className="text-left py-2 px-2 text-slate-500">Tipo</th>
+                    <th className="text-left py-2 px-2 text-slate-500">Operação</th>
                     <th className="text-left py-2 px-2 text-slate-500">Produto</th>
                     <th className="text-center py-2 px-2 text-slate-500">Status</th>
-                    <th className="text-right py-2 px-2 text-slate-500">Duração</th>
-                    <th className="text-left py-2 px-2 text-slate-500">Erro</th>
+                    <th className="text-right py-2 px-2 text-slate-500">Tempo</th>
+                    <th className="text-left py-2 px-2 text-slate-500">Detalhes</th>
                   </tr>
                 </thead>
                 <tbody>
                   {logs.map((log) => {
                     const logStatus = String(log.status ?? '');
-                    const statusColor = logStatus === 'OK' || logStatus === 'SUCCESS' || logStatus === 'SENT'
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : logStatus === 'PARTIAL'
-                        ? 'bg-orange-100 text-orange-700'
-                        : logStatus === 'ERROR'
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-slate-100 text-slate-600';
+                    const visual = statusVisual(logStatus);
                     const createdAt = log.created_at as string | null;
                     const errMsg = log.error_message as string | null;
                     const duration = log.duration_ms;
+                    const endpoint = String(log.endpoint ?? '');
+                    const itemType = log.item_type as string | null;
+                    const operacao = operacaoLabel(endpoint, itemType);
                     return (
                       <tr key={String(log.id)} className="border-b border-slate-100 align-top">
                         <td className="py-2 px-2 text-slate-600 whitespace-nowrap">
                           {createdAt ? new Date(createdAt).toLocaleString('pt-BR') : '—'}
                         </td>
-                        <td className="py-2 px-2 font-mono text-slate-700">{String(log.endpoint ?? '—')}</td>
-                        <td className="py-2 px-2 text-slate-600">{String(log.item_type ?? '—')}</td>
-                        <td className="py-2 px-2 font-mono text-slate-700">{String(log.product_code ?? '—')}</td>
+                        <td
+                          className="py-2 px-2 text-slate-700"
+                          title={endpoint ? `Endpoint: ${endpoint}` : undefined}
+                        >
+                          {operacao}
+                        </td>
+                        <td className="py-2 px-2 font-mono text-slate-700">
+                          {String(log.product_code ?? '—')}
+                        </td>
                         <td className="py-2 px-2 text-center">
-                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${statusColor}`}>
-                            {logStatus || '—'}
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${visual.bg}`}
+                          >
+                            <visual.Icon className="w-3 h-3" />
+                            {visual.label}
                           </span>
                         </td>
                         <td className="py-2 px-2 text-right text-slate-600 tabular-nums">
-                          {duration ? `${duration}ms` : '—'}
+                          {formatDuration(duration as number | null | undefined)}
                         </td>
                         <td className="py-2 px-2 text-red-700 max-w-md break-words">
                           {errMsg ? (
                             <details>
-                              <summary className="cursor-pointer">{errMsg.slice(0, 80)}{errMsg.length > 80 ? '…' : ''}</summary>
-                              <pre className="text-[10px] whitespace-pre-wrap mt-1 bg-red-50 p-2 rounded">{errMsg}</pre>
+                              <summary className="cursor-pointer text-red-700">
+                                {errMsg.slice(0, 80)}
+                                {errMsg.length > 80 ? '…' : ''}
+                              </summary>
+                              <pre className="text-[10px] whitespace-pre-wrap mt-1 bg-red-50 p-2 rounded">
+                                {errMsg}
+                              </pre>
                             </details>
-                          ) : '—'}
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
+              <p className="mt-2 text-[10px] text-slate-400">
+                Passe o mouse sobre <strong>Operação</strong> para ver o endpoint técnico do Protheus.
+                A resposta completa do Protheus está em <em>Resposta do Protheus (debug)</em> abaixo.
+              </p>
             </div>
           )}
         </div>
