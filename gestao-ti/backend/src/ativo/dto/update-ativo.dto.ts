@@ -1,72 +1,13 @@
-import {
-  IsString, IsOptional, IsEnum, IsInt, IsDateString, MaxLength, IsUUID,
-} from 'class-validator';
-import { TipoAtivo, StatusAtivo } from '@prisma/client';
+import { PartialType } from '@nestjs/mapped-types';
+import { IsEnum } from 'class-validator';
+import { StatusAtivo } from '@prisma/client';
+import { CreateAtivoDto } from './create-ativo.dto.js';
 
-export class UpdateAtivoDto {
-  @IsOptional() @IsString() @MaxLength(50)
-  tag?: string;
-
-  @IsOptional() @IsString() @MaxLength(200)
-  nome?: string;
-
-  @IsOptional() @IsString() @MaxLength(5000)
-  descricao?: string;
-
-  @IsOptional() @IsEnum(TipoAtivo)
-  tipo?: TipoAtivo;
-
-  @IsOptional() @IsString() @MaxLength(150)
-  fabricante?: string;
-
-  @IsOptional() @IsString() @MaxLength(150)
-  modelo?: string;
-
-  @IsOptional() @IsString() @MaxLength(100)
-  numeroSerie?: string;
-
-  @IsOptional() @IsUUID()
-  filialId?: string;
-
-  @IsOptional() @IsUUID()
-  responsavelId?: string;
-
-  @IsOptional() @IsUUID()
-  departamentoId?: string;
-
-  @IsOptional() @IsDateString()
-  dataAquisicao?: string;
-
-  @IsOptional() @IsDateString()
-  dataGarantia?: string;
-
-  @IsOptional() @IsString() @MaxLength(200)
-  processador?: string;
-
-  @IsOptional() @IsInt()
-  memoriaGB?: number;
-
-  @IsOptional() @IsInt()
-  discoGB?: number;
-
-  @IsOptional() @IsString() @MaxLength(200)
-  sistemaOperacional?: string;
-
-  @IsOptional() @IsString() @MaxLength(45)
-  ip?: string;
-
-  @IsOptional() @IsString() @MaxLength(100)
-  hostname?: string;
-
-  @IsOptional() @IsString() @MaxLength(2000)
-  observacoes?: string;
-
-  @IsOptional() @IsString() @MaxLength(500)
-  glpiId?: string;
-
-  @IsOptional() @IsUUID()
-  ativoPaiId?: string;
-}
+/**
+ * Auditoria 10/05/2026 #DT3-M1 — refatorado para PartialType.
+ * Antes: 41 linhas duplicadas de CreateAtivoDto com `?:`.
+ */
+export class UpdateAtivoDto extends PartialType(CreateAtivoDto) {}
 
 export class UpdateStatusAtivoDto {
   @IsEnum(StatusAtivo)

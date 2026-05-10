@@ -1,123 +1,13 @@
-import {
-  IsString,
-  IsOptional,
-  IsEnum,
-  IsNumber,
-  IsBoolean,
-  IsDateString,
-  IsInt,
-  IsIn,
-  MaxLength,
-  Min,
-} from 'class-validator';
+import { PartialType } from '@nestjs/mapped-types';
+import { IsEnum } from 'class-validator';
 import { StatusContrato } from '@prisma/client';
+import { CreateContratoDto } from './create-contrato.dto.js';
 
-export class UpdateContratoDto {
-  @IsOptional()
-  @IsString()
-  @MaxLength(200)
-  titulo?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(5000)
-  descricao?: string;
-
-  @IsOptional()
-  @IsString()
-  tipoContratoId?: string;
-
-  @IsOptional()
-  @IsString()
-  filialId?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  numeroContrato?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(200)
-  fornecedor?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  codigoFornecedor?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(10)
-  lojaFornecedor?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(15)
-  codigoProduto?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  descricaoProduto?: string;
-
-  @IsOptional()
-  @IsString()
-  fornecedorId?: string;
-
-  @IsOptional()
-  @IsString()
-  produtoId?: string;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  valorTotal?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  valorMensal?: number;
-
-  @IsOptional()
-  @IsDateString()
-  dataInicio?: string;
-
-  @IsOptional()
-  @IsDateString()
-  dataFim?: string;
-
-  @IsOptional()
-  @IsDateString()
-  dataAssinatura?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  renovacaoAutomatica?: boolean;
-
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  diasAlertaVencimento?: number;
-
-  @IsOptional()
-  @IsString()
-  softwareId?: string;
-
-  @IsOptional()
-  @IsString()
-  equipeId?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(2000)
-  observacoes?: string;
-
-  @IsOptional()
-  @IsString()
-  @IsIn(['FIXO', 'VARIAVEL'])
-  modalidadeValor?: string;
-}
+/**
+ * Auditoria 10/05/2026 #DT3-M1 — refatorado para PartialType.
+ * Antes: 76 linhas duplicadas de CreateContratoDto com `?:`.
+ */
+export class UpdateContratoDto extends PartialType(CreateContratoDto) {}
 
 export class UpdateStatusContratoDto {
   @IsEnum(StatusContrato, { message: 'Status invalido' })

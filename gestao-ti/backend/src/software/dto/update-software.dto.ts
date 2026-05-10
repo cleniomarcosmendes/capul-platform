@@ -1,48 +1,14 @@
-import { IsString, IsOptional, IsEnum, MaxLength } from 'class-validator';
-import { TipoSoftware, Criticidade, AmbienteSoftware, StatusSoftware } from '@prisma/client';
+import { PartialType } from '@nestjs/mapped-types';
+import { IsEnum } from 'class-validator';
+import { StatusSoftware } from '@prisma/client';
+import { CreateSoftwareDto } from './create-software.dto.js';
 
-export class UpdateSoftwareDto {
-  @IsOptional()
-  @IsString()
-  @MaxLength(150)
-  nome?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(150)
-  fabricante?: string;
-
-  @IsOptional()
-  @IsEnum(TipoSoftware)
-  tipo?: TipoSoftware;
-
-  @IsOptional()
-  @IsEnum(Criticidade)
-  criticidade?: Criticidade;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  versaoAtual?: string;
-
-  @IsOptional()
-  @IsEnum(AmbienteSoftware)
-  ambiente?: AmbienteSoftware;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  urlAcesso?: string;
-
-  @IsOptional()
-  @IsString()
-  equipeResponsavelId?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(2000)
-  observacoes?: string;
-}
+/**
+ * Auditoria 10/05/2026 #DT3-M1 — refatorado para PartialType.
+ * Antes: 38 linhas duplicadas de CreateSoftwareDto com `?:`.
+ * PartialType cria automaticamente todas as props opcionais com os mesmos validators.
+ */
+export class UpdateSoftwareDto extends PartialType(CreateSoftwareDto) {}
 
 export class UpdateStatusSoftwareDto {
   @IsEnum(StatusSoftware)
