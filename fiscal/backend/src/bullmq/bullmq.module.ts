@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Queue, QueueEvents } from 'bullmq';
 import IORedis from 'ioredis';
+import { QueueMonitorService } from './queue-monitor.service.js';
 
 /**
  * Módulo BullMQ — centraliza a conexão Redis compartilhada entre todas as filas
@@ -23,6 +24,24 @@ export const QUEUE_CRUZAMENTO = Symbol('QUEUE_CRUZAMENTO');
 export const QUEUE_SCHEDULER = Symbol('QUEUE_SCHEDULER');
 export const QUEUE_ALERTAS = Symbol('QUEUE_ALERTAS');
 
+/**
+ * Defaults seguros para jobs em qualquer fila (auditoria 10/05/2026 #M4).
+ *
+ * Sem defaults, BullMQ aplica `attempts: 1` e nenhum backoff — uma falha
+ * pontual de rede mata o job sem retry. Aplicado em todas as filas para
+ * garantir que `.add()` futuros (Onda 2) herdem o comportamento defensivo
+ * sem precisar lembrar de passar opts em cada chamada.
+ *
+ * Per-job options sobrescrevem estes defaults (ex: ExecucaoService já passa
+ * a mesma config explicitamente — sem prejuízo, double coverage).
+ */
+const DEFAULT_JOB_OPTIONS = {
+  attempts: 3,
+  backoff: { type: 'exponential' as const, delay: 2000 },
+  removeOnComplete: 1000,
+  removeOnFail: 500,
+};
+
 @Global()
 @Module({
   imports: [ConfigModule],
@@ -41,19 +60,22 @@ export const QUEUE_ALERTAS = Symbol('QUEUE_ALERTAS');
     {
       provide: QUEUE_CRUZAMENTO,
       inject: [REDIS_CONNECTION],
-      useFactory: (connection: IORedis) => new Queue('fiscal-cruzamento', { connection }),
+      useFactory: (connection: IORedis) =>
+        new Queue('fiscal-cruzamento', { connection, defaultJobOptions: DEFAULT_JOB_OPTIONS }),
     },
     {
       provide: QUEUE_SCHEDULER,
       inject: [REDIS_CONNECTION],
       useFactory: (connection: IORedis) =>
-        new Queue('fiscal-scheduler', { connection }),
+        new Queue('fiscal-scheduler', { connection, defaultJobOptions: DEFAULT_JOB_OPTIONS }),
     },
     {
       provide: QUEUE_ALERTAS,
       inject: [REDIS_CONNECTION],
-      useFactory: (connection: IORedis) => new Queue('fiscal-alertas', { connection }),
+      useFactory: (connection: IORedis) =>
+        new Queue('fiscal-alertas', { connection, defaultJobOptions: DEFAULT_JOB_OPTIONS }),
     },
+    QueueMonitorService,
   ],
   exports: [REDIS_CONNECTION, QUEUE_CRUZAMENTO, QUEUE_SCHEDULER, QUEUE_ALERTAS],
 })
