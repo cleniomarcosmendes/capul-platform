@@ -1,7 +1,8 @@
-# Auditoria — Dívida Técnica — 10/05/2026 (Fase 5.1)
+# Auditoria — Dívida Técnica — 10/05/2026 (Fase 5.1 + Fase 5.2 parcial)
 
 **Frente:** 5 (do `PLAYBOOK_AUDITORIA_v1.md`)
-**Modo:** profunda (Fase 5.1 — mapa + plano; Fase 5.2 — refactor pendente aprovação)
+**Modo:** profunda
+**Status:** Fase 5.1 ✅ concluída • Fase 5.2 ⏳ Sprint 1 ✅ + Sprint 2.1 ✅ aplicados (5 commits) • Sprint 2.2 + Sprint 3 → **Backlog priorizado**
 **Branch:** `audit/divida-tecnica`
 **Auditor:** Claude Opus 4.7 (sessão Clenio)
 **Escopo:** higiene de código sem risco de segurança — duplicações, dead code, dependências não usadas, inconsistências, funções gigantes.
@@ -279,37 +280,42 @@ Validar antes — pode ser falso positivo (resolvido via deps transitivas).
 
 ## Roadmap consolidado de refactor — Fase 5.2
 
-### Sprint 1 — Quick wins (~5h, baixo risco)
+### Sprint 1 — Quick wins ✅ APLICADO (10/05/2026)
 
-- [ ] **DT3-M1** — `PartialType()` nos 6 pares Create/Update (2h) — elimina 245 linhas
-- [ ] **DT3-M3** — Helper `cnpj.helper.ts` no fiscal (1h)
-- [ ] **DT3-M2** — Helper `multer-config.helper.ts` no gestao-ti (1-2h)
-- [ ] **DT1-M1 (parcial)** — Mover `pino-pretty` pra devDeps + remover devDeps óbvias (1h)
+- [x] **DT3-M3** — Helper `cnpj.helper.ts` no fiscal (commit `499215a`) — 7 ocorrências centralizadas
+- [x] **DT3-M1** — `PartialType()` nos 6 pares Create/Update (commit `377cd92`) — 215 linhas eliminadas
+- [x] **DT3-M2** — Helper `multer-upload.helper.ts` no gestao-ti (commit `cef5ce0`) — 4 controllers consistentes; 3 ganharam verificação fs/W_OK que só chamado tinha
+- [x] **DT1-M1 (parcial)** — `pino-pretty` → devDeps + `@nestjs/jwt` removido de gestao-ti (commit `877ddc6`)
 
-### Sprint 2 — Refactor médio (~10-14h, baixo-médio risco)
+### Sprint 2 — Refactor médio (parcialmente aplicado)
 
-- [ ] **DT5-M2** — Quebrar `dashboard-acompanhamento.service.ts` (3-4h)
-- [ ] **DT5-M3** — Quebrar `chamado-core.service.ts` (3-4h)
-- [ ] **DT5-M1** — Refactor `nfe.service.ts` em 3 sub-services (4-6h) — testar exaustivamente
+- [x] **DT5-M2** — Split `dashboard-acompanhamento.service.ts` (commit `d5886d8`) — extraído `DashboardRelatorioService` (397 linhas). Acompanhamento: 1210 → 834 linhas (-31%).
+- [ ] ~~**DT5-M3** — Quebrar `chamado-core.service.ts`~~ — **DESCARTADO** após análise (62 LOC/método, já saudável; quebrar traria pouco ganho)
+- [ ] **DT5-M1** — Refactor `nfe.service.ts` em 3 sub-services (4-6h) — **BACKLOG** (mexe em caminho crítico Fiscal SEFAZ; exige testes amplos pós-refactor)
 
-### Sprint 3 — Refactor grande (~12-20h, médio risco)
+### Sprint 3 — Refactor grande — **BACKLOG**
 
-- [ ] **DT5-A1** — Migrar 97 endpoints de `inventario/main.py` para routers (em 6 lotes de ~10 endpoints)
+- [ ] **DT5-A1** — Migrar 97 endpoints de `inventario/main.py` para routers (12-20h em 6 lotes) — pré-requisito: Douglas voltar (alterações grandes Inventário precisam soak HOM)
 
-### Backlog (~2-4h)
+### Backlog (sem urgência)
 
-- [ ] **DT4-B1** — Tipar 21 ocorrências de `: any` espalhadas
-- [ ] **DT1-M1 (validar)** — `@nestjs/jwt` em gestao-ti, missing deps
+- [ ] **DT4-B1** — Tipar 21 ocorrências de `: any` espalhadas (2-4h)
+- [ ] **DT2-B1** — Avaliar 11 dead code exports de ts-prune (1h)
+- [ ] **DT1-M1 (resto)** — Validar `@nestjs/schematics`, `ts-loader`, `tsconfig-paths`, `source-map-support`, `supertest`, `@types/supertest` em cada backend (1h)
+- [ ] **DT1-M1 (missing)** — Validar deps "missing" depcheck (`multer`, `cron`, `@jest/globals`) — provável falsos positivos transitivos (30min)
 
 ---
 
 ## Estimativa de esforço total
 
-- **Sprint 1 (Quick wins):** 5h
-- **Sprint 2 (Refactor médio):** 10-14h
-- **Sprint 3 (Refactor grande):** 12-20h
-- **Backlog:** 2-4h
-- **TOTAL:** **29-43h**
+| Status | Conteúdo | Esforço |
+|---|---|---|
+| ✅ Aplicado | Sprint 1 (4 quick wins) + Sprint 2.1 (split dashboard) | ~7h |
+| ❌ Descartado | Sprint 2.2 (#DT5-M3 chamado-core) | ~3-4h economizados |
+| ⏳ Backlog | Sprint 2.3 (#DT5-M1 nfe.service) + Sprint 3 (#DT5-A1 inventario) + cleanups | ~16-26h |
+| **TOTAL ORIGINAL** | | **29-43h** |
+| **TOTAL APLICADO HOJE** | | **~7h** |
+| **TOTAL RESTANTE NO BACKLOG** | | **~16-26h** |
 
 ---
 
