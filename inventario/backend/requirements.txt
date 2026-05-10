@@ -16,7 +16,7 @@ psycopg2-binary==2.9.10          # PostgreSQL driver
 pyjwt==2.12.0                    # 25/04 #13 round 2 — CVE-2026-32597 (havia residual em 2.10.1)
 bcrypt==4.3.0                    # Bcrypt hashing (compatível com passlib 1.7.4)
 passlib[bcrypt]==1.7.4           # Password hashing
-python-multipart==0.0.26         # 6 CVEs (round 2 — 0.0.22 e 0.0.26)
+python-multipart==0.0.27         # 25/04 round 2 + 10/05 #A3 — fix GHSA-pp6c-gr5w-3c5g
 
 # Validação de Dados
 pydantic==2.10.3                # Data validation
