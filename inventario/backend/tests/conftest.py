@@ -39,23 +39,29 @@ def db_engine():
     """
     Cria engine do banco de dados de testes.
 
-    Usa o mesmo banco de produção mas com schema de testes.
-    CUIDADO: Limpa dados após testes!
+    Usa o banco real (capul_platform) com search_path=inventario.
+    Cada teste roda em transação que e revertida no fim — sem efeito persistente.
+
+    Pra rodar localmente fora do docker, defina TEST_DATABASE_URL apontando
+    pro postgres exposto.
     """
-    # URL do banco de testes (pode ser diferente do prod)
     DATABASE_URL = os.getenv(
         "TEST_DATABASE_URL",
-        "postgresql://inventario_user:senha123@localhost:5432/inventario_protheus"
+        os.getenv(
+            "DATABASE_URL",
+            "postgresql://capul_user:capul_secure_password_2025@postgres:5432/capul_platform"
+        )
     )
 
-    engine = create_engine(DATABASE_URL)
-
-    # Criar tabelas se não existirem
-    # Base.metadata.create_all(bind=engine)
+    # search_path=inventario garante que as queries das models batam no schema
+    # certo (tabelas estão em "inventario.*" no capul_platform multi-schema).
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"options": "-csearch_path=inventario"}
+    )
 
     yield engine
 
-    # Cleanup após todos os testes
     engine.dispose()
 
 
@@ -93,7 +99,7 @@ def test_admin_user(db_session: Session, test_store: Store) -> User:
         username="test_admin",
         full_name="Test Admin",
         email="admin@test.com",
-        hashed_password=hash_password("test123"),
+        password_hash=hash_password("test123"),
         role=UserRole.ADMIN,
         store_id=test_store.id,
         is_active=True
@@ -122,7 +128,7 @@ def test_supervisor_user(db_session: Session, test_store: Store) -> User:
         username="test_supervisor",
         full_name="Test Supervisor",
         email="supervisor@test.com",
-        hashed_password=hash_password("test123"),
+        password_hash=hash_password("test123"),
         role=UserRole.SUPERVISOR,
         store_id=test_store.id,
         is_active=True
@@ -150,7 +156,7 @@ def test_operator_user(db_session: Session, test_store: Store) -> User:
         username="test_operator",
         full_name="Test Operator",
         email="operator@test.com",
-        hashed_password=hash_password("test123"),
+        password_hash=hash_password("test123"),
         role=UserRole.OPERATOR,
         store_id=test_store.id,
         is_active=True
@@ -216,7 +222,8 @@ def test_products(db_session: Session, test_store: Store) -> list[Product]:
         product = Product(
             id=uuid4(),
             code=f"PROD{i:03d}",
-            description=f"Produto Teste {i}",
+            name=f"Produto Teste {i}",  # NOT NULL no schema atual
+            description=f"Produto Teste {i} (descricao)",
             store_id=test_store.id,
             unit="UN",
             is_active=True
@@ -286,7 +293,7 @@ def test_counting_list(
     """Cria lista de contagem de teste"""
     counting_list = CountingList(
         id=uuid4(),
-        code="CL_TEST_001",
+        list_name="CL_TEST_001",
         inventory_id=test_inventory.id,
         current_cycle=1,
         list_status="ABERTA",
