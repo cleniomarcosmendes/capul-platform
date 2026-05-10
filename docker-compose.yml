@@ -77,7 +77,12 @@ services:
     # Se REDIS_PASSWORD estiver ausente/vazio, o Compose aborta com erro
     # (sintaxe ${VAR:?}). Evita repetir o incidente 19/04/2026 onde Redis
     # subiu sem autenticacao porque a var nao estava preenchida em prod.
-    command: redis-server --requirepass ${REDIS_PASSWORD:?Variavel REDIS_PASSWORD obrigatoria no .env — sem isto Redis rodaria sem autenticacao}
+    # Auditoria 10/05/2026 #M2 (Performance) — maxmemory + LRU eviction
+    # Container tem mem_limit 256m; deixamos 200mb pro Redis + 56mb headroom pro
+    # overhead (RDB snapshots temporarios, fragmentacao). Sem maxmemory, Redis
+    # daria OOM antes de evictar (default policy=noeviction).
+    # allkeys-lru: evicta a chave menos recentemente usada (cache real, nao crítico).
+    command: redis-server --requirepass ${REDIS_PASSWORD:?Variavel REDIS_PASSWORD obrigatoria no .env — sem isto Redis rodaria sem autenticacao} --maxmemory 200mb --maxmemory-policy allkeys-lru
     # Porta NAO exposta externamente — acesso apenas via rede Docker interna
     volumes:
       - redis_data:/data
