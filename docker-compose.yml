@@ -49,6 +49,16 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: capul-db
+    # Auditoria 10/05/2026 #M1 Performance — pg_stat_statements habilitado
+    # para visibilidade de slow queries (top-N por tempo total/médio).
+    # CREATE EXTENSION pg_stat_statements precisa rodar uma vez (depois do
+    # primeiro startup com shared_preload_libraries definido).
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.max=10000
+      -c pg_stat_statements.track=all
+      -c pg_stat_statements.save=on
     environment:
       POSTGRES_USER: ${DB_USER:?DB_USER obrigatorio no .env}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD obrigatorio no .env}
@@ -112,7 +122,7 @@ services:
     container_name: capul-auth-migrate
     command: ["sh", "-c", "npx prisma migrate deploy"]
     environment:
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=core
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=core&connection_limit=10
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,7 +133,7 @@ services:
     build: ./auth-gateway
     container_name: capul-auth
     environment:
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=core
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=core&connection_limit=10
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET obrigatorio no .env (64+ chars — gerar com openssl rand -hex 64)}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET obrigatorio (deve ser diferente de JWT_SECRET)}
       JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-60m}
@@ -258,7 +268,7 @@ services:
     container_name: capul-gestao-ti-migrate
     command: ["sh", "-c", "npx prisma migrate deploy"]
     environment:
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public&connection_limit=10
       DB_SCHEMA: gestao_ti
       CORE_SCHEMA: core
     depends_on:
@@ -271,7 +281,7 @@ services:
     build: ./gestao-ti/backend
     container_name: capul-gestao-ti-api
     environment:
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public&connection_limit=10
       JWT_SECRET: ${JWT_SECRET}
       DB_SCHEMA: gestao_ti
       CORE_SCHEMA: core
@@ -331,7 +341,7 @@ services:
     container_name: capul-fiscal-migrate
     command: ["sh", "-c", "npx prisma migrate deploy"]
     environment:
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public&connection_limit=10
       DB_SCHEMA: fiscal
       CORE_SCHEMA: core
     depends_on:
@@ -344,7 +354,7 @@ services:
     build: ./fiscal/backend
     container_name: capul-fiscal-api
     environment:
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public&connection_limit=10
       JWT_SECRET: ${JWT_SECRET}
       DB_SCHEMA: fiscal
       CORE_SCHEMA: core
