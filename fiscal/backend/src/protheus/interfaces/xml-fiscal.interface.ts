@@ -82,6 +82,11 @@ export interface XmlFiscalPostBody {
   usuarioCapulQueDisparou?: string;
 }
 
+/**
+ * @public-api Status retornado pelo POST /xmlFiscal. Tipo union explicíto
+ * para documentação — XmlFiscalPostResponseGravado/JaExistente usam literals
+ * direto. Anotado em 11/05/2026 (auditoria #DT2-B1).
+ */
 export type XmlFiscalPostStatus = 'GRAVADO' | 'JA_EXISTENTE';
 
 export interface XmlFiscalPostResponseGravado {
@@ -122,6 +127,11 @@ export type XmlFiscalErrorCode =
   | 'FALHA_GRAVACAO'
   | 'PROTHEUS_INDISPONIVEL';
 
+/**
+ * @public-api Payload de erro estruturado retornado pelo Protheus.
+ * Anotado em 11/05/2026 (auditoria #DT2-B1) — tipo oficial do contrato.
+ * XmlFiscalException usa estes campos diretamente sem tipar.
+ */
 export interface XmlFiscalErrorBody {
   erro: XmlFiscalErrorCode;
   mensagem: string;

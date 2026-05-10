@@ -62,6 +62,11 @@ export interface EventosNfeResponse {
 /**
  * Payload de erro 400 retornado pela API:
  *   { code: 400, message: "O parametro chaveNFe deve conter exatamente 44 digitos numericos." }
+ *
+ * @public-api Faz parte do contrato com Protheus /eventosNfe.
+ * Anotado em 11/05/2026 (auditoria #DT2-B1) — embora ts-prune detecte
+ * "unused", é o tipo TS oficial do response de erro do endpoint. Mantido
+ * para documentação e uso futuro (ex: novo handler que tipa o response).
  */
 export interface EventosNfeErrorBody {
   code: number;

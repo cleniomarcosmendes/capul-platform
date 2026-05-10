@@ -7,12 +7,8 @@ export class ResolverChamadoDto {
   descricao: string;
 }
 
-export class FecharChamadoDto {
-  @IsOptional()
-  @IsString()
-  @MaxLength(5000)
-  descricao?: string;
-}
+// FecharChamadoDto removido em 11/05/2026 (dead code via ts-prune — zero usos).
+// Caso "fechar chamado" usa o fluxo regular ResolverChamadoDto + transição de status.
 
 export class ReabrirChamadoDto {
   @IsOptional()
