@@ -12834,6 +12834,12 @@ def sync_cycle_between_tables(db: Session, inventory_id: str, new_cycle: int):
 
     Esta função garante que ambas as tabelas sempre tenham o mesmo current_cycle,
     resolvendo definitivamente os problemas de sincronização.
+
+    Também limpa flags de revisão (revisar_no_ciclo, motivo_revisao) que são
+    específicas do ciclo anterior — fix 09/05/2026 INV_04: bandeiras antigas
+    do ciclo 1 ficavam penduradas e o frontend `partialReviewMode` forçava
+    filtro 'revisar' no ciclo 2, listando só a interseção (1 item de 7
+    pendentes).
     """
     try:
         logger.info(f"🔄 [SYNC-DEFINITIVO] Sincronizando current_cycle={new_cycle} para inventory {inventory_id}")
@@ -12862,10 +12868,32 @@ def sync_cycle_between_tables(db: Session, inventory_id: str, new_cycle: int):
             "inventory_id": inventory_id
         })
 
-        # 3. Commit das mudanças
+        # 3. Limpar flags revisar_no_ciclo de todas as counting_lists do
+        #    inventário — sao do ciclo ANTERIOR. Sem isso, o frontend
+        #    detecta partialReviewMode e força filtro 'revisar', escondendo
+        #    a maioria dos itens pendentes do ciclo novo.
+        clear_review_flags_query = text("""
+            UPDATE inventario.counting_list_items
+               SET revisar_no_ciclo = false,
+                   motivo_revisao = NULL
+             WHERE counting_list_id IN (
+                 SELECT id FROM inventario.counting_lists
+                  WHERE inventory_id = :inventory_id
+             )
+               AND (revisar_no_ciclo = true OR motivo_revisao IS NOT NULL)
+        """)
+        result_clear = db.execute(clear_review_flags_query, {
+            "inventory_id": inventory_id
+        })
+
+        # 4. Commit das mudanças
         db.commit()
 
-        logger.info(f"✅ [SYNC-DEFINITIVO] Ciclo sincronizado: inventory_lists ({result_inventory.rowcount} rows) e counting_lists ({result_counting.rowcount} rows)")
+        logger.info(
+            f"✅ [SYNC-DEFINITIVO] Ciclo sincronizado: inventory_lists "
+            f"({result_inventory.rowcount} rows), counting_lists ({result_counting.rowcount} rows), "
+            f"flags revisar limpas ({result_clear.rowcount} items)"
+        )
 
         return True
 
