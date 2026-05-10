@@ -2224,3 +2224,33 @@ model NotaFiscalItem {
   @@map("nota_fiscal_itens")
   @@schema("gestao_ti")
 }
+
+/// Cache de respostas para idempotência em endpoints de criação.
+/// Auditoria 10/05/2026 #M3 — defesa em profundidade contra duplicação por
+/// retry de cliente após timeout/network glitch.
+///
+/// Uso: cliente envia header `Idempotency-Key: <uuid>`. Backend faz lookup
+/// por (usuario_id, key); se cached e não expirou, retorna resposta cacheada.
+/// Senão, executa request normal e cacheia a resposta com TTL 24h.
+///
+/// Cleanup: cron @daily apaga registros com expires_at < now().
+model IdempotencyKey {
+  id             String   @id @default(uuid())
+  /// Chave gerada pelo cliente (UUID/ULID/qualquer string única do request)
+  key            String   @db.VarChar(128)
+  /// userId do JWT (isola entre usuários)
+  usuarioId      String   @map("usuario_id")
+  /// Method + path para detectar mau uso (cliente enviando mesma key em endpoints diferentes)
+  method         String   @db.VarChar(10)
+  path           String   @db.VarChar(255)
+  /// Response cacheada
+  responseStatus Int      @map("response_status")
+  responseBody   Json?    @map("response_body")
+  createdAt      DateTime @default(now()) @map("created_at")
+  expiresAt      DateTime @map("expires_at")
+
+  @@unique([usuarioId, key], name: "idempotency_user_key")
+  @@index([expiresAt]) // pra cleanup eficiente
+  @@map("idempotency_keys")
+  @@schema("gestao_ti")
+}

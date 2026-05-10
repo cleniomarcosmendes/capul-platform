@@ -4,12 +4,17 @@ import axios from 'axios';
 // Em dev local sem Nginx, usar proxy do Vite ou porta direta
 const BASE_URL = import.meta.env.VITE_API_URL || '';
 
+// timeout 30s — auditoria 10/05/2026 #A2 (Robustez UX)
+// Evita spinner infinito quando backend trava. Endpoints que demoram mais
+// (uploads, imports) devem passar override no chamada: api.post(url, data, { timeout: 600_000 }).
 export const authApi = axios.create({
   baseURL: `${BASE_URL}/api/v1/auth`,
+  timeout: 30_000,
 });
 
 export const coreApi = axios.create({
   baseURL: `${BASE_URL}/api/v1/core`,
+  timeout: 30_000,
 });
 
 // Interceptor: adiciona token em todas as requests

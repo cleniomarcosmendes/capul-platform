@@ -4,9 +4,12 @@ const AUTH_BASE = '/api/v1/auth';
 const CORE_BASE = '/api/v1/core';
 const FISCAL_BASE = '/api/v1/fiscal';
 
-export const authApi = axios.create({ baseURL: AUTH_BASE });
-export const coreApi = axios.create({ baseURL: CORE_BASE });
-export const fiscalApi = axios.create({ baseURL: FISCAL_BASE });
+// timeout 30s — auditoria 10/05/2026 #A2 (Robustez UX)
+// Consultas SEFAZ/Protheus podem demorar mais; endpoints especificos passam override:
+//   fiscalApi.post('/cte/consulta', payload, { timeout: 120_000 })
+export const authApi = axios.create({ baseURL: AUTH_BASE, timeout: 30_000 });
+export const coreApi = axios.create({ baseURL: CORE_BASE, timeout: 30_000 });
+export const fiscalApi = axios.create({ baseURL: FISCAL_BASE, timeout: 30_000 });
 
 let isRefreshing = false;
 let failedQueue: { resolve: (token: string) => void; reject: (err: unknown) => void }[] = [];

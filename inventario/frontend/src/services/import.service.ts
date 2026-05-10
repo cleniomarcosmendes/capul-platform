@@ -52,9 +52,15 @@ export interface SimpleWarehouse {
 
 // === Serviço ===
 
+// Sync hierarquia + import-produtos podem levar 5-30 min. Override timeout
+// default de 30s — alinhado com nginx proxy_read_timeout (300s sync, 1800s
+// import-produtos). Audit Frente 6 #A2 — 10/05/2026.
+const SYNC_TIMEOUT = 300_000;        // 5 min para sync de hierarquia
+const IMPORT_TIMEOUT = 1_800_000;    // 30 min para import-produtos
+
 export const importService = {
   async syncHierarchy(): Promise<HierarchySyncResult> {
-    const { data } = await inventarioApi.post('/sync/protheus/hierarchy');
+    const { data } = await inventarioApi.post('/sync/protheus/hierarchy', undefined, { timeout: SYNC_TIMEOUT });
     return data;
   },
 
@@ -67,7 +73,7 @@ export const importService = {
     const params = new URLSearchParams();
     params.append('filial', filial);
     armazens.forEach((a) => params.append('armazem', a));
-    const { data } = await inventarioApi.post(`/import-produtos?${params.toString()}`);
+    const { data } = await inventarioApi.post(`/import-produtos?${params.toString()}`, undefined, { timeout: IMPORT_TIMEOUT });
     return data;
   },
 };

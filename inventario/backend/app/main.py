@@ -729,31 +729,86 @@ async def import_bulk_basic(request: dict, db: Session = Depends(get_db)):
 
 @app.get("/health", tags=["Health"])
 async def health_check(db: Session = Depends(get_db)):
-    """Health check com verificação do banco"""
+    """
+    Health check profundo (auditoria 10/05/2026 #A1 — Robustez).
+
+    Verifica:
+      - Database (SQLAlchemy: query simples + counts)
+      - Redis (cache.get_redis_client + PING)
+
+    Status overall:
+      - ok:       todos passam
+      - degraded: Redis falhou ou nao configurado (cache nao funciona, mas operacoes principais sim)
+      - down:     DB falhou - retorna HTTP 503
+
+    Antes so verificava DB; container ficava "healthy" mesmo com Redis caido.
+    """
+    from app.core.cache import get_redis_client
+    import time
+
+    # === Database check ===
+    db_check = {"ok": False, "latency_ms": -1}
+    t0 = time.time()
     try:
-        # Testar conexão com banco
         user_count = db.query(User).count()
         store_count = db.query(Store).count()
-        
-        return {
-            "status": "🟢 Healthy",
-            "timestamp": datetime.now().isoformat(),
-            "database": "✅ Connected",
-            "counts": {
-                "users": user_count,
-                "stores": store_count
-            }
+        db_check = {
+            "ok": True,
+            "latency_ms": round((time.time() - t0) * 1000, 1),
+            "counts": {"users": user_count, "stores": store_count},
         }
     except Exception as e:
-        logger.error(f"❌ Health check failed: {e}")
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "🔴 Unhealthy",
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
+        db_check = {
+            "ok": False,
+            "latency_ms": round((time.time() - t0) * 1000, 1),
+            "message": str(e),
+        }
+
+    # === Redis check ===
+    redis_check = {"ok": False, "latency_ms": -1}
+    t1 = time.time()
+    try:
+        client = get_redis_client()
+        if client is None:
+            redis_check = {"ok": False, "message": "Redis nao configurado (REDIS_URL ausente ou conexao falhou)"}
+        else:
+            pong = client.ping()
+            redis_check = {
+                "ok": bool(pong),
+                "latency_ms": round((time.time() - t1) * 1000, 1),
             }
-        )
+    except Exception as e:
+        redis_check = {
+            "ok": False,
+            "latency_ms": round((time.time() - t1) * 1000, 1),
+            "message": str(e),
+        }
+
+    # === Status overall ===
+    if not db_check["ok"]:
+        status = "down"
+        status_code = 503
+    elif not redis_check["ok"]:
+        status = "degraded"
+        status_code = 200
+    else:
+        status = "ok"
+        status_code = 200
+
+    payload = {
+        "status": status,
+        "timestamp": datetime.now().isoformat(),
+        "checks": {
+            "database": db_check,
+            "redis": redis_check,
+        },
+    }
+
+    if status == "down":
+        logger.error(f"Health check DOWN: db={db_check}")
+        return JSONResponse(status_code=status_code, content=payload)
+
+    return payload
 
 # =================================
 # ENDPOINTS DE CACHE (v2.19.13)
