@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { onlyDigits } from '../common/helpers/cnpj.helper.js';
 
 /**
  * Dados obtidos via Receita Federal (BrasilAPI ou ReceitaWS).
@@ -56,7 +57,7 @@ export class ReceitaClient {
   private readonly CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 horas
 
   async consultarCnpj(cnpj: string): Promise<ReceitaFederalData | null> {
-    const digits = cnpj.replace(/\D/g, '');
+    const digits = onlyDigits(cnpj);
     if (digits.length !== 14) {
       return null;
     }

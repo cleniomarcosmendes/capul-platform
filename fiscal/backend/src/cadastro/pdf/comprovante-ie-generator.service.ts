@@ -6,6 +6,7 @@ import type {
   CruzamentoIeProtheusSefaz,
 } from '../cadastro.service.js';
 import type { ReceitaFederalData } from '../receita.client.js';
+import { formatCpfCnpj } from '../../common/helpers/cnpj.helper.js';
 
 /**
  * Geração do "Comprovante CCC — Inscrição Estadual" — relatório textual
@@ -280,10 +281,7 @@ export class ComprovanteIeGeneratorService {
 
   private fmtCnpj(s: string | null | undefined): string {
     if (!s) return '-';
-    const d = s.replace(/\D/g, '');
-    if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
-    if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-    return s;
+    return formatCpfCnpj(s);
   }
 
   private fmtSituacao(situacaoRaw: string, situacaoEnum: string): string {

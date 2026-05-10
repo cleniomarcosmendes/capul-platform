@@ -9,6 +9,7 @@ import { Worker, type Job } from 'bullmq';
 import IORedis from 'ioredis';
 import { REDIS_CONNECTION } from '../bullmq/bullmq.module.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { onlyDigits } from '../common/helpers/cnpj.helper.js';
 import { CccClient } from '../sefaz/ccc-client.service.js';
 import { AmbienteService } from '../ambiente/ambiente.service.js';
 import { CircuitBreakerService, CircuitBreakerOpenError } from './circuit-breaker.service.js';
@@ -134,7 +135,7 @@ export class CruzamentoWorker implements OnApplicationBootstrap, OnApplicationSh
     jobData: CruzamentoJobData,
   ): Promise<void> {
     const situacao = this.mapSituacao(c.situacaoCadastral);
-    const cnpjClean = (c.cnpj ?? jobData.cnpj).replace(/\D/g, '');
+    const cnpjClean = onlyDigits(c.cnpj ?? jobData.cnpj);
 
     const existing = await this.prisma.cadastroContribuinte.findUnique({
       where: { cnpj_uf: { cnpj: cnpjClean, uf } },

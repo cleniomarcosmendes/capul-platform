@@ -12,6 +12,7 @@ import { AmbienteService } from '../ambiente/ambiente.service.js';
 import { ProtheusCadastroService } from '../protheus/protheus-cadastro.service.js';
 import { ReceitaClient, type ReceitaFederalData } from './receita.client.js';
 import { DivergenciaService } from './divergencia.service.js';
+import { onlyDigits } from '../common/helpers/cnpj.helper.js';
 import type {
   CadastroContribuinte,
   SituacaoCadastral,
@@ -266,7 +267,7 @@ export class CadastroService {
    * inexistente no Protheus — sem UF, o SEFAZ não tem onde perguntar).
    */
   async consultarPontual(cnpj: string, uf?: string | null): Promise<CadastroConsultaPontualResult> {
-    const cnpjDigits = cnpj.replace(/\D/g, '');
+    const cnpjDigits = onlyDigits(cnpj);
     if (cnpjDigits.length !== 14 && cnpjDigits.length !== 11) {
       throw new BadRequestException(`Documento inválido — informe CPF (11 dígitos) ou CNPJ (14 dígitos): ${cnpj}`);
     }
@@ -610,7 +611,7 @@ export class CadastroService {
   }
 
   async getPorCnpj(cnpj: string): Promise<CadastroContribuinte[]> {
-    const cnpjDigits = cnpj.replace(/\D/g, '');
+    const cnpjDigits = onlyDigits(cnpj);
     return this.prisma.cadastroContribuinte.findMany({
       where: { cnpj: cnpjDigits },
       orderBy: { updatedAt: 'desc' },
@@ -618,7 +619,7 @@ export class CadastroService {
   }
 
   async getHistorico(cnpj: string): Promise<any> {
-    const cnpjDigits = cnpj.replace(/\D/g, '');
+    const cnpjDigits = onlyDigits(cnpj);
     const contrib = await this.prisma.cadastroContribuinte.findFirst({
       where: { cnpj: cnpjDigits },
       include: {

@@ -18,6 +18,7 @@ import {
 } from '../sefaz/nfe-consulta-protocolo.client.js';
 import { AmbienteService } from '../ambiente/ambiente.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { onlyDigits, formatCnpj as fmtCnpjHelper } from '../common/helpers/cnpj.helper.js';
 import { NfeParserService, ORGAO_RECEPCAO_MAP } from './parsers/nfe-parser.service.js';
 import { DocumentoConsultaService } from './documento-consulta.service.js';
 import {
@@ -1273,7 +1274,7 @@ export class NfeService {
         where: { codigo, status: 'ATIVO' },
         select: { cnpj: true },
       });
-      const cnpj = filial?.cnpj?.replace(/\D/g, '') ?? '';
+      const cnpj = onlyDigits(filial?.cnpj);
       return cnpj.length === 14 ? cnpj : null;
     } catch (err) {
       this.logger.warn(
@@ -1304,7 +1305,7 @@ export class NfeService {
         select: { codigo: true, cnpj: true },
       });
       return filiais
-        .map((f) => ({ codigo: f.codigo, cnpj: (f.cnpj ?? '').replace(/\D/g, '') }))
+        .map((f) => ({ codigo: f.codigo, cnpj: onlyDigits(f.cnpj) }))
         .filter((f) => f.cnpj.length === 14)
         .sort((a, b) => {
           if (a.codigo === '01') return -1;
@@ -1336,8 +1337,7 @@ export class NfeService {
   }
 
   private formatCnpj(cnpj: string): string {
-    if (cnpj.length !== 14) return cnpj;
-    return `${cnpj.slice(0, 2)}.${cnpj.slice(2, 5)}.${cnpj.slice(5, 8)}/${cnpj.slice(8, 12)}-${cnpj.slice(12)}`;
+    return fmtCnpjHelper(cnpj);
   }
 
   /**

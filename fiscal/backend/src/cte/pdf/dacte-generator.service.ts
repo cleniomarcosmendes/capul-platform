@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import bwipjs from 'bwip-js';
 import type { CteParsed, CteParticipante } from '../parsers/cte-parsed.interface.js';
+import { formatCpfCnpj } from '../../common/helpers/cnpj.helper.js';
 
 /**
  * Geração do DACTE — Documento Auxiliar do CT-e.
@@ -746,10 +747,7 @@ export class DacteGeneratorService {
 
   private formatCnpj(cnpj: string | null | undefined): string {
     if (!cnpj) return '-';
-    const d = cnpj.replace(/\D/g, '');
-    if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
-    if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-    return cnpj;
+    return formatCpfCnpj(cnpj);
   }
 
   private formatCep(cep: string | null | undefined): string {
