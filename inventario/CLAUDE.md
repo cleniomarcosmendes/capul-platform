@@ -47,7 +47,7 @@ cd backend && pytest
 | Frontend | http://localhost:8000/ | 8000 |
 | API Docs | http://localhost:8000/docs | 8000 |
 | PgAdmin | http://localhost:5050 | 5050 |
-| Login | admin / admin123 | - |
+| Login | usuário criado via UNIFIED_AUTH (Auth Gateway) | - |
 
 ---
 
