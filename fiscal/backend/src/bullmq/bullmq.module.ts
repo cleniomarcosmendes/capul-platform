@@ -3,6 +3,16 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Queue, QueueEvents } from 'bullmq';
 import IORedis from 'ioredis';
 import { QueueMonitorService } from './queue-monitor.service.js';
+import {
+  REDIS_CONNECTION,
+  QUEUE_CRUZAMENTO,
+  QUEUE_SCHEDULER,
+  QUEUE_ALERTAS,
+} from './bullmq.tokens.js';
+
+// Re-exporta tokens para retrocompatibilidade com módulos que ainda
+// importam daqui (refactor 11/05/2026 — circular import com QueueMonitor).
+export { REDIS_CONNECTION, QUEUE_CRUZAMENTO, QUEUE_SCHEDULER, QUEUE_ALERTAS };
 
 /**
  * Módulo BullMQ — centraliza a conexão Redis compartilhada entre todas as filas
@@ -18,11 +28,6 @@ import { QueueMonitorService } from './queue-monitor.service.js';
  * @Global porque múltiplos módulos (cruzamento, alertas) injetam a mesma
  * conexão para evitar múltiplas conexões Redis.
  */
-
-export const REDIS_CONNECTION = Symbol('REDIS_CONNECTION');
-export const QUEUE_CRUZAMENTO = Symbol('QUEUE_CRUZAMENTO');
-export const QUEUE_SCHEDULER = Symbol('QUEUE_SCHEDULER');
-export const QUEUE_ALERTAS = Symbol('QUEUE_ALERTAS');
 
 /**
  * Defaults seguros para jobs em qualquer fila (auditoria 10/05/2026 #M4).

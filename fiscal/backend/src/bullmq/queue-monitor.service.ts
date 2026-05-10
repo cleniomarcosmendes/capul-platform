@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { Queue } from 'bullmq';
-import { QUEUE_ALERTAS, QUEUE_CRUZAMENTO, QUEUE_SCHEDULER } from './bullmq.module.js';
+import { QUEUE_ALERTAS, QUEUE_CRUZAMENTO, QUEUE_SCHEDULER } from './bullmq.tokens.js';
 
 /**
  * Monitor periodico das filas BullMQ — origem: auditoria 10/05/2026 #A3 (Robustez).
