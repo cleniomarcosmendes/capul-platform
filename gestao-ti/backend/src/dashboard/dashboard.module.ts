@@ -5,6 +5,7 @@ import { DashboardResumoService } from './services/dashboard-resumo.service.js';
 import { DashboardOperacionalService } from './services/dashboard-operacional.service.js';
 import { DashboardFinanceiroService } from './services/dashboard-financeiro.service.js';
 import { DashboardAcompanhamentoService } from './services/dashboard-acompanhamento.service.js';
+import { DashboardRelatorioService } from './services/dashboard-relatorio.service.js';
 import { DashboardIndicadoresService } from './services/dashboard-indicadores.service.js';
 import { HorarioModule } from '../horario/horario.module.js';
 
@@ -16,6 +17,7 @@ import { HorarioModule } from '../horario/horario.module.js';
     DashboardOperacionalService,
     DashboardFinanceiroService,
     DashboardAcompanhamentoService,
+    DashboardRelatorioService,
     DashboardIndicadoresService,
     DashboardService,
   ],

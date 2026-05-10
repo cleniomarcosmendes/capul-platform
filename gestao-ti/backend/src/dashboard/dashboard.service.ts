@@ -3,6 +3,7 @@ import { DashboardResumoService } from './services/dashboard-resumo.service.js';
 import { DashboardOperacionalService } from './services/dashboard-operacional.service.js';
 import { DashboardFinanceiroService } from './services/dashboard-financeiro.service.js';
 import { DashboardAcompanhamentoService } from './services/dashboard-acompanhamento.service.js';
+import { DashboardRelatorioService } from './services/dashboard-relatorio.service.js';
 import { DashboardIndicadoresService } from './services/dashboard-indicadores.service.js';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class DashboardService {
     private readonly operacional: DashboardOperacionalService,
     private readonly financeiro: DashboardFinanceiroService,
     private readonly acompanhamento: DashboardAcompanhamentoService,
+    private readonly relatorio: DashboardRelatorioService,
     private readonly indicadores: DashboardIndicadoresService,
   ) {}
 
@@ -90,19 +92,19 @@ export class DashboardService {
   }
 
   async getMinhasPendencias(userId: string) {
-    return this.acompanhamento.getMinhasPendencias(userId);
+    return this.relatorio.getMinhasPendencias(userId);
   }
 
   async getRelatorioOs(tecnicoId: string, dataInicio: string, dataFim: string) {
-    return this.acompanhamento.getRelatorioOs(tecnicoId, dataInicio, dataFim);
+    return this.relatorio.getRelatorioOs(tecnicoId, dataInicio, dataFim);
   }
 
   async getRelatorioChamado(chamadoId: string) {
-    return this.acompanhamento.getRelatorioChamado(chamadoId);
+    return this.relatorio.getRelatorioChamado(chamadoId);
   }
 
   async getRelatorioProjeto(projetoId: string) {
-    return this.acompanhamento.getRelatorioProjeto(projetoId);
+    return this.relatorio.getRelatorioProjeto(projetoId);
   }
 
   getIndicadores(mes: number, ano: number, tiposParada?: string[]) {
