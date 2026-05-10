@@ -113,7 +113,8 @@ export class UsuarioService {
       }
     }
 
-    const senhaHash = await bcrypt.hash(dto.senha, 10);
+    // Cost 12 — auditoria 10/05/2026 #M2
+    const senhaHash = await bcrypt.hash(dto.senha, 12);
 
     const novoUsuario = await this.prisma.usuario.create({
       data: {
@@ -211,7 +212,8 @@ export class UsuarioService {
 
   async resetSenha(id: string, novaSenha: string) {
     await this.findOne(id);
-    const senhaHash = await bcrypt.hash(novaSenha, 10);
+    // Cost 12 — auditoria 10/05/2026 #M2
+    const senhaHash = await bcrypt.hash(novaSenha, 12);
     await this.prisma.usuario.update({
       where: { id },
       data: { senha: senhaHash, primeiroAcesso: true },

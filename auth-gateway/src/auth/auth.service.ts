@@ -226,7 +226,8 @@ export class AuthService {
       throw new BadRequestException('Senha atual incorreta');
     }
 
-    const novaSenhaHash = await bcrypt.hash(dto.novaSenha, 10);
+    // Cost 12 — auditoria 10/05/2026 #M2 (recomendação 2026 vs hardware atual; ~400ms vs ~100ms)
+    const novaSenhaHash = await bcrypt.hash(dto.novaSenha, 12);
 
     await this.prisma.usuario.update({
       where: { id: userId },
