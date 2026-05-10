@@ -46,6 +46,15 @@ export class DocumentoConsultaService {
 
   async registrar(input: RegistrarConsultaInput): Promise<DocumentoConsulta> {
     const valorTotal = input.valorTotal ?? null;
+    // Truncate defensivo — alguns retornos SEFAZ vêm com placeholder não-substituído
+    // (ex.: "Autorizado o uso do $APP_NAME_FORMATED$" = 39 chars > varchar(30) de
+    // statusAtual). Sem isso o upsert quebra com P2000. Limites espelham o schema.
+    const trunc = (v: string | null | undefined, max: number): string | null | undefined =>
+      typeof v === 'string' && v.length > max ? v.slice(0, max) : v;
+    const statusAtual = trunc(input.statusAtual, 30);
+    const numeroNF = trunc(input.numeroNF, 9);
+    const serie = trunc(input.serie, 3);
+    const ambienteSefaz = trunc(input.ambienteSefaz, 20) ?? input.ambienteSefaz;
     // Flags granulares (08/05/2026): undefined deixa Prisma nao alterar campo,
     // null sobrescreve. So passamos null/valor quando a chamada teve gravacao
     // real (grvFlags != null no helper).
@@ -68,22 +77,22 @@ export class DocumentoConsultaService {
         usuarioId: input.usuarioId,
         usuarioEmail: input.usuarioEmail,
         origem: input.origem,
-        ambienteSefaz: input.ambienteSefaz,
+        ambienteSefaz,
         protocoloAutorizacao: input.protocoloAutorizacao,
         dataAutorizacao: input.dataAutorizacao,
         cnpjEmitente: input.cnpjEmitente,
         cnpjDestinatario: input.cnpjDestinatario,
-        numeroNF: input.numeroNF,
-        serie: input.serie,
+        numeroNF,
+        serie,
         valorTotal: valorTotal !== null ? valorTotal : undefined,
-        statusAtual: input.statusAtual,
+        statusAtual,
         erroMensagem: input.erroMensagem,
         protheusGrvRequest: input.protheusGrvRequest ?? undefined,
         ...grvFields,
       },
       update: {
         origem: input.origem,
-        statusAtual: input.statusAtual,
+        statusAtual,
         erroMensagem: input.erroMensagem,
         // atualiza protocolo e valor se vieram (ex.: primeira consulta foi cache miss,
         // segunda já veio do Protheus com protocolo preenchido)
@@ -91,8 +100,8 @@ export class DocumentoConsultaService {
         dataAutorizacao: input.dataAutorizacao ?? undefined,
         cnpjEmitente: input.cnpjEmitente ?? undefined,
         cnpjDestinatario: input.cnpjDestinatario ?? undefined,
-        numeroNF: input.numeroNF ?? undefined,
-        serie: input.serie ?? undefined,
+        numeroNF: numeroNF ?? undefined,
+        serie: serie ?? undefined,
         valorTotal: valorTotal !== null ? valorTotal : undefined,
         // protheusGrvRequest atualizado a cada nova tentativa de gravação,
         // mesmo se o request anterior teve sucesso — permite debug de
@@ -104,9 +113,10 @@ export class DocumentoConsultaService {
   }
 
   async marcarStatusSefazAtualizado(id: string, statusAtual: string): Promise<void> {
+    const truncated = statusAtual.length > 30 ? statusAtual.slice(0, 30) : statusAtual;
     await this.prisma.documentoConsulta.update({
       where: { id },
-      data: { consultaSefazAtualizadaEm: new Date(), statusAtual },
+      data: { consultaSefazAtualizadaEm: new Date(), statusAtual: truncated },
     });
   }
 
