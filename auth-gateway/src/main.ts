@@ -22,12 +22,21 @@ async function bootstrap() {
   app.useGlobalPipes(globalValidationPipe);
   app.useGlobalFilters(new GlobalExceptionFilter());
 
-  // CORS restritivo — apenas origens da intranet
-  const allowedOrigins = (process.env.CORS_ORIGINS || 'https://localhost')
+  // Auditoria 10/05/2026 #B3 — CORS_ORIGINS obrigatório (sem fallback).
+  // Mesma regra do fiscal-backend. Aborta se vazio para evitar configuração
+  // silenciosa em PROD com fallback `localhost` que não bloqueia ataques reais.
+  const corsOrigins = (process.env.CORS_ORIGINS ?? '')
     .split(',')
-    .map((o) => o.trim());
+    .map((o) => o.trim())
+    .filter(Boolean);
+  if (corsOrigins.length === 0) {
+    throw new Error(
+      'CORS_ORIGINS não configurado. Defina a variável de ambiente com a lista ' +
+        'de origens permitidas separadas por vírgula (ex.: https://platform.capul.com.br,https://localhost).',
+    );
+  }
   app.enableCors({
-    origin: allowedOrigins,
+    origin: corsOrigins,
     credentials: true,
   });
 

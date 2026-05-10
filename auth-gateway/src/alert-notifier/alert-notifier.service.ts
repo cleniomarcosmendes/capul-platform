@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { DrConfigService } from '../backup-execucao/dr-config.service';
+import { validatePublicUrl } from '../common/utils/url-validator';
 
 /**
  * Service centralizado de alertas — webhook (Slack/Teams) + e-mail.
@@ -48,17 +49,25 @@ export class AlertNotifierService {
 
     // Webhook (Slack/Teams) — não bloqueia se falhar
     if (cfg.webhookAlerta) {
-      try {
-        const res = await fetch(cfg.webhookAlerta, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: subject + '\n\n' + body }),
-          signal: AbortSignal.timeout(10_000),
-        });
-        result.webhookSent = res.ok;
-        if (!res.ok) result.details += `webhook HTTP ${res.status}; `;
-      } catch (err) {
-        result.details += `webhook fail: ${(err as Error).message}; `;
+      // Auditoria 10/05/2026 #B2 — valida URL antes do fetch para evitar SSRF
+      // a recursos internos (admin malicioso configurando webhook=http://10.x).
+      const urlCheck = validatePublicUrl(cfg.webhookAlerta);
+      if (!urlCheck.ok) {
+        this.logger.warn(`Webhook URL rejeitada: ${urlCheck.reason}`);
+        result.details += `webhook rejeitado: ${urlCheck.reason}; `;
+      } else {
+        try {
+          const res = await fetch(cfg.webhookAlerta, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: subject + '\n\n' + body }),
+            signal: AbortSignal.timeout(10_000),
+          });
+          result.webhookSent = res.ok;
+          if (!res.ok) result.details += `webhook HTTP ${res.status}; `;
+        } catch (err) {
+          result.details += `webhook fail: ${(err as Error).message}; `;
+        }
       }
     }
 
