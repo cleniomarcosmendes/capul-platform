@@ -4,9 +4,12 @@ const AUTH_BASE = '/api/v1/auth';
 const CORE_BASE = '/api/v1/core';
 const GESTAO_BASE = '/api/v1/gestao-ti';
 
-export const authApi = axios.create({ baseURL: AUTH_BASE });
-export const coreApi = axios.create({ baseURL: CORE_BASE });
-export const gestaoApi = axios.create({ baseURL: GESTAO_BASE });
+// timeout 30s — auditoria 10/05/2026 #A2 (Robustez UX)
+// Para uploads grandes (anexos chamados/projetos), passar override:
+//   gestaoApi.post(url, formData, { timeout: 600_000 })
+export const authApi = axios.create({ baseURL: AUTH_BASE, timeout: 30_000 });
+export const coreApi = axios.create({ baseURL: CORE_BASE, timeout: 30_000 });
+export const gestaoApi = axios.create({ baseURL: GESTAO_BASE, timeout: 30_000 });
 
 let isRefreshing = false;
 let failedQueue: { resolve: (token: string) => void; reject: (err: unknown) => void }[] = [];

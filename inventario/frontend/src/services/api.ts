@@ -3,11 +3,14 @@ import axios from 'axios';
 const AUTH_BASE = '/api/v1/auth';
 const CORE_BASE = '/api/v1/core';
 
-export const authApi = axios.create({ baseURL: AUTH_BASE });
-export const coreApi = axios.create({ baseURL: CORE_BASE });
+// timeout 30s — auditoria 10/05/2026 #A2 (Robustez UX)
+// Para imports/sync grandes, passar override:
+//   inventarioApi.post('/import-produtos', data, { timeout: 1_800_000 })
+export const authApi = axios.create({ baseURL: AUTH_BASE, timeout: 30_000 });
+export const coreApi = axios.create({ baseURL: CORE_BASE, timeout: 30_000 });
 
 // Inventario API - endpoints diretos (cada modulo tem seu prefixo)
-export const inventarioApi = axios.create({ baseURL: '/api/v1' });
+export const inventarioApi = axios.create({ baseURL: '/api/v1', timeout: 30_000 });
 
 let isRefreshing = false;
 let failedQueue: { resolve: (token: string) => void; reject: (err: unknown) => void }[] = [];
