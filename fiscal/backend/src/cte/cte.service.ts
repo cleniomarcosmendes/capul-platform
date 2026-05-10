@@ -24,6 +24,7 @@ import type { CteParsed } from './parsers/cte-parsed.interface.js';
 import type { FiscalAuthenticatedUser } from '../common/interfaces/jwt-payload.interface.js';
 import type { XmlNfeResult } from '../protheus/interfaces/xml-nfe.interface.js';
 import type { OrigemConsulta } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service.js';
 import {
   type ProtheusStatus,
   type ProtheusLeituraStatus,
@@ -85,6 +86,7 @@ export class CteService {
     private readonly documentoConsulta: DocumentoConsultaService,
     private readonly documentoEvento: DocumentoEventoService,
     private readonly ambiente: AmbienteService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async consultarPorChave(
@@ -98,6 +100,7 @@ export class CteService {
     let xmlString: string | null = null;
     let parsed: CteParsed | null = null;
     let origem: OrigemConsulta | 'SEFAZ_STATUS_ONLY' = 'SEFAZ_STATUS_ONLY';
+    let fonteXml: 'PLATAFORMA' | 'PROTHEUS' | null = null;
 
     let leitura: ProtheusLeituraStatus = 'NAO_CONSULTADO';
     let leituraMensagem: string | null = null;
@@ -107,60 +110,105 @@ export class CteService {
       'Gravação CT-e não é realizada por este módulo — o Protheus grava via monitor CT-e.';
     const gravacaoErro: string | null = null;
 
-    // --- passo 1: GET /xmlNfe (unificado NF-e/CT-e — busca SZR010 → SPED156) ---
-    // O endpoint Protheus é o mesmo para NF-e (modelo 55) e CT-e (modelo 57) —
-    // discrimina pelo conteúdo da chave. Migrado da operação antiga `xmlFiscal`
-    // (contrato v1 antes de 20/04) em 22/04/2026.
-    let xmlNfeResp: XmlNfeResult | null = null;
+    // --- passo 1: PLATAFORMA — buscar em fiscal.cte_documento (10/05/2026) ---
+    // Source of truth quando distNSU está ativo. CT-es chegam direto do SEFAZ
+    // via CTeDistribuicaoDFe e ficam armazenados em cte_documento.xml.
+    // Antes (Onda 1 só) buscávamos só no Protheus — a partir de 10/05 olhamos
+    // primeiro na nossa base, e Protheus vira fallback (caso o CT-e tenha sido
+    // gravado manualmente lá mas não veio via distNSU — caso raro de transição).
     try {
-      xmlNfeResp = await this.protheusXml.buscarXml(chave);
-      if (xmlNfeResp.found) {
-        leitura = 'CACHE_HIT';
-        leituraMensagem =
-          xmlNfeResp.origem === 'SZR010'
-            ? 'XML encontrado no cache do Protheus (SZR010).'
-            : 'XML encontrado no Protheus (SPED156).';
-      } else {
-        leitura = 'CACHE_MISS';
-        leituraMensagem = 'XML não encontrado no Protheus — consultando apenas status na SEFAZ.';
+      const docLocal = await this.prisma.cteDocumento.findFirst({
+        where: { chave },
+        orderBy: { recebidoEm: 'desc' },
+        select: { id: true, xml: true, schema: true },
+      });
+      if (docLocal?.xml && (docLocal.schema === 'procCTe' || docLocal.schema === 'procCTeSimp')) {
+        try {
+          parsed = this.parser.parse(docLocal.xml);
+          xmlString = docLocal.xml;
+          // Reusa enum existente (PROTHEUS_CACHE) pra evitar migration; nota
+          // semântica aqui que a fonte real é a plataforma. Próxima migration
+          // pode adicionar valor PLATAFORMA_LOCAL ao enum OrigemConsulta.
+          origem = 'PROTHEUS_CACHE';
+          fonteXml = 'PLATAFORMA';
+          leitura = 'CACHE_HIT';
+          leituraMensagem = 'XML encontrado na plataforma (baixado do SEFAZ via distNSU).';
+          this.logger.log(`consultarPorChave ${chave.slice(0, 6)}… — fonte=PLATAFORMA (cte_documento id=${docLocal.id})`);
+        } catch (err) {
+          this.logger.warn(
+            `Parse do XML local falhou para CT-e ${chave.slice(0, 6)}…: ${(err as Error).message} — vou tentar Protheus.`,
+          );
+          xmlString = null;
+          parsed = null;
+        }
       }
     } catch (err) {
-      const msg = (err as Error).message;
       this.logger.warn(
-        `xmlNfe falhou para CT-e chave ${chave.slice(0, 6)}…: ${msg} — seguindo apenas com status SEFAZ.`,
+        `Busca em cte_documento falhou para ${chave.slice(0, 6)}…: ${(err as Error).message} — vou tentar Protheus.`,
       );
-      leitura = 'FALHA_TECNICA';
-      leituraMensagem = 'Não foi possível verificar o cache no Protheus. Seguindo apenas com status SEFAZ.';
-      leituraErro = msg;
     }
 
-    // --- passo 2: se o XML veio do Protheus, decodifica e parseia ---
-    if (xmlNfeResp?.found) {
+    // --- passo 2: PROTHEUS (fallback) — GET /xmlNfe (SZR010 → SPED156) ---
+    // Só executa se a plataforma não tinha o XML (ou parse falhou).
+    let xmlNfeResp: XmlNfeResult | null = null;
+    if (!xmlString) {
       try {
-        const decoded = decodeXmlBytes(
-          Buffer.from(xmlNfeResp.xmlBase64, 'base64'),
-          `xmlNfe Protheus CT-e ${chave.slice(0, 6)}…`,
-        );
-        xmlString = decoded.xml;
-        if (decoded.encodingAnomaly) {
-          this.logger.warn(
-            `xmlNfe Protheus CT-e ${chave.slice(0, 6)}… retornou bytes nao-UTF-8 — fallback latin1 aplicado`,
-          );
+        xmlNfeResp = await this.protheusXml.buscarXml(chave);
+        if (xmlNfeResp.found) {
+          leitura = 'CACHE_HIT';
+          leituraMensagem =
+            xmlNfeResp.origem === 'SZR010'
+              ? 'XML encontrado no cache do Protheus (SZR010).'
+              : 'XML encontrado no Protheus (SPED156).';
+        } else {
+          leitura = 'CACHE_MISS';
+          leituraMensagem = 'XML não encontrado nem na plataforma nem no Protheus — consultando apenas status na SEFAZ.';
         }
-        origem = 'PROTHEUS_CACHE';
-        parsed = this.parser.parse(xmlString);
       } catch (err) {
         const msg = (err as Error).message;
         this.logger.warn(
-          `Parse do XML CT-e falhou para chave ${chave.slice(0, 6)}…: ${msg} — caindo apenas para status SEFAZ.`,
+          `xmlNfe falhou para CT-e chave ${chave.slice(0, 6)}…: ${msg} — seguindo apenas com status SEFAZ.`,
         );
         leitura = 'FALHA_TECNICA';
-        leituraMensagem = 'XML recebido do Protheus mas parse falhou. Seguindo apenas com status.';
+        leituraMensagem = 'Não foi possível verificar o cache no Protheus. Seguindo apenas com status SEFAZ.';
         leituraErro = msg;
-        xmlString = null;
-        parsed = null;
       }
+
+      // --- passo 2.1: se o XML veio do Protheus, decodifica e parseia ---
+      if (xmlNfeResp?.found) {
+        try {
+          const decoded = decodeXmlBytes(
+            Buffer.from(xmlNfeResp.xmlBase64, 'base64'),
+            `xmlNfe Protheus CT-e ${chave.slice(0, 6)}…`,
+          );
+          xmlString = decoded.xml;
+          if (decoded.encodingAnomaly) {
+            this.logger.warn(
+              `xmlNfe Protheus CT-e ${chave.slice(0, 6)}… retornou bytes nao-UTF-8 — fallback latin1 aplicado`,
+            );
+          }
+          origem = 'PROTHEUS_CACHE';
+          fonteXml = 'PROTHEUS';
+          parsed = this.parser.parse(xmlString);
+        } catch (err) {
+          const msg = (err as Error).message;
+          this.logger.warn(
+            `Parse do XML CT-e falhou para chave ${chave.slice(0, 6)}…: ${msg} — caindo apenas para status SEFAZ.`,
+          );
+          leitura = 'FALHA_TECNICA';
+          leituraMensagem = 'XML recebido do Protheus mas parse falhou. Seguindo apenas com status.';
+          leituraErro = msg;
+          xmlString = null;
+          parsed = null;
+        }
+      }
+    } else {
+      // Plataforma já entregou — não precisamos do Protheus pra esta consulta
+      this.logger.debug(
+        `consultarPorChave ${chave.slice(0, 6)}… — pulando Protheus (XML ja achado na plataforma)`,
+      );
     }
+    void fonteXml; // referenciado nos logs acima; pode ser exposto na resposta no futuro
 
     const protheusStatus: ProtheusStatus = {
       leitura,
@@ -213,7 +261,7 @@ export class CteService {
 
     const avisoXmlIndisponivel = parsed
       ? null
-      : 'O XML completo deste CT-e não está no Protheus (SZR010). O serviço nacional CTeDistribuicaoDFe só permite download por NSU — não por chave. Mostrando apenas status e eventos retornados pelo CteConsultaProtocolo da SEFAZ. Para obter o XML: aguarde a sincronização NSU, peça ao emitente, ou use o monitor CT-e do Protheus.';
+      : 'O XML completo deste CT-e nao foi encontrado nem na plataforma (cte_documento via distNSU) nem no Protheus (SZR010/SPED156). O serviço nacional CTeDistribuicaoDFe só permite download por NSU — não por chave. Mostrando apenas status e eventos retornados pelo CteConsultaProtocolo da SEFAZ. Para obter o XML: aguarde a sincronização NSU (scheduler @cron 15min), peça ao emitente, ou use o monitor CT-e do Protheus.';
 
     return {
       chave,
