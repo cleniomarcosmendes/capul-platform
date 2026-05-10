@@ -671,8 +671,18 @@ export function CteRecebidosPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-700 text-xs uppercase">
                 <tr>
-                  <th className="px-3 py-2 text-left">Chave</th>
-                  <th className="px-3 py-2 text-left">Tipo</th>
+                  <th
+                    className="px-3 py-2 text-left cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => toggleSort('chave')}
+                  >
+                    Chave {sortIcon('chave')}
+                  </th>
+                  <th
+                    className="px-3 py-2 text-left cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => toggleSort('schema')}
+                  >
+                    Tipo {sortIcon('schema')}
+                  </th>
                   <th
                     className="px-3 py-2 text-left cursor-pointer hover:bg-gray-100 select-none"
                     onClick={() => toggleSort('papelCapul')}
@@ -697,7 +707,12 @@ export function CteRecebidosPage() {
                   >
                     NSU {sortIcon('nsu')}
                   </th>
-                  <th className="px-3 py-2 text-left">Ambiente SEFAZ</th>
+                  <th
+                    className="px-3 py-2 text-left cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => toggleSort('ambiente')}
+                  >
+                    Ambiente SEFAZ {sortIcon('ambiente')}
+                  </th>
                   <th
                     className="px-3 py-2 text-left cursor-pointer hover:bg-gray-100 select-none"
                     onClick={() => toggleSort('recebidoEm')}

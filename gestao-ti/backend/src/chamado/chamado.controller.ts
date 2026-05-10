@@ -79,6 +79,8 @@ export class ChamadoController {
     @Query('dataFim') dataFim?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.service.findAll(user, role, {
       status,
@@ -95,6 +97,8 @@ export class ChamadoController {
       dataFim,
       page: page ? parseInt(page, 10) : undefined,
       pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+      sortBy,
+      sortOrder: sortOrder === 'asc' ? 'asc' : sortOrder === 'desc' ? 'desc' : undefined,
     });
   }
 

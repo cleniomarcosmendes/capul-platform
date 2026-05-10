@@ -15,6 +15,9 @@ interface ListFilters {
   dataFim?: string;
   page?: number;
   pageSize?: number;
+  /** Ordenação por clique no header (10/05/2026). Chaves whitelistadas no backend. */
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface ListarChamadosResult {
@@ -66,6 +69,8 @@ export const chamadoService = {
     if (filters.dataFim) params.dataFim = filters.dataFim;
     if (filters.page) params.page = String(filters.page);
     if (filters.pageSize) params.pageSize = String(filters.pageSize);
+    if (filters.sortBy) params.sortBy = filters.sortBy;
+    if (filters.sortOrder) params.sortOrder = filters.sortOrder;
     const { data } = await gestaoApi.get<ListarChamadosResult>('/chamados', { params });
     return data;
   },

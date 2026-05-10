@@ -38,6 +38,8 @@ export class ChamadoService {
     dataFim?: string;
     page?: number;
     pageSize?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
   }) {
     return this.core.findAll(user, role, filters);
   }

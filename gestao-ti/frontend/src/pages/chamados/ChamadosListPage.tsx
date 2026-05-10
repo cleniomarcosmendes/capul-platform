@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { chamadoService } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
-import { Plus, Eye, Download, Star, Search } from 'lucide-react';
+import { Plus, Eye, Download, Star, Search, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import { Paginator } from '../../components/Paginator';
 import type { Chamado, EquipeTI, Departamento, StatusChamado, Visibilidade, UsuarioCore } from '../../types';
@@ -139,6 +139,27 @@ export function ChamadosListPage() {
     }
   }, [gestaoTiRole, usuario]);
 
+  // Ordenação por clique no header (10/05/2026). Default null = backend usa
+  // ordem natural (createdAt desc — mais recentes primeiro). Fluxo: 1º clique
+  // numa coluna asc, 2º desc, 3º limpa volta pro default.
+  type SortKey = 'numero' | 'titulo' | 'status' | 'prioridade' | 'createdAt' | 'filial' | 'equipe' | 'tecnico' | 'solicitante' | 'departamento';
+  const [sortBy, setSortBy] = useState<SortKey | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const toggleSort = (key: SortKey) => {
+    if (sortBy !== key) { setSortBy(key); setSortOrder('asc'); }
+    else if (sortOrder === 'asc') { setSortOrder('desc'); }
+    else { setSortBy(null); setSortOrder('asc'); }  // 3º clique → limpa
+    setPage(1);
+  };
+
+  const SortIcon = ({ col }: { col: SortKey }) => {
+    if (sortBy !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300 inline-block ml-1" />;
+    return sortOrder === 'asc'
+      ? <ArrowUp className="w-3 h-3 text-blue-600 inline-block ml-1" />
+      : <ArrowDown className="w-3 h-3 text-blue-600 inline-block ml-1" />;
+  };
+
   const carregarChamados = useCallback((silent = false) => {
     if (!usuario) return; // Aguardar auth estar pronto
     if (!silent) setLoading(true);
@@ -157,14 +178,20 @@ export function ChamadosListPage() {
           search: buscaDebounced.trim() || undefined,
         };
     chamadoService
-      .listarPaginado({ ...baseFilters, page, pageSize })
+      .listarPaginado({
+        ...baseFilters,
+        page,
+        pageSize,
+        sortBy: sortBy ?? undefined,
+        sortOrder: sortBy ? sortOrder : undefined,
+      })
       .then((res) => {
         setChamados(res.items);
         setTotalChamados(res.total);
       })
       .catch(() => {})
       .finally(() => { if (!silent) setLoading(false); });
-  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, filterDepartamento, filterTecnico, filterDataInicio, filterDataFim, usuario, pendentesAvaliacao, buscaDebounced, page, pageSize]);
+  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, filterDepartamento, filterTecnico, filterDataInicio, filterDataFim, usuario, pendentesAvaliacao, buscaDebounced, page, pageSize, sortBy, sortOrder]);
 
   useEffect(() => {
     carregarChamados();
@@ -410,16 +437,56 @@ export function ChamadosListPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">#</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Filial</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Titulo</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Status</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Prioridade</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Equipe</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Tecnico</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Solicitante</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Depto</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Data</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">
+                    <button onClick={() => toggleSort('numero')} className="flex items-center hover:text-slate-800">
+                      # <SortIcon col="numero" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">
+                    <button onClick={() => toggleSort('filial')} className="flex items-center hover:text-slate-800">
+                      Filial <SortIcon col="filial" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">
+                    <button onClick={() => toggleSort('titulo')} className="flex items-center hover:text-slate-800">
+                      Titulo <SortIcon col="titulo" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">
+                    <button onClick={() => toggleSort('status')} className="flex items-center hover:text-slate-800">
+                      Status <SortIcon col="status" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">
+                    <button onClick={() => toggleSort('prioridade')} className="flex items-center hover:text-slate-800">
+                      Prioridade <SortIcon col="prioridade" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">
+                    <button onClick={() => toggleSort('equipe')} className="flex items-center hover:text-slate-800">
+                      Equipe <SortIcon col="equipe" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">
+                    <button onClick={() => toggleSort('tecnico')} className="flex items-center hover:text-slate-800">
+                      Tecnico <SortIcon col="tecnico" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">
+                    <button onClick={() => toggleSort('solicitante')} className="flex items-center hover:text-slate-800">
+                      Solicitante <SortIcon col="solicitante" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">
+                    <button onClick={() => toggleSort('departamento')} className="flex items-center hover:text-slate-800">
+                      Depto <SortIcon col="departamento" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">
+                    <button onClick={() => toggleSort('createdAt')} className="flex items-center hover:text-slate-800">
+                      Data <SortIcon col="createdAt" />
+                    </button>
+                  </th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>

@@ -489,6 +489,10 @@ export class CteDocumentoService {
       protheusStatus: 'protheusStatus',
       protheusTentativas: 'protheusTentativas',
       papelCapul: 'papelCapul',
+      // Adicionado 10/05/2026: completa sort por todas as colunas relevantes
+      chave: 'chave',
+      schema: 'schema',
+      ambiente: 'ambiente',
     };
     const sortColumn = filtros.sortBy && SORTABLE_COLUMNS[filtros.sortBy]
       ? SORTABLE_COLUMNS[filtros.sortBy]

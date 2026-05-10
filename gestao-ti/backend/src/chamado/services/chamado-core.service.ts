@@ -74,6 +74,12 @@ export class ChamadoCoreService {
      */
     page?: number;
     pageSize?: number;
+    /**
+     * Ordenação por clique no header (10/05/2026). Whitelist de colunas
+     * impede SQL injection via query param. Default mantido: createdAt desc.
+     */
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
   }) {
     const where: Record<string, unknown> = {};
 
@@ -176,12 +182,32 @@ export class ChamadoCoreService {
     // as duas queries).
     const page = Math.max(1, filters.page ?? 1);
     const pageSize = Math.min(200, Math.max(1, filters.pageSize ?? 50));
+
+    // Whitelist de ordenação (10/05/2026): protege contra SQL injection via
+    // query param e mapeia colunas amigáveis pra estrutura Prisma (alguns
+    // campos são em relations, ex.: filial.nome via JOIN).
+    const SORT_MAP: Record<string, Record<string, unknown>> = {
+      numero: { numero: filters.sortOrder ?? 'asc' },
+      titulo: { titulo: filters.sortOrder ?? 'asc' },
+      status: { status: filters.sortOrder ?? 'asc' },
+      prioridade: { prioridade: filters.sortOrder ?? 'asc' },
+      createdAt: { createdAt: filters.sortOrder ?? 'desc' },
+      filial: { filial: { nome: filters.sortOrder ?? 'asc' } },
+      equipe: { equipeAtual: { nome: filters.sortOrder ?? 'asc' } },
+      tecnico: { tecnico: { nome: filters.sortOrder ?? 'asc' } },
+      solicitante: { solicitante: { nome: filters.sortOrder ?? 'asc' } },
+      departamento: { departamento: { nome: filters.sortOrder ?? 'asc' } },
+    };
+    const orderBy = (filters.sortBy && SORT_MAP[filters.sortBy])
+      ? SORT_MAP[filters.sortBy]
+      : { createdAt: 'desc' as const };
+
     const [total, items] = await this.prisma.$transaction([
       this.prisma.chamado.count({ where }),
       this.prisma.chamado.findMany({
         where,
         include: chamadoInclude,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
