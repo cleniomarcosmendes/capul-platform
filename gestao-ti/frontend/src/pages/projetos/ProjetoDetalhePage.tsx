@@ -8,7 +8,7 @@ import { chamadoService } from '../../services/chamado.service';
 import { compraService } from '../../services/compra.service';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
-import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare, KeyRound, ClipboardList, Download, Eye, Upload, Copy, FileText, Printer } from 'lucide-react';
+import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare, KeyRound, ClipboardList, Download, Eye, Upload, Copy, FileText, Printer, Star } from 'lucide-react';
 import { formatDateBR } from '../../utils/date';
 import { MentionInput } from '../../components/MentionInput';
 import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
@@ -713,6 +713,34 @@ function TabSubProjetos({ projeto, canManage, isRestrictedRole }: { projeto: Pro
   // Hierarquia limitada a 2 niveis (decisao 26/04/2026): so projeto raiz (N1) pode ter subprojetos.
   const canCreateSubProjeto = (canManage || isRestrictedRole) && projeto.nivel < 2;
 
+  // Favoritos (10/05/2026): subprojetos favoritados sobem ao topo, igual o
+  // comportamento da ProjetosListPage. Antes a lista vinha na ordem do
+  // backend (numero/id) sem respeitar favorito.
+  const [favoritoIds, setFavoritoIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    projetoService.listarFavoritos().then((ids) => setFavoritoIds(new Set(ids))).catch(() => {});
+  }, []);
+
+  async function handleToggleFavorito(id: string) {
+    try {
+      const { favorito } = await projetoService.toggleFavorito(id);
+      setFavoritoIds((prev) => {
+        const next = new Set(prev);
+        if (favorito) next.add(id); else next.delete(id);
+        return next;
+      });
+    } catch { /* silencioso — botão é opcional */ }
+  }
+
+  // Ordenação: favoritos primeiro (igual cmpDefault da ProjetosListPage),
+  // dentro de cada grupo mantém numero asc.
+  const subsOrdenados = [...subs].sort((a, b) => {
+    const aFav = favoritoIds.has(a.id) ? 0 : 1;
+    const bFav = favoritoIds.has(b.id) ? 0 : 1;
+    if (aFav !== bFav) return aFav - bFav;
+    return Number(a.numero) - Number(b.numero);
+  });
+
   return (
     <div className="bg-white rounded-xl border border-slate-200">
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
@@ -735,20 +763,30 @@ function TabSubProjetos({ projeto, canManage, isRestrictedRole }: { projeto: Pro
         </p>
       ) : (
         <div className="divide-y divide-slate-100">
-          {subs.map((s) => (
-            <div key={s.id} className="px-6 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-slate-400">#{s.numero}</span>
-                <Link to={`/gestao-ti/projetos/${s.id}`} className="text-sm text-capul-600 hover:underline font-medium">
-                  {s.nome}
-                </Link>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${statusCores[s.status]}`}>
-                  {statusLabel[s.status]}
-                </span>
+          {subsOrdenados.map((s) => {
+            const isFav = favoritoIds.has(s.id);
+            return (
+              <div key={s.id} className="px-6 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => handleToggleFavorito(s.id)}
+                    className="text-slate-300 hover:text-yellow-500 transition-colors"
+                    title={isFav ? 'Desfavoritar' : 'Favoritar'}
+                  >
+                    <Star className={`w-4 h-4 ${isFav ? 'text-yellow-500 fill-yellow-500' : ''}`} />
+                  </button>
+                  <span className="text-xs text-slate-400">#{s.numero}</span>
+                  <Link to={`/gestao-ti/projetos/${s.id}`} className="text-sm text-capul-600 hover:underline font-medium">
+                    {s.nome}
+                  </Link>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${statusCores[s.status]}`}>
+                    {statusLabel[s.status]}
+                  </span>
+                </div>
+                <span className="text-xs text-slate-400">N{s.nivel}</span>
               </div>
-              <span className="text-xs text-slate-400">N{s.nivel}</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
