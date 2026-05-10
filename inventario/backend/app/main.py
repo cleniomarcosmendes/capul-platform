@@ -3229,43 +3229,27 @@ async def check_and_advance_inventory_round(db: Session, inventory_id: str, curr
             # ✅ CORREÇÃO DEFINITIVA: Usar OR ao invés de AND para detectar divergências
             # 🔧 CORREÇÃO v2.19.42: Tratar count_cycle_2 NULL como 0 quando item precisava de recontagem
             # Regra: Se needs_recount_cycle_2=true mas count_cycle_2=NULL, operador não encontrou = 0
+            # Regra C2→C3 (corrigida 09/05/2026): vai pro C3 SOMENTE se C1 ≠ C2.
+            # Antes (v2.19.42): tinha 3 condicoes com tolerancia >5% que faziam
+            # divergencias pequenas serem silenciosamente confirmadas. Hoje a regra
+            # eh igualdade direta — se contagens batem entre si, divergencia
+            # confirmada (vira ajuste fiscal direto), nao precisa terceiro contador.
+            #
+            # NULL no C2 quando needs_recount_cycle_2=true => tratamos como 0
+            # (operador nao encontrou fisicamente — nao bipou).
             db.execute(
                 text("""
                     UPDATE inventario.inventory_items
                     SET needs_recount_cycle_3 = CASE
-                        -- REGRA ESPECIAL: Produtos com qty esperada = 0
-                        WHEN expected_quantity = 0 THEN
-                            CASE
-                                -- 🔧 v2.19.42: NULL no ciclo 2 = 0 (não encontrado)
-                                -- Se precisava recontar e não contou, tratamos como 0
-                                -- Se c2(efetivo)=0 == expected=0 → Zero Confirmado, não precisa ciclo 3
-                                WHEN count_cycle_2 IS NULL AND needs_recount_cycle_2 = true THEN false
-                                -- Se 2ª contagem = 0 = esperado → NÃO precisa de 3ª contagem (Zero Confirmado)
-                                WHEN count_cycle_2 = 0 THEN false
-                                -- Se 1ª = 2ª (ambas != 0) → NÃO precisa de 3ª contagem (Divergência confirmada)
-                                WHEN count_cycle_1 IS NOT NULL AND count_cycle_2 IS NOT NULL
-                                     AND abs(count_cycle_1 - count_cycle_2) < 0.01 THEN false
-                                -- Se 1ª != 2ª → SIM precisa de 3ª contagem (desempate)
-                                WHEN count_cycle_1 IS NOT NULL AND count_cycle_2 IS NOT NULL
-                                     AND abs(count_cycle_1 - count_cycle_2) >= 0.01 THEN true
-                                ELSE false
-                            END
-                        -- REGRA GERAL: Produtos com qty esperada != 0
-                        -- 🔧 v2.19.42: Usar COALESCE para tratar NULL como 0
-                        WHEN count_cycle_1 IS NOT NULL
-                             AND (count_cycle_2 IS NOT NULL OR needs_recount_cycle_2 = true)
-                             AND (
-                                -- Divergência significativa entre ciclo 1 e 2 (> 5%)
-                                abs(count_cycle_1 - COALESCE(count_cycle_2, 0)) > GREATEST(count_cycle_1, COALESCE(count_cycle_2, 0), 1) * 0.05
-                                OR
-                                -- Divergência com quantidade esperada (> 5%)
-                                abs(count_cycle_1 - expected_quantity) > GREATEST(expected_quantity, 1) * 0.05
-                                OR
-                                abs(COALESCE(count_cycle_2, 0) - expected_quantity) > GREATEST(expected_quantity, 1) * 0.05
-                             ) THEN true
+                        -- Sem C1 ou nao precisava recontar no C2: nada a desempatar
+                        WHEN count_cycle_1 IS NULL THEN false
+                        WHEN count_cycle_2 IS NULL AND needs_recount_cycle_2 = false THEN false
+                        -- C1 != COALESCE(C2, 0) => desempate
+                        WHEN abs(count_cycle_1 - COALESCE(count_cycle_2, 0)) >= 0.01 THEN true
+                        -- C1 == C2: divergencia confirmada, nao precisa C3
                         ELSE false
                     END,
-                    -- 🔧 v2.19.42: Também atualizar count_cycle_2 para 0 quando NULL e precisava recontar
+                    -- NULL no C2 quando precisava recontar = 0 (nao encontrado fisicamente)
                     count_cycle_2 = CASE
                         WHEN count_cycle_2 IS NULL AND needs_recount_cycle_2 = true THEN 0
                         ELSE count_cycle_2
@@ -3274,7 +3258,7 @@ async def check_and_advance_inventory_round(db: Session, inventory_id: str, curr
                 """),
                 {"inventory_id": inventory_id}
             )
-            print(f"✅ Campos needs_recount_cycle_3 atualizados baseado em divergências do 2º ciclo (v2.19.42: NULL=0)")
+            print(f"✅ needs_recount_cycle_3 atualizado: vai pro C3 somente se C1 != C2 (sem 5%)")
 
             # 🔧 CORREÇÃO AUTOMÁTICA: Criar assignments para produtos que precisam de ciclo 3
             # Buscar usuário responsável pelo inventário (usar o mesmo dos ciclos anteriores)
@@ -6440,38 +6424,18 @@ async def release_items_for_recount(
             logger.info(f"✅ Campos needs_recount_cycle_2 atualizados baseado em divergências do 1º ciclo")
             
         elif current_cycle == 2:
-            # Após 2º ciclo, verificar se precisa 3º ciclo
-            # 🔧 CORREÇÃO v2.19.42: Tratar count_cycle_2 NULL como 0 quando item precisava de recontagem
+            # Regra C2→C3 (corrigida 09/05/2026): vai pro C3 SOMENTE se C1 ≠ C2.
+            # Igualdade direta — se C1 == C2, divergencia confirmada, nao vai.
+            # NULL no C2 (quando precisava recontar) = 0 (operador nao encontrou).
             db.execute(
                 text("""
                     UPDATE inventario.inventory_items
                     SET needs_recount_cycle_3 = CASE
-                        -- REGRA ESPECIAL: Produtos com qty esperada = 0
-                        WHEN expected_quantity = 0 THEN
-                            CASE
-                                -- 🔧 v2.19.42: NULL no ciclo 2 = 0 (não encontrado)
-                                -- Se precisava recontar e não contou, tratamos como 0
-                                -- Se c2(efetivo)=0 == expected=0 → Zero Confirmado, não precisa ciclo 3
-                                WHEN count_cycle_2 IS NULL AND needs_recount_cycle_2 = true THEN false
-                                -- Se 2ª contagem = 0 = esperado → NÃO precisa de 3ª contagem (Zero Confirmado)
-                                WHEN count_cycle_2 = 0 THEN false
-                                -- Se 1ª = 2ª (ambas != 0) → NÃO precisa de 3ª contagem (Divergência confirmada)
-                                WHEN count_cycle_1 IS NOT NULL AND count_cycle_2 IS NOT NULL
-                                     AND abs(count_cycle_1 - count_cycle_2) < 0.01 THEN false
-                                -- Se 1ª != 2ª → SIM precisa de 3ª contagem (desempate)
-                                WHEN count_cycle_1 IS NOT NULL AND count_cycle_2 IS NOT NULL
-                                     AND abs(count_cycle_1 - count_cycle_2) >= 0.01 THEN true
-                                ELSE false
-                            END
-                        -- REGRA GERAL: Produtos com qty esperada != 0
-                        -- 🔧 v2.19.42: Usar COALESCE para tratar NULL como 0
-                        WHEN count_cycle_1 IS NOT NULL
-                             AND (count_cycle_2 IS NOT NULL OR needs_recount_cycle_2 = true)
-                             AND abs(count_cycle_1 - COALESCE(count_cycle_2, 0)) >= 0.01
-                             AND abs(COALESCE(count_cycle_2, 0) - expected_quantity) >= 0.01 THEN true
+                        WHEN count_cycle_1 IS NULL THEN false
+                        WHEN count_cycle_2 IS NULL AND needs_recount_cycle_2 = false THEN false
+                        WHEN abs(count_cycle_1 - COALESCE(count_cycle_2, 0)) >= 0.01 THEN true
                         ELSE false
                     END,
-                    -- 🔧 v2.19.42: Também atualizar count_cycle_2 para 0 quando NULL e precisava recontar
                     count_cycle_2 = CASE
                         WHEN count_cycle_2 IS NULL AND needs_recount_cycle_2 = true THEN 0
                         ELSE count_cycle_2
@@ -6480,7 +6444,7 @@ async def release_items_for_recount(
                 """),
                 {"inventory_id": inventory_list_id}
             )
-            logger.info(f"✅ Campos needs_recount_cycle_3 atualizados baseado em divergências do 2º ciclo (v2.19.42: NULL=0)")
+            logger.info(f"✅ needs_recount_cycle_3 atualizado: C1 != C2 vai pro C3 (sem 5%)")
         
         db.commit()
         logger.info(f"✅ Status atualizado de {old_status} para EM_CONTAGEM - Inventário: {inventory_list_id}")
