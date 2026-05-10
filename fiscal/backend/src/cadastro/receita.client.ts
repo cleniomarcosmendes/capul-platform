@@ -47,13 +47,17 @@ interface CacheEntry {
  * Limitações conhecidas:
  *  - **Apenas CNPJ**. Nenhuma API pública gratuita oferece dados de CPF.
  *  - Rate limits: BrasilAPI é generoso, ReceitaWS limita a 3 req/min gratuito.
- *  - Cache de 6h em memória para reduzir chamadas repetidas.
+ *  - Cache de 24h em memória para reduzir chamadas repetidas (auditoria 10/05/2026 #M2 — antes era 6h).
+ *  - Retry interno: 1 tentativa adicional com backoff 500ms em erros de rede/5xx
+ *    (auditoria 10/05/2026 #M2 — glitches pontuais não derrubam mais a consulta).
  */
 @Injectable()
 export class ReceitaClient {
   private readonly logger = new Logger(ReceitaClient.name);
   private readonly cache = new Map<string, CacheEntry>();
-  private readonly CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 horas
+  // Estendido de 6h pra 24h (auditoria 10/05/2026 #M2). Receita Federal raramente
+  // muda dados em 1 dia; cache mais longo reduz chamadas externas.
+  private readonly CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
 
   async consultarCnpj(cnpj: string): Promise<ReceitaFederalData | null> {
     const digits = cnpj.replace(/\D/g, '');
@@ -97,11 +101,41 @@ export class ReceitaClient {
     return null;
   }
 
+  /**
+   * Wrapper de fetch com 1 retry e backoff 500ms em erros transitorios
+   * (auditoria 10/05/2026 #M2). Não retry em 4xx (definitivo) — apenas em
+   * erros de rede (timeout, connection refused) ou 5xx (servidor instável).
+   */
+  private async fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+    const RETRIES = 1;
+    const BACKOFF_MS = 500;
+    let lastErr: Error | undefined;
+    for (let attempt = 0; attempt <= RETRIES; attempt++) {
+      try {
+        const res = await fetch(url, init);
+        // 5xx é transitório — pode retry
+        if (res.status >= 500 && attempt < RETRIES) {
+          this.logger.warn(`Receita ${url.split('/')[2]}: HTTP ${res.status} (tentativa ${attempt + 1}/${RETRIES + 1}) — retry em ${BACKOFF_MS}ms`);
+          await new Promise((r) => setTimeout(r, BACKOFF_MS));
+          continue;
+        }
+        return res;
+      } catch (err) {
+        lastErr = err as Error;
+        if (attempt < RETRIES) {
+          this.logger.warn(`Receita ${url.split('/')[2]}: erro de rede (${lastErr.message}) — retry em ${BACKOFF_MS}ms`);
+          await new Promise((r) => setTimeout(r, BACKOFF_MS));
+        }
+      }
+    }
+    throw lastErr ?? new Error('Falha sem detalhes');
+  }
+
   private async consultarBrasilApi(cnpj: string): Promise<ReceitaFederalData | null> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, {
+      const res = await this.fetchWithRetry(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, {
         signal: controller.signal,
         headers: { accept: 'application/json' },
       });
@@ -155,7 +189,7 @@ export class ReceitaClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-      const res = await fetch(`https://receitaws.com.br/v1/cnpj/${cnpj}`, {
+      const res = await this.fetchWithRetry(`https://receitaws.com.br/v1/cnpj/${cnpj}`, {
         signal: controller.signal,
         headers: { accept: 'application/json' },
       });
