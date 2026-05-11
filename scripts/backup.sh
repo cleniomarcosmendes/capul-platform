@@ -39,7 +39,12 @@ APP_CONTAINER="capul-gestao-ti-api"
 REDIS_CONTAINER="capul-redis"
 FISCAL_CONTAINER="capul-fiscal-api"
 DB_NAME="capul_platform"
-UPLOADS_VOLUME="uploads_data"
+# UPLOADS_VOLUME e UPLOADS_PATH agora são resolvidos dinamicamente em
+# resolve_uploads_volume() via `docker inspect` do container — antes
+# estavam hard-coded como "uploads_data" mas Docker Compose prefixa o
+# nome do volume com o do projeto ("capul-platform_uploads_data"),
+# fazendo o backup gerar tar vazio em PROD (incidente 11/05/2026).
+UPLOADS_VOLUME=""
 UPLOADS_PATH="/app/uploads"
 FISCAL_CERTS_PATH="${APP_DIR}/fiscal/backend/certs"
 
@@ -111,6 +116,34 @@ load_env() {
         log_error "Variável DB_USER não definida no .env"
         exit 1
     fi
+}
+
+# Resolve o nome real do volume Docker montado em UPLOADS_PATH no
+# APP_CONTAINER. Docker Compose prefixa nomes de volumes com o nome do
+# projeto (ex.: "capul-platform_uploads_data"), então hard-codar
+# "uploads_data" gerava tar vazio quando o nome real era outro.
+# Retorna 1 se não conseguir resolver — caller decide o que fazer.
+resolve_uploads_volume() {
+    if [ -n "$UPLOADS_VOLUME" ]; then
+        return 0  # já resolvido
+    fi
+    if ! docker ps --format "{{.Names}}" | grep -q "^${APP_CONTAINER}$"; then
+        log_warning "Container $APP_CONTAINER não está rodando — usando fallback uploads_data"
+        UPLOADS_VOLUME="uploads_data"
+        return 0
+    fi
+    # `docker inspect` lista mounts; filtra o que aponta pra UPLOADS_PATH
+    local resolved
+    resolved=$(docker inspect "$APP_CONTAINER" \
+        --format "{{range .Mounts}}{{if eq .Destination \"$UPLOADS_PATH\"}}{{.Name}}{{end}}{{end}}" 2>/dev/null)
+    if [ -z "$resolved" ]; then
+        log_warning "Não foi possível resolver volume em $UPLOADS_PATH — usando fallback uploads_data"
+        UPLOADS_VOLUME="uploads_data"
+        return 1
+    fi
+    UPLOADS_VOLUME="$resolved"
+    log_info "Volume de uploads resolvido: $UPLOADS_VOLUME (montado em $UPLOADS_PATH)"
+    return 0
 }
 
 cleanup_old_backups() {
@@ -795,6 +828,7 @@ main() {
     if [ "$tipo" = "restore-from-prod" ]; then
         check_requirements
         load_env
+        resolve_uploads_volume || true
         restore_from_prod "$2"
         exit 0
     fi
@@ -814,6 +848,7 @@ main() {
     # Verificar requisitos e carregar variáveis
     check_requirements
     load_env
+    resolve_uploads_volume || true
 
     BACKUP_START_EPOCH=$(date +%s)
     TIPO_SELECIONADO="$tipo"
