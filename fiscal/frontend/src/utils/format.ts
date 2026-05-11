@@ -64,10 +64,20 @@ export function fmtData(d: string | Date | null | undefined): string {
 
 /**
  * Formata telefone brasileiro ((XX)XXXX-XXXX ou (XX)XXXXX-XXXX).
+ * Defensiva: rejeita placeholders comuns do XML (0XXX0000000000, todos
+ * zeros, 6+ zeros consecutivos) — retorna '-' nesses casos.
  */
 export function fmtTelefone(t?: string | null): string {
   if (!t) return '-';
-  const d = t.replace(/\D/g, '');
+  let d = t.replace(/\D/g, '');
+  if (!d) return '-';
+
+  // Placeholder: tudo zeros ou rastro longo de zeros (típico de XML preenchido só pra passar schema).
+  if (/^0+$/.test(d) || /0{6,}/.test(d)) return '-';
+
+  // Remove zeros à esquerda se sobram 10 ou 11 dígitos válidos (caso "0341234-5678").
+  while (d.length > 11 && d.startsWith('0')) d = d.slice(1);
+
   if (d.length === 11) return d.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
   if (d.length === 10) return d.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
   return t;

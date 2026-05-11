@@ -274,19 +274,20 @@ export function CteConsultaPage() {
     URL.revokeObjectURL(url);
   }
 
-  // Lista de abas — ordem do portal SEFAZ. Algumas só aparecem quando o XML
-  // contém o bloco correspondente (Expedidor/Recebedor/DocAnt/Seguro/Modal),
-  // pra não poluir.
+  // Lista de abas — ordem espelha o portal SEFAZ (Tomador 3º, logo após
+  // Emitente) pra facilitar quem está acostumado à consulta oficial.
+  // Mantemos abas extras que o portal não tem (Locais, Doc. Anteriores,
+  // Seguro, Histórico) ao final, agrupadas. Algumas só aparecem quando o
+  // XML contém o bloco correspondente, pra não poluir.
   const tabs: Array<[Tab, string, boolean]> = result
     ? [
         ['cte', 'CT-e', result.xmlDisponivel],
         ['emitente', 'Emitente', result.xmlDisponivel],
+        ['tomador', 'Tomador', result.xmlDisponivel],
         ['remetente', 'Remetente', result.xmlDisponivel],
         ['expedidor', 'Expedidor', result.xmlDisponivel && !!result.parsed?.expedidor],
         ['recebedor', 'Recebedor', result.xmlDisponivel && !!result.parsed?.recebedor],
         ['destinatario', 'Destinatário', result.xmlDisponivel],
-        ['tomador', 'Tomador', result.xmlDisponivel],
-        ['locais', 'Locais', result.xmlDisponivel],
         ['prestacao', 'Prestação', result.xmlDisponivel],
         ['tributos', 'Tributos', result.xmlDisponivel],
         ['carga', 'Carga', result.xmlDisponivel],
@@ -296,6 +297,7 @@ export function CteConsultaPage() {
           result.xmlDisponivel && (result.parsed?.documentosTransportados.length ?? 0) > 0,
         ],
         ['modal', `Modal ${modalLabel(result.parsed?.modal)}`, result.xmlDisponivel && !!result.parsed?.modal],
+        ['locais', 'Locais', result.xmlDisponivel],
         [
           'docAnt',
           `Doc. Anteriores (${result.parsed?.documentosAnteriores.length ?? 0})`,
@@ -549,7 +551,7 @@ function Secao({
   children,
   cols = 2,
 }: {
-  titulo: string;
+  titulo: string | null;
   children: React.ReactNode;
   cols?: 2 | 3 | 4;
 }) {
@@ -561,9 +563,11 @@ function Secao({
         : 'md:grid-cols-2';
   return (
     <section className="mb-6 last:mb-0">
-      <h3 className="mb-3 border-b border-slate-200 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-600">
-        {titulo}
-      </h3>
+      {titulo && (
+        <h3 className="mb-3 border-b border-slate-200 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-600">
+          {titulo}
+        </h3>
+      )}
       <dl className={`grid grid-cols-1 gap-x-8 gap-y-3 text-sm ${colClass}`}>{children}</dl>
     </section>
   );
@@ -576,6 +580,19 @@ function Secao({
 function AbaCte({ parsed }: { parsed: CteParsed }) {
   const g = parsed.dadosGerais;
   const prot = parsed.protocoloAutorizacao;
+  const v = parsed.valores;
+
+  // Resolve o participante que efetivamente é o tomador (mesma lógica da
+  // aba Tomador dedicada — mas aqui usamos só pra resumo).
+  let tomadorRef: CteParticipante | null = null;
+  switch (parsed.tomador) {
+    case 'Remetente': tomadorRef = parsed.remetente; break;
+    case 'Expedidor': tomadorRef = parsed.expedidor ?? null; break;
+    case 'Recebedor': tomadorRef = parsed.recebedor ?? null; break;
+    case 'Destinatário': tomadorRef = parsed.destinatario; break;
+    case 'Outros': tomadorRef = parsed.tomadorOutros ?? null; break;
+  }
+
   return (
     <>
       <Secao titulo="Identificação do CT-e" cols={4}>
@@ -583,17 +600,71 @@ function AbaCte({ parsed }: { parsed: CteParsed }) {
         <Row label="Série" value={g.serie} />
         <Row label="Número" value={g.numero} />
         <Row label="Data de Emissão" value={fmtDataHora(g.dataEmissao)} />
-        <Row label="Tipo do CT-e" value={`${g.tipoCte} - ${g.tipoCteDescricao}`} />
+      </Secao>
+
+      <Secao titulo="Valores" cols={3}>
+        <Row label="Valor Total do Serviço" value={`R$ ${fmtNum(v.valorTotalPrestacao)}`} />
+        <Row label="Base de Cálculo ICMS" value={`R$ ${fmtNum(v.icms?.vBC ?? 0)}`} />
+        <Row label="Valor ICMS" value={`R$ ${fmtNum(v.icms?.vICMS ?? 0)}`} />
+      </Secao>
+
+      <Secao titulo="Emitente (Transportador)" cols={4}>
+        <Row label="CNPJ" value={fmtCnpj(parsed.emitente.cnpj ?? parsed.emitente.cpf)} />
+        <Row label="Nome / Razão Social" value={valorOuVazio(parsed.emitente.razaoSocial)} wide />
+        <Row label="Inscrição Estadual" value={valorOuVazio(parsed.emitente.inscricaoEstadual)} />
+        <Row label="UF" value={valorOuVazio(parsed.emitente.endereco?.uf)} />
+      </Secao>
+
+      <Secao titulo="Tomador do Serviço" cols={4}>
+        <Row label="CNPJ" value={tomadorRef ? fmtCnpj(tomadorRef.cnpj ?? tomadorRef.cpf) : '-'} />
+        <Row label="Nome / Razão Social" value={valorOuVazio(tomadorRef?.razaoSocial)} wide />
+        <Row label="Inscrição Estadual" value={valorOuVazio(tomadorRef?.inscricaoEstadual)} />
+        <Row label="UF" value={valorOuVazio(tomadorRef?.endereco?.uf)} />
+        <Row label="Relação com a carga" value={parsed.tomador ?? '-'} wide />
+      </Secao>
+
+      <Secao titulo="Remetente" cols={4}>
+        <Row label="CNPJ" value={fmtCnpj(parsed.remetente.cnpj ?? parsed.remetente.cpf)} />
+        <Row label="Nome / Razão Social" value={valorOuVazio(parsed.remetente.razaoSocial)} wide />
+        <Row label="Inscrição Estadual" value={valorOuVazio(parsed.remetente.inscricaoEstadual)} />
+        <Row label="UF" value={valorOuVazio(parsed.remetente.endereco?.uf)} />
+      </Secao>
+
+      <Secao titulo="Destinatário" cols={4}>
+        <Row label="CNPJ" value={fmtCnpj(parsed.destinatario.cnpj ?? parsed.destinatario.cpf)} />
+        <Row label="Nome / Razão Social" value={valorOuVazio(parsed.destinatario.razaoSocial)} wide />
+        <Row label="Inscrição Estadual" value={valorOuVazio(parsed.destinatario.inscricaoEstadual)} />
+        <Row label="UF" value={valorOuVazio(parsed.destinatario.endereco?.uf)} />
+      </Secao>
+
+      <Secao titulo="Características" cols={4}>
+        <Row label="Modal" value={`${g.modalidade} - ${g.modalidadeDescricao}`} />
         <Row label="Tipo de Serviço" value={`${g.tipoServico} - ${g.tipoServicoDescricao}`} />
-        <Row label="Modalidade" value={`${g.modalidade} - ${g.modalidadeDescricao}`} />
+        <Row label="Tipo do CT-e" value={`${g.tipoCte} - ${g.tipoCteDescricao}`} />
         <Row label="CFOP" value={g.cfop} />
         <Row label="Natureza da Operação" value={valorOuVazio(g.naturezaOperacao)} wide />
-        <Row label="Ambiente" value={g.ambiente === '1' ? 'Produção' : 'Homologação'} />
         <Row
           label="Tipo de Emissão"
           value={
             g.tipoEmissao
               ? `${g.tipoEmissao} - ${valorOuVazio(g.tipoEmissaoDescricao)}`
+              : '-'
+          }
+        />
+        <Row label="Ambiente" value={g.ambiente === '1' ? 'Produção' : 'Homologação'} />
+        <Row
+          label="Início da Prestação"
+          value={
+            g.ufInicio || g.municipioInicioNome
+              ? `${g.ufInicio ?? ''} - ${g.municipioInicioNome ?? ''}`.trim().replace(/^- /, '')
+              : '-'
+          }
+        />
+        <Row
+          label="Fim da Prestação"
+          value={
+            g.ufFim || g.municipioFimNome
+              ? `${g.ufFim ?? ''} - ${g.municipioFimNome ?? ''}`.trim().replace(/^- /, '')
               : '-'
           }
         />
@@ -633,49 +704,82 @@ function AbaParticipante({
   p,
   mostrarCRT = false,
   mostrarISUF = false,
+  relacaoComCarga,
 }: {
   p: CteParticipante;
   mostrarCRT?: boolean;
   mostrarISUF?: boolean;
+  /** Quando preenchido, mostra "Relação com a carga" como último campo (uso pela aba Tomador). */
+  relacaoComCarga?: string | null;
 }) {
   const e = p.endereco;
-  return (
-    <>
-      <Secao titulo="Identificação" cols={4}>
-        <Row label={p.cnpj ? 'CNPJ' : p.cpf ? 'CPF' : 'CNPJ/CPF'} value={fmtCnpj(p.cnpj ?? p.cpf)} />
-        <Row label="Nome / Razão Social" value={valorOuVazio(p.razaoSocial)} wide />
-        {p.nomeFantasia && <Row label="Nome Fantasia" value={p.nomeFantasia} />}
-        <Row label="Inscrição Estadual" value={valorOuVazio(p.inscricaoEstadual)} />
-        {p.inscricaoEstadualST && (
-          <Row label="IE Substituto Tributário" value={p.inscricaoEstadualST} />
-        )}
-        {mostrarISUF && (
-          <Row label="Inscrição SUFRAMA" value={valorOuVazio(p.inscricaoSUFRAMA)} />
-        )}
-        {mostrarCRT && (
-          <Row
-            label="Regime Tributário (CRT)"
-            value={p.crt ? `${p.crt} - ${valorOuVazio(p.crtDescricao)}` : '-'}
-            wide
-          />
-        )}
-        {p.email && <Row label="E-mail" value={p.email} wide />}
-      </Secao>
 
-      <Secao titulo="Endereço" cols={4}>
-        <Row label="Logradouro" value={valorOuVazio(e?.logradouro)} wide />
-        <Row label="Número" value={valorOuVazio(e?.numero)} />
-        <Row label="Complemento" value={valorOuVazio(e?.complemento)} />
-        <Row label="Bairro" value={valorOuVazio(e?.bairro)} />
-        <Row label="Município" value={valorOuVazio(e?.municipio)} />
-        <Row label="Código IBGE Município" value={valorOuVazio(e?.codigoMunicipio)} />
-        <Row label="UF" value={valorOuVazio(e?.uf)} />
-        <Row label="CEP" value={fmtCep(e?.cep)} />
-        <Row label="País" value={valorOuVazio(e?.pais)} />
-        <Row label="Código País" value={valorOuVazio(e?.codigoPais)} />
-        <Row label="Telefone" value={fmtTelefone(e?.fone)} />
-      </Secao>
-    </>
+  // Endereço completo numa linha: "logradouro, número, complemento" — padrão Portal SEFAZ.
+  const enderecoCompleto =
+    [
+      e?.logradouro,
+      e?.numero,
+      e?.complemento && e.complemento !== '-' && !/^\*+$/.test(e.complemento) ? e.complemento : null,
+    ]
+      .filter((v) => v && v !== '-')
+      .join(', ') || '-';
+
+  // Município "código - nome" combinado (Portal SEFAZ).
+  const municipioFmt =
+    e?.codigoMunicipio && e?.municipio
+      ? `${e.codigoMunicipio} - ${e.municipio}`
+      : e?.municipio || e?.codigoMunicipio || '-';
+
+  // País "código - nome" combinado (Portal SEFAZ).
+  const paisFmt =
+    e?.codigoPais && e?.pais
+      ? `${e.codigoPais} - ${e.pais}`
+      : e?.pais || e?.codigoPais || '-';
+
+  // Último campo da linha "País": Relação com a carga (Tomador) ou SUFRAMA (Destinatário) ou nada.
+  let ultimoCampo: { label: string; value: string } | null = null;
+  if (relacaoComCarga) {
+    ultimoCampo = { label: 'Relação com a carga', value: relacaoComCarga };
+  } else if (mostrarISUF) {
+    ultimoCampo = { label: 'Inscrição SUFRAMA', value: valorOuVazio(p.inscricaoSUFRAMA) };
+  }
+
+  return (
+    <Secao titulo={null} cols={2}>
+      <Row label="Nome / Razão Social" value={valorOuVazio(p.razaoSocial)} />
+      <Row label="Nome Fantasia" value={valorOuVazio(p.nomeFantasia)} />
+      <Row
+        label={p.cnpj ? 'CNPJ' : p.cpf ? 'CPF' : 'CNPJ/CPF'}
+        value={fmtCnpj(p.cnpj ?? p.cpf)}
+      />
+      <Row label="Inscrição Estadual" value={valorOuVazio(p.inscricaoEstadual)} />
+      {p.inscricaoEstadualST && (
+        <>
+          <Row label="IE Substituto Tributário" value={p.inscricaoEstadualST} />
+          <Row label="" value="" />
+        </>
+      )}
+      <Row label="Endereço" value={enderecoCompleto} />
+      <Row label="Bairro / Distrito" value={valorOuVazio(e?.bairro)} />
+      <Row label="Fone / Fax" value={fmtTelefone(e?.fone)} />
+      <Row label="CEP" value={fmtCep(e?.cep)} />
+      <Row label="Município" value={municipioFmt} />
+      <Row label="UF" value={valorOuVazio(e?.uf)} />
+      <Row label="País" value={paisFmt} />
+      {ultimoCampo ? (
+        <Row label={ultimoCampo.label} value={ultimoCampo.value} />
+      ) : (
+        <Row label="" value="" />
+      )}
+      {mostrarCRT && p.crt && (
+        <Row
+          label="Regime Tributário (CRT)"
+          value={`${p.crt} - ${valorOuVazio(p.crtDescricao)}`}
+          wide
+        />
+      )}
+      {p.email && <Row label="E-mail" value={p.email} wide />}
+    </Secao>
   );
 }
 
@@ -708,15 +812,18 @@ function AbaTomador({ parsed }: { parsed: CteParsed }) {
           </p>
         </div>
       </div>
-      <Secao titulo="Identificação do Tomador" cols={2}>
-        <Row label="Categoria" value={nome} wide />
-      </Secao>
       {participanteRef ? (
-        <AbaParticipante p={participanteRef} />
+        <AbaParticipante p={participanteRef} relacaoComCarga={nome ?? undefined} />
       ) : (
-        <div className="text-sm italic text-slate-500">
-          Tomador “{nome}” sem dados detalhados no XML.
-        </div>
+        <Secao titulo={null} cols={2}>
+          <Row label="Relação com a carga" value={nome ?? '-'} />
+          <Row label="" value="" />
+          <Row
+            label="Observação"
+            value={`Tomador "${nome}" sem dados detalhados no XML (o XML deste CT-e não referencia o bloco do papel correspondente).`}
+            wide
+          />
+        </Secao>
       )}
     </>
   );
