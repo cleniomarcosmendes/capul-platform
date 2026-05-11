@@ -3,10 +3,51 @@
 
 - **De:** Clenio Marcos — Departamento de T.I. (CAPUL)
 - **Para:** Equipe Protheus / TOTVS
-- **Data:** 18/04/2026 — **Atualizado em 20/04/2026** (arquitetura revisada após alinhamento)
+- **Data:** 18/04/2026 — **Atualizado em 11/05/2026** (validação fix U_AMARRCTE em HOM)
 - **Referência:** Contratos recebidos em 18/04/2026
   - `szr010-szq010.txt` — `POST /rest/api/INFOCLIENTES/FISCAL/grvXML`
   - `Eventos_nfe.txt` — `GET /rest/api/INFOCLIENTES/FISCAL/eventosNfe`
+
+---
+
+## 🆕 Atualização 11/05/2026 — Validação do fix U_AMARRCTE em HOM
+
+A equipe Protheus comunicou em 11/05/2026 a aplicação do fix das SPs custom `U_AMARRCTE` / `U_AMARRAC7` / `U_GERASA5` em ambiente de **HOMOLOGAÇÃO** (incidente registrado em 08/05/2026, ver `memory/project_cte_incidente_u_amarrcte_08mai.md`).
+
+### Validação executada em 11/05/2026
+
+- Endpoint `grvXML` temporariamente apontado para HOM (`https://192.168.7.63:8115/.../grvXML`) na tabela `core.integracoes_api_endpoints`.
+- 4 CT-es novos (não pré-carregados pela equipe Protheus em HOM) disparados via `POST /api/v1/fiscal/cte/recebidos/:id/regravar-protheus-local`:
+
+| id local | Chave | Filial CAPUL | Resultado |
+|---|---|---|---|
+| 5114 | `31260526866501000149570010000011871024653324` | 18 | `GRAVADO_PRENOTA_FALHOU` |
+| 5115 | `31260526866501000149570010000011891019592694` | 18 | `GRAVADO_PRENOTA_FALHOU` |
+| 5116 | `31260526866501000149570010000011901047966782` | 18 | `GRAVADO_PRENOTA_FALHOU` |
+| 5117 | `31260526866501000149570010000011911224882435` | 18 | `GRAVADO_PRENOTA_FALHOU` |
+
+Adicionalmente, 5 CT-es do bucket `FALHA_TECNICA` original (ids 54–58, lote 08/05) retornaram `JA_EXISTIA` — a equipe Protheus já havia injetado o XML em HOM em 09/05/2026 às 19:15 para teste da correção.
+
+### Conclusão
+
+- ✅ **U_AMARRCTE / U_AMARRAC7 / U_GERASA5** corrigida em HOM. **Zero ocorrências de `DisarmTransaction`** na amarração CT-e. `protheus_grv_xml_gravado=true` em 100% das tentativas.
+- ⚠️ **U_PRENF / U_NFeSaida** **continua falhando** — XML grava corretamente em XMLCAB/XMLIT, porém a geração da pré-nota não ocorre automática. Verificar `error_<chave>.log` no AppServer Protheus HOM.
+
+### Impacto atual do bug remanescente (U_PRENF)
+
+Antes do fix de 11/05, o bug U_PRENF afetava **614 documentos DEST** já em status `GRAVADO_PRENOTA_FALHOU` (XML salvo, pré-nota pendente — fiscal precisa concluir manualmente no Protheus).
+
+Após o fix de U_AMARRCTE, o U_PRENF passa a afetar também:
+
+- **154 documentos TOMA filial 01** que estavam bloqueados em `FALHA_TECNICA` / `PROTHEUS_DESISTIU` (139 DESISTIU + 15 FALHA_TECNICA na contagem original, hoje 51 FALHA_TECNICA + os DESISTIU que viraram retentativa). Esses agora migram para `GRAVADO_PRENOTA_FALHOU` ao serem regravados.
+- **1.635 documentos TOMA** ainda não tentados (status_protheus NULL).
+
+Total estimado de pré-notas pendentes pós-regravação: **~2.400 docs**.
+
+### Pedido formal à equipe Protheus
+
+1. **Promover o fix U_AMARRCTE para PROD** (apiportal.capul.com.br). Hoje endpoint segue apontando para PROD, sem o fix — qualquer disparo automatic em PROD vai continuar falhando.
+2. **Investigar / corrigir U_PRENF / U_NFeSaida** — root cause da falha na criação de pré-nota a partir do XML em XMLCAB/XMLIT. Esse é hoje o **único bloqueador remanescente** do fluxo CT-e/NF-e na CAPUL após o fix de U_AMARRCTE.
 
 ---
 
