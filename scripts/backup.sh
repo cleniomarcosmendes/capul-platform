@@ -643,11 +643,30 @@ restore_from_prod() {
     # --- 6. Restaurar uploads -----------------------------------------------
     if [ -n "$uploads_file" ]; then
         log_info "Etapa 6/7 — restaurando volume uploads_data..."
-        docker run --rm \
-            -v "${UPLOADS_VOLUME}:/data" \
-            -v "$restore_tmp:/backup:ro" \
-            alpine sh -c "rm -rf /data/* /data/..?* /data/.[!.]* 2>/dev/null; tar -xzf /backup/$(basename "$uploads_file") -C /data && chown -R 1000:1000 /data"
-        log_success "  → uploads restaurados."
+
+        # Pega a imagem do container gestao-ti pra usar appuser:appgroup no
+        # chown — Dockerfile cria appuser via `adduser -S` (Alpine system
+        # user, UID ~100), NÃO é 1000. Sem isso, o app não consegue ler
+        # os arquivos após restore. Fallback: hard-code chown 100:101.
+        local gestao_img
+        gestao_img=$(docker inspect "$APP_CONTAINER" --format '{{.Config.Image}}' 2>/dev/null || true)
+
+        if [ -n "$gestao_img" ]; then
+            docker run --rm \
+                -v "${UPLOADS_VOLUME}:/app/uploads" \
+                -v "$restore_tmp:/backup:ro" \
+                --user 0:0 --entrypoint sh \
+                "$gestao_img" \
+                -c "rm -rf /app/uploads/* /app/uploads/..?* /app/uploads/.[!.]* 2>/dev/null; tar -xzf /backup/$(basename "$uploads_file") -C /app/uploads && chown -R appuser:appgroup /app/uploads"
+            log_success "  → uploads restaurados (chown via imagem $gestao_img)."
+        else
+            log_warn "  → imagem do $APP_CONTAINER nao encontrada — fallback chown numerico 100:101 (UID do appuser no Alpine)."
+            docker run --rm \
+                -v "${UPLOADS_VOLUME}:/data" \
+                -v "$restore_tmp:/backup:ro" \
+                alpine sh -c "rm -rf /data/* /data/..?* /data/.[!.]* 2>/dev/null; tar -xzf /backup/$(basename "$uploads_file") -C /data && chown -R 100:101 /data"
+            log_success "  → uploads restaurados (fallback)."
+        fi
     else
         log_warn "Etapa 6/7 — backup nao tinha uploads, pulando."
     fi
