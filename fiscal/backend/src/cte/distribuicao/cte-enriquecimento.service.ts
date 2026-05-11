@@ -151,13 +151,14 @@ export class CteEnriquecimentoService {
       }
 
       while (true) {
-        // Candidatos: já enriquecidos (papel_capul preenchido), schema documento
-        // (não evento), ainda não gravados no Protheus, tentativas abaixo do limite
-        // (PROTHEUS_DESISTIU é terminal e fica fora da fila).
+        // Candidatos: já enriquecidos como TOMA (Capul tomadora do serviço),
+        // schema documento (não evento), ainda não gravados, tentativas abaixo
+        // do limite. Regra 11/05/2026 (setor fiscal): só papel TOMA gera
+        // pré-nota no Protheus. DEST/REM/EXPED ficam apenas no cache local.
         const lote = await this.prisma.client.cteDocumento.findMany({
           where: {
             processadoEm: { not: null },
-            papelCapul: { not: null },
+            papelCapul: 'TOMA',
             protheusGravadoEm: null,
             schema: { in: ['procCTe', 'procCTeSimp'] },
             protheusTentativas: { lt: MAX_TENTATIVAS_PROTHEUS },
@@ -254,6 +255,18 @@ export class CteEnriquecimentoService {
         mensagem: 'Documento sem papel_capul — execute "Forcar enriquecimento" antes.',
       };
     }
+    // Regra 11/05/2026 (setor fiscal): apenas papel TOMA gera pré-nota no
+    // Protheus. CT-es onde Capul é DEST/REM/EXPED ficam apenas no cache
+    // local — não há nota fiscal de entrada a criar.
+    if (doc.papelCapul !== 'TOMA') {
+      return {
+        ok: false,
+        chave: doc.chave,
+        statusAnterior: doc.protheusStatus,
+        statusNovo: doc.protheusStatus,
+        mensagem: `Papel ${doc.papelCapul} não exige gravação no Protheus — apenas TOMA (Capul tomadora do serviço de frete) gera pré-nota.`,
+      };
+    }
 
     const statusAnterior = doc.protheusStatus;
 
@@ -342,6 +355,16 @@ export class CteEnriquecimentoService {
       cnpjsWhitelist = filiais.map((f) => (f.cnpj ?? '').replace(/\D/g, '')).filter((c) => c.length === 14);
     }
 
+    // Regra 11/05/2026 (setor fiscal): apenas TOMA gera pré-nota — se vier
+    // outro papel explicitamente, rejeita pra não criar lote zumbi.
+    if (filtros.papel && filtros.papel !== 'TOMA') {
+      throw new BadRequestException(
+        `Filtro papel=${filtros.papel} inválido para regravação. ` +
+          'Apenas TOMA é enviado ao Protheus (Capul tomadora do serviço de frete). ' +
+          'CT-es DEST/REM/EXPED ficam apenas no cache local.',
+      );
+    }
+
     const statusFiltro = filtros.protheusStatus && filtros.protheusStatus.length > 0
       ? filtros.protheusStatus
       : ['FALHA_TECNICA', 'PROTHEUS_DESISTIU'];
@@ -349,9 +372,9 @@ export class CteEnriquecimentoService {
     const where: any = {
       protheusStatus: { in: statusFiltro },
       dhEmi: { gte: filtros.dataInicio, lte: filtros.dataFim },
+      papelCapul: 'TOMA',
     };
     if (cnpjsWhitelist) where.cnpjConsulente = { in: cnpjsWhitelist };
-    if (filtros.papel) where.papelCapul = filtros.papel;
     if (filtros.cnpjConsulente) where.cnpjConsulente = filtros.cnpjConsulente.replace(/\D/g, '');
 
     const resetResult = await this.prisma.client.cteDocumento.updateMany({

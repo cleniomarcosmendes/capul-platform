@@ -521,6 +521,7 @@ export class CteDocumentoService {
           protheusGravadoEm: true,
           protheusStatus: true,
           protheusErro: true,
+          protheusTentativas: true,
           protheusGrvSucesso: true,
           protheusGrvXmlGravado: true,
           protheusGrvPendAmarracao: true,

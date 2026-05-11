@@ -42,6 +42,7 @@ interface CteDocumentoListItem {
   protheusGravadoEm: string | null;
   protheusStatus: string | null;
   protheusErro: string | null;
+  protheusTentativas: number;
   // Flags granulares (08/05/2026): fonte de verdade do retorno grvXML.
   // Status acima eh derivado, mas filtros avancados usam estas colunas.
   protheusGrvSucesso: boolean | null;
@@ -166,7 +167,14 @@ export function CteRecebidosPage() {
   // aceita formatos livres (ex: "+052025-05-07") que viram dates malformadas
   // no toISOString. Sem essa guarda, useEffect disparava request a cada
   // keystroke do user, batendo rate-limit do throttler (429 em loop).
-  const isDataValida = (d: string) => !d || /^\d{4}-\d{2}-\d{2}$/.test(d);
+  // Range 2020-2099: regex \d{4} aceitava anos absurdos (0203, 0263, 6203)
+  // digitados manualmente no input type=date — min/max do HTML nao bloqueia.
+  const isDataValida = (d: string) => {
+    if (!d) return true;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
+    const ano = Number(d.slice(0, 4));
+    return ano >= 2020 && ano <= 2099;
+  };
 
   const carregar = useCallback(async () => {
     if (
@@ -241,8 +249,14 @@ export function CteRecebidosPage() {
     return sortOrder === 'desc' ? <span>↓</span> : <span>↑</span>;
   };
 
+  // Debounce 350ms: agrupa keystrokes em search/datas num unico fetch.
+  // Sem isso, cada caractere disparava request — estourava throttler 200/min
+  // quando o user digitava chave de 44 dig + ajustava 4 inputs date.
   useEffect(() => {
-    void carregar();
+    const t = setTimeout(() => {
+      void carregar();
+    }, 350);
+    return () => clearTimeout(t);
   }, [carregar]);
 
   const limparFiltros = () => {
@@ -279,26 +293,29 @@ export function CteRecebidosPage() {
   const [regravandoId, setRegravandoId] = useState<number | null>(null);
   const [regravandoBatch, setRegravandoBatch] = useState(false);
 
-  // Re-tentar habilitado: precisa filtro de status (FALHA_TECNICA ou PROTHEUS_DESISTIU)
-  // + janela de data obrigatoria (evita reprocessamento sem criterio temporal)
+  // Re-tentar habilitado: precisa filtro de status (FALHA_TECNICA ou PROTHEUS_DESISTIU),
+  // janela de data e papel TOMA (regra 11/05: só Capul tomadora gera pré-nota).
   const podeRegravarFalhas =
     (protheusStatus === 'FALHA_TECNICA' || protheusStatus === 'PROTHEUS_DESISTIU') &&
     !!dataInicio &&
-    !!dataFim;
+    !!dataFim &&
+    papel === 'TOMA';
 
   const tooltipRegravar = !dataInicio || !dataFim
     ? 'Preencha dataInicio E dataFim no filtro de Emissao'
     : (protheusStatus !== 'FALHA_TECNICA' && protheusStatus !== 'PROTHEUS_DESISTIU')
-      ? 'Selecione FALHA_TECNICA ou PROTHEUS_DESISTIU no filtro Status Protheus'
-      : `Vai re-tentar TODOS os ${total} docs filtrados`;
+      ? 'Selecione "Falha técnica" ou "Limite de tentativas excedido" no filtro Status Protheus'
+      : papel !== 'TOMA'
+        ? 'Selecione papel=TOMA no filtro (apenas Capul tomadora do serviço gera pré-nota)'
+        : `Vai re-tentar TODOS os ${total} docs filtrados`;
 
   const regravarFalhasFiltradas = async () => {
     const ok = await confirm({
       title: 'Re-tentar gravação Protheus dos filtrados?',
       description:
-        `Reseta status PROTHEUS_DESISTIU/FALHA_TECNICA pra null e dispara enriquecimento ` +
-        `dos ${total} documentos filtrados (${protheusStatus}, dhEmi entre ${dataInicio} e ${dataFim}). ` +
-        `NÃO consome SEFAZ. Pode demorar minutos pra muitas falhas.`,
+        `Reseta o contador de tentativas e dispara nova gravação para os ${total} documentos filtrados ` +
+        `(status ${protheusStatus}, dhEmi entre ${dataInicio} e ${dataFim}). ` +
+        `NÃO consome SEFAZ — usa o XML do cache local. Pode demorar minutos.`,
       variant: 'warning',
       confirmLabel: `Re-tentar ${total} docs`,
     });
@@ -556,13 +573,13 @@ export function CteRecebidosPage() {
                 className="w-full px-3 py-1.5 border rounded text-sm"
               >
                 <option value="">Todos</option>
-                <option value="GRAVADO">✓ GRAVADO</option>
+                <option value="GRAVADO">✓ Gravado</option>
+                <option value="JA_EXISTIA">✓ Já estava no Protheus</option>
                 <option value="GRAVADO_PRENOTA_FALHOU">⚠ Pré-nota pendente</option>
                 <option value="GRAVADO_AGUARDANDO_AMARRACAO">⚠ Aguarda amarração</option>
-                <option value="JA_EXISTIA">✓ JA_EXISTIA</option>
-                <option value="FALHA_TECNICA">✗ FALHA_TECNICA</option>
-                <option value="PROTHEUS_DESISTIU">✗ PROTHEUS_DESISTIU</option>
-                <option value="NAO_APLICAVEL">— N/A</option>
+                <option value="FALHA_TECNICA">✗ Falha técnica</option>
+                <option value="PROTHEUS_DESISTIU">✗ Limite de tentativas excedido</option>
+                <option value="NAO_APLICAVEL">— Não aplicável</option>
                 <option value="PENDENTE">— Pendente (sem status)</option>
               </select>
             </div>
@@ -725,6 +742,13 @@ export function CteRecebidosPage() {
                   >
                     Protheus {sortIcon('protheusStatus')}
                   </th>
+                  <th
+                    className="px-3 py-2 text-center cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => toggleSort('protheusTentativas')}
+                    title="Tentativas de gravação consumidas. Após 5, status vira 'Limite excedido' e exige reset manual."
+                  >
+                    Tentativas {sortIcon('protheusTentativas')}
+                  </th>
                   <th className="px-3 py-2 text-right">Tamanho</th>
                   <th className="px-3 py-2"></th>
                 </tr>
@@ -791,7 +815,7 @@ export function CteRecebidosPage() {
                       <td className="px-3 py-2 text-xs">
                         {it.protheusStatus === 'GRAVADO' ? (
                           <span title={`Gravado em SZR010+SZQ010 ${it.protheusGravadoEm ? new Date(it.protheusGravadoEm).toLocaleString('pt-BR') : ''}`}>
-                            <Badge variant="green">✓ GRAVADO</Badge>
+                            <Badge variant="green">✓ Gravado</Badge>
                           </span>
                         ) : it.protheusStatus === 'GRAVADO_PRENOTA_FALHOU' ? (
                           it.inconsistenciaResolvidaEm ? (
@@ -815,22 +839,40 @@ export function CteRecebidosPage() {
                           )
                         ) : it.protheusStatus === 'JA_EXISTIA' ? (
                           <span title="XML já estava em SZR010 (importação manual prévia preservada pelo pré-check)">
-                            <Badge variant="green">✓ JA_EXISTIA</Badge>
+                            <Badge variant="green">✓ Já estava no Protheus</Badge>
                           </span>
                         ) : it.protheusStatus === 'FALHA_TECNICA' ? (
                           <span title={it.protheusErro ?? 'Erro técnico — retry no próximo ciclo'}>
-                            <Badge variant="red">✗ FALHA</Badge>
+                            <Badge variant="red">✗ Falha técnica</Badge>
                           </span>
                         ) : it.protheusStatus === 'PROTHEUS_DESISTIU' ? (
-                          <span title="Limite de 5 tentativas atingido — re-tente manual após cadastrar SA2">
-                            <Badge variant="red">✗ DESISTIU</Badge>
+                          <span title={`Limite de 5 tentativas atingido. ${it.protheusErro ?? 'Re-tente manualmente após resolver causa raiz.'}`}>
+                            <Badge variant="red">✗ Limite de tentativas excedido</Badge>
                           </span>
                         ) : it.protheusStatus === 'NAO_APLICAVEL' ? (
                           <span title="Gravação não aplicável (ex: ambiente XML difere do Protheus)">
-                            <Badge variant="gray">— N/A</Badge>
+                            <Badge variant="gray">— Não aplicável</Badge>
                           </span>
                         ) : (
                           <span className="text-gray-400 text-xs" title="Ainda não tentou gravar (flag desligada ou doc novo)">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center text-xs">
+                        {it.protheusTentativas === 0 ? (
+                          <span className="text-gray-300">—</span>
+                        ) : (
+                          <span
+                            className={
+                              it.protheusTentativas >= 5
+                                ? 'inline-block px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold'
+                                : it.protheusTentativas >= 3
+                                  ? 'inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-700'
+                                  : 'text-gray-600'
+                            }
+                            title={`${it.protheusTentativas} de 5 tentativas consumidas`}
+                          >
+                            {it.protheusTentativas}/5
+                          </span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-right text-xs">
@@ -962,15 +1004,18 @@ export function CteRecebidosPage() {
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div>
                           <span className="text-gray-500">Status:</span>{' '}
-                          {detalhe.documento.protheusStatus === 'GRAVADO' ||
-                          detalhe.documento.protheusStatus === 'JA_EXISTIA' ? (
-                            <Badge variant="green">✓ {detalhe.documento.protheusStatus}</Badge>
+                          {detalhe.documento.protheusStatus === 'GRAVADO' ? (
+                            <Badge variant="green">✓ Gravado</Badge>
+                          ) : detalhe.documento.protheusStatus === 'JA_EXISTIA' ? (
+                            <Badge variant="green">✓ Já estava no Protheus</Badge>
                           ) : detalhe.documento.protheusStatus === 'GRAVADO_PRENOTA_FALHOU' ? (
                             <Badge variant="yellow">⚠ Pré-nota pendente</Badge>
                           ) : detalhe.documento.protheusStatus === 'GRAVADO_AGUARDANDO_AMARRACAO' ? (
                             <Badge variant="yellow">⚠ Aguarda amarração</Badge>
+                          ) : detalhe.documento.protheusStatus === 'FALHA_TECNICA' ? (
+                            <Badge variant="red">✗ Falha técnica</Badge>
                           ) : detalhe.documento.protheusStatus === 'PROTHEUS_DESISTIU' ? (
-                            <Badge variant="red">✗ DESISTIU (limite tentativas)</Badge>
+                            <Badge variant="red">✗ Limite de tentativas excedido (5/5)</Badge>
                           ) : (
                             <Badge variant="red">✗ {detalhe.documento.protheusStatus}</Badge>
                           )}
@@ -1106,7 +1151,8 @@ export function CteRecebidosPage() {
                         )
                       )}
                       {(detalhe.documento.protheusStatus === 'FALHA_TECNICA' ||
-                        detalhe.documento.protheusStatus === 'PROTHEUS_DESISTIU') && (
+                        detalhe.documento.protheusStatus === 'PROTHEUS_DESISTIU') &&
+                        detalhe.documento.papelCapul === 'TOMA' && (
                         <div className="mt-3 rounded border border-amber-300 bg-amber-50 p-2 flex items-center justify-between gap-2">
                           <span className="text-xs text-amber-900">
                             Re-tentar gravação no Protheus (sem consumir SEFAZ — usa o XML do
@@ -1121,6 +1167,15 @@ export function CteRecebidosPage() {
                             <RefreshCw size={14} className="mr-1" />
                             Re-tentar
                           </Button>
+                        </div>
+                      )}
+                      {(detalhe.documento.protheusStatus === 'FALHA_TECNICA' ||
+                        detalhe.documento.protheusStatus === 'PROTHEUS_DESISTIU') &&
+                        detalhe.documento.papelCapul !== 'TOMA' && (
+                        <div className="mt-3 rounded border border-gray-300 bg-gray-50 p-2 text-xs text-gray-600">
+                          Papel <strong>{detalhe.documento.papelCapul ?? '—'}</strong> não exige
+                          pré-nota no Protheus (apenas TOMA = Capul tomadora do serviço de frete).
+                          Re-tentativa não se aplica — o XML fica disponível apenas no cache local.
                         </div>
                       )}
                       {detalhe.documento.protheusGrvRequest && (
