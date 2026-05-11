@@ -409,27 +409,28 @@ backup_uploads() {
 
     log_info "Iniciando backup dos arquivos de upload (anexos)..."
 
-    # Verificar se o container esta rodando
-    if ! docker ps --format "{{.Names}}" | grep -q "^${APP_CONTAINER}$"; then
-        log_warning "Container $APP_CONTAINER não está em execução. Tentando via volume direto..."
-        # Fallback: copiar via container temporário usando o volume
-        docker run --rm \
-            -v "${UPLOADS_VOLUME}:/data:ro" \
-            -v "${BACKUP_DIR}:/backup" \
-            alpine tar -czf "/backup/backup_uploads_${TIMESTAMP}.tar.gz" -C /data .
-    else
-        # Copiar via container em execução
-        docker exec "$APP_CONTAINER" tar -czf /tmp/uploads_backup.tar.gz -C "$UPLOADS_PATH" .
-        docker cp "${APP_CONTAINER}:/tmp/uploads_backup.tar.gz" "$backup_file"
-        docker exec "$APP_CONTAINER" rm -f /tmp/uploads_backup.tar.gz
+    # Sempre via container temporário alpine como root, montando o volume
+    # diretamente. Antes (11/05/2026): rodava "docker exec ... tar" como
+    # appuser, que falhava silenciosamente em arquivos com owner diferente
+    # — backup saía com 81% dos anexos faltando sem reportar erro.
+    docker run --rm \
+        -v "${UPLOADS_VOLUME}:/data:ro" \
+        -v "${BACKUP_DIR}:/backup" \
+        alpine tar -czf "/backup/backup_uploads_${TIMESTAMP}.tar.gz" -C /data . \
+        || { log_error "Falha ao gerar tar dos uploads (volume ${UPLOADS_VOLUME})"; return 1; }
+
+    if [ ! -f "$backup_file" ]; then
+        log_error "Backup de uploads não foi gerado: $backup_file"
+        return 1
     fi
 
-    if [ -f "$backup_file" ]; then
-        local size
-        size=$(du -sh "$backup_file" | cut -f1)
-        log_success "Backup de uploads salvo: $backup_file ($size)"
-    else
-        log_warning "Nenhum arquivo de upload encontrado ou backup vazio"
+    local size files
+    size=$(du -sh "$backup_file" | cut -f1)
+    files=$(docker run --rm -v "${BACKUP_DIR}:/b:ro" alpine \
+        tar -tzf "/b/$(basename "$backup_file")" 2>/dev/null | grep -v '/$' | wc -l)
+    log_success "Backup de uploads salvo: $backup_file ($size, $files arquivos)"
+    if [ "$files" = "0" ]; then
+        log_warning "  → ATENÇÃO: tar gerado com 0 arquivos. Volume vazio ou erro de leitura."
     fi
     echo "$backup_file"
 }
@@ -460,13 +461,17 @@ backup_full() {
 
     # Backup dos uploads (anexos)
     log_info "  → Exportando arquivos de upload (anexos)..."
-    if docker ps --format "{{.Names}}" | grep -q "^${APP_CONTAINER}$"; then
-        docker exec "$APP_CONTAINER" tar -czf /tmp/uploads_backup.tar.gz -C "$UPLOADS_PATH" . 2>/dev/null || true
-        docker cp "${APP_CONTAINER}:/tmp/uploads_backup.tar.gz" "$uploads_tmp" 2>/dev/null || true
-        docker exec "$APP_CONTAINER" rm -f /tmp/uploads_backup.tar.gz 2>/dev/null || true
-    else
-        docker run --rm -v "${UPLOADS_VOLUME}:/data:ro" -v /tmp:/backup \
-            alpine tar -czf "/backup/capul_uploads_${TIMESTAMP}.tar.gz" -C /data . 2>/dev/null || true
+    # Sempre via alpine como root montando volume direto. Antes rodava
+    # "docker exec ... tar" como appuser, que falhava silenciosamente em
+    # arquivos com owner diferente — incidente 11/05/2026: 81% dos anexos
+    # ficaram fora do backup sem gerar warning.
+    if ! docker run --rm \
+            -v "${UPLOADS_VOLUME}:/data:ro" \
+            -v /tmp:/backup \
+            alpine tar -czf "/backup/capul_uploads_${TIMESTAMP}.tar.gz" -C /data .; then
+        log_error "Falha ao gerar tar dos uploads. Backup full abortado."
+        send_failure_alert 1 "uploads"
+        exit 1
     fi
 
     # Tarball com aplicação + dump + uploads
@@ -480,10 +485,20 @@ backup_full() {
         -C /tmp "capul_db_dump_${TIMESTAMP}.dump"
     )
 
-    # Incluir uploads se existir
-    if [ -f "$uploads_tmp" ]; then
-        tar_args+=(-C /tmp "capul_uploads_${TIMESTAMP}.tar.gz")
+    # Uploads precisa estar presente — falha em vez de prosseguir silencioso.
+    if [ ! -f "$uploads_tmp" ]; then
+        log_error "Tar dos uploads não foi gerado: $uploads_tmp — abortando."
+        send_failure_alert 1 "uploads"
+        exit 1
     fi
+    # Sanidade: conta arquivos dentro do tar dos uploads.
+    local uploads_count
+    uploads_count=$(tar -tzf "$uploads_tmp" 2>/dev/null | grep -v '/$' | wc -l)
+    log_info "  → uploads tar contém $uploads_count arquivos ($(du -sh "$uploads_tmp" | cut -f1))"
+    if [ "$uploads_count" = "0" ]; then
+        log_warning "  → Tar de uploads tem 0 arquivos. Verifique volume ${UPLOADS_VOLUME}."
+    fi
+    tar_args+=(-C /tmp "capul_uploads_${TIMESTAMP}.tar.gz")
 
     tar -czf "$backup_file" "${tar_args[@]}"
 
@@ -492,7 +507,7 @@ backup_full() {
 
     local size
     size=$(du -sh "$backup_file" | cut -f1)
-    log_success "Backup completo salvo: $backup_file ($size)"
+    log_success "Backup completo salvo: $backup_file ($size, incluindo $uploads_count anexos)"
     echo "$backup_file"
 }
 
