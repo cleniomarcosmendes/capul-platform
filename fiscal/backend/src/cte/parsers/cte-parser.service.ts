@@ -130,7 +130,16 @@ export class CteParserService {
     const expedidor = inf.exped ? this.parseParticipante(inf.exped, 'expedidor') : null;
     const recebedor = inf.receb ? this.parseParticipante(inf.receb, 'recebedor') : null;
     const destinatario = this.parseParticipante(inf.dest, 'destinatario');
-    const tomador = TOMADOR_MAP[String(inf.ide?.toma ?? '4')] ?? 'Outros';
+    // Schema CT-e 4.00 (NT 2014.002):
+    //   <ide><toma3><toma>0..3</toma></toma3>     — Rem/Exp/Rec/Dest
+    //   <ide><toma4><toma>4</toma><CNPJ>...        — "Outros" com bloco proprio
+    // Fallback <ide><toma> direto cobre XMLs minimalistas/legados.
+    const tomaCode =
+      inf.ide?.toma3?.toma ??
+      inf.ide?.toma4?.toma ??
+      inf.ide?.toma ??
+      '4';
+    const tomador = TOMADOR_MAP[String(tomaCode)] ?? 'Outros';
     const tomadorOutros = inf.ide?.toma4 ? this.parseParticipante(inf.ide.toma4, 'tomador4') : null;
 
     const infCTeNorm = inf.infCTeNorm ?? null;
