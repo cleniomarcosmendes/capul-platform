@@ -3,16 +3,24 @@
 # =============================================================================
 # SCRIPT DE BACKUP — CAPUL PLATFORM
 # =============================================================================
-# Uso: ./backup.sh [tipo]
-#   Tipos: full | app | db | uploads
-#   Sem argumento: executa backup completo (full)
+# Uso: ./backup.sh [tipo] [argumento]
+#   Tipos de backup: full | app | db | uploads | certs | env | redis
+#   Restore PRD→HOM:  restore-from-prod <caminho/backup_full_*.tar.gz>
+#   Sem argumento: menu interativo
 #
 # Exemplos:
-#   ./backup.sh           → backup completo
+#   ./backup.sh           → menu interativo
 #   ./backup.sh full      → backup completo (app + banco + uploads)
 #   ./backup.sh app       → somente aplicação
 #   ./backup.sh db        → somente banco de dados
 #   ./backup.sh uploads   → somente arquivos de upload (anexos)
+#
+#   ./backup.sh restore-from-prod backups/backup_full_20260511_PRD.tar.gz
+#     → restaura banco + uploads de um backup PRD num servidor HOM.
+#       PRESERVA: código, .env, certs A1, redis.
+#       Sanitiza: endpoints PROD→HOM, ambiente_ativo=HOM, freio de mão ON.
+#       DESTRUTIVO no banco (DROP + CREATE) — confirmação obrigatória.
+#       Use APENAS em ambiente de homologação, NUNCA em produção.
 # =============================================================================
 
 set -e
@@ -489,6 +497,217 @@ backup_full() {
 }
 
 # =============================================================================
+# RESTORE PRD → HOM
+# =============================================================================
+# Restaura um backup_full_*.tar.gz de PROD num servidor de HOMOLOGAÇÃO,
+# preservando .env, código e configs locais do HOM. Sanitiza endpoints e
+# flags fiscais pra HOMOLOGAÇÃO após o restore.
+#
+# Uso: ./backup.sh restore-from-prod <caminho/do/backup_full_*.tar.gz>
+#
+# O QUE RESTAURA: dump do PostgreSQL + volume de uploads (anexos).
+# O QUE PRESERVA: /opt/capul-platform/* (código + .env), certs A1, redis.
+#
+# IMPORTANTE: este comando É DESTRUTIVO — substitui banco e uploads do
+# servidor onde roda. Use APENAS em ambiente de HOMOLOGAÇÃO.
+
+restore_from_prod() {
+    local source_tar="$1"
+    local restore_tmp="/tmp/restore-prd-$(date +%s)"
+
+    # --- Validações ----------------------------------------------------------
+    if [ -z "$source_tar" ]; then
+        log_error "Caminho do backup obrigatorio."
+        echo "Uso: $0 restore-from-prod <caminho/do/backup_full_*.tar.gz>"
+        exit 1
+    fi
+    if [ ! -f "$source_tar" ]; then
+        log_error "Arquivo nao encontrado: $source_tar"
+        exit 1
+    fi
+    if ! tar -tzf "$source_tar" >/dev/null 2>&1; then
+        log_error "Arquivo nao parece ser um tar.gz valido: $source_tar"
+        exit 1
+    fi
+    if ! tar -tzf "$source_tar" | grep -q "^capul_db_dump_.*\.dump$"; then
+        log_error "Tar nao contem capul_db_dump_*.dump na raiz. Backup invalido para restore-from-prod."
+        exit 1
+    fi
+
+    # --- Confirmação dupla ---------------------------------------------------
+    echo "" >/dev/tty
+    echo -e "${RED}${BOLD}============================================================${NC}" >/dev/tty
+    echo -e "${RED}${BOLD}  RESTORE PRD → HOM (DESTRUTIVO)${NC}" >/dev/tty
+    echo -e "${RED}${BOLD}============================================================${NC}" >/dev/tty
+    echo "" >/dev/tty
+    echo -e "  Backup origem: ${BOLD}$source_tar${NC}" >/dev/tty
+    echo -e "  Destino: ${BOLD}este servidor ($(hostname))${NC}" >/dev/tty
+    echo "" >/dev/tty
+    echo -e "  ${YELLOW}Vai SUBSTITUIR:${NC}" >/dev/tty
+    echo -e "    • banco capul_platform inteiro (DROP + CREATE + restore do dump)" >/dev/tty
+    echo -e "    • volume uploads_data (anexos)" >/dev/tty
+    echo "" >/dev/tty
+    echo -e "  ${GREEN}NÃO toca:${NC}" >/dev/tty
+    echo -e "    • /opt/capul-platform/ (código + .env)" >/dev/tty
+    echo -e "    • certificados A1 (fiscal/backend/certs)" >/dev/tty
+    echo -e "    • redis (cache/sessões)" >/dev/tty
+    echo "" >/dev/tty
+    echo -e "  ${RED}NUNCA execute em produção.${NC} Use apenas em HOM." >/dev/tty
+    echo "" >/dev/tty
+
+    read -r -p "  Confirme digitando exatamente RESTAURAR PRD: " confirma </dev/tty
+    if [ "$confirma" != "RESTAURAR PRD" ]; then
+        echo -e "  ${YELLOW}Confirmação não bate. Operação cancelada.${NC}" >/dev/tty
+        exit 0
+    fi
+
+    # --- 1. Backup defensivo do estado atual --------------------------------
+    log_info "Etapa 1/7 — backup defensivo do estado HOM atual..."
+    local pre_backup="${BACKUP_DIR}/_HOM_pre_restore_$(date +%Y%m%d_%H%M%S).tar.gz"
+    mkdir -p "$BACKUP_DIR"
+    docker exec "$DB_CONTAINER" pg_dump \
+        -U "$DB_USER" \
+        -d "$DB_NAME" \
+        --format=custom \
+        -f /tmp/hom_pre_restore.dump 2>/dev/null || {
+            log_warn "  → pg_dump pre-restore falhou (banco pode estar inacessivel) — seguindo."
+        }
+    docker cp "${DB_CONTAINER}:/tmp/hom_pre_restore.dump" "/tmp/hom_pre_restore.dump" 2>/dev/null || true
+    docker exec "$DB_CONTAINER" rm -f /tmp/hom_pre_restore.dump 2>/dev/null || true
+    [ -f /tmp/hom_pre_restore.dump ] && {
+        tar -czf "$pre_backup" -C /tmp hom_pre_restore.dump
+        rm -f /tmp/hom_pre_restore.dump
+        log_success "  → backup pre-restore: $pre_backup"
+    }
+
+    # --- 2. Parar serviços (exceto postgres) --------------------------------
+    log_info "Etapa 2/7 — parando serviços (mantendo postgres)..."
+    cd "$APP_DIR"
+    docker compose stop \
+        auth-gateway hub configurador gestao-ti-backend gestao-ti-frontend \
+        inventario-backend inventario-frontend fiscal-backend fiscal-frontend \
+        nginx 2>/dev/null || true
+
+    # --- 3. Extrair APENAS dump + uploads -----------------------------------
+    log_info "Etapa 3/7 — extraindo dump e uploads do backup PRD..."
+    mkdir -p "$restore_tmp"
+    tar -xzf "$source_tar" \
+        -C "$restore_tmp" \
+        --wildcards 'capul_db_dump_*.dump' 'capul_uploads_*.tar.gz' 2>/dev/null || true
+
+    local dump_file
+    dump_file=$(ls "$restore_tmp"/capul_db_dump_*.dump 2>/dev/null | head -1)
+    if [ -z "$dump_file" ]; then
+        log_error "Dump nao extraido. Backup pode estar corrompido."
+        rm -rf "$restore_tmp"
+        exit 1
+    fi
+    local uploads_file
+    uploads_file=$(ls "$restore_tmp"/capul_uploads_*.tar.gz 2>/dev/null | head -1)
+    log_success "  → dump: $(basename "$dump_file") ($(du -sh "$dump_file" | cut -f1))"
+    [ -n "$uploads_file" ] && log_success "  → uploads: $(basename "$uploads_file") ($(du -sh "$uploads_file" | cut -f1))"
+
+    # --- 4. Garantir postgres rodando ---------------------------------------
+    log_info "Etapa 4/7 — garantindo postgres healthy..."
+    docker compose up -d postgres
+    local tries=20
+    while [ $tries -gt 0 ]; do
+        if docker exec "$DB_CONTAINER" pg_isready -U "$DB_USER" >/dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+        tries=$((tries - 1))
+    done
+    [ $tries -eq 0 ] && { log_error "Postgres nao subiu em 20s"; exit 1; }
+    log_success "  → postgres pronto."
+
+    # --- 5. DROP + CREATE + restore -----------------------------------------
+    log_info "Etapa 5/7 — restaurando banco (DROP + CREATE + pg_restore)..."
+    docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d postgres \
+        -c "DROP DATABASE IF EXISTS $DB_NAME;" >/dev/null
+    docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d postgres \
+        -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;" >/dev/null
+
+    docker cp "$dump_file" "${DB_CONTAINER}:/tmp/restore.dump"
+    docker exec "$DB_CONTAINER" pg_restore \
+        -U "$DB_USER" \
+        -d "$DB_NAME" \
+        --no-owner --no-privileges \
+        /tmp/restore.dump 2>&1 | tail -10 || {
+            log_error "pg_restore falhou. Verifique log acima."
+            exit 1
+        }
+    docker exec "$DB_CONTAINER" rm -f /tmp/restore.dump
+    log_success "  → banco restaurado."
+
+    # --- 6. Restaurar uploads -----------------------------------------------
+    if [ -n "$uploads_file" ]; then
+        log_info "Etapa 6/7 — restaurando volume uploads_data..."
+        docker run --rm \
+            -v "${UPLOADS_VOLUME}:/data" \
+            -v "$restore_tmp:/backup:ro" \
+            alpine sh -c "rm -rf /data/* /data/..?* /data/.[!.]* 2>/dev/null; tar -xzf /backup/$(basename "$uploads_file") -C /data && chown -R 1000:1000 /data"
+        log_success "  → uploads restaurados."
+    else
+        log_warn "Etapa 6/7 — backup nao tinha uploads, pulando."
+    fi
+
+    # --- 7. Sanitizar configs PRD → HOM -------------------------------------
+    log_info "Etapa 7/7 — sanitizando configs PRD → HOM no banco..."
+    docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" >/dev/null <<'SQL'
+-- 7.1 Endpoints: desliga PROD, liga HOM correspondente
+UPDATE core.integracoes_api_endpoints
+   SET ativo = false, updated_at = NOW()
+ WHERE ambiente = 'PRODUCAO' AND ativo = true;
+
+UPDATE core.integracoes_api_endpoints e
+   SET ativo = true, updated_at = NOW()
+ WHERE e.ambiente = 'HOMOLOGACAO'
+   AND e.ativo = false
+   AND EXISTS (
+       SELECT 1 FROM core.integracoes_api_endpoints p
+        WHERE p.integracao_id = e.integracao_id
+          AND p.modulo = e.modulo
+          AND p.operacao = e.operacao
+          AND p.ambiente = 'PRODUCAO'
+   );
+
+-- 7.2 Fiscal: ambiente em HOM + freio de mão (pausa total)
+UPDATE fiscal.ambiente_config
+   SET ambiente_ativo = 'HOMOLOGACAO',
+       cte_distribuicao_ambiente = 'HOMOLOGACAO',
+       cte_distribuicao_ativo = false,
+       cte_protheus_grava_ativo = false,
+       pause_sync = true,
+       ultima_alteracao_em = NOW(),
+       ultima_alteracao_por = 'backup.sh:restore-from-prod'
+ WHERE id = 1;
+SQL
+    log_success "  → configs sanitizadas (endpoints HOM, ambiente HOMOLOGACAO, freio de mão ON)."
+
+    # --- Limpeza + status final ---------------------------------------------
+    rm -rf "$restore_tmp"
+
+    echo ""
+    log_info "Estado pós-restore:"
+    docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -c \
+        "SELECT modulo, operacao, ambiente, ativo FROM core.integracoes_api_endpoints WHERE modulo='FISCAL' ORDER BY operacao, ambiente;"
+    docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -c \
+        "SELECT ambiente_ativo, pause_sync, cte_distribuicao_ativo, cte_protheus_grava_ativo FROM fiscal.ambiente_config WHERE id=1;"
+
+    echo ""
+    echo -e "${GREEN}${BOLD}============================================================${NC}"
+    echo -e "${GREEN}${BOLD}  RESTORE PRD → HOM CONCLUÍDO${NC}"
+    echo -e "${GREEN}${BOLD}============================================================${NC}"
+    echo ""
+    echo "  Próximos passos:"
+    echo "    1. docker compose up -d  (subir todos os serviços)"
+    echo "    2. Confirmar URL/credenciais do Protheus HOM no Configurador"
+    echo "    3. Smoke test: login + consulta básica"
+    echo ""
+}
+
+# =============================================================================
 # MENU INTERATIVO
 # =============================================================================
 
@@ -538,6 +757,14 @@ main() {
         tipo="$TIPO_SELECIONADO"
     fi
 
+    # restore-from-prod tem fluxo próprio — não passa pelo case do backup.
+    if [ "$tipo" = "restore-from-prod" ]; then
+        check_requirements
+        load_env
+        restore_from_prod "$2"
+        exit 0
+    fi
+
     echo ""
     echo -e "${BOLD}============================================================${NC}"
     echo -e "${BOLD}  BACKUP — CAPUL PLATFORM${NC}"
@@ -583,9 +810,11 @@ main() {
             backup_redis
             ;;
         *)
-            log_error "Tipo invalido: '$tipo'. Use: full | app | db | uploads | certs | env | redis"
+            log_error "Tipo invalido: '$tipo'. Use: full | app | db | uploads | certs | env | redis | restore-from-prod"
             echo ""
-            echo "Uso: $0 [full|app|db|uploads|certs|env|redis]"
+            echo "Uso:"
+            echo "  $0 [full|app|db|uploads|certs|env|redis]            — executa backup"
+            echo "  $0 restore-from-prod <caminho/backup_full_*.tar.gz>  — restaura backup PRD em HOM"
             exit 1
             ;;
     esac
