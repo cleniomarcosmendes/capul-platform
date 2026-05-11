@@ -430,10 +430,15 @@ export function CteRecebidosPage() {
     }
   };
 
-  const imprimirDacte = async (id: number, chaveLabel?: string) => {
+  const imprimirDacte = async (
+    id: number,
+    chaveLabel?: string,
+    modelo: 'padrao' | 'fsist' = 'padrao',
+  ) => {
     try {
       const r = await fiscalApi.get(`/cte/recebidos/${id}/dacte`, {
         responseType: 'blob',
+        params: modelo === 'fsist' ? { modelo: 'fsist' } : undefined,
       });
       const blob = new Blob([r.data], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
@@ -945,15 +950,28 @@ export function CteRecebidosPage() {
                 {detalhe &&
                   (detalhe.documento.schema === 'procCTe' ||
                     detalhe.documento.schema === 'procCTeSimp') && (
-                    <Button
-                      variant="secondary"
-                      onClick={() =>
-                        imprimirDacte(detalhe.documento.id, detalhe.documento.chave ?? undefined)
-                      }
-                    >
-                      <Printer size={14} className="mr-1" />
-                      Imprimir DACTE
-                    </Button>
+                    <>
+                      <Button
+                        variant="secondary"
+                        onClick={() =>
+                          imprimirDacte(detalhe.documento.id, detalhe.documento.chave ?? undefined, 'padrao')
+                        }
+                        title="DACTE compacto (padrão Capul)"
+                      >
+                        <Printer size={14} className="mr-1" />
+                        DACTE Padrão
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() =>
+                          imprimirDacte(detalhe.documento.id, detalhe.documento.chave ?? undefined, 'fsist')
+                        }
+                        title="DACTE estilo fsist.com.br (oficial, denso)"
+                      >
+                        <Printer size={14} className="mr-1" />
+                        DACTE Fsist
+                      </Button>
+                    </>
                   )}
                 <button
                   onClick={() => setDetalhe(null)}

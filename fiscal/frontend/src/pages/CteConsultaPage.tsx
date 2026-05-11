@@ -261,15 +261,16 @@ export function CteConsultaPage() {
     URL.revokeObjectURL(url);
   }
 
-  async function handleDownloadDacte() {
+  async function handleDownloadDacte(modelo: 'padrao' | 'fsist' = 'padrao') {
     if (!result?.xmlDisponivel) return;
     const r = await fiscalApi.get(`/cte/${result.chave}/filial/${result.filial}/dacte`, {
       responseType: 'blob',
+      params: modelo === 'fsist' ? { modelo: 'fsist' } : undefined,
     });
     const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
     const a = document.createElement('a');
     a.href = url;
-    a.download = `DACTE_${result.chave}.pdf`;
+    a.download = `DACTE_${modelo === 'fsist' ? 'fsist_' : ''}${result.chave}.pdf`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -444,9 +445,19 @@ export function CteConsultaPage() {
                     variant="secondary"
                     size="sm"
                     leftIcon={<FileText className="h-4 w-4" />}
-                    onClick={handleDownloadDacte}
+                    onClick={() => handleDownloadDacte('padrao')}
+                    title="DACTE compacto (padrão Capul)"
                   >
-                    Baixar DACTE
+                    DACTE Padrão
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    leftIcon={<FileText className="h-4 w-4" />}
+                    onClick={() => handleDownloadDacte('fsist')}
+                    title="DACTE estilo fsist.com.br (oficial, denso)"
+                  >
+                    DACTE Fsist
                   </Button>
                 </div>
               </>

@@ -20,6 +20,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { FiscalAuthenticatedUser } from '../common/interfaces/jwt-payload.interface.js';
 import { CteService } from './cte.service.js';
 import { DacteGeneratorService } from './pdf/dacte-generator.service.js';
+import { DacteFsistGeneratorService } from './pdf/dacte-fsist-generator.service.js';
 import { DistribuicaoNsuService } from './distribuicao/distribuicao-nsu.service.js';
 import { CteEnriquecimentoService } from './distribuicao/cte-enriquecimento.service.js';
 import { PapelDetectorService } from './distribuicao/papel-detector.service.js';
@@ -35,6 +36,7 @@ export class CteController {
   constructor(
     private readonly cte: CteService,
     private readonly dacte: DacteGeneratorService,
+    private readonly dacteFsist: DacteFsistGeneratorService,
     private readonly distribuicao: DistribuicaoNsuService,
     private readonly enriquecimento: CteEnriquecimentoService,
     private readonly papelDetector: PapelDetectorService,
@@ -100,6 +102,7 @@ export class CteController {
   async downloadDacte(
     @Param('chave') chave: string,
     @Param('filial') filial: string,
+    @Query('modelo') modelo: 'padrao' | 'fsist' | undefined,
     @CurrentUser() user: FiscalAuthenticatedUser,
     @Res() res: Response,
   ) {
@@ -112,7 +115,9 @@ export class CteController {
       });
       return;
     }
-    const pdf = await this.dacte.generate(resultado.parsed);
+    const pdf = modelo === 'fsist'
+      ? await this.dacteFsist.generate(resultado.parsed)
+      : await this.dacte.generate(resultado.parsed);
     res.setHeader('Content-Disposition', `attachment; filename="DACTE_${chave}.pdf"`);
     res.setHeader('Content-Length', pdf.length);
     res.send(pdf);
@@ -424,6 +429,7 @@ export class CteController {
   @Header('content-type', 'application/pdf')
   async dacteRecebido(
     @Param('id') id: string,
+    @Query('modelo') modelo: 'padrao' | 'fsist' | undefined,
     @Res() res: Response,
   ) {
     const idNum = Number(id);
@@ -439,7 +445,9 @@ export class CteController {
       return;
     }
     const parsed = this.parser.parse(xml);
-    const pdf = await this.dacte.generate(parsed);
+    const pdf = modelo === 'fsist'
+      ? await this.dacteFsist.generate(parsed)
+      : await this.dacte.generate(parsed);
     const chave = parsed.dadosGerais.chave || `id${idNum}`;
     res.setHeader('Content-Disposition', `inline; filename="DACTE_${chave}.pdf"`);
     res.setHeader('Content-Length', pdf.length);

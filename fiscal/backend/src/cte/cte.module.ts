@@ -7,6 +7,7 @@ import { CteController } from './cte.controller.js';
 import { CteService } from './cte.service.js';
 import { CteParserService } from './parsers/cte-parser.service.js';
 import { DacteGeneratorService } from './pdf/dacte-generator.service.js';
+import { DacteFsistGeneratorService } from './pdf/dacte-fsist-generator.service.js';
 import { NsuControleService } from './distribuicao/nsu-controle.service.js';
 import { DistribuicaoNsuService } from './distribuicao/distribuicao-nsu.service.js';
 import { CteDocumentoService } from './distribuicao/cte-documento.service.js';
@@ -26,6 +27,7 @@ import { SincronizacaoFiliaisService } from './distribuicao/sincronizacao-filiai
     CteService,
     CteParserService,
     DacteGeneratorService,
+    DacteFsistGeneratorService,
     NsuControleService,
     DistribuicaoNsuService,
     CteDocumentoService,
