@@ -301,7 +301,12 @@ export class DacteGeneratorService {
     const tomadorPart = this.resolveTomadorParticipante(parsed);
     const x = this.MARGIN;
     const w = this.PAGE_W - 2 * this.MARGIN;
-    const h = 36;
+    // h=44 (era 36): com 3 linhas de conteúdo (razão social + endereço +
+    // CNPJ/IE), 36px não dava espaço suficiente — endereço (y+22) e CNPJ/IE
+    // (y+25) ficavam a 3px de distância e o texto sobrepunha (fonte 7 ocupa
+    // ~9px de altura). Layout atual: header y+2, razão y+10, endereço y+22,
+    // CNPJ/IE y+33. Espaçamento consistente com renderParticipanteBox.
+    const h = 44;
     this.rect(doc, x, y0, w, h);
 
     doc.font(this.F_DEFAULT).fontSize(5).fillColor('#333')
@@ -335,8 +340,8 @@ export class DacteGeneratorService {
       .text(
         `CNPJ: ${this.formatCnpj(tomadorPart.cnpj ?? tomadorPart.cpf)}     IE: ${tomadorPart.inscricaoEstadual ?? '-'}`,
         x + 4,
-        y0 + h - 11,
-        { width: w - 8 },
+        y0 + 33,
+        { width: w - 8, ellipsis: true, lineBreak: false },
       );
 
     return y0 + h;
