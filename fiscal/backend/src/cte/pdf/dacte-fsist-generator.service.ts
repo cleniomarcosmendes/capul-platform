@@ -147,7 +147,8 @@ export class DacteFsistGeneratorService {
       if (l1) linhas.push(l1);
       const l2 = [e.cep ? `CEP: ${this.formatCep(e.cep)}` : null, [e.municipio, e.uf].filter(Boolean).join(' - ')].filter(Boolean).join(' - ');
       if (l2) linhas.push(l2);
-      if (e.fone) linhas.push(`Fone/Fax: ${e.fone}`);
+      const foneFmt = this.formatFone(e.fone);
+      if (foneFmt !== '-') linhas.push(`Fone/Fax: ${foneFmt}`);
     }
     doc.font(this.F).fontSize(7)
       .text(linhas.join('\n'), x + 4, y0 + 24, { width: wEmit - 8, height: 40 });
@@ -445,7 +446,7 @@ export class DacteFsistGeneratorService {
 
     doc.font(this.F).fontSize(5).text('FONE', x + 405, y0 + 30);
     doc.font(this.FB).fontSize(7)
-      .text(te?.fone ?? '-', x + 405, y0 + 36, { width: w - 410, lineBreak: false });
+      .text(this.formatFone(te?.fone), x + 405, y0 + 36, { width: w - 410, lineBreak: false });
 
     return y0 + h;
   }
@@ -865,7 +866,7 @@ export class DacteFsistGeneratorService {
       .text(e?.pais ?? '-', x + 60, y + 52, { width: w - 200, lineBreak: false });
     doc.font(this.F).fontSize(5).text('FONE', x + w - 130, y + 52);
     doc.font(this.FB).fontSize(7)
-      .text(e?.fone ?? '-', x + w - 110, y + 52, { width: 106, lineBreak: false });
+      .text(this.formatFone(e?.fone), x + w - 110, y + 52, { width: 106, lineBreak: false });
   }
 
   private resolveTomadorParticipante(parsed: CteParsed): CteParticipante | null {
@@ -947,6 +948,22 @@ export class DacteFsistGeneratorService {
     const d = new Date(iso);
     if (isNaN(d.getTime())) return iso;
     return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  }
+
+  /**
+   * Formata telefone brasileiro com defensiva contra placeholders comuns
+   * em XMLs CT-e (0XXX0000000000, todos zeros, 6+ zeros consecutivos).
+   */
+  private formatFone(fone: string | null | undefined): string {
+    if (!fone) return '-';
+    let d = String(fone).replace(/\D/g, '');
+    if (!d) return '-';
+    if (/^0+$/.test(d) || /0{6,}/.test(d)) return '-';
+    while (d.length > 11 && d.startsWith('0')) d = d.slice(1);
+    if (d.length === 11) return d.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+    if (d.length === 10) return d.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+    if (d.length === 8) return d.replace(/(\d{4})(\d{4})/, '$1-$2');
+    return d;
   }
 
   private formatMoney(n: number | null | undefined): string {
