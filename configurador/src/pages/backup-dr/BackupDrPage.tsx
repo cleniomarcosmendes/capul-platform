@@ -350,6 +350,15 @@ export function BackupDrPage() {
                 result={testResults.drtest}
                 onCopy={copyToClipboard}
               />
+
+              <TestRow
+                title="Restaurar HOM com backup de PRD"
+                hint="Restaura banco + volume uploads de um backup PROD num servidor HOM (testar deploy com dados reais). NUNCA usar em PROD — script não checa ambiente. Requer SSH."
+                buttonLabel="Gerar comando"
+                onClick={() => runTest('restoreFromProd', () => backupService.comandoRestoreFromProd())}
+                result={testResults.restoreFromProd}
+                onCopy={copyToClipboard}
+              />
             </div>
           </div>
 

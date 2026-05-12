@@ -78,6 +78,11 @@ export class BackupExecucaoController {
     return this.drTest.comandoDrTest();
   }
 
+  @Get('comando/restore-from-prod')
+  comandoRestoreFromProd() {
+    return this.drTest.comandoRestoreFromProd();
+  }
+
   @Get()
   listar(
     @Query('limit') limit?: string,

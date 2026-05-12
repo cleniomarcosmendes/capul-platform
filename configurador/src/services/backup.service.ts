@@ -86,6 +86,11 @@ export const backupService = {
     const { data } = await coreApi.get('/backup/execucoes/comando/dr-test');
     return data;
   },
+
+  async comandoRestoreFromProd(): Promise<TestResult> {
+    const { data } = await coreApi.get('/backup/execucoes/comando/restore-from-prod');
+    return data;
+  },
 };
 
 export interface TestResult {

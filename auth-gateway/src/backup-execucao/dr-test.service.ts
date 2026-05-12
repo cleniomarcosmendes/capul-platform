@@ -195,4 +195,35 @@ export class DrTestService {
       detail: 'sudo /opt/capul-platform/scripts/dr-test.sh',
     };
   }
+
+  /**
+   * Restore PRD→HOM — operação 2-passos (listar arquivos + restaurar).
+   *
+   * O subcomando `restore-from-prod` foi adicionado ao backup.sh em 05/05/2026
+   * e validado em HOM em 11/05/2026 após 3 fixes em cadeia (chown appuser,
+   * uploads via alpine root, volume resolvido dinamicamente).
+   *
+   * **Nunca rodar em PROD** — o script não checa ambiente automaticamente.
+   * Antes de rodar, garantir que está conectado no servidor de HOM
+   * (`hostname` deve indicar HOM, não PROD).
+   */
+  comandoRestoreFromProd(): TestResult {
+    return {
+      ok: true,
+      message:
+        'Restaura banco + volume uploads_data de um backup PROD em HOM. ' +
+        'Operação 2 passos via SSH no servidor HOM (NUNCA em PROD):',
+      detail:
+        '# 1. Liste os backups PRD disponíveis no servidor HOM:\n' +
+        'ls -lh /opt/capul-platform/backups/backup_full_*_PRD.tar.gz\n' +
+        '\n' +
+        '# 2. Restaure (substitua <ARQUIVO> pelo nome de um backup acima):\n' +
+        'sudo /opt/capul-platform/scripts/backup.sh restore-from-prod \\\n' +
+        '  /opt/capul-platform/backups/<ARQUIVO>\n' +
+        '\n' +
+        '# O script pede confirmação dupla (digitar "RESTAURAR PRD") e faz\n' +
+        '# backup defensivo do estado HOM atual antes de sobrescrever.\n' +
+        '# Após o restore, subir os serviços: sudo docker compose up -d',
+    };
+  }
 }
