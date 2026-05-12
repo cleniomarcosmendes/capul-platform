@@ -128,7 +128,9 @@ export function CteRecebidosPage() {
 
   // Filtros
   const [search, setSearch] = useState('');
-  const [papel, setPapel] = useState<'' | PapelCapul>('');
+  // Default 'TOMA' — único papel que gera pré-nota no Protheus (regra 11/05/2026).
+  // Operador pode mudar pra ver outros papéis ou "Todos" se precisar.
+  const [papel, setPapel] = useState<'' | PapelCapul>('TOMA');
   const [schema, setSchema] = useState<'' | SchemaCte>('');
   const [ambiente, setAmbiente] = useState<'' | '1' | '2'>('');
   const [protheusStatus, setProtheusStatus] = useState<
@@ -261,7 +263,7 @@ export function CteRecebidosPage() {
 
   const limparFiltros = () => {
     setSearch('');
-    setPapel('');
+    setPapel('TOMA'); // mantém default — TOMA é a operação principal
     setSchema('');
     setAmbiente('');
     setProtheusStatus('');
