@@ -886,25 +886,14 @@ export function CteRecebidosPage() {
                         {(it.xmlBytes / 1024).toFixed(1)} KB
                       </td>
                       <td className="px-3 py-2 text-right">
-                        <div className="inline-flex gap-1">
-                          {(it.schema === 'procCTe' || it.schema === 'procCTeSimp') && (
-                            <Button
-                              variant="ghost"
-                              onClick={() => imprimirDacte(it.id, it.chave ?? undefined)}
-                              title="Imprimir DACTE"
-                            >
-                              <Printer size={14} />
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            onClick={() => abrirDetalhe(it.id)}
-                            disabled={carregandoDetalhe}
-                            title="Ver detalhe"
-                          >
-                            <FileText size={14} />
-                          </Button>
-                        </div>
+                        <Button
+                          variant="ghost"
+                          onClick={() => abrirDetalhe(it.id)}
+                          disabled={carregandoDetalhe}
+                          title="Ver detalhe (impressão DACTE Capul/Fsist dentro do modal)"
+                        >
+                          <FileText size={14} />
+                        </Button>
                       </td>
                     </tr>
                   );
