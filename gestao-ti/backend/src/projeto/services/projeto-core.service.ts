@@ -228,6 +228,19 @@ export class ProjetoCoreService {
     const tipo = isExterno ? 'STAKEHOLDER' : dto.tipo;
     const responsavelId = isExterno ? userId! : dto.responsavelId;
 
+    // FKs validadas explicitamente para evitar P2003 (FK violation) virar 500
+    // generico. Cenario real: incidente 12/05/2026 com julianamarques — frontend
+    // mandou tipoProjetoId stale (do DEV) que nao existia em HOM, gerando 500
+    // sem mensagem util pro operador.
+    if (dto.tipoProjetoId) {
+      const tp = await this.prisma.tipoProjetoConfig.findUnique({ where: { id: dto.tipoProjetoId } });
+      if (!tp) throw new NotFoundException('Tipo de projeto nao encontrado');
+    }
+    if (responsavelId) {
+      const resp = await this.prisma.usuario.findUnique({ where: { id: responsavelId } });
+      if (!resp) throw new NotFoundException('Usuario responsavel nao encontrado');
+    }
+
     const projeto = await this.prisma.projeto.create({
       data: {
         nome: dto.nome,
