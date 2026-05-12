@@ -1240,11 +1240,19 @@ function AbaDocumentos({ parsed }: { parsed: CteParsed }) {
                     )}
                   </td>
                   <td className="px-3 py-2 font-mono text-xs">
-                    {d.chaveNFe
-                      ? fmtChave(d.chaveNFe)
-                      : d.numeroNF
-                        ? `Nº ${d.numeroNF} Série ${valorOuVazio(d.serie)}`
-                        : valorOuVazio(d.numeroOutro)}
+                    {d.chaveNFe ? (
+                      <a
+                        href={`/fiscal/nfe?chave=${d.chaveNFe}`}
+                        title="Consultar esta NF-e em /fiscal/nfe"
+                        className="text-blue-700 hover:text-blue-900 hover:underline"
+                      >
+                        {fmtChave(d.chaveNFe)}
+                      </a>
+                    ) : d.numeroNF ? (
+                      `Nº ${d.numeroNF} Série ${valorOuVazio(d.serie)}`
+                    ) : (
+                      valorOuVazio(d.numeroOutro)
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right font-mono">
                     {d.valor != null ? fmtNum(d.valor) : '-'}
@@ -1255,10 +1263,10 @@ function AbaDocumentos({ parsed }: { parsed: CteParsed }) {
                   <td className="px-3 py-2 text-center">
                     {d.chaveNFe && (
                       <a
-                        href={`/fiscal/nfe/consulta?chave=${d.chaveNFe}`}
+                        href={`/fiscal/nfe?chave=${d.chaveNFe}`}
                         target="_blank"
                         rel="noreferrer"
-                        title="Abrir em /fiscal/nfe/consulta"
+                        title="Abrir consulta NF-e em nova aba"
                         className="inline-flex items-center text-xs text-slate-700 hover:text-slate-900"
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
