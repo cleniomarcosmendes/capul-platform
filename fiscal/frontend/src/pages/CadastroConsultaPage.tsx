@@ -930,6 +930,12 @@ function ReceitaFederalCard({ result }: { result: CadastroConsultaResult }) {
               fiscal se essa necessidade é frequente para justificar a contratação.
             </div>
           )}
+          {!isCpf && (
+            <div className="mt-3 pt-3 border-t border-blue-100 flex items-center justify-between gap-3 text-xs text-slate-500">
+              <span>Para baixar o comprovante oficial PDF, use o portal manual:</span>
+              <LinkComprovanteReceita />
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1033,15 +1039,7 @@ function ReceitaFederalCard({ result }: { result: CadastroConsultaResult }) {
           </strong>{' '}
           (API pública gratuita)
         </span>
-        <a
-          href="https://solucoes.receita.fazenda.gov.br/Servicos/cnpjreva/cnpjreva_solicitacao.asp"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 font-medium text-blue-700 hover:bg-blue-100"
-          title="Abre o portal da Receita Federal em nova aba — requer captcha humano para baixar o PDF oficial."
-        >
-          🔗 Comprovante oficial na Receita Federal
-        </a>
+        <LinkComprovanteReceita />
         <span>
           Consultado em{' '}
           {new Date(r.consultadoEm).toLocaleString('pt-BR')}
@@ -1117,6 +1115,33 @@ function ProtheusStatusBanner({ result }: { result: CadastroConsultaResult }) {
   );
 }
 
+/**
+ * Botão pra abrir o portal oficial da Receita Federal (cnpjreva).
+ *
+ * O portal requer captcha humano — não dá pra automatizar. Por isso é
+ * link manual em todas as situações onde o operador pode precisar do
+ * comprovante oficial:
+ *   - Receita Federal indisponível na consulta automática (BrasilAPI/ReceitaWS off)
+ *   - SEFAZ não encontrou o CNPJ (operador valida na Receita pra confirmar
+ *     que a empresa existe mesmo)
+ *   - Protheus indisponível e operador quer baixar PDF oficial pro arquivo fiscal
+ *
+ * Só faz sentido pra CNPJ (14 dígitos). CPF não consulta nesse portal.
+ */
+function LinkComprovanteReceita() {
+  return (
+    <a
+      href="https://solucoes.receita.fazenda.gov.br/Servicos/cnpjreva/cnpjreva_solicitacao.asp"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 font-medium text-blue-700 hover:bg-blue-100"
+      title="Abre o portal da Receita Federal em nova aba — requer captcha humano para baixar o PDF oficial."
+    >
+      🔗 Comprovante oficial na Receita Federal
+    </a>
+  );
+}
+
 function ErrorDisplay({
   error,
   errorCode,
@@ -1128,6 +1153,7 @@ function ErrorDisplay({
 }) {
   const isNotFound = error.includes('encontrado') || error.includes('404');
   const isCpf = documento.length === 11;
+  const isCnpj = documento.length === 14;
   const isIndisponivel = error.includes('indispon') || error.includes('500') || error.includes('timeout');
   const isProtheusIndisponivel = errorCode === 'PROTHEUS_INDISPONIVEL';
 
@@ -1187,6 +1213,12 @@ function ErrorDisplay({
               </li>
             </ul>
           </div>
+          {isCnpj && (
+            <div className="border-t border-slate-100 pt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+              <span>Precisa do comprovante oficial? Acesse direto na Receita Federal:</span>
+              <LinkComprovanteReceita />
+            </div>
+          )}
           <div className="border-t border-slate-100 pt-3">
             <p className="text-xs text-slate-400 font-mono">
               Código: PROTHEUS_INDISPONIVEL · HTTP 503
@@ -1260,6 +1292,12 @@ function ErrorDisplay({
               )}
             </ul>
           </div>
+          {isCnpj && (
+            <div className="border-t border-slate-100 pt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+              <span>Quer confirmar manualmente na Receita Federal?</span>
+              <LinkComprovanteReceita />
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1270,10 +1308,16 @@ function ErrorDisplay({
       <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-5">
         <div className="flex items-start gap-3">
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
-          <div>
+          <div className="flex-1">
             <h3 className="text-sm font-semibold text-red-900">SEFAZ indisponivel</h3>
             <p className="text-sm text-red-800 mt-1">{error}</p>
             <p className="text-xs text-red-700 mt-2">Tente novamente em alguns minutos. Se o problema persistir, verifique o certificado A1 no Configurador.</p>
+            {isCnpj && (
+              <div className="mt-3 pt-3 border-t border-red-200 flex items-center justify-between gap-3 text-xs text-red-700">
+                <span>Enquanto isso, consulte direto na Receita Federal:</span>
+                <LinkComprovanteReceita />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1284,9 +1328,15 @@ function ErrorDisplay({
     <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-5">
       <div className="flex items-start gap-3">
         <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
-        <div>
+        <div className="flex-1">
           <h3 className="text-sm font-semibold text-red-900">Falha na consulta</h3>
           <p className="text-sm text-red-800 mt-1">{error}</p>
+          {isCnpj && (
+            <div className="mt-3 pt-3 border-t border-red-200 flex items-center justify-between gap-3 text-xs text-red-700">
+              <span>Para confirmar o cadastro, abra o portal oficial:</span>
+              <LinkComprovanteReceita />
+            </div>
+          )}
         </div>
       </div>
     </div>
