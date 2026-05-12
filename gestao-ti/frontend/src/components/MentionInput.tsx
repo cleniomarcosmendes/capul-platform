@@ -13,9 +13,10 @@ interface MentionInputProps {
   placeholder?: string;
   rows?: number;
   className?: string;
+  maxLength?: number;
 }
 
-export function MentionInput({ value, onChange, usuarios, placeholder, rows = 2, className }: MentionInputProps) {
+export function MentionInput({ value, onChange, usuarios, placeholder, rows = 2, className, maxLength }: MentionInputProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [filtro, setFiltro] = useState('');
   const [cursorPos, setCursorPos] = useState(0);
@@ -91,6 +92,7 @@ export function MentionInput({ value, onChange, usuarios, placeholder, rows = 2,
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         rows={rows}
+        maxLength={maxLength}
         className={className || 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm'}
       />
       {showDropdown && filtrados.length > 0 && (

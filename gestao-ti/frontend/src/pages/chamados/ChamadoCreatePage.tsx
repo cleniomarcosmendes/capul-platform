@@ -358,6 +358,7 @@ export function ChamadoCreatePage() {
                     onChange={(e) => setNomeColaborador(e.target.value)}
                     readOnly={!nomeEditavel}
                     required={nomeEditavel}
+                    maxLength={100}
                     placeholder={nomeEditavel ? 'Digite o nome' : 'Preenchido automaticamente'}
                     className={`w-full border border-slate-300 rounded-lg px-3 py-2 text-sm ${!nomeEditavel ? 'bg-slate-50 text-slate-700' : ''}`}
                   />
@@ -388,9 +389,23 @@ export function ChamadoCreatePage() {
               onChange={(e) => setDescricao(e.target.value)}
               required
               rows={5}
+              maxLength={5000}
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
               placeholder="Explique o que esta acontecendo, o que voce precisa e qual o impacto no seu trabalho..."
             />
+            <div className="mt-1 flex justify-end">
+              <span
+                className={`text-xs ${
+                  descricao.length >= 4900
+                    ? 'text-red-600 font-semibold'
+                    : descricao.length >= 4500
+                    ? 'text-amber-600'
+                    : 'text-slate-400'
+                }`}
+              >
+                {descricao.length.toLocaleString('pt-BR')} / 5.000 caracteres
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -523,6 +538,7 @@ export function ChamadoCreatePage() {
             <input
               value={ipMaquina}
               onChange={(e) => setIpMaquina(e.target.value)}
+              maxLength={45}
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
               placeholder="Ex: 192.168.1.100"
             />

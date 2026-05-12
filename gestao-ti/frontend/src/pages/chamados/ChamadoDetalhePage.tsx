@@ -566,9 +566,23 @@ export function ChamadoDetalhePage() {
                   onChange={setComentarioTexto}
                   usuarios={usuariosMencao.map((u) => ({ id: u.id, nome: u.nome, username: u.username }))}
                   rows={3}
+                  maxLength={5000}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                   placeholder="Escreva seu comentario... (use @usuario para mencionar)"
                 />
+                <div className="flex justify-end">
+                  <span
+                    className={`text-xs ${
+                      comentarioTexto.length >= 4900
+                        ? 'text-red-600 font-semibold'
+                        : comentarioTexto.length >= 4500
+                        ? 'text-amber-600'
+                        : 'text-slate-400'
+                    }`}
+                  >
+                    {comentarioTexto.length.toLocaleString('pt-BR')} / 5.000
+                  </span>
+                </div>
                 {!isUsuarioFinal && (
                   <label className="flex items-center gap-2 text-sm text-slate-600">
                     <input type="checkbox" checked={comentarioPublico} onChange={(e) => setComentarioPublico(e.target.checked)} className="rounded border-slate-300" />
@@ -640,6 +654,7 @@ export function ChamadoDetalhePage() {
                     </div>
                   )}
                   <input value={transferMotivo} onChange={(e) => setTransferMotivo(e.target.value)}
+                    maxLength={1000}
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Motivo da transferencia (opcional)" />
                   <div className="flex gap-2">
                     <button onClick={() => {
@@ -665,7 +680,21 @@ export function ChamadoDetalhePage() {
               <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
                 <h4 className="font-medium text-sm text-slate-700">Finalizar Chamado</h4>
                 <textarea value={resolverDescricao} onChange={(e) => setResolverDescricao(e.target.value)} rows={3}
+                  maxLength={5000}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Descreva a resolucao do chamado *" />
+                <div className="flex justify-end">
+                  <span
+                    className={`text-xs ${
+                      resolverDescricao.length >= 4900
+                        ? 'text-red-600 font-semibold'
+                        : resolverDescricao.length >= 4500
+                        ? 'text-amber-600'
+                        : 'text-slate-400'
+                    }`}
+                  >
+                    {resolverDescricao.length.toLocaleString('pt-BR')} / 5.000
+                  </span>
+                </div>
                 <div className="flex gap-2">
                   <button onClick={() => runAction(() => chamadoService.resolver(chamado.id, resolverDescricao))}
                     disabled={actionLoading || !resolverDescricao.trim()}
@@ -681,6 +710,7 @@ export function ChamadoDetalhePage() {
               <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
                 <h4 className="font-medium text-sm text-slate-700">Reabrir Chamado</h4>
                 <input value={reabrirMotivo} onChange={(e) => setReabrirMotivo(e.target.value)}
+                  maxLength={1000}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Motivo da reabertura (opcional)" />
                 <div className="flex gap-2">
                   <button onClick={() => runAction(() => chamadoService.reabrir(chamado.id, reabrirMotivo || undefined))}
