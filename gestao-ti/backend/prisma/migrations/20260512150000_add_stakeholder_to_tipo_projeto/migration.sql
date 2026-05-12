@@ -1,0 +1,24 @@
+-- Adiciona valor STAKEHOLDER ao enum gestao_ti.TipoProjeto.
+--
+-- Contexto (12/05/2026): julianamarques (USUARIO_CHAVE) recebeu erro 500 ao
+-- tentar criar subprojeto em HOM. Log do backend revelou PostgresError
+-- 22P02 "invalid input value for enum gestao_ti.TipoProjeto: STAKEHOLDER".
+--
+-- Histórico do gap:
+--   - schema.prisma sempre teve STAKEHOLDER no enum
+--   - Mas a migration init (20260222230842) criou o enum apenas com 4
+--     valores (DESENVOLVIMENTO_INTERNO, IMPLANTACAO_TERCEIRO,
+--     INFRAESTRUTURA, OUTRO)
+--   - Nenhuma migration posterior adicionou STAKEHOLDER
+--   - Em DEV alguém aplicou via `prisma db push` (sincroniza schema sem
+--     gerar migration), por isso passava nos testes locais
+--   - Em PROD/HOM os init jobs `*-migrate` rodam `prisma migrate deploy`
+--     que ignora mudanças não-migradas — enum ficou stale
+--
+-- O backend força `tipo = STAKEHOLDER` quando isExterno=true
+-- (projeto-core.service.ts:228), então o cenário só explode no fluxo
+-- USUARIO_CHAVE/TERCEIRIZADO criando subprojeto.
+--
+-- Idempotente via `IF NOT EXISTS` (PostgreSQL 9.6+). Seguro re-rodar.
+
+ALTER TYPE "gestao_ti"."TipoProjeto" ADD VALUE IF NOT EXISTS 'STAKEHOLDER';
