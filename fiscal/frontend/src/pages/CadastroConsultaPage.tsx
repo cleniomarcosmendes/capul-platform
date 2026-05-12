@@ -5,7 +5,7 @@ import { fiscalApi } from '../services/api';
 import { PageWrapper } from '../components/PageWrapper';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
-import { extractApiError } from '../utils/errors';
+import { extractApiError, extractApiErrorCode } from '../utils/errors';
 import { Row } from '../components/Row';
 import { fmtCnpj, fmtCep } from '../utils/format';
 import type {
@@ -60,6 +60,7 @@ export function CadastroConsultaPage() {
   const [uf, setUf] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [result, setResult] = useState<CadastroConsultaResult | null>(null);
   const [copied, setCopied] = useState(false);
   const autoTriggeredRef = useRef<string | null>(null);
@@ -72,6 +73,7 @@ export function CadastroConsultaPage() {
       return;
     }
     setError(null);
+    setErrorCode(null);
     setResult(null);
     setCopied(false);
     try {
@@ -83,6 +85,7 @@ export function CadastroConsultaPage() {
       setResult(data);
     } catch (err) {
       setError(extractApiError(err, 'Falha ao consultar CNPJ na SEFAZ.'));
+      setErrorCode(extractApiErrorCode(err));
     } finally {
       setLoading(false);
     }
@@ -227,7 +230,7 @@ export function CadastroConsultaPage() {
         </div>
       </form>
 
-      {error && <ErrorDisplay error={error} documento={docDigits} />}
+      {error && <ErrorDisplay error={error} errorCode={errorCode} documento={docDigits} />}
 
       {result && (
         <div className="space-y-5">
@@ -1114,10 +1117,85 @@ function ProtheusStatusBanner({ result }: { result: CadastroConsultaResult }) {
   );
 }
 
-function ErrorDisplay({ error, documento }: { error: string; documento: string }) {
+function ErrorDisplay({
+  error,
+  errorCode,
+  documento,
+}: {
+  error: string;
+  errorCode: string | null;
+  documento: string;
+}) {
   const isNotFound = error.includes('encontrado') || error.includes('404');
   const isCpf = documento.length === 11;
   const isIndisponivel = error.includes('indispon') || error.includes('500') || error.includes('timeout');
+  const isProtheusIndisponivel = errorCode === 'PROTHEUS_INDISPONIVEL';
+
+  if (isProtheusIndisponivel) {
+    return (
+      <div className="mb-6 rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="bg-red-50 border-b border-red-200 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+              <Database className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-red-900">
+                Integração Protheus indisponível
+              </h3>
+              <p className="text-xs text-red-700 mt-0.5">
+                A consulta SEFAZ não foi feita porque o cadastro Protheus (SA1/SA2) é a fonte das UFs.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+              O que aconteceu?
+            </h4>
+            <p className="text-sm text-slate-700">
+              O serviço de API do Protheus (<code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">apiportal.capul.com.br</code>)
+              não respondeu após 3 tentativas. Isso costuma indicar que o serviço foi reiniciado, está em manutenção
+              ou houve um problema de rede entre a plataforma e o Protheus.
+            </p>
+          </div>
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+              O que fazer?
+            </h4>
+            <ul className="text-sm text-slate-600 space-y-1.5">
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>
+                  <strong>Mais rápido:</strong> informe a <strong>UF</strong> no formulário acima e consulte novamente —
+                  isso pula o Protheus e vai direto ao SEFAZ.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>
+                  Se você não souber a UF ou precisar do cruzamento Protheus, <strong>peça à equipe de TI</strong> para
+                  verificar o serviço Protheus.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>
+                  Tente novamente em alguns minutos — em geral o serviço estabiliza rápido após restart.
+                </span>
+              </li>
+            </ul>
+          </div>
+          <div className="border-t border-slate-100 pt-3">
+            <p className="text-xs text-slate-400 font-mono">
+              Código: PROTHEUS_INDISPONIVEL · HTTP 503
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isNotFound) {
     return (

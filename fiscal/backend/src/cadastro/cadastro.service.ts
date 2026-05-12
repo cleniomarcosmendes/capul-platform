@@ -282,7 +282,7 @@ export class CadastroService {
 
     // 1) Protheus PRIMEIRO — fonte para descobrir UFs no modo auditoria.
     const enriquecimento = await this.enrichFromProtheus(cnpjDigits);
-    const { vinculos } = enriquecimento;
+    const { vinculos, falhou: protheusFalhou } = enriquecimento;
 
     // 2) Conjunto de UFs candidatas. Prioridade:
     //    a) UFs distintas dos vínculos Protheus (auditoria)
@@ -296,8 +296,24 @@ export class CadastroService {
       ufsCandidatas.push(ufInformada);
     }
 
-    // Sem UF informada e sem Protheus → operador precisa dizer onde procurar.
     if (ufsCandidatas.length === 0) {
+      // Sem Protheus E sem UF informada — distinguir CAUSA antes de pedir UF.
+      // Sem essa distinção, a mensagem "este CNPJ não possui vínculo no Protheus"
+      // é falso negativo quando a API Protheus está fora — confunde operador e
+      // o setor fiscal abre chamado achando que o cadastro sumiu (incidente 12/05).
+      if (protheusFalhou) {
+        throw new HttpException(
+          {
+            erro: 'PROTHEUS_INDISPONIVEL',
+            mensagem:
+              'Não foi possível consultar o cadastro Protheus (SA1/SA2) — o serviço de API não respondeu. ' +
+              'Informe a UF manualmente para forçar a consulta direta no SEFAZ, ou peça à equipe de TI para ' +
+              'verificar o serviço Protheus (apiportal.capul.com.br).',
+          },
+          HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
+      // Sem Protheus por ausência real de cadastro + sem UF — pede UF.
       throw new BadRequestException(
         'Informe a UF — este CNPJ ainda não possui vínculo no Protheus, então o sistema não sabe em qual SEFAZ consultar.',
       );
