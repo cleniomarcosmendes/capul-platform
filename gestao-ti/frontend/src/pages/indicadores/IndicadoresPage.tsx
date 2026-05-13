@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Header } from '../../layouts/Header';
 import { gestaoApi } from '../../services/api';
 import { formatDateBR } from '../../utils/date';
-import { DollarSign, KeyRound, Activity, Ticket, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { DollarSign, KeyRound, Activity, Ticket, Clock, ChevronLeft, ChevronRight, Globe2 } from 'lucide-react';
 
 interface LicencaDetalhe {
   id: string; nome: string | null; modeloLicenca: string | null; quantidade: number | null;
@@ -74,9 +74,15 @@ interface IndicadoresData {
     porProjeto: { projeto: { id: string; numero: number; nome: string }; horas: number }[];
     porAnalista: { usuario: { id: string; nome: string }; horas: number }[];
   };
+  chamadosExternos: {
+    totalNoMes: number;
+    qtdSoftwaresComLancamento: number;
+    porSoftware: { softwareId: string; softwareNome: string; fabricante: string | null; qtdChamados: number; observacoes: string | null }[];
+    tendencia12Meses: { ano: number; mes: number; total: number }[];
+  };
 }
 
-type Detalhe = 'investimentos' | 'chamados' | 'horas' | 'disponibilidade' | 'licencas' | null;
+type Detalhe = 'investimentos' | 'chamados' | 'horas' | 'disponibilidade' | 'licencas' | 'chamadosExternos' | null;
 
 const tipoParadaLabel: Record<string, string> = {
   PARADA_NAO_PROGRAMADA: 'Nao Programada',
@@ -179,7 +185,7 @@ export function IndicadoresPage() {
         ) : (
           <>
             {/* Cards dos indicadores */}
-            <div className="grid grid-cols-5 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
               {/* 1. Investimentos */}
               <button onClick={() => { setDetalhe(detalhe === 'investimentos' ? null : 'investimentos'); setSubDetalhe(null); }}
                 className={`bg-white rounded-xl border p-5 text-left transition-all hover:shadow-md ${detalhe === 'investimentos' ? 'border-capul-500 ring-2 ring-capul-200' : 'border-slate-200'}`}>
@@ -247,6 +253,19 @@ export function IndicadoresPage() {
                 <p className="text-xl font-bold text-slate-800">{data.horasDesenvolvimento.totalHoras}h</p>
                 <div className="mt-2 text-xs text-slate-500">
                   <span>{data.horasDesenvolvimento.porProjeto.length} projeto(s)</span>
+                </div>
+              </button>
+
+              {/* 6. Chamados Externos (manuais — abertos junto a fornecedores TOTVS/Zanthus/Linix etc.) */}
+              <button onClick={() => { setDetalhe(detalhe === 'chamadosExternos' ? null : 'chamadosExternos'); setSubDetalhe(null); }}
+                className={`bg-white rounded-xl border p-5 text-left transition-all hover:shadow-md ${detalhe === 'chamadosExternos' ? 'border-capul-500 ring-2 ring-capul-200' : 'border-slate-200'}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="p-2 rounded-lg bg-rose-100"><Globe2 className="w-4 h-4 text-rose-600" /></div>
+                  <span className="text-xs font-medium text-slate-500 uppercase">Chamados Externos</span>
+                </div>
+                <p className="text-xl font-bold text-slate-800">{data.chamadosExternos.totalNoMes}</p>
+                <div className="mt-2 text-xs text-slate-500">
+                  <span>{data.chamadosExternos.qtdSoftwaresComLancamento} fornecedor(es)</span>
                 </div>
               </button>
             </div>
@@ -560,6 +579,64 @@ export function IndicadoresPage() {
                 })()}
               </div>
             )}
+
+            {detalhe === 'chamadosExternos' && (() => {
+              const tendencia = data.chamadosExternos.tendencia12Meses;
+              const maxTend = Math.max(...tendencia.map(t => t.total), 1);
+              return (
+                <div className="bg-white rounded-xl border border-slate-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-700 uppercase">Detalhamento - Chamados a Fornecedores Externos</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">Lançamentos mensais manuais em <a href="/gestao-ti/chamados-externos" className="text-capul-600 hover:underline">Cadastros → Chamados Externos</a></p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-6">
+                    {/* Por fornecedor no mes atual */}
+                    <div>
+                      <h4 className="text-xs font-medium text-slate-500 mb-3 uppercase">Por Fornecedor ({meses[mes - 1]} {ano})</h4>
+                      {data.chamadosExternos.porSoftware.length === 0 ? (
+                        <p className="text-sm text-slate-400">Nenhum lançamento neste mês</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {data.chamadosExternos.porSoftware.map((s) => (
+                            <div key={s.softwareId} className="bg-slate-50 rounded-lg p-3">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm font-medium text-slate-700">{s.softwareNome}</p>
+                                  {s.fabricante && <p className="text-xs text-slate-500">{s.fabricante}</p>}
+                                </div>
+                                <p className="text-lg font-bold text-rose-600">{s.qtdChamados}</p>
+                              </div>
+                              {s.observacoes && <p className="text-xs text-slate-500 mt-1 italic">{s.observacoes}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {/* Tendência últimos 12 meses */}
+                    <div>
+                      <h4 className="text-xs font-medium text-slate-500 mb-3 uppercase">Tendência - Últimos 12 meses</h4>
+                      <div className="space-y-1.5">
+                        {tendencia.map((t) => {
+                          const w = maxTend > 0 ? Math.round((t.total / maxTend) * 100) : 0;
+                          const isCurrent = t.mes === mes && t.ano === ano;
+                          return (
+                            <div key={`${t.ano}-${t.mes}`} className="flex items-center gap-2 text-xs">
+                              <span className={`min-w-[70px] ${isCurrent ? 'font-bold text-rose-700' : 'text-slate-500'}`}>{meses[t.mes - 1].slice(0, 3)}/{String(t.ano).slice(-2)}</span>
+                              <div className="flex-1 bg-slate-100 rounded h-5 relative overflow-hidden">
+                                <div className={`h-full ${isCurrent ? 'bg-rose-500' : 'bg-rose-300'} transition-all`} style={{ width: `${w}%` }}></div>
+                              </div>
+                              <span className={`min-w-[36px] text-right ${isCurrent ? 'font-bold text-rose-700' : 'text-slate-600'}`}>{t.total}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {detalhe === 'horas' && (
               <div className="bg-white rounded-xl border border-slate-200 p-6">

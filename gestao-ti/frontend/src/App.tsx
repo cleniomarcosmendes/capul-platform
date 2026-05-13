@@ -53,6 +53,7 @@ import { ProdutosPage } from './pages/cadastros/ProdutosPage';
 import { CategoriaLicencaPage } from './pages/cadastros/CategoriaLicencaPage';
 import { TiposProdutoPage } from './pages/cadastros/TiposProdutoPage';
 import { TiposProjetoPage } from './pages/cadastros/TiposProjetoPage';
+import { ChamadosExternosPage } from './pages/cadastros/ChamadosExternosPage';
 import { IndicadoresPage } from './pages/indicadores/IndicadoresPage';
 import { NotasFiscaisListPage } from './pages/compras/NotasFiscaisListPage';
 import { NotaFiscalFormPage } from './pages/compras/NotaFiscalFormPage';
@@ -162,6 +163,7 @@ function AppRoutes() {
         <Route path="tipos-produto" element={<TiposProdutoPage />} />
         <Route path="tipos-projeto" element={<TiposProjetoPage />} />
         <Route path="categorias-licenca" element={<CategoriaLicencaPage />} />
+        <Route path="chamados-externos" element={<ChamadosExternosPage />} />
         <Route path="notas-fiscais" element={<NotasFiscaisListPage />} />
         <Route path="notas-fiscais/nova" element={<NotaFiscalFormPage />} />
         <Route path="notas-fiscais/:id" element={<NotaFiscalDetalhePage />} />

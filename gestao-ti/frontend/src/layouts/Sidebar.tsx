@@ -33,6 +33,7 @@ import {
   ListChecks,
   Receipt,
   BarChart3,
+  Globe2,
   X,
 } from 'lucide-react';
 
@@ -85,6 +86,7 @@ const menuItems: MenuItem[] = [
   { label: 'Tipos de Produto', icon: Tag, path: '/gestao-ti/tipos-produto', roles: MANAGERS },
   { label: 'Tipos de Projeto', icon: FolderKanban, path: '/gestao-ti/tipos-projeto', roles: MANAGERS },
   { label: 'Cat. Licencas', icon: Tag, path: '/gestao-ti/categorias-licenca', roles: MANAGERS },
+  { label: 'Chamados Externos', icon: Globe2, path: '/gestao-ti/chamados-externos', roles: MANAGERS },
 ];
 
 function filterMenuByRole(items: MenuItem[], role: string | null): MenuItem[] {
