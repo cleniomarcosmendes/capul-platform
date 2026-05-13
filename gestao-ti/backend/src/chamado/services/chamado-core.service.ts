@@ -13,6 +13,7 @@ import { ResolverChamadoDto, ReabrirChamadoDto, CsatDto } from '../dto/resolver-
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 import { NotificacaoService } from '../../notificacao/notificacao.service.js';
 import { ChamadoHelpersService } from './chamado-helpers.service.js';
+import { ChamadoAgrupamentoService } from './chamado-agrupamento.service.js';
 import { ChamadoTempoService } from './chamado-tempo.service.js';
 import { chamadoInclude } from './chamado.constants.js';
 import { isGestor, isTI } from '../../common/constants/roles.constant.js';
@@ -27,6 +28,7 @@ export class ChamadoCoreService {
     private readonly notificacaoService: NotificacaoService,
     private readonly helpers: ChamadoHelpersService,
     private readonly tempo: ChamadoTempoService,
+    private readonly agrupamento: ChamadoAgrupamentoService,
   ) {}
 
   // ─── Coletar todos os envolvidos no chamado (para notificacoes) ───
@@ -84,6 +86,12 @@ export class ChamadoCoreService {
      */
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    /**
+     * Inclui chamados em status AGRUPADO na listagem. Default false
+     * (filhos ficam "escondidos" — operacao acontece no agrupador).
+     * Decidido em 13/05/2026.
+     */
+    incluirAgrupados?: boolean;
   }) {
     const where: Record<string, unknown> = {};
 
@@ -98,6 +106,9 @@ export class ChamadoCoreService {
         } else {
           where.status = filters.status;
         }
+      } else if (!filters.incluirAgrupados) {
+        // Sem filtro de status: por default excluir AGRUPADO (filho fica escondido).
+        where.NOT = { status: 'AGRUPADO' };
       }
       if (filters.equipeId) where.equipeAtualId = filters.equipeId;
       if (filters.visibilidade) where.visibilidade = filters.visibilidade;
@@ -239,6 +250,18 @@ export class ChamadoCoreService {
           include: {
             usuario: { select: { id: true, nome: true, username: true } },
             adicionadoPor: { select: { id: true, nome: true, username: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+        chamadoAgrupador: {
+          select: { id: true, numero: true, titulo: true, status: true },
+        },
+        chamadosAgrupados: {
+          select: {
+            id: true, numero: true, titulo: true, status: true,
+            statusAnteriorAgrupamento: true, slaPausadoEm: true,
+            solicitante: { select: { id: true, nome: true } },
+            createdAt: true,
           },
           orderBy: { createdAt: 'asc' },
         },
@@ -851,6 +874,15 @@ export class ChamadoCoreService {
       ).catch((err) => console.error('Notificacao error:', err.message));
     }
 
+    // Propagar para filhos (se este chamado for agrupador).
+    // Apenas comentarios publicos sao propagados — comentario interno fica
+    // restrito ao agrupador. Decidido em 13/05/2026 (item 3).
+    if (historico.publico) {
+      this.agrupamento.propagarComentario(id, dto.descricao, user).catch((err) =>
+        console.error('Propagacao comentario error:', err.message),
+      );
+    }
+
     return historico;
   }
 
@@ -908,9 +940,10 @@ export class ChamadoCoreService {
       });
     }
 
+    const dataResolucao = new Date();
     const updated = await this.prisma.chamado.update({
       where: { id },
-      data: { status: 'RESOLVIDO', dataResolucao: new Date() },
+      data: { status: 'RESOLVIDO', dataResolucao },
       include: chamadoInclude,
     });
 
@@ -936,6 +969,10 @@ export class ChamadoCoreService {
       }
     }).catch((err) => console.error('Notificacao error:', err.message));
 
+    // Cascata para filhos agrupados (decidido em 13/05/2026)
+    this.agrupamento.cascataResolverFechar(id, 'RESOLVIDO', dataResolucao, user)
+      .catch((err) => console.error('Cascata resolver error:', err.message));
+
     return updated;
   }
 
@@ -948,9 +985,10 @@ export class ChamadoCoreService {
       throw new BadRequestException('Apenas chamados resolvidos podem ser fechados');
     }
 
+    const dataFechamento = new Date();
     const updated = await this.prisma.chamado.update({
       where: { id },
-      data: { status: 'FECHADO', dataFechamento: new Date() },
+      data: { status: 'FECHADO', dataFechamento },
       include: chamadoInclude,
     });
 
@@ -963,6 +1001,10 @@ export class ChamadoCoreService {
         usuarioId: user.sub,
       },
     });
+
+    // Cascata para filhos agrupados (decidido em 13/05/2026)
+    this.agrupamento.cascataResolverFechar(id, 'FECHADO', dataFechamento, user)
+      .catch((err) => console.error('Cascata fechar error:', err.message));
 
     // Notificar envolvidos (solicitante + tecnico + colaboradores)
     this.getDestinatariosChamado(id, [user.sub]).then((ids) => {

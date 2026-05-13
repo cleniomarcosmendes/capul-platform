@@ -6,6 +6,7 @@ import { ChamadoTempoService } from './services/chamado-tempo.service.js';
 import { ChamadoCoreService } from './services/chamado-core.service.js';
 import { ChamadoColaboradorService } from './services/chamado-colaborador.service.js';
 import { ChamadoAnexoService } from './services/chamado-anexo.service.js';
+import { ChamadoAgrupamentoService } from './services/chamado-agrupamento.service.js';
 import { NotificacaoModule } from '../notificacao/notificacao.module.js';
 
 @Module({
@@ -17,6 +18,7 @@ import { NotificacaoModule } from '../notificacao/notificacao.module.js';
     ChamadoCoreService,
     ChamadoColaboradorService,
     ChamadoAnexoService,
+    ChamadoAgrupamentoService,
     ChamadoService,
   ],
   exports: [ChamadoService],

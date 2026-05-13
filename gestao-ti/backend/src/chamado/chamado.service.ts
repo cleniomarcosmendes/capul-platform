@@ -3,6 +3,7 @@ import { ChamadoCoreService } from './services/chamado-core.service.js';
 import { ChamadoColaboradorService } from './services/chamado-colaborador.service.js';
 import { ChamadoTempoService } from './services/chamado-tempo.service.js';
 import { ChamadoAnexoService } from './services/chamado-anexo.service.js';
+import { ChamadoAgrupamentoService } from './services/chamado-agrupamento.service.js';
 import { CreateChamadoDto } from './dto/create-chamado.dto.js';
 import { UpdateChamadoHeaderDto } from './dto/update-chamado-header.dto.js';
 import { TransferirEquipeDto, TransferirTecnicoDto } from './dto/transferir-chamado.dto.js';
@@ -19,6 +20,7 @@ export class ChamadoService {
     private readonly colaboradores: ChamadoColaboradorService,
     private readonly tempo: ChamadoTempoService,
     private readonly anexos: ChamadoAnexoService,
+    private readonly agrupamento: ChamadoAgrupamentoService,
   ) {}
 
   // ─── Core ───
@@ -40,6 +42,7 @@ export class ChamadoService {
     pageSize?: number;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    incluirAgrupados?: boolean;
   }) {
     return this.core.findAll(user, role, filters);
   }
@@ -126,6 +129,20 @@ export class ChamadoService {
 
   async adicionarCopias(chamadoId: string, usuariosIds: string[], user: JwtPayload, role: string) {
     return this.core.adicionarCopiasComCheck(chamadoId, usuariosIds, user, role);
+  }
+
+  // ─── Agrupamento (decidido em 13/05/2026) ───
+
+  async agruparEm(chamadoId: string, agrupadorId: string, user: JwtPayload, role: string) {
+    return this.agrupamento.agrupar(chamadoId, agrupadorId, user, role);
+  }
+
+  async desagrupar(chamadoId: string, user: JwtPayload, role: string) {
+    return this.agrupamento.desagrupar(chamadoId, user, role);
+  }
+
+  async listarAgrupados(chamadoId: string) {
+    return this.agrupamento.listarAgrupados(chamadoId);
   }
 
   // ─── Tempo ───

@@ -82,6 +82,7 @@ export class ChamadoController {
     @Query('pageSize') pageSize?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: string,
+    @Query('incluirAgrupados') incluirAgrupados?: string,
   ) {
     return this.service.findAll(user, role, {
       status,
@@ -100,6 +101,7 @@ export class ChamadoController {
       pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
       sortBy,
       sortOrder: sortOrder === 'asc' ? 'asc' : sortOrder === 'desc' ? 'desc' : undefined,
+      incluirAgrupados: incluirAgrupados === 'true',
     });
   }
 
@@ -348,6 +350,35 @@ export class ChamadoController {
   @Get(':id/copias')
   listarCopias(@Param('id') id: string) {
     return this.service.listarCopias(id);
+  }
+
+  // === Agrupamento (decidido em 13/05/2026) ===
+  // Apenas TI agrupa/desagrupa. Validacao detalhada no service.
+
+  @Get(':id/agrupados')
+  listarAgrupados(@Param('id') id: string) {
+    return this.service.listarAgrupados(id);
+  }
+
+  @Post(':id/agrupar-em')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  agruparEm(
+    @Param('id') id: string,
+    @Body('agrupadorId') agrupadorId: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.agruparEm(id, agrupadorId, user, role);
+  }
+
+  @Post(':id/desagrupar')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  desagrupar(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.desagrupar(id, user, role);
   }
 
   @Post(':id/copias')

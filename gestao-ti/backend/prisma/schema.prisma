@@ -211,6 +211,10 @@ enum StatusChamado {
   FECHADO
   CANCELADO
   REABERTO
+  /// Chamado agrupado em outro (chamado-pai). Tratado como "fora da fila"
+  /// — SLA pausado, nao aparece em listagens padrao. Resposta acontece no
+  /// pai e propaga via historico. Decidido em 13/05/2026.
+  AGRUPADO
 
   @@schema("gestao_ti")
 }
@@ -239,6 +243,16 @@ enum TipoHistorico {
   REABERTO
   CANCELADO
   AVALIADO
+  /// Chamado foi agrupado em outro (virou filho). Decidido em 13/05/2026.
+  AGRUPADO_EM
+  /// Chamado foi desagrupado (voltou ao status anterior).
+  DESAGRUPADO
+  /// Resposta no agrupador propagada para os filhos. Registrada em cada filho
+  /// com referencia ao agrupador.
+  RESPONDIDO_EM_GRUPO
+  /// Cascata de resolucao/fechamento do agrupador para os filhos.
+  RESOLVIDO_EM_GRUPO
+  FECHADO_EM_GRUPO
 
   @@schema("gestao_ti")
 }
@@ -347,6 +361,23 @@ model Chamado {
   departamentoId String?       @map("departamento_id")
   departamento   Departamento? @relation(fields: [departamentoId], references: [id])
 
+  /// Agrupamento de chamados (decidido em 13/05/2026): quando varios usuarios
+  /// abrem chamados com o mesmo problema, TI agrupa todos em um chamado-pai.
+  /// Filhos ficam em status AGRUPADO (SLA pausado, fora dos filtros padroes).
+  /// Resposta no pai propaga para os filhos via historico/notificacao.
+  /// Closure do pai cascateia para os filhos.
+  chamadoAgrupadorId       String?   @map("chamado_agrupador_id")
+  chamadoAgrupador         Chamado?  @relation("ChamadoAgrupamento", fields: [chamadoAgrupadorId], references: [id])
+  chamadosAgrupados        Chamado[] @relation("ChamadoAgrupamento")
+
+  /// Status original antes de ser agrupado — usado para restaurar ao desagrupar.
+  /// Tipo String (nao StatusChamado) pra evitar Prisma forcar enum em update parcial.
+  statusAnteriorAgrupamento String?  @map("status_anterior_agrupamento")
+
+  /// Timestamp do agrupamento — usado para somar tempo pausado a dataLimiteSla
+  /// na hora de desagrupar.
+  slaPausadoEm             DateTime? @map("sla_pausado_em")
+
   historicos      HistoricoChamado[]
   osChamados      OsChamado[]
   paradas         ParadaChamado[]
@@ -359,6 +390,7 @@ model Chamado {
   @@index([equipeAtualId, status])
   @@index([solicitanteId])
   @@index([tecnicoId])
+  @@index([chamadoAgrupadorId])
   @@map("chamados")
   @@schema("gestao_ti")
 }
