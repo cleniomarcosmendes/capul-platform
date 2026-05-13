@@ -118,6 +118,16 @@ export class ChamadoService {
     return this.colaboradores.removerColaborador(chamadoId, colaboradorId, user, role);
   }
 
+  // ─── Copias (decidido em 13/05/2026) ───
+
+  async listarCopias(chamadoId: string) {
+    return this.core.listarCopias(chamadoId);
+  }
+
+  async adicionarCopias(chamadoId: string, usuariosIds: string[], user: JwtPayload, role: string) {
+    return this.core.adicionarCopiasComCheck(chamadoId, usuariosIds, user, role);
+  }
+
   // ─── Tempo ───
 
   async listarRegistrosTempo(chamadoId: string) {

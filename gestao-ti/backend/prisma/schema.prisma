@@ -66,6 +66,8 @@ model Usuario {
   artigosAutor         ArtigoConhecimento[] @relation("ArtigoAutor")
   notificacoes         Notificacao[]
   chamadoColaboracoes  ChamadoColaborador[]    @relation("ChamadoColaborador")
+  chamadoCopias               ChamadoCopia[]   @relation("ChamadoCopiaUsuario")
+  chamadosCopiaAdicionadosPor ChamadoCopia[]   @relation("ChamadoCopiaAdicionadoPor")
   paradaColaboracoes   ParadaColaborador[]     @relation("ParadaColaborador")
   registrosTempoChm    RegistroTempoChamado[]  @relation("RegistroTempoChamado")
   comentariosTarefa    ComentarioTarefa[]      @relation("ComentarioTarefaUsuario")
@@ -350,6 +352,7 @@ model Chamado {
   paradas         ParadaChamado[]
   anexos          AnexoChamado[]
   colaboradores   ChamadoColaborador[]
+  copias          ChamadoCopia[]
   registrosTempo  RegistroTempoChamado[]
 
   @@index([status])
@@ -436,6 +439,30 @@ model ChamadoColaborador {
 
   @@unique([chamadoId, usuarioId])
   @@map("chamado_colaboradores")
+  @@schema("gestao_ti")
+}
+
+/// Usuarios "em copia" no chamado: tem papel de solicitante (ve detalhes,
+/// recebe notificacoes, pode comentar). Conceito separado de
+/// ChamadoColaborador (T.I.-only, participa ativamente da solucao).
+/// Restricao: nao pode adicionar membro de EquipeTI ativo (impede contornar
+/// designacao de tecnico via inclusao em copia). Decidido em 13/05/2026.
+model ChamadoCopia {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  chamadoId String  @map("chamado_id")
+  chamado   Chamado @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+
+  usuarioId String  @map("usuario_id")
+  usuario   Usuario @relation("ChamadoCopiaUsuario", fields: [usuarioId], references: [id])
+
+  adicionadoPorId String?  @map("adicionado_por_id")
+  adicionadoPor   Usuario? @relation("ChamadoCopiaAdicionadoPor", fields: [adicionadoPorId], references: [id])
+
+  @@unique([chamadoId, usuarioId])
+  @@index([usuarioId])
+  @@map("chamado_copias")
   @@schema("gestao_ti")
 }
 

@@ -30,6 +30,8 @@ export class ChamadoCoreService {
   ) {}
 
   // ─── Coletar todos os envolvidos no chamado (para notificacoes) ───
+  // Inclui solicitante, tecnico atual, colaboradores (T.I.) e copias (extras).
+  // Copias entraram em 13/05/2026 — ver feature "Em copia" no chamado.
   private async getDestinatariosChamado(
     chamadoId: string,
     excluirIds: string[],
@@ -40,6 +42,7 @@ export class ChamadoCoreService {
         solicitanteId: true,
         tecnicoId: true,
         colaboradores: { select: { usuarioId: true } },
+        copias: { select: { usuarioId: true } },
       },
     });
     if (!chamado) return [];
@@ -48,6 +51,7 @@ export class ChamadoCoreService {
     ids.add(chamado.solicitanteId);
     if (chamado.tecnicoId) ids.add(chamado.tecnicoId);
     for (const c of chamado.colaboradores) ids.add(c.usuarioId);
+    for (const c of chamado.copias) ids.add(c.usuarioId);
 
     for (const id of excluirIds) ids.delete(id);
     return Array.from(ids);
@@ -231,6 +235,13 @@ export class ChamadoCoreService {
         colaboradores: {
           include: { usuario: { select: { id: true, nome: true, username: true } } },
         },
+        copias: {
+          include: {
+            usuario: { select: { id: true, nome: true, username: true } },
+            adicionadoPor: { select: { id: true, nome: true, username: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
         registrosTempo: {
           where: { horaFim: null },
           select: { id: true, usuarioId: true, horaInicio: true },
@@ -241,7 +252,10 @@ export class ChamadoCoreService {
     if (!chamado) throw new NotFoundException('Chamado nao encontrado');
 
     if (role === 'USUARIO_FINAL') {
-      if (chamado.solicitanteId !== user.sub) {
+      // Copiados tem papel de solicitante: leem o chamado mesmo nao sendo
+      // dono. Decidido em 13/05/2026 (feature "Em copia").
+      const isCopiado = chamado.copias.some((c) => c.usuarioId === user.sub);
+      if (chamado.solicitanteId !== user.sub && !isCopiado) {
         throw new ForbiddenException('Sem acesso a este chamado');
       }
       chamado.historicos = chamado.historicos.filter((h) => h.publico);
@@ -361,7 +375,112 @@ export class ChamadoCoreService {
       },
     });
 
+    // Adicionar usuarios em copia (se informados). Validacao isTI + criacao
+    // dos registros + notificacao individual aos copiados ocorrem aqui para
+    // que o solicitante so receba uma resposta apos o chamado estar 100%
+    // configurado. Se algum copiado falhar validacao, o chamado ja foi
+    // criado — copiados validos ainda sao processados.
+    if (dto.copiasUsuariosIds && dto.copiasUsuariosIds.length > 0) {
+      await this.adicionarCopias(chamado.id, dto.copiasUsuariosIds, user, { silenciarErrosIndividuais: false });
+    }
+
     return chamado;
+  }
+
+  /**
+   * Adiciona usuarios em copia ao chamado. Valida isTI em cada um.
+   * Notifica cada copiado da inclusao (mensagem dedicada).
+   */
+  async adicionarCopias(
+    chamadoId: string,
+    usuariosIds: string[],
+    user: JwtPayload,
+    opts: { silenciarErrosIndividuais?: boolean } = {},
+  ) {
+    const chamado = await this.prisma.chamado.findUnique({
+      where: { id: chamadoId },
+      select: { id: true, numero: true, titulo: true, copias: { select: { usuarioId: true } } },
+    });
+    if (!chamado) throw new NotFoundException('Chamado nao encontrado');
+
+    const jaCopiados = new Set(chamado.copias.map((c) => c.usuarioId));
+    const novos: string[] = [];
+    const erros: { usuarioId: string; motivo: string }[] = [];
+
+    for (const usuarioId of usuariosIds) {
+      if (jaCopiados.has(usuarioId)) continue;
+      try {
+        await this.helpers.assertNaoSeTI(usuarioId);
+        // Garantir que o usuario existe (defensive)
+        const u = await this.prisma.usuario.findUnique({ where: { id: usuarioId }, select: { id: true } });
+        if (!u) {
+          erros.push({ usuarioId, motivo: 'Usuario nao encontrado' });
+          continue;
+        }
+        await this.prisma.chamadoCopia.create({
+          data: { chamadoId, usuarioId, adicionadoPorId: user.sub },
+        });
+        novos.push(usuarioId);
+      } catch (err) {
+        const msg = (err as { message?: string })?.message ?? 'Erro';
+        erros.push({ usuarioId, motivo: msg });
+      }
+    }
+
+    // Erros: na criacao do chamado (silenciarErrosIndividuais=false) lancamos
+    // BadRequest se NENHUM copiado entrou (mas chamado ja existe — UI mostra
+    // mensagem amigavel). Em adicao via endpoint dedicado, retornamos relatorio.
+    if (!opts.silenciarErrosIndividuais && novos.length === 0 && erros.length > 0) {
+      throw new BadRequestException({
+        message: 'Nenhum usuario foi adicionado em copia',
+        erros,
+      });
+    }
+
+    // Notificar copiados novos da inclusao (somente novos, nao reativados)
+    if (novos.length > 0) {
+      this.notificacaoService.criarParaUsuarios(
+        novos,
+        'CHAMADO_ATUALIZADO',
+        `Voce foi adicionado em copia no chamado #${chamado.numero}`,
+        `${this.prefixoAutor(user)}adicionou voce em copia no chamado "${chamado.titulo}". Voce recebera atualizacoes e pode comentar.`,
+        { chamadoId },
+      ).catch((err) => console.error('Notificacao error:', err.message));
+    }
+
+    return { adicionados: novos, erros };
+  }
+
+  /**
+   * Versao com check de "quem pode adicionar copia" para endpoint dedicado
+   * (POST /chamados/:id/copias). Aceita gestor, tecnico, colaborador,
+   * solicitante e ate copiados existentes — qualquer envolvido pode
+   * trazer mais gente. Erros individuais sao retornados em vez de
+   * lancar (silenciarErrosIndividuais=true).
+   */
+  async adicionarCopiasComCheck(chamadoId: string, usuariosIds: string[], user: JwtPayload, role: string) {
+    await this.helpers.assertTecnicoOuColaborador(chamadoId, user.sub, role, {
+      permitirSolicitante: true,
+      permitirCopia: true,
+    });
+    return this.adicionarCopias(chamadoId, usuariosIds, user, { silenciarErrosIndividuais: true });
+  }
+
+  async listarCopias(chamadoId: string) {
+    await this.helpers.getChamadoOrFail(chamadoId);
+    return this.prisma.chamadoCopia.findMany({
+      where: { chamadoId },
+      include: {
+        usuario: { select: { id: true, nome: true, username: true, email: true } },
+        adicionadoPor: { select: { id: true, nome: true, username: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  private prefixoAutor(user: JwtPayload): string {
+    const nome = (user as { nome?: string }).nome || (user as { username?: string }).username;
+    return nome ? `${nome} ` : '';
   }
 
   async updateHeader(id: string, dto: UpdateChamadoHeaderDto, user: JwtPayload, role: string) {
@@ -565,8 +684,12 @@ export class ChamadoCoreService {
   }
 
   async comentar(id: string, dto: ComentarioChamadoDto, user: JwtPayload, role: string) {
-    // Solicitante tambem pode comentar
-    await this.helpers.assertTecnicoOuColaborador(id, user.sub, role, { permitirSolicitante: true });
+    // Solicitante e copiados tambem podem comentar (copiado tem "papel de
+    // solicitante" — decidido em 13/05/2026).
+    await this.helpers.assertTecnicoOuColaborador(id, user.sub, role, {
+      permitirSolicitante: true,
+      permitirCopia: true,
+    });
 
     const chamado = await this.helpers.getChamadoOrFail(id);
 

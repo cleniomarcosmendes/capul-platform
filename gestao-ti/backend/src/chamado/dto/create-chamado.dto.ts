@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, MaxLength, IsArray, IsUUID, ArrayMaxSize } from 'class-validator';
 import { Prioridade, Visibilidade } from '@prisma/client';
 
 export class CreateChamadoDto {
@@ -76,4 +76,24 @@ export class CreateChamadoDto {
   @IsString()
   @MaxLength(100)
   nomeColaborador?: string;
+
+  /**
+   * IDs dos usuarios a adicionar em copia no chamado.
+   * Validacao no service: nao pode incluir membro ativo de EquipeTI
+   * (impede contornar designacao de tecnico via "em copia").
+   * Limite de 20 por chamado evita abuso/erro.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsUUID(undefined, { each: true })
+  copiasUsuariosIds?: string[];
+}
+
+/** Payload para adicionar copias em um chamado existente. */
+export class AddChamadoCopiasDto {
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsUUID(undefined, { each: true })
+  usuariosIds: string[];
 }

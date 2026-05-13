@@ -14,7 +14,7 @@ import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
-import { CreateChamadoDto } from './dto/create-chamado.dto.js';
+import { CreateChamadoDto, AddChamadoCopiasDto } from './dto/create-chamado.dto.js';
 import { UpdateChamadoHeaderDto } from './dto/update-chamado-header.dto.js';
 import { TransferirEquipeDto, TransferirTecnicoDto } from './dto/transferir-chamado.dto.js';
 import { ComentarioChamadoDto } from './dto/comentario-chamado.dto.js';
@@ -339,6 +339,26 @@ export class ChamadoController {
     @GestaoTiRole() role: string,
   ) {
     return this.service.removerColaborador(id, colaboradorId, user, role);
+  }
+
+  // === Copias (decidido em 13/05/2026) ===
+  // Diferente de Colaborador (T.I.-only, atua na solucao), Copia eh para
+  // usuarios nao-T.I. que precisam acompanhar/comentar o chamado.
+
+  @Get(':id/copias')
+  listarCopias(@Param('id') id: string) {
+    return this.service.listarCopias(id);
+  }
+
+  @Post(':id/copias')
+  async adicionarCopias(
+    @Param('id') id: string,
+    @Body() dto: AddChamadoCopiasDto,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    // Validacao "qualquer envolvido pode adicionar copia" ocorre no service.
+    return this.service.adicionarCopias(id, dto.usuariosIds, user, role);
   }
 
   // === Registro de Tempo ===
