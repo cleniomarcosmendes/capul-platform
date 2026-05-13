@@ -18,6 +18,8 @@ interface ListFilters {
   /** Ordenação por clique no header (10/05/2026). Chaves whitelistadas no backend. */
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  /** Incluir chamados em status AGRUPADO (filhos). Default false (13/05/2026). */
+  incluirAgrupados?: boolean;
 }
 
 export interface ListarChamadosResult {
@@ -88,6 +90,7 @@ export const chamadoService = {
     if (filters.pageSize) params.pageSize = String(filters.pageSize);
     if (filters.sortBy) params.sortBy = filters.sortBy;
     if (filters.sortOrder) params.sortOrder = filters.sortOrder;
+    if (filters.incluirAgrupados) params.incluirAgrupados = 'true';
     const { data } = await gestaoApi.get<ListarChamadosResult>('/chamados', { params });
     return data;
   },
@@ -248,6 +251,22 @@ export const chamadoService = {
 
   async adicionarCopias(id: string, usuariosIds: string[]): Promise<AdicionarCopiasResult> {
     const { data } = await gestaoApi.post(`/chamados/${id}/copias`, { usuariosIds });
+    return data;
+  },
+
+  // Agrupamento (decidido em 13/05/2026)
+  async agruparEm(id: string, agrupadorId: string): Promise<{ id: string; status: string; chamadoAgrupadorId: string }> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/agrupar-em`, { agrupadorId });
+    return data;
+  },
+
+  async desagrupar(id: string): Promise<{ id: string; status: string }> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/desagrupar`);
+    return data;
+  },
+
+  async listarAgrupados(id: string): Promise<{ id: string; numero: number; titulo: string; status: string; solicitante: { id: string; nome: string }; createdAt: string }[]> {
+    const { data } = await gestaoApi.get(`/chamados/${id}/agrupados`);
     return data;
   },
 

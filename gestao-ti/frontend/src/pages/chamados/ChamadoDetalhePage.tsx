@@ -8,7 +8,7 @@ import {
   ArrowLeft, UserPlus, ArrowRightLeft, CheckCircle,
   XCircle, RotateCcw, Lock, Star, Users, MessageSquare,
   Paperclip, Download, Trash2, FileText, Image, FileSpreadsheet, File,
-  Play, Square, Edit3, Check, X, Clock, Copy, Printer, Bell,
+  Play, Square, Edit3, Check, X, Clock, Copy, Printer, Bell, Layers, Unlink, Search,
 } from 'lucide-react';
 import { coreService } from '../../services/core.service';
 import { useToast } from '../../components/Toast';
@@ -26,6 +26,7 @@ const statusLabels: Record<StatusChamado, string> = {
   ABERTO: 'Aberto', EM_ATENDIMENTO: 'Em Atendimento', PENDENTE: 'Pendente',
   PENDENTE_USUARIO: 'Pendente Usuário',
   RESOLVIDO: 'Resolvido', FECHADO: 'Fechado', CANCELADO: 'Cancelado', REABERTO: 'Reaberto',
+  AGRUPADO: 'Agrupado',
 };
 
 const statusColors: Record<StatusChamado, string> = {
@@ -37,6 +38,7 @@ const statusColors: Record<StatusChamado, string> = {
   FECHADO: 'bg-slate-100 text-slate-600 border-slate-200',
   CANCELADO: 'bg-red-100 text-red-600 border-red-200',
   REABERTO: 'bg-purple-100 text-purple-700 border-purple-200',
+  AGRUPADO: 'bg-amber-100 text-amber-700 border-amber-200',
 };
 
 const prioridadeColors: Record<string, string> = {
@@ -116,6 +118,13 @@ export function ChamadoDetalhePage() {
   const [copiaBusca, setCopiaBusca] = useState('');
   const [copiaIdsParaAdicionar, setCopiaIdsParaAdicionar] = useState<string[]>([]);
   const [copiaSalvando, setCopiaSalvando] = useState(false);
+
+  // Agrupamento (decidido em 13/05/2026)
+  const [showModalAgrupar, setShowModalAgrupar] = useState(false);
+  const [agruparBusca, setAgruparBusca] = useState('');
+  const [agruparResultados, setAgruparResultados] = useState<Chamado[]>([]);
+  const [agruparLoading, setAgruparLoading] = useState(false);
+  const [agruparSalvando, setAgruparSalvando] = useState(false);
 
   // Registro de Tempo
   const [registrosTempo, setRegistrosTempo] = useState<RegistroTempoChamado[]>([]);
@@ -923,6 +932,178 @@ export function ChamadoDetalhePage() {
                 {chamado.comentarioSatisfacao && (
                   <p className="text-xs text-slate-500 mt-1">"{chamado.comentarioSatisfacao}"</p>
                 )}
+              </div>
+            )}
+
+            {/* Agrupamento (decidido em 13/05/2026 — TI agrupa chamados com mesmo problema) */}
+            {(() => {
+              const isAgrupado = !!chamado.chamadoAgrupadorId && !!chamado.chamadoAgrupador;
+              const filhos = chamado.chamadosAgrupados ?? [];
+              const ehAgrupador = filhos.length > 0;
+              const finalizado = ['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status);
+              const podeAgrupar = isTecnico && !finalizado && !isAgrupado && !ehAgrupador && !!chamado.tecnicoId;
+              const podeDesagrupar = isTecnico && isAgrupado && chamado.status === 'AGRUPADO';
+
+              if (!isAgrupado && !ehAgrupador && !podeAgrupar) return null;
+
+              return (
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                      <Layers className="w-4 h-4" />
+                      {ehAgrupador ? `Chamados agrupados (${filhos.length})` : isAgrupado ? 'Agrupado em outro chamado' : 'Agrupamento'}
+                    </h4>
+                    {podeAgrupar && (
+                      <button onClick={() => { setShowModalAgrupar(true); setAgruparBusca(''); setAgruparResultados([]); }}
+                        className="text-sm text-capul-600 hover:underline font-medium">
+                        + Agrupar em outro chamado
+                      </button>
+                    )}
+                    {podeDesagrupar && (
+                      <button onClick={async () => {
+                        if (!await confirm('Desagrupar chamado', 'Ele voltará ao status anterior e o SLA será retomado.', { variant: 'warning' })) return;
+                        try {
+                          await chamadoService.desagrupar(chamado.id);
+                          const full = await chamadoService.buscar(chamado.id);
+                          setChamado(full);
+                          if (full.copias) setCopias(full.copias);
+                          toast('success', 'Chamado desagrupado');
+                        } catch (err: unknown) {
+                          const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+                          toast('error', msg || 'Erro ao desagrupar');
+                        }
+                      }} className="text-sm text-amber-600 hover:underline font-medium flex items-center gap-1">
+                        <Unlink className="w-3.5 h-3.5" /> Desagrupar
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Estado: filho */}
+                  {isAgrupado && chamado.chamadoAgrupador && (
+                    <Link to={`/gestao-ti/chamados/${chamado.chamadoAgrupador.id}`}
+                      className="block bg-amber-50 border border-amber-200 rounded-lg p-3 hover:bg-amber-100 transition-colors">
+                      <p className="text-xs text-amber-700 font-medium">Este chamado está agrupado em:</p>
+                      <p className="text-sm text-amber-900 font-semibold mt-0.5">
+                        #{chamado.chamadoAgrupador.numero} — {chamado.chamadoAgrupador.titulo}
+                      </p>
+                      <p className="text-xs text-amber-700 mt-1">
+                        A resposta vem pelo chamado principal. SLA pausado em {chamado.slaPausadoEm ? new Date(chamado.slaPausadoEm).toLocaleString('pt-BR') : '-'}.
+                      </p>
+                    </Link>
+                  )}
+
+                  {/* Estado: agrupador */}
+                  {ehAgrupador && (
+                    <>
+                      <p className="text-xs text-slate-500 mb-3">
+                        Comentários neste chamado são propagados automaticamente para os chamados filhos. Ao resolver/fechar, todos os filhos seguem em cascata.
+                      </p>
+                      <div className="space-y-2">
+                        {filhos.map((f) => (
+                          <div key={f.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
+                            <div>
+                              <Link to={`/gestao-ti/chamados/${f.id}`} className="text-sm font-medium text-capul-600 hover:underline">
+                                #{f.numero} — {f.titulo}
+                              </Link>
+                              <p className="text-xs text-slate-500">
+                                Solicitante: {f.solicitante.nome}
+                                {f.statusAnteriorAgrupamento && (
+                                  <> · status anterior: <span className="font-medium">{f.statusAnteriorAgrupamento}</span></>
+                                )}
+                              </p>
+                            </div>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${f.status === 'AGRUPADO' ? 'bg-amber-100 text-amber-700' : f.status === 'RESOLVIDO' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+                              {f.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Botão sozinho quando ainda não está agrupado */}
+                  {!isAgrupado && !ehAgrupador && podeAgrupar && (
+                    <p className="text-xs text-slate-500">
+                      Use o botão acima se este chamado relata o mesmo problema de outro já em atendimento.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Modal: agrupar em outro chamado */}
+            {showModalAgrupar && (
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowModalAgrupar(false)}>
+                <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+                  <h3 className="text-lg font-semibold text-slate-800 mb-2">Agrupar em outro chamado</h3>
+                  <p className="text-sm text-slate-500 mb-4">
+                    Busque pelo número ou título do chamado-pai. Apenas chamados em atendimento (com técnico atribuído) podem agrupar.
+                  </p>
+                  <div className="relative mb-4">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={agruparBusca}
+                      onChange={async (e) => {
+                        const v = e.target.value;
+                        setAgruparBusca(v);
+                        if (v.trim().length < 2) { setAgruparResultados([]); return; }
+                        setAgruparLoading(true);
+                        try {
+                          const r = await chamadoService.listarPaginado({ search: v.trim(), pageSize: 10 });
+                          setAgruparResultados(r.items.filter((c) =>
+                            c.id !== chamado.id &&
+                            !!c.tecnicoId &&
+                            !['RESOLVIDO', 'FECHADO', 'CANCELADO', 'AGRUPADO'].includes(c.status)
+                          ));
+                        } catch { setAgruparResultados([]); }
+                        setAgruparLoading(false);
+                      }}
+                      placeholder="Buscar por número ou título..."
+                      className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-capul-600"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="max-h-72 overflow-y-auto border border-slate-200 rounded-lg">
+                    {agruparLoading ? (
+                      <p className="p-4 text-sm text-slate-400">Buscando...</p>
+                    ) : agruparBusca.trim().length < 2 ? (
+                      <p className="p-4 text-sm text-slate-400">Digite ao menos 2 caracteres</p>
+                    ) : agruparResultados.length === 0 ? (
+                      <p className="p-4 text-sm text-slate-400">Nenhum chamado elegível encontrado</p>
+                    ) : (
+                      agruparResultados.map((c) => (
+                        <button
+                          key={c.id}
+                          disabled={agruparSalvando}
+                          onClick={async () => {
+                            setAgruparSalvando(true);
+                            try {
+                              await chamadoService.agruparEm(chamado.id, c.id);
+                              const full = await chamadoService.buscar(chamado.id);
+                              setChamado(full);
+                              setShowModalAgrupar(false);
+                              toast('success', `Agrupado em #${c.numero}`);
+                            } catch (err: unknown) {
+                              const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+                              toast('error', msg || 'Erro ao agrupar');
+                            }
+                            setAgruparSalvando(false);
+                          }}
+                          className="w-full text-left px-4 py-3 hover:bg-slate-50 border-b border-slate-100 last:border-b-0 disabled:opacity-50"
+                        >
+                          <p className="text-sm font-medium text-slate-700">#{c.numero} — {c.titulo}</p>
+                          <p className="text-xs text-slate-500">{c.status} · {c.tecnico?.nome || 'sem técnico'}</p>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                  <div className="flex justify-end mt-4">
+                    <button onClick={() => setShowModalAgrupar(false)} className="text-sm text-slate-500 hover:text-slate-700">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 

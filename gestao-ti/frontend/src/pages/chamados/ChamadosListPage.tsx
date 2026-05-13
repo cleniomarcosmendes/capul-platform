@@ -25,6 +25,7 @@ const statusLabels: Record<StatusChamado, string> = {
   FECHADO: 'Fechado',
   CANCELADO: 'Cancelado',
   REABERTO: 'Reaberto',
+  AGRUPADO: 'Agrupado',
 };
 
 const statusColors: Record<StatusChamado, string> = {
@@ -40,6 +41,7 @@ const statusColors: Record<StatusChamado, string> = {
   FECHADO: 'bg-slate-100 text-slate-600',
   CANCELADO: 'bg-red-100 text-red-600',
   REABERTO: 'bg-purple-100 text-purple-700',
+  AGRUPADO: 'bg-amber-100 text-amber-700',
 };
 
 const prioridadeColors: Record<string, string> = {
@@ -106,15 +108,18 @@ export function ChamadosListPage() {
   const [filterDataFim, setFilterDataFim] = useState(savedFilters?.filterDataFim ?? '');
   const [pendentesAvaliacao, setPendentesAvaliacao] = useState(searchParams.get('pendentes') === '1' || (savedFilters?.pendentesAvaliacao ?? false));
   const [busca, setBusca] = useState(savedFilters?.busca ?? '');
+  // Incluir AGRUPADOS na listagem (decidido em 13/05/2026). Default false:
+  // filhos ficam escondidos pq a operacao acontece no agrupador.
+  const [incluirAgrupados, setIncluirAgrupados] = useState<boolean>(savedFilters?.incluirAgrupados ?? false);
 
   // Salvar filtros no sessionStorage ao alterar
   useEffect(() => {
     sessionStorage.setItem('chamados_filtros', JSON.stringify({
       filterStatus, filterEquipe, filterVisibilidade, meusChamados,
       filterFilial, filterDepartamento, filterTecnico, filterDataInicio, filterDataFim,
-      pendentesAvaliacao, busca,
+      pendentesAvaliacao, busca, incluirAgrupados,
     }));
-  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, filterDepartamento, filterTecnico, filterDataInicio, filterDataFim, pendentesAvaliacao, busca]);
+  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, filterDepartamento, filterTecnico, filterDataInicio, filterDataFim, pendentesAvaliacao, busca, incluirAgrupados]);
 
   const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
 
@@ -176,6 +181,7 @@ export function ChamadosListPage() {
           dataInicio: filterDataInicio || undefined,
           dataFim: filterDataFim || undefined,
           search: buscaDebounced.trim() || undefined,
+          incluirAgrupados: incluirAgrupados || undefined,
         };
     chamadoService
       .listarPaginado({
@@ -191,7 +197,7 @@ export function ChamadosListPage() {
       })
       .catch(() => {})
       .finally(() => { if (!silent) setLoading(false); });
-  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, filterDepartamento, filterTecnico, filterDataInicio, filterDataFim, usuario, pendentesAvaliacao, buscaDebounced, page, pageSize, sortBy, sortOrder]);
+  }, [filterStatus, filterEquipe, filterVisibilidade, meusChamados, filterFilial, filterDepartamento, filterTecnico, filterDataInicio, filterDataFim, usuario, pendentesAvaliacao, buscaDebounced, page, pageSize, sortBy, sortOrder, incluirAgrupados]);
 
   useEffect(() => {
     carregarChamados();
@@ -386,6 +392,16 @@ export function ChamadosListPage() {
                       className="rounded border-slate-300"
                     />
                     Meus chamados
+                  </label>
+
+                  <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer" title="Mostrar chamados agrupados em outros (filhos)">
+                    <input
+                      type="checkbox"
+                      checked={incluirAgrupados}
+                      onChange={(e) => setIncluirAgrupados(e.target.checked)}
+                      className="rounded border-slate-300"
+                    />
+                    Incluir agrupados
                   </label>
                 </>
               )}

@@ -99,7 +99,7 @@ export interface CentroCusto {
 // === Fase 2 types ===
 
 export type Prioridade = 'CRITICA' | 'ALTA' | 'MEDIA' | 'BAIXA';
-export type StatusChamado = 'ABERTO' | 'EM_ATENDIMENTO' | 'PENDENTE' | 'PENDENTE_USUARIO' | 'RESOLVIDO' | 'FECHADO' | 'CANCELADO' | 'REABERTO';
+export type StatusChamado = 'ABERTO' | 'EM_ATENDIMENTO' | 'PENDENTE' | 'PENDENTE_USUARIO' | 'RESOLVIDO' | 'FECHADO' | 'CANCELADO' | 'REABERTO' | 'AGRUPADO';
 export type Visibilidade = 'PUBLICO' | 'PRIVADO';
 export type TipoHistorico = 'ABERTURA' | 'ASSUMIDO' | 'COMENTARIO' | 'SOLICITACAO_INFO' | 'RETOMADA_USUARIO' | 'TRANSFERENCIA_EQUIPE' | 'TRANSFERENCIA_TECNICO' | 'RESOLVIDO' | 'FECHADO' | 'REABERTO' | 'CANCELADO' | 'AVALIADO';
 export type StatusOS = 'ABERTA' | 'EM_EXECUCAO' | 'CONCLUIDA' | 'CANCELADA';
@@ -260,6 +260,25 @@ export interface Chamado {
   colaboradores?: ChamadoColaborador[];
   copias?: ChamadoCopiaResumo[];
   registrosTempo?: { id: string; usuarioId: string; horaInicio: string }[];
+  /** Agrupamento (13/05/2026): se este eh filho, aponta para o pai. */
+  chamadoAgrupadorId?: string | null;
+  chamadoAgrupador?: { id: string; numero: number; titulo: string; status: StatusChamado } | null;
+  /** Status anterior antes de agrupar (para restaurar ao desagrupar). */
+  statusAnteriorAgrupamento?: string | null;
+  slaPausadoEm?: string | null;
+  /** Filhos agrupados (presente quando este eh o agrupador). */
+  chamadosAgrupados?: ChamadoAgrupadoResumo[];
+}
+
+export interface ChamadoAgrupadoResumo {
+  id: string;
+  numero: number;
+  titulo: string;
+  status: StatusChamado;
+  statusAnteriorAgrupamento: string | null;
+  slaPausadoEm: string | null;
+  solicitante: { id: string; nome: string };
+  createdAt: string;
 }
 
 export interface ChamadoCopiaResumo {
