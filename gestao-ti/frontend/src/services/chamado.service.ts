@@ -45,6 +45,23 @@ interface CreateChamadoPayload {
   ativoId?: string;
   matriculaColaborador?: string;
   nomeColaborador?: string;
+  /** IDs de usuarios a colocar em copia. Backend rejeita membros de EquipeTI. */
+  copiasUsuariosIds?: string[];
+}
+
+export interface ChamadoCopia {
+  id: string;
+  createdAt: string;
+  chamadoId: string;
+  usuarioId: string;
+  adicionadoPorId: string | null;
+  usuario: { id: string; nome: string; username: string; email: string | null };
+  adicionadoPor: { id: string; nome: string; username: string } | null;
+}
+
+export interface AdicionarCopiasResult {
+  adicionados: string[];
+  erros: { usuarioId: string; motivo: string }[];
 }
 
 export const chamadoService = {
@@ -221,6 +238,17 @@ export const chamadoService = {
 
   async removerColaborador(id: string, colaboradorId: string): Promise<void> {
     await gestaoApi.delete(`/chamados/${id}/colaboradores/${colaboradorId}`);
+  },
+
+  // Copias (decidido em 13/05/2026)
+  async listarCopias(id: string): Promise<ChamadoCopia[]> {
+    const { data } = await gestaoApi.get(`/chamados/${id}/copias`);
+    return data;
+  },
+
+  async adicionarCopias(id: string, usuariosIds: string[]): Promise<AdicionarCopiasResult> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/copias`, { usuariosIds });
+    return data;
   },
 
   // Registro de Tempo

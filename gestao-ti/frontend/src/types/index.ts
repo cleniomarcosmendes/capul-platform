@@ -258,7 +258,18 @@ export interface Chamado {
   departamentoId: string | null;
   departamento: { id: string; nome: string } | null;
   colaboradores?: ChamadoColaborador[];
+  copias?: ChamadoCopiaResumo[];
   registrosTempo?: { id: string; usuarioId: string; horaInicio: string }[];
+}
+
+export interface ChamadoCopiaResumo {
+  id: string;
+  chamadoId: string;
+  usuarioId: string;
+  adicionadoPorId: string | null;
+  usuario: { id: string; nome: string; username: string };
+  adicionadoPor: { id: string; nome: string; username: string } | null;
+  createdAt: string;
 }
 
 export interface ChamadoColaborador {

@@ -12,8 +12,13 @@ import { paradaService } from '../../services/parada.service';
 import { ordemServicoService } from '../../services/ordem-servico.service';
 import { ativoService } from '../../services/ativo.service';
 import { coreService } from '../../services/core.service';
-import { ArrowLeft, FolderKanban, Paperclip, X, CheckCircle } from 'lucide-react';
-import type { EquipeTI, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento, Ativo } from '../../types';
+import { ArrowLeft, FolderKanban, Paperclip, X, CheckCircle, Users2 } from 'lucide-react';
+import type { EquipeTI, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento, Ativo, UsuarioCore } from '../../types';
+
+const ROLES_TI_SET = new Set(['ADMIN', 'GESTOR_TI', 'SUPORTE_TI']);
+function isUsuarioTI(u: UsuarioCore): boolean {
+  return (u.permissoes ?? []).some((p) => p.modulo.codigo === 'GESTAO_TI' && ROLES_TI_SET.has(p.roleModulo.codigo));
+}
 
 export function ChamadoCreatePage() {
   const navigate = useNavigate();
@@ -118,6 +123,12 @@ export function ChamadoCreatePage() {
   }
 
 
+  // Em copia (usuarios nao-TI que recebem notificacoes e podem comentar)
+  const [usuariosNaoTI, setUsuariosNaoTI] = useState<UsuarioCore[]>([]);
+  const [copiasIds, setCopiasIds] = useState<string[]>([]);
+  const [copiaBusca, setCopiaBusca] = useState('');
+  const [copiaDropdownOpen, setCopiaDropdownOpen] = useState(false);
+
   // Anexos
   const [arquivos, setArquivos] = useState<File[]>([]);
 
@@ -175,6 +186,13 @@ export function ChamadoCreatePage() {
       coreService.listarDepartamentos(filialId).then(setDepartamentos).catch(() => setDepartamentos([]));
     }
   }, [isUsuarioFinal, filialId]);
+
+  // Carregar usuarios elegiveis a serem postos em copia (filtra TI fora)
+  useEffect(() => {
+    coreService.listarUsuarios().then((users) => {
+      setUsuariosNaoTI(users.filter((u) => u.id !== usuario?.id && !isUsuarioTI(u)));
+    }).catch(() => setUsuariosNaoTI([]));
+  }, [usuario?.id]);
 
   useEffect(() => {
     if (softwareId) {
@@ -242,6 +260,7 @@ export function ChamadoCreatePage() {
         ativoId: ativoId || undefined,
         matriculaColaborador: isUsuarioPadrao && matriculaColaborador ? matriculaColaborador.trim() : undefined,
         nomeColaborador: isUsuarioPadrao && nomeColaborador ? nomeColaborador.trim() : undefined,
+        copiasUsuariosIds: copiasIds.length > 0 ? copiasIds : undefined,
       });
 
       // Upload dos anexos
@@ -592,6 +611,76 @@ export function ChamadoCreatePage() {
                   <option key={m.id} value={m.id}>{m.nome}</option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          {/* Em cópia */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Em cópia (opcional)</label>
+            <p className="text-xs text-slate-500 mb-2">
+              Pessoas adicionadas em cópia recebem notificações e podem comentar. Equipe T.I. não pode ser colocada em cópia.
+            </p>
+            {/* Chips dos selecionados */}
+            {copiasIds.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {copiasIds.map((cid) => {
+                  const u = usuariosNaoTI.find((x) => x.id === cid);
+                  if (!u) return null;
+                  return (
+                    <span key={cid} className="inline-flex items-center gap-1 bg-capul-100 text-capul-700 text-xs px-2 py-1 rounded-full">
+                      <Users2 className="w-3 h-3" />
+                      {u.nome}
+                      <button type="button" onClick={() => setCopiasIds(copiasIds.filter((i) => i !== cid))}
+                        className="ml-1 text-capul-500 hover:text-capul-700">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            {/* Autocomplete */}
+            <div className="relative">
+              <input
+                type="text"
+                value={copiaBusca}
+                onChange={(e) => { setCopiaBusca(e.target.value); setCopiaDropdownOpen(true); }}
+                onFocus={() => setCopiaDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setCopiaDropdownOpen(false), 200)}
+                placeholder="Buscar usuário para adicionar em cópia..."
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600"
+              />
+              {copiaDropdownOpen && (() => {
+                const termo = copiaBusca.trim().toLowerCase();
+                const disponiveis = usuariosNaoTI
+                  .filter((u) => !copiasIds.includes(u.id))
+                  .filter((u) => !termo || u.nome.toLowerCase().includes(termo) || u.username.toLowerCase().includes(termo))
+                  .slice(0, 15);
+                if (disponiveis.length === 0) return (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-10 p-3 text-sm text-slate-500">
+                    {termo ? 'Nenhum usuário encontrado' : 'Comece a digitar para buscar'}
+                  </div>
+                );
+                return (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
+                    {disponiveis.map((u) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setCopiasIds([...copiasIds, u.id]);
+                          setCopiaBusca('');
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between"
+                      >
+                        <span className="text-slate-700">{u.nome}</span>
+                        <span className="text-xs text-slate-400">{u.username}</span>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
