@@ -147,7 +147,7 @@ export function ChamadosListPage() {
   // Ordenação por clique no header (10/05/2026). Default null = backend usa
   // ordem natural (createdAt desc — mais recentes primeiro). Fluxo: 1º clique
   // numa coluna asc, 2º desc, 3º limpa volta pro default.
-  type SortKey = 'numero' | 'titulo' | 'status' | 'prioridade' | 'createdAt' | 'filial' | 'equipe' | 'tecnico' | 'solicitante' | 'departamento';
+  type SortKey = 'numero' | 'titulo' | 'status' | 'prioridade' | 'createdAt' | 'updatedAt' | 'filial' | 'equipe' | 'tecnico' | 'solicitante' | 'departamento';
   const [sortBy, setSortBy] = useState<SortKey | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 

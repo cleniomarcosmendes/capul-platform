@@ -207,15 +207,19 @@ export class ChamadoCoreService {
       status: { status: filters.sortOrder ?? 'asc' },
       prioridade: { prioridade: filters.sortOrder ?? 'asc' },
       createdAt: { createdAt: filters.sortOrder ?? 'desc' },
+      updatedAt: { updatedAt: filters.sortOrder ?? 'desc' },
       filial: { filial: { nome: filters.sortOrder ?? 'asc' } },
       equipe: { equipeAtual: { nome: filters.sortOrder ?? 'asc' } },
       tecnico: { tecnico: { nome: filters.sortOrder ?? 'asc' } },
       solicitante: { solicitante: { nome: filters.sortOrder ?? 'asc' } },
       departamento: { departamento: { nome: filters.sortOrder ?? 'asc' } },
     };
+    // Default: ordenar por ultima atividade (updatedAt) — chamado reaberto,
+    // comentado ou transferido sobe ao topo. Decidido em 13/05/2026 pos
+    // feedback do Clenio: chamado reaberto antigo nao aparecia no topo.
     const orderBy = (filters.sortBy && SORT_MAP[filters.sortBy])
       ? SORT_MAP[filters.sortBy]
-      : { createdAt: 'desc' as const };
+      : { updatedAt: 'desc' as const };
 
     const [total, items] = await this.prisma.$transaction([
       this.prisma.chamado.count({ where }),
