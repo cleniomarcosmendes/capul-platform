@@ -52,10 +52,9 @@ export class ProjetoCoreService {
     }
 
     // USUARIO_CHAVE e TERCEIRIZADO so veem projetos vinculados
-    if (filters.role === 'USUARIO_CHAVE' && filters.usuarioId) {
+    // Ambos compartilham `usuariosChave` desde 13/05/2026.
+    if ((filters.role === 'USUARIO_CHAVE' || filters.role === 'TERCEIRIZADO') && filters.usuarioId) {
       where.usuariosChave = { some: { usuarioId: filters.usuarioId, ativo: true } };
-    } else if (filters.role === 'TERCEIRIZADO' && filters.usuarioId) {
-      where.terceirizados = { some: { usuarioId: filters.usuarioId, ativo: true } };
     } else if (filters.meusProjetos === 'true' && filters.usuarioId) {
       where.OR = [
         { responsavelId: filters.usuarioId },
@@ -157,21 +156,14 @@ export class ProjetoCoreService {
   }
 
   /**
-   * Retorna IDs dos sub-projetos aos quais o usuario esta vinculado
+   * Retorna IDs dos sub-projetos aos quais o usuario esta vinculado.
+   * USUARIO_CHAVE e TERCEIRIZADO compartilham `usuarioChaveProjeto` desde 13/05/2026.
    */
   private async getSubProjetosVinculados(subProjetoIds: string[], userId: string, role: string): Promise<string[]> {
     if (subProjetoIds.length === 0) return [];
 
-    if (role === 'USUARIO_CHAVE') {
+    if (role === 'USUARIO_CHAVE' || role === 'TERCEIRIZADO') {
       const vinculos = await this.prisma.usuarioChaveProjeto.findMany({
-        where: { projetoId: { in: subProjetoIds }, usuarioId: userId, ativo: true },
-        select: { projetoId: true },
-      });
-      return vinculos.map((v) => v.projetoId);
-    }
-
-    if (role === 'TERCEIRIZADO') {
-      const vinculos = await this.prisma.terceirizadoProjeto.findMany({
         where: { projetoId: { in: subProjetoIds }, usuarioId: userId, ativo: true },
         select: { projetoId: true },
       });
@@ -261,17 +253,13 @@ export class ProjetoCoreService {
       include: projetoDetailInclude,
     });
 
-    // Vincular o criador externo ao subprojeto como usuario-chave/terceirizado
+    // Vincular o criador externo ao subprojeto.
+    // USUARIO_CHAVE e TERCEIRIZADO compartilham UsuarioChaveProjeto desde 13/05/2026.
     if (isExterno && userId) {
-      if (role === 'USUARIO_CHAVE') {
-        await this.prisma.usuarioChaveProjeto.create({
-          data: { projetoId: projeto.id, usuarioId: userId, funcao: 'Responsavel', ativo: true },
-        }).catch(() => {}); // ignora se ja existe
-      } else if (role === 'TERCEIRIZADO') {
-        await this.prisma.terceirizadoProjeto.create({
-          data: { projetoId: projeto.id, usuarioId: userId, funcao: 'Analista', ativo: true },
-        }).catch(() => {}); // ignora se ja existe
-      }
+      const funcao = role === 'TERCEIRIZADO' ? 'Analista' : 'Responsavel';
+      await this.prisma.usuarioChaveProjeto.create({
+        data: { projetoId: projeto.id, usuarioId: userId, funcao, ativo: true },
+      }).catch(() => {}); // ignora se ja existe
     }
 
     return projeto;
@@ -611,7 +599,6 @@ export class ProjetoCoreService {
         custos: true,
         riscos: true,
         usuariosChave: true,
-        terceirizados: true,
         pendencias: { include: { interacoes: true } },
       },
     });
@@ -724,22 +711,6 @@ export class ProjetoCoreService {
           usuarioId: u.usuarioId,
           funcao: u.funcao,
           ativo: true,
-        })),
-        skipDuplicates: true,
-      });
-    }
-
-    // Duplicar terceirizados
-    if (original.terceirizados.length > 0) {
-      await this.prisma.terceirizadoProjeto.createMany({
-        data: original.terceirizados.map((t) => ({
-          projetoId: novoProjeto.id,
-          usuarioId: t.usuarioId,
-          empresa: t.empresa,
-          funcao: t.funcao,
-          especialidade: t.especialidade,
-          ativo: true,
-          observacoes: t.observacoes,
         })),
         skipDuplicates: true,
       });

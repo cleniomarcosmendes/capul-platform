@@ -103,23 +103,19 @@ export class ProjetoHelpersService {
   }
 
   /**
-   * Verifica se usuario tem acesso ao projeto (USUARIO_CHAVE ou TERCEIRIZADO)
+   * Verifica se usuario tem acesso ao projeto (USUARIO_CHAVE ou TERCEIRIZADO).
+   * Ambas as roles compartilham `usuario_chave_projeto` como tabela de vinculo
+   * desde 13/05/2026 — antes `TerceirizadoProjeto` era paralela mas a UI sempre
+   * gravava em UsuarioChaveProjeto, criando mismatch que travava terceirizados.
    */
   async checkProjetoAccessChave(projetoId: string, userId: string, role: string) {
     if (isTI(role)) return;
 
-    if (role === 'USUARIO_CHAVE') {
+    if (role === 'USUARIO_CHAVE' || role === 'TERCEIRIZADO') {
       const uc = await this.prisma.usuarioChaveProjeto.findUnique({
         where: { projetoId_usuarioId: { projetoId, usuarioId: userId } },
       });
       if (uc && uc.ativo) return;
-    }
-
-    if (role === 'TERCEIRIZADO') {
-      const terc = await this.prisma.terceirizadoProjeto.findUnique({
-        where: { projetoId_usuarioId: { projetoId, usuarioId: userId } },
-      });
-      if (terc && terc.ativo) return;
     }
 
     throw new ForbiddenException('Sem acesso a este projeto');

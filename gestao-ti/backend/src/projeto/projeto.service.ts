@@ -152,48 +152,8 @@ export class ProjetoService {
     return this.membroService.removeUsuarioChave(projetoId, ucId);
   }
 
-  // ============================================================
-  // TERCEIRIZADOS
-  // ============================================================
-
-  listTerceirizados(projetoId: string) {
-    return this.membroService.listTerceirizados(projetoId);
-  }
-
-  addTerceirizado(projetoId: string, dto: {
-    usuarioId: string;
-    funcao: string;
-    empresa?: string;
-    especialidade?: string;
-    dataInicio?: Date;
-    dataFim?: Date;
-    observacoes?: string;
-  }) {
-    return this.membroService.addTerceirizado(projetoId, dto);
-  }
-
-  updateTerceirizado(projetoId: string, terceirizadoId: string, dto: {
-    funcao?: string;
-    empresa?: string;
-    especialidade?: string;
-    dataInicio?: Date;
-    dataFim?: Date;
-    observacoes?: string;
-    ativo?: boolean;
-  }) {
-    return this.membroService.updateTerceirizado(projetoId, terceirizadoId, dto);
-  }
-
-  removeTerceirizado(projetoId: string, terceirizadoId: string) {
-    return this.membroService.removeTerceirizado(projetoId, terceirizadoId);
-  }
-
   meusProjetosChave(usuarioId: string) {
     return this.membroService.meusProjetosChave(usuarioId);
-  }
-
-  meusProjetosTerceirizado(usuarioId: string) {
-    return this.membroService.meusProjetosTerceirizado(usuarioId);
   }
 
   // ============================================================

@@ -293,10 +293,6 @@ export class DashboardRelatorioService {
             where: { ativo: true },
             include: { usuario: { select: { id: true, nome: true } } },
           },
-          terceirizados: {
-            where: { ativo: true },
-            include: { usuario: { select: { id: true, nome: true } } },
-          },
           fases: { orderBy: { ordem: 'asc' } },
           atividades: {
             include: {

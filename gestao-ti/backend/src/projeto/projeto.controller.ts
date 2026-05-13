@@ -40,7 +40,6 @@ import { CreateAnexoDto } from './dto/create-anexo.dto';
 import { CreateApontamentoDto } from './dto/create-apontamento.dto';
 import { UpdateRegistroTempoDto } from './dto/update-registro-tempo.dto';
 import { CreateUsuarioChaveDto } from './dto/create-usuario-chave.dto';
-import { CreateTerceirizadoDto, UpdateTerceirizadoDto } from './dto/create-terceirizado.dto';
 import { CreatePendenciaDto } from './dto/create-pendencia.dto';
 import { UpdatePendenciaDto } from './dto/update-pendencia.dto';
 import { CreateInteracaoPendenciaDto } from './dto/create-interacao-pendencia.dto';
@@ -107,16 +106,13 @@ export class ProjetoController {
     return this.service.buscarComentarios(q);
   }
 
+  // USUARIO_CHAVE e TERCEIRIZADO compartilham `usuario_chave_projeto` desde 13/05/2026.
+  // O endpoint legado `/meus-projetos-terceirizado` foi removido — `/meus-projetos-chave`
+  // agora atende ambas as roles.
   @Get('meus-projetos-chave')
-  @Roles('USUARIO_CHAVE')
+  @Roles('USUARIO_CHAVE', 'TERCEIRIZADO')
   meusProjetosChave(@CurrentUser() user: JwtPayload) {
     return this.service.meusProjetosChave(user.sub);
-  }
-
-  @Get('meus-projetos-terceirizado')
-  @Roles('TERCEIRIZADO')
-  meusProjetosTerceirizado(@CurrentUser() user: JwtPayload) {
-    return this.service.meusProjetosTerceirizado(user.sub);
   }
 
   @Get(':id')
@@ -683,49 +679,6 @@ export class ProjetoController {
   async removeUsuarioChave(@Param('id') id: string, @Param('ucId') ucId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeUsuarioChave(id, ucId);
-  }
-
-  // --- Terceirizados ---
-
-  @Get(':id/terceirizados')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
-  listTerceirizados(@Param('id') id: string) {
-    return this.service.listTerceirizados(id);
-  }
-
-  @Post(':id/terceirizados')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
-  async addTerceirizado(@Param('id') id: string, @Body() dto: CreateTerceirizadoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
-    return this.service.addTerceirizado(id, {
-      ...dto,
-      dataInicio: dto.dataInicio ? new Date(dto.dataInicio) : undefined,
-      dataFim: dto.dataFim ? new Date(dto.dataFim) : undefined,
-    });
-  }
-
-  @Patch(':id/terceirizados/:tercId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
-  async updateTerceirizado(
-    @Param('id') id: string,
-    @Param('tercId') tercId: string,
-    @Body() dto: UpdateTerceirizadoDto,
-    @CurrentUser() user: JwtPayload,
-    @GestaoTiRole() role: string,
-  ) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
-    return this.service.updateTerceirizado(id, tercId, {
-      ...dto,
-      dataInicio: dto.dataInicio ? new Date(dto.dataInicio) : undefined,
-      dataFim: dto.dataFim ? new Date(dto.dataFim) : undefined,
-    });
-  }
-
-  @Delete(':id/terceirizados/:tercId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
-  async removeTerceirizado(@Param('id') id: string, @Param('tercId') tercId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
-    return this.service.removeTerceirizado(id, tercId);
   }
 
   // --- Pendencias ---
