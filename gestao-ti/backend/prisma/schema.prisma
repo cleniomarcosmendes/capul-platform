@@ -70,6 +70,7 @@ model Usuario {
   registrosTempoChm    RegistroTempoChamado[]  @relation("RegistroTempoChamado")
   comentariosTarefa    ComentarioTarefa[]      @relation("ComentarioTarefaUsuario")
   usuarioChaveProjetos   UsuarioChaveProjeto[]   @relation("UsuarioChaveProjeto")
+  chamadosExternosRegistrados ChamadoExternoMensal[] @relation("ChamadoExternoRegistradoPor")
   pendenciasResponsavel  PendenciaProjeto[]      @relation("PendenciaResponsavel")
   pendenciasCriador      PendenciaProjeto[]      @relation("PendenciaCriador")
   interacoesPendencia    InteracaoPendencia[]    @relation("InteracaoPendenciaUsuario")
@@ -1012,17 +1013,48 @@ model Software {
   equipeResponsavelId String?  @map("equipe_responsavel_id")
   equipeResponsavel   EquipeTI? @relation(fields: [equipeResponsavelId], references: [id])
 
-  modulos   SoftwareModulo[]
-  filiais   SoftwareFilial[]
-  licencas  SoftwareLicenca[]
-  chamados  Chamado[]
-  contratos Contrato[]
-  paradas   RegistroParada[]
-  projetos  Projeto[]
-  ativos    AtivoSoftware[]
-  artigos   ArtigoConhecimento[]
+  modulos          SoftwareModulo[]
+  filiais          SoftwareFilial[]
+  licencas         SoftwareLicenca[]
+  chamados         Chamado[]
+  contratos        Contrato[]
+  paradas          RegistroParada[]
+  projetos         Projeto[]
+  ativos           AtivoSoftware[]
+  artigos          ArtigoConhecimento[]
+  chamadosExternos ChamadoExternoMensal[]
 
   @@map("softwares")
+  @@schema("gestao_ti")
+}
+
+// ============================================================
+// MODELOS DO GESTAO_TI — Chamados externos (KPI manual)
+// ============================================================
+
+/// Registro mensal de chamados que a CAPUL abriu junto a fornecedores
+/// externos (TOTVS, ZANTHUS, LINIX, etc.). Alimenta o KPI no Dashboard
+/// de Indicadores Estrategicos. Lancamento manual pelo time T.I.
+/// (ADMIN/GESTOR_TI). Decidido em 13/05/2026.
+model ChamadoExternoMensal {
+  id              String   @id @default(uuid())
+  mes             Int      // 1-12
+  ano             Int
+  qtdChamados     Int      @map("qtd_chamados")
+  observacoes     String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  softwareId String   @map("software_id")
+  software   Software @relation(fields: [softwareId], references: [id])
+
+  registradoPorId String?  @map("registrado_por_id")
+  registradoPor   Usuario? @relation("ChamadoExternoRegistradoPor", fields: [registradoPorId], references: [id])
+
+  @@unique([mes, ano, softwareId])
+  @@index([ano, mes])
+  @@index([softwareId])
+  @@map("chamados_externos_mensal")
   @@schema("gestao_ti")
 }
 

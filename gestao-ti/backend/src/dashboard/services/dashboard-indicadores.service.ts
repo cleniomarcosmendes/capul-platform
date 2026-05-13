@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { ChamadoExternoService } from '../../chamado-externo/chamado-externo.service.js';
 
 @Injectable()
 export class DashboardIndicadoresService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly chamadoExternoService: ChamadoExternoService,
+  ) {}
 
   async getIndicadores(mes: number, ano: number, tiposParada?: string[]) {
     // Calcular periodo
@@ -12,12 +16,13 @@ export class DashboardIndicadoresService {
     const diasNoMes = dataFim.getDate();
     const horasTotais = diasNoMes * 24;
 
-    const [investimentos, licencas, disponibilidade, chamados, horasDesenvolvimento] = await Promise.all([
+    const [investimentos, licencas, disponibilidade, chamados, horasDesenvolvimento, chamadosExternos] = await Promise.all([
       this.getInvestimentos(dataInicio, dataFim),
       this.getLicencas(),
       this.getDisponibilidade(dataInicio, dataFim, horasTotais, tiposParada),
       this.getChamados(dataInicio, dataFim),
       this.getHorasDesenvolvimento(dataInicio, dataFim),
+      this.chamadoExternoService.getKpiPeriodo(mes, ano),
     ]);
 
     return {
@@ -27,6 +32,7 @@ export class DashboardIndicadoresService {
       disponibilidade,
       chamados,
       horasDesenvolvimento,
+      chamadosExternos,
     };
   }
 

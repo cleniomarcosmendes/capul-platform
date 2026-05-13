@@ -10,6 +10,7 @@ import { EquipeModule } from './equipe/equipe.module.js';
 import { CatalogoServicoModule } from './catalogo-servico/catalogo-servico.module.js';
 import { SlaModule } from './sla/sla.module.js';
 import { ChamadoModule } from './chamado/chamado.module.js';
+import { ChamadoExternoModule } from './chamado-externo/chamado-externo.module.js';
 import { OrdemServicoModule } from './ordem-servico/ordem-servico.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { SoftwareModule } from './software/software.module.js';
@@ -75,6 +76,7 @@ import { IdempotencyModule } from './common/idempotency/idempotency.module.js';
     CatalogoServicoModule,
     SlaModule,
     ChamadoModule,
+    ChamadoExternoModule,
     OrdemServicoModule,
     SoftwareModule,
     LicencaModule,

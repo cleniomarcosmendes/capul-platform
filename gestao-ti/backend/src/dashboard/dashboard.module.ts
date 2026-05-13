@@ -8,9 +8,10 @@ import { DashboardAcompanhamentoService } from './services/dashboard-acompanhame
 import { DashboardRelatorioService } from './services/dashboard-relatorio.service.js';
 import { DashboardIndicadoresService } from './services/dashboard-indicadores.service.js';
 import { HorarioModule } from '../horario/horario.module.js';
+import { ChamadoExternoModule } from '../chamado-externo/chamado-externo.module.js';
 
 @Module({
-  imports: [HorarioModule],
+  imports: [HorarioModule, ChamadoExternoModule],
   controllers: [DashboardController],
   providers: [
     DashboardResumoService,
