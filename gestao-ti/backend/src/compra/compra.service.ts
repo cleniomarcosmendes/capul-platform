@@ -74,12 +74,21 @@ export class CompraService {
     return this.notaFiscalService.findEquipesParaCompras(usuarioId, role);
   }
 
-  createNotaFiscal(dto: CreateNotaFiscalDto, userId: string, filialId: string, role: string) {
-    return this.notaFiscalService.create(dto, userId, filialId, role);
+  createNotaFiscal(dto: CreateNotaFiscalDto, userId: string, filialId: string, role: string, jwt?: string) {
+    return this.notaFiscalService.create(dto, userId, filialId, role, jwt);
   }
 
-  updateNotaFiscal(id: string, dto: UpdateNotaFiscalDto, usuarioId: string, role: string) {
-    return this.notaFiscalService.update(id, dto, usuarioId, role);
+  updateNotaFiscal(id: string, dto: UpdateNotaFiscalDto, usuarioId: string, role: string, jwt?: string) {
+    return this.notaFiscalService.update(id, dto, usuarioId, role, jwt);
+  }
+
+  /**
+   * Validação + preview de uma chave NF-e via módulo Fiscal. Não persiste
+   * nada no Gestão TI (mas o Fiscal pode gravar no Protheus se for o
+   * primeiro acesso à chave).
+   */
+  validarChaveNotaFiscal(chave: string, jwt: string) {
+    return this.notaFiscalService.validarChave(chave, jwt);
   }
 
   removeNotaFiscal(id: string, usuarioId: string, role: string) {

@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   Query,
+  Req,
   Res,
   UseGuards,
   UseInterceptors,
@@ -31,11 +32,24 @@ import { isAnexoPermitido } from '../common/constants/anexo-mime.constant';
 import { createUploadConfig } from '../common/helpers/multer-upload.helper.js';
 import { CreateTipoProdutoDto, UpdateTipoProdutoDto } from './dto/create-tipo-produto.dto';
 import { CreateTipoProjetoDto, UpdateTipoProjetoDto } from './dto/create-tipo-projeto.dto';
-import { CreateNotaFiscalDto, UpdateNotaFiscalDto } from './dto/create-nota-fiscal.dto';
+import { CreateNotaFiscalDto, UpdateNotaFiscalDto, ValidarChaveNfeDto } from './dto/create-nota-fiscal.dto';
 
 const NF_UPLOADS_DIR = path.join(process.cwd(), 'uploads', 'notas-fiscais');
 if (!fs.existsSync(NF_UPLOADS_DIR)) {
   fs.mkdirSync(NF_UPLOADS_DIR, { recursive: true });
+}
+
+/**
+ * Extrai o token Bearer do header Authorization. Usado quando o Compras
+ * precisa propagar o JWT do usuário para chamar o módulo Fiscal (vínculo
+ * de chave NF-e). O JwtAuthGuard já garante que o token é válido aqui.
+ */
+function extrairJwt(req: express.Request): string {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith('Bearer ')) {
+    throw new BadRequestException('Header Authorization Bearer ausente');
+  }
+  return auth.slice('Bearer '.length).trim();
 }
 
 @Controller('compras')
@@ -133,14 +147,26 @@ export class CompraController {
     return this.service.findOneNotaFiscal(id);
   }
 
+  @Post('notas-fiscais/validar-chave')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  validarChaveNotaFiscal(
+    @Body() dto: ValidarChaveNfeDto,
+    @Req() req: express.Request,
+  ) {
+    const jwt = extrairJwt(req);
+    return this.service.validarChaveNotaFiscal(dto.chave, jwt);
+  }
+
   @Post('notas-fiscais')
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   createNotaFiscal(
     @Body() dto: CreateNotaFiscalDto,
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
+    @Req() req: express.Request,
   ) {
-    return this.service.createNotaFiscal(dto, user.sub, user.filialId, role);
+    const jwt = dto.chaveNfe ? extrairJwt(req) : undefined;
+    return this.service.createNotaFiscal(dto, user.sub, user.filialId, role, jwt);
   }
 
   @Patch('notas-fiscais/:id')
@@ -150,8 +176,10 @@ export class CompraController {
     @Body() dto: UpdateNotaFiscalDto,
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
+    @Req() req: express.Request,
   ) {
-    return this.service.updateNotaFiscal(id, dto, user.sub, role);
+    const jwt = dto.chaveNfe !== undefined ? extrairJwt(req) : undefined;
+    return this.service.updateNotaFiscal(id, dto, user.sub, role, jwt);
   }
 
   @Delete('notas-fiscais/:id')

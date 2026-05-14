@@ -10,6 +10,7 @@ import {
   IsNumber,
   Min,
   IsIn,
+  Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -64,6 +65,18 @@ export class CreateNotaFiscalDto {
   @IsString()
   equipeId?: string;
 
+  /**
+   * Chave da NF-e (44 dígitos). Opcional — quando informada, vincula a NF
+   * Compras ao XML armazenado no módulo Fiscal (SZR/SZQ no Protheus). O
+   * service chama `POST /api/v1/fiscal/nfe/consulta` para validar/baixar
+   * antes de persistir. Validação mod-11 é feita no service (mais
+   * informativa do que regex puro).
+   */
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{44}$/, { message: 'Chave NF-e deve ter exatamente 44 dígitos numéricos' })
+  chaveNfe?: string;
+
   @IsArray({ message: 'Itens obrigatorios' })
   @ValidateNested({ each: true })
   @Type(() => NotaFiscalItemDto)
@@ -106,4 +119,36 @@ export class UpdateNotaFiscalDto {
   @ValidateNested({ each: true })
   @Type(() => NotaFiscalItemDto)
   itens?: NotaFiscalItemDto[];
+
+  /**
+   * Chave da NF-e (44 dígitos). null/string vazia para desvincular.
+   * Service bloqueia alteração se status >= CONFERIDA e exige
+   * `motivoAlteracaoChave` quando troca uma chave preexistente.
+   */
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{44}$/, { message: 'Chave NF-e deve ter exatamente 44 dígitos numéricos' })
+  chaveNfe?: string | null;
+
+  /**
+   * Justificativa da troca de chave (obrigatória quando a NF já tinha uma
+   * chave vinculada e o usuário está alterando). Vai pro audit log
+   * NotaFiscalChaveHistorico.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500, { message: 'Motivo deve ter no máximo 500 caracteres' })
+  motivoAlteracaoChave?: string;
+}
+
+/**
+ * Body de POST /compras/notas-fiscais/validar-chave — preview de NF-e antes
+ * de salvar/vincular. Devolve emitente, número, valor, lista de produtos
+ * e status SEFAZ. Não persiste nada no Gestão TI; mas o Fiscal grava o XML
+ * no Protheus (SZR/SZQ) como efeito colateral.
+ */
+export class ValidarChaveNfeDto {
+  @IsString({ message: 'Chave obrigatória' })
+  @Matches(/^\d{44}$/, { message: 'Chave NF-e deve ter exatamente 44 dígitos numéricos' })
+  chave: string;
 }

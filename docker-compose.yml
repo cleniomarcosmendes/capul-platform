@@ -292,6 +292,9 @@ services:
       NODE_ENV: production
       # Auditoria 10/05/2026 #B3 — CORS_ORIGINS obrigatório (fallback localhost removido)
       CORS_ORIGINS: "${CORS_ORIGINS:?CORS_ORIGINS obrigatoria no .env (lista separada por virgula)}"
+      # Integração Compras → Fiscal (14/05/2026) — vincular chave NF-e no
+      # cadastro de NF de Compras. URL interna container-to-container.
+      FISCAL_API_URL: http://fiscal-backend:3002/api/v1/fiscal
     # Porta NAO exposta — acesso via Nginx reverse proxy
     volumes:
       - uploads_data:/app/uploads

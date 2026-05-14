@@ -15,9 +15,12 @@ datasource db {
 // ============================================================
 
 model Filial {
-  id           String @id
+  id           String  @id
   codigo       String
-  nomeFantasia String @map("nome_fantasia")
+  nomeFantasia String  @map("nome_fantasia")
+  /// CNPJ da filial (existe em core.filiais — exposto aqui para validações
+  /// fiscais, ex: vincular chave NF-e em Compras. Read-only.) 14/05/2026.
+  cnpj         String?
 
   chamados        Chamado[]
   ordensServico   OrdemServico[]
@@ -82,6 +85,7 @@ model Usuario {
   horarioTrabalho        HorarioTrabalho?        @relation("HorarioTrabalho")
   notasFiscaisCriadas    NotaFiscal[]            @relation("NotaFiscalCriadaPor")
   anexosNotaFiscal       AnexoNotaFiscal[]       @relation("AnexoNFUsuario")
+  alteracoesChaveNF      NotaFiscalChaveHistorico[] @relation("NFChaveAlteradoPor")
 
   @@map("usuarios")
   @@schema("core")
@@ -2222,6 +2226,13 @@ model NotaFiscal {
   createdAt    DateTime          @default(now()) @map("created_at")
   updatedAt    DateTime          @updatedAt @map("updated_at")
 
+  /// Chave da NF-e (44 dígitos). Quando informada, vincula esta NF Compras ao
+  /// XML armazenado no módulo Fiscal (SZR/SZQ + cache fiscal.documento_consulta).
+  /// Opcional — fornecedores não-NF-e ou retroativos seguem sem chave.
+  /// Edição bloqueada quando status >= CONFERIDA; em REGISTRADA exige motivo
+  /// e gera audit em NotaFiscalChaveHistorico. Adicionado 14/05/2026.
+  chaveNfe   String? @unique @map("chave_nfe") @db.Char(44)
+
   fornecedorId String          @map("fornecedor_id")
   fornecedor   FornecedorConfig @relation(fields: [fornecedorId], references: [id])
 
@@ -2234,8 +2245,9 @@ model NotaFiscal {
   equipeId String?   @map("equipe_id")
   equipe   EquipeTI? @relation(fields: [equipeId], references: [id])
 
-  itens  NotaFiscalItem[]
-  anexos AnexoNotaFiscal[]
+  itens          NotaFiscalItem[]
+  anexos         AnexoNotaFiscal[]
+  chaveHistorico NotaFiscalChaveHistorico[]
 
   @@unique([numero, fornecedorId])
   @@index([fornecedorId])
@@ -2243,6 +2255,29 @@ model NotaFiscal {
   @@index([equipeId])
   @@index([dataLancamento])
   @@map("notas_fiscais")
+  @@schema("gestao_ti")
+}
+
+/// Audit log de alterações da chave NF-e em NotaFiscal (Compras TI). Cada
+/// linha = uma troca (vínculo inicial registra chaveAnterior=null). Permite
+/// rastrear quem trocou, quando e por quê (motivo obrigatório se chave
+/// preexistente). Adicionado 14/05/2026.
+model NotaFiscalChaveHistorico {
+  id              String   @id @default(uuid())
+  chaveAnterior   String?  @map("chave_anterior") @db.Char(44)
+  chaveNova       String?  @map("chave_nova") @db.Char(44)
+  motivo          String?
+  alteradoEm      DateTime @default(now()) @map("alterado_em")
+
+  notaFiscalId String     @map("nota_fiscal_id")
+  notaFiscal   NotaFiscal @relation(fields: [notaFiscalId], references: [id], onDelete: Cascade)
+
+  alteradoPorId String  @map("alterado_por_id")
+  alteradoPor   Usuario @relation("NFChaveAlteradoPor", fields: [alteradoPorId], references: [id])
+
+  @@index([notaFiscalId])
+  @@index([alteradoPorId])
+  @@map("nota_fiscal_chave_historico")
   @@schema("gestao_ti")
 }
 
