@@ -52,9 +52,9 @@ const prioridadeColors: Record<string, string> = {
 };
 
 const prioridadeLabels: Record<string, string> = {
-  CRITICA: 'Critica',
+  CRITICA: 'Crítica',
   ALTA: 'Alta',
-  MEDIA: 'Media',
+  MEDIA: 'Média',
   BAIXA: 'Baixa',
 };
 

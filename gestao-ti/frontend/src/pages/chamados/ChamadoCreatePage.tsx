@@ -461,9 +461,9 @@ export function ChamadoCreatePage() {
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
               >
                 <option value="BAIXA">Baixa</option>
-                <option value="MEDIA">Media</option>
+                <option value="MEDIA">Média</option>
                 <option value="ALTA">Alta</option>
-                <option value="CRITICA">Critica</option>
+                <option value="CRITICA">Crítica</option>
               </select>
             </div>
           </div>

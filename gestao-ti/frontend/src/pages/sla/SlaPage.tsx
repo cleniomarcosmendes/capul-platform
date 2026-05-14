@@ -11,7 +11,7 @@ type SortKey = 'nome' | 'equipe' | 'prioridade' | 'horasResposta' | 'horasResolu
 type SortDir = 'asc' | 'desc';
 
 const prioridadeLabels: Record<Prioridade, string> = {
-  CRITICA: 'Critica', ALTA: 'Alta', MEDIA: 'Media', BAIXA: 'Baixa',
+  CRITICA: 'Crítica', ALTA: 'Alta', MEDIA: 'Média', BAIXA: 'Baixa',
 };
 
 export function SlaPage() {

@@ -11,7 +11,7 @@ type SortKey = 'nome' | 'equipe' | 'prioridadePadrao' | 'ordem' | 'status';
 type SortDir = 'asc' | 'desc';
 
 const prioridadeLabels: Record<Prioridade, string> = {
-  CRITICA: 'Critica', ALTA: 'Alta', MEDIA: 'Media', BAIXA: 'Baixa',
+  CRITICA: 'Crítica', ALTA: 'Alta', MEDIA: 'Média', BAIXA: 'Baixa',
 };
 
 export function CatalogoServicosPage() {
