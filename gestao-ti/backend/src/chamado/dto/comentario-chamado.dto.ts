@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsArray, IsUUID, ArrayMaxSize, MaxLength } from 'class-validator';
 
 export class ComentarioChamadoDto {
   @IsString()
@@ -18,4 +18,16 @@ export class ComentarioChamadoDto {
   @IsOptional()
   @IsBoolean()
   solicitarInfoUsuario?: boolean;
+
+  /**
+   * IDs de anexos a vincular ao comentario (decisao 13/05/2026 — chat-style).
+   * Anexos sao gravados normalmente em AnexoChamado (vinculados ao chamado).
+   * Service insere marcadores `[anexo:<uuid>]` na descricao para o front
+   * renderizar chip clicavel inline. Abordagem leve sem FK comentarioId.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsUUID(undefined, { each: true })
+  anexosIds?: string[];
 }

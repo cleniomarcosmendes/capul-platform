@@ -371,6 +371,19 @@ export class ChamadoController {
     return this.service.agruparEm(id, agrupadorId, user, role);
   }
 
+  // Agrupa varios chamados (filhosIds[]) neste chamado-pai de uma vez.
+  // Pedido suporte 13/05/2026 — UX de selecao multipla.
+  @Post(':id/agrupar-multiplos')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  agruparMultiplos(
+    @Param('id') id: string,
+    @Body('filhosIds') filhosIds: string[],
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.agruparMultiplos(id, filhosIds, user, role);
+  }
+
   @Post(':id/desagrupar')
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   desagrupar(

@@ -47,7 +47,7 @@ export class ChamadoAgrupamentoService {
         where: { id: chamadoFilhoId },
         select: {
           id: true, numero: true, titulo: true, status: true, dataLimiteSla: true,
-          chamadoAgrupadorId: true, solicitanteId: true,
+          chamadoAgrupadorId: true, solicitanteId: true, tecnicoId: true,
         },
       }),
       this.prisma.chamado.findUnique({
@@ -79,13 +79,20 @@ export class ChamadoAgrupamentoService {
 
     const agora = new Date();
 
+    // Se filho nao tem tecnico, o tecnico do pai assume automaticamente.
+    // Status anterior fica EM_ATENDIMENTO para que ao desagrupar volte como
+    // assumido (e nao como ABERTO original). Pedido suporte 13/05/2026.
+    const filhoHerdaTecnico = !filho.tecnicoId && !!pai.tecnicoId;
+    const statusAnterior = filhoHerdaTecnico ? 'EM_ATENDIMENTO' : filho.status;
+
     await this.prisma.chamado.update({
       where: { id: chamadoFilhoId },
       data: {
         chamadoAgrupadorId: agrupadorId,
-        statusAnteriorAgrupamento: filho.status,
+        statusAnteriorAgrupamento: statusAnterior,
         slaPausadoEm: agora,
         status: 'AGRUPADO',
+        ...(filhoHerdaTecnico ? { tecnicoId: pai.tecnicoId } : {}),
       },
     });
 
@@ -98,6 +105,20 @@ export class ChamadoAgrupamentoService {
         usuarioId: user.sub,
       },
     });
+
+    // Se herdou tecnico, registra ASSUMIDO no filho para deixar rastro
+    // — solicitante ve quem ficou responsavel apos o agrupamento.
+    if (filhoHerdaTecnico) {
+      await this.prisma.historicoChamado.create({
+        data: {
+          tipo: 'ASSUMIDO',
+          descricao: `Tecnico do chamado agrupador #${pai.numero} assumiu automaticamente`,
+          publico: true,
+          chamadoId: chamadoFilhoId,
+          usuarioId: user.sub,
+        },
+      });
+    }
 
     // Notificar solicitante do filho
     if (filho.solicitanteId !== user.sub) {
@@ -114,6 +135,44 @@ export class ChamadoAgrupamentoService {
       where: { id: chamadoFilhoId },
       select: { id: true, status: true, chamadoAgrupadorId: true, slaPausadoEm: true },
     });
+  }
+
+  /**
+   * Agrupa varios chamados de uma vez em um agrupador. Para cada filho,
+   * tenta chamar `agrupar` — erros individuais sao coletados em vez de
+   * abortar o lote inteiro. UX da equipe de suporte (13/05/2026):
+   * tecnico marca varios chamados via checkbox e agrupa todos no chamado
+   * que ja esta atendendo.
+   */
+  async agruparMultiplos(agrupadorId: string, filhosIds: string[], user: JwtPayload, role: string) {
+    if (!isTI(role)) {
+      throw new ForbiddenException('Apenas equipe T.I. pode agrupar chamados');
+    }
+    if (!filhosIds || filhosIds.length === 0) {
+      throw new BadRequestException('Informe pelo menos um chamado para agrupar');
+    }
+
+    const agrupados: { id: string; numero: number }[] = [];
+    const erros: { chamadoId: string; numero?: number; motivo: string }[] = [];
+
+    for (const filhoId of filhosIds) {
+      try {
+        await this.agrupar(filhoId, agrupadorId, user, role);
+        const c = await this.prisma.chamado.findUnique({
+          where: { id: filhoId },
+          select: { id: true, numero: true },
+        });
+        if (c) agrupados.push(c);
+      } catch (err) {
+        const numero = (await this.prisma.chamado.findUnique({
+          where: { id: filhoId }, select: { numero: true },
+        }))?.numero;
+        const motivo = (err as { message?: string })?.message ?? 'Erro desconhecido';
+        erros.push({ chamadoId: filhoId, numero, motivo });
+      }
+    }
+
+    return { agrupados, erros };
   }
 
   async desagrupar(chamadoFilhoId: string, user: JwtPayload, role: string) {
@@ -241,6 +300,44 @@ export class ChamadoAgrupamentoService {
         { agrupadorId },
       ).catch((err) => console.error('Notificacao error:', err.message));
     }
+  }
+
+  /**
+   * Propaga um evento generico do agrupador para os filhos como historico
+   * COMENTARIO publico com prefixo `[Agrupador #N]`. Usado para que
+   * interacoes do pai (assumir, transferir equipe/tecnico) apareçam na
+   * timeline de cada filho — pedido suporte 13/05/2026.
+   *
+   * Por que tipo COMENTARIO: evita criar valores novos no enum
+   * TipoHistorico (que exigiria ALTER TYPE) e mantem a aparencia visual
+   * "informativa" nos filhos sem fingir que eles foram transferidos.
+   */
+  async propagarEventoNoFilho(
+    agrupadorId: string,
+    descricao: string,
+    autorId: string,
+  ) {
+    const filhos = await this.prisma.chamado.findMany({
+      where: { chamadoAgrupadorId: agrupadorId, status: 'AGRUPADO' },
+      select: { id: true },
+    });
+    if (filhos.length === 0) return;
+
+    const pai = await this.prisma.chamado.findUnique({
+      where: { id: agrupadorId },
+      select: { numero: true },
+    });
+    if (!pai) return;
+
+    await this.prisma.historicoChamado.createMany({
+      data: filhos.map((f) => ({
+        tipo: 'COMENTARIO' as const,
+        descricao: `[Agrupador #${pai.numero}] ${descricao}`,
+        publico: true,
+        chamadoId: f.id,
+        usuarioId: autorId,
+      })),
+    });
   }
 
   /**

@@ -137,6 +137,10 @@ export class ChamadoService {
     return this.agrupamento.agrupar(chamadoId, agrupadorId, user, role);
   }
 
+  async agruparMultiplos(agrupadorId: string, filhosIds: string[], user: JwtPayload, role: string) {
+    return this.agrupamento.agruparMultiplos(agrupadorId, filhosIds, user, role);
+  }
+
   async desagrupar(chamadoId: string, user: JwtPayload, role: string) {
     return this.agrupamento.desagrupar(chamadoId, user, role);
   }

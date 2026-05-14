@@ -179,9 +179,16 @@ export class ChamadoCoreService {
     if (filters.search) {
       const term = filters.search.trim();
       const numero = parseInt(term, 10);
-      const searchCondition = numero
-        ? { OR: [{ numero }, { titulo: { contains: term, mode: 'insensitive' } }] }
-        : { titulo: { contains: term, mode: 'insensitive' } };
+      // Busca cobre: numero exato (se numerico) + titulo + descricao + nome
+      // do solicitante. Pedido suporte 13/05/2026 — "achar pelo nome de
+      // quem abriu e por texto do chamado".
+      const orClauses: Record<string, unknown>[] = [
+        { titulo: { contains: term, mode: 'insensitive' } },
+        { descricao: { contains: term, mode: 'insensitive' } },
+        { solicitante: { nome: { contains: term, mode: 'insensitive' } } },
+      ];
+      if (numero) orClauses.unshift({ numero });
+      const searchCondition = { OR: orClauses };
 
       if (where.OR) {
         where.AND = [{ OR: where.OR }, searchCondition];
@@ -245,7 +252,8 @@ export class ChamadoCoreService {
             equipeOrigem: { select: { id: true, nome: true, sigla: true } },
             equipeDestino: { select: { id: true, nome: true, sigla: true } },
           },
-          orderBy: { createdAt: 'asc' },
+          // Mais recente em cima (chat-style TOTVS — decisao 13/05/2026).
+          orderBy: { createdAt: 'desc' },
         },
         colaboradores: {
           include: { usuario: { select: { id: true, nome: true, username: true } } },
@@ -575,6 +583,10 @@ export class ChamadoCoreService {
       }
     }).catch((err) => console.error('Notificacao error:', err.message));
 
+    // Propaga para filhos agrupados (13/05/2026)
+    this.agrupamento.propagarEventoNoFilho(id, 'Chamado assumido por um tecnico', user.sub)
+      .catch((err) => console.error('Propagacao assumir error:', err.message));
+
     return updated;
   }
 
@@ -652,6 +664,10 @@ export class ChamadoCoreService {
       }
     }).catch((err) => console.error('Notificacao error:', err.message));
 
+    // Propaga para filhos agrupados (13/05/2026)
+    this.agrupamento.propagarEventoNoFilho(id, `Transferido para a equipe ${equipeDestino.nome}`, user.sub)
+      .catch((err) => console.error('Propagacao transferir equipe error:', err.message));
+
     return updated;
   }
 
@@ -707,6 +723,10 @@ export class ChamadoCoreService {
       }
     }).catch((err) => console.error('Notificacao error:', err.message));
 
+    // Propaga para filhos agrupados (13/05/2026)
+    this.agrupamento.propagarEventoNoFilho(id, `Transferido para o tecnico ${tecnico.nome}`, user.sub)
+      .catch((err) => console.error('Propagacao transferir tecnico error:', err.message));
+
     return updated;
   }
 
@@ -724,9 +744,18 @@ export class ChamadoCoreService {
       throw new BadRequestException('Nao e possivel comentar em chamado finalizado. Reabra o chamado para adicionar comentarios.');
     }
 
-    // Se chamado nao tem tecnico atribuido, apenas solicitante pode comentar
+    // Se chamado nao tem tecnico atribuido, podem comentar:
+    // - Solicitante (sempre)
+    // - Copiados (tem "papel de solicitante" — decidido em 13/05/2026)
+    // - Gestor (override)
     if (!chamado.tecnicoId && chamado.solicitanteId !== user.sub && !isGestor(role)) {
-      throw new BadRequestException('E necessario assumir o chamado antes de comentar');
+      const isCopia = await this.prisma.chamadoCopia.findUnique({
+        where: { chamadoId_usuarioId: { chamadoId: id, usuarioId: user.sub } },
+        select: { id: true },
+      });
+      if (!isCopia) {
+        throw new BadRequestException('E necessario assumir o chamado antes de comentar');
+      }
     }
 
     // ----- Validações específicas do "Solicitar info ao usuário" -----
@@ -753,6 +782,23 @@ export class ChamadoCoreService {
     const isRespostaSolicitante =
       chamado.status === 'PENDENTE_USUARIO' && chamado.solicitanteId === user.sub;
 
+    // ----- Anexos vinculados (decisao 13/05/2026 — chat-style) -----
+    // Cada anexosIds eh um AnexoChamado ja gravado (upload prévio do front).
+    // Apos validar que pertencem a este chamado, anexa marcadores
+    // `[anexo:<uuid>]` no fim da descricao. Front parseia em chip clicavel.
+    let descricaoFinal = dto.descricao;
+    if (dto.anexosIds && dto.anexosIds.length > 0) {
+      const anexosValidos = await this.prisma.anexoChamado.findMany({
+        where: { id: { in: dto.anexosIds }, chamadoId: id },
+        select: { id: true },
+      });
+      if (anexosValidos.length !== dto.anexosIds.length) {
+        throw new BadRequestException('Um ou mais anexos nao pertencem a este chamado');
+      }
+      const marcadores = anexosValidos.map((a) => `[anexo:${a.id}]`).join(' ');
+      descricaoFinal = `${dto.descricao}\n\n${marcadores}`;
+    }
+
     // ----- Persistência -----
     // Comentário sempre é registrado. Se for solicitação de info ou resposta
     // do solicitante, registra também uma entrada MUDANCA_STATUS para que
@@ -760,7 +806,7 @@ export class ChamadoCoreService {
     const historico = await this.prisma.historicoChamado.create({
       data: {
         tipo: 'COMENTARIO',
-        descricao: dto.descricao,
+        descricao: descricaoFinal,
         // "Solicitar info" força publico=true (faz parte do contrato — solicitante PRECISA ver)
         publico: isSolicitarInfo ? true : (dto.publico ?? true),
         chamadoId: id,
