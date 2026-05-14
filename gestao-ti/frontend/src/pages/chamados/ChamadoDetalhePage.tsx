@@ -158,7 +158,6 @@ export function ChamadoDetalhePage() {
   );
   const { ConfirmDialog, guardedNavigate } = useUnsavedChanges(isEditing);
 
-  const isUsuarioFinal = gestaoTiRole === 'USUARIO_FINAL';
   const isTecnico = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
   const isGestor = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
   const isSolicitante = chamado?.solicitanteId === usuario?.id;
@@ -609,8 +608,15 @@ export function ChamadoDetalhePage() {
                     className="hidden"
                     accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.7z"
                   />
-                  {!isUsuarioFinal && (
-                    <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
+                  {/* Checkbox e "Solicitar info" só pra staff TI (ADMIN/GESTOR_TI/
+                      SUPORTE_TI). Antes mostrava pra todos !USUARIO_FINAL — incluindo
+                      USUARIO_CHAVE/TERCEIRIZADO/DESENV — que não devem decidir
+                      visibilidade interna. Backend reforça (defesa em profundidade). */}
+                  {isTecnico && (
+                    <label
+                      className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none"
+                      title="Desmarque para deixar o comentário interno (visível apenas para staff de TI — solicitante, em cópia, USUARIO_CHAVE e TERCEIRIZADO não enxergam)."
+                    >
                       <input
                         type="checkbox"
                         checked={comentarioPublico}
@@ -621,7 +627,7 @@ export function ChamadoDetalhePage() {
                     </label>
                   )}
                   <div className="flex-1" />
-                  {!isUsuarioFinal && ['EM_ATENDIMENTO', 'PENDENTE_USUARIO'].includes(chamado.status) && (
+                  {isTecnico && ['EM_ATENDIMENTO', 'PENDENTE_USUARIO'].includes(chamado.status) && (
                     <button
                       onClick={() => handleEnviarComentario(true, true)}
                       disabled={actionLoading || !comentarioTexto.trim()}

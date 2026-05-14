@@ -13,7 +13,7 @@ import { UpdatePendenciaDto } from '../dto/update-pendencia.dto.js';
 import { CreateInteracaoPendenciaDto } from '../dto/create-interacao-pendencia.dto.js';
 import { ProjetoHelpersService } from './projeto-helpers.service.js';
 import { PENDENCIA_UPLOADS_DIR } from './projeto.constants.js';
-import { isGestor } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI } from '../../common/constants/roles.constant.js';
 
 @Injectable()
 export class ProjetoPendenciaService {
@@ -98,8 +98,12 @@ export class ProjetoPendenciaService {
     });
     if (!pendencia) throw new NotFoundException('Pendencia nao encontrada neste projeto');
 
-    // USUARIO_CHAVE e TERCEIRIZADO: filter internal interactions
-    if (role === 'USUARIO_CHAVE' || role === 'TERCEIRIZADO') {
+    // Filtro de comentário interno (14/05/2026 — alinhamento com Chamado):
+    // qualquer role NÃO-staff só vê interações públicas. Staff = ADMIN/
+    // GESTOR_TI/SUPORTE_TI (isTI). Antes filtrava apenas USUARIO_CHAVE e
+    // TERCEIRIZADO; USUARIO_FINAL hipotético (ou roles legadas como
+    // DESENVOLVEDOR/MANUTENCAO/INFRAESTRUTURA) viam internos.
+    if (!isTI(role)) {
       pendencia.interacoes = pendencia.interacoes.filter((i) => i.publica);
     }
 
@@ -355,8 +359,11 @@ export class ProjetoPendenciaService {
       throw new BadRequestException('Nao e possivel comentar em pendencia finalizada');
     }
 
-    // USUARIO_CHAVE e TERCEIRIZADO: always public
-    const publica = (role === 'USUARIO_CHAVE' || role === 'TERCEIRIZADO') ? true : (dto.publica ?? true);
+    // Non-staff sempre grava publica=true (defesa em profundidade — frontend
+    // não mostra o checkbox pra eles, mas evita bypass por API direto).
+    // Staff = ADMIN/GESTOR_TI/SUPORTE_TI (isTI). 14/05/2026 — alinhamento com
+    // Chamado e com a regra explicitada pelo Clenio (todo non-staff é restrito).
+    const publica = !isTI(role) ? true : (dto.publica ?? true);
 
     const interacao = await this.prisma.interacaoPendencia.create({
       data: {

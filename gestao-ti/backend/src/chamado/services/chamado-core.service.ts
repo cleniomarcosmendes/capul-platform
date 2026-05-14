@@ -152,6 +152,11 @@ export class ChamadoCoreService {
           { tecnicoId: user.sub },
           { colaboradores: { some: { usuarioId: user.sub } } },
         ];
+        // Cinto-e-suspensório (14/05/2026): chamado PRIVADO é staff-only.
+        // Mesmo que TI vincule um USUARIO_CHAVE/TERCEIRIZADO por engano,
+        // ele não enxerga PRIVADO na listagem. Criação já é restrita a
+        // ROLES_PODE_PRIVADO; este é o filtro de leitura espelhado.
+        where.visibilidade = 'PUBLICO';
       } else if (filters.meusChamados) {
         where.OR = [
           { solicitanteId: user.sub },
@@ -293,6 +298,21 @@ export class ChamadoCoreService {
       if (chamado.solicitanteId !== user.sub && !isCopiado) {
         throw new ForbiddenException('Sem acesso a este chamado');
       }
+    }
+
+    // Cinto-e-suspensório (14/05/2026): PRIVADO é staff-only no detalhe
+    // também. Criação já é restrita a ROLES_PODE_PRIVADO; aqui bloqueia
+    // acesso via link direto caso TI vincule non-staff por engano.
+    if (chamado.visibilidade === 'PRIVADO' && !isTI(role)) {
+      throw new ForbiddenException('Chamado privado — acesso restrito a equipe de TI');
+    }
+
+    // Filtro de comentário interno (14/05/2026 — fix): qualquer role
+    // NÃO-staff só vê comentários públicos. Antes só filtrava USUARIO_FINAL
+    // — USUARIO_CHAVE e TERCEIRIZADO podiam virar solicitante/em-cópia/
+    // colaborador e enxergavam comentários internos da equipe T.I.
+    // (vazamento). Regra única: staff = ADMIN/GESTOR_TI/SUPORTE_TI (isTI).
+    if (!isTI(role)) {
       chamado.historicos = chamado.historicos.filter((h) => h.publico);
     }
 
@@ -807,8 +827,11 @@ export class ChamadoCoreService {
       data: {
         tipo: 'COMENTARIO',
         descricao: descricaoFinal,
-        // "Solicitar info" força publico=true (faz parte do contrato — solicitante PRECISA ver)
-        publico: isSolicitarInfo ? true : (dto.publico ?? true),
+        // Defesa em profundidade (14/05/2026): non-staff sempre grava
+        // publico=true (mesmo se enviar publico=false no DTO). Frontend não
+        // mostra checkbox pra não-staff, mas evita bypass por API direto.
+        // "Solicitar info" também força publico=true (solicitante PRECISA ver).
+        publico: !isTI(role) || isSolicitarInfo ? true : (dto.publico ?? true),
         chamadoId: id,
         usuarioId: user.sub,
       },

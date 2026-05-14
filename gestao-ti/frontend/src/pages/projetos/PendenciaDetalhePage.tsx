@@ -503,7 +503,11 @@ export function PendenciaDetalhePage() {
                   }}
                   className="hidden"
                 />
-                {!isRestrictedRole && (
+                {/* Checkbox só pra staff TI (ADMIN/GESTOR_TI/SUPORTE_TI). Antes era
+                    pra !USUARIO_CHAVE/TERCEIRIZADO — USUARIO_FINAL e roles legadas
+                    (DESENV/MANUT/INFRA) viam o checkbox mesmo não devendo decidir
+                    visibilidade interna. Backend reforça (defesa em profundidade). */}
+                {isStaffTI && (
                   <label
                     className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none"
                     title="Desmarque para deixar o comentário interno (visível apenas para staff de TI — Usuário Chave / Terceirizado não enxerga)."
