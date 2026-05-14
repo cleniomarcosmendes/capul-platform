@@ -1,4 +1,5 @@
 import { gestaoApi } from './api';
+import { withCharsetUtf8 } from '../utils/blob';
 import type { Chamado, HistoricoChamado, AnexoChamado, StatusChamado, Visibilidade, ChamadoColaborador, RegistroTempoChamado } from '../types';
 
 interface ListFilters {
@@ -140,11 +141,13 @@ export const chamadoService = {
     descricao: string,
     publico = true,
     solicitarInfoUsuario = false,
+    anexosIds?: string[],
   ): Promise<HistoricoChamado> {
     const { data } = await gestaoApi.post(`/chamados/${id}/comentar`, {
       descricao,
       publico,
       solicitarInfoUsuario,
+      anexosIds: anexosIds && anexosIds.length > 0 ? anexosIds : undefined,
     });
     return data;
   },
@@ -219,7 +222,7 @@ export const chamadoService = {
     const { data } = await gestaoApi.get(`/chamados/${id}/anexos/${anexoId}/download?inline=1`, {
       responseType: 'blob',
     });
-    const blob = new Blob([data], { type: mimeType });
+    const blob = new Blob([data], { type: withCharsetUtf8(mimeType) });
     const url = window.URL.createObjectURL(blob);
     window.open(url, '_blank');
   },
@@ -267,6 +270,11 @@ export const chamadoService = {
 
   async listarAgrupados(id: string): Promise<{ id: string; numero: number; titulo: string; status: string; solicitante: { id: string; nome: string }; createdAt: string }[]> {
     const { data } = await gestaoApi.get(`/chamados/${id}/agrupados`);
+    return data;
+  },
+
+  async agruparMultiplos(id: string, filhosIds: string[]): Promise<{ agrupados: { id: string; numero: number }[]; erros: { chamadoId: string; numero?: number; motivo: string }[] }> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/agrupar-multiplos`, { filhosIds });
     return data;
   },
 

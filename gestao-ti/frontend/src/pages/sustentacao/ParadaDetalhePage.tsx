@@ -8,6 +8,7 @@ import { equipeService } from '../../services/equipe.service';
 import { Activity, ArrowLeft, Clock, AlertTriangle, Building2, User, Wrench, Unlink, Plus, Ticket, X, Filter, CheckSquare, Users, Trash2, Search, Pencil, Paperclip, Download } from 'lucide-react';
 import type { RegistroParada, Chamado, EquipeTI, ParadaHistorico, TipoEventoParada } from '../../types';
 import { useToast } from '../../components/Toast';
+import { abrirAnexoOuBaixar } from '../../utils/anexo';
 
 const tipoLabel: Record<string, string> = {
   PARADA_PROGRAMADA: 'Programada',
@@ -455,16 +456,11 @@ export function ParadaDetalhePage() {
                 <div key={a.id} className="px-6 py-3 flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <button
-                      onClick={() => {
-                        const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
-                        if (viewable.includes(a.mimeType)) {
-                          paradaService.abrirAnexo(id!, a.id, a.mimeType).catch(() => {
-                            paradaService.downloadAnexo(id!, a.id, a.nomeOriginal);
-                          });
-                        } else {
-                          paradaService.downloadAnexo(id!, a.id, a.nomeOriginal);
-                        }
-                      }}
+                      onClick={() => abrirAnexoOuBaixar(
+                        a.mimeType,
+                        () => paradaService.abrirAnexo(id!, a.id, a.mimeType),
+                        () => paradaService.downloadAnexo(id!, a.id, a.nomeOriginal),
+                      )}
                       className="text-sm text-capul-700 hover:underline truncate text-left"
                     >
                       {a.nomeOriginal}

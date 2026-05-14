@@ -14,14 +14,40 @@ interface MentionInputProps {
   rows?: number;
   className?: string;
   maxLength?: number;
+  // Chat-style (14/05/2026): textarea cresce conforme conteúdo entre
+  // minRows e maxRows; Enter envia (Shift+Enter quebra linha).
+  autoGrow?: boolean;
+  minRows?: number;
+  maxRows?: number;
+  submitOnEnter?: boolean;
+  onSubmit?: () => void;
 }
 
-export function MentionInput({ value, onChange, usuarios, placeholder, rows = 2, className, maxLength }: MentionInputProps) {
+export function MentionInput({ value, onChange, usuarios, placeholder, rows = 2, className, maxLength, autoGrow, minRows, maxRows, submitOnEnter, onSubmit }: MentionInputProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [filtro, setFiltro] = useState('');
   const [cursorPos, setCursorPos] = useState(0);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-grow: ajusta altura conforme conteúdo, entre minRows e maxRows.
+  useEffect(() => {
+    if (!autoGrow || !textareaRef.current) return;
+    const ta = textareaRef.current;
+    const cs = getComputedStyle(ta);
+    const lineH = parseFloat(cs.lineHeight) || 20;
+    const padT = parseFloat(cs.paddingTop) || 0;
+    const padB = parseFloat(cs.paddingBottom) || 0;
+    const borderT = parseFloat(cs.borderTopWidth) || 0;
+    const borderB = parseFloat(cs.borderBottomWidth) || 0;
+    const extra = padT + padB + borderT + borderB;
+    const minH = lineH * (minRows ?? 1) + extra;
+    const maxH = lineH * (maxRows ?? 6) + extra;
+    ta.style.height = 'auto';
+    const next = Math.min(maxH, Math.max(minH, ta.scrollHeight));
+    ta.style.height = next + 'px';
+    ta.style.overflowY = ta.scrollHeight > maxH ? 'auto' : 'hidden';
+  }, [value, autoGrow, minRows, maxRows]);
 
   const filtrados = usuarios.filter((u) =>
     !filtro || u.nome.toLowerCase().includes(filtro.toLowerCase()) || u.username.toLowerCase().includes(filtro.toLowerCase())
@@ -73,6 +99,14 @@ export function MentionInput({ value, onChange, usuarios, placeholder, rows = 2,
     if (showDropdown && e.key === 'Escape') {
       setShowDropdown(false);
       e.preventDefault();
+      return;
+    }
+    // Enter envia (Shift+Enter quebra linha). Não dispara se o dropdown
+    // de menções estiver aberto — ali Enter ainda pode evoluir pra
+    // "selecionar item destacado" no futuro.
+    if (submitOnEnter && onSubmit && e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !showDropdown) {
+      e.preventDefault();
+      onSubmit();
     }
   }
 
@@ -91,9 +125,9 @@ export function MentionInput({ value, onChange, usuarios, placeholder, rows = 2,
         onChange={handleInput}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        rows={rows}
+        rows={autoGrow ? (minRows ?? 1) : rows}
         maxLength={maxLength}
-        className={className || 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm'}
+        className={`${className || 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm'}${autoGrow ? ' resize-none' : ''}`}
       />
       {showDropdown && filtrados.length > 0 && (
         <div

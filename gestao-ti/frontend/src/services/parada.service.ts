@@ -1,4 +1,5 @@
 import { gestaoApi } from './api';
+import { withCharsetUtf8 } from '../utils/blob';
 import type { RegistroParada, ParadaColaborador, MotivoParada, TipoParada, ImpactoParada, StatusParada } from '../types';
 import type { PaginatedResponse } from '../components/Paginator';
 
@@ -170,7 +171,7 @@ export const paradaService = {
 
   async abrirAnexo(paradaId: string, anexoId: string, mimeType: string): Promise<void> {
     const { data } = await gestaoApi.get(`/paradas/${paradaId}/anexos/${anexoId}/download?inline=1`, { responseType: 'blob' });
-    const blob = new Blob([data], { type: mimeType });
+    const blob = new Blob([data], { type: withCharsetUtf8(mimeType) });
     const url = window.URL.createObjectURL(blob);
     window.open(url, '_blank');
   },

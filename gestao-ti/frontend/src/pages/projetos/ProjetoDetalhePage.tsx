@@ -8,11 +8,12 @@ import { chamadoService } from '../../services/chamado.service';
 import { compraService } from '../../services/compra.service';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
-import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare, KeyRound, ClipboardList, Download, Eye, Upload, Copy, FileText, Printer, Star } from 'lucide-react';
+import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare, KeyRound, ClipboardList, Eye, Upload, Copy, FileText, Printer, Star } from 'lucide-react';
 import { formatDateBR } from '../../utils/date';
 import { MentionInput } from '../../components/MentionInput';
 import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
+import { abrirAnexoOuBaixar } from '../../utils/anexo';
 import type {
   Projeto,
   MembroProjeto,
@@ -118,7 +119,7 @@ const categoriaCores: Record<string, string> = {
 };
 
 const probabilidadeLabel: Record<string, string> = {
-  MUITO_BAIXA: 'Muito Baixa', BAIXA: 'Baixa', MEDIA: 'Media', ALTA: 'Alta', MUITO_ALTA: 'Muito Alta',
+  MUITO_BAIXA: 'Muito Baixa', BAIXA: 'Baixa', MEDIA: 'Média', ALTA: 'Alta', MUITO_ALTA: 'Muito Alta',
 };
 const probabilidadeCores: Record<string, string> = {
   MUITO_BAIXA: 'bg-green-100 text-green-700', BAIXA: 'bg-lime-100 text-lime-700', MEDIA: 'bg-yellow-100 text-yellow-700', ALTA: 'bg-orange-100 text-orange-700', MUITO_ALTA: 'bg-red-100 text-red-700',
@@ -157,7 +158,7 @@ const chamadoStatusCores: Record<string, string> = {
 };
 
 const prioridadeLabel: Record<string, string> = {
-  BAIXA: 'Baixa', MEDIA: 'Media', ALTA: 'Alta', CRITICA: 'Critica',
+  BAIXA: 'Baixa', MEDIA: 'Média', ALTA: 'Alta', CRITICA: 'Crítica',
 };
 
 type Tab = 'visaoGeral' | 'subprojetos' | 'equipe' | 'atividades' | 'financeiro' | 'riscos' | 'dependencias' | 'anexos' | 'chamados' | 'usuariosChave' | 'pendencias';
@@ -169,7 +170,7 @@ const pendenciaStatusCores: Record<string, string> = {
   ABERTA: 'bg-blue-100 text-blue-700', EM_ANDAMENTO: 'bg-yellow-100 text-yellow-700', AGUARDANDO_VALIDACAO: 'bg-orange-100 text-orange-700', CONCLUIDA: 'bg-green-100 text-green-700', CANCELADA: 'bg-slate-100 text-slate-600',
 };
 const pendenciaPrioridadeLabel: Record<string, string> = {
-  BAIXA: 'Baixa', MEDIA: 'Media', ALTA: 'Alta', URGENTE: 'Urgente',
+  BAIXA: 'Baixa', MEDIA: 'Média', ALTA: 'Alta', URGENTE: 'Urgente',
 };
 const pendenciaPrioridadeCores: Record<string, string> = {
   BAIXA: 'bg-green-100 text-green-700', MEDIA: 'bg-yellow-100 text-yellow-700', ALTA: 'bg-orange-100 text-orange-700', URGENTE: 'bg-red-100 text-red-700',
@@ -2844,17 +2845,12 @@ function TabAnexos({ projetoId, canAdd, canManage }: { projetoId: string; canAdd
               <div className="flex items-center gap-3">
                 <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{anexoTipoLabel[a.tipo]}</span>
                 {a.tipo === 'ARQUIVO' ? (
-                  <button onClick={() => {
-                    const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
-                    if (a.mimeType && viewable.includes(a.mimeType)) {
-                      projetoService.abrirAnexo(projetoId, a.id, a.mimeType).catch(() => {
-                        handleDownload(a);
-                      });
-                    } else {
-                      handleDownload(a);
-                    }
-                  }} className="text-sm text-capul-600 hover:underline font-medium flex items-center gap-1">
-                    <Download className="w-3 h-3" />
+                  <button onClick={() => abrirAnexoOuBaixar(
+                    a.mimeType,
+                    () => projetoService.abrirAnexo(projetoId, a.id, a.mimeType!),
+                    () => handleDownload(a),
+                  )} className="text-sm text-capul-600 hover:underline font-medium flex items-center gap-1" title="Clique para abrir">
+                    <Eye className="w-3 h-3" />
                     {a.nomeOriginal || a.titulo}
                   </button>
                 ) : (

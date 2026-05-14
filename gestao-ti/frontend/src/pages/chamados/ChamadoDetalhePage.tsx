@@ -6,7 +6,7 @@ import { chamadoService } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
 import {
   ArrowLeft, UserPlus, ArrowRightLeft, CheckCircle,
-  XCircle, RotateCcw, Lock, Star, Users, MessageSquare,
+  XCircle, RotateCcw, Lock, Star, Users,
   Paperclip, Download, Trash2, FileText, Image, FileSpreadsheet, File,
   Play, Square, Edit3, Check, X, Clock, Copy, Printer, Bell, Layers, Unlink, Search,
 } from 'lucide-react';
@@ -20,7 +20,9 @@ function isUsuarioTI(u: UsuarioCore): boolean {
 }
 import { MentionInput } from '../../components/MentionInput';
 import { ChatBubbleList, type ChatEvent } from '../../components/ChatBubbleList';
+import { ComentarioTexto } from '../../components/ComentarioTexto';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
+import { abrirAnexoOuBaixar } from '../../utils/anexo';
 
 const statusLabels: Record<StatusChamado, string> = {
   ABERTO: 'Aberto', EM_ATENDIMENTO: 'Em Atendimento', PENDENTE: 'Pendente',
@@ -47,7 +49,7 @@ const prioridadeColors: Record<string, string> = {
 };
 
 const prioridadeLabels: Record<string, string> = {
-  CRITICA: 'Critica', ALTA: 'Alta', MEDIA: 'Media', BAIXA: 'Baixa',
+  CRITICA: 'Crítica', ALTA: 'Alta', MEDIA: 'Média', BAIXA: 'Baixa',
 };
 
 // tipoIcons foi removido em 29/04/2026 — a renderização do histórico foi
@@ -82,6 +84,10 @@ export function ChamadoDetalhePage() {
   const [showComentario, setShowComentario] = useState(false);
   const [comentarioTexto, setComentarioTexto] = useState('');
   const [comentarioPublico, setComentarioPublico] = useState(true);
+  // Anexos no input do comentario (chat-style 13/05/2026) — pre-upload em
+  // memoria, sobe quando o usuario clica em Enviar.
+  const [comentarioArquivos, setComentarioArquivos] = useState<File[]>([]);
+  const comentarioFileInputRef = useRef<HTMLInputElement>(null);
 
   const [showTransferir, setShowTransferir] = useState(false);
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);
@@ -101,8 +107,9 @@ export function ChamadoDetalhePage() {
 
   // Anexos
   const [anexos, setAnexos] = useState<AnexoChamado[]>([]);
-  const [uploadingAnexo, setUploadingAnexo] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // uploadingAnexo / fileInputRef removidos em 13/05/2026 (upload migrou
+  // para o input do comentário — chat-style TOTVS). handleUploadAnexo
+  // também removido (inline no botão Enviar).
 
   // Colaboradores
   const [colaboradores, setColaboradores] = useState<ChamadoColaborador[]>([]);
@@ -120,11 +127,20 @@ export function ChamadoDetalhePage() {
   const [copiaSalvando, setCopiaSalvando] = useState(false);
 
   // Agrupamento (decidido em 13/05/2026)
+  // Modo "este vira filho" — busca pai pra agrupar
   const [showModalAgrupar, setShowModalAgrupar] = useState(false);
   const [agruparBusca, setAgruparBusca] = useState('');
   const [agruparResultados, setAgruparResultados] = useState<Chamado[]>([]);
   const [agruparLoading, setAgruparLoading] = useState(false);
   const [agruparSalvando, setAgruparSalvando] = useState(false);
+  // Modo "agrupar outros aqui" — selecao multipla, pedido suporte 13/05
+  const [showModalAgruparFilhos, setShowModalAgruparFilhos] = useState(false);
+  const [filhosBusca, setFilhosBusca] = useState('');
+  const [filhosBuscaDebounced, setFilhosBuscaDebounced] = useState('');
+  const [filhosResultados, setFilhosResultados] = useState<Chamado[]>([]);
+  const [filhosLoading, setFilhosLoading] = useState(false);
+  const [filhosSelecionadosIds, setFilhosSelecionadosIds] = useState<Set<string>>(new Set());
+  const [filhosSalvando, setFilhosSalvando] = useState(false);
 
   // Registro de Tempo
   const [registrosTempo, setRegistrosTempo] = useState<RegistroTempoChamado[]>([]);
@@ -155,6 +171,11 @@ export function ChamadoDetalhePage() {
   const isColaborador = colaboradores.some((c) => c.usuarioId === usuario?.id);
   // Pode movimentar: gestor (override), tecnico atribuido, ou colaborador
   const podeMovimentar = isGestor || isTecnicoAtribuido || isColaborador;
+  // Em cópia (13/05/2026): usuario tem "papel de solicitante" — pode ver,
+  // comentar, anexar, adicionar mais copias. Backend ja libera; frontend
+  // precisa expor os botoes (senao role USUARIO_FINAL em copia nao consegue
+  // interagir).
+  const isCopiado = copias.some((c) => c.usuarioId === usuario?.id);
 
   useEffect(() => {
     if (!id) return;
@@ -193,6 +214,33 @@ export function ChamadoDetalhePage() {
     }
   }, [equipeDestinoId]);
 
+  // Debounce da busca do modal "Agrupar outros aqui" (300ms)
+  useEffect(() => {
+    if (!showModalAgruparFilhos) return;
+    const t = setTimeout(() => setFilhosBuscaDebounced(filhosBusca), 300);
+    return () => clearTimeout(t);
+  }, [filhosBusca, showModalAgruparFilhos]);
+
+  // Carrega lista de chamados elegiveis (nao finalizados, com tecnico, nao
+  // agrupados, nao o proprio). 25 primeiros + filtra por search.
+  useEffect(() => {
+    if (!showModalAgruparFilhos || !chamado) return;
+    setFilhosLoading(true);
+    chamadoService.listarPaginado({
+      status: 'ATIVOS' as StatusChamado,
+      pageSize: 25,
+      search: filhosBuscaDebounced.trim() || undefined,
+    }).then((res) => {
+      // Chamados sem tecnico tambem podem ser agrupados — backend atribui
+      // automaticamente o tecnico do agrupador (pedido suporte 13/05/2026).
+      const elegiveis = res.items.filter((c) =>
+        c.id !== chamado.id &&
+        !['RESOLVIDO', 'FECHADO', 'CANCELADO', 'AGRUPADO'].includes(c.status),
+      );
+      setFilhosResultados(elegiveis);
+    }).catch(() => setFilhosResultados([])).finally(() => setFilhosLoading(false));
+  }, [showModalAgruparFilhos, filhosBuscaDebounced, chamado]);
+
   async function runAction(fn: () => Promise<Chamado>) {
     setActionLoading(true);
     setError('');
@@ -230,23 +278,6 @@ export function ChamadoDetalhePage() {
     setCsatComentario('');
   }
 
-  async function handleUploadAnexo(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!e.target.files || !chamado) return;
-    setUploadingAnexo(true);
-    setError('');
-    try {
-      const files = Array.from(e.target.files);
-      const uploaded = await Promise.all(files.map((f) => chamadoService.uploadAnexo(chamado.id, f)));
-      setAnexos((prev) => [...uploaded, ...prev]);
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg || 'Erro ao enviar anexo');
-    } finally {
-      setUploadingAnexo(false);
-      e.target.value = '';
-    }
-  }
-
   async function handleRemoveAnexo(anexoId: string) {
     if (!chamado || !(await confirm('Remover Anexo', 'Deseja remover este anexo?'))) return;
     try {
@@ -255,6 +286,29 @@ export function ChamadoDetalhePage() {
     } catch {
       setError('Erro ao remover anexo');
     }
+  }
+
+  // Helper unificado pra envio do compositor (Enviar, Solicitar info, Enter).
+  // Solicitar info exige texto; Enviar normal permite só anexo (sem texto).
+  async function handleEnviarComentario(visivel: boolean, solicitarInfo: boolean) {
+    if (!chamado) return;
+    if (solicitarInfo) {
+      if (!comentarioTexto.trim()) return;
+    } else if (!comentarioTexto.trim() && comentarioArquivos.length === 0) {
+      return;
+    }
+    await runAction(async () => {
+      let anexosIds: string[] = [];
+      if (comentarioArquivos.length > 0) {
+        const uploaded = await Promise.all(
+          comentarioArquivos.map((f) => chamadoService.uploadAnexo(chamado.id, f)),
+        );
+        anexosIds = uploaded.map((a) => a.id);
+      }
+      await chamadoService.comentar(chamado.id, comentarioTexto, visivel, solicitarInfo, anexosIds);
+      setComentarioArquivos([]);
+      return chamadoService.buscar(chamado.id);
+    });
   }
 
   if (loading) return <><Header title="Chamado" /><div className="p-6 text-slate-500">Carregando...</div></>;
@@ -268,28 +322,33 @@ export function ChamadoDetalhePage() {
   const canTransferirTecnico = podeMovimentar && emAndamento && temTecnico;
   const canResolver = podeMovimentar && emAndamento && temTecnico;
   const canFechar = podeMovimentar && chamado.status === 'RESOLVIDO';
-  const canReabrir = (podeMovimentar || isSolicitante) && (chamado.status === 'RESOLVIDO' || chamado.status === 'FECHADO');
+  const canReabrir = (podeMovimentar || isSolicitante || isCopiado) && (chamado.status === 'RESOLVIDO' || chamado.status === 'FECHADO');
   const canCancelar = isGestor && emAndamento;
   const canExcluir = isTecnico && chamado.status === 'ABERTO';
   const canDuplicar = isTecnico || isSolicitante;
   const canAvaliar = isSolicitante && (chamado.status === 'RESOLVIDO' || chamado.status === 'FECHADO') && !chamado.notaSatisfacao;
-  const canComentar = !finalizado && (isSolicitante || (podeMovimentar && temTecnico));
-  const canAnexar = !finalizado && (isSolicitante || podeMovimentar);
+  const canComentar = !finalizado && (isSolicitante || isCopiado || (podeMovimentar && temTecnico));
+  const canAnexar = !finalizado && (isSolicitante || isCopiado || podeMovimentar);
 
   return (
     <>
       {ConfirmDialog}
       <Header title={`Chamado #${chamado.numero}`} />
-      <div className="p-6">
-        <button onClick={() => guardedNavigate('/gestao-ti/chamados')} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4">
+      <div className="p-6 lg:flex lg:flex-col lg:flex-1 lg:min-h-0 lg:overflow-hidden">
+        <button onClick={() => guardedNavigate('/gestao-ti/chamados')} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4 lg:flex-shrink-0">
           <ArrowLeft className="w-4 h-4" /> Voltar
         </button>
 
-        {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>}
+        {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm lg:flex-shrink-0">{error}</div>}
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:flex-1 lg:min-h-0 lg:overflow-hidden">
           {/* Main content */}
-          <div className="lg:col-span-3 space-y-6">
+          {/* Coluna principal — split-screen no lg+ (chat-style): topo
+              com banners/cabeçalho, meio rolando histórico, rodapé fixo
+              com ações + input de comentário (pedido suporte 14/05/2026). */}
+          <div className="lg:col-span-3 flex flex-col space-y-4 lg:space-y-3 lg:min-h-0 lg:overflow-hidden">
+            {/* Topo fixo */}
+            <div className="space-y-4 lg:flex-shrink-0">
             {/* Banner Pendente Usuário — visível enquanto o chamado aguarda
                 a resposta do solicitante. Mostra desde quando (último evento
                 SOLICITACAO_INFO). Auto-some quando o solicitante responder
@@ -314,9 +373,9 @@ export function ChamadoDetalhePage() {
                 </div>
               );
             })()}
-            {/* Header info */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6">
-              <div className="flex items-start justify-between gap-4 mb-4">
+            {/* Header info — padding compacto (13/05/2026) */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <div className="flex items-start flex-wrap gap-3 mb-3">
                 {editingHeader ? (
                   <input
                     value={editTitulo}
@@ -339,7 +398,8 @@ export function ChamadoDetalhePage() {
                     )}
                   </h2>
                 )}
-                <div className="flex items-center gap-2 shrink-0">
+                {/* Relatorio + status alinhados a direita (compacto). */}
+                <div className="flex items-center gap-2 shrink-0 ml-auto">
                   {editingHeader && (
                     <>
                       <button
@@ -411,383 +471,27 @@ export function ChamadoDetalhePage() {
                 <p className="text-xs text-slate-500">Modulo: <span className="text-slate-700">{chamado.moduloNome}</span></p>
               )}
             </div>
-
-            {/* Anexos */}
-            {(anexos.length > 0 || canAnexar) && (
-              <div className="bg-white rounded-xl border border-slate-200">
-                <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-                  <h4 className="font-semibold text-slate-700 flex items-center gap-2">
-                    <Paperclip className="w-4 h-4" />
-                    Anexos {anexos.length > 0 && <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{anexos.length}</span>}
-                  </h4>
-                  {canAnexar && (
-                    <>
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploadingAnexo}
-                        className="text-sm text-capul-600 hover:text-capul-700 flex items-center gap-1 disabled:opacity-50"
-                      >
-                        <Paperclip className="w-3.5 h-3.5" />
-                        {uploadingAnexo ? 'Enviando...' : 'Anexar'}
-                      </button>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        onChange={handleUploadAnexo}
-                        className="hidden"
-                        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.7z"
-                      />
-                    </>
-                  )}
-                </div>
-                <div
-                  className="p-4 transition-colors"
-                  onDragOver={(e) => { if (!canAnexar) return; e.preventDefault(); e.currentTarget.classList.add('bg-capul-50'); }}
-                  onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('bg-capul-50'); }}
-                  onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove('bg-capul-50'); if (!canAnexar || !e.dataTransfer.files.length) return; const fakeEvent = { target: { files: e.dataTransfer.files, value: '' } } as unknown as React.ChangeEvent<HTMLInputElement>; handleUploadAnexo(fakeEvent); }}
-                >
-                  {anexos.length === 0 ? (
-                    <p className="text-sm text-slate-400">{canAnexar ? 'Nenhum anexo — arraste arquivos para ca' : 'Nenhum anexo'}</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {anexos.map((a) => {
-                        const Icon = getFileIcon(a.mimeType);
-                        return (
-                          <div key={a.id} className="flex items-center gap-3 bg-slate-50 rounded-lg px-4 py-3">
-                            <Icon className="w-5 h-5 text-slate-400 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <button
-                                onClick={() => {
-                                  const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
-                                  if (viewable.includes(a.mimeType)) {
-                                    chamadoService.abrirAnexo(chamado.id, a.id, a.mimeType).catch(() => {
-                                      toast('warning', 'Nao foi possivel abrir o arquivo. Iniciando download...');
-                                      chamadoService.downloadAnexo(chamado.id, a.id, a.nomeOriginal);
-                                    });
-                                  } else {
-                                    toast('info', 'Este tipo de arquivo nao pode ser visualizado no navegador. Iniciando download...');
-                                    chamadoService.downloadAnexo(chamado.id, a.id, a.nomeOriginal);
-                                  }
-                                }}
-                                className="text-sm text-capul-700 hover:text-capul-900 hover:underline truncate text-left"
-                                title="Clique para abrir"
-                              >
-                                {a.nomeOriginal}
-                              </button>
-                              <p className="text-xs text-slate-400">
-                                {formatFileSize(a.tamanho)} — {a.usuario.nome} — {new Date(a.createdAt).toLocaleString('pt-BR')}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => chamadoService.downloadAnexo(chamado.id, a.id, a.nomeOriginal)}
-                                className="p-1.5 text-slate-400 hover:text-capul-600 rounded"
-                                title="Download"
-                              >
-                                <Download className="w-4 h-4" />
-                              </button>
-                              {isTecnico && (
-                                <button
-                                  onClick={() => handleRemoveAnexo(a.id)}
-                                  className="p-1.5 text-slate-400 hover:text-red-500 rounded"
-                                  title="Remover"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Actions bar */}
             {isTecnico && emAndamento && !temTecnico && (
               <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
                 <UserPlus className="w-4 h-4 flex-shrink-0" />
                 <span>Este chamado ainda nao possui um responsavel. E necessario <strong>assumir</strong> o chamado antes de finaliza-lo.</span>
               </div>
             )}
-            <div className="flex flex-wrap gap-2">
-              {canAssumir && (
-                <button onClick={async () => { if (await confirm('Assumir Chamado', `Voce sera o responsavel pelo atendimento do chamado #${chamado.numero}. Deseja continuar?`, { confirmLabel: 'Sim, assumir' })) runAction(() => chamadoService.assumir(chamado.id)); }} disabled={actionLoading}
-                  className="flex items-center gap-1.5 bg-capul-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
-                  <UserPlus className="w-4 h-4" /> Assumir
-                </button>
-              )}
-              {canComentar && (
-                <button onClick={() => { closeAllPanels(); setShowComentario(true); }}
-                  className="flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm hover:bg-slate-200">
-                  <MessageSquare className="w-4 h-4" /> Comentar
-                </button>
-              )}
-              {(canTransferirEquipe || canTransferirTecnico) && (
-                <button onClick={() => { closeAllPanels(); setShowTransferir(true); }}
-                  className="flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm hover:bg-slate-200">
-                  <ArrowRightLeft className="w-4 h-4" /> Transferir
-                </button>
-              )}
-              {canResolver && (
-                <button onClick={() => { closeAllPanels(); setShowResolver(true); }}
-                  className="flex items-center gap-1.5 bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700">
-                  <CheckCircle className="w-4 h-4" /> Finalizar Chamado
-                </button>
-              )}
-              {canFechar && (
-                <button onClick={async () => { if (await confirm('Fechar Chamado', 'Ao fechar, o chamado nao podera mais receber interacoes. Deseja continuar?', { confirmLabel: 'Sim, fechar' })) runAction(() => chamadoService.fechar(chamado.id)); }} disabled={actionLoading}
-                  className="flex items-center gap-1.5 bg-slate-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-slate-700 disabled:opacity-50">
-                  <Lock className="w-4 h-4" /> Fechar
-                </button>
-              )}
-              {canReabrir && (
-                <button onClick={() => { closeAllPanels(); setShowReabrir(true); }}
-                  className="flex items-center gap-1.5 bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700">
-                  <RotateCcw className="w-4 h-4" /> Reabrir
-                </button>
-              )}
-              {canCancelar && (
-                <button onClick={async () => { if (await confirm('Cancelar Chamado', 'Tem certeza que deseja cancelar este chamado?', { variant: 'danger', confirmLabel: 'Sim, cancelar' })) runAction(() => chamadoService.cancelar(chamado.id)); }} disabled={actionLoading}
-                  className="flex items-center gap-1.5 bg-red-100 text-red-700 px-3 py-2 rounded-lg text-sm hover:bg-red-200 disabled:opacity-50">
-                  <XCircle className="w-4 h-4" /> Cancelar
-                </button>
-              )}
-              {canExcluir && (
-                <button onClick={async () => {
-                  if (await confirm('Excluir Chamado', `Deseja excluir permanentemente o chamado #${chamado.numero}? Esta acao nao pode ser desfeita.`, { variant: 'danger', confirmLabel: 'Sim, excluir' })) {
-                    try { await chamadoService.excluir(chamado.id); toast('success', `Chamado #${chamado.numero} excluido`); navigate('/gestao-ti/chamados'); } catch { toast('error', 'Erro ao excluir chamado'); }
-                  }
-                }} disabled={actionLoading}
-                  className="flex items-center gap-1.5 bg-red-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50">
-                  <Trash2 className="w-4 h-4" /> Excluir
-                </button>
-              )}
-              {canDuplicar && (
-                <button onClick={() => {
-                  const params = new URLSearchParams();
-                  params.set('duplicarDe', chamado.id);
-                  navigate(`/gestao-ti/chamados/novo?${params.toString()}`);
-                }}
-                  className="flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm hover:bg-slate-200">
-                  <Copy className="w-4 h-4" /> Duplicar
-                </button>
-              )}
-              {canAvaliar && (
-                <button onClick={() => { closeAllPanels(); setShowAvaliar(true); }}
-                  className="flex items-center gap-1.5 bg-amber-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-amber-600">
-                  <Star className="w-4 h-4" /> Avaliar
-                </button>
-              )}
             </div>
 
-            {/* Action panels */}
-            {showComentario && (
-              <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-                <h4 className="font-medium text-sm text-slate-700">Adicionar Comentario</h4>
-                <MentionInput
-                  value={comentarioTexto}
-                  onChange={setComentarioTexto}
-                  usuarios={usuariosMencao.map((u) => ({ id: u.id, nome: u.nome, username: u.username }))}
-                  rows={3}
-                  maxLength={5000}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                  placeholder="Escreva seu comentario... (use @usuario para mencionar)"
-                />
-                <div className="flex justify-end">
-                  <span
-                    className={`text-xs ${
-                      comentarioTexto.length >= 4900
-                        ? 'text-red-600 font-semibold'
-                        : comentarioTexto.length >= 4500
-                        ? 'text-amber-600'
-                        : 'text-slate-400'
-                    }`}
-                  >
-                    {comentarioTexto.length.toLocaleString('pt-BR')} / 5.000
-                  </span>
-                </div>
-                {!isUsuarioFinal && (
-                  <label className="flex items-center gap-2 text-sm text-slate-600">
-                    <input type="checkbox" checked={comentarioPublico} onChange={(e) => setComentarioPublico(e.target.checked)} className="rounded border-slate-300" />
-                    Visivel para o solicitante
-                  </label>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  <button onClick={() => runAction(async () => { await chamadoService.comentar(chamado.id, comentarioTexto, comentarioPublico, false); return chamadoService.buscar(chamado.id); })}
-                    disabled={actionLoading || !comentarioTexto.trim()}
-                    className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
-                    Salvar Comentario
-                  </button>
-                  {/* Botão extra: técnico/colaborador/gestor pode solicitar info ao
-                      solicitante. Marca chamado como PENDENTE_USUARIO + força publico=true
-                      + envia notificação destacada. Solicitante volta o status pra
-                      EM_ATENDIMENTO automaticamente quando responder. */}
-                  {!isUsuarioFinal && ['EM_ATENDIMENTO', 'PENDENTE_USUARIO'].includes(chamado.status) && (
-                    <button
-                      onClick={() => runAction(async () => {
-                        await chamadoService.comentar(chamado.id, comentarioTexto, true, true);
-                        return chamadoService.buscar(chamado.id);
-                      })}
-                      disabled={actionLoading || !comentarioTexto.trim()}
-                      title="Solicita informações ao solicitante. Chamado vai para 'Pendente Usuário' até o solicitante responder, e volta automático para 'Em Atendimento'."
-                      className="bg-amber-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-amber-600 disabled:opacity-50 flex items-center gap-1.5">
-                      <span aria-hidden="true">🔔</span>
-                      Solicitar info ao usuário
-                    </button>
-                  )}
-                  <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
-                </div>
+            {/* Histórico — rolagem interna (chat-style) */}
+            <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:flex-1 lg:min-h-0 overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-slate-200">
+                <h4 className="font-semibold text-slate-700 text-sm">Historico</h4>
               </div>
-            )}
-
-            {showTransferir && (
-              <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-                <h4 className="font-medium text-sm text-slate-700 flex items-center gap-2">
-                  <ArrowRightLeft className="w-4 h-4" /> Transferir Chamado
-                </h4>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs text-slate-500 mb-1">Equipe</label>
-                    <select value={equipeDestinoId} onChange={(e) => setEquipeDestinoId(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-                      <option value="">Selecione a equipe</option>
-                      {equipes.map((e) => (
-                        <option key={e.id} value={e.id}>
-                          {e.sigla} - {e.nome}{e.id === chamado.equipeAtualId ? ' (atual)' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {equipeDestinoId && (equipeDestinoId === chamado.equipeAtualId ? membrosEquipe : membrosEquipeDestino) && (
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1">
-                        {equipeDestinoId === chamado.equipeAtualId ? 'Transferir para tecnico' : 'Indicar tecnico (opcional)'}
-                      </label>
-                      <select value={tecnicoEquipeDestinoId} onChange={(e) => setTecnicoEquipeDestinoId(e.target.value)}
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-                        <option value="">{equipeDestinoId === chamado.equipeAtualId ? 'Selecione o tecnico' : 'Nenhum (equipe assume)'}</option>
-                        {(equipeDestinoId === chamado.equipeAtualId ? membrosEquipe : membrosEquipeDestino)?.membros
-                          ?.filter((m) => m.status === 'ATIVO' && m.usuarioId !== chamado.tecnicoId)
-                          .map((m) => (
-                            <option key={m.usuarioId} value={m.usuarioId}>
-                              {m.usuario.nome}{m.isLider ? ' (Lider)' : ''}
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-                  )}
-                  <input value={transferMotivo} onChange={(e) => setTransferMotivo(e.target.value)}
-                    maxLength={1000}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Motivo da transferencia (opcional)" />
-                  <div className="flex gap-2">
-                    <button onClick={() => {
-                      if (equipeDestinoId === chamado.equipeAtualId) {
-                        // Transferir para tecnico da mesma equipe
-                        runAction(() => chamadoService.transferirTecnico(chamado.id, tecnicoEquipeDestinoId, transferMotivo || undefined));
-                      } else {
-                        // Transferir para outra equipe
-                        runAction(() => chamadoService.transferirEquipe(chamado.id, equipeDestinoId, transferMotivo || undefined, tecnicoEquipeDestinoId || undefined));
-                      }
-                    }}
-                      disabled={actionLoading || !equipeDestinoId || (equipeDestinoId === chamado.equipeAtualId && !tecnicoEquipeDestinoId)}
-                      className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
-                      Transferir
-                    </button>
-                    <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {showResolver && (
-              <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-                <h4 className="font-medium text-sm text-slate-700">Finalizar Chamado</h4>
-                <textarea value={resolverDescricao} onChange={(e) => setResolverDescricao(e.target.value)} rows={3}
-                  maxLength={5000}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Descreva a resolucao do chamado *" />
-                <div className="flex justify-end">
-                  <span
-                    className={`text-xs ${
-                      resolverDescricao.length >= 4900
-                        ? 'text-red-600 font-semibold'
-                        : resolverDescricao.length >= 4500
-                        ? 'text-amber-600'
-                        : 'text-slate-400'
-                    }`}
-                  >
-                    {resolverDescricao.length.toLocaleString('pt-BR')} / 5.000
-                  </span>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => runAction(() => chamadoService.resolver(chamado.id, resolverDescricao))}
-                    disabled={actionLoading || !resolverDescricao.trim()}
-                    className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700 disabled:opacity-50">
-                    Confirmar Finalizacao
-                  </button>
-                  <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
-                </div>
-              </div>
-            )}
-
-            {showReabrir && (
-              <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-                <h4 className="font-medium text-sm text-slate-700">Reabrir Chamado</h4>
-                <input value={reabrirMotivo} onChange={(e) => setReabrirMotivo(e.target.value)}
-                  maxLength={1000}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Motivo da reabertura (opcional)" />
-                <div className="flex gap-2">
-                  <button onClick={() => runAction(() => chamadoService.reabrir(chamado.id, reabrirMotivo || undefined))}
-                    disabled={actionLoading}
-                    className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
-                    Confirmar Reabertura
-                  </button>
-                  <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
-                </div>
-              </div>
-            )}
-
-            {showAvaliar && (
-              <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-                <h4 className="font-medium text-sm text-slate-700">Avaliar Atendimento</h4>
-                <div>
-                  <label className="text-xs text-slate-500 mb-1 block">Nota (1-5)</label>
-                  <div className="flex gap-1">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <button key={n} onClick={() => setCsatNota(n)} className={`w-10 h-10 rounded-lg border text-sm font-medium transition-colors ${csatNota >= n ? 'bg-amber-400 border-amber-500 text-white' : 'bg-white border-slate-300 text-slate-500 hover:border-amber-300'}`}>
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <input value={csatComentario} onChange={(e) => setCsatComentario(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Comentario (opcional)" />
-                <div className="flex gap-2">
-                  <button onClick={() => runAction(() => chamadoService.avaliar(chamado.id, csatNota, csatComentario || undefined))}
-                    disabled={actionLoading}
-                    className="bg-amber-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-amber-600 disabled:opacity-50">
-                    Salvar Avaliacao
-                  </button>
-                  <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
-                </div>
-              </div>
-            )}
-
-            {/* Timeline */}
-            <div className="bg-white rounded-xl border border-slate-200">
-              <div className="px-6 py-4 border-b border-slate-200">
-                <h4 className="font-semibold text-slate-700">Historico</h4>
-              </div>
-              <div className="p-6">
+              <div className="p-4 lg:flex-1 lg:min-h-0 overflow-y-auto">
                 {!chamado.historicos || chamado.historicos.length === 0 ? (
                   <p className="text-sm text-slate-400">Nenhum historico</p>
                 ) : (
                   <ChatBubbleList
                     eventos={chamado.historicos as unknown as ChatEvent[]}
                     currentUserId={usuario?.id ?? ''}
+                    validAnexoIds={new Set(anexos.map((a) => a.id))}
                     getPapel={(uid) =>
                       uid === chamado.solicitanteId
                         ? { label: 'Solicitante', cls: 'bg-blue-100 text-blue-600' }
@@ -805,14 +509,147 @@ export function ChamadoDetalhePage() {
                       const updated = await chamadoService.buscar(chamado.id);
                       setChamado(updated);
                     }}
+                    renderTexto={(descricao) => (
+                      <ComentarioTexto
+                        texto={descricao}
+                        anexos={anexos}
+                        onDownload={(a) => abrirAnexoOuBaixar(
+                          a.mimeType,
+                          () => chamadoService.abrirAnexo(chamado.id, a.id, a.mimeType),
+                          () => chamadoService.downloadAnexo(chamado.id, a.id, a.nomeOriginal),
+                        )}
+                      />
+                    )}
                   />
                 )}
               </div>
             </div>
+
+            {/* Rodapé fixo — input de comentário (botões de ação ficam na sidebar — 14/05/2026) */}
+            <div className="lg:flex-shrink-0">
+              {/* Input de comentário sempre visível no rodapé (chat-style) */}
+            {canComentar && (
+              <div
+                className="bg-white rounded-xl border border-slate-200 overflow-hidden"
+                onDragOver={(e) => { e.preventDefault(); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const files = Array.from(e.dataTransfer.files);
+                  if (files.length > 0) setComentarioArquivos((prev) => [...prev, ...files]);
+                }}
+              >
+                {/* Chips de anexos — só renderizam quando há arquivos */}
+                {comentarioArquivos.length > 0 && (
+                  <div className="flex flex-wrap gap-1 px-3 pt-2 pb-1.5 border-b border-slate-100">
+                    {comentarioArquivos.map((f, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 bg-capul-50 text-capul-700 border border-capul-200 text-xs px-2 py-0.5 rounded-md">
+                        <Paperclip className="w-3 h-3" />
+                        {f.name}
+                        <button
+                          type="button"
+                          onClick={() => setComentarioArquivos((prev) => prev.filter((_, idx) => idx !== i))}
+                          className="ml-0.5 text-capul-500 hover:text-capul-700"
+                          title="Remover"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Textarea auto-grow + contador inline discreto */}
+                <div className="relative">
+                  <MentionInput
+                    value={comentarioTexto}
+                    onChange={setComentarioTexto}
+                    usuarios={usuariosMencao.map((u) => ({ id: u.id, nome: u.nome, username: u.username }))}
+                    autoGrow
+                    minRows={1}
+                    maxRows={6}
+                    maxLength={5000}
+                    submitOnEnter
+                    onSubmit={() => handleEnviarComentario(comentarioPublico, false)}
+                    className="w-full border-0 px-3 py-2 text-sm focus:outline-none focus:ring-0"
+                    placeholder="Escreva seu comentário... (Enter envia, Shift+Enter quebra linha — use @ para mencionar)"
+                  />
+                  {/* Contador discreto — aparece só perto do limite (≥ 4000) */}
+                  {comentarioTexto.length >= 4000 && (
+                    <span
+                      className={`absolute bottom-1 right-3 text-[10px] pointer-events-none bg-white/80 px-1 rounded ${
+                        comentarioTexto.length >= 4900
+                          ? 'text-red-600 font-semibold'
+                          : comentarioTexto.length >= 4500
+                          ? 'text-amber-600'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {comentarioTexto.length.toLocaleString('pt-BR')}/5.000
+                    </span>
+                  )}
+                </div>
+
+                {/* Toolbar única — botão anexar (só ícone), checkbox visível,
+                    Solicitar info e Enviar. Tudo em uma linha pra economizar
+                    altura (pedido suporte 14/05/2026). */}
+                <div className="flex items-center gap-2 px-2 py-1.5 border-t border-slate-100 bg-slate-50/60">
+                  <button
+                    type="button"
+                    onClick={() => comentarioFileInputRef.current?.click()}
+                    className="p-1.5 text-slate-500 hover:text-capul-600 hover:bg-slate-100 rounded transition-colors"
+                    title="Anexar arquivos (ou arraste e solte aqui)"
+                  >
+                    <Paperclip className="w-4 h-4" />
+                  </button>
+                  <input
+                    ref={comentarioFileInputRef}
+                    type="file"
+                    multiple
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files ?? []);
+                      if (files.length > 0) setComentarioArquivos((prev) => [...prev, ...files]);
+                      if (comentarioFileInputRef.current) comentarioFileInputRef.current.value = '';
+                    }}
+                    className="hidden"
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.7z"
+                  />
+                  {!isUsuarioFinal && (
+                    <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={comentarioPublico}
+                        onChange={(e) => setComentarioPublico(e.target.checked)}
+                        className="rounded border-slate-300 w-3.5 h-3.5"
+                      />
+                      Visível p/ solicitante
+                    </label>
+                  )}
+                  <div className="flex-1" />
+                  {!isUsuarioFinal && ['EM_ATENDIMENTO', 'PENDENTE_USUARIO'].includes(chamado.status) && (
+                    <button
+                      onClick={() => handleEnviarComentario(true, true)}
+                      disabled={actionLoading || !comentarioTexto.trim()}
+                      title="Solicita informações ao solicitante. Chamado vai para 'Pendente Usuário' até ele responder."
+                      className="bg-amber-500 text-white px-3 py-1.5 rounded-md text-xs hover:bg-amber-600 disabled:opacity-50 flex items-center gap-1 font-medium">
+                      <span aria-hidden="true">🔔</span>
+                      Solicitar info
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleEnviarComentario(comentarioPublico, false)}
+                    disabled={actionLoading || (!comentarioTexto.trim() && comentarioArquivos.length === 0)}
+                    title="Enviar comentário (Enter)"
+                    className="bg-capul-600 text-white px-4 py-1.5 rounded-md text-xs font-medium hover:bg-capul-700 disabled:opacity-50">
+                    Enviar
+                  </button>
+                </div>
+              </div>
+            )}
+            </div>
           </div>
 
-          {/* Sidebar info */}
-          <div className="lg:col-span-2 space-y-4">
+          {/* Sidebar info — rolagem independente no lg+ */}
+          <div className="lg:col-span-2 space-y-4 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
             <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
               <h4 className="font-semibold text-slate-700 text-sm">Detalhes</h4>
 
@@ -920,6 +757,77 @@ export function ChamadoDetalhePage() {
               )}
             </div>
 
+            {/* Ações — barra de ações do chamado (movida para sidebar em 14/05/2026 — pedido suporte) */}
+            {(canAssumir || canTransferirEquipe || canTransferirTecnico || canResolver || canFechar || canReabrir || canCancelar || canExcluir || canDuplicar || canAvaliar) && (
+              <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
+                <h4 className="font-semibold text-slate-700 text-sm">Ações</h4>
+                <div className="flex flex-wrap gap-2">
+                  {canAssumir && (
+                    <button onClick={async () => { if (await confirm('Assumir Chamado', `Voce sera o responsavel pelo atendimento do chamado #${chamado.numero}. Deseja continuar?`, { confirmLabel: 'Sim, assumir' })) runAction(() => chamadoService.assumir(chamado.id)); }} disabled={actionLoading}
+                      className="flex items-center gap-1.5 bg-capul-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
+                      <UserPlus className="w-4 h-4" /> Assumir
+                    </button>
+                  )}
+                  {(canTransferirEquipe || canTransferirTecnico) && (
+                    <button onClick={() => { closeAllPanels(); setShowTransferir(true); }}
+                      className="flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm hover:bg-slate-200">
+                      <ArrowRightLeft className="w-4 h-4" /> Transferir
+                    </button>
+                  )}
+                  {canResolver && (
+                    <button onClick={() => { closeAllPanels(); setShowResolver(true); }}
+                      className="flex items-center gap-1.5 bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700">
+                      <CheckCircle className="w-4 h-4" /> Finalizar Chamado
+                    </button>
+                  )}
+                  {canFechar && (
+                    <button onClick={async () => { if (await confirm('Fechar Chamado', 'Ao fechar, o chamado nao podera mais receber interacoes. Deseja continuar?', { confirmLabel: 'Sim, fechar' })) runAction(() => chamadoService.fechar(chamado.id)); }} disabled={actionLoading}
+                      className="flex items-center gap-1.5 bg-slate-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-slate-700 disabled:opacity-50">
+                      <Lock className="w-4 h-4" /> Fechar
+                    </button>
+                  )}
+                  {canReabrir && (
+                    <button onClick={() => { closeAllPanels(); setShowReabrir(true); }}
+                      className="flex items-center gap-1.5 bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700">
+                      <RotateCcw className="w-4 h-4" /> Reabrir
+                    </button>
+                  )}
+                  {canCancelar && (
+                    <button onClick={async () => { if (await confirm('Cancelar Chamado', 'Tem certeza que deseja cancelar este chamado?', { variant: 'danger', confirmLabel: 'Sim, cancelar' })) runAction(() => chamadoService.cancelar(chamado.id)); }} disabled={actionLoading}
+                      className="flex items-center gap-1.5 bg-red-100 text-red-700 px-3 py-2 rounded-lg text-sm hover:bg-red-200 disabled:opacity-50">
+                      <XCircle className="w-4 h-4" /> Cancelar
+                    </button>
+                  )}
+                  {canExcluir && (
+                    <button onClick={async () => {
+                      if (await confirm('Excluir Chamado', `Deseja excluir permanentemente o chamado #${chamado.numero}? Esta acao nao pode ser desfeita.`, { variant: 'danger', confirmLabel: 'Sim, excluir' })) {
+                        try { await chamadoService.excluir(chamado.id); toast('success', `Chamado #${chamado.numero} excluido`); navigate('/gestao-ti/chamados'); } catch { toast('error', 'Erro ao excluir chamado'); }
+                      }
+                    }} disabled={actionLoading}
+                      className="flex items-center gap-1.5 bg-red-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50">
+                      <Trash2 className="w-4 h-4" /> Excluir
+                    </button>
+                  )}
+                  {canDuplicar && (
+                    <button onClick={() => {
+                      const params = new URLSearchParams();
+                      params.set('duplicarDe', chamado.id);
+                      navigate(`/gestao-ti/chamados/novo?${params.toString()}`);
+                    }}
+                      className="flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm hover:bg-slate-200">
+                      <Copy className="w-4 h-4" /> Duplicar
+                    </button>
+                  )}
+                  {canAvaliar && (
+                    <button onClick={() => { closeAllPanels(); setShowAvaliar(true); }}
+                      className="flex items-center gap-1.5 bg-amber-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-amber-600">
+                      <Star className="w-4 h-4" /> Avaliar
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {chamado.notaSatisfacao && (
               <div className="bg-white rounded-xl border border-slate-200 p-5">
                 <h4 className="font-semibold text-slate-700 text-sm mb-3">Avaliacao (CSAT)</h4>
@@ -931,390 +839,6 @@ export function ChamadoDetalhePage() {
                 </div>
                 {chamado.comentarioSatisfacao && (
                   <p className="text-xs text-slate-500 mt-1">"{chamado.comentarioSatisfacao}"</p>
-                )}
-              </div>
-            )}
-
-            {/* Agrupamento (decidido em 13/05/2026 — TI agrupa chamados com mesmo problema) */}
-            {(() => {
-              const isAgrupado = !!chamado.chamadoAgrupadorId && !!chamado.chamadoAgrupador;
-              const filhos = chamado.chamadosAgrupados ?? [];
-              const ehAgrupador = filhos.length > 0;
-              const finalizado = ['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status);
-              const podeAgrupar = isTecnico && !finalizado && !isAgrupado && !ehAgrupador && !!chamado.tecnicoId;
-              const podeDesagrupar = isTecnico && isAgrupado && chamado.status === 'AGRUPADO';
-
-              if (!isAgrupado && !ehAgrupador && !podeAgrupar) return null;
-
-              return (
-                <div className="bg-white rounded-xl border border-slate-200 p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
-                      <Layers className="w-4 h-4" />
-                      {ehAgrupador ? `Chamados agrupados (${filhos.length})` : isAgrupado ? 'Agrupado em outro chamado' : 'Agrupamento'}
-                    </h4>
-                    {podeAgrupar && (
-                      <button onClick={() => { setShowModalAgrupar(true); setAgruparBusca(''); setAgruparResultados([]); }}
-                        className="text-sm text-capul-600 hover:underline font-medium">
-                        + Agrupar em outro chamado
-                      </button>
-                    )}
-                    {podeDesagrupar && (
-                      <button onClick={async () => {
-                        if (!await confirm('Desagrupar chamado', 'Ele voltará ao status anterior e o SLA será retomado.', { variant: 'warning' })) return;
-                        try {
-                          await chamadoService.desagrupar(chamado.id);
-                          const full = await chamadoService.buscar(chamado.id);
-                          setChamado(full);
-                          if (full.copias) setCopias(full.copias);
-                          toast('success', 'Chamado desagrupado');
-                        } catch (err: unknown) {
-                          const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-                          toast('error', msg || 'Erro ao desagrupar');
-                        }
-                      }} className="text-sm text-amber-600 hover:underline font-medium flex items-center gap-1">
-                        <Unlink className="w-3.5 h-3.5" /> Desagrupar
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Estado: filho */}
-                  {isAgrupado && chamado.chamadoAgrupador && (
-                    <Link to={`/gestao-ti/chamados/${chamado.chamadoAgrupador.id}`}
-                      className="block bg-amber-50 border border-amber-200 rounded-lg p-3 hover:bg-amber-100 transition-colors">
-                      <p className="text-xs text-amber-700 font-medium">Este chamado está agrupado em:</p>
-                      <p className="text-sm text-amber-900 font-semibold mt-0.5">
-                        #{chamado.chamadoAgrupador.numero} — {chamado.chamadoAgrupador.titulo}
-                      </p>
-                      <p className="text-xs text-amber-700 mt-1">
-                        A resposta vem pelo chamado principal. SLA pausado em {chamado.slaPausadoEm ? new Date(chamado.slaPausadoEm).toLocaleString('pt-BR') : '-'}.
-                      </p>
-                    </Link>
-                  )}
-
-                  {/* Estado: agrupador */}
-                  {ehAgrupador && (
-                    <>
-                      <p className="text-xs text-slate-500 mb-3">
-                        Comentários neste chamado são propagados automaticamente para os chamados filhos. Ao resolver/fechar, todos os filhos seguem em cascata.
-                      </p>
-                      <div className="space-y-2">
-                        {filhos.map((f) => (
-                          <div key={f.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
-                            <div>
-                              <Link to={`/gestao-ti/chamados/${f.id}`} className="text-sm font-medium text-capul-600 hover:underline">
-                                #{f.numero} — {f.titulo}
-                              </Link>
-                              <p className="text-xs text-slate-500">
-                                Solicitante: {f.solicitante.nome}
-                                {f.statusAnteriorAgrupamento && (
-                                  <> · status anterior: <span className="font-medium">{f.statusAnteriorAgrupamento}</span></>
-                                )}
-                              </p>
-                            </div>
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${f.status === 'AGRUPADO' ? 'bg-amber-100 text-amber-700' : f.status === 'RESOLVIDO' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
-                              {f.status}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-
-                  {/* Botão sozinho quando ainda não está agrupado */}
-                  {!isAgrupado && !ehAgrupador && podeAgrupar && (
-                    <p className="text-xs text-slate-500">
-                      Use o botão acima se este chamado relata o mesmo problema de outro já em atendimento.
-                    </p>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Modal: agrupar em outro chamado */}
-            {showModalAgrupar && (
-              <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowModalAgrupar(false)}>
-                <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-                  <h3 className="text-lg font-semibold text-slate-800 mb-2">Agrupar em outro chamado</h3>
-                  <p className="text-sm text-slate-500 mb-4">
-                    Busque pelo número ou título do chamado-pai. Apenas chamados em atendimento (com técnico atribuído) podem agrupar.
-                  </p>
-                  <div className="relative mb-4">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      value={agruparBusca}
-                      onChange={async (e) => {
-                        const v = e.target.value;
-                        setAgruparBusca(v);
-                        if (v.trim().length < 2) { setAgruparResultados([]); return; }
-                        setAgruparLoading(true);
-                        try {
-                          const r = await chamadoService.listarPaginado({ search: v.trim(), pageSize: 10 });
-                          setAgruparResultados(r.items.filter((c) =>
-                            c.id !== chamado.id &&
-                            !!c.tecnicoId &&
-                            !['RESOLVIDO', 'FECHADO', 'CANCELADO', 'AGRUPADO'].includes(c.status)
-                          ));
-                        } catch { setAgruparResultados([]); }
-                        setAgruparLoading(false);
-                      }}
-                      placeholder="Buscar por número ou título..."
-                      className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-capul-600"
-                      autoFocus
-                    />
-                  </div>
-                  <div className="max-h-72 overflow-y-auto border border-slate-200 rounded-lg">
-                    {agruparLoading ? (
-                      <p className="p-4 text-sm text-slate-400">Buscando...</p>
-                    ) : agruparBusca.trim().length < 2 ? (
-                      <p className="p-4 text-sm text-slate-400">Digite ao menos 2 caracteres</p>
-                    ) : agruparResultados.length === 0 ? (
-                      <p className="p-4 text-sm text-slate-400">Nenhum chamado elegível encontrado</p>
-                    ) : (
-                      agruparResultados.map((c) => (
-                        <button
-                          key={c.id}
-                          disabled={agruparSalvando}
-                          onClick={async () => {
-                            setAgruparSalvando(true);
-                            try {
-                              await chamadoService.agruparEm(chamado.id, c.id);
-                              const full = await chamadoService.buscar(chamado.id);
-                              setChamado(full);
-                              setShowModalAgrupar(false);
-                              toast('success', `Agrupado em #${c.numero}`);
-                            } catch (err: unknown) {
-                              const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-                              toast('error', msg || 'Erro ao agrupar');
-                            }
-                            setAgruparSalvando(false);
-                          }}
-                          className="w-full text-left px-4 py-3 hover:bg-slate-50 border-b border-slate-100 last:border-b-0 disabled:opacity-50"
-                        >
-                          <p className="text-sm font-medium text-slate-700">#{c.numero} — {c.titulo}</p>
-                          <p className="text-xs text-slate-500">{c.status} · {c.tecnico?.nome || 'sem técnico'}</p>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                  <div className="flex justify-end mt-4">
-                    <button onClick={() => setShowModalAgrupar(false)} className="text-sm text-slate-500 hover:text-slate-700">
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Em cópia (decidido em 13/05/2026 — usuarios nao-TI envolvidos) */}
-            {(() => {
-              const isCopiado = copias.some((c) => c.usuarioId === usuario?.id);
-              const podeAdicionarCopia = (isSolicitante || podeMovimentar || isCopiado) && !['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status);
-              if (copias.length === 0 && !podeAdicionarCopia) return null;
-              return (
-                <div className="bg-white rounded-xl border border-slate-200 p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
-                      <Users className="w-4 h-4" /> Em cópia ({copias.length})
-                    </h4>
-                    {podeAdicionarCopia && (
-                      <button onClick={() => { setShowAddCopia(!showAddCopia); setCopiaIdsParaAdicionar([]); setCopiaBusca(''); }}
-                        className="text-sm text-capul-600 hover:underline font-medium">
-                        {showAddCopia ? 'Cancelar' : '+ Adicionar'}
-                      </button>
-                    )}
-                  </div>
-
-                  {showAddCopia && (
-                    <div className="mb-4 space-y-2">
-                      <p className="text-xs text-slate-500">
-                        Equipe T.I. não pode ser colocada em cópia. Adicionados recebem notificações e podem comentar.
-                      </p>
-                      {copiaIdsParaAdicionar.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {copiaIdsParaAdicionar.map((cid) => {
-                            const u = usuariosNaoTI.find((x) => x.id === cid);
-                            if (!u) return null;
-                            return (
-                              <span key={cid} className="inline-flex items-center gap-1 bg-capul-100 text-capul-700 text-xs px-2 py-1 rounded-full">
-                                {u.nome}
-                                <button type="button" onClick={() => setCopiaIdsParaAdicionar(copiaIdsParaAdicionar.filter((i) => i !== cid))}
-                                  className="ml-1 text-capul-500 hover:text-capul-700">
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
-                      <input
-                        type="text"
-                        value={copiaBusca}
-                        onChange={(e) => setCopiaBusca(e.target.value)}
-                        placeholder="Buscar usuário..."
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600"
-                      />
-                      <div className="border border-slate-200 rounded-lg max-h-48 overflow-y-auto">
-                        {(() => {
-                          const termo = copiaBusca.trim().toLowerCase();
-                          const idsJa = new Set([...copias.map((c) => c.usuarioId), ...copiaIdsParaAdicionar]);
-                          const disponiveis = usuariosNaoTI
-                            .filter((u) => !idsJa.has(u.id))
-                            .filter((u) => !termo || u.nome.toLowerCase().includes(termo) || u.username.toLowerCase().includes(termo))
-                            .slice(0, 12);
-                          if (disponiveis.length === 0) return <p className="text-sm text-slate-400 p-3">{termo ? 'Nenhum resultado' : 'Digite para buscar'}</p>;
-                          return disponiveis.map((u) => (
-                            <button
-                              key={u.id}
-                              type="button"
-                              onClick={() => { setCopiaIdsParaAdicionar([...copiaIdsParaAdicionar, u.id]); setCopiaBusca(''); }}
-                              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between border-b border-slate-100 last:border-b-0"
-                            >
-                              <span className="text-slate-700">{u.nome}</span>
-                              <span className="text-xs text-slate-400">{u.username}</span>
-                            </button>
-                          ));
-                        })()}
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          disabled={copiaIdsParaAdicionar.length === 0 || copiaSalvando}
-                          onClick={async () => {
-                            setCopiaSalvando(true);
-                            try {
-                              const res = await chamadoService.adicionarCopias(chamado.id, copiaIdsParaAdicionar);
-                              const novas = await chamadoService.listarCopias(chamado.id);
-                              setCopias(novas);
-                              setShowAddCopia(false);
-                              setCopiaIdsParaAdicionar([]);
-                              if (res.erros.length > 0) {
-                                toast('error', `${res.erros.length} usuario(s) nao foram adicionados (T.I.?)`);
-                              } else {
-                                toast('success', `${res.adicionados.length} usuario(s) adicionado(s) em copia`);
-                              }
-                            } catch (err: unknown) {
-                              const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-                              toast('error', msg || 'Erro ao adicionar copias');
-                            }
-                            setCopiaSalvando(false);
-                          }}
-                          className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50"
-                        >
-                          {copiaSalvando ? 'Adicionando...' : `Adicionar ${copiaIdsParaAdicionar.length > 0 ? `(${copiaIdsParaAdicionar.length})` : ''}`}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {copias.length === 0 ? (
-                    <p className="text-sm text-slate-400">Nenhum usuário em cópia</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {copias.map((c) => (
-                        <div key={c.id} className="flex items-center gap-3 py-1">
-                          <div className="w-8 h-8 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center text-xs font-bold">
-                            {c.usuario.nome.charAt(0)}
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm text-slate-700">{c.usuario.nome}</p>
-                            {c.adicionadoPor && (
-                              <p className="text-[10px] text-slate-400">adicionado por {c.adicionadoPor.nome}</p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Colaboradores */}
-            {podeMovimentar && (
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
-                    <Users className="w-4 h-4" /> Colaboradores ({colaboradores.length})
-                  </h4>
-                  {!['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status) && chamado.tecnicoId && (
-                    <button onClick={() => {
-                      setShowAddColab(!showAddColab);
-                      if (!showAddColab && usuariosDisponiveis.length === 0) {
-                        // Filtra apenas staff de TI — colaboradores de chamado devem ser
-                        // técnicos atuando, não usuários finais (mesma lógica de OS).
-                        coreService.listarUsuarios().then((users) => {
-                          const rolesStaff = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
-                          const staff = users.filter((u: any) =>
-                            u.permissoes?.some((p: any) => p.modulo?.codigo === 'GESTAO_TI' && rolesStaff.includes(p.roleModulo?.codigo))
-                          );
-                          setUsuariosDisponiveis(staff);
-                        }).catch(() => {});
-                      }
-                    }} className="text-sm text-capul-600 hover:underline font-medium">
-                      {showAddColab ? 'Cancelar' : '+ Adicionar'}
-                    </button>
-                  )}
-                </div>
-
-                {showAddColab && (
-                  <div className="flex gap-2 mb-4">
-                    <select value={colabSelecionado} onChange={(e) => setColabSelecionado(e.target.value)}
-                      className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-                      <option value="">Selecione um tecnico...</option>
-                      {usuariosDisponiveis
-                        .filter((u) => u.id !== chamado.tecnicoId && u.id !== chamado.solicitanteId && !colaboradores.find((c) => c.usuarioId === u.id))
-                        .map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
-                    </select>
-                    <button disabled={!colabSelecionado} onClick={async () => {
-                      try {
-                        const novo = await chamadoService.adicionarColaborador(chamado.id, colabSelecionado);
-                        setColaboradores([...colaboradores, novo]);
-                        setColabSelecionado('');
-                        setShowAddColab(false);
-                      } catch (err: unknown) {
-                        const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-                        toast('error', msg || 'Erro ao adicionar colaborador');
-                      }
-                    }} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
-                      OK
-                    </button>
-                  </div>
-                )}
-
-                {colaboradores.length === 0 ? (
-                  <p className="text-sm text-slate-400">{!chamado.tecnicoId ? 'Aguardando tecnico assumir o chamado' : 'Nenhum colaborador adicionado'}</p>
-                ) : (
-                  <div className="space-y-3">
-                    {colaboradores.map((c) => (
-                      <div key={c.id} className="flex items-center justify-between py-1">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-capul-100 text-capul-700 flex items-center justify-center text-xs font-bold">
-                            {c.usuario.nome.charAt(0)}
-                          </div>
-                          <span className="text-sm text-slate-700">{c.usuario.nome}</span>
-                        </div>
-                        {!['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status) && (() => {
-                          const temTempo = registrosTempo.some((r) => r.usuarioId === c.usuarioId);
-                          return temTempo ? (
-                            <span className="text-[10px] text-slate-400" title="Possui registros de tempo">com apontamento</span>
-                          ) : (
-                            <button onClick={async () => {
-                              try {
-                                await chamadoService.removerColaborador(chamado.id, c.id);
-                                setColaboradores(colaboradores.filter((x) => x.id !== c.id));
-                              } catch (err: unknown) {
-                                const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-                                toast('error', msg || 'Erro ao remover colaborador');
-                              }
-                            }} className="text-slate-400 hover:text-red-500">
-                              <X className="w-4 h-4" />
-                            </button>
-                          );
-                        })()}
-                      </div>
-                    ))}
-                  </div>
                 )}
               </div>
             )}
@@ -1525,7 +1049,717 @@ export function ChamadoDetalhePage() {
                 )}
               </div>
             )}
+
+            {/* Colaboradores */}
+            {podeMovimentar && (
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                    <Users className="w-4 h-4" /> Colaboradores ({colaboradores.length})
+                  </h4>
+                  {!['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status) && chamado.tecnicoId && (
+                    <button onClick={() => {
+                      setShowAddColab(!showAddColab);
+                      if (!showAddColab && usuariosDisponiveis.length === 0) {
+                        // Filtra apenas staff de TI — colaboradores de chamado devem ser
+                        // técnicos atuando, não usuários finais (mesma lógica de OS).
+                        coreService.listarUsuarios().then((users) => {
+                          const rolesStaff = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
+                          const staff = users.filter((u: any) =>
+                            u.permissoes?.some((p: any) => p.modulo?.codigo === 'GESTAO_TI' && rolesStaff.includes(p.roleModulo?.codigo))
+                          );
+                          setUsuariosDisponiveis(staff);
+                        }).catch(() => {});
+                      }
+                    }} className="text-sm text-capul-600 hover:underline font-medium">
+                      {showAddColab ? 'Cancelar' : '+ Adicionar'}
+                    </button>
+                  )}
+                </div>
+
+                {showAddColab && (
+                  <div className="flex gap-2 mb-4">
+                    <select value={colabSelecionado} onChange={(e) => setColabSelecionado(e.target.value)}
+                      className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                      <option value="">Selecione um tecnico...</option>
+                      {usuariosDisponiveis
+                        .filter((u) => u.id !== chamado.tecnicoId && u.id !== chamado.solicitanteId && !colaboradores.find((c) => c.usuarioId === u.id))
+                        .map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+                    </select>
+                    <button disabled={!colabSelecionado} onClick={async () => {
+                      try {
+                        const novo = await chamadoService.adicionarColaborador(chamado.id, colabSelecionado);
+                        setColaboradores([...colaboradores, novo]);
+                        setColabSelecionado('');
+                        setShowAddColab(false);
+                      } catch (err: unknown) {
+                        const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+                        toast('error', msg || 'Erro ao adicionar colaborador');
+                      }
+                    }} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
+                      OK
+                    </button>
+                  </div>
+                )}
+
+                {colaboradores.length === 0 ? (
+                  <p className="text-sm text-slate-400">{!chamado.tecnicoId ? 'Aguardando tecnico assumir o chamado' : 'Nenhum colaborador adicionado'}</p>
+                ) : (
+                  <div className="space-y-3">
+                    {colaboradores.map((c) => (
+                      <div key={c.id} className="flex items-center justify-between py-1">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-capul-100 text-capul-700 flex items-center justify-center text-xs font-bold">
+                            {c.usuario.nome.charAt(0)}
+                          </div>
+                          <span className="text-sm text-slate-700">{c.usuario.nome}</span>
+                        </div>
+                        {!['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status) && (() => {
+                          const temTempo = registrosTempo.some((r) => r.usuarioId === c.usuarioId);
+                          return temTempo ? (
+                            <span className="text-[10px] text-slate-400" title="Possui registros de tempo">com apontamento</span>
+                          ) : (
+                            <button onClick={async () => {
+                              try {
+                                await chamadoService.removerColaborador(chamado.id, c.id);
+                                setColaboradores(colaboradores.filter((x) => x.id !== c.id));
+                              } catch (err: unknown) {
+                                const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+                                toast('error', msg || 'Erro ao remover colaborador');
+                              }
+                            }} className="text-slate-400 hover:text-red-500">
+                              <X className="w-4 h-4" />
+                            </button>
+                          );
+                        })()}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Em cópia (decidido em 13/05/2026 — usuarios nao-TI envolvidos) */}
+            {(() => {
+              const isCopiado = copias.some((c) => c.usuarioId === usuario?.id);
+              const podeAdicionarCopia = (isSolicitante || podeMovimentar || isCopiado) && !['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status);
+              if (copias.length === 0 && !podeAdicionarCopia) return null;
+              return (
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                      <Users className="w-4 h-4" /> Em cópia ({copias.length})
+                    </h4>
+                    {podeAdicionarCopia && (
+                      <button onClick={() => { setShowAddCopia(!showAddCopia); setCopiaIdsParaAdicionar([]); setCopiaBusca(''); }}
+                        className="text-sm text-capul-600 hover:underline font-medium">
+                        {showAddCopia ? 'Cancelar' : '+ Adicionar'}
+                      </button>
+                    )}
+                  </div>
+
+                  {showAddCopia && (
+                    <div className="mb-4 space-y-2">
+                      <p className="text-xs text-slate-500">
+                        Equipe T.I. não pode ser colocada em cópia. Adicionados recebem notificações e podem comentar.
+                      </p>
+                      {copiaIdsParaAdicionar.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {copiaIdsParaAdicionar.map((cid) => {
+                            const u = usuariosNaoTI.find((x) => x.id === cid);
+                            if (!u) return null;
+                            return (
+                              <span key={cid} className="inline-flex items-center gap-1 bg-capul-100 text-capul-700 text-xs px-2 py-1 rounded-full">
+                                {u.nome}
+                                <button type="button" onClick={() => setCopiaIdsParaAdicionar(copiaIdsParaAdicionar.filter((i) => i !== cid))}
+                                  className="ml-1 text-capul-500 hover:text-capul-700">
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <input
+                        type="text"
+                        value={copiaBusca}
+                        onChange={(e) => setCopiaBusca(e.target.value)}
+                        placeholder="Buscar usuário..."
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600"
+                      />
+                      <div className="border border-slate-200 rounded-lg max-h-48 overflow-y-auto">
+                        {(() => {
+                          const termo = copiaBusca.trim().toLowerCase();
+                          const idsJa = new Set([...copias.map((c) => c.usuarioId), ...copiaIdsParaAdicionar]);
+                          const disponiveis = usuariosNaoTI
+                            .filter((u) => !idsJa.has(u.id))
+                            .filter((u) => !termo || u.nome.toLowerCase().includes(termo) || u.username.toLowerCase().includes(termo))
+                            .slice(0, 12);
+                          if (disponiveis.length === 0) return <p className="text-sm text-slate-400 p-3">{termo ? 'Nenhum resultado' : 'Digite para buscar'}</p>;
+                          return disponiveis.map((u) => (
+                            <button
+                              key={u.id}
+                              type="button"
+                              onClick={() => { setCopiaIdsParaAdicionar([...copiaIdsParaAdicionar, u.id]); setCopiaBusca(''); }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between border-b border-slate-100 last:border-b-0"
+                            >
+                              <span className="text-slate-700">{u.nome}</span>
+                              <span className="text-xs text-slate-400">{u.username}</span>
+                            </button>
+                          ));
+                        })()}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          disabled={copiaIdsParaAdicionar.length === 0 || copiaSalvando}
+                          onClick={async () => {
+                            setCopiaSalvando(true);
+                            try {
+                              const res = await chamadoService.adicionarCopias(chamado.id, copiaIdsParaAdicionar);
+                              const novas = await chamadoService.listarCopias(chamado.id);
+                              setCopias(novas);
+                              setShowAddCopia(false);
+                              setCopiaIdsParaAdicionar([]);
+                              if (res.erros.length > 0) {
+                                toast('error', `${res.erros.length} usuario(s) nao foram adicionados (T.I.?)`);
+                              } else {
+                                toast('success', `${res.adicionados.length} usuario(s) adicionado(s) em copia`);
+                              }
+                            } catch (err: unknown) {
+                              const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+                              toast('error', msg || 'Erro ao adicionar copias');
+                            }
+                            setCopiaSalvando(false);
+                          }}
+                          className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50"
+                        >
+                          {copiaSalvando ? 'Adicionando...' : `Adicionar ${copiaIdsParaAdicionar.length > 0 ? `(${copiaIdsParaAdicionar.length})` : ''}`}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {copias.length === 0 ? (
+                    <p className="text-sm text-slate-400">Nenhum usuário em cópia</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {copias.map((c) => (
+                        <div key={c.id} className="flex items-center gap-3 py-1">
+                          <div className="w-8 h-8 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center text-xs font-bold">
+                            {c.usuario.nome.charAt(0)}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm text-slate-700">{c.usuario.nome}</p>
+                            {c.adicionadoPor && (
+                              <p className="text-[10px] text-slate-400">adicionado por {c.adicionadoPor.nome}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Anexos (movido para coluna direita em 13/05/2026 — chat-style TOTVS) */}
+            {(anexos.length > 0 || canAnexar) && (
+              <div className="bg-white rounded-xl border border-slate-200">
+                <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                  <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                    <Paperclip className="w-4 h-4" />
+                    Anexos {anexos.length > 0 && <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{anexos.length}</span>}
+                  </h4>
+                </div>
+                <div className="p-3">
+                  {anexos.length === 0 ? (
+                    <p className="text-xs text-slate-400">Nenhum anexo</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {anexos.map((a) => {
+                        const Icon = getFileIcon(a.mimeType);
+                        return (
+                          <div key={a.id} className="flex items-center gap-2 bg-slate-50 rounded-lg px-2 py-1.5 group">
+                            <Icon className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <button
+                                onClick={() => abrirAnexoOuBaixar(
+                                  a.mimeType,
+                                  () => chamadoService.abrirAnexo(chamado.id, a.id, a.mimeType),
+                                  () => chamadoService.downloadAnexo(chamado.id, a.id, a.nomeOriginal),
+                                )}
+                                className="text-xs text-capul-700 hover:underline truncate block text-left w-full"
+                                title={a.nomeOriginal}
+                              >
+                                {a.nomeOriginal}
+                              </button>
+                              <p className="text-[10px] text-slate-400 truncate">
+                                {formatFileSize(a.tamanho)} · {new Date(a.createdAt).toLocaleDateString('pt-BR')}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => chamadoService.downloadAnexo(chamado.id, a.id, a.nomeOriginal)}
+                                className="p-1 text-slate-400 hover:text-capul-600 rounded"
+                                title="Download"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                              </button>
+                              {isTecnico && (
+                                <button
+                                  onClick={() => handleRemoveAnexo(a.id)}
+                                  className="p-1 text-slate-400 hover:text-red-500 rounded"
+                                  title="Remover"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Agrupamento (decidido em 13/05/2026 — TI agrupa chamados com mesmo problema) */}
+            {(() => {
+              const isAgrupado = !!chamado.chamadoAgrupadorId && !!chamado.chamadoAgrupador;
+              const filhos = chamado.chamadosAgrupados ?? [];
+              const ehAgrupador = filhos.length > 0;
+              const finalizado = ['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status);
+              // Pode tornar ESTE chamado um filho de outro (busca pai)
+              const podeVirarFilho = isTecnico && !finalizado && !isAgrupado && !ehAgrupador && !!chamado.tecnicoId;
+              // Pode agrupar OUTROS chamados como filhos deste (selecao multipla)
+              const podeReceberFilhos = isTecnico && !finalizado && !isAgrupado && !!chamado.tecnicoId;
+              const podeDesagrupar = isTecnico && isAgrupado && chamado.status === 'AGRUPADO';
+
+              if (!isAgrupado && !ehAgrupador && !podeVirarFilho && !podeReceberFilhos) return null;
+
+              return (
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                  <div className="flex items-center justify-between mb-3 gap-2">
+                    <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                      <Layers className="w-4 h-4" />
+                      {ehAgrupador ? `Chamados agrupados (${filhos.length})` : isAgrupado ? 'Agrupado em outro chamado' : 'Agrupamento'}
+                    </h4>
+                    <div className="flex items-center gap-3 flex-wrap justify-end">
+                    {podeReceberFilhos && (
+                      <button onClick={() => { setShowModalAgruparFilhos(true); setFilhosBusca(''); setFilhosBuscaDebounced(''); setFilhosResultados([]); setFilhosSelecionadosIds(new Set()); }}
+                        className="text-sm text-capul-600 hover:underline font-medium">
+                        + Agrupar chamados aqui
+                      </button>
+                    )}
+                    {podeVirarFilho && (
+                      <button onClick={() => { setShowModalAgrupar(true); setAgruparBusca(''); setAgruparResultados([]); }}
+                        className="text-sm text-slate-500 hover:underline">
+                        Agrupar este em outro
+                      </button>
+                    )}
+                    {podeDesagrupar && (
+                      <button onClick={async () => {
+                        if (!await confirm('Desagrupar chamado', 'Ele voltará ao status anterior e o SLA será retomado.', { variant: 'warning' })) return;
+                        try {
+                          await chamadoService.desagrupar(chamado.id);
+                          const full = await chamadoService.buscar(chamado.id);
+                          setChamado(full);
+                          if (full.copias) setCopias(full.copias);
+                          toast('success', 'Chamado desagrupado');
+                        } catch (err: unknown) {
+                          const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+                          toast('error', msg || 'Erro ao desagrupar');
+                        }
+                      }} className="text-sm text-amber-600 hover:underline font-medium flex items-center gap-1">
+                        <Unlink className="w-3.5 h-3.5" /> Desagrupar
+                      </button>
+                    )}
+                    </div>
+                  </div>
+
+                  {/* Estado: filho */}
+                  {isAgrupado && chamado.chamadoAgrupador && (
+                    <Link to={`/gestao-ti/chamados/${chamado.chamadoAgrupador.id}`}
+                      className="block bg-amber-50 border border-amber-200 rounded-lg p-3 hover:bg-amber-100 transition-colors">
+                      <p className="text-xs text-amber-700 font-medium">Este chamado está agrupado em:</p>
+                      <p className="text-sm text-amber-900 font-semibold mt-0.5">
+                        #{chamado.chamadoAgrupador.numero} — {chamado.chamadoAgrupador.titulo}
+                      </p>
+                      <p className="text-xs text-amber-700 mt-1">
+                        A resposta vem pelo chamado principal. SLA pausado em {chamado.slaPausadoEm ? new Date(chamado.slaPausadoEm).toLocaleString('pt-BR') : '-'}.
+                      </p>
+                    </Link>
+                  )}
+
+                  {/* Estado: agrupador */}
+                  {ehAgrupador && (
+                    <>
+                      <p className="text-xs text-slate-500 mb-3">
+                        Comentários neste chamado são propagados automaticamente para os chamados filhos. Ao resolver/fechar, todos os filhos seguem em cascata.
+                      </p>
+                      <div className="space-y-2">
+                        {filhos.map((f) => (
+                          <div key={f.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
+                            <div>
+                              <Link to={`/gestao-ti/chamados/${f.id}`} className="text-sm font-medium text-capul-600 hover:underline">
+                                #{f.numero} — {f.titulo}
+                              </Link>
+                              <p className="text-xs text-slate-500">
+                                Solicitante: {f.solicitante.nome}
+                                {f.statusAnteriorAgrupamento && (
+                                  <> · status anterior: <span className="font-medium">{f.statusAnteriorAgrupamento}</span></>
+                                )}
+                              </p>
+                            </div>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${f.status === 'AGRUPADO' ? 'bg-amber-100 text-amber-700' : f.status === 'RESOLVIDO' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+                              {f.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Hint quando ainda não está agrupado */}
+                  {!isAgrupado && !ehAgrupador && (podeVirarFilho || podeReceberFilhos) && (
+                    <p className="text-xs text-slate-500">
+                      <strong>Agrupar chamados aqui</strong>: marque outros chamados que reportam o mesmo problema — eles viram filhos deste.
+                      <br/>
+                      <strong>Agrupar este em outro</strong>: marque este como filho de um chamado-pai já em andamento.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Modal: agrupar em outro chamado */}
+            {showModalAgrupar && (
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowModalAgrupar(false)}>
+                <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+                  <h3 className="text-lg font-semibold text-slate-800 mb-2">Agrupar em outro chamado</h3>
+                  <p className="text-sm text-slate-500 mb-4">
+                    Busque pelo número ou título do chamado-pai. Apenas chamados em atendimento (com técnico atribuído) podem agrupar.
+                  </p>
+                  <div className="relative mb-4">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={agruparBusca}
+                      onChange={async (e) => {
+                        const v = e.target.value;
+                        setAgruparBusca(v);
+                        if (v.trim().length < 2) { setAgruparResultados([]); return; }
+                        setAgruparLoading(true);
+                        try {
+                          const r = await chamadoService.listarPaginado({ search: v.trim(), pageSize: 10 });
+                          setAgruparResultados(r.items.filter((c) =>
+                            c.id !== chamado.id &&
+                            !!c.tecnicoId &&
+                            !['RESOLVIDO', 'FECHADO', 'CANCELADO', 'AGRUPADO'].includes(c.status)
+                          ));
+                        } catch { setAgruparResultados([]); }
+                        setAgruparLoading(false);
+                      }}
+                      placeholder="Buscar por número ou título..."
+                      className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-capul-600"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="max-h-72 overflow-y-auto border border-slate-200 rounded-lg">
+                    {agruparLoading ? (
+                      <p className="p-4 text-sm text-slate-400">Buscando...</p>
+                    ) : agruparBusca.trim().length < 2 ? (
+                      <p className="p-4 text-sm text-slate-400">Digite ao menos 2 caracteres</p>
+                    ) : agruparResultados.length === 0 ? (
+                      <p className="p-4 text-sm text-slate-400">Nenhum chamado elegível encontrado</p>
+                    ) : (
+                      agruparResultados.map((c) => (
+                        <button
+                          key={c.id}
+                          disabled={agruparSalvando}
+                          onClick={async () => {
+                            setAgruparSalvando(true);
+                            try {
+                              await chamadoService.agruparEm(chamado.id, c.id);
+                              const full = await chamadoService.buscar(chamado.id);
+                              setChamado(full);
+                              setShowModalAgrupar(false);
+                              toast('success', `Agrupado em #${c.numero}`);
+                            } catch (err: unknown) {
+                              const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+                              toast('error', msg || 'Erro ao agrupar');
+                            }
+                            setAgruparSalvando(false);
+                          }}
+                          className="w-full text-left px-4 py-3 hover:bg-slate-50 border-b border-slate-100 last:border-b-0 disabled:opacity-50"
+                        >
+                          <p className="text-sm font-medium text-slate-700">#{c.numero} — {c.titulo}</p>
+                          <p className="text-xs text-slate-500">{c.status} · {c.tecnico?.nome || 'sem técnico'}</p>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                  <div className="flex justify-end mt-4">
+                    <button onClick={() => setShowModalAgrupar(false)} className="text-sm text-slate-500 hover:text-slate-700">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal: agrupar OUTROS chamados aqui (selecao multipla — pedido suporte 13/05/2026) */}
+            {showModalAgruparFilhos && (() => {
+              // Carrega resultados ao abrir o modal (busca vazia mostra primeiros N)
+              return (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowModalAgruparFilhos(false)}>
+                  <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full mx-4 max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                    <div className="p-6 border-b border-slate-200">
+                      <h3 className="text-lg font-semibold text-slate-800 mb-1">Agrupar chamados neste #{chamado.numero}</h3>
+                      <p className="text-sm text-slate-500">
+                        Marque os chamados que reportam o mesmo problema. Eles vão virar filhos deste e seu SLA será pausado até desagrupamento ou resolução.
+                      </p>
+                    </div>
+                    <div className="p-6 border-b border-slate-200">
+                      <div className="relative">
+                        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          value={filhosBusca}
+                          onChange={(e) => setFilhosBusca(e.target.value)}
+                          placeholder="Buscar por número, título, descrição ou solicitante..."
+                          className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-capul-600"
+                          autoFocus
+                        />
+                      </div>
+                      {filhosSelecionadosIds.size > 0 && (
+                        <p className="text-xs text-capul-700 mt-2 font-medium">
+                          {filhosSelecionadosIds.size} chamado(s) selecionado(s)
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-2">
+                      {filhosLoading ? (
+                        <p className="p-6 text-sm text-slate-400 text-center">Buscando...</p>
+                      ) : filhosResultados.length === 0 ? (
+                        <p className="p-6 text-sm text-slate-400 text-center">
+                          {filhosBuscaDebounced.trim().length > 0 ? 'Nenhum chamado elegível encontrado' : 'Carregando chamados...'}
+                        </p>
+                      ) : (
+                        <ul className="divide-y divide-slate-100">
+                          {filhosResultados.map((c) => {
+                            const marcado = filhosSelecionadosIds.has(c.id);
+                            return (
+                              <li key={c.id}>
+                                <label className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={marcado}
+                                    onChange={(e) => {
+                                      setFilhosSelecionadosIds((prev) => {
+                                        const next = new Set(prev);
+                                        if (e.target.checked) next.add(c.id); else next.delete(c.id);
+                                        return next;
+                                      });
+                                    }}
+                                    className="mt-1 rounded border-slate-300"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-medium text-slate-700">#{c.numero}</span>
+                                      <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{c.status}</span>
+                                    </div>
+                                    <p className="text-sm text-slate-700 truncate">{c.titulo}</p>
+                                    <p className="text-xs text-slate-500">
+                                      Solicitante: {c.solicitante?.nome ?? '-'}
+                                      {c.tecnico?.nome && ` · Técnico: ${c.tecnico.nome}`}
+                                    </p>
+                                  </div>
+                                </label>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                    <div className="p-4 border-t border-slate-200 flex items-center justify-between bg-slate-50 rounded-b-2xl">
+                      <button onClick={() => setShowModalAgruparFilhos(false)} className="text-sm text-slate-500 hover:text-slate-700">
+                        Cancelar
+                      </button>
+                      <button
+                        disabled={filhosSelecionadosIds.size === 0 || filhosSalvando}
+                        onClick={async () => {
+                          setFilhosSalvando(true);
+                          try {
+                            const ids = Array.from(filhosSelecionadosIds);
+                            const res = await chamadoService.agruparMultiplos(chamado.id, ids);
+                            const full = await chamadoService.buscar(chamado.id);
+                            setChamado(full);
+                            setShowModalAgruparFilhos(false);
+                            setFilhosSelecionadosIds(new Set());
+                            if (res.erros.length > 0) {
+                              toast('error', `${res.agrupados.length} agrupados, ${res.erros.length} com erro: ${res.erros[0].motivo}`);
+                            } else {
+                              toast('success', `${res.agrupados.length} chamado(s) agrupado(s)`);
+                            }
+                          } catch (err: unknown) {
+                            const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+                            toast('error', msg || 'Erro ao agrupar');
+                          }
+                          setFilhosSalvando(false);
+                        }}
+                        className="bg-capul-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50"
+                      >
+                        {filhosSalvando ? 'Agrupando...' : `Agrupar selecionados${filhosSelecionadosIds.size > 0 ? ` (${filhosSelecionadosIds.size})` : ''}`}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
+
+          {/* Modais de ação — overlays centrais (convertidos de painéis inline em 14/05/2026) */}
+            {showTransferir && (
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={closeAllPanels}>
+                <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-3" onClick={(e) => e.stopPropagation()}>
+                <h4 className="font-medium text-sm text-slate-700 flex items-center gap-2">
+                  <ArrowRightLeft className="w-4 h-4" /> Transferir Chamado
+                </h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Equipe</label>
+                    <select value={equipeDestinoId} onChange={(e) => setEquipeDestinoId(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                      <option value="">Selecione a equipe</option>
+                      {equipes.map((e) => (
+                        <option key={e.id} value={e.id}>
+                          {e.sigla} - {e.nome}{e.id === chamado.equipeAtualId ? ' (atual)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {equipeDestinoId && (equipeDestinoId === chamado.equipeAtualId ? membrosEquipe : membrosEquipeDestino) && (
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">
+                        {equipeDestinoId === chamado.equipeAtualId ? 'Transferir para tecnico' : 'Indicar tecnico (opcional)'}
+                      </label>
+                      <select value={tecnicoEquipeDestinoId} onChange={(e) => setTecnicoEquipeDestinoId(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                        <option value="">{equipeDestinoId === chamado.equipeAtualId ? 'Selecione o tecnico' : 'Nenhum (equipe assume)'}</option>
+                        {(equipeDestinoId === chamado.equipeAtualId ? membrosEquipe : membrosEquipeDestino)?.membros
+                          ?.filter((m) => m.status === 'ATIVO' && m.usuarioId !== chamado.tecnicoId)
+                          .map((m) => (
+                            <option key={m.usuarioId} value={m.usuarioId}>
+                              {m.usuario.nome}{m.isLider ? ' (Lider)' : ''}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
+                  <input value={transferMotivo} onChange={(e) => setTransferMotivo(e.target.value)}
+                    maxLength={1000}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Motivo da transferencia (opcional)" />
+                  <div className="flex gap-2">
+                    <button onClick={() => {
+                      if (equipeDestinoId === chamado.equipeAtualId) {
+                        // Transferir para tecnico da mesma equipe
+                        runAction(() => chamadoService.transferirTecnico(chamado.id, tecnicoEquipeDestinoId, transferMotivo || undefined));
+                      } else {
+                        // Transferir para outra equipe
+                        runAction(() => chamadoService.transferirEquipe(chamado.id, equipeDestinoId, transferMotivo || undefined, tecnicoEquipeDestinoId || undefined));
+                      }
+                    }}
+                      disabled={actionLoading || !equipeDestinoId || (equipeDestinoId === chamado.equipeAtualId && !tecnicoEquipeDestinoId)}
+                      className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
+                      Transferir
+                    </button>
+                    <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+                  </div>
+                </div>
+                </div>
+              </div>
+            )}
+
+            {showResolver && (
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={closeAllPanels}>
+                <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-3" onClick={(e) => e.stopPropagation()}>
+                <h4 className="font-medium text-sm text-slate-700">Finalizar Chamado</h4>
+                <textarea value={resolverDescricao} onChange={(e) => setResolverDescricao(e.target.value)} rows={3}
+                  maxLength={5000}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Descreva a resolucao do chamado *" />
+                <div className="flex justify-end">
+                  <span
+                    className={`text-xs ${
+                      resolverDescricao.length >= 4900
+                        ? 'text-red-600 font-semibold'
+                        : resolverDescricao.length >= 4500
+                        ? 'text-amber-600'
+                        : 'text-slate-400'
+                    }`}
+                  >
+                    {resolverDescricao.length.toLocaleString('pt-BR')} / 5.000
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => runAction(() => chamadoService.resolver(chamado.id, resolverDescricao))}
+                    disabled={actionLoading || !resolverDescricao.trim()}
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700 disabled:opacity-50">
+                    Confirmar Finalizacao
+                  </button>
+                  <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+                </div>
+                </div>
+              </div>
+            )}
+
+            {showReabrir && (
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={closeAllPanels}>
+                <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-3" onClick={(e) => e.stopPropagation()}>
+                <h4 className="font-medium text-sm text-slate-700">Reabrir Chamado</h4>
+                <input value={reabrirMotivo} onChange={(e) => setReabrirMotivo(e.target.value)}
+                  maxLength={1000}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Motivo da reabertura (opcional)" />
+                <div className="flex gap-2">
+                  <button onClick={() => runAction(() => chamadoService.reabrir(chamado.id, reabrirMotivo || undefined))}
+                    disabled={actionLoading}
+                    className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
+                    Confirmar Reabertura
+                  </button>
+                  <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+                </div>
+                </div>
+              </div>
+            )}
+
+            {showAvaliar && (
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={closeAllPanels}>
+                <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-3" onClick={(e) => e.stopPropagation()}>
+                <h4 className="font-medium text-sm text-slate-700">Avaliar Atendimento</h4>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Nota (1-5)</label>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button key={n} onClick={() => setCsatNota(n)} className={`w-10 h-10 rounded-lg border text-sm font-medium transition-colors ${csatNota >= n ? 'bg-amber-400 border-amber-500 text-white' : 'bg-white border-slate-300 text-slate-500 hover:border-amber-300'}`}>
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <input value={csatComentario} onChange={(e) => setCsatComentario(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Comentario (opcional)" />
+                <div className="flex gap-2">
+                  <button onClick={() => runAction(() => chamadoService.avaliar(chamado.id, csatNota, csatComentario || undefined))}
+                    disabled={actionLoading}
+                    className="bg-amber-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-amber-600 disabled:opacity-50">
+                    Salvar Avaliacao
+                  </button>
+                  <button onClick={closeAllPanels} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+                </div>
+                </div>
+              </div>
+            )}
         </div>
       </div>
     </>

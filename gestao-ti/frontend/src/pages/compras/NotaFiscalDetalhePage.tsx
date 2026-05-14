@@ -6,6 +6,7 @@ import { compraService } from '../../services/compra.service';
 import { useToast } from '../../components/Toast';
 import { ArrowLeft, Pencil, Copy, FileText, FolderKanban, Paperclip, Download, Trash2, Upload } from 'lucide-react';
 import { formatDateBR, formatDateTimeBR } from '../../utils/date';
+import { abrirAnexoOuBaixar } from '../../utils/anexo';
 import type { NotaFiscal } from '../../types';
 
 const statusCores: Record<string, string> = {
@@ -336,16 +337,11 @@ export function NotaFiscalDetalhePage() {
                   <Paperclip className="w-4 h-4 text-slate-400 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <button
-                      onClick={() => {
-                        const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
-                        if (viewable.includes(a.mimeType)) {
-                          compraService.abrirAnexoNF(nf.id, a.id, a.mimeType).catch(() => {
-                            compraService.downloadAnexoNF(nf.id, a.id, a.nomeOriginal);
-                          });
-                        } else {
-                          compraService.downloadAnexoNF(nf.id, a.id, a.nomeOriginal);
-                        }
-                      }}
+                      onClick={() => abrirAnexoOuBaixar(
+                        a.mimeType,
+                        () => compraService.abrirAnexoNF(nf.id, a.id, a.mimeType),
+                        () => compraService.downloadAnexoNF(nf.id, a.id, a.nomeOriginal),
+                      )}
                       className="text-sm text-capul-700 hover:text-capul-900 hover:underline truncate text-left"
                       title="Clique para abrir"
                     >

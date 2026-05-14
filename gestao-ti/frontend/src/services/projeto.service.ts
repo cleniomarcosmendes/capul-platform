@@ -1,4 +1,5 @@
 import { gestaoApi } from './api';
+import { withCharsetUtf8 } from '../utils/blob';
 import type { PaginatedResponse } from '../components/Paginator';
 import type {
   Projeto,
@@ -343,7 +344,7 @@ export const projetoService = {
 
   async abrirAnexo(id: string, anexoId: string, mimeType: string): Promise<void> {
     const { data } = await gestaoApi.get(`/projetos/${id}/anexos/${anexoId}/download`, { responseType: 'blob' });
-    const url = window.URL.createObjectURL(new Blob([data], { type: mimeType }));
+    const url = window.URL.createObjectURL(new Blob([data], { type: withCharsetUtf8(mimeType) }));
     window.open(url, '_blank');
   },
 
@@ -452,7 +453,7 @@ export const projetoService = {
     return data;
   },
 
-  async adicionarInteracaoPendencia(id: string, pid: string, payload: { descricao: string; publica?: boolean }): Promise<InteracaoPendencia> {
+  async adicionarInteracaoPendencia(id: string, pid: string, payload: { descricao: string; publica?: boolean; anexosIds?: string[] }): Promise<InteracaoPendencia> {
     const { data } = await gestaoApi.post(`/projetos/${id}/pendencias/${pid}/interacoes`, payload);
     return data;
   },
@@ -462,12 +463,13 @@ export const projetoService = {
     return data;
   },
 
-  async uploadAnexoPendencia(id: string, pid: string, file: File): Promise<void> {
+  async uploadAnexoPendencia(id: string, pid: string, file: File): Promise<{ id: string; nomeOriginal: string; mimeType: string | null; tamanho: number; createdAt: string }> {
     const formData = new FormData();
     formData.append('file', file);
-    await gestaoApi.post(`/projetos/${id}/pendencias/${pid}/anexos`, formData, {
+    const { data } = await gestaoApi.post(`/projetos/${id}/pendencias/${pid}/anexos`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    return data;
   },
 
   async downloadAnexoPendencia(id: string, pid: string, anexoId: string): Promise<Blob> {
@@ -479,7 +481,7 @@ export const projetoService = {
 
   async abrirAnexoPendencia(id: string, pid: string, anexoId: string, mimeType: string): Promise<void> {
     const { data } = await gestaoApi.get(`/projetos/${id}/pendencias/${pid}/anexos/${anexoId}/download`, { responseType: 'blob' });
-    const url = window.URL.createObjectURL(new Blob([data], { type: mimeType }));
+    const url = window.URL.createObjectURL(new Blob([data], { type: withCharsetUtf8(mimeType) }));
     window.open(url, '_blank');
   },
 

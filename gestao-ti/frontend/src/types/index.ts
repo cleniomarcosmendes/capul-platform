@@ -795,6 +795,12 @@ export interface InteracaoPendencia {
   pendenciaId: string;
   usuarioId: string;
   usuario: { id: string; nome: string; username: string };
+  /** Anexos vinculados a esta interacao via FK. Era 1:1 (campo `anexo`),
+   *  virou 1:N em 14/05/2026 — incidente Marco Antonio. */
+  anexos?: AnexoPendenciaItem[];
+  /** Marcada quando o anexo originalmente vinculado foi excluido — UI mostra
+   *  chip "anexo removido" pra preservar contexto (paridade chamado 14/05/2026). */
+  anexoRemovido?: boolean;
   createdAt: string;
 }
 

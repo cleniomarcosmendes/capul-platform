@@ -1,4 +1,5 @@
 import { gestaoApi } from './api';
+import { withCharsetUtf8 } from '../utils/blob';
 import type { ArtigoConhecimento, AnexoConhecimento } from '../types';
 import type { PaginatedResponse } from '../components/Paginator';
 
@@ -88,7 +89,7 @@ export const conhecimentoService = {
 
   async abrirAnexo(artigoId: string, anexoId: string, mimeType: string): Promise<void> {
     const { data } = await gestaoApi.get(`/conhecimento/${artigoId}/anexos/${anexoId}/download`, { responseType: 'blob' });
-    const url = window.URL.createObjectURL(new Blob([data], { type: mimeType }));
+    const url = window.URL.createObjectURL(new Blob([data], { type: withCharsetUtf8(mimeType) }));
     window.open(url, '_blank');
   },
 

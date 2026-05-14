@@ -6,6 +6,7 @@ import { conhecimentoService } from '../../services/conhecimento.service';
 import { ArrowLeft, BookMarked, Edit, Trash2, Send, Archive, Globe, Lock, Paperclip, Download, FileText, Image, File as FileIcon } from 'lucide-react';
 import type { ArtigoConhecimento, AnexoConhecimento, CategoriaArtigo, StatusArtigo } from '../../types';
 import { useToast } from '../../components/Toast';
+import { abrirAnexoOuBaixar } from '../../utils/anexo';
 
 const categoriaLabel: Record<CategoriaArtigo, string> = {
   PROCEDIMENTO: 'Procedimento', SOLUCAO: 'Solucao', FAQ: 'FAQ', CONFIGURACAO: 'Configuracao', OUTRO: 'Outro',
@@ -220,16 +221,11 @@ export function ConhecimentoDetalhePage() {
                         <Icon className="w-5 h-5 text-slate-400 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
                           <button
-                            onClick={() => {
-                              const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
-                              if (viewable.includes(a.mimeType)) {
-                                conhecimentoService.abrirAnexo(id!, a.id, a.mimeType).catch(() => {
-                                  conhecimentoService.downloadAnexo(id!, a.id, a.nomeOriginal);
-                                });
-                              } else {
-                                conhecimentoService.downloadAnexo(id!, a.id, a.nomeOriginal);
-                              }
-                            }}
+                            onClick={() => abrirAnexoOuBaixar(
+                              a.mimeType,
+                              () => conhecimentoService.abrirAnexo(id!, a.id, a.mimeType),
+                              () => conhecimentoService.downloadAnexo(id!, a.id, a.nomeOriginal),
+                            )}
                             className="text-sm text-amber-700 hover:text-amber-900 hover:underline truncate text-left"
                             title="Clique para abrir"
                           >

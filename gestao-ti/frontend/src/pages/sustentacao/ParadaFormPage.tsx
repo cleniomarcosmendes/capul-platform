@@ -7,6 +7,7 @@ import { softwareService } from '../../services/software.service';
 import { coreApi } from '../../services/api';
 import { ArrowLeft, Paperclip, Download, Trash2 } from 'lucide-react';
 import { useToast } from '../../components/Toast';
+import { abrirAnexoOuBaixar } from '../../utils/anexo';
 import type { Software, SoftwareModulo, MotivoParada, TipoParada, ImpactoParada } from '../../types';
 
 // Converte ISO UTC string para formato datetime-local (hora local do browser)
@@ -377,16 +378,11 @@ export function ParadaFormPage() {
                         <div className="flex-1 min-w-0">
                           <button
                             type="button"
-                            onClick={() => {
-                              const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
-                              if (viewable.includes(a.mimeType)) {
-                                paradaService.abrirAnexo(id, a.id, a.mimeType).catch(() => {
-                                  paradaService.downloadAnexo(id, a.id, a.nomeOriginal);
-                                });
-                              } else {
-                                paradaService.downloadAnexo(id, a.id, a.nomeOriginal);
-                              }
-                            }}
+                            onClick={() => abrirAnexoOuBaixar(
+                              a.mimeType,
+                              () => paradaService.abrirAnexo(id, a.id, a.mimeType),
+                              () => paradaService.downloadAnexo(id, a.id, a.nomeOriginal),
+                            )}
                             className="text-capul-700 hover:underline truncate text-left"
                           >
                             {a.nomeOriginal}

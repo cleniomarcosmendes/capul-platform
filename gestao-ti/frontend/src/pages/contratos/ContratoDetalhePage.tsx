@@ -15,6 +15,7 @@ import {
 import { projetoService } from '../../services/projeto.service';
 import { SearchSelect } from '../../components/SearchSelect';
 import type { SearchSelectOption } from '../../components/SearchSelect';
+import { abrirAnexoOuBaixar } from '../../utils/anexo';
 import type {
   Contrato,
   StatusContrato,
@@ -596,16 +597,11 @@ function TabGeral({ contrato, canManage, onReload, toast, confirm }: TabPropsWit
                 <FileText className="w-4 h-4 text-slate-400 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <button
-                    onClick={() => {
-                      const viewable = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'application/pdf', 'text/plain', 'text/csv'];
-                      if (viewable.includes(a.mimeType)) {
-                        contratoService.abrirAnexo(contrato.id, a.id, a.mimeType).catch(() => {
-                          handleDownload(a);
-                        });
-                      } else {
-                        handleDownload(a);
-                      }
-                    }}
+                    onClick={() => abrirAnexoOuBaixar(
+                      a.mimeType,
+                      () => contratoService.abrirAnexo(contrato.id, a.id, a.mimeType),
+                      () => handleDownload(a),
+                    )}
                     className="text-sm text-capul-700 hover:text-capul-900 hover:underline truncate text-left"
                     title="Clique para abrir"
                   >
