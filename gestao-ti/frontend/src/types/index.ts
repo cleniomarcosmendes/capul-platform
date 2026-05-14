@@ -1515,6 +1515,15 @@ export interface NotaFiscalItem {
   projeto: { id: string; numero: number; nome: string } | null;
 }
 
+export interface NotaFiscalChaveHistorico {
+  id: string;
+  chaveAnterior: string | null;
+  chaveNova: string | null;
+  motivo: string | null;
+  alteradoEm: string;
+  alteradoPor: { id: string; nome: string; username: string };
+}
+
 export interface NotaFiscal {
   id: string;
   numero: string;
@@ -1523,6 +1532,8 @@ export interface NotaFiscal {
   status: StatusNotaFiscal;
   observacao: string | null;
   valorTotal: number;
+  /** Chave NF-e vinculada (44 dígitos) ou null. Vínculo é opcional. */
+  chaveNfe: string | null;
   createdAt: string;
   updatedAt: string;
   fornecedorId: string;
@@ -1534,6 +1545,8 @@ export interface NotaFiscal {
   equipeId: string | null;
   equipe: { id: string; nome: string; sigla: string; cor: string | null } | null;
   itens: NotaFiscalItem[];
+  /** Audit de alterações da chave NF-e (mais recente primeiro). */
+  chaveHistorico?: NotaFiscalChaveHistorico[];
 }
 
 export interface NotaFiscalItemProjeto {

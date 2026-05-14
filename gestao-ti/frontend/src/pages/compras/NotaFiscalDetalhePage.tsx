@@ -3,8 +3,9 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { compraService } from '../../services/compra.service';
+import type { ValidarChaveNfeResult } from '../../services/compra.service';
 import { useToast } from '../../components/Toast';
-import { ArrowLeft, Pencil, Copy, FileText, FolderKanban, Paperclip, Download, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Pencil, Copy, FileText, FolderKanban, Paperclip, Download, Trash2, Upload, FileCheck, ExternalLink, History, Search, Loader2, X } from 'lucide-react';
 import { formatDateBR, formatDateTimeBR } from '../../utils/date';
 import { abrirAnexoOuBaixar } from '../../utils/anexo';
 import type { NotaFiscal } from '../../types';
@@ -34,6 +35,27 @@ export function NotaFiscalDetalhePage() {
   const [anexos, setAnexos] = useState<{ id: string; nomeOriginal: string; mimeType: string; tamanho: number; createdAt: string; usuario: { id: string; nome: string } }[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Consulta rápida da chave NF-e (modal embutido) — alternativa ao "Ver no
+  // Fiscal" para quem está na tela de Compras e só quer dar uma olhada,
+  // sem trocar de aba/módulo. Reusa POST /compras/notas-fiscais/validar-chave.
+  const [previewNfe, setPreviewNfe] = useState<ValidarChaveNfeResult | null>(null);
+  const [consultandoChave, setConsultandoChave] = useState(false);
+
+  async function handleConsultaRapida() {
+    if (!nf?.chaveNfe) return;
+    setConsultandoChave(true);
+    try {
+      const result = await compraService.validarChaveNfe(nf.chaveNfe);
+      setPreviewNfe(result);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        || 'Erro ao consultar a chave NF-e';
+      toast('error', msg);
+    } finally {
+      setConsultandoChave(false);
+    }
+  }
 
   useEffect(() => {
     if (id) carregar();
@@ -249,6 +271,60 @@ export function NotaFiscalDetalhePage() {
               <p className="mt-1 text-sm text-slate-700">{nf.observacao}</p>
             </div>
           )}
+
+          {/* Chave NF-e vinculada — 14/05/2026 */}
+          {nf.chaveNfe && (
+            <div className="mt-4 bg-sky-50 border border-sky-200 rounded-lg p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <FileCheck className="w-4 h-4 text-sky-700" />
+                  <span className="text-xs font-semibold text-sky-800 uppercase">NF-e vinculada</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleConsultaRapida}
+                    disabled={consultandoChave}
+                    className="flex items-center gap-1 text-xs text-sky-700 hover:text-sky-900 disabled:text-slate-400 disabled:cursor-wait"
+                    title="Consulta rápida — exibe preview da NF-e nesta tela"
+                  >
+                    {consultandoChave ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+                    Consulta rápida
+                  </button>
+                  <a
+                    href={`/fiscal/nfe?chave=${nf.chaveNfe}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs text-sky-700 hover:text-sky-900"
+                    title="Abrir consulta completa no módulo Fiscal (requer permissão fiscal)"
+                  >
+                    Ver no Fiscal <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+              <p className="mt-1 text-sm font-mono text-slate-700 break-all">{nf.chaveNfe}</p>
+              {canManage && nf.chaveHistorico && nf.chaveHistorico.length > 0 && (
+                <details className="mt-2">
+                  <summary className="text-xs text-sky-700 cursor-pointer hover:text-sky-900 flex items-center gap-1">
+                    <History className="w-3 h-3" />
+                    Histórico de alterações ({nf.chaveHistorico.length})
+                  </summary>
+                  <ul className="mt-2 space-y-1.5 text-xs text-slate-600">
+                    {nf.chaveHistorico.map((h) => (
+                      <li key={h.id} className="border-l-2 border-sky-300 pl-2">
+                        <div>
+                          <strong>{h.alteradoPor.nome}</strong> em {formatDateTimeBR(h.alteradoEm)}
+                          {h.chaveAnterior === null && <span className="ml-1 text-green-700">(vínculo inicial)</span>}
+                          {h.chaveNova === null && h.chaveAnterior !== null && <span className="ml-1 text-red-700">(desvinculou)</span>}
+                        </div>
+                        {h.motivo && <div className="italic text-slate-500">"{h.motivo}"</div>}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Itens */}
@@ -367,6 +443,108 @@ export function NotaFiscalDetalhePage() {
           )}
         </div>
       </div>
+
+      {/* Modal preview NF-e (Consulta rápida) — 14/05/2026 */}
+      {previewNfe && (
+        <div
+          className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setPreviewNfe(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <div>
+                <h4 className="text-base font-semibold text-slate-800">Preview NF-e</h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Origem: <span className="font-mono">{previewNfe.origem}</span>
+                </p>
+              </div>
+              <button onClick={() => setPreviewNfe(null)} className="text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-4 overflow-y-auto flex-1">
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <p className="text-xs uppercase text-slate-500 font-semibold">Emitente</p>
+                  <p className="text-sm text-slate-800">{previewNfe.parsed.emitente.razaoSocial}</p>
+                  <p className="text-xs text-slate-500 font-mono">CNPJ {previewNfe.parsed.emitente.cnpj ?? previewNfe.parsed.emitente.cpf ?? '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase text-slate-500 font-semibold">Destinatário</p>
+                  <p className="text-sm text-slate-800">{previewNfe.parsed.destinatario.razaoSocial}</p>
+                  <p className="text-xs text-slate-500 font-mono">CNPJ {previewNfe.parsed.destinatario.cnpj ?? previewNfe.parsed.destinatario.cpf ?? '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase text-slate-500 font-semibold">Número / Série</p>
+                  <p className="text-sm text-slate-800">
+                    {previewNfe.parsed.dadosGerais.numero}
+                    {previewNfe.parsed.dadosGerais.serie ? ` / ${previewNfe.parsed.dadosGerais.serie}` : ''}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase text-slate-500 font-semibold">Valor Total</p>
+                  <p className="text-sm text-slate-800 font-semibold">R$ {Number(previewNfe.parsed.totais.valorNota ?? 0).toFixed(2)}</p>
+                </div>
+                {previewNfe.parsed.protocoloAutorizacao && (
+                  <div className="col-span-2">
+                    <p className="text-xs uppercase text-slate-500 font-semibold">Autorização SEFAZ</p>
+                    <p className="text-sm text-slate-800">
+                      {previewNfe.parsed.protocoloAutorizacao.cStat}
+                      {' - '}
+                      {previewNfe.parsed.protocoloAutorizacao.motivo}
+                      {' · Protocolo '}
+                      <span className="font-mono">{previewNfe.parsed.protocoloAutorizacao.protocolo}</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <p className="text-xs uppercase text-slate-500 font-semibold mb-2">
+                Produtos da NF-e ({previewNfe.parsed.produtos.length})
+              </p>
+              <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium">#</th>
+                      <th className="px-3 py-2 text-left font-medium">Código</th>
+                      <th className="px-3 py-2 text-left font-medium">Descrição</th>
+                      <th className="px-3 py-2 text-right font-medium">Qtd</th>
+                      <th className="px-3 py-2 text-left font-medium">UN</th>
+                      <th className="px-3 py-2 text-right font-medium">V. Unit</th>
+                      <th className="px-3 py-2 text-right font-medium">V. Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewNfe.parsed.produtos.map((p) => (
+                      <tr key={p.item} className="border-t border-slate-100">
+                        <td className="px-3 py-1.5 text-slate-500">{p.item}</td>
+                        <td className="px-3 py-1.5 font-mono text-slate-700">{p.codigo}</td>
+                        <td className="px-3 py-1.5 text-slate-700">{p.descricao}</td>
+                        <td className="px-3 py-1.5 text-right text-slate-700">{Number(p.quantidadeComercial ?? 0)}</td>
+                        <td className="px-3 py-1.5 text-slate-500">{p.unidadeComercial ?? '—'}</td>
+                        <td className="px-3 py-1.5 text-right text-slate-700">R$ {Number(p.valorUnitarioComercial ?? 0).toFixed(4)}</td>
+                        <td className="px-3 py-1.5 text-right text-slate-700">R$ {Number(p.valorTotalBruto ?? 0).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="border-t border-slate-200 px-6 py-3 flex justify-end">
+              <button
+                onClick={() => setPreviewNfe(null)}
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 rounded-lg"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

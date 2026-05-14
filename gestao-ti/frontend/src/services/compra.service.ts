@@ -24,6 +24,8 @@ interface CreateNotaFiscalPayload {
   observacao?: string;
   equipeId?: string;
   itens: NotaFiscalItemPayload[];
+  /** Chave NF-e opcional (44 dígitos). Backend valida via módulo Fiscal. */
+  chaveNfe?: string;
 }
 
 interface UpdateNotaFiscalPayload {
@@ -35,6 +37,61 @@ interface UpdateNotaFiscalPayload {
   status?: string;
   equipeId?: string;
   itens?: NotaFiscalItemPayload[];
+  /** Nova chave NF-e ou null para desvincular. Bloqueada se status >= CONFERIDA. */
+  chaveNfe?: string | null;
+  /** Motivo obrigatório quando alterar/remover chave preexistente. */
+  motivoAlteracaoChave?: string;
+}
+
+/**
+ * Resposta de POST /compras/notas-fiscais/validar-chave. Espelha
+ * `NfeParsed` do módulo Fiscal — campos extras são ignorados (forward-compat).
+ */
+export interface ValidarChaveNfeResult {
+  origem: string;
+  parsed: {
+    dadosGerais: {
+      chave: string;
+      numero: string;
+      serie: string;
+      dataEmissao?: string;
+    };
+    emitente: {
+      cnpj?: string | null;
+      cpf?: string | null;
+      razaoSocial: string;
+      inscricaoEstadual?: string | null;
+    };
+    destinatario: {
+      cnpj?: string | null;
+      cpf?: string | null;
+      razaoSocial: string;
+    };
+    totais: {
+      valorNota: number;
+      valorProdutos?: number;
+    };
+    /** cStat é STRING — "100" = autorizada. */
+    protocoloAutorizacao?: {
+      protocolo: string;
+      dataRecebimento: string;
+      cStat: string;
+      motivo: string;
+      ambiente: '1' | '2';
+    } | null;
+    produtos: Array<{
+      item: number;
+      codigo: string;
+      descricao: string;
+      ncm?: string | null;
+      cfop?: string | null;
+      unidadeComercial?: string;
+      quantidadeComercial: number;
+      valorUnitarioComercial: number;
+      valorTotalBruto: number;
+    }>;
+    eventos?: Array<{ tpEvento?: string; cStat?: string; motivo?: string }>;
+  };
 }
 
 interface ListFilters {
@@ -143,6 +200,16 @@ export const compraService = {
 
   async atualizarNotaFiscal(id: string, payload: UpdateNotaFiscalPayload): Promise<NotaFiscal> {
     const { data } = await gestaoApi.patch(`/compras/notas-fiscais/${id}`, payload);
+    return data;
+  },
+
+  /**
+   * Valida uma chave NF-e via módulo Fiscal e retorna preview
+   * (emitente, número, valor, produtos). Lança erro tipado em caso de
+   * chave inválida, NF cancelada, destinatário não-CAPUL, etc.
+   */
+  async validarChaveNfe(chave: string): Promise<ValidarChaveNfeResult> {
+    const { data } = await gestaoApi.post('/compras/notas-fiscais/validar-chave', { chave });
     return data;
   },
 
