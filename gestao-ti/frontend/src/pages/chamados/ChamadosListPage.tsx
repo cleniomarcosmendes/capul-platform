@@ -372,16 +372,16 @@ export function ChamadosListPage() {
                     value={filterDataInicio}
                     onChange={(e) => setFilterDataInicio(e.target.value)}
                     className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
-                    title="Data inicio"
-                    placeholder="Data inicio"
+                    title="Atividade desde — inclui chamados abertos OU reabertos/comentados/transferidos no período"
+                    placeholder="Atividade desde"
                   />
                   <input
                     type="date"
                     value={filterDataFim}
                     onChange={(e) => setFilterDataFim(e.target.value)}
                     className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
-                    title="Data fim"
-                    placeholder="Data fim"
+                    title="Atividade até — inclui chamados abertos OU reabertos/comentados/transferidos no período"
+                    placeholder="Atividade até"
                   />
 
                   <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">

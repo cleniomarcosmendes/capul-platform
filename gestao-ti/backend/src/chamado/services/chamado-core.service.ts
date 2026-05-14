@@ -118,14 +118,27 @@ export class ChamadoCoreService {
       if (filters.tecnicoId) where.tecnicoId = filters.tecnicoId;
 
       if (filters.dataInicio || filters.dataFim) {
-        const createdAt: Record<string, Date> = {};
-        if (filters.dataInicio) createdAt.gte = new Date(filters.dataInicio);
+        const range: Record<string, Date> = {};
+        if (filters.dataInicio) range.gte = new Date(filters.dataInicio);
         if (filters.dataFim) {
           const fim = new Date(filters.dataFim);
           fim.setHours(23, 59, 59, 999);
-          createdAt.lte = fim;
+          range.lte = fim;
         }
-        where.createdAt = createdAt;
+        // Filtro por "atividade no período" (decisão 14/05/2026): inclui
+        // chamado aberto E chamados com qualquer movimento (reabertura,
+        // comentário, transferência) dentro do range, mesmo que abertos antes.
+        // Caso real: chamado #152 aberto 13/05, reaberto 14/05 — sumia ao
+        // filtrar 14/05 porque o filtro olhava só createdAt. Agora aparece.
+        const dateCondition = { OR: [{ createdAt: range }, { updatedAt: range }] };
+        if (where.AND) {
+          (where.AND as object[]).push(dateCondition);
+        } else if (where.OR) {
+          where.AND = [{ OR: where.OR }, dateCondition];
+          delete where.OR;
+        } else {
+          where.AND = [dateCondition];
+        }
       }
 
       // Para roles nao-staff, restringir as filiais vinculadas ao usuario
@@ -195,7 +208,10 @@ export class ChamadoCoreService {
       if (numero) orClauses.unshift({ numero });
       const searchCondition = { OR: orClauses };
 
-      if (where.OR) {
+      // Compat com filtro de data acima (que pode ter criado where.AND).
+      if (where.AND) {
+        (where.AND as object[]).push(searchCondition);
+      } else if (where.OR) {
         where.AND = [{ OR: where.OR }, searchCondition];
         delete where.OR;
       } else {
