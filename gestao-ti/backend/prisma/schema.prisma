@@ -2140,6 +2140,10 @@ model InteracaoPendencia {
   tipo      TipoInteracaoPendencia
   descricao String?
   publica   Boolean                 @default(true)
+  // Flag marcada quando o anexo originalmente vinculado a esta interação é
+  // excluído da sidebar — preserva o "rastro" pra UI mostrar chip "anexo
+  // removido" (paridade com chamado, 14/05/2026).
+  anexoRemovido Boolean             @default(false) @map("anexo_removido")
   createdAt DateTime                @default(now()) @map("created_at")
 
   pendenciaId String            @map("pendencia_id")
@@ -2148,7 +2152,9 @@ model InteracaoPendencia {
   usuarioId String  @map("usuario_id")
   usuario   Usuario @relation("InteracaoPendenciaUsuario", fields: [usuarioId], references: [id])
 
-  anexo AnexoPendencia?
+  // Many-to-one (14/05/2026 — incidente Marco Antonio): 1 interacao pode ter
+  // N anexos. Antes era 1:1 (campo `anexo` singular) — virou array.
+  anexos AnexoPendencia[]
 
   @@index([pendenciaId])
   @@map("interacoes_pendencia")
@@ -2166,7 +2172,7 @@ model AnexoPendencia {
   pendenciaId String           @map("pendencia_id")
   pendencia   PendenciaProjeto @relation(fields: [pendenciaId], references: [id], onDelete: Cascade)
 
-  interacaoId String?             @unique @map("interacao_id")
+  interacaoId String?             @map("interacao_id")
   interacao   InteracaoPendencia? @relation(fields: [interacaoId], references: [id])
 
   usuarioId String  @map("usuario_id")

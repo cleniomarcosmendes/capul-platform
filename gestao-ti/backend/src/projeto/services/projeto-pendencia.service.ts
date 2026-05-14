@@ -74,9 +74,10 @@ export class ProjetoPendenciaService {
         interacoes: {
           include: {
             usuario: { select: { id: true, nome: true, username: true } },
-            anexo: true,
+            anexos: true,
           },
-          orderBy: { createdAt: 'asc' },
+          // Mais recente em cima (chat-style TOTVS — decisao 13/05/2026).
+          orderBy: { createdAt: 'desc' },
         },
         anexos: {
           include: { usuario: { select: { id: true, nome: true } } },
@@ -370,6 +371,39 @@ export class ProjetoPendenciaService {
       },
     });
 
+    // Vincular anexos a esta interacao (FK interacao_id). Decisao 13/05/2026
+    // — chat-style: anexos do comentario gravam interacao_id pra renderizar
+    // chip dentro do bubble do comentario na UI.
+    //
+    // Cada upload de anexo cria automaticamente uma interacao tipo ANEXO
+    // (legado). Quando o anexo eh "movido" para o comentario, removemos a
+    // interacao ANEXO antiga (que ficaria pendurada sem conteudo).
+    if (dto.anexosIds && dto.anexosIds.length > 0) {
+      const anexosValidos = await this.prisma.anexoPendencia.findMany({
+        where: { id: { in: dto.anexosIds }, pendenciaId },
+        select: { id: true, interacaoId: true },
+      });
+      if (anexosValidos.length !== dto.anexosIds.length) {
+        console.warn(`Pendencia ${pendenciaId}: ${dto.anexosIds.length - anexosValidos.length} anexo(s) nao puderam ser vinculados a interacao ${interacao.id}`);
+      }
+      const interacoesAntigas = anexosValidos
+        .map((a) => a.interacaoId)
+        .filter((id): id is string => !!id && id !== interacao.id);
+
+      if (anexosValidos.length > 0) {
+        await this.prisma.anexoPendencia.updateMany({
+          where: { id: { in: anexosValidos.map((a) => a.id) } },
+          data: { interacaoId: interacao.id },
+        });
+      }
+      // Limpar interacoes ANEXO orfas (criadas automaticamente no upload)
+      if (interacoesAntigas.length > 0) {
+        await this.prisma.interacaoPendencia.deleteMany({
+          where: { id: { in: interacoesAntigas }, tipo: 'ANEXO' },
+        });
+      }
+    }
+
     // Processar @mencoes
     const mencionadoIds: string[] = [];
     if (dto.descricao) {
@@ -478,7 +512,19 @@ export class ProjetoPendenciaService {
     const filePath = path.join(PENDENCIA_UPLOADS_DIR, anexo.nomeArquivo);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
-    await this.prisma.anexoPendencia.delete({ where: { id: anexoId } });
+    // Se o anexo estava vinculado a uma interacao (comentario), marca a flag
+    // pra UI conseguir mostrar chip "anexo removido" no lugar do chip do
+    // arquivo — paridade com chamado (14/05/2026). Roda na mesma transacao
+    // pra garantir consistencia entre o delete e o update.
+    await this.prisma.$transaction(async (tx) => {
+      if (anexo.interacaoId) {
+        await tx.interacaoPendencia.update({
+          where: { id: anexo.interacaoId },
+          data: { anexoRemovido: true },
+        });
+      }
+      await tx.anexoPendencia.delete({ where: { id: anexoId } });
+    });
     return { deleted: true };
   }
 }
