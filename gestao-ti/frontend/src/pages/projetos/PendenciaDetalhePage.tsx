@@ -422,9 +422,11 @@ export function PendenciaDetalhePage() {
         </div>
 
             {/* Compositor — Slack-style (paridade com chamado, 14/05/2026):
-                auto-grow, Enter envia (Shift+Enter quebra linha), drag-drop,
-                contador discreto, toolbar única no rodapé. Pendencia finalizada
-                mostra aviso em vez do compositor (backend bloqueia). */}
+                rows=3 com resize-y manual (pedido suporte 14/05 — permite
+                conferir texto longo redimensionando antes de enviar), Enter
+                quebra linha (envio apenas pelo botao), drag-drop, contador
+                discreto, toolbar única no rodapé. Pendencia finalizada mostra
+                aviso em vez do compositor (backend bloqueia). */}
             {isFinalizada ? (
               <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-500 text-center lg:flex-shrink-0">
                 Pendência {pendencia.status === 'CONCLUIDA' ? 'concluída' : 'cancelada'} — novos comentários não são permitidos.
@@ -462,14 +464,10 @@ export function PendenciaDetalhePage() {
                   value={comentario}
                   onChange={setComentario}
                   usuarios={membrosEquipe.map((m) => ({ id: m.usuarioId, nome: m.usuario.nome, username: m.usuario.username }))}
-                  autoGrow
-                  minRows={1}
-                  maxRows={6}
+                  rows={3}
                   maxLength={5000}
-                  submitOnEnter
-                  onSubmit={handleAddComentario}
-                  className="w-full border-0 px-3 py-2 text-sm focus:outline-none focus:ring-0"
-                  placeholder="Escreva seu comentário... (Enter envia, Shift+Enter quebra linha — use @ para mencionar)"
+                  className="w-full border-0 px-3 py-2 text-sm focus:outline-none focus:ring-0 resize-y"
+                  placeholder="Escreva seu comentário... (use @ para mencionar)"
                 />
                 {comentario.length >= 4000 && (
                   <span
@@ -523,7 +521,7 @@ export function PendenciaDetalhePage() {
                 <button
                   onClick={handleAddComentario}
                   disabled={enviando || (!comentario.trim() && comentarioArquivos.length === 0)}
-                  title="Enviar comentário (Enter)"
+                  title="Enviar comentário"
                   className="bg-capul-600 text-white px-4 py-1.5 rounded-md text-xs font-medium hover:bg-capul-700 disabled:opacity-50 flex items-center gap-1"
                 >
                   <Send className="w-3.5 h-3.5" />

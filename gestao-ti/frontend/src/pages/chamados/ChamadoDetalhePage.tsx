@@ -564,14 +564,10 @@ export function ChamadoDetalhePage() {
                     value={comentarioTexto}
                     onChange={setComentarioTexto}
                     usuarios={usuariosMencao.map((u) => ({ id: u.id, nome: u.nome, username: u.username }))}
-                    autoGrow
-                    minRows={1}
-                    maxRows={6}
+                    rows={3}
                     maxLength={5000}
-                    submitOnEnter
-                    onSubmit={() => handleEnviarComentario(comentarioPublico, false)}
-                    className="w-full border-0 px-3 py-2 text-sm focus:outline-none focus:ring-0"
-                    placeholder="Escreva seu comentário... (Enter envia, Shift+Enter quebra linha — use @ para mencionar)"
+                    className="w-full border-0 px-3 py-2 text-sm focus:outline-none focus:ring-0 resize-y"
+                    placeholder="Escreva seu comentário... (use @ para mencionar)"
                   />
                   {/* Contador discreto — aparece só perto do limite (≥ 4000) */}
                   {comentarioTexto.length >= 4000 && (
@@ -638,7 +634,7 @@ export function ChamadoDetalhePage() {
                   <button
                     onClick={() => handleEnviarComentario(comentarioPublico, false)}
                     disabled={actionLoading || (!comentarioTexto.trim() && comentarioArquivos.length === 0)}
-                    title="Enviar comentário (Enter)"
+                    title="Enviar comentário"
                     className="bg-capul-600 text-white px-4 py-1.5 rounded-md text-xs font-medium hover:bg-capul-700 disabled:opacity-50">
                     Enviar
                   </button>
