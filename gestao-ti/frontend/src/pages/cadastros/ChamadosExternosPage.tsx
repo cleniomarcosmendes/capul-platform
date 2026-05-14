@@ -14,7 +14,10 @@ type SortDir = 'asc' | 'desc';
 
 const now = new Date();
 const ANO_ATUAL = now.getFullYear();
-const ANOS = [ANO_ATUAL - 2, ANO_ATUAL - 1, ANO_ATUAL, ANO_ATUAL + 1];
+// Janela: ano atual + 2 a frente. Recalculado a cada carga da pagina via
+// `new Date().getFullYear()` — quando virar 2027, a lista vira [2027,2028,2029]
+// automaticamente. Nao incluir anos passados (nunca terao lancamento novo).
+const ANOS = [ANO_ATUAL, ANO_ATUAL + 1, ANO_ATUAL + 2];
 
 export function ChamadosExternosPage() {
   const { gestaoTiRole } = useAuth();

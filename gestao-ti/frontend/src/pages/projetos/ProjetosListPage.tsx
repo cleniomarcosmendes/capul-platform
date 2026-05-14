@@ -134,11 +134,31 @@ export function ProjetosListPage() {
       byParent.set(key, arr);
     });
 
+    // Propaga favorito para ancestrais: pai com subprojeto favoritado deve
+    // ir junto pro topo (senao filho favorito fica enterrado no fim).
+    // Fix 13/05/2026 — subprojeto #45 favoritado nao subia ao topo pq o pai
+    // nao era favorito. Ver f03ae22 (fix anterior dentro do projeto pai).
+    const temFavoritoNaArvore = new Set<string>(favoritoIds);
+    projetosFiltrados.forEach((p) => {
+      if (!favoritoIds.has(p.id)) return;
+      let paiId = p.projetoPaiId;
+      while (paiId) {
+        if (temFavoritoNaArvore.has(paiId)) break; // ja marcado
+        temFavoritoNaArvore.add(paiId);
+        const pai = projetosFiltrados.find((x) => x.id === paiId);
+        paiId = pai?.projetoPaiId ?? null;
+      }
+    });
+
     type ProjetoItem = typeof projetosFiltrados[0];
     const cmpDefault = (a: ProjetoItem, b: ProjetoItem) => {
-      const aFav = favoritoIds.has(a.id) ? 0 : 1;
-      const bFav = favoritoIds.has(b.id) ? 0 : 1;
+      const aFav = temFavoritoNaArvore.has(a.id) ? 0 : 1;
+      const bFav = temFavoritoNaArvore.has(b.id) ? 0 : 1;
       if (aFav !== bFav) return aFav - bFav;
+      // Empate: favorito direto ainda tem prioridade sobre "favorito por filho"
+      const aFavDireto = favoritoIds.has(a.id) ? 0 : 1;
+      const bFavDireto = favoritoIds.has(b.id) ? 0 : 1;
+      if (aFavDireto !== bFavDireto) return aFavDireto - bFavDireto;
       return Number(a.numero) - Number(b.numero);
     };
     const cmpCustom = (a: ProjetoItem, b: ProjetoItem) => {
