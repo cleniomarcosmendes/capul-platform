@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   ChevronDown,
   Download,
+  Eye,
   FileText,
   Info,
   Printer,
@@ -19,6 +20,7 @@ import { InconsistenciaPanelNfe } from '../components/InconsistenciaPanelNfe';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
 import { extractApiError } from '../utils/errors';
+import { abrirBlobEmNovaAba, baixarBlob } from '../utils/blob';
 import { Row } from '../components/Row';
 import {
   fmtCep,
@@ -186,30 +188,37 @@ export function NfeConsultaPage() {
     }
   }
 
-  async function handleDownloadXml() {
-    if (!result) return;
+  async function fetchNfeXml(): Promise<Blob | null> {
+    if (!result) return null;
     const r = await fiscalApi.get(`/nfe/${result.chave}/filial/${result.filial}/xml`, {
       responseType: 'blob',
     });
-    const url = URL.createObjectURL(new Blob([r.data], { type: 'application/xml' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `NFe_${result.chave}.xml`;
-    a.click();
-    URL.revokeObjectURL(url);
+    return new Blob([r.data], { type: 'application/xml; charset=utf-8' });
   }
 
-  async function handleDownloadDanfe() {
-    if (!result) return;
+  async function fetchNfeDanfe(): Promise<Blob | null> {
+    if (!result) return null;
     const r = await fiscalApi.get(`/nfe/${result.chave}/filial/${result.filial}/danfe`, {
       responseType: 'blob',
     });
-    const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `DANFE_${result.chave}.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
+    return new Blob([r.data], { type: 'application/pdf' });
+  }
+
+  async function handleAbrirXml() {
+    const blob = await fetchNfeXml();
+    if (blob) abrirBlobEmNovaAba(blob);
+  }
+  async function handleBaixarXml() {
+    const blob = await fetchNfeXml();
+    if (blob && result) baixarBlob(blob, `NFe_${result.chave}.xml`);
+  }
+  async function handleAbrirDanfe() {
+    const blob = await fetchNfeDanfe();
+    if (blob) abrirBlobEmNovaAba(blob);
+  }
+  async function handleBaixarDanfe() {
+    const blob = await fetchNfeDanfe();
+    if (blob && result) baixarBlob(blob, `DANFE_${result.chave}.pdf`);
   }
 
   /**
@@ -532,22 +541,46 @@ export function NfeConsultaPage() {
               <Badge variant={result.parsed.dadosGerais.ambiente === '1' ? 'green' : 'yellow'}>
                 {result.parsed.dadosGerais.ambiente === '1' ? 'Produção' : 'Homologação'}
               </Badge>
-              <Button
-                variant="secondary"
-                size="sm"
-                leftIcon={<Download className="h-4 w-4" />}
-                onClick={handleDownloadXml}
-              >
-                Baixar XML
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                leftIcon={<FileText className="h-4 w-4" />}
-                onClick={handleDownloadDanfe}
-              >
-                Baixar DANFE
-              </Button>
+              {/* Padrão (14/05/2026): botão principal abre em nova aba; ícone ↓ baixa.
+                  Viewer do browser oferece download nativo do PDF/XML aberto. */}
+              <div className="flex items-stretch">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<Eye className="h-4 w-4" />}
+                  onClick={handleAbrirXml}
+                  title="Abrir XML em nova aba"
+                >
+                  XML
+                </Button>
+                <button
+                  type="button"
+                  onClick={handleBaixarXml}
+                  title="Baixar XML"
+                  className="ml-1 inline-flex items-center justify-center rounded-md border border-slate-300 bg-white px-2 text-slate-600 hover:bg-slate-50"
+                >
+                  <Download className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="flex items-stretch">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<FileText className="h-4 w-4" />}
+                  onClick={handleAbrirDanfe}
+                  title="Abrir DANFE em nova aba"
+                >
+                  DANFE
+                </Button>
+                <button
+                  type="button"
+                  onClick={handleBaixarDanfe}
+                  title="Baixar DANFE"
+                  className="ml-1 inline-flex items-center justify-center rounded-md border border-slate-300 bg-white px-2 text-slate-600 hover:bg-slate-50"
+                >
+                  <Download className="h-4 w-4" />
+                </button>
+              </div>
               <Button
                 variant="secondary"
                 size="sm"

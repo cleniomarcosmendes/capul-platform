@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   Download,
+  Eye,
   FileText,
   Info,
   X,
@@ -17,6 +18,7 @@ import { OrigemBadge } from '../components/OrigemBadge';
 import { EventosTimeline } from '../components/EventosTimeline';
 import { useAuth } from '../contexts/AuthContext';
 import { extractApiError } from '../utils/errors';
+import { abrirBlobEmNovaAba, baixarBlob } from '../utils/blob';
 import { Row } from '../components/Row';
 import {
   fmtChave,
@@ -248,31 +250,38 @@ export function CteConsultaPage() {
     }
   }
 
-  async function handleDownloadXml() {
-    if (!result?.xmlDisponivel) return;
+  async function fetchXmlBlob(): Promise<Blob | null> {
+    if (!result?.xmlDisponivel) return null;
     const r = await fiscalApi.get(`/cte/${result.chave}/filial/${result.filial}/xml`, {
       responseType: 'blob',
     });
-    const url = URL.createObjectURL(new Blob([r.data], { type: 'application/xml' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `CTe_${result.chave}.xml`;
-    a.click();
-    URL.revokeObjectURL(url);
+    return new Blob([r.data], { type: 'application/xml; charset=utf-8' });
   }
 
-  async function handleDownloadDacte(modelo: 'padrao' | 'fsist' = 'padrao') {
-    if (!result?.xmlDisponivel) return;
+  async function fetchDacteBlob(modelo: 'padrao' | 'fsist' = 'padrao'): Promise<Blob | null> {
+    if (!result?.xmlDisponivel) return null;
     const r = await fiscalApi.get(`/cte/${result.chave}/filial/${result.filial}/dacte`, {
       responseType: 'blob',
       params: modelo === 'fsist' ? { modelo: 'fsist' } : undefined,
     });
-    const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `DACTE_${modelo === 'fsist' ? 'fsist_' : ''}${result.chave}.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
+    return new Blob([r.data], { type: 'application/pdf' });
+  }
+
+  async function handleAbrirXml() {
+    const blob = await fetchXmlBlob();
+    if (blob) abrirBlobEmNovaAba(blob);
+  }
+  async function handleBaixarXml() {
+    const blob = await fetchXmlBlob();
+    if (blob && result) baixarBlob(blob, `CTe_${result.chave}.xml`);
+  }
+  async function handleAbrirDacte(modelo: 'padrao' | 'fsist' = 'padrao') {
+    const blob = await fetchDacteBlob(modelo);
+    if (blob) abrirBlobEmNovaAba(blob);
+  }
+  async function handleBaixarDacte(modelo: 'padrao' | 'fsist' = 'padrao') {
+    const blob = await fetchDacteBlob(modelo);
+    if (blob && result) baixarBlob(blob, `DACTE_${modelo === 'fsist' ? 'fsist_' : ''}${result.chave}.pdf`);
   }
 
   // Lista de abas — ordem espelha o portal SEFAZ (Tomador 3º, logo após
@@ -432,33 +441,68 @@ export function CteConsultaPage() {
                 <div className="mb-4 font-mono text-xs text-slate-500">
                   {fmtChave(result.chave)}
                 </div>
+                {/* Padrão (14/05/2026): click abre em nova aba; ícone "↓" ao
+                    lado força download tradicional. PDF/XML viewer do browser
+                    já oferece download nativo, então a maioria dos usuários
+                    consegue resolver pelo "Abrir". */}
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    leftIcon={<Download className="h-4 w-4" />}
-                    onClick={handleDownloadXml}
-                  >
-                    Baixar XML
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    leftIcon={<FileText className="h-4 w-4" />}
-                    onClick={() => handleDownloadDacte('padrao')}
-                    title="DACTE compacto (padrão Capul)"
-                  >
-                    DACTE Padrão
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    leftIcon={<FileText className="h-4 w-4" />}
-                    onClick={() => handleDownloadDacte('fsist')}
-                    title="DACTE estilo fsist.com.br (oficial, denso)"
-                  >
-                    DACTE Fsist
-                  </Button>
+                  <div className="flex items-stretch">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      leftIcon={<Eye className="h-4 w-4" />}
+                      onClick={handleAbrirXml}
+                      title="Abrir XML em nova aba"
+                    >
+                      XML
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={handleBaixarXml}
+                      title="Baixar XML"
+                      className="ml-1 inline-flex items-center justify-center rounded-md border border-slate-300 bg-white px-2 text-slate-600 hover:bg-slate-50"
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="flex items-stretch">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      leftIcon={<FileText className="h-4 w-4" />}
+                      onClick={() => handleAbrirDacte('padrao')}
+                      title="Abrir DACTE compacto (padrão Capul) em nova aba"
+                    >
+                      DACTE Padrão
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => handleBaixarDacte('padrao')}
+                      title="Baixar DACTE Padrão"
+                      className="ml-1 inline-flex items-center justify-center rounded-md border border-slate-300 bg-white px-2 text-slate-600 hover:bg-slate-50"
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="flex items-stretch">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      leftIcon={<FileText className="h-4 w-4" />}
+                      onClick={() => handleAbrirDacte('fsist')}
+                      title="Abrir DACTE estilo fsist.com.br (oficial, denso) em nova aba"
+                    >
+                      DACTE Fsist
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => handleBaixarDacte('fsist')}
+                      title="Baixar DACTE Fsist"
+                      className="ml-1 inline-flex items-center justify-center rounded-md border border-slate-300 bg-white px-2 text-slate-600 hover:bg-slate-50"
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </>
             ) : (
