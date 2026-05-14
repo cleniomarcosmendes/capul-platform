@@ -46,7 +46,10 @@ export function ProjetosListPage() {
   const [search, setSearch] = useState('');
   const [searchDebounced, setSearchDebounced] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
-  const [filtroStatus, setFiltroStatus] = useState<string>('EM_ANDAMENTO,PLANEJAMENTO');
+  // "Ativos" abrange Andamento + Planejamento + Em Homologação + Liberado p/
+  // Produção (decisão 14/05/2026). PAUSADO fica fora — conceitualmente é
+  // "parado". Filtro default alinhado ao card de KPI e ao value do filtro.
+  const [filtroStatus, setFiltroStatus] = useState<string>('EM_ANDAMENTO,PLANEJAMENTO,EM_HOMOLOGACAO,LIBERADO_PARA_PRODUCAO');
   const [filtroSoftware, setFiltroSoftware] = useState('');
   const [apenasRaiz, setApenasRaiz] = useState(false);
   const [meusProjetos, setMeusProjetos] = useState(true);
@@ -229,7 +232,7 @@ export function ProjetosListPage() {
   }
 
   const totalAtivos = projetosFiltrados.filter((p) =>
-    ['PLANEJAMENTO', 'EM_ANDAMENTO', 'EM_HOMOLOGACAO', 'LIBERADO_PARA_PRODUCAO', 'PAUSADO'].includes(p.status),
+    ['PLANEJAMENTO', 'EM_ANDAMENTO', 'EM_HOMOLOGACAO', 'LIBERADO_PARA_PRODUCAO'].includes(p.status),
   ).length;
   const emAndamento = projetosFiltrados.filter((p) => p.status === 'EM_ANDAMENTO').length;
   const planejamento = projetosFiltrados.filter((p) => p.status === 'PLANEJAMENTO').length;
@@ -299,9 +302,7 @@ export function ProjetosListPage() {
           </select>
           <select value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
             <option value="">Todos Status</option>
-            <option value="EM_ANDAMENTO,PLANEJAMENTO">Ativos (Andamento + Planejamento)</option>
-            <option value="EM_HOMOLOGACAO">🧪 Aguardando validação HOM</option>
-            <option value="LIBERADO_PARA_PRODUCAO">🚀 Aguardando produção</option>
+            <option value="EM_ANDAMENTO,PLANEJAMENTO,EM_HOMOLOGACAO,LIBERADO_PARA_PRODUCAO">Ativos</option>
             {Object.entries(statusLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
           <select value={filtroSoftware} onChange={(e) => setFiltroSoftware(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
