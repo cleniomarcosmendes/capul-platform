@@ -1,0 +1,1692 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>V3 — Atividades de Projeto (Capul)</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* Capul palette — emerald primário */
+      --primary:        #047857;   /* emerald-700 */
+      --primary-hover:  #065f46;   /* emerald-800 */
+      --primary-soft:   #ecfdf5;   /* emerald-50 */
+      --primary-border: #a7f3d0;   /* emerald-200 */
+
+      --bg-page:        #f8fafc;   /* slate-50 */
+      --bg-surface:     #ffffff;
+      --bg-toolbar:     #f1f5f9;   /* slate-100 */
+      --bg-hover:       #f1f5f9;
+      --bg-selected:    #ecfdf5;
+
+      --text-primary:   #0f172a;   /* slate-900 */
+      --text-secondary: #475569;   /* slate-600 */
+      --text-muted:     #94a3b8;   /* slate-400 */
+
+      --border:         #e2e8f0;   /* slate-200 */
+      --border-strong:  #cbd5e1;   /* slate-300 */
+
+      --status-done:    #16a34a;   /* green-600 */
+      --status-doing:   #2563eb;   /* blue-600 */
+      --status-pending: #94a3b8;   /* slate-400 */
+      --status-danger:  #dc2626;   /* red-600 */
+
+      --shadow-sm:  0 1px 2px rgba(0,0,0,.05);
+      --shadow-md:  0 4px 12px rgba(0,0,0,.08);
+      --shadow-lg:  0 16px 48px rgba(0,0,0,.18);
+
+      --radius-sm: 4px;
+      --radius-md: 6px;
+      --radius-lg: 8px;
+
+      /* Drawer width controla o push */
+      --drawer-w: 420px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary:        #34d399;
+        --primary-hover:  #6ee7b7;
+        --primary-soft:   #064e3b;
+        --primary-border: #047857;
+
+        --bg-page:        #0f172a;
+        --bg-surface:     #1e293b;
+        --bg-toolbar:     #1e293b;
+        --bg-hover:       #334155;
+        --bg-selected:    #064e3b;
+
+        --text-primary:   #f1f5f9;
+        --text-secondary: #cbd5e1;
+        --text-muted:     #64748b;
+
+        --border:         #334155;
+        --border-strong:  #475569;
+      }
+    }
+
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg-page);
+      color: var(--text-primary);
+      font-size: 13px;
+      line-height: 1.4;
+      min-height: 100vh;
+    }
+
+    /* Floating annotation showing viewport mode */
+    .vp-annot {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 100;
+      background: var(--text-primary);
+      color: var(--bg-surface);
+      padding: 6px 12px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 500;
+      box-shadow: var(--shadow-md);
+    }
+
+    /* ========== HEADER DO PROJETO ========== */
+    .proj-header {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .proj-header-inner {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 16px 24px 8px;
+    }
+    .back-link {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .back-link:hover { color: var(--text-secondary); }
+    .proj-top-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 8px;
+    }
+    .proj-title-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .proj-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .proj-sub-chips {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .proj-meta {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      margin-top: 12px;
+      max-width: 800px;
+    }
+    .proj-meta-item .label {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .proj-meta-item .val {
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+    .proj-desc {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      max-width: 800px;
+    }
+    .proj-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 9px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      background: var(--bg-toolbar);
+      color: var(--text-secondary);
+    }
+    .chip-status-planejamento { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+    .chip-status-andamento    { background: #ecfdf5; color: var(--primary); border-color: var(--primary-border); }
+    .chip-fase                { background: var(--primary-soft); color: var(--primary); border-color: var(--primary-border); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-strong);
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 120ms, border-color 120ms;
+    }
+    .btn:hover { background: var(--bg-hover); }
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+      box-shadow: var(--shadow-sm);
+    }
+    .btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+    .btn-icon-only { padding: 6px; }
+
+    /* ========== TABS DO PROJETO ========== */
+    .proj-tabs {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .proj-tabs::-webkit-scrollbar { display: none; }
+    .proj-tabs-inner {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      gap: 4px;
+    }
+    .tab-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      border-bottom: 2px solid transparent;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: color 120ms, border-color 120ms;
+    }
+    .tab-link:hover { color: var(--text-primary); }
+    .tab-link.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+      font-weight: 500;
+    }
+
+    /* ========== TOOLBAR ATIVIDADES (sticky) ========== */
+    .toolbar {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 30;
+    }
+    .toolbar-inner {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .toolbar-divider {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+    }
+    .search-wrap {
+      flex: 1;
+      min-width: 200px;
+      max-width: 360px;
+      position: relative;
+    }
+    .search-wrap input {
+      width: 100%;
+      padding: 6px 10px 6px 30px;
+      font-size: 12px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-md);
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      font-family: inherit;
+      outline: none;
+      transition: border-color 120ms, box-shadow 120ms;
+    }
+    .search-wrap input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(4,120,87,.12);
+    }
+    .search-wrap i {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 14px;
+      pointer-events: none;
+    }
+    .view-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 2px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-md);
+      background: var(--bg-surface);
+    }
+    .view-toggle button {
+      padding: 4px 9px;
+      font-size: 11px;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .view-toggle button.active {
+      background: var(--text-primary);
+      color: var(--bg-surface);
+    }
+
+    .kbd {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 5px;
+      font-size: 10px;
+      font-family: ui-monospace, monospace;
+      background: var(--bg-toolbar);
+      color: var(--text-muted);
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      margin-left: 4px;
+    }
+
+    /* ========== LAYOUT PRINCIPAL — LISTA + DRAWER ========== */
+    .layout {
+      display: flex;
+      max-width: 1480px;
+      margin: 0 auto;
+      transition: padding 240ms cubic-bezier(.2,.8,.2,1);
+    }
+    .list-area {
+      flex: 1;
+      min-width: 0;
+      padding: 16px 24px 60px;
+    }
+
+    /* Push mode (≥1440px): drawer faz parte do layout, lista encolhe */
+    @media (min-width: 1440px) {
+      body.drawer-open .layout { padding-right: var(--drawer-w); }
+      .drawer { position: fixed; top: 0; bottom: 0; right: 0; width: var(--drawer-w); transform: translateX(100%); transition: transform 240ms cubic-bezier(.2,.8,.2,1); border-left: 1px solid var(--border); }
+      body.drawer-open .drawer { transform: translateX(0); }
+      .drawer-backdrop { display: none !important; }
+    }
+
+    /* Overlay mode (768-1439px): drawer flutua com backdrop */
+    @media (min-width: 768px) and (max-width: 1439px) {
+      .drawer {
+        position: fixed; top: 0; bottom: 0; right: 0; width: var(--drawer-w);
+        max-width: 92vw;
+        transform: translateX(100%);
+        transition: transform 240ms cubic-bezier(.2,.8,.2,1);
+        box-shadow: var(--shadow-lg);
+      }
+      body.drawer-open .drawer { transform: translateX(0); }
+    }
+
+    /* Mobile (<768px): drawer full-screen, modal vira bottom-sheet */
+    @media (max-width: 767px) {
+      .drawer {
+        position: fixed; inset: 0; width: 100vw; height: 100dvh;
+        transform: translateX(100%);
+        transition: transform 240ms cubic-bezier(.2,.8,.2,1);
+        border-left: none;
+      }
+      body.drawer-open .drawer { transform: translateX(0); }
+      .drawer-backdrop { display: none !important; }
+      .proj-meta { grid-template-columns: repeat(2, 1fr); }
+      .proj-top-row { flex-direction: column; }
+      .proj-actions { width: 100%; flex-wrap: wrap; }
+      .toolbar-inner { padding: 10px 16px; }
+      .list-area { padding: 12px 16px 80px; }
+      .search-wrap { width: 100%; max-width: none; order: 99; }
+      .view-toggle { display: none; }
+    }
+
+    .drawer-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(15,23,42,0.4);
+      opacity: 0; pointer-events: none;
+      transition: opacity 220ms ease;
+      z-index: 40;
+    }
+    body.drawer-open .drawer-backdrop {
+      opacity: 1; pointer-events: auto;
+    }
+
+    /* ========== FASES + TAREFAS ========== */
+    .fase-block {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    .fase-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--bg-toolbar);
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .fase-toggle {
+      background: transparent; border: none;
+      color: var(--text-muted); cursor: pointer;
+      padding: 2px; display: inline-flex;
+    }
+    .fase-toggle:hover { color: var(--text-primary); }
+    .fase-name { font-weight: 600; color: var(--text-primary); }
+    .fase-meta { font-size: 11px; color: var(--text-muted); }
+    .fase-actions {
+      margin-left: auto;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .fase-status-select {
+      font-size: 11px;
+      padding: 3px 8px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .icon-btn {
+      width: 26px; height: 26px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: none; background: transparent;
+      color: var(--text-muted); cursor: pointer;
+      border-radius: var(--radius-sm);
+      transition: background 100ms, color 100ms;
+    }
+    .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .icon-btn.danger:hover { color: var(--status-danger); }
+    .icon-btn.success:hover { color: var(--status-done); }
+
+    .task-list {
+      list-style: none;
+    }
+    .task-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 100ms;
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      border-left: none;
+      border-right: none;
+      border-top: none;
+      font-family: inherit;
+      color: var(--text-primary);
+    }
+    .task-list li:last-child .task-row { border-bottom: none; }
+    .task-row:hover { background: var(--bg-hover); }
+    .task-row.selected {
+      background: var(--bg-selected);
+      box-shadow: inset 3px 0 0 var(--primary);
+    }
+    .task-row .row-actions {
+      display: flex; align-items: center; gap: 2px;
+      opacity: 0;
+      transition: opacity 120ms ease;
+    }
+    .task-row:hover .row-actions,
+    .task-row.selected .row-actions,
+    .task-row:focus-within .row-actions { opacity: 1; }
+
+    .task-check {
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      border: 2px solid var(--border-strong);
+      display: inline-flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: border-color 120ms, background 120ms;
+    }
+    .task-check.done {
+      background: var(--primary-soft);
+      border-color: var(--primary);
+    }
+    .task-check.done i { color: var(--primary); font-size: 11px; }
+    .task-check.doing {
+      border-color: var(--status-doing);
+    }
+    .task-check.doing::after {
+      content: '';
+      width: 8px; height: 8px;
+      background: var(--status-doing);
+      border-radius: 50%;
+    }
+
+    .task-name {
+      flex: 1;
+      min-width: 0;
+      font-size: 13px;
+      color: var(--text-primary);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .task-name.done {
+      color: var(--text-muted);
+    }
+    .task-meta {
+      display: flex; align-items: center; gap: 10px;
+      flex-shrink: 0;
+    }
+    .meta-pill {
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .meta-pill i { font-size: 13px; }
+    .meta-pill.highlight { color: var(--primary); font-weight: 500; }
+
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 10px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .status-pill-done    { background: #dcfce7; color: #166534; }
+    .status-pill-doing   { background: #dbeafe; color: #1e40af; }
+    .status-pill-pending { background: #f1f5f9; color: #475569; }
+    @media (prefers-color-scheme: dark) {
+      .status-pill-done    { background: #064e3b; color: #6ee7b7; }
+      .status-pill-doing   { background: #1e3a8a; color: #93c5fd; }
+      .status-pill-pending { background: #334155; color: #cbd5e1; }
+    }
+
+    /* Hide some meta on smaller screens */
+    @media (max-width: 1023px) {
+      .meta-pill.hide-md { display: none; }
+    }
+    @media (max-width: 767px) {
+      .meta-pill.hide-sm { display: none; }
+      .status-pill.hide-sm { display: none; }
+    }
+
+    /* ========== INLINE ADD ========== */
+    .inline-add {
+      padding: 10px 14px;
+      background: var(--bg-toolbar);
+      border-bottom: 1px solid var(--border);
+      display: none;
+      animation: slideDown 160ms cubic-bezier(.2,.8,.2,1);
+    }
+    .inline-add.open { display: block; }
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .inline-add input {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 13px;
+      border: 1px solid var(--primary);
+      border-radius: var(--radius-md);
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      font-family: inherit;
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(4,120,87,.12);
+    }
+    .inline-add-hint {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .inline-add-hint a {
+      color: var(--primary);
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .inline-add-hint a:hover { text-decoration: underline; }
+
+    /* ========== DRAWER ========== */
+    .drawer {
+      background: var(--bg-surface);
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+    }
+    .drawer-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .drawer-top {
+      display: flex; align-items: flex-start; gap: 8px;
+    }
+    .drawer-breadcrumb {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .drawer-title {
+      flex: 1;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-top: 2px;
+    }
+    .drawer-controls {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+      flex-wrap: wrap;
+    }
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 9px;
+      font-size: 11px;
+      border-radius: 9999px;
+      border: 1px solid var(--border);
+      background: var(--bg-toolbar);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .badge:hover { background: var(--bg-hover); }
+    .badge i { font-size: 11px; }
+    .badge-done {
+      background: #dcfce7; color: #166534; border-color: #86efac;
+    }
+    @media (prefers-color-scheme: dark) {
+      .badge-done { background: #064e3b; color: #6ee7b7; border-color: var(--primary); }
+    }
+    .timer-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px;
+      font-size: 11px;
+      border-radius: 9999px;
+      border: 1px solid var(--primary-border);
+      background: var(--primary-soft);
+      color: var(--primary);
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: 500;
+      margin-left: auto;
+    }
+    .timer-pill:hover { background: var(--primary); color: white; }
+    .timer-pill i { font-size: 12px; }
+
+    .drawer-tabs {
+      display: flex;
+      gap: 0;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .drawer-tabs::-webkit-scrollbar { display: none; }
+    .drawer-tab {
+      padding: 9px 12px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color 120ms, border-color 120ms;
+    }
+    .drawer-tab:hover { color: var(--text-primary); }
+    .drawer-tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+      font-weight: 500;
+    }
+    .drawer-tab-count {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-left: 3px;
+    }
+
+    .drawer-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+    .drawer-content::-webkit-scrollbar { width: 6px; }
+    .drawer-content::-webkit-scrollbar-thumb {
+      background: var(--border-strong);
+      border-radius: 3px;
+    }
+
+    .section { margin-bottom: 18px; }
+    .section-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+    .desc-text {
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--text-secondary);
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .info-item {
+      font-size: 12px;
+    }
+    .info-item .lbl { color: var(--text-muted); font-size: 11px; }
+    .info-item .val { color: var(--text-primary); }
+
+    /* ========== TAB TEMPO ========== */
+    .tempo-total {
+      display: flex; align-items: baseline; gap: 8px;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .tempo-total-val {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .tempo-total-lbl {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .tempo-table {
+      width: 100%;
+      font-size: 12px;
+      border-collapse: collapse;
+    }
+    .tempo-table th {
+      text-align: left;
+      padding: 6px 4px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border);
+    }
+    .tempo-table td {
+      padding: 7px 4px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .tempo-table td.duracao {
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .tempo-table tr:last-child td { border-bottom: none; }
+    .tempo-add-btn {
+      margin-top: 10px;
+      width: 100%;
+      padding: 8px;
+      font-size: 12px;
+      border: 1px dashed var(--border-strong);
+      border-radius: var(--radius-md);
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+    }
+    .tempo-add-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: var(--primary-soft);
+    }
+
+    /* ========== TAB CONVERSA (chat-style) ========== */
+    .conv-area {
+      display: flex; flex-direction: column;
+      gap: 12px;
+    }
+    .conv-msg {
+      background: var(--bg-toolbar);
+      border-radius: 0 var(--radius-lg) var(--radius-lg) var(--radius-lg);
+      padding: 10px 12px;
+    }
+    .conv-meta {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .conv-meta strong { color: var(--text-primary); font-weight: 500; }
+    .conv-text {
+      font-size: 13px;
+      color: var(--text-primary);
+      line-height: 1.55;
+    }
+    .avatar {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-size: 9px; font-weight: 600;
+      display: inline-flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .composer {
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-surface);
+    }
+    .composer textarea {
+      width: 100%;
+      padding: 8px 10px;
+      font-size: 13px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-md);
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      font-family: inherit;
+      outline: none;
+      resize: vertical;
+      min-height: 38px;
+      transition: border-color 120ms, box-shadow 120ms;
+    }
+    .composer textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(4,120,87,.12);
+    }
+    .composer-actions {
+      margin-top: 6px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .composer-actions .spacer { flex: 1; }
+    .composer-btn {
+      padding: 4px 8px;
+      font-size: 11px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-family: inherit;
+      border-radius: var(--radius-sm);
+      display: inline-flex; align-items: center; gap: 4px;
+    }
+    .composer-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    /* ========== EMPTY STATES ========== */
+    .empty {
+      text-align: center;
+      padding: 40px 16px;
+      color: var(--text-muted);
+    }
+    .empty i {
+      font-size: 36px;
+      display: block;
+      margin: 0 auto 10px;
+      opacity: 0.35;
+    }
+    .empty-msg { font-size: 12px; }
+    .empty-cta {
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--primary);
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .empty-cta:hover { text-decoration: underline; }
+
+    /* ========== TAB HISTÓRICO ========== */
+    .timeline {
+      display: flex; flex-direction: column;
+      gap: 4px;
+    }
+    .timeline-item {
+      display: flex; gap: 10px;
+      padding: 5px 0;
+      font-size: 12px;
+      align-items: baseline;
+    }
+    .timeline-time {
+      flex-shrink: 0;
+      width: 90px;
+      font-size: 11px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .timeline-text {
+      color: var(--text-primary);
+      flex: 1;
+    }
+    .timeline-text strong { font-weight: 500; }
+
+    /* ========== MODAL NOVA TAREFA ========== */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(15,23,42,0.5);
+      display: none;
+      align-items: center; justify-content: center;
+      z-index: 70;
+      padding: 24px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-card {
+      width: 100%;
+      max-width: 540px;
+      background: var(--bg-surface);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      animation: pop 200ms cubic-bezier(.2,.8,.2,1);
+      max-height: calc(100dvh - 48px);
+      display: flex; flex-direction: column;
+    }
+    @keyframes pop {
+      from { transform: scale(.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    @media (max-width: 767px) {
+      .modal-backdrop { align-items: flex-end; padding: 0; }
+      .modal-card {
+        max-width: none;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        max-height: 92dvh;
+        animation: slideUp 260ms cubic-bezier(.2,.8,.2,1);
+      }
+      @keyframes slideUp {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+      }
+      .modal-card::before {
+        content: '';
+        display: block;
+        width: 36px; height: 4px;
+        background: var(--border-strong);
+        border-radius: 2px;
+        margin: 8px auto 0;
+      }
+    }
+
+    .modal-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-title {
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .modal-body {
+      padding: 16px 18px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .form-row { margin-bottom: 12px; }
+    .form-row label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 4px;
+    }
+    .form-row input,
+    .form-row select,
+    .form-row textarea {
+      width: 100%;
+      padding: 7px 10px;
+      font-size: 13px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-md);
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      font-family: inherit;
+      outline: none;
+      transition: border-color 120ms, box-shadow 120ms;
+    }
+    .form-row input:focus,
+    .form-row select:focus,
+    .form-row textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(4,120,87,.12);
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 480px) {
+      .form-grid { grid-template-columns: 1fr; }
+    }
+    .modal-footer {
+      padding: 12px 18px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-toolbar);
+      display: flex; gap: 8px; justify-content: flex-end;
+      border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    }
+    @media (max-width: 767px) {
+      .modal-footer { border-radius: 0; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="vp-annot" id="vpAnnot">Viewport: —</div>
+
+<!-- ========== HEADER DO PROJETO ========== -->
+<header class="proj-header">
+  <div class="proj-header-inner">
+    <a href="#" class="back-link"><i class="ti ti-arrow-left"></i> Voltar para lista</a>
+    <div class="proj-top-row">
+      <div style="min-width:0; flex:1;">
+        <div class="proj-title-row">
+          <h1 class="proj-title">Integração Protheus x Platform CAPUL Módulo Fiscal</h1>
+          <span class="chip chip-status-planejamento">Planejamento</span>
+        </div>
+        <div class="proj-sub-chips">
+          <span class="chip">Desenvolvimento Interno</span>
+          <span>Nível 1</span>
+        </div>
+        <div class="proj-meta">
+          <div class="proj-meta-item">
+            <div class="label">Responsável</div>
+            <div class="val">Diego Lelis</div>
+          </div>
+          <div class="proj-meta-item">
+            <div class="label">Software</div>
+            <div class="val">Protheus</div>
+          </div>
+          <div class="proj-meta-item">
+            <div class="label">Contrato</div>
+            <div class="val">—</div>
+          </div>
+          <div class="proj-meta-item">
+            <div class="label">Período</div>
+            <div class="val">16/04/2026 — 17/04/2026 <span style="color:var(--text-muted)">(prev.)</span></div>
+          </div>
+        </div>
+        <p class="proj-desc">Projeto voltado à criação de endpoints no ERP Protheus para o Platform CAPUL Módulo Fiscal.</p>
+      </div>
+      <div class="proj-actions">
+        <button class="btn"><i class="ti ti-dots"></i> <span class="hide-sm">Outras alterações</span></button>
+        <button class="btn"><i class="ti ti-printer"></i> <span class="hide-sm">Relatório</span></button>
+        <button class="btn"><i class="ti ti-pencil"></i> <span class="hide-sm">Editar</span></button>
+        <button class="btn"><i class="ti ti-copy"></i> <span class="hide-sm">Duplicar</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs do projeto -->
+  <nav class="proj-tabs">
+    <div class="proj-tabs-inner">
+      <a href="#" class="tab-link"><i class="ti ti-eye"></i> Visão Geral</a>
+      <a href="#" class="tab-link"><i class="ti ti-folder"></i> Sub-projetos</a>
+      <a href="#" class="tab-link"><i class="ti ti-users"></i> Equipe</a>
+      <a href="#" class="tab-link"><i class="ti ti-key"></i> Usuários-Chave</a>
+      <a href="#" class="tab-link active"><i class="ti ti-clock"></i> Atividades</a>
+      <a href="#" class="tab-link"><i class="ti ti-list-check"></i> Pendências</a>
+      <a href="#" class="tab-link"><i class="ti ti-currency-real"></i> Financeiro</a>
+      <a href="#" class="tab-link"><i class="ti ti-alert-triangle"></i> Riscos</a>
+      <a href="#" class="tab-link"><i class="ti ti-link"></i> Dependências</a>
+      <a href="#" class="tab-link"><i class="ti ti-paperclip"></i> Anexos</a>
+      <a href="#" class="tab-link"><i class="ti ti-message-circle"></i> Chamados</a>
+    </div>
+  </nav>
+</header>
+
+<!-- ========== TOOLBAR ATIVIDADES ========== -->
+<div class="toolbar">
+  <div class="toolbar-inner">
+    <button class="btn btn-primary" onclick="toggleInlineAdd()" id="btnNova">
+      <i class="ti ti-plus"></i> Nova tarefa <span class="kbd">N</span>
+    </button>
+    <div class="toolbar-divider"></div>
+    <button class="btn"><i class="ti ti-layout-list"></i> Agrupar: <strong style="margin-left:2px">Fase</strong> <i class="ti ti-chevron-down" style="font-size:12px"></i></button>
+    <button class="btn"><i class="ti ti-adjustments-horizontal"></i> Status: <strong style="margin-left:2px">Todos</strong> <i class="ti ti-chevron-down" style="font-size:12px"></i></button>
+    <button class="btn"><i class="ti ti-user"></i> <span class="hide-sm">Apenas eu</span></button>
+    <div class="search-wrap">
+      <i class="ti ti-search"></i>
+      <input type="search" placeholder="Buscar tarefa…" id="searchInput">
+    </div>
+    <div class="view-toggle">
+      <button class="active"><i class="ti ti-list"></i> Lista</button>
+      <button><i class="ti ti-layout-kanban"></i> Kanban</button>
+      <button><i class="ti ti-calendar"></i> Timeline</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== LAYOUT PRINCIPAL ========== -->
+<div class="layout">
+  <main class="list-area">
+
+    <!-- Inline-add (Linear-style) -->
+    <div class="fase-block" id="inlineAddBlock" style="display:none">
+      <div class="inline-add open">
+        <input id="inlineAddInput" type="text" placeholder="Título da nova tarefa… (Enter cria, Esc cancela)" autocomplete="off">
+        <div class="inline-add-hint">
+          <span><i class="ti ti-corner-down-left"></i> Enter cria</span>
+          <span><i class="ti ti-x"></i> Esc cancela</span>
+          <a onclick="openFullModal()">+ Detalhar com mais campos</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lista renderizada via JS -->
+    <div id="listContainer"></div>
+
+    <div style="text-align:right; margin-top:10px">
+      <button class="btn"><i class="ti ti-plus"></i> Nova fase</button>
+    </div>
+  </main>
+
+  <!-- ========== DRAWER ========== -->
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-header">
+      <div class="drawer-top">
+        <button class="icon-btn" onclick="closeDrawer()" aria-label="Fechar painel" title="Fechar (Esc)"><i class="ti ti-x"></i></button>
+        <div style="flex:1; min-width:0">
+          <div class="drawer-breadcrumb" id="drawerBreadcrumb">FASE 2 · Implementação e testes</div>
+          <div class="drawer-title" id="drawerTitle">Implementação e testes</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="drawer-controls">
+      <button class="badge badge-done" id="drawerStatus"><i class="ti ti-check"></i> Concluída</button>
+      <button class="badge" id="drawerFase"><i class="ti ti-tag"></i> Fase 2</button>
+      <button class="badge"><i class="ti ti-user"></i> Diego Lelis</button>
+      <button class="timer-pill" id="drawerTimer"><i class="ti ti-player-play"></i> 5h 24min total</button>
+    </div>
+
+    <div class="drawer-tabs" role="tablist">
+      <div class="drawer-tab active" data-tab="visao" role="tab">Visão geral</div>
+      <div class="drawer-tab" data-tab="tempo"  role="tab">Cronômetro <span class="drawer-tab-count" id="tabCountTempo">(7)</span></div>
+      <div class="drawer-tab" data-tab="conv"   role="tab">Conversa <span class="drawer-tab-count" id="tabCountConv">(2)</span></div>
+      <div class="drawer-tab" data-tab="anexos" role="tab">Anexos <span class="drawer-tab-count" id="tabCountAnexos">(0)</span></div>
+      <div class="drawer-tab" data-tab="hist"   role="tab">Histórico</div>
+    </div>
+
+    <div class="drawer-content" id="drawerContent"></div>
+
+    <div class="composer" id="composer" style="display:none">
+      <textarea id="composerInput" rows="2" placeholder="Escreva uma mensagem… use @ para mencionar"></textarea>
+      <div class="composer-actions">
+        <button class="composer-btn"><i class="ti ti-paperclip"></i> Anexo</button>
+        <button class="composer-btn"><i class="ti ti-at"></i> Mencionar</button>
+        <span class="spacer"></span>
+        <button class="btn btn-primary" onclick="sendComment()" style="padding:5px 12px"><i class="ti ti-send"></i> Enviar</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="drawer-backdrop" onclick="closeDrawer()"></div>
+</div>
+
+<!-- ========== MODAL NOVA TAREFA (full) ========== -->
+<div class="modal-backdrop" id="modalNova" onclick="if(event.target===this) closeModal()">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title">Nova tarefa</div>
+      <button class="icon-btn" onclick="closeModal()" aria-label="Fechar"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label>Título</label>
+        <input type="text" placeholder="O que precisa ser feito?" id="modalTitulo" autofocus>
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label>Início</label>
+          <input type="date">
+        </div>
+        <div class="form-row">
+          <label>Fim</label>
+          <input type="date">
+        </div>
+        <div class="form-row">
+          <label>Fase</label>
+          <select>
+            <option>Sem fase</option>
+            <option>FASE 1 — Análise</option>
+            <option>FASE 2 — Implementação e testes</option>
+            <option>FASE 3 — Golive</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Responsável</label>
+          <select>
+            <option>Eu (Diego Lelis)</option>
+            <option>Marco Antônio</option>
+            <option>Juliana Marques</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Descrição (opcional)</label>
+        <textarea rows="3" placeholder="Detalhe parâmetros, configurações…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="closeModal()">Adicionar tarefa</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ========== DADOS (espelham os prints reais) ==========
+  const fases = [
+    {
+      id: 'fase-1', nome: 'FASE 1', titulo: 'Análise',
+      periodo: '16/04/2026 → 17/04/2026', status: 'Aprovada',
+    },
+    {
+      id: 'fase-2', nome: 'FASE 2', titulo: 'Implementação e testes',
+      periodo: '17/04/2026 → 17/04/2026', status: 'Aprovada',
+    },
+    {
+      id: 'fase-3', nome: 'FASE 3', titulo: 'Golive',
+      periodo: '20/04/2026 → 24/04/2026', status: 'Aprovada',
+    },
+  ];
+
+  const tasks = [
+    {
+      id: 't1', faseId: 'fase-1',
+      titulo: 'Avaliar consultas SQL e definir escopo',
+      status: 'done', statusLabel: 'Concluída',
+      responsavel: 'Diego Lelis',
+      dataInicio: '16/04/2026', dataFim: '17/04/2026', dataResumida: '16/04',
+      cronoTotal: '1h',
+      descricao: 'Avaliar todas as consultas SQL, enviadas pelo Clenio, para a disponibilização dos eventos referentes às notas fiscais de entrada.',
+      tempo: [
+        ['16/04/2026', '09:00', '10:00', '1h', '—'],
+      ],
+      conversas: [],
+      historico: [
+        ['16/04 10:00', 'Diego encerrou cronômetro (1h)'],
+        ['16/04 09:00', 'Diego iniciou cronômetro'],
+        ['16/04 08:55', 'Diego marcou como Concluída'],
+        ['15/04 17:20', 'Diego criou a tarefa'],
+      ],
+    },
+    {
+      id: 't2', faseId: 'fase-2',
+      titulo: 'Incluir chave contendo o XML referente ao evento',
+      status: 'done', statusLabel: 'Concluída',
+      responsavel: 'Diego Lelis',
+      dataInicio: '27/04/2026', dataFim: '27/04/2026', dataResumida: '27/04',
+      cronoTotal: '3h',
+      descricao: 'Inclusão da chave NF-e no payload da requisição antes do envio ao endpoint. Validado com o time de integração.',
+      tempo: [
+        ['27/04/2026', '14:00', '15:30', '1h 30min', '—'],
+        ['27/04/2026', '10:00', '11:30', '1h 30min', 'Análise do schema XML'],
+      ],
+      conversas: [
+        { autor: 'Diego Lelis', avatar: 'DL', data: '27/04/2026 16:12',
+          texto: 'Chave incluída e testada com sucesso em homologação. Aguardando validação do Clenio.' },
+        { autor: 'Diego Lelis', avatar: 'DL', data: '27/04/2026 09:50',
+          texto: 'Iniciando a inclusão do campo chaveNFe no payload conforme alinhado.' },
+      ],
+      historico: [
+        ['27/04 15:30', 'Diego encerrou cronômetro (1h 30min)'],
+        ['27/04 14:00', 'Diego iniciou cronômetro'],
+        ['27/04 11:30', 'Diego encerrou cronômetro (1h 30min)'],
+        ['27/04 10:00', 'Diego iniciou cronômetro'],
+        ['26/04 18:10', 'Diego criou a tarefa'],
+      ],
+    },
+    {
+      id: 't3', faseId: 'fase-2', selected: true,
+      titulo: 'Implementação e testes',
+      status: 'done', statusLabel: 'Concluída',
+      responsavel: 'Diego Lelis',
+      dataInicio: '17/04/2026', dataFim: '17/04/2026', dataResumida: '17/04',
+      cronoTotal: '5h 24min',
+      descricao: 'Implementação teste de endpoint eventosNfe.',
+      tempo: [
+        ['20/04/2026', '15:23', '15:53', '30min',    '—'],
+        ['20/04/2026', '13:51', '14:47', '56min',    '—'],
+        ['20/04/2026', '10:40', '11:37', '57min',    '—'],
+        ['20/04/2026', '09:30', '10:17', '47min',    '—'],
+        ['17/04/2026', '15:51', '16:03', '12min',    '—'],
+        ['17/04/2026', '13:34', '15:06', '1h 32min', '—'],
+        ['17/04/2026', '11:00', '11:30', '30min',    '—'],
+      ],
+      conversas: [
+        { autor: 'Diego Lelis', avatar: 'DL', data: '20/04/2026 13:51',
+          texto: 'Após a realização dos testes, vou realizar o merge com as implementações realizadas pelo Marco Antônio.' },
+        { autor: 'Diego Lelis', avatar: 'DL', data: '20/04/2026 09:30',
+          texto: 'Após alinhamento com o Clenio, será necessário que o endpoint eventosNfe retorne também o XML, baseado nas tabelas SZR e SPED156.' },
+      ],
+      historico: [
+        ['20/04 15:53', 'Diego encerrou cronômetro (30min)'],
+        ['20/04 15:23', 'Diego iniciou cronômetro'],
+        ['20/04 14:47', 'Diego encerrou cronômetro (56min)'],
+        ['20/04 13:51', 'Diego iniciou cronômetro · adicionou comentário'],
+        ['20/04 11:37', 'Diego encerrou cronômetro (57min)'],
+        ['20/04 10:40', 'Diego iniciou cronômetro'],
+        ['20/04 10:17', 'Diego encerrou cronômetro (47min)'],
+        ['20/04 09:30', 'Diego iniciou cronômetro · adicionou comentário'],
+        ['17/04 11:00', 'Diego iniciou tarefa (status → Em andamento)'],
+        ['17/04 10:58', 'Diego criou a tarefa'],
+      ],
+    },
+    {
+      id: 't4', faseId: 'fase-3',
+      titulo: 'Promoção pra PROD + acompanhamento 24h',
+      status: 'doing', statusLabel: 'Em andamento',
+      responsavel: 'Diego Lelis',
+      dataInicio: '20/04/2026', dataFim: '24/04/2026', dataResumida: '20/04 → 24/04',
+      cronoTotal: '2h 10min',
+      descricao: 'Promoção dos artefatos para o ambiente de produção e acompanhamento das primeiras 24h pós-deploy.',
+      tempo: [
+        ['22/04/2026', '14:00', '15:10', '1h 10min', 'Smoke tests pós-deploy'],
+        ['20/04/2026', '17:30', '18:30', '1h',       'Deploy executado'],
+      ],
+      conversas: [
+        { autor: 'Diego Lelis', avatar: 'DL', data: '22/04/2026 15:12',
+          texto: 'Sistema estável após 18h em PROD. Sem erros relevantes nos logs.' },
+      ],
+      historico: [
+        ['22/04 15:10', 'Diego encerrou cronômetro (1h 10min)'],
+        ['22/04 14:00', 'Diego iniciou cronômetro'],
+        ['20/04 18:30', 'Diego encerrou cronômetro (1h)'],
+        ['20/04 17:30', 'Diego iniciou cronômetro'],
+        ['20/04 14:00', 'Diego iniciou tarefa (status → Em andamento)'],
+        ['19/04 16:40', 'Diego criou a tarefa'],
+      ],
+    },
+  ];
+
+  let currentTaskId = 't3'; // tarefa pré-selecionada (mesma do print 2)
+  let currentTab = 'visao';
+
+  // ========== RENDERIZAÇÃO DA LISTA ==========
+  function renderList() {
+    const container = document.getElementById('listContainer');
+    container.innerHTML = fases.map(fase => {
+      const fTasks = tasks.filter(t => t.faseId === fase.id);
+      return `
+        <section class="fase-block" id="block-${fase.id}">
+          <div class="fase-header">
+            <button class="fase-toggle" aria-label="Recolher fase"><i class="ti ti-chevron-down"></i></button>
+            <span class="chip chip-fase"><i class="ti ti-folder"></i> ${fase.nome}</span>
+            <span class="fase-name">${fase.titulo}</span>
+            <span class="fase-meta">${fTasks.length} tarefa${fTasks.length === 1 ? '' : 's'} · ${fase.periodo}</span>
+            <div class="fase-actions">
+              <select class="fase-status-select"><option>${fase.status}</option></select>
+              <button class="icon-btn" aria-label="Editar fase"><i class="ti ti-pencil"></i></button>
+              <button class="icon-btn danger" aria-label="Excluir fase"><i class="ti ti-trash"></i></button>
+            </div>
+          </div>
+          <ul class="task-list">
+            ${fTasks.map(t => renderTaskRow(t)).join('')}
+          </ul>
+        </section>
+      `;
+    }).join('');
+
+    document.querySelectorAll('.task-row').forEach(row => {
+      row.addEventListener('click', e => {
+        if (e.target.closest('.row-actions')) return;
+        openDrawer(row.dataset.taskId);
+      });
+      row.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDrawer(row.dataset.taskId); }
+      });
+    });
+  }
+
+  function renderTaskRow(t) {
+    const selectedCls = (t.id === currentTaskId && document.body.classList.contains('drawer-open')) ? 'selected' : '';
+    const checkCls = t.status === 'done' ? 'done' : t.status === 'doing' ? 'doing' : '';
+    const nameCls = t.status === 'done' ? 'done' : '';
+    const checkIcon = t.status === 'done' ? '<i class="ti ti-check"></i>' : '';
+    const playIcon = t.status === 'doing' ? 'ti-player-pause' : 'ti-player-play';
+    const statusPillCls = t.status === 'done' ? 'status-pill-done' : t.status === 'doing' ? 'status-pill-doing' : 'status-pill-pending';
+    const convCount = t.conversas.length;
+    return `
+      <li>
+        <button class="task-row ${selectedCls}" data-task-id="${t.id}" tabindex="0">
+          <span class="task-check ${checkCls}">${checkIcon}</span>
+          <span class="task-name ${nameCls}">${t.titulo}</span>
+          <span class="task-meta">
+            <span class="meta-pill hide-md"><i class="ti ti-user"></i>${t.responsavel.split(' ')[0]}</span>
+            <span class="meta-pill"><i class="ti ti-calendar"></i>${t.dataResumida}</span>
+            <span class="meta-pill"><i class="ti ti-clock"></i>${t.cronoTotal}</span>
+            <span class="meta-pill ${convCount ? 'highlight' : ''} hide-sm"><i class="ti ti-message"></i>${convCount}</span>
+            <span class="status-pill ${statusPillCls} hide-sm">${t.statusLabel}</span>
+          </span>
+          <span class="row-actions">
+            <button class="icon-btn success" onclick="event.stopPropagation()" title="Iniciar cronômetro"><i class="ti ${playIcon}"></i></button>
+            <button class="icon-btn" onclick="event.stopPropagation()" title="Editar"><i class="ti ti-pencil"></i></button>
+            <button class="icon-btn danger" onclick="event.stopPropagation()" title="Excluir"><i class="ti ti-trash"></i></button>
+          </span>
+        </button>
+      </li>
+    `;
+  }
+
+  // ========== DRAWER ==========
+  function openDrawer(taskId) {
+    currentTaskId = taskId;
+    document.body.classList.add('drawer-open');
+    document.getElementById('drawer').setAttribute('aria-hidden', 'false');
+    renderDrawer();
+    renderList(); // pra refletir seleção
+  }
+  function closeDrawer() {
+    document.body.classList.remove('drawer-open');
+    document.getElementById('drawer').setAttribute('aria-hidden', 'true');
+    renderList();
+  }
+
+  function renderDrawer() {
+    const t = tasks.find(x => x.id === currentTaskId);
+    if (!t) return;
+    const f = fases.find(x => x.id === t.faseId);
+
+    document.getElementById('drawerBreadcrumb').textContent = `${f.nome} · ${f.titulo}`;
+    document.getElementById('drawerTitle').textContent = t.titulo;
+
+    const statusEl = document.getElementById('drawerStatus');
+    if (t.status === 'done') {
+      statusEl.className = 'badge badge-done';
+      statusEl.innerHTML = '<i class="ti ti-check"></i> Concluída';
+    } else if (t.status === 'doing') {
+      statusEl.className = 'badge';
+      statusEl.innerHTML = '<i class="ti ti-clock"></i> Em andamento';
+    } else {
+      statusEl.className = 'badge';
+      statusEl.innerHTML = '<i class="ti ti-circle"></i> Pendente';
+    }
+
+    document.getElementById('drawerFase').innerHTML = `<i class="ti ti-tag"></i> ${f.nome}`;
+    document.getElementById('drawerTimer').innerHTML = `<i class="ti ti-player-play"></i> ${t.cronoTotal} total`;
+
+    document.getElementById('tabCountTempo').textContent = `(${t.tempo.length})`;
+    document.getElementById('tabCountConv').textContent  = `(${t.conversas.length})`;
+    document.getElementById('tabCountAnexos').textContent = `(0)`;
+
+    renderTabContent();
+  }
+
+  function renderTabContent() {
+    const t = tasks.find(x => x.id === currentTaskId);
+    const f = fases.find(x => x.id === t.faseId);
+    const content = document.getElementById('drawerContent');
+    const composer = document.getElementById('composer');
+    composer.style.display = 'none';
+
+    if (currentTab === 'visao') {
+      content.innerHTML = `
+        <div class="section">
+          <div class="section-label">Descrição</div>
+          <p class="desc-text">${t.descricao}</p>
+        </div>
+        <div class="section">
+          <div class="info-grid">
+            <div class="info-item">
+              <div class="lbl">Responsável</div>
+              <div class="val" style="display:flex; align-items:center; gap:6px; margin-top:2px">
+                <span class="avatar">${initials(t.responsavel)}</span>${t.responsavel}
+              </div>
+            </div>
+            <div class="info-item">
+              <div class="lbl">Fase</div>
+              <div class="val" style="margin-top:2px">${f.nome} · ${f.titulo}</div>
+            </div>
+            <div class="info-item">
+              <div class="lbl">Início</div>
+              <div class="val" style="margin-top:2px">${t.dataInicio}</div>
+            </div>
+            <div class="info-item">
+              <div class="lbl">Fim</div>
+              <div class="val" style="margin-top:2px">${t.dataFim}</div>
+            </div>
+            <div class="info-item">
+              <div class="lbl">Cronômetro</div>
+              <div class="val" style="margin-top:2px">${t.cronoTotal} (${t.tempo.length} registros)</div>
+            </div>
+            <div class="info-item">
+              <div class="lbl">Conversa</div>
+              <div class="val" style="margin-top:2px">${t.conversas.length} mensagem(ns)</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    else if (currentTab === 'tempo') {
+      if (t.tempo.length === 0) {
+        content.innerHTML = `
+          <div class="empty">
+            <i class="ti ti-clock"></i>
+            <div class="empty-msg">Nenhum registro de tempo ainda</div>
+            <a class="empty-cta">▷ Iniciar cronômetro</a>
+          </div>
+        `;
+      } else {
+        content.innerHTML = `
+          <div class="tempo-total">
+            <i class="ti ti-clock" style="font-size:18px; color:var(--text-secondary)"></i>
+            <span class="tempo-total-val">${t.cronoTotal}</span>
+            <span class="tempo-total-lbl">total · ${t.tempo.length} registros</span>
+          </div>
+          <table class="tempo-table">
+            <thead>
+              <tr>
+                <th>Data</th><th>Início</th><th>Fim</th><th>Duração</th><th>Obs</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${t.tempo.map(r => `
+                <tr>
+                  <td>${r[0]}</td>
+                  <td>${r[1]}</td>
+                  <td>${r[2]}</td>
+                  <td class="duracao">${r[3]}</td>
+                  <td>${r[4]}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <button class="tempo-add-btn"><i class="ti ti-plus"></i> Adicionar registro manual</button>
+        `;
+      }
+    }
+
+    else if (currentTab === 'conv') {
+      composer.style.display = 'block';
+      if (t.conversas.length === 0) {
+        content.innerHTML = `
+          <div class="empty">
+            <i class="ti ti-message"></i>
+            <div class="empty-msg">Nenhuma mensagem ainda. Seja o primeiro a comentar.</div>
+          </div>
+        `;
+      } else {
+        content.innerHTML = `
+          <div class="conv-area">
+            ${t.conversas.map(c => `
+              <div class="conv-msg">
+                <div class="conv-meta">
+                  <span class="avatar">${c.avatar}</span>
+                  <strong>${c.autor}</strong>
+                  <span>· ${c.data}</span>
+                </div>
+                <div class="conv-text">${c.texto}</div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+    }
+
+    else if (currentTab === 'anexos') {
+      content.innerHTML = `
+        <div class="empty">
+          <i class="ti ti-paperclip"></i>
+          <div class="empty-msg">Nenhum anexo nesta tarefa</div>
+          <a class="empty-cta">+ Adicionar anexo</a>
+        </div>
+      `;
+    }
+
+    else if (currentTab === 'hist') {
+      content.innerHTML = `
+        <div class="timeline">
+          ${t.historico.map(h => `
+            <div class="timeline-item">
+              <span class="timeline-time">${h[0]}</span>
+              <span class="timeline-text">${h[1]}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+  }
+
+  function switchTab(name) {
+    currentTab = name;
+    document.querySelectorAll('.drawer-tab').forEach(d => d.classList.toggle('active', d.dataset.tab === name));
+    renderTabContent();
+  }
+
+  document.querySelectorAll('.drawer-tab').forEach(d => {
+    d.addEventListener('click', () => switchTab(d.dataset.tab));
+  });
+
+  function sendComment() {
+    const input = document.getElementById('composerInput');
+    const text = input.value.trim();
+    if (!text) return;
+    const t = tasks.find(x => x.id === currentTaskId);
+    const now = new Date();
+    const data = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    t.conversas.unshift({ autor: 'Você (Diego Lelis)', avatar: 'DL', data, texto: text });
+    input.value = '';
+    document.getElementById('tabCountConv').textContent = `(${t.conversas.length})`;
+    renderTabContent();
+    renderList();
+  }
+
+  // ========== INLINE-ADD + MODAL ==========
+  function toggleInlineAdd() {
+    const block = document.getElementById('inlineAddBlock');
+    const input = document.getElementById('inlineAddInput');
+    if (block.style.display === 'block') {
+      block.style.display = 'none';
+    } else {
+      block.style.display = 'block';
+      block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(() => input.focus(), 100);
+    }
+  }
+  function openFullModal() {
+    document.getElementById('inlineAddBlock').style.display = 'none';
+    document.getElementById('modalNova').classList.add('open');
+    setTimeout(() => document.getElementById('modalTitulo').focus(), 50);
+  }
+  function closeModal() {
+    document.getElementById('modalNova').classList.remove('open');
+  }
+
+  document.getElementById('inlineAddInput').addEventListener('keydown', e => {
+    if (e.key === 'Escape') document.getElementById('inlineAddBlock').style.display = 'none';
+    if (e.key === 'Enter') {
+      const t = e.target.value.trim();
+      if (t) alert('(mockup) Nova tarefa criada: ' + t);
+      e.target.value = '';
+      document.getElementById('inlineAddBlock').style.display = 'none';
+    }
+  });
+
+  // ========== ATALHOS GLOBAIS ==========
+  document.addEventListener('keydown', e => {
+    const inField = e.target.matches('input, textarea, select');
+    if (e.key === 'Escape') {
+      if (document.getElementById('modalNova').classList.contains('open')) { closeModal(); return; }
+      if (document.body.classList.contains('drawer-open')) { closeDrawer(); return; }
+    }
+    if (e.key === 'n' && !inField) { e.preventDefault(); openFullModal(); }
+    if (e.key === '/' && !inField) { e.preventDefault(); document.getElementById('searchInput').focus(); }
+  });
+
+  // ========== ANNOTATION DO VIEWPORT (testar breakpoints visualmente) ==========
+  function updateAnnot() {
+    const w = window.innerWidth;
+    let mode;
+    if (w >= 1440) mode = 'Push (≥1440)';
+    else if (w >= 768) mode = 'Overlay (768–1439)';
+    else mode = 'Full-screen (<768)';
+    document.getElementById('vpAnnot').textContent = `Viewport: ${w}px · ${mode}`;
+  }
+  window.addEventListener('resize', updateAnnot);
+
+  // ========== HELPERS ==========
+  function initials(name) {
+    return name.split(' ').slice(0, 2).map(s => s[0]).join('').toUpperCase();
+  }
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  // ========== INIT ==========
+  renderList();
+  renderDrawer();
+  updateAnnot();
+  // Abre o drawer automaticamente na inicialização pra demonstrar
+  setTimeout(() => openDrawer('t3'), 200);
+</script>
+
+</body>
+</html>

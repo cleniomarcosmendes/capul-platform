@@ -278,6 +278,153 @@ visuais que aparecerem). Estimativa: ~3-4h (componente + 2 telas).
 ferramenta vira "experiência de uso" vs "formulário corporativo". Diferença
 de adoção real pelos técnicos e usuários-chave.
 
+### ⏳ 2026-05-15 — Repaginar "Atividades" do Projeto/Subprojeto (List + Drawer)
+
+**Contexto:** Aba "Atividades" em `ProjetoDetalhePage` (e idêntica no
+subprojeto) está poluída visualmente. Diagnóstico em 6 pontos:
+1. Form "Nova Tarefa" persistente ocupa ~250px sempre visíveis no topo
+2. Expand de tarefa empurra layout (in-place) — uma tarefa expandida =
+   ~800px de scroll, empurra as outras pra fora do viewport
+3. Cronômetro vem em tabela completa de 7+ linhas dentro do card
+4. "Notas" + "Comentários" são duas seções quase paralelas (confunde
+   onde escrever)
+5. Múltiplos controles repetidos por linha: 6 botões × 10 tarefas = 60
+6. Cabeçalho projeto + tabs + form Nova Tarefa = ~450px de chrome antes
+   da 1ª tarefa útil
+
+**Decisão de design (V3 do mockup, 15/05 — `c:\temp\mockup-atividades-projeto-v3.html`):**
+- **Lista densa + Drawer lateral data-driven** (padrão ClickUp/Linear/Notion)
+- Drawer com tabs internas: *Visão / Cronômetro (N) / Conversa (N) / Anexos / Histórico*
+- "Nova Tarefa" sai do topo → vira **inline-add** (Linear-style) + atalho `N` abre modal completo
+- **Responsivo robusto**: push em ≥1440px, overlay em 768–1439px, full-screen em <768px (modal vira bottom-sheet em mobile)
+- **Composer chat-style** na tab Conversa, reusa `ChatBubbleList` + `ComentarioTexto` + `MentionInput` (já existentes)
+- **Cor primária**: verde Capul (`emerald-700` = `#047857`)
+- **Ícones**: `lucide-react` (já instalado — não trocar pra Tabler como no mockup)
+- **Drag-and-drop**: NÃO entra agora — fica pra view Kanban (Fase 4)
+- **Dark mode**: NÃO entra agora — item separado neste backlog
+
+**Plano técnico de implementação (3 PRs sequenciais):**
+- **PR 1 — Quick wins (~2-3h):** mover form "Nova Tarefa" pra modal/inline-add.
+  Já ganha -250px de chrome. Mexe só em `TabCronograma` (linha ~921 de
+  `ProjetoDetalhePage.tsx`). Sem mudar estrutura.
+- **PR 2 — Drawer da tarefa (~6-8h):** click numa tarefa abre drawer overlay/push
+  (responsivo). Drawer **reusa** funções de `renderAtividade` por ora — só
+  muda o container. Componente novo `<TarefaDrawer />` reutilizável.
+- **PR 3 — Linha compacta + tabs internas (~10-12h):** lista vira 1 linha
+  por tarefa (sem expand inline). Drawer ganha tabs Visão/Tempo/Conv/Anexos/Histórico.
+  Tab Conversa reaproveita `ChatBubbleList`. Empty states implementados.
+
+**Esforço total estimado:** ~20-25h. Sem virtualização (vem se passar de 200 tarefas).
+
+**Onde mexe:**
+- `gestao-ti/frontend/src/pages/projetos/ProjetoDetalhePage.tsx` (componente
+  `TabCronograma` linha ~921, `renderAtividade` linha ~1276)
+- Componente novo: `gestao-ti/frontend/src/components/TarefaDrawer.tsx`
+- Componente novo: `gestao-ti/frontend/src/components/InlineAddTarefa.tsx`
+- Reuso: `ChatBubbleList`, `ComentarioTexto`, `MentionInput`
+
+**Pré-requisito antes de codificar:** validar mockup V3 com Diego/Marco/Juliana
+(usuários-chave dessa tela) — UX coletiva pode revelar pedidos não-óbvios.
+
+**Mesmo padrão deve ser aplicado depois em:** Acompanhamento de Item
+(`AcompanhamentoItemPage`) — tem layout semelhante de "Registros de Tempo"
+em tabela inline que vai ganhar o mesmo problema com volume.
+
+**Por que adiado:** decisão de arquitetura tomada (V3 aprovada 15/05), mas
+implementação real ~20-25h precisa de janela dedicada + soak HOM antes
+de ir pra PROD (estratégia padrão 05/05).
+
+### ⏳ 2026-05-15 — Dark mode unificado nos 5 frontends (Auth/Hub/Configurador/Gestão TI/Inventário/Fiscal)
+
+**Contexto:** Mockup V3 de Atividades (15/05) testou dark mode via
+`@media (prefers-color-scheme: dark)` e ficou bom — mas o Capul **não tem
+infra de dark mode** em nenhum dos 5 frontends React. Tailwind sem
+`darkMode: 'class'`, sem CSS vars como source of truth, sem toggle no
+header, sem persistência de preferência.
+
+**Status atual por frontend:**
+- `auth-gateway` (login): light only — cores hard-coded no Tailwind
+- `hub`: light only — cards com bg-white fixo
+- `configurador`: light only
+- `gestao-ti/frontend`: light only — `--primary-dark` definido em `index.css`
+  mas só usado como variante de hover do verde, não como tema dark
+- `inventario/frontend`: light only
+- `fiscal/frontend`: light only
+
+**Solução robusta (definitiva, não paliativa):**
+
+1. **Tailwind config** em cada frontend:
+   ```js
+   // tailwind.config.* — todos os 6 frontends
+   module.exports = {
+     darkMode: 'class',  // não 'media' — usuário escolhe explícito
+     // ...
+   }
+   ```
+2. **CSS vars como source of truth** num arquivo compartilhado (criar
+   `shared/styles/theme.css` ou copiar em cada frontend):
+   ```css
+   :root { --bg-page: #f8fafc; --text-primary: #0f172a; ... }
+   .dark { --bg-page: #0f172a; --text-primary: #f1f5f9; ... }
+   ```
+3. **Toggle no Header** (sun/moon icon, lucide-react `Sun`/`Moon`) — toda
+   tela tem header, então o toggle vira universal.
+4. **Persistência via `localStorage`**:
+   ```ts
+   // hook compartilhado useTheme()
+   const [theme, setTheme] = useState(() =>
+     localStorage.getItem('capul-theme') || 'system'
+   );
+   useEffect(() => {
+     const resolved = theme === 'system'
+       ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+       : theme;
+     document.documentElement.classList.toggle('dark', resolved === 'dark');
+     localStorage.setItem('capul-theme', theme);
+   }, [theme]);
+   ```
+5. **3 opções no toggle**: Light / Dark / System (segue OS) — padrão GitHub/Vercel.
+6. **Sincronizar entre tabs/janelas** via `storage` event.
+7. **Documentar** paleta semântica num `STYLEGUIDE.md` na raiz pra novas
+   features sempre referenciarem `var(--bg-page)` em vez de `bg-white`.
+
+**Esforço estimado por frontend:**
+- Auth (login simples): ~1h
+- Hub (cards): ~1.5h
+- Configurador: ~2h
+- Gestão TI: ~4-5h (mais telas, paleta mais rica)
+- Inventário: ~2-3h
+- Fiscal: ~3h
+- Compartilhado (theme.css + useTheme hook + Toggle): ~2h
+- Testes + ajustes de contraste WCAG AA: ~3h
+- **Total: ~20-25h** numa sessão dedicada.
+
+**Por que solução completa em vez de só gestao-ti:** se ligar dark só num
+módulo, usuário navega Hub→GestãoTI e tem "flash" de paleta. Inconsistência
+visual quebra a confiança da plataforma como produto integrado. Memory
+[Hub — CONFIGURADOR sempre por último] e padrão de modais elegantes (sweep
+nos 4 frontends) já estabeleceram esse princípio.
+
+**Riscos:**
+- Cores corporativas mantidas (verde Capul `#047857`) — só varia cinzas/bg
+- Componentes de terceiros (chart libs, react-pdf-viewer) podem não respeitar
+  CSS vars — testar e listar exceções
+- Status pills (chip-status-done etc.) precisam variantes dark calibradas
+  pra contraste AA
+
+**Por que adiado:** Sessão 15/05 estava focada em "tela poluída de Atividades",
+não em tema geral. Dark mode entrou na conversa como bônus do mockup V3.
+Cliente (Clenio) optou explicitamente por solução robusta em vez de paliativo
+local — então precisa janela própria com escopo nos 6 frontends.
+
+**Pré-requisito:** decidir se vale fazer ANTES ou DEPOIS da reformulação
+de Atividades. Se DEPOIS, Atividades vai sair em light-only e ganha dark
+no mesmo PR do dark mode unificado. Se ANTES, Atividades já nasce
+dark-aware.
+
+**Recomendação:** ANTES — fazer dark mode unificado como item próprio
+(20-25h), depois Atividades já nasce com suporte nativo (sem retrabalho).
+
 ---
 
 ## Histórico (feitos)
