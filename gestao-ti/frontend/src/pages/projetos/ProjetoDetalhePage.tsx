@@ -12,6 +12,8 @@ import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2
 import { formatDateBR } from '../../utils/date';
 import { MentionInput } from '../../components/MentionInput';
 import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
+import { NovaTarefaModal } from '../../components/NovaTarefaModal';
+import { NovaTarefaButton } from '../../components/NovaTarefaButton';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { abrirAnexoOuBaixar } from '../../utils/anexo';
 import type {
@@ -935,13 +937,8 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   const [editFaseOrdem, setEditFaseOrdem] = useState('');
   const [editFaseDataInicio, setEditFaseDataInicio] = useState('');
   const [editFaseDataFimPrevista, setEditFaseDataFimPrevista] = useState('');
-  // Atividade form
-  const [novoTitulo, setNovoTitulo] = useState('');
-  const [novaDescricao, setNovaDescricao] = useState('');
-  const [novaFaseId, setNovaFaseId] = useState('');
-  const [novaDataInicio, setNovaDataInicio] = useState('');
-  const [novaDataFimPrevista, setNovaDataFimPrevista] = useState('');
-  const [novosResponsavelIds, setNovosResponsavelIds] = useState<string[]>([]);
+  // Nova tarefa (modal — substitui o form persistente do topo)
+  const [showNovaTarefa, setShowNovaTarefa] = useState(false);
   const [membrosEquipe, setMembrosEquipe] = useState<MembroProjeto[]>([]);
   const [saving, setSaving] = useState(false);
   // Expanded atividade
@@ -978,14 +975,28 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   const [editComentarioVisivel, setEditComentarioVisivel] = useState(false);
   const isEditingCronograma = Boolean(
     showFaseForm || editingFaseId || editingAtividade || editingRegistro ||
-    (novoComentario && novoComentario.trim()) || editingComentario ||
-    novoTitulo.trim() || novaDescricao.trim()
+    (novoComentario && novoComentario.trim()) || editingComentario
   );
 
   useEffect(() => {
     onEditingChange?.(isEditingCronograma);
     return () => onEditingChange?.(false);
   }, [isEditingCronograma, onEditingChange]);
+
+  // Atalho "N" abre o modal de nova tarefa (TabCronograma so monta na aba Atividades)
+  useEffect(() => {
+    if (!canAdd) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'n' && e.key !== 'N') return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+      e.preventDefault();
+      setShowNovaTarefa(true);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [canAdd]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -1055,24 +1066,6 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   }
 
   // --- Atividades ---
-  async function handleAddAtividade() {
-    if (!novoTitulo || saving) return;
-    setSaving(true);
-    try {
-      await projetoService.adicionarAtividade(projetoId, {
-        titulo: novoTitulo,
-        descricao: novaDescricao || undefined,
-        faseId: novaFaseId || undefined,
-        responsavelIds: novosResponsavelIds.length > 0 ? novosResponsavelIds : undefined,
-        dataInicio: novaDataInicio ? new Date(novaDataInicio).toISOString() : undefined,
-        dataFimPrevista: novaDataFimPrevista ? new Date(novaDataFimPrevista).toISOString() : undefined,
-      });
-      setNovoTitulo(''); setNovaDescricao(''); setNovaFaseId('');
-      setNovaDataInicio(''); setNovaDataFimPrevista(''); setNovosResponsavelIds([]);
-      loadAll();
-    } catch { /* empty */ }
-    setSaving(false);
-  }
   async function handleIniciar(atividadeId: string) {
     // Verificar se ha outro timer ativo do MESMO usuario (em qualquer atividade deste projeto)
     const outraAtiva = atividades.find((a) =>
@@ -1644,41 +1637,10 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     <>
     {/* protecao via pai */}
     <div className="space-y-4">
-      {/* Nova Atividade */}
+      {/* Nova tarefa — botao abre modal (form persistente removido, ganha -250px de chrome) */}
       {canAdd && (
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <h4 className="text-sm font-semibold text-slate-700 mb-3">Nova Tarefa</h4>
-          <div className="space-y-3">
-            <div className="flex gap-3 items-end flex-wrap">
-              <input type="text" placeholder="Titulo da tarefa" value={novoTitulo} onChange={(e) => setNovoTitulo(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-48" />
-              <input type="date" placeholder="Inicio" value={novaDataInicio} onChange={(e) => setNovaDataInicio(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-36" title="Data inicio" />
-              <input type="date" placeholder="Fim previsto" value={novaDataFimPrevista} min={novaDataInicio || undefined} onChange={(e) => setNovaDataFimPrevista(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-36" title="Data fim prevista" />
-              {fases.length > 0 && (
-                <select value={novaFaseId} onChange={(e) => setNovaFaseId(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-                  <option value="">Sem fase</option>
-                  {fases.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
-                </select>
-              )}
-              <div className="min-w-48">
-                <MultiSelectDropdown
-                  options={membrosEquipe.map((m) => ({ value: m.usuarioId, label: m.usuario.nome }))}
-                  selected={novosResponsavelIds}
-                  onChange={setNovosResponsavelIds}
-                  placeholder="Responsaveis (eu)"
-                />
-              </div>
-            </div>
-            <textarea
-              placeholder="Descricao da tarefa (opcional) — detalhe o que precisa ser feito, parametros, configuracoes..."
-              value={novaDescricao}
-              onChange={(e) => setNovaDescricao(e.target.value)}
-              rows={4}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-y"
-            />
-            <div className="flex justify-end">
-              <button onClick={handleAddAtividade} disabled={!novoTitulo || saving} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">Adicionar</button>
-            </div>
-          </div>
+        <div className="flex items-center justify-end">
+          <NovaTarefaButton onClick={() => setShowNovaTarefa(true)} />
         </div>
       )}
 
@@ -1886,6 +1848,15 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
       </div>
       );
     })()}
+
+    <NovaTarefaModal
+      open={showNovaTarefa}
+      onClose={() => setShowNovaTarefa(false)}
+      onCreated={loadAll}
+      projetoId={projetoId}
+      fases={fases}
+      membrosEquipe={membrosEquipe}
+    />
 
     </>
   );
