@@ -40,6 +40,7 @@ export function UsuarioFormPage() {
   const [filialIds, setFilialIds] = useState<string[]>([]);
 
   const [filiais, setFiliais] = useState<FilialOption[]>([]);
+  const [filialSearch, setFilialSearch] = useState('');
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [modulos, setModulos] = useState<ModuloSistema[]>([]);
   const [permissoes, setPermissoes] = useState<PermissaoForm[]>([]);
@@ -52,6 +53,10 @@ export function UsuarioFormPage() {
   type TimeoutPref = 30 | 60 | 120 | 240 | 'never';
   const [inactivityTimeout, setInactivityTimeout] = useState<TimeoutPref>(60);
   const [inactivityTimeoutOriginal, setInactivityTimeoutOriginal] = useState<TimeoutPref>(60);
+
+  type TabId = 'dados' | 'acesso' | 'permissoes' | 'sessao';
+  const [activeTab, setActiveTab] = useState<TabId>('dados');
+  const [tabErrors, setTabErrors] = useState<Set<TabId>>(new Set());
 
   useEffect(() => {
     carregarDados();
@@ -152,23 +157,53 @@ export function UsuarioFormPage() {
   const emailFiscalCheck = exigeEmailFiscal();
   const emailObrigatorio = emailFiscalCheck.exige;
 
+  // Valida campos obrigatórios e mapeia cada falha pra sua aba. Como as abas
+  // escondem campos, não dá pra confiar no `required` nativo do HTML (input
+  // oculto não é "focusable" e o browser bloqueia o submit silenciosamente —
+  // por isso o <form> usa noValidate e a validação é 100% aqui).
+  function validar(): { abas: Set<TabId>; mensagem: string } {
+    const abas = new Set<TabId>();
+    let mensagem = '';
+
+    if (!username.trim() || !nome.trim() || (!isEdicao && !senha.trim())) {
+      abas.add('dados');
+      mensagem = 'Preencha os campos obrigatórios em Dados Básicos.';
+    }
+
+    const fiscalCheck = exigeEmailFiscal();
+    if (fiscalCheck.exige && !email.trim()) {
+      abas.add('dados');
+      mensagem = `E-mail é obrigatório para a role "${fiscalCheck.roleNome}" no módulo Fiscal — esses usuários recebem alertas críticos (limite SEFAZ, circuit breaker, digest de cruzamento).`;
+    }
+
+    if (!departamentoId) {
+      abas.add('acesso');
+      if (!mensagem) mensagem = 'Selecione o Departamento na aba Acesso.';
+    }
+
+    return { abas, mensagem };
+  }
+
+  const ORDEM_TABS: TabId[] = ['dados', 'acesso', 'permissoes', 'sessao'];
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setErro('');
     setMsg('');
+
+    const { abas, mensagem } = validar();
+    if (abas.size > 0) {
+      setTabErrors(abas);
+      const primeira = ORDEM_TABS.find((t) => abas.has(t));
+      if (primeira) setActiveTab(primeira);
+      setErro(mensagem);
+      return;
+    }
+    setTabErrors(new Set());
     setSaving(true);
 
     try {
       const permsHabilitadas = permissoes.filter((p) => p.habilitado && p.roleModuloId);
-
-      const fiscalCheck = exigeEmailFiscal();
-      if (fiscalCheck.exige && (!email || email.trim() === '')) {
-        setErro(
-          `E-mail é obrigatório para usuários com role "${fiscalCheck.roleNome}" no módulo Fiscal — esses usuários recebem alertas críticos (limite SEFAZ, circuit breaker, digest de cruzamento). Cadastre o e-mail antes de salvar.`,
-        );
-        setSaving(false);
-        return;
-      }
 
       if (isEdicao) {
         await usuarioService.atualizar(id!, {
@@ -240,14 +275,53 @@ export function UsuarioFormPage() {
   return (
     <>
       <Header title={isEdicao ? 'Editar Usuario' : 'Novo Usuario'} />
-      <div className="p-6 max-w-3xl">
-        <button onClick={() => navigate('/configurador/usuarios')} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 mb-6">
-          <ArrowLeft className="w-4 h-4" />
-          Voltar para lista
-        </button>
+      <div className="p-6 max-w-6xl">
+        {/* Barra topo: voltar à esquerda, ações à direita (Salvar salva todas as abas) */}
+        <div className="flex items-center justify-between mb-5">
+          <button onClick={() => navigate('/configurador/usuarios')} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700">
+            <ArrowLeft className="w-4 h-4" />
+            Voltar para lista
+          </button>
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={() => navigate('/configurador/usuarios')} className="px-5 py-2 text-sm text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-all">
+              Cancelar
+            </button>
+            <button type="submit" form="usuario-form" disabled={saving} className="flex items-center gap-2 bg-emerald-600 text-white font-medium py-2 px-5 rounded-lg text-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+              <Save className="w-4 h-4" />
+              {saving ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Dados Basicos */}
+        {/* Nav de abas — escala com novas seções sem virar "linguiça" */}
+        <nav className="flex gap-1 border-b border-slate-200 mb-6">
+          {([
+            { id: 'dados' as TabId, label: 'Dados' },
+            { id: 'acesso' as TabId, label: 'Acesso' },
+            { id: 'permissoes' as TabId, label: 'Permissões' },
+            ...(isEdicao ? [{ id: 'sessao' as TabId, label: 'Sessão & Segurança' }] : []),
+          ]).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setActiveTab(t.id)}
+              className={`relative px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                activeTab === t.id
+                  ? 'border-emerald-600 text-emerald-700'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              {t.label}
+              {tabErrors.has(t.id) && (
+                <span className="absolute top-1.5 -right-0.5 w-2 h-2 rounded-full bg-red-500" />
+              )}
+            </button>
+          ))}
+        </nav>
+
+        <form id="usuario-form" onSubmit={handleSubmit} noValidate className="space-y-6">
+          {/* === ABA: DADOS === */}
+          {activeTab === 'dados' && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <h2 className="font-semibold text-slate-800 mb-4">Dados Basicos</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -357,7 +431,10 @@ export function UsuarioFormPage() {
             </div>
           </div>
 
-          {/* Filial & Departamento */}
+          )}
+
+          {/* === ABA: ACESSO === */}
+          {activeTab === 'acesso' && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <h2 className="font-semibold text-slate-800 mb-4">Filial & Departamento</h2>
             <div className="space-y-4">
@@ -382,86 +459,122 @@ export function UsuarioFormPage() {
                 </div>
               </div>
 
-              {filiais.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-slate-700">Filiais de Acesso</label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (filialIds.length === filiais.length) {
-                          setFilialIds([]);
-                        } else {
-                          setFilialIds(filiais.map((f) => f.id));
-                        }
-                      }}
-                      className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
-                    >
-                      {filialIds.length === filiais.length ? 'Desmarcar Todas' : 'Selecionar Todas'}
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    {filiais.map((f) => (
-                      <label key={f.id} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer">
-                        <input type="checkbox" checked={filialIds.includes(f.id)} onChange={() => toggleFilial(f.id)} className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600" />
-                        <span className="text-sm text-slate-700">{f.codigo} - {f.nomeFantasia}</span>
+              {filiais.length > 0 && (() => {
+                const termo = filialSearch.trim().toLowerCase();
+                const filtradas = termo
+                  ? filiais.filter((f) =>
+                      `${f.codigo} ${f.nomeFantasia}`.toLowerCase().includes(termo),
+                    )
+                  : filiais;
+                return (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-slate-700">
+                        Filiais de Acesso
+                        <span className="ml-2 text-xs font-normal text-slate-400">
+                          {filialIds.length} de {filiais.length} selecionadas
+                        </span>
                       </label>
-                    ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (filialIds.length === filiais.length) {
+                            setFilialIds([]);
+                          } else {
+                            setFilialIds(filiais.map((f) => f.id));
+                          }
+                        }}
+                        className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+                      >
+                        {filialIds.length === filiais.length ? 'Desmarcar Todas' : 'Selecionar Todas'}
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={filialSearch}
+                      onChange={(e) => setFilialSearch(e.target.value)}
+                      placeholder="Buscar filial por código ou nome..."
+                      className="w-full mb-2 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent"
+                    />
+                    <div className="max-h-72 overflow-y-auto border border-slate-200 rounded-lg p-1 grid grid-cols-1 sm:grid-cols-2 gap-x-2">
+                      {filtradas.map((f) => (
+                        <label key={f.id} className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer">
+                          <input type="checkbox" checked={filialIds.includes(f.id)} onChange={() => toggleFilial(f.id)} className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600 flex-shrink-0" />
+                          <span className="text-sm text-slate-700 truncate">{f.codigo} - {f.nomeFantasia}</span>
+                        </label>
+                      ))}
+                      {filtradas.length === 0 && (
+                        <p className="col-span-full text-sm text-slate-400 px-3 py-4 text-center">
+                          Nenhuma filial encontrada para "{filialSearch}"
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </div>
+          )}
 
-          {/* Permissoes */}
+          {/* === ABA: PERMISSÕES === (linhas compactas + scroll: escala com
+              N módulos sem virar "linguiça" — queixa 15/05) */}
+          {activeTab === 'permissoes' && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <h2 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
-              <Shield className="w-5 h-5 text-emerald-600" />
-              Permissoes de Modulos
-            </h2>
-            <div className="space-y-3">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-slate-800 flex items-center gap-2">
+                <Shield className="w-5 h-5 text-emerald-600" />
+                Permissões de Módulos
+              </h2>
+              <span className="text-xs text-slate-400">
+                {permissoes.filter((p) => p.habilitado).length} de {modulos.length} ativos
+              </span>
+            </div>
+            <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-[28rem] overflow-y-auto">
               {modulos.map((modulo) => {
                 const perm = permissoes.find((p) => p.moduloId === modulo.id);
                 if (!perm) return null;
+                const descricao = perm.habilitado
+                  ? modulo.rolesDisponiveis.find((r) => r.id === perm.roleModuloId)?.descricao || ''
+                  : '';
                 return (
-                  <div key={modulo.id} className={`border rounded-xl p-4 transition-all ${perm.habilitado ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200'}`}>
-                    <div className="flex items-center justify-between">
-                      <label className="flex items-center gap-3 cursor-pointer flex-1">
-                        <input type="checkbox" checked={perm.habilitado} onChange={() => togglePermissao(modulo.id)} className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600" />
-                        <div>
-                          <p className="text-sm font-medium text-slate-800">{modulo.nome}</p>
-                          <p className="text-xs text-slate-400">{modulo.codigo}</p>
-                        </div>
+                  <div
+                    key={modulo.id}
+                    className={`px-3 py-2.5 transition-colors ${perm.habilitado ? 'bg-emerald-50/50' : 'hover:bg-slate-50'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
+                        <input type="checkbox" checked={perm.habilitado} onChange={() => togglePermissao(modulo.id)} className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600 flex-shrink-0" />
+                        <span className="text-sm font-medium text-slate-800 truncate">{modulo.nome}</span>
+                        <span className="text-[11px] text-slate-400 flex-shrink-0">{modulo.codigo}</span>
                       </label>
                       {perm.habilitado && modulo.rolesDisponiveis.length > 0 && (
-                        <select value={perm.roleModuloId} onChange={(e) => setPermissaoRole(modulo.id, e.target.value)} className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent">
+                        <select value={perm.roleModuloId} onChange={(e) => setPermissaoRole(modulo.id, e.target.value)} className="px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent flex-shrink-0 max-w-[10rem]">
                           {modulo.rolesDisponiveis.map((role) => (
                             <option key={role.id} value={role.id}>{role.nome}</option>
                           ))}
                         </select>
                       )}
                     </div>
-                    {perm.habilitado && modulo.rolesDisponiveis.length > 0 && (
-                      <p className="text-xs text-slate-400 mt-2 ml-7">
-                        {modulo.rolesDisponiveis.find((r) => r.id === perm.roleModuloId)?.descricao || ''}
-                      </p>
+                    {descricao && (
+                      <p className="text-[11px] text-slate-400 mt-1 ml-6 leading-snug">{descricao}</p>
                     )}
                   </div>
                 );
               })}
             </div>
           </div>
+          )}
 
-          {/* Preferencias — Timeout de inatividade */}
-          {isEdicao && (
+          {/* === ABA: SESSÃO & SEGURANÇA === (só na edição) */}
+          {activeTab === 'sessao' && isEdicao && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
               <h2 className="font-semibold text-slate-800 mb-1 flex items-center gap-2">
                 <Clock className="w-5 h-5 text-emerald-600" />
                 Sessão & Segurança
               </h2>
               <p className="text-xs text-slate-400 mb-4">
-                Tempo que o sistema aguarda sem interação antes de desconectar este usuário automaticamente.
-                Aplica-se a todos os módulos (Gestão TI, Inventário, Fiscal).
+                Tempo sem interação antes de desconectar automaticamente. Aplica-se a
+                todos os módulos (Gestão TI, Inventário, Fiscal).
               </p>
               <div className="max-w-sm">
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Timeout de inatividade</label>
@@ -481,7 +594,7 @@ export function UsuarioFormPage() {
                 </select>
               </div>
               {inactivityTimeout === 'never' && (
-                <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2.5 rounded-lg max-w-md">
+                <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2.5 rounded-lg max-w-lg">
                   <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                   <span>
                     A sessão deste usuário <strong>não expira por inatividade</strong>. Use apenas
@@ -496,17 +609,6 @@ export function UsuarioFormPage() {
           {/* Feedback */}
           {erro && <div className="bg-red-50 text-red-700 text-sm px-4 py-3 rounded-lg border border-red-200">{erro}</div>}
           {msg && <div className="bg-green-50 text-green-700 text-sm px-4 py-3 rounded-lg border border-green-200">{msg}</div>}
-
-          {/* Botoes */}
-          <div className="flex items-center gap-3">
-            <button type="submit" disabled={saving} className="flex items-center gap-2 bg-emerald-600 text-white font-medium py-2.5 px-6 rounded-lg text-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
-              <Save className="w-4 h-4" />
-              {saving ? 'Salvando...' : 'Salvar'}
-            </button>
-            <button type="button" onClick={() => navigate('/configurador/usuarios')} className="px-6 py-2.5 text-sm text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-all">
-              Cancelar
-            </button>
-          </div>
         </form>
       </div>
     </>
