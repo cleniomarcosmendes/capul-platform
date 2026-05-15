@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { usuarioService } from '../../services/usuario.service';
 import { departamentoService } from '../../services/departamento.service';
-import { ArrowLeft, Save, Shield, KeyRound } from 'lucide-react';
+import { ArrowLeft, Save, Shield, KeyRound, Clock, AlertTriangle } from 'lucide-react';
 import type { UsuarioDetalhe, ModuloSistema, FilialOption, Departamento } from '../../types';
 
 interface PermissaoForm {
@@ -47,6 +47,11 @@ export function UsuarioFormPage() {
   const [showResetSenha, setShowResetSenha] = useState(false);
   const [novaSenha, setNovaSenha] = useState('');
   const [resetMsg, setResetMsg] = useState('');
+
+  // Timeout de inatividade — preferência por usuário (default 60min se não configurado)
+  type TimeoutPref = 30 | 60 | 120 | 240 | 'never';
+  const [inactivityTimeout, setInactivityTimeout] = useState<TimeoutPref>(60);
+  const [inactivityTimeoutOriginal, setInactivityTimeoutOriginal] = useState<TimeoutPref>(60);
 
   useEffect(() => {
     carregarDados();
@@ -95,6 +100,19 @@ export function UsuarioFormPage() {
           return existente ? { ...pv, roleModuloId: existente.roleModuloId, habilitado: true } : pv;
         });
         setPermissoes(permsComDados);
+
+        try {
+          const prefs = await usuarioService.getPreferencias(id!);
+          const raw = prefs?.inactivityTimeoutMin;
+          const valor: TimeoutPref =
+            raw === 'never' || raw === 30 || raw === 60 || raw === 120 || raw === 240
+              ? raw
+              : 60;
+          setInactivityTimeout(valor);
+          setInactivityTimeoutOriginal(valor);
+        } catch {
+          // fallback silencioso pro default
+        }
       } else {
         setPermissoes(permsVazias);
       }
@@ -177,6 +195,11 @@ export function UsuarioFormPage() {
           if (!aindaHabilitada) {
             await usuarioService.revogarPermissao(id!, original.moduloId);
           }
+        }
+
+        if (inactivityTimeout !== inactivityTimeoutOriginal) {
+          await usuarioService.atualizarPreferencias(id!, { inactivityTimeoutMin: inactivityTimeout });
+          setInactivityTimeoutOriginal(inactivityTimeout);
         }
 
         setMsg('Usuario atualizado com sucesso!');
@@ -428,6 +451,47 @@ export function UsuarioFormPage() {
               })}
             </div>
           </div>
+
+          {/* Preferencias — Timeout de inatividade */}
+          {isEdicao && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+              <h2 className="font-semibold text-slate-800 mb-1 flex items-center gap-2">
+                <Clock className="w-5 h-5 text-emerald-600" />
+                Sessão & Segurança
+              </h2>
+              <p className="text-xs text-slate-400 mb-4">
+                Tempo que o sistema aguarda sem interação antes de desconectar este usuário automaticamente.
+                Aplica-se a todos os módulos (Gestão TI, Inventário, Fiscal).
+              </p>
+              <div className="max-w-sm">
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Timeout de inatividade</label>
+                <select
+                  value={String(inactivityTimeout)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setInactivityTimeout(v === 'never' ? 'never' : (Number(v) as TimeoutPref));
+                  }}
+                  className={inputClass}
+                >
+                  <option value="30">30 minutos</option>
+                  <option value="60">60 minutos (padrão)</option>
+                  <option value="120">120 minutos (2 horas)</option>
+                  <option value="240">240 minutos (4 horas)</option>
+                  <option value="never">Manter sempre conectado</option>
+                </select>
+              </div>
+              {inactivityTimeout === 'never' && (
+                <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2.5 rounded-lg max-w-md">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <span>
+                    A sessão deste usuário <strong>não expira por inatividade</strong>. Use apenas
+                    em estações pessoais — em PCs compartilhados qualquer pessoa pode acessar o
+                    sistema sem login. (O refresh token ainda expira em 7 dias.)
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Feedback */}
           {erro && <div className="bg-red-50 text-red-700 text-sm px-4 py-3 rounded-lg border border-red-200">{erro}</div>}

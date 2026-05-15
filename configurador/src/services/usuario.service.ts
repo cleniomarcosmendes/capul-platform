@@ -72,4 +72,14 @@ export const usuarioService = {
     const { data } = await coreApi.get('/filiais');
     return data;
   },
+
+  async getPreferencias(id: string): Promise<Record<string, any>> {
+    const { data } = await coreApi.get(`/usuarios/${id}/preferencias`);
+    return data ?? {};
+  },
+
+  async atualizarPreferencias(id: string, patch: Record<string, any>): Promise<Record<string, any>> {
+    const { data } = await coreApi.patch(`/usuarios/${id}/preferencias`, patch);
+    return data;
+  },
 };
