@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { UsuarioService } from './usuario.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import {
   CreateUsuarioDto,
   UpdateUsuarioDto,
@@ -26,6 +27,21 @@ export class UsuarioController {
   @Get()
   findAll(@Query('filialId') filialId?: string) {
     return this.usuarioService.findAll(filialId);
+  }
+
+  @Get('me/preferencias')
+  getMyPreferencias(@CurrentUser('id') userId: string) {
+    return this.usuarioService.getPreferencias(userId);
+  }
+
+  @Get(':id/preferencias')
+  getPreferencias(@Param('id') id: string) {
+    return this.usuarioService.getPreferencias(id);
+  }
+
+  @Patch(':id/preferencias')
+  updatePreferencias(@Param('id') id: string, @Body() patch: Record<string, any>) {
+    return this.usuarioService.updatePreferencias(id, patch);
   }
 
   @Get(':id')

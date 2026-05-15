@@ -94,6 +94,36 @@ export class UsuarioService {
     return usuario;
   }
 
+  async getPreferencias(id: string): Promise<Record<string, any>> {
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id },
+      select: { preferencias: true },
+    });
+    if (!usuario) throw new NotFoundException('Usuario nao encontrado');
+    return (usuario.preferencias as Record<string, any>) ?? {};
+  }
+
+  async updatePreferencias(id: string, patch: Record<string, any>) {
+    const atual = await this.getPreferencias(id);
+    const merged = { ...atual, ...patch };
+
+    if ('inactivityTimeoutMin' in merged) {
+      const v = merged.inactivityTimeoutMin;
+      const ok = v === 'never' || (typeof v === 'number' && [30, 60, 120, 240].includes(v));
+      if (!ok) {
+        throw new BadRequestException(
+          'inactivityTimeoutMin deve ser 30, 60, 120, 240 ou "never"',
+        );
+      }
+    }
+
+    await this.prisma.usuario.update({
+      where: { id },
+      data: { preferencias: merged },
+    });
+    return merged;
+  }
+
   async create(dto: CreateUsuarioDto) {
     const existing = await this.prisma.usuario.findFirst({
       where: {
