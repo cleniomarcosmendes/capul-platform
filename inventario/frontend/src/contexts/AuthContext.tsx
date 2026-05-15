@@ -1,8 +1,10 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
-import { authApi } from '../services/api';
+import { authApi, coreApi } from '../services/api';
 import type { UsuarioLogado } from '../types';
 
-const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutos
+// Default 60min se o usuário não tiver preferência configurada (Configurador →
+// Usuário → Sessão & Segurança). `null` = "manter sempre conectado".
+const DEFAULT_INACTIVITY_MS = 60 * 60 * 1000;
 
 interface AuthContextType {
   usuario: UsuarioLogado | null;
@@ -18,6 +20,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionExpired, setSessionExpired] = useState(false);
+  // ms até deslogar por inatividade. null = nunca (preferência "sempre conectado").
+  const [inactivityMs, setInactivityMs] = useState<number | null>(DEFAULT_INACTIVITY_MS);
   const inactivityTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const inventarioRole = usuario?.modulos.find((m) => m.codigo === 'INVENTARIO')?.role ?? null;
@@ -32,6 +36,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       const { data } = await authApi.get('/me');
       setUsuario(data);
+
+      try {
+        const { data: prefs } = await coreApi.get('/usuarios/me/preferencias');
+        const raw = prefs?.inactivityTimeoutMin;
+        if (raw === 'never') setInactivityMs(null);
+        else if (typeof raw === 'number' && [30, 60, 120, 240].includes(raw))
+          setInactivityMs(raw * 60 * 1000);
+        else setInactivityMs(DEFAULT_INACTIVITY_MS);
+      } catch {
+        setInactivityMs(DEFAULT_INACTIVITY_MS);
+      }
     } catch {
       setUsuario(null);
       localStorage.clear();
@@ -53,14 +68,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Timeout de inatividade
   const resetInactivityTimer = useCallback(() => {
     clearTimeout(inactivityTimer.current);
+    if (inactivityMs === null) return; // "sempre conectado" — não arma timer
     if (localStorage.getItem('accessToken')) {
       inactivityTimer.current = setTimeout(() => {
         localStorage.clear();
         setUsuario(null);
         setSessionExpired(true);
-      }, INACTIVITY_TIMEOUT);
+      }, inactivityMs);
     }
-  }, []);
+  }, [inactivityMs]);
 
   useEffect(() => {
     refreshUser();
