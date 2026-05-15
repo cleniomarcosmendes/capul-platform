@@ -14,6 +14,8 @@ import { MentionInput } from '../../components/MentionInput';
 import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
 import { NovaTarefaModal } from '../../components/NovaTarefaModal';
 import { NovaTarefaButton } from '../../components/NovaTarefaButton';
+import { TarefaDrawer } from '../../components/TarefaDrawer';
+import { useTarefaDrawer } from '../../hooks/useTarefaDrawer';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { abrirAnexoOuBaixar } from '../../utils/anexo';
 import type {
@@ -942,7 +944,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   const [membrosEquipe, setMembrosEquipe] = useState<MembroProjeto[]>([]);
   const [saving, setSaving] = useState(false);
   // Expanded atividade
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { openTarefaId: expandedId, open: openTarefaDrawer, close: closeTarefaDrawer } = useTarefaDrawer();
   const [registros, setRegistros] = useState<RegistroTempo[]>([]);
   const [loadingRegistros, setLoadingRegistros] = useState(false);
   const [editingRegistro, setEditingRegistro] = useState<string | null>(null);
@@ -1110,9 +1112,15 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     try { setComentarios(await projetoService.listarComentarios(projetoId, atividadeId)); } catch { setComentarios([]); }
     setLoadingComentarios(false);
   }
-  function toggleExpand(atividadeId: string) {
-    if (expandedId === atividadeId) { setExpandedId(null); return; }
-    setExpandedId(atividadeId); setEditingRegistro(null); loadRegistros(atividadeId); loadComentarios(atividadeId);
+  function handleOpenTarefa(atividadeId: string) {
+    openTarefaDrawer(atividadeId);
+    setEditingRegistro(null);
+    loadRegistros(atividadeId);
+    loadComentarios(atividadeId);
+  }
+  function handleCloseDrawer() {
+    closeTarefaDrawer();
+    closeEditAtividade();
   }
   function toLocalDatetimeStr(iso: string): string {
     // Converte ISO UTC para formato datetime-local (YYYY-MM-DDTHH:MM) em hora local
@@ -1161,10 +1169,15 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   }
   async function handleRemoveAtividade(atividadeId: string) {
     if (!await confirm('Remover Tarefa', 'Deseja remover esta tarefa e todos os seus registros de tempo?', { variant: 'danger', confirmLabel: 'Remover' })) return;
-    try { await projetoService.removerAtividade(projetoId, atividadeId); loadAll(); } catch { /* empty */ }
+    try {
+      await projetoService.removerAtividade(projetoId, atividadeId);
+      if (expandedId === atividadeId) handleCloseDrawer();
+      loadAll();
+    } catch { /* empty */ }
   }
 
   function openEditAtividade(a: AtividadeProjeto) {
+    handleOpenTarefa(a.id); // garante drawer aberto + cronometro/notas carregados
     setEditingAtividade(a);
     setEditAtivTitulo(a.titulo);
     setEditAtivDescricao(a.descricao || '');
@@ -1266,79 +1279,135 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     CANCELADA: { label: 'Cancelada', color: 'bg-red-100 text-red-600', dot: 'bg-red-500' },
   };
 
+  // Conteudo de edicao da tarefa — exibido dentro do drawer (mesmo JSX de antes)
+  function renderEdicaoTarefa() {
+    return (
+      <div className="p-5">
+        <h5 className="text-sm font-semibold text-slate-700 mb-4">Editar Tarefa</h5>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Titulo *</label>
+            <input type="text" placeholder="Titulo da tarefa" value={editAtivTitulo} onChange={(e) => setEditAtivTitulo(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Data Inicio</label>
+              <input type="date" value={editAtivDataInicio} onChange={(e) => setEditAtivDataInicio(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Data Fim Prevista</label>
+              <input type="date" value={editAtivDataFimPrevista} min={editAtivDataInicio || undefined} onChange={(e) => setEditAtivDataFimPrevista(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            {fases.length > 0 && (
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Fase</label>
+                <select value={editAtivFaseId} onChange={(e) => setEditAtivFaseId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                  <option value="">Sem fase</option>
+                  {fases.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+          {membrosEquipe.length > 0 && (
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Responsaveis</label>
+              <MultiSelectDropdown
+                options={membrosEquipe.map((m) => ({ value: m.usuarioId, label: m.usuario.nome }))}
+                selected={editAtivResponsavelIds}
+                onChange={setEditAtivResponsavelIds}
+                placeholder="Selecione os responsaveis"
+              />
+            </div>
+          )}
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Descricao</label>
+            <textarea placeholder="Descricao da tarefa (opcional) - detalhe o que precisa ser feito, parametros, configuracoes..." value={editAtivDescricao} onChange={(e) => setEditAtivDescricao(e.target.value)} rows={10} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button onClick={closeEditAtividade} className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2">Cancelar</button>
+            <button onClick={handleSaveAtividade} disabled={savingAtividade || !editAtivTitulo.trim()} className="bg-capul-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
+              {savingAtividade ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Botoes de acao da tarefa — reutilizados na linha (lista) e no drawer
+  function renderAcoesTarefa(a: AtividadeProjeto) {
+    const cfg = statusAtividadeConfig[a.status] || statusAtividadeConfig.PENDENTE;
+    const meuRegistroAtivo = a.registrosTempo?.find((r) => r.usuarioId === userId);
+    return (
+      <>
+        {canAdd ? (
+          <select
+            value={a.status}
+            onChange={(e) => handleChangeStatus(a.id, e.target.value)}
+            className="text-[11px] font-medium border border-slate-200 rounded-lg px-2 py-1 bg-white cursor-pointer"
+          >
+            <option value="PENDENTE">Pendente</option>
+            <option value="EM_ANDAMENTO">Em Andamento</option>
+            <option value="CONCLUIDA">Concluida</option>
+            <option value="CANCELADA">Cancelada</option>
+          </select>
+        ) : (
+          <span className={`text-[11px] font-medium rounded-full px-2.5 py-1 ${cfg.color}`}>{cfg.label}</span>
+        )}
+
+        {canAdd && fases.length > 0 && (
+          <select
+            value={a.faseId || ''}
+            onChange={(e) => handleChangeFase(a.id, e.target.value)}
+            className="text-[11px] border border-slate-200 rounded-lg px-2 py-1 bg-white cursor-pointer text-slate-600 max-w-[120px]"
+            title="Mover para fase"
+          >
+            <option value="">Sem fase</option>
+            {fases.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+          </select>
+        )}
+
+        {canAdd && !meuRegistroAtivo && (
+          <button onClick={() => handleIniciar(a.id)} className="inline-flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors" title="Iniciar cronometro">
+            <Play className="w-3.5 h-3.5" /> Iniciar
+          </button>
+        )}
+        {canAdd && meuRegistroAtivo && (
+          <button onClick={() => handleEncerrar(a.id)} className="inline-flex items-center gap-1 text-sm font-medium text-red-600 bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-lg transition-colors" title="Encerrar cronometro">
+            <Square className="w-3.5 h-3.5" /> Encerrar
+          </button>
+        )}
+
+        {canAdd && (
+          <button onClick={() => openEditAtividade(a)} className="text-slate-300 hover:text-capul-600 transition-colors p-1" title="Editar tarefa">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        {canAdd && (
+          <button onClick={() => handleRemoveAtividade(a.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1" title="Remover tarefa">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </>
+    );
+  }
+
   function renderAtividade(a: AtividadeProjeto) {
-    const isExpanded = expandedId === a.id;
+    const isSelected = expandedId === a.id;
     const meuRegistroAtivo = a.registrosTempo?.find((r) => r.usuarioId === userId);
     const temRegistros = (a._count?.registrosTempo ?? 0) > 0;
     const cfg = statusAtividadeConfig[a.status] || statusAtividadeConfig.PENDENTE;
-    const isEditing = editingAtividade?.id === a.id;
-
-    // Formulario de edicao inline
-    if (isEditing) {
-      return (
-        <div key={a.id} className="mx-3 my-2">
-          <div className="rounded-lg border border-amber-300 bg-amber-50 p-5">
-            <h5 className="text-sm font-semibold text-slate-700 mb-4">Editar Tarefa</h5>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Titulo *</label>
-                <input type="text" placeholder="Titulo da tarefa" value={editAtivTitulo} onChange={(e) => setEditAtivTitulo(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Data Inicio</label>
-                  <input type="date" value={editAtivDataInicio} onChange={(e) => setEditAtivDataInicio(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Data Fim Prevista</label>
-                  <input type="date" value={editAtivDataFimPrevista} min={editAtivDataInicio || undefined} onChange={(e) => setEditAtivDataFimPrevista(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-                </div>
-                {fases.length > 0 && (
-                  <div>
-                    <label className="block text-xs text-slate-500 mb-1">Fase</label>
-                    <select value={editAtivFaseId} onChange={(e) => setEditAtivFaseId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-                      <option value="">Sem fase</option>
-                      {fases.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
-                    </select>
-                  </div>
-                )}
-              </div>
-              {membrosEquipe.length > 0 && (
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Responsaveis</label>
-                  <MultiSelectDropdown
-                    options={membrosEquipe.map((m) => ({ value: m.usuarioId, label: m.usuario.nome }))}
-                    selected={editAtivResponsavelIds}
-                    onChange={setEditAtivResponsavelIds}
-                    placeholder="Selecione os responsaveis"
-                  />
-                </div>
-              )}
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Descricao</label>
-                <textarea placeholder="Descricao da tarefa (opcional) - detalhe o que precisa ser feito, parametros, configuracoes..." value={editAtivDescricao} onChange={(e) => setEditAtivDescricao(e.target.value)} rows={10} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button onClick={closeEditAtividade} className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2">Cancelar</button>
-                <button onClick={handleSaveAtividade} disabled={savingAtividade || !editAtivTitulo.trim()} className="bg-capul-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
-                  {savingAtividade ? 'Salvando...' : 'Salvar'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
 
     return (
       <div key={a.id} className="mx-3 my-2">
-        <div className={`rounded-lg border ${meuRegistroAtivo ? 'border-green-300 bg-green-50/50 shadow-sm shadow-green-100' : isExpanded ? 'border-capul-300 bg-white shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'} transition-all`}>
+        <div className={`rounded-lg border ${meuRegistroAtivo ? 'border-green-300 bg-green-50/50 shadow-sm shadow-green-100' : isSelected ? 'border-capul-400 bg-capul-50/40 shadow-sm ring-1 ring-capul-200' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'} transition-all`}>
         {/* Linha principal */}
-        <div className="px-4 py-3 cursor-pointer" onClick={() => toggleExpand(a.id)}>
+        <div className="px-4 py-3 cursor-pointer" onClick={() => handleOpenTarefa(a.id)} title="Abrir detalhes da tarefa">
           <div className="flex items-start gap-3">
-            {/* Indicador de status (barra lateral) */}
+            {/* Indicador de status (barra lateral) — destaque verde quando selecionada */}
             <div className="pt-0.5 flex-shrink-0">
-              <div className={`w-1.5 h-12 rounded-full ${cfg.dot}`} />
+              <div className={`w-1.5 h-12 rounded-full ${isSelected ? 'bg-capul-500' : cfg.dot}`} />
             </div>
 
             {/* Conteudo principal */}
@@ -1387,65 +1456,11 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
               </div>
             </div>
 
-            {/* Acoes compactas (direita) */}
+            {/* Acoes compactas (direita) — reutiliza renderAcoesTarefa (lista + drawer) */}
             <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-              {/* Status select */}
-              {canAdd ? (
-                <select
-                  value={a.status}
-                  onChange={(e) => handleChangeStatus(a.id, e.target.value)}
-                  className="text-[11px] font-medium border border-slate-200 rounded-lg px-2 py-1 bg-white cursor-pointer"
-                >
-                  <option value="PENDENTE">Pendente</option>
-                  <option value="EM_ANDAMENTO">Em Andamento</option>
-                  <option value="CONCLUIDA">Concluida</option>
-                  <option value="CANCELADA">Cancelada</option>
-                </select>
-              ) : (
-                <span className={`text-[11px] font-medium rounded-full px-2.5 py-1 ${cfg.color}`}>{cfg.label}</span>
-              )}
-
-              {/* Fase select (permite mover entre fases) */}
-              {canAdd && fases.length > 0 && (
-                <select
-                  value={a.faseId || ''}
-                  onChange={(e) => handleChangeFase(a.id, e.target.value)}
-                  className="text-[11px] border border-slate-200 rounded-lg px-2 py-1 bg-white cursor-pointer text-slate-600 max-w-[120px]"
-                  title="Mover para fase"
-                >
-                  <option value="">Sem fase</option>
-                  {fases.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
-                </select>
-              )}
-
-              {/* Timer */}
-              {canAdd && !meuRegistroAtivo && (
-                <button onClick={() => handleIniciar(a.id)} className="inline-flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors" title="Iniciar cronometro">
-                  <Play className="w-3.5 h-3.5" /> Iniciar
-                </button>
-              )}
-              {canAdd && meuRegistroAtivo && (
-                <button onClick={() => handleEncerrar(a.id)} className="inline-flex items-center gap-1 text-sm font-medium text-red-600 bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-lg transition-colors" title="Encerrar cronometro">
-                  <Square className="w-3.5 h-3.5" /> Encerrar
-                </button>
-              )}
-
-              {/* Editar */}
-              {canAdd && (
-                <button onClick={() => openEditAtividade(a)} className="text-slate-300 hover:text-capul-600 transition-colors p-1" title="Editar tarefa">
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-              )}
-
-              {/* Remover */}
-              {canAdd && (
-                <button onClick={() => handleRemoveAtividade(a.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1" title="Remover tarefa">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
-
-              {/* Expand indicator */}
-              {isExpanded ? <ChevronDown className="w-4 h-4 text-slate-300" /> : <ChevronRight className="w-4 h-4 text-slate-300" />}
+              {renderAcoesTarefa(a)}
+              {/* Abre o painel lateral */}
+              <ChevronRight className="w-4 h-4 text-slate-300" />
             </div>
           </div>
           {/* Descricao — largura total, fora do flex row */}
@@ -1455,10 +1470,21 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
             </div>
           )}
         </div>
+        </div>
+      </div>
+    );
+  }
 
-        {/* Registros de Tempo (expandido) */}
-        {isExpanded && (
-          <div className="bg-slate-50/80 px-5 py-4 border-t border-slate-200 rounded-b-lg">
+  // Cronometro + notas da tarefa — exibido dentro do drawer (mesmo JSX de antes)
+  function renderConteudoTarefa(a: AtividadeProjeto) {
+    return (
+      <>
+        {canAdd && (
+          <div className="flex flex-wrap items-center gap-1.5 px-5 py-3 border-b border-slate-200 bg-white sticky top-0 z-10">
+            {renderAcoesTarefa(a)}
+          </div>
+        )}
+          <div className="bg-slate-50/80 px-5 py-4">
             <div className="flex items-center justify-between mb-3">
               <h5 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
                 Registros de Tempo
@@ -1625,9 +1651,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
               )}
             </div>
           </div>
-        )}
-        </div>
-      </div>
+      </>
     );
   }
 
@@ -1636,7 +1660,8 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   return (
     <>
     {/* protecao via pai */}
-    <div className="space-y-4">
+    {/* Push: a ≥1440px o drawer (420px fixo) reserva espaco; <1440 vira overlay */}
+    <div className={`space-y-4 transition-[padding] duration-200 ${expandedId ? 'min-[1440px]:pr-[440px]' : ''}`}>
       {/* Nova tarefa — botao abre modal (form persistente removido, ganha -250px de chrome) */}
       {canAdd && (
         <div className="flex items-center justify-end">
@@ -1857,6 +1882,22 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
       fases={fases}
       membrosEquipe={membrosEquipe}
     />
+
+    {(() => {
+      const ta = atividades.find((x) => x.id === expandedId) || null;
+      const faseTa = ta?.faseId ? fases.find((f) => f.id === ta.faseId) : null;
+      const editandoEsta = ta != null && editingAtividade?.id === ta.id;
+      return (
+        <TarefaDrawer
+          open={expandedId != null}
+          onClose={handleCloseDrawer}
+          titulo={ta?.titulo || ''}
+          breadcrumb={faseTa ? `FASE ${faseTa.ordem} · ${faseTa.nome}` : undefined}
+        >
+          {ta && (editandoEsta ? renderEdicaoTarefa() : renderConteudoTarefa(ta))}
+        </TarefaDrawer>
+      );
+    })()}
 
     </>
   );
