@@ -1019,6 +1019,8 @@ export interface ComentarioTarefa {
   id: string;
   texto: string;
   visivelPendencia?: boolean;
+  /** false = nota interna (só staff TI vê/cria). Regra única 14/05. */
+  publica?: boolean;
   atividadeId: string;
   usuarioId: string;
   usuario: { id: string; nome: string };

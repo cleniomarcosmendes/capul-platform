@@ -162,8 +162,8 @@ export class ProjetoService {
   // ATIVIDADES
   // ============================================================
 
-  listAtividades(projetoId: string) {
-    return this.atividadeService.listAtividades(projetoId);
+  listAtividades(projetoId: string, role?: string) {
+    return this.atividadeService.listAtividades(projetoId, role);
   }
 
   addAtividade(
@@ -195,24 +195,24 @@ export class ProjetoService {
   // COMENTARIOS DE TAREFA
   // ============================================================
 
-  listComentarios(projetoId: string, atividadeId: string) {
-    return this.atividadeService.listComentarios(projetoId, atividadeId);
+  listComentarios(projetoId: string, atividadeId: string, role?: string) {
+    return this.atividadeService.listComentarios(projetoId, atividadeId, role);
   }
 
-  addComentario(projetoId: string, atividadeId: string, texto: string, userId: string, visivelPendencia?: boolean) {
-    return this.atividadeService.addComentario(projetoId, atividadeId, texto, userId, visivelPendencia);
+  addComentario(projetoId: string, atividadeId: string, texto: string, userId: string, visivelPendencia?: boolean, publica?: boolean, role?: string) {
+    return this.atividadeService.addComentario(projetoId, atividadeId, texto, userId, visivelPendencia, publica, role);
   }
 
   removeComentario(projetoId: string, comentarioId: string, userId: string, role?: string) {
     return this.atividadeService.removeComentario(projetoId, comentarioId, userId, role);
   }
 
-  updateComentario(projetoId: string, comentarioId: string, texto: string, userId: string, role?: string, visivelPendencia?: boolean) {
-    return this.atividadeService.updateComentario(projetoId, comentarioId, texto, userId, role, visivelPendencia);
+  updateComentario(projetoId: string, comentarioId: string, texto: string, userId: string, role?: string, visivelPendencia?: boolean, publica?: boolean) {
+    return this.atividadeService.updateComentario(projetoId, comentarioId, texto, userId, role, visivelPendencia, publica);
   }
 
-  buscarComentarios(query: string) {
-    return this.atividadeService.buscarComentarios(query);
+  buscarComentarios(query: string, role?: string) {
+    return this.atividadeService.buscarComentarios(query, role);
   }
 
   // ============================================================

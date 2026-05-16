@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MessageSquare, Pencil, Trash2, ArrowUpDown } from 'lucide-react';
+import { MessageSquare, Pencil, Trash2, ArrowUpDown, Lock } from 'lucide-react';
 import type { ComentarioTarefa } from '../../types';
 import { MentionInput } from '../MentionInput';
 import { EmptyState } from '../EmptyState';
@@ -21,10 +21,12 @@ interface ConversaTabProps {
   loading: boolean;
   currentUserId: string;
   canManage: boolean;
+  /** staff TI (ADMIN/GESTOR_TI/SUPORTE_TI) — só eles criam nota interna. */
+  isStaffTI: boolean;
   membros: Membro[];
   pendenciaNumero?: number;
-  onEnviar: (texto: string, visivelPendencia: boolean) => Promise<void>;
-  onEditar: (id: string, texto: string, visivelPendencia: boolean) => Promise<void>;
+  onEnviar: (texto: string, visivelPendencia: boolean, publica: boolean) => Promise<void>;
+  onEditar: (id: string, texto: string, visivelPendencia: boolean, publica: boolean) => Promise<void>;
   onRemover: (id: string) => Promise<void>;
 }
 
@@ -40,15 +42,18 @@ function fmtQuando(iso: string): string {
  * conforme digita (autoGrow). Estado de edição é local.
  */
 export function ConversaTab({
-  comentarios, loading, currentUserId, canManage, membros, pendenciaNumero,
+  comentarios, loading, currentUserId, canManage, isStaffTI, membros, pendenciaNumero,
   onEnviar, onEditar, onRemover,
 }: ConversaTabProps) {
   const [novo, setNovo] = useState('');
   const [novoVisivel, setNovoVisivel] = useState(false);
+  // publica=true por padrão (compat). Só staff TI consegue desmarcar.
+  const [novoPublico, setNovoPublico] = useState(true);
   const [enviando, setEnviando] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editTexto, setEditTexto] = useState('');
   const [editVisivel, setEditVisivel] = useState(false);
+  const [editPublico, setEditPublico] = useState(true);
   const [salvandoEdit, setSalvandoEdit] = useState(false);
   // Padrão: recentes primeiro (mais novas no topo). Toggle alterna p/ antigas primeiro.
   const [ordemAsc, setOrdemAsc] = useState(false);
@@ -62,9 +67,10 @@ export function ConversaTab({
     if (!novo.trim() || enviando) return;
     setEnviando(true);
     try {
-      await onEnviar(novo.trim(), novoVisivel);
+      await onEnviar(novo.trim(), novoVisivel, novoPublico);
       setNovo('');
       setNovoVisivel(false);
+      setNovoPublico(true);
     } finally {
       setEnviando(false);
     }
@@ -74,13 +80,14 @@ export function ConversaTab({
     setEditId(c.id);
     setEditTexto(c.texto);
     setEditVisivel(c.visivelPendencia ?? false);
+    setEditPublico(c.publica ?? true);
   }
 
   async function salvarEdit() {
     if (!editId || !editTexto.trim() || salvandoEdit) return;
     setSalvandoEdit(true);
     try {
-      await onEditar(editId, editTexto.trim(), editVisivel);
+      await onEditar(editId, editTexto.trim(), editVisivel, editPublico);
       setEditId(null);
       setEditTexto('');
     } finally {
@@ -131,13 +138,24 @@ export function ConversaTab({
                       className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs"
                       placeholder="Editar nota... (use @usuario para mencionar)"
                     />
-                    <div className="flex items-center justify-between mt-1 mb-2">
-                      {pendenciaNumero != null ? (
-                        <label className="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
-                          <input type="checkbox" checked={editVisivel} onChange={(e) => setEditVisivel(e.target.checked)} className="rounded border-slate-300" />
-                          Visivel na Pendencia #{pendenciaNumero}
-                        </label>
-                      ) : <span />}
+                    <div className="flex items-center justify-between gap-3 mt-1 mb-2">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {isStaffTI && (
+                          <label
+                            className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none"
+                            title="Desmarque para deixar a nota interna (visível apenas para staff de TI — Usuário Chave / Terceirizado não enxerga)."
+                          >
+                            <input type="checkbox" checked={editPublico} onChange={(e) => setEditPublico(e.target.checked)} className="rounded border-slate-300 w-3.5 h-3.5" />
+                            Visível p/ Usuário Chave / Terceirizado
+                          </label>
+                        )}
+                        {pendenciaNumero != null && (
+                          <label className="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
+                            <input type="checkbox" checked={editVisivel} onChange={(e) => setEditVisivel(e.target.checked)} className="rounded border-slate-300" />
+                            Visivel na Pendencia #{pendenciaNumero}
+                          </label>
+                        )}
+                      </div>
                       <CharCount value={editTexto} />
                     </div>
                     <div className="flex justify-end gap-3">
@@ -155,6 +173,14 @@ export function ConversaTab({
                     <div className="flex items-center gap-2 mb-0.5">
                       <span className="text-[11px] font-medium text-slate-700">{c.usuario.nome}</span>
                       <span className="text-[10px] text-slate-400">{fmtQuando(c.createdAt)}</span>
+                      {c.publica === false && (
+                        <span
+                          className="inline-flex items-center gap-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-100 border border-amber-200 rounded px-1 py-0.5"
+                          title="Nota interna — visível apenas para staff de TI. Usuário Chave / Terceirizado não enxerga."
+                        >
+                          <Lock className="w-2.5 h-2.5" />interna
+                        </span>
+                      )}
                       {(canManage || meu) && (
                         <span className="flex items-center gap-1 ml-1">
                           <button onClick={() => startEdit(c)} className="text-slate-300 hover:text-capul-600" title="Editar"><Pencil className="w-3 h-3" /></button>
@@ -187,7 +213,16 @@ export function ConversaTab({
           />
         </div>
         <div className="mt-2 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            {isStaffTI && (
+              <label
+                className="flex items-center gap-1.5 text-[11px] text-slate-500 cursor-pointer select-none"
+                title="Desmarque para deixar a nota interna (visível apenas para staff de TI — Usuário Chave / Terceirizado não enxerga)."
+              >
+                <input type="checkbox" checked={novoPublico} onChange={(e) => setNovoPublico(e.target.checked)} className="rounded border-slate-300 w-3.5 h-3.5" />
+                Visível p/ Usuário Chave / Terceirizado
+              </label>
+            )}
             {pendenciaNumero != null && (
               <label className="flex items-center gap-2 text-[11px] text-slate-500 cursor-pointer">
                 <input type="checkbox" checked={novoVisivel} onChange={(e) => setNovoVisivel(e.target.checked)} className="rounded border-slate-300" />

@@ -1799,6 +1799,10 @@ model ComentarioTarefa {
   id                String   @id @default(uuid())
   texto             String
   visivelPendencia  Boolean  @default(false) @map("visivel_pendencia")
+  // publica=false => nota interna: só staff TI (isTI: ADMIN/GESTOR_TI/
+  // SUPORTE_TI) vê/cria. Regra única 14/05 — espelha HistoricoChamado.publico
+  // e InteracaoPendencia.publica. Default true (compat com notas existentes).
+  publica           Boolean  @default(true)
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 

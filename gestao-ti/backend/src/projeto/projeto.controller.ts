@@ -102,8 +102,8 @@ export class ProjetoController {
   }
 
   @Get('busca-comentarios')
-  buscarComentarios(@Query('q') q: string) {
-    return this.service.buscarComentarios(q);
+  buscarComentarios(@Query('q') q: string, @GestaoTiRole() role?: string) {
+    return this.service.buscarComentarios(q, role);
   }
 
   // USUARIO_CHAVE e TERCEIRIZADO compartilham `usuario_chave_projeto` desde 13/05/2026.
@@ -252,8 +252,8 @@ export class ProjetoController {
   // --- Atividades ---
 
   @Get(':id/atividades')
-  listAtividades(@Param('id') id: string) {
-    return this.service.listAtividades(id);
+  listAtividades(@Param('id') id: string, @GestaoTiRole() role?: string) {
+    return this.service.listAtividades(id, role);
   }
 
   @Post(':id/atividades')
@@ -309,8 +309,12 @@ export class ProjetoController {
   // --- Comentarios de Tarefa ---
 
   @Get(':id/atividades/:atividadeId/comentarios')
-  listComentarios(@Param('id') id: string, @Param('atividadeId') atividadeId: string) {
-    return this.service.listComentarios(id, atividadeId);
+  listComentarios(
+    @Param('id') id: string,
+    @Param('atividadeId') atividadeId: string,
+    @GestaoTiRole() role?: string,
+  ) {
+    return this.service.listComentarios(id, atividadeId, role);
   }
 
   @Post(':id/atividades/:atividadeId/comentarios')
@@ -318,12 +322,12 @@ export class ProjetoController {
   async addComentario(
     @Param('id') id: string,
     @Param('atividadeId') atividadeId: string,
-    @Body() body: { texto: string; visivelPendencia?: boolean },
+    @Body() body: { texto: string; visivelPendencia?: boolean; publica?: boolean },
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
-    return this.service.addComentario(id, atividadeId, body.texto, user.sub, body.visivelPendencia);
+    return this.service.addComentario(id, atividadeId, body.texto, user.sub, body.visivelPendencia, body.publica, role);
   }
 
   @Delete(':id/comentarios/:comentarioId')
@@ -342,12 +346,12 @@ export class ProjetoController {
   async updateComentario(
     @Param('id') id: string,
     @Param('comentarioId') comentarioId: string,
-    @Body() body: { texto: string; visivelPendencia?: boolean },
+    @Body() body: { texto: string; visivelPendencia?: boolean; publica?: boolean },
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
-    return this.service.updateComentario(id, comentarioId, body.texto, user.sub, role, body.visivelPendencia);
+    return this.service.updateComentario(id, comentarioId, body.texto, user.sub, role, body.visivelPendencia, body.publica);
   }
 
   // --- Registro de Tempo ---

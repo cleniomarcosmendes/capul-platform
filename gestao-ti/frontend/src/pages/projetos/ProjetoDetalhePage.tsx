@@ -931,6 +931,9 @@ function TabEquipe({ projetoId, canManage, onEditingChange }: { projetoId: strin
 // --- Tab Atividades (Fases + Atividades + Registros de Tempo) ---
 function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGestor, onEditingChange }: { projetoId: string; isCompleto: boolean; canManage: boolean; canAdd: boolean; userId: string; isGestor: boolean; onEditingChange?: (editing: boolean) => void }) {
   const { confirm, toast } = useToast();
+  const { gestaoTiRole } = useAuth();
+  // Staff TI (Regra única 14/05): só eles criam/veem nota interna na Conversa.
+  const isStaffTI = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
   const [fases, setFases] = useState<FaseProjeto[]>([]);
   const [atividades, setAtividades] = useState<AtividadeProjeto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1236,18 +1239,18 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     setSavingAtividade(false);
   }
 
-  async function handleEnviarComentario(texto: string, visivelPendencia: boolean) {
+  async function handleEnviarComentario(texto: string, visivelPendencia: boolean, publica: boolean) {
     if (!expandedId) return;
     try {
-      await projetoService.adicionarComentario(projetoId, expandedId, texto, visivelPendencia || undefined);
+      await projetoService.adicionarComentario(projetoId, expandedId, texto, visivelPendencia || undefined, publica);
       loadComentarios(expandedId);
       loadAll();
     } catch { /* empty */ }
   }
 
-  async function handleEditarComentario(comentarioId: string, texto: string, visivelPendencia: boolean) {
+  async function handleEditarComentario(comentarioId: string, texto: string, visivelPendencia: boolean, publica: boolean) {
     try {
-      await projetoService.atualizarComentario(projetoId, comentarioId, texto, visivelPendencia || undefined);
+      await projetoService.atualizarComentario(projetoId, comentarioId, texto, visivelPendencia || undefined, publica);
       if (expandedId) loadComentarios(expandedId);
       loadAll();
     } catch { /* empty */ }
@@ -1258,6 +1261,16 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     try {
       await projetoService.removerComentario(projetoId, comentarioId);
       if (expandedId) loadComentarios(expandedId);
+      loadAll();
+    } catch { /* empty */ }
+  }
+
+  // Edição inline da aba "Visão geral" (1 campo por vez). loadAll() reabastece
+  // `atividades`; o drawer (linha ~1807) re-deriva `ta` de lá.
+  async function handleSaveVisao(payload: { descricao?: string; dataInicio?: string; dataFimPrevista?: string }) {
+    if (!expandedId) return;
+    try {
+      await projetoService.atualizarAtividade(projetoId, expandedId, payload);
       loadAll();
     } catch { /* empty */ }
   }
@@ -1350,13 +1363,12 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
       if (!canAdd) return null;
       return (
         <>
-          {!meuRegistroAtivo ? (
+          {/* Iniciar fica só no hover (começar não é urgente). Encerrar é
+              sempre-visível na linha (renderAtividade) — não esconder o stop
+              de um cronômetro rodando atrás do hover. */}
+          {!meuRegistroAtivo && (
             <button onClick={() => handleIniciar(a.id)} className="text-slate-300 hover:text-green-600 transition-colors p-1" title="Iniciar cronometro">
               <Play className="w-4 h-4" />
-            </button>
-          ) : (
-            <button onClick={() => handleEncerrar(a.id)} className="text-red-500 hover:text-red-700 transition-colors p-1" title="Encerrar cronometro">
-              <Square className="w-4 h-4" />
             </button>
           )}
           <button onClick={() => openEditAtividade(a)} className="text-slate-300 hover:text-capul-600 transition-colors p-1" title="Editar tarefa">
@@ -1441,7 +1453,11 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
         onClick={() => handleOpenTarefa(a.id)}
         title="Abrir detalhes da tarefa"
         className={`group flex items-center gap-2.5 px-4 py-2 border-b border-slate-100 last:border-b-0 border-l-[3px] cursor-pointer transition-colors ${
-          isSelected ? 'bg-capul-50 border-l-capul-500' : 'border-l-transparent hover:bg-slate-50'
+          isSelected
+            ? 'bg-capul-50 border-l-capul-500'
+            : meuRegistroAtivo
+              ? 'bg-blue-50/60 border-l-blue-500 hover:bg-blue-50'
+              : 'border-l-transparent hover:bg-slate-50'
         }`}
       >
         {/* Indicador de status */}
@@ -1452,7 +1468,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
           title={cfg.label}
         >
           {concluida && <Check className="w-2.5 h-2.5 text-green-600" />}
-          {meuRegistroAtivo && !concluida && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+          {meuRegistroAtivo && !concluida && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />}
         </span>
 
         {/* Titulo */}
@@ -1484,6 +1500,17 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
         )}
         <span className={`text-[10px] font-medium rounded-full px-2 py-0.5 flex-shrink-0 ${cfg.color}`}>{cfg.label}</span>
 
+        {/* Cronômetro rodando: Encerrar SEMPRE visível (não atrás do hover) —
+            evita regressão de +1 clique p/ parar o timer (revisão 16/05). */}
+        {meuRegistroAtivo && !isSelected && canAdd && (
+          <button
+            onClick={(e) => { e.stopPropagation(); handleEncerrar(a.id); }}
+            className="flex items-center gap-1 flex-shrink-0 text-[11px] font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-0.5 rounded-full transition-colors"
+            title="Encerrar cronometro"
+          >
+            <Square className="w-3 h-3" /><span className="hidden lg:inline">Encerrar</span>
+          </button>
+        )}
         {/* Acoes inline — só no hover; ocultas na linha aberta (ficam no drawer) */}
         {!isSelected && (
           <span
@@ -1532,6 +1559,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
             loading={loadingComentarios}
             currentUserId={userId}
             canManage={canManage}
+            isStaffTI={isStaffTI}
             membros={membrosEquipe.map((m) => ({ id: m.usuarioId, nome: m.usuario.nome, username: m.usuario.username }))}
             pendenciaNumero={a.pendencia?.numero}
             onEnviar={handleEnviarComentario}
@@ -1544,7 +1572,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
       case 'historico':
         return <div className="flex-1 overflow-y-auto"><HistoricoTab historico={historico} loading={loadingHistorico} /></div>;
       default:
-        return <div className="flex-1 overflow-y-auto"><VisaoTab atividade={a} faseNome={faseNome} /></div>;
+        return <div className="flex-1 overflow-y-auto"><VisaoTab atividade={a} faseNome={faseNome} canManage={canManage} onSave={handleSaveVisao} /></div>;
     }
   }
 
