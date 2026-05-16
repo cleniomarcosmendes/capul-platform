@@ -405,7 +405,7 @@ export class ProjetoAtividadeService {
     });
 
     // Processar @mencoes
-    const mencionadoIds = await this.helpers.processarMencoes(texto, projetoId, userId, `um comentario na tarefa "${atividade.titulo}"`, { atividadeId });
+    const mencionadoIds = await this.helpers.processarMencoes(texto, projetoId, userId, `um comentario na tarefa "${atividade.titulo}"`, { atividadeId }, !publicaEfetiva);
 
     // Notificar responsaveis da atividade (exceto autor e ja mencionados)
     const responsaveis = await this.prisma.atividadeResponsavel.findMany({

@@ -39,7 +39,7 @@ export class ProjetoHelpersService {
   /**
    * Detecta @username em texto e envia notificacao para os mencionados
    */
-  async processarMencoes(texto: string, projetoId: string, autorId: string, contexto: string, dadosExtras?: Record<string, unknown>): Promise<string[]> {
+  async processarMencoes(texto: string, projetoId: string, autorId: string, contexto: string, dadosExtras?: Record<string, unknown>, soStaffTI = false): Promise<string[]> {
     const regex = /@(\S+)/g;
     const usernames: string[] = [];
     let match;
@@ -63,7 +63,20 @@ export class ProjetoHelpersService {
       select: { numero: true, nome: true },
     });
 
-    const idsParaNotificar = usuarios.map((u) => u.id).filter((id) => id !== autorId);
+    let idsParaNotificar = usuarios.map((u) => u.id).filter((id) => id !== autorId);
+    // Nota/interação INTERNA (publica=false): não notificar @menção a
+    // USUARIO_CHAVE/TERCEIRIZADO vinculado — não veem o conteúdo (Regra
+    // única 14/05). Role não vive neste DB; usuarios_chave_projeto = proxy
+    // de não-staff (mesma fonte de checkProjetoAccessChave). Default
+    // soStaffTI=false ⇒ comportamento legado (notas públicas inalteradas).
+    if (soStaffTI && idsParaNotificar.length > 0) {
+      const chave = await this.prisma.usuarioChaveProjeto.findMany({
+        where: { projetoId, ativo: true, usuarioId: { in: idsParaNotificar } },
+        select: { usuarioId: true },
+      });
+      const chaveIds = new Set(chave.map((c) => c.usuarioId));
+      idsParaNotificar = idsParaNotificar.filter((id) => !chaveIds.has(id));
+    }
     if (idsParaNotificar.length > 0 && projeto) {
       this.notificacaoService.criarParaUsuarios(
         idsParaNotificar,
