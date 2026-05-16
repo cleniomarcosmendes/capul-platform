@@ -8,13 +8,18 @@ import { chamadoService } from '../../services/chamado.service';
 import { compraService } from '../../services/compra.service';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
-import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Edit3, Search, Unlink, MessageSquare, KeyRound, ClipboardList, Eye, Upload, Copy, FileText, Printer, Star } from 'lucide-react';
+import { ArrowLeft, Pencil, FolderKanban, Users, Clock, DollarSign, Plus, Trash2, AlertTriangle, Link2, Paperclip, Ticket, ExternalLink, Play, Square, ChevronDown, ChevronRight, Check, X, Search, Unlink, MessageSquare, KeyRound, ClipboardList, Eye, Upload, Copy, FileText, Printer, Star } from 'lucide-react';
 import { formatDateBR } from '../../utils/date';
-import { MentionInput } from '../../components/MentionInput';
 import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
 import { NovaTarefaModal } from '../../components/NovaTarefaModal';
 import { NovaTarefaButton } from '../../components/NovaTarefaButton';
-import { TarefaDrawer } from '../../components/TarefaDrawer';
+import { TarefaDrawer, type DrawerTab } from '../../components/TarefaDrawer';
+import { InlineAddTarefa } from '../../components/InlineAddTarefa';
+import { VisaoTab } from '../../components/tarefa-tabs/VisaoTab';
+import { TempoTab } from '../../components/tarefa-tabs/TempoTab';
+import { ConversaTab } from '../../components/tarefa-tabs/ConversaTab';
+import { AnexosTab } from '../../components/tarefa-tabs/AnexosTab';
+import { HistoricoTab } from '../../components/tarefa-tabs/HistoricoTab';
 import { useTarefaDrawer } from '../../hooks/useTarefaDrawer';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { abrirAnexoOuBaixar } from '../../utils/anexo';
@@ -42,6 +47,7 @@ import type {
   UsuarioCore,
   RegistroTempo,
   ComentarioTarefa,
+  AtividadeHistorico,
   EquipeTI,
   UsuarioChaveProjeto,
   PendenciaProjeto,
@@ -947,16 +953,14 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   const { openTarefaId: expandedId, open: openTarefaDrawer, close: closeTarefaDrawer } = useTarefaDrawer();
   const [registros, setRegistros] = useState<RegistroTempo[]>([]);
   const [loadingRegistros, setLoadingRegistros] = useState(false);
-  const [editingRegistro, setEditingRegistro] = useState<string | null>(null);
-  const [editInicio, setEditInicio] = useState('');
-  const [editFim, setEditFim] = useState('');
-  const [editObs, setEditObs] = useState('');
   // Comentarios
   const [comentarios, setComentarios] = useState<ComentarioTarefa[]>([]);
   const [loadingComentarios, setLoadingComentarios] = useState(false);
-  const [novoComentario, setNovoComentario] = useState('');
-  const [novoComentarioVisivel, setNovoComentarioVisivel] = useState(false);
-  const [savingComentario, setSavingComentario] = useState(false);
+  // Drawer: aba ativa + historico + inline-add
+  const [drawerTab, setDrawerTab] = useState('visao');
+  const [historico, setHistorico] = useState<AtividadeHistorico[]>([]);
+  const [loadingHistorico, setLoadingHistorico] = useState(false);
+  const [showInlineAdd, setShowInlineAdd] = useState(false);
   // Fases colapsadas
   const [collapsedFases, setCollapsedFases] = useState<Set<string>>(new Set());
   // Edicao de atividade
@@ -971,13 +975,8 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   // Modal resumo fase (ao alterar status de tarefa)
   const [faseResumoModal, setFaseResumoModal] = useState<{ faseId: string; faseNome: string; faseStatus: string; todasFinalizadas: boolean; tarefas: { titulo: string; status: string; dataFimPrevista: string | null; responsaveis: string[] }[] } | null>(null);
   const [aprovandoFase, setAprovandoFase] = useState(false);
-  // Edicao de notas
-  const [editingComentario, setEditingComentario] = useState<string | null>(null);
-  const [editComentarioTexto, setEditComentarioTexto] = useState('');
-  const [editComentarioVisivel, setEditComentarioVisivel] = useState(false);
   const isEditingCronograma = Boolean(
-    showFaseForm || editingFaseId || editingAtividade || editingRegistro ||
-    (novoComentario && novoComentario.trim()) || editingComentario
+    showFaseForm || editingFaseId || editingAtividade
   );
 
   useEffect(() => {
@@ -1016,6 +1015,30 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   }, [projetoId, isCompleto]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  // URL state: ?tarefa=<uuid> — permite linkar/F5 direto numa tarefa
+  const [, setSearchParamsTarefa] = useSearchParams();
+  const initialTarefaRef = useRef(new URLSearchParams(window.location.search).get('tarefa'));
+  const urlSyncReady = useRef(false);
+
+  useEffect(() => {
+    if (urlSyncReady.current || atividades.length === 0) return;
+    const id = initialTarefaRef.current;
+    if (id && atividades.some((x) => x.id === id)) handleOpenTarefa(id);
+    urlSyncReady.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [atividades]);
+
+  useEffect(() => {
+    if (!urlSyncReady.current) return;
+    setSearchParamsTarefa((prev) => {
+      const next = new URLSearchParams(prev);
+      if (expandedId) next.set('tarefa', expandedId);
+      else next.delete('tarefa');
+      return next;
+    }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedId]);
 
   // --- Fases ---
   async function handleAddFase() {
@@ -1112,9 +1135,15 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     try { setComentarios(await projetoService.listarComentarios(projetoId, atividadeId)); } catch { setComentarios([]); }
     setLoadingComentarios(false);
   }
+  async function loadHistorico(atividadeId: string) {
+    setLoadingHistorico(true);
+    try { setHistorico(await projetoService.listarHistoricoAtividade(projetoId, atividadeId)); } catch { setHistorico([]); }
+    setLoadingHistorico(false);
+  }
   function handleOpenTarefa(atividadeId: string) {
     openTarefaDrawer(atividadeId);
-    setEditingRegistro(null);
+    setDrawerTab('visao');
+    setHistorico([]);
     loadRegistros(atividadeId);
     loadComentarios(atividadeId);
   }
@@ -1122,22 +1151,14 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     closeTarefaDrawer();
     closeEditAtividade();
   }
-  function toLocalDatetimeStr(iso: string): string {
-    // Converte ISO UTC para formato datetime-local (YYYY-MM-DDTHH:MM) em hora local
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  function handleDrawerTab(key: string) {
+    setDrawerTab(key);
+    if (key === 'historico' && expandedId) loadHistorico(expandedId);
   }
-  function startEdit(r: RegistroTempo) {
-    setEditingRegistro(r.id);
-    setEditInicio(r.horaInicio ? toLocalDatetimeStr(r.horaInicio) : '');
-    setEditFim(r.horaFim ? toLocalDatetimeStr(r.horaFim) : '');
-    setEditObs(r.observacoes || '');
-  }
-  async function handleSaveEdit(registroId: string) {
+  async function handleAjustarRegistro(registroId: string, payload: { horaInicio?: string; horaFim?: string; observacoes?: string }) {
     try {
-      await projetoService.ajustarRegistroTempo(projetoId, registroId, { horaInicio: editInicio ? new Date(editInicio).toISOString() : undefined, horaFim: editFim ? new Date(editFim).toISOString() : undefined, observacoes: editObs || undefined });
-      setEditingRegistro(null); if (expandedId) loadRegistros(expandedId);
+      await projetoService.ajustarRegistroTempo(projetoId, registroId, payload);
+      if (expandedId) loadRegistros(expandedId);
     } catch { /* empty */ }
   }
   async function handleRemoveRegistro(registroId: string) {
@@ -1215,17 +1236,21 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     setSavingAtividade(false);
   }
 
-  async function handleAddComentario() {
-    if (!novoComentario.trim() || !expandedId || savingComentario) return;
-    setSavingComentario(true);
+  async function handleEnviarComentario(texto: string, visivelPendencia: boolean) {
+    if (!expandedId) return;
     try {
-      await projetoService.adicionarComentario(projetoId, expandedId, novoComentario.trim(), novoComentarioVisivel || undefined);
-      setNovoComentario('');
-      setNovoComentarioVisivel(false);
+      await projetoService.adicionarComentario(projetoId, expandedId, texto, visivelPendencia || undefined);
       loadComentarios(expandedId);
       loadAll();
     } catch { /* empty */ }
-    setSavingComentario(false);
+  }
+
+  async function handleEditarComentario(comentarioId: string, texto: string, visivelPendencia: boolean) {
+    try {
+      await projetoService.atualizarComentario(projetoId, comentarioId, texto, visivelPendencia || undefined);
+      if (expandedId) loadComentarios(expandedId);
+      loadAll();
+    } catch { /* empty */ }
   }
 
   async function handleRemoveComentario(comentarioId: string) {
@@ -1235,26 +1260,6 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
       if (expandedId) loadComentarios(expandedId);
       loadAll();
     } catch { /* empty */ }
-  }
-
-  function startEditComentario(c: { id: string; texto: string; visivelPendencia?: boolean }) {
-    setEditingComentario(c.id);
-    setEditComentarioTexto(c.texto);
-    setEditComentarioVisivel(c.visivelPendencia ?? false);
-  }
-
-  async function handleSaveComentario(comentarioId: string) {
-    if (!editComentarioTexto.trim() || savingComentario) return;
-    setSavingComentario(true);
-    try {
-      await projetoService.atualizarComentario(projetoId, comentarioId, editComentarioTexto.trim(), editComentarioVisivel || undefined);
-      setEditingComentario(null);
-      setEditComentarioTexto('');
-      setEditComentarioVisivel(false);
-      if (expandedId) loadComentarios(expandedId);
-      loadAll();
-    } catch { /* empty */ }
-    setSavingComentario(false);
   }
 
   const totalMinutos = registros.reduce((sum, r) => sum + (r.duracaoMinutos ?? 0), 0);
@@ -1393,266 +1398,126 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     );
   }
 
+  // Linha compacta (1 tarefa = 1 linha). Tudo que era inline migrou pro drawer.
   function renderAtividade(a: AtividadeProjeto) {
     const isSelected = expandedId === a.id;
     const meuRegistroAtivo = a.registrosTempo?.find((r) => r.usuarioId === userId);
-    const temRegistros = (a._count?.registrosTempo ?? 0) > 0;
     const cfg = statusAtividadeConfig[a.status] || statusAtividadeConfig.PENDENTE;
+    const concluida = a.status === 'CONCLUIDA';
+    const cancelada = a.status === 'CANCELADA';
+    const responsavel = a.responsaveis && a.responsaveis.length > 0
+      ? a.responsaveis[0].usuario.nome.split(' ')[0]
+      : a.usuario.nome.split(' ')[0];
 
     return (
-      <div key={a.id} className="mx-3 my-2">
-        <div className={`rounded-lg border ${meuRegistroAtivo ? 'border-green-300 bg-green-50/50 shadow-sm shadow-green-100' : isSelected ? 'border-capul-400 bg-capul-50/40 shadow-sm ring-1 ring-capul-200' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'} transition-all`}>
-        {/* Linha principal */}
-        <div className="px-4 py-3 cursor-pointer" onClick={() => handleOpenTarefa(a.id)} title="Abrir detalhes da tarefa">
-          <div className="flex items-start gap-3">
-            {/* Indicador de status (barra lateral) — destaque verde quando selecionada */}
-            <div className="pt-0.5 flex-shrink-0">
-              <div className={`w-1.5 h-12 rounded-full ${isSelected ? 'bg-capul-500' : cfg.dot}`} />
-            </div>
+      <div
+        key={a.id}
+        onClick={() => handleOpenTarefa(a.id)}
+        title="Abrir detalhes da tarefa"
+        className={`group flex items-center gap-2.5 px-4 py-2 border-b border-slate-100 last:border-b-0 border-l-[3px] cursor-pointer transition-colors ${
+          isSelected ? 'bg-capul-50 border-l-capul-500' : 'border-l-transparent hover:bg-slate-50'
+        }`}
+      >
+        {/* Indicador de status */}
+        <span
+          className={`flex-shrink-0 w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
+            concluida ? 'bg-green-100 border-green-500' : meuRegistroAtivo ? 'border-blue-500' : `border-slate-300`
+          }`}
+          title={cfg.label}
+        >
+          {concluida && <Check className="w-2.5 h-2.5 text-green-600" />}
+          {meuRegistroAtivo && !concluida && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+        </span>
 
-            {/* Conteudo principal */}
-            <div className="flex-1 min-w-0">
-              {/* Titulo + badges */}
-              <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                <span className={`text-[13px] font-bold leading-tight ${a.status === 'CANCELADA' ? 'text-slate-400 line-through' : a.status === 'CONCLUIDA' ? 'text-green-700' : 'text-slate-900'}`}>{a.titulo}</span>
-                {meuRegistroAtivo && (
-                  <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium bg-green-50 border border-green-200 px-2.5 py-0.5 rounded-full animate-pulse">
-                    <Play className="w-3.5 h-3.5" /> Ativo
-                  </span>
-                )}
-              </div>
-              {/* Meta info */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className={`text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 ${cfg.color}`}>{cfg.label}</span>
-                <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                  <Users className="w-3 h-3" /> {a.responsaveis && a.responsaveis.length > 0
-                    ? a.responsaveis.map((r) => r.usuario.nome).join(', ')
-                    : a.usuario.nome}
-                </span>
-                <span className="text-[11px] text-slate-400">{formatDateBR(a.dataAtividade)}</span>
-                {(a.dataInicio || a.dataFimPrevista) && (
-                  <span className="text-[11px] text-slate-500 flex items-center gap-1 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5">
-                    <Clock className="w-3 h-3 text-slate-400" />
-                    {a.dataInicio ? formatDateBR(a.dataInicio) : '?'}
-                    {' → '}
-                    {a.dataFimPrevista ? formatDateBR(a.dataFimPrevista) : '?'}
-                  </span>
-                )}
-                {temRegistros && !meuRegistroAtivo && (
-                  <span className="text-[11px] text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                    <Clock className="w-3 h-3" />{a._count?.registrosTempo}
-                  </span>
-                )}
-                {(a._count?.comentarios ?? 0) > 0 && (
-                  <span className="text-[11px] text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                    <MessageSquare className="w-3 h-3" />{a._count?.comentarios}
-                  </span>
-                )}
-                {a.pendencia && (
-                  <span className="text-[11px] text-purple-600 bg-purple-100 border border-purple-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                    <ClipboardList className="w-3 h-3" /> P#{a.pendencia.numero}
-                  </span>
-                )}
-              </div>
-            </div>
+        {/* Titulo */}
+        <span className={`flex-1 min-w-0 truncate text-[13px] ${cancelada ? 'text-slate-400 line-through' : concluida ? 'text-slate-500' : 'text-slate-800'}`}>
+          {a.titulo}
+        </span>
 
-            {/* Acoes compactas (direita) — reutiliza renderAcoesTarefa (lista + drawer) */}
-            <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-              {renderAcoesTarefa(a)}
-              {/* Abre o painel lateral */}
-              <ChevronRight className="w-4 h-4 text-slate-300" />
-            </div>
-          </div>
-          {/* Descricao — largura total, fora do flex row */}
-          {a.descricao && (
-            <div className="px-4 pb-3">
-              <p className="text-xs text-slate-500 leading-relaxed border-t border-slate-100 pt-2" style={{ textAlign: 'justify', whiteSpace: 'pre-wrap' }}>{a.descricao}</p>
-            </div>
-          )}
-        </div>
-        </div>
+        {/* Meta compacta (some em telas estreitas) */}
+        <span className="hidden md:flex items-center gap-1 text-[11px] text-slate-400 flex-shrink-0">
+          <Users className="w-3 h-3" />{responsavel}
+        </span>
+        <span className="hidden lg:inline text-[11px] text-slate-400 flex-shrink-0">
+          {formatDateBR(a.dataFimPrevista || a.dataAtividade)}
+        </span>
+        {(a._count?.registrosTempo ?? 0) > 0 && (
+          <span className="hidden sm:flex items-center gap-0.5 text-[11px] text-slate-400 flex-shrink-0" title="Registros de tempo">
+            <Clock className="w-3 h-3" />{a._count?.registrosTempo}
+          </span>
+        )}
+        {(a._count?.comentarios ?? 0) > 0 && (
+          <span className="hidden sm:flex items-center gap-0.5 text-[11px] text-capul-600 font-medium flex-shrink-0" title="Notas">
+            <MessageSquare className="w-3 h-3" />{a._count?.comentarios}
+          </span>
+        )}
+        {a.pendencia && (
+          <span className="hidden sm:flex items-center gap-0.5 text-[10px] text-purple-600 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
+            <ClipboardList className="w-3 h-3" />P#{a.pendencia.numero}
+          </span>
+        )}
+        <span className={`text-[10px] font-medium rounded-full px-2 py-0.5 flex-shrink-0 ${cfg.color}`}>{cfg.label}</span>
+
+        {/* Acoes — aparecem no hover/selecionada */}
+        <span
+          className={`flex items-center gap-1 flex-shrink-0 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {renderAcoesTarefa(a)}
+        </span>
+        <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
       </div>
     );
   }
 
   // Cronometro + notas da tarefa — exibido dentro do drawer (mesmo JSX de antes)
-  function renderConteudoTarefa(a: AtividadeProjeto) {
-    return (
-      <>
-        {canAdd && (
-          <div className="flex flex-wrap items-center gap-1.5 px-5 py-3 border-b border-slate-200 bg-white sticky top-0 z-10">
-            {renderAcoesTarefa(a)}
+  const drawerTabsDef = (a: AtividadeProjeto): DrawerTab[] => [
+    { key: 'visao', label: 'Visão geral' },
+    { key: 'tempo', label: 'Cronômetro', count: a._count?.registrosTempo ?? 0 },
+    { key: 'conversa', label: 'Conversa', count: a._count?.comentarios ?? 0 },
+    { key: 'anexos', label: 'Anexos' },
+    { key: 'historico', label: 'Histórico' },
+  ];
+
+  function renderTarefaTabContent(a: AtividadeProjeto) {
+    const faseNome = a.faseId ? fases.find((f) => f.id === a.faseId)?.nome : undefined;
+    switch (drawerTab) {
+      case 'tempo':
+        return (
+          <div className="flex-1 overflow-y-auto">
+            <TempoTab
+              registros={registros}
+              loading={loadingRegistros}
+              totalMinutos={totalMinutos}
+              canAdd={canAdd}
+              currentUserId={userId}
+              isGestor={isGestor}
+              onSalvar={handleAjustarRegistro}
+              onRemover={handleRemoveRegistro}
+            />
           </div>
-        )}
-          <div className="bg-slate-50/80 px-5 py-4">
-            <div className="flex items-center justify-between mb-3">
-              <h5 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                Registros de Tempo
-                {totalMinutos > 0 && <span className="ml-2 text-capul-600 normal-case font-medium">Total: {fmtDuracao(totalMinutos)}</span>}
-              </h5>
-            </div>
-            {loadingRegistros ? (
-              <p className="text-xs text-slate-400">Carregando...</p>
-            ) : registros.length === 0 ? (
-              <p className="text-xs text-slate-400 italic">Nenhum registro de tempo</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-left text-slate-500 border-b border-slate-200">
-                      <th className="pb-2 font-medium">Data</th>
-                      <th className="pb-2 font-medium">Inicio</th>
-                      <th className="pb-2 font-medium">Fim</th>
-                      <th className="pb-2 font-medium">Duracao</th>
-                      <th className="pb-2 font-medium">Profissional</th>
-                      <th className="pb-2 font-medium">Obs</th>
-                      {canAdd && <th className="pb-2 font-medium text-center w-20">Acoes</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {registros.map((r) => editingRegistro === r.id ? (
-                      <tr key={r.id} className="bg-amber-50">
-                        <td className="py-2 pr-2" colSpan={2}><label className="block text-slate-500 mb-0.5">Inicio</label><input type="datetime-local" value={editInicio} onChange={(e) => setEditInicio(e.target.value)} className="border border-slate-300 rounded px-2 py-1 text-xs w-full" /></td>
-                        <td className="py-2 pr-2" colSpan={2}><label className="block text-slate-500 mb-0.5">Fim</label><input type="datetime-local" value={editFim} onChange={(e) => setEditFim(e.target.value)} className="border border-slate-300 rounded px-2 py-1 text-xs w-full" /></td>
-                        <td className="py-2 pr-2" colSpan={2}><label className="block text-slate-500 mb-0.5">Observacao</label><input value={editObs} onChange={(e) => setEditObs(e.target.value)} placeholder="Obs..." className="border border-slate-300 rounded px-2 py-1 text-xs w-full" /></td>
-                        <td className="py-2 text-center"><div className="flex items-center justify-center gap-1"><button onClick={() => handleSaveEdit(r.id)} className="text-green-600 hover:text-green-800"><Check className="w-4 h-4" /></button><button onClick={() => setEditingRegistro(null)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button></div></td>
-                      </tr>
-                    ) : (
-                      <tr key={r.id} className={`${!r.horaFim ? 'bg-green-50/50' : ''}`}>
-                        <td className="py-2 pr-2 text-slate-600">{new Date(r.horaInicio).toLocaleDateString('pt-BR')}</td>
-                        <td className="py-2 pr-2 text-slate-700 font-medium">{fmtHora(r.horaInicio)}</td>
-                        <td className="py-2 pr-2 text-slate-700 font-medium">{r.horaFim ? fmtHora(r.horaFim) : <span className="text-green-600 animate-pulse">ativo...</span>}</td>
-                        <td className="py-2 pr-2 text-slate-700 font-medium">{fmtDuracao(r.duracaoMinutos)}</td>
-                        <td className="py-2 pr-2 text-slate-600">{r.usuario.nome}</td>
-                        <td className="py-2 pr-2 text-slate-500">{r.observacoes || '-'}</td>
-                        {canAdd && (() => {
-                          const isMeu = r.usuarioId === userId;
-                          const timerAtivo = !r.horaFim;
-                          const limiteD2 = new Date(); limiteD2.setDate(limiteD2.getDate() - 2); limiteD2.setHours(0, 0, 0, 0);
-                          const foraDoPrazo = new Date(r.horaInicio) < limiteD2;
-                          const podeEditar = !timerAtivo && (isMeu || isGestor) && (!foraDoPrazo || isGestor);
-                          const motivo = timerAtivo ? 'Cronometro ativo' : !isMeu && !isGestor ? 'Registro de outro usuario' : foraDoPrazo && !isGestor ? 'Registro com mais de 2 dias' : '';
-                          return (
-                            <td className="py-2 text-center">
-                              <div className="flex items-center justify-center gap-2">
-                                <button onClick={() => podeEditar && startEdit(r)} disabled={!podeEditar} className={podeEditar ? 'text-blue-500 hover:text-blue-700' : 'text-slate-300 cursor-not-allowed'} title={motivo || 'Ajustar'}><Edit3 className="w-3.5 h-3.5" /></button>
-                                <button onClick={() => podeEditar && handleRemoveRegistro(r.id)} disabled={!podeEditar} className={podeEditar ? 'text-red-400 hover:text-red-600' : 'text-slate-300 cursor-not-allowed'} title={motivo || 'Remover'}><Trash2 className="w-3.5 h-3.5" /></button>
-                              </div>
-                            </td>
-                          );
-                        })()}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* Comentarios */}
-            <div className="mt-4 pt-4 border-t border-slate-200">
-              <h5 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                <MessageSquare className="w-3.5 h-3.5" /> Notas ({comentarios.length})
-              </h5>
-
-              {/* Form novo comentario */}
-              <div className="mb-3">
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <MentionInput
-                      value={novoComentario}
-                      onChange={setNovoComentario}
-                      usuarios={membrosEquipe.map((m) => ({ id: m.usuarioId, nome: m.usuario.nome, username: m.usuario.username }))}
-                      placeholder="Adicionar nota... (use @usuario para mencionar)"
-                      rows={8}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs"
-                    />
-                  </div>
-                  <button
-                    onClick={handleAddComentario}
-                    disabled={!novoComentario.trim() || savingComentario}
-                    className="self-end bg-capul-600 text-white px-3 py-2 rounded-lg text-xs hover:bg-capul-700 disabled:opacity-50"
-                  >
-                    {savingComentario ? '...' : 'Enviar'}
-                  </button>
-                </div>
-                {a.pendencia && (
-                  <label className="flex items-center gap-2 text-xs text-slate-500 mt-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={novoComentarioVisivel}
-                      onChange={(e) => setNovoComentarioVisivel(e.target.checked)}
-                      className="rounded border-slate-300"
-                    />
-                    Visivel na Pendencia #{a.pendencia.numero}
-                  </label>
-                )}
-              </div>
-
-              {loadingComentarios ? (
-                <p className="text-xs text-slate-400">Carregando...</p>
-              ) : comentarios.length === 0 ? (
-                <p className="text-xs text-slate-400 italic">Nenhuma nota</p>
-              ) : (
-                <div className="space-y-2">
-                  {comentarios.map((c) => editingComentario === c.id ? (
-                    <div key={c.id} className="bg-amber-50 rounded-lg border border-amber-300 px-4 py-3">
-                      <div className="flex items-center gap-2 text-xs mb-3">
-                        <span className="font-medium text-slate-700">{c.usuario.nome}</span>
-                        <span className="text-slate-400">{new Date(c.createdAt).toLocaleDateString('pt-BR')} {new Date(c.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
-                      <MentionInput
-                        value={editComentarioTexto}
-                        onChange={setEditComentarioTexto}
-                        usuarios={membrosEquipe.map((m) => ({ id: m.usuarioId, nome: m.usuario.nome, username: m.usuario.username }))}
-                        rows={8}
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs mb-3"
-                        placeholder="Editar nota... (use @usuario para mencionar)"
-                      />
-                      {a.pendencia && (
-                        <label className="flex items-center gap-2 text-xs text-slate-500 mb-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={editComentarioVisivel}
-                            onChange={(e) => setEditComentarioVisivel(e.target.checked)}
-                            className="rounded border-slate-300"
-                          />
-                          Visivel na Pendencia #{a.pendencia.numero}
-                        </label>
-                      )}
-                      <div className="flex justify-end gap-3">
-                        <button onClick={() => { setEditingComentario(null); setEditComentarioTexto(''); }} className="text-xs text-slate-500 hover:text-slate-700 px-3 py-1.5">Cancelar</button>
-                        <button onClick={() => handleSaveComentario(c.id)} disabled={!editComentarioTexto.trim() || savingComentario} className="bg-capul-600 text-white px-4 py-1.5 rounded-lg text-xs hover:bg-capul-700 disabled:opacity-50">
-                          {savingComentario ? '...' : 'Salvar'}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div key={c.id} className="bg-white rounded-lg border border-slate-200 px-3 py-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className="font-medium text-slate-700">{c.usuario.nome}</span>
-                          <span className="text-slate-400">{new Date(c.createdAt).toLocaleDateString('pt-BR')} {new Date(c.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                        {(canManage || c.usuarioId === userId) && (
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => startEditComentario(c)} className="text-slate-300 hover:text-capul-600 transition-colors" title="Editar">
-                              <Pencil className="w-3 h-3" />
-                            </button>
-                            <button onClick={() => handleRemoveComentario(c.id)} className="text-slate-300 hover:text-red-500 transition-colors" title="Remover">
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      <p className="text-xs text-slate-600 whitespace-pre-wrap">{c.texto}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-      </>
-    );
+        );
+      case 'conversa':
+        return (
+          <ConversaTab
+            comentarios={comentarios}
+            loading={loadingComentarios}
+            currentUserId={userId}
+            canManage={canManage}
+            membros={membrosEquipe.map((m) => ({ id: m.usuarioId, nome: m.usuario.nome, username: m.usuario.username }))}
+            pendenciaNumero={a.pendencia?.numero}
+            onEnviar={handleEnviarComentario}
+            onEditar={handleEditarComentario}
+            onRemover={handleRemoveComentario}
+          />
+        );
+      case 'anexos':
+        return <div className="flex-1 overflow-y-auto"><AnexosTab /></div>;
+      case 'historico':
+        return <div className="flex-1 overflow-y-auto"><HistoricoTab historico={historico} loading={loadingHistorico} /></div>;
+      default:
+        return <div className="flex-1 overflow-y-auto"><VisaoTab atividade={a} faseNome={faseNome} /></div>;
+    }
   }
 
   if (loading) return <p className="text-slate-500 text-sm">Carregando...</p>;
@@ -1662,11 +1527,19 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     {/* protecao via pai */}
     {/* Push: a ≥1440px o drawer (420px fixo) reserva espaco; <1440 vira overlay */}
     <div className={`space-y-4 transition-[padding] duration-200 ${expandedId ? 'min-[1440px]:pr-[440px]' : ''}`}>
-      {/* Nova tarefa — botao abre modal (form persistente removido, ganha -250px de chrome) */}
+      {/* Nova tarefa — botao abre o inline-add (Linear-style); atalho N abre o modal completo */}
       {canAdd && (
         <div className="flex items-center justify-end">
-          <NovaTarefaButton onClick={() => setShowNovaTarefa(true)} />
+          <NovaTarefaButton onClick={() => setShowInlineAdd((v) => !v)} />
         </div>
+      )}
+      {canAdd && showInlineAdd && (
+        <InlineAddTarefa
+          projetoId={projetoId}
+          onCreated={loadAll}
+          onCancel={() => setShowInlineAdd(false)}
+          onDetalhar={() => { setShowInlineAdd(false); setShowNovaTarefa(true); }}
+        />
       )}
 
       {/* Fases com atividades agrupadas (modo COMPLETO) */}
@@ -1893,8 +1766,13 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
           onClose={handleCloseDrawer}
           titulo={ta?.titulo || ''}
           breadcrumb={faseTa ? `FASE ${faseTa.ordem} · ${faseTa.nome}` : undefined}
+          hideChrome={editandoEsta}
+          controls={ta && canAdd ? renderAcoesTarefa(ta) : undefined}
+          tabs={ta ? drawerTabsDef(ta) : undefined}
+          activeTab={drawerTab}
+          onTabChange={handleDrawerTab}
         >
-          {ta && (editandoEsta ? renderEdicaoTarefa() : renderConteudoTarefa(ta))}
+          {ta && (editandoEsta ? renderEdicaoTarefa() : renderTarefaTabContent(ta))}
         </TarefaDrawer>
       );
     })()}
@@ -2153,18 +2031,6 @@ function TabVisaoGeral({ projetoId }: { projetoId: string }) {
       )}
     </div>
   );
-}
-
-function fmtDuracao(minutos: number | null | undefined): string {
-  if (!minutos) return '-';
-  const h = Math.floor(minutos / 60);
-  const m = minutos % 60;
-  return h > 0 ? `${h}h${m > 0 ? ` ${m}min` : ''}` : `${m}min`;
-}
-
-function fmtHora(dt: string | null): string {
-  if (!dt) return '-';
-  return new Date(dt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
 
