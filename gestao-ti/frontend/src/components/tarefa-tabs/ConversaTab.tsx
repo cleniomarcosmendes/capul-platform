@@ -47,8 +47,10 @@ export function ConversaTab({
 }: ConversaTabProps) {
   const [novo, setNovo] = useState('');
   const [novoVisivel, setNovoVisivel] = useState(false);
-  // publica=true por padrão (compat). Só staff TI consegue desmarcar.
-  const [novoPublico, setNovoPublico] = useState(true);
+  // Padrão DESMARCADO (interna) — conceito restritivo: nota nasce só p/
+  // staff TI; o autor marca explicitamente p/ liberar ao usuário-chave.
+  // (Decisão Clenio 16/05.) Só staff TI vê/altera este checkbox.
+  const [novoPublico, setNovoPublico] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editTexto, setEditTexto] = useState('');
@@ -70,7 +72,7 @@ export function ConversaTab({
       await onEnviar(novo.trim(), novoVisivel, novoPublico);
       setNovo('');
       setNovoVisivel(false);
-      setNovoPublico(true);
+      setNovoPublico(false);
     } finally {
       setEnviando(false);
     }
