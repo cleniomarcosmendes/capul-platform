@@ -344,6 +344,7 @@ export function PendenciaDetalhePage() {
             <p className="text-sm text-slate-400">Nenhuma interacao</p>
           ) : (
             <ChatBubbleList
+              sortable
               eventos={(pendencia.interacoes || []).map((inter) => ({
                 id: inter.id,
                 tipo: inter.tipo,
