@@ -1013,8 +1013,11 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     return () => window.removeEventListener('keydown', onKey);
   }, [canAdd]);
 
-  const loadAll = useCallback(async () => {
-    setLoading(true);
+  // showSpinner=false (default) => refresh SILENCIOSO: refetch + setState sem
+  // togglar `loading`, então a aba/drawer NÃO some e volta (linha ~1590
+  // `if (loading) return Carregando`). Só a carga inicial pede o spinner.
+  const loadAll = useCallback(async (showSpinner = false) => {
+    if (showSpinner) setLoading(true);
     try {
       const [f, a, m] = await Promise.all([
         isCompleto ? projetoService.listarFases(projetoId) : Promise.resolve([]),
@@ -1025,10 +1028,10 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
       setAtividades(a);
       setMembrosEquipe(m);
     } catch { /* empty */ }
-    setLoading(false);
+    if (showSpinner) setLoading(false);
   }, [projetoId, isCompleto]);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => { loadAll(true); }, [loadAll]);
 
   // URL state: ?tarefa=<uuid> — permite linkar/F5 direto numa tarefa
   const [, setSearchParamsTarefa] = useSearchParams();
@@ -1144,10 +1147,12 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     try { setRegistros(await projetoService.listarRegistrosTempo(projetoId, atividadeId)); } catch { setRegistros([]); }
     setLoadingRegistros(false);
   }
-  async function loadComentarios(atividadeId: string) {
-    setLoadingComentarios(true);
+  async function loadComentarios(atividadeId: string, silent = false) {
+    // silent: usado no refresh pós-envio/edição/remoção — não pisca o
+    // "Carregando..." da lista de notas (já temos os dados na tela).
+    if (!silent) setLoadingComentarios(true);
     try { setComentarios(await projetoService.listarComentarios(projetoId, atividadeId)); } catch { setComentarios([]); }
-    setLoadingComentarios(false);
+    if (!silent) setLoadingComentarios(false);
   }
   async function loadHistorico(atividadeId: string) {
     setLoadingHistorico(true);
@@ -1254,7 +1259,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     if (!expandedId) return;
     try {
       await projetoService.adicionarComentario(projetoId, expandedId, texto, visivelPendencia || undefined, publica);
-      loadComentarios(expandedId);
+      loadComentarios(expandedId, true);
       loadAll();
     } catch { /* empty */ }
   }
@@ -1262,7 +1267,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   async function handleEditarComentario(comentarioId: string, texto: string, visivelPendencia: boolean, publica: boolean) {
     try {
       await projetoService.atualizarComentario(projetoId, comentarioId, texto, visivelPendencia || undefined, publica);
-      if (expandedId) loadComentarios(expandedId);
+      if (expandedId) loadComentarios(expandedId, true);
       loadAll();
     } catch { /* empty */ }
   }
@@ -1271,7 +1276,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     if (!await confirm('Remover Nota', 'Deseja remover esta nota?')) return;
     try {
       await projetoService.removerComentario(projetoId, comentarioId);
-      if (expandedId) loadComentarios(expandedId);
+      if (expandedId) loadComentarios(expandedId, true);
       loadAll();
     } catch { /* empty */ }
   }
