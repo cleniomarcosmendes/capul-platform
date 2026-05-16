@@ -278,6 +278,24 @@ visuais que aparecerem). Estimativa: ~3-4h (componente + 2 telas).
 ferramenta vira "experiência de uso" vs "formulário corporativo". Diferença
 de adoção real pelos técnicos e usuários-chave.
 
+### ⏳ 2026-05-16 — Divisor arrastável no drawer de tarefa (largura ajustável + persistência)
+
+**Contexto:** Em 16/05 a largura do drawer de tarefa virou
+`clamp(460px, 40vw, 640px)` (var CSS `--tarefa-drawer-w` em `index.css`,
+consumida por `Drawer.tsx` e pelo `.tarefa-push`). Resolve a Conversa
+espremida com risco/esforço mínimos. O "ideal de produto" — o usuário
+arrastar a borda e o sistema lembrar — ficou DE FORA de propósito.
+
+**Proposta:** handle na borda esquerda do painel; `pointerdown/move/up`
+ajusta `--tarefa-drawer-w` (respeitando min/max do clamp); persistir a
+preferência em `localStorage` e reidratar no mount. O `.tarefa-push` já
+consome a var, então o push acompanha sozinho.
+
+**Adiada porque:** exige handle + lógica de pointer events + estado +
+persistência — é outra tarefa, não um ajuste de CSS. Não bundlar com o
+clamp (já entregue). Estimativa: ~3-4h. Reavaliar se, no uso real, as
+pessoas ainda quiserem ajustar manualmente após o clamp.
+
 ### ⏳ 2026-05-15 — Repaginar "Atividades" do Projeto/Subprojeto (List + Drawer)
 
 **Contexto:** Aba "Atividades" em `ProjetoDetalhePage` (e idêntica no

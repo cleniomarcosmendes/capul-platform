@@ -35,6 +35,15 @@ body {
   box-sizing: border-box;
 }
 
+/* Largura do drawer de tarefa — FONTE ÚNICA. O painel (Drawer.tsx) e o
+   espaço que o "push" reserva consomem esta var, então nunca dessincronizam
+   (antes: painel 420px vs push 440px). clamp: nunca < 460 (legível mesmo em
+   notebook), escala com a tela, trava em 640 (linha de leitura não fica
+   larga demais em 4K — conteúdo da Conversa é leitura corrida ~60-70 chars). */
+:root {
+  --tarefa-drawer-w: clamp(460px, 40vw, 640px);
+}
+
 /* Drawer de Atividades — modo "push" (≥1440px): a página inteira (header do
    projeto + tabs + conteúdo) reserva espaço pro painel fixo, como no mockup V3.
    TarefaDrawer alterna `body.tarefa-drawer-open` enquanto aberto. */
@@ -43,6 +52,6 @@ body {
 }
 @media (min-width: 1440px) {
   body.tarefa-drawer-open .tarefa-push {
-    padding-right: 440px;
+    padding-right: var(--tarefa-drawer-w);
   }
 }

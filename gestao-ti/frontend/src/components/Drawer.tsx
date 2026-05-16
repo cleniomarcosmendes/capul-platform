@@ -50,7 +50,7 @@ export function Drawer({ open, onClose, children, ariaLabel }: DrawerProps) {
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
-        className={`fixed top-0 right-0 bottom-0 z-50 bg-white shadow-2xl flex flex-col w-full md:w-[420px] md:max-w-[92vw] border-l border-slate-200 transition-transform duration-200 ${mounted ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed top-0 right-0 bottom-0 z-50 bg-white shadow-2xl flex flex-col w-full md:w-[var(--tarefa-drawer-w)] md:max-w-[92vw] border-l border-slate-200 transition-transform duration-200 ${mounted ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {children}
       </aside>
