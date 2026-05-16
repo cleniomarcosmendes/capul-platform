@@ -575,12 +575,18 @@ export function ProjetoDetalhePage() {
                     .map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
               )}
-              <Link
-                to={`/gestao-ti/projetos/${projeto.id}/relatorio`}
-                className="flex items-center gap-1 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm hover:bg-slate-200"
-              >
-                <Printer className="w-4 h-4" /> Relatorio
-              </Link>
+              {/* Relatório é staff-TI-only na API (@Roles STAFF → 403 p/
+                  USUARIO_CHAVE/TERCEIRIZADO). Escondemos o botão pra role
+                  restrita — sem isso ela via o botão e caía em erro (beco
+                  sem saída). Barreira real continua no backend. */}
+              {!isRestrictedRole && (
+                <Link
+                  to={`/gestao-ti/projetos/${projeto.id}/relatorio`}
+                  className="flex items-center gap-1 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm hover:bg-slate-200"
+                >
+                  <Printer className="w-4 h-4" /> Relatorio
+                </Link>
+              )}
               {canManage && (
                 <>
                   <Link
