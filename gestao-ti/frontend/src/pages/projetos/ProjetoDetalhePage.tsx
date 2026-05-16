@@ -440,7 +440,7 @@ export function ProjetoDetalhePage() {
     <>
       {ParentConfirmDialog}
       <Header title={`Projeto #${projeto.numero}`} />
-      <div className="p-6">
+      <div className="p-6 tarefa-push">
         {/* Breadcrumbs - Navegacao Hierarquica */}
         <nav className="flex items-center gap-2 text-sm mb-4">
           <Link to="/gestao-ti/projetos" className="text-slate-500 hover:text-capul-600">
@@ -653,14 +653,14 @@ export function ProjetoDetalhePage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-4 border-b border-slate-200">
+        <div className="flex gap-1 mb-4 border-b border-slate-200 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tabs.map((t) => {
             const Icon = t.icon;
             return (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap flex-shrink-0 ${
                   tab === t.key
                     ? tabActiveColor
                     : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -1339,10 +1339,36 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     );
   }
 
-  // Botoes de acao da tarefa — reutilizados na linha (lista) e no drawer
-  function renderAcoesTarefa(a: AtividadeProjeto) {
+  // Botoes de acao da tarefa.
+  // - variant 'linha'  : só ícones (▷/■ ✎ 🗑) no hover — status/fase ficam no drawer
+  // - variant 'drawer' : controles completos (status, fase, cronômetro, editar, remover)
+  function renderAcoesTarefa(a: AtividadeProjeto, variant: 'linha' | 'drawer' = 'drawer') {
     const cfg = statusAtividadeConfig[a.status] || statusAtividadeConfig.PENDENTE;
     const meuRegistroAtivo = a.registrosTempo?.find((r) => r.usuarioId === userId);
+
+    if (variant === 'linha') {
+      if (!canAdd) return null;
+      return (
+        <>
+          {!meuRegistroAtivo ? (
+            <button onClick={() => handleIniciar(a.id)} className="text-slate-300 hover:text-green-600 transition-colors p-1" title="Iniciar cronometro">
+              <Play className="w-4 h-4" />
+            </button>
+          ) : (
+            <button onClick={() => handleEncerrar(a.id)} className="text-red-500 hover:text-red-700 transition-colors p-1" title="Encerrar cronometro">
+              <Square className="w-4 h-4" />
+            </button>
+          )}
+          <button onClick={() => openEditAtividade(a)} className="text-slate-300 hover:text-capul-600 transition-colors p-1" title="Editar tarefa">
+            <Pencil className="w-4 h-4" />
+          </button>
+          <button onClick={() => handleRemoveAtividade(a.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1" title="Remover tarefa">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </>
+      );
+    }
+
     return (
       <>
         {canAdd ? (
@@ -1458,14 +1484,16 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
         )}
         <span className={`text-[10px] font-medium rounded-full px-2 py-0.5 flex-shrink-0 ${cfg.color}`}>{cfg.label}</span>
 
-        {/* Acoes — aparecem no hover/selecionada */}
-        <span
-          className={`flex items-center gap-1 flex-shrink-0 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {renderAcoesTarefa(a)}
-        </span>
-        <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
+        {/* Acoes inline — só no hover; ocultas na linha aberta (ficam no drawer) */}
+        {!isSelected && (
+          <span
+            className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {renderAcoesTarefa(a, 'linha')}
+          </span>
+        )}
+        <ChevronRight className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-capul-500' : 'text-slate-300'}`} />
       </div>
     );
   }
@@ -1525,8 +1553,9 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   return (
     <>
     {/* protecao via pai */}
-    {/* Push: a ≥1440px o drawer (420px fixo) reserva espaco; <1440 vira overlay */}
-    <div className={`space-y-4 transition-[padding] duration-200 ${expandedId ? 'min-[1440px]:pr-[440px]' : ''}`}>
+    {/* Push ≥1440px é aplicado no nível da página (.tarefa-push em index.css),
+        para o cabeçalho/tabs do projeto encolherem junto e não ficarem cobertos */}
+    <div className="space-y-4">
       {/* Nova tarefa — botao abre o inline-add (Linear-style); atalho N abre o modal completo */}
       {canAdd && (
         <div className="flex items-center justify-end">

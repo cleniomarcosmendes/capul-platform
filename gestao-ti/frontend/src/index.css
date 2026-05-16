@@ -34,3 +34,15 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* Drawer de Atividades — modo "push" (≥1440px): a página inteira (header do
+   projeto + tabs + conteúdo) reserva espaço pro painel fixo, como no mockup V3.
+   TarefaDrawer alterna `body.tarefa-drawer-open` enquanto aberto. */
+.tarefa-push {
+  transition: padding-right 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (min-width: 1440px) {
+  body.tarefa-drawer-open .tarefa-push {
+    padding-right: 440px;
+  }
+}

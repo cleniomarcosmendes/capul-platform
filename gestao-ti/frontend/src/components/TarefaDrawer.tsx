@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { Drawer } from './Drawer';
 
@@ -34,6 +34,14 @@ interface TarefaDrawerProps {
 export function TarefaDrawer({
   open, onClose, titulo, breadcrumb, controls, tabs, activeTab, onTabChange, hideChrome, children,
 }: TarefaDrawerProps) {
+  // Modo push (≥1440px, via CSS em index.css): a página inteira encolhe
+  // enquanto o drawer está aberto. Em <1440px o CSS ignora (vira overlay).
+  useEffect(() => {
+    if (!open) return;
+    document.body.classList.add('tarefa-drawer-open');
+    return () => document.body.classList.remove('tarefa-drawer-open');
+  }, [open]);
+
   return (
     <Drawer open={open} onClose={onClose} ariaLabel={titulo ? `Tarefa: ${titulo}` : 'Tarefa'}>
       <div className="px-4 py-3 border-b border-slate-200 flex items-start gap-2 flex-shrink-0">
