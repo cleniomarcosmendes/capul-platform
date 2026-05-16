@@ -218,7 +218,10 @@ export class ProjetoController {
   // --- Fases ---
 
   @Get(':id/fases')
-  listFases(@Param('id') id: string) {
+  async listFases(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role?: string) {
+    // Mesma classe do gap #2 — a aba Atividades carrega fases; sem ACL
+    // vazava estrutura de qualquer projeto por id.
+    await this.service.checkProjetoAccessChave(id, user.sub, role || '');
     return this.service.listFases(id);
   }
 
@@ -252,7 +255,11 @@ export class ProjetoController {
   // --- Atividades ---
 
   @Get(':id/atividades')
-  listAtividades(@Param('id') id: string, @GestaoTiRole() role?: string) {
+  async listAtividades(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role?: string) {
+    // Gap #2 (16/05): GET de atividades não tinha ACL por projeto — qualquer
+    // usuário do módulo lia tarefas/notas de qualquer projeto por id. Mesmo
+    // gate canônico do findOne: TI early-return; chave só se vinculado.
+    await this.service.checkProjetoAccessChave(id, user.sub, role || '');
     return this.service.listAtividades(id, role);
   }
 
@@ -302,18 +309,21 @@ export class ProjetoController {
   }
 
   @Get(':id/atividades/:atividadeId/historico')
-  listHistoricoAtividade(@Param('id') id: string, @Param('atividadeId') atividadeId: string) {
+  async listHistoricoAtividade(@Param('id') id: string, @Param('atividadeId') atividadeId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role?: string) {
+    await this.service.checkProjetoAccessChave(id, user.sub, role || '');
     return this.service.listarHistoricoAtividade(id, atividadeId);
   }
 
   // --- Comentarios de Tarefa ---
 
   @Get(':id/atividades/:atividadeId/comentarios')
-  listComentarios(
+  async listComentarios(
     @Param('id') id: string,
     @Param('atividadeId') atividadeId: string,
+    @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role?: string,
   ) {
+    await this.service.checkProjetoAccessChave(id, user.sub, role || '');
     return this.service.listComentarios(id, atividadeId, role);
   }
 
@@ -326,7 +336,11 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    // Acesso por checkProjetoAccessChave (não assertMembroOuGestor): permite
+    // usuário-chave/terceirizado VINCULADO comentar nas tarefas do projeto-pai
+    // (16/05 — colaboração estilo chat). Conteúdo interno segue filtrado;
+    // non-staff só grava/vê pública (defesa em profundidade no service).
+    await this.service.checkProjetoAccessChave(id, user.sub, role);
     return this.service.addComentario(id, atividadeId, body.texto, user.sub, body.visivelPendencia, body.publica, role);
   }
 
@@ -337,7 +351,7 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.checkProjetoAccessChave(id, user.sub, role);
     return this.service.removeComentario(id, comentarioId, user.sub, role);
   }
 
@@ -350,7 +364,7 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.checkProjetoAccessChave(id, user.sub, role);
     return this.service.updateComentario(id, comentarioId, body.texto, user.sub, role, body.visivelPendencia, body.publica);
   }
 

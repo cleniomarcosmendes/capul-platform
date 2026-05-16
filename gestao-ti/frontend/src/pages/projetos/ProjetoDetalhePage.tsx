@@ -423,8 +423,13 @@ export function ProjetoDetalhePage() {
     const subprojetoTabs: Tab[] = ['visaoGeral', 'equipe', 'atividades', 'pendencias', 'anexos', 'usuariosChave'];
     tabs = allTabs.filter(t => subprojetoTabs.includes(t.key));
   } else {
-    // Projeto principal ou subprojeto de outro: apenas sub-projetos e pendencias
-    const restrictedTabs: Tab[] = ['subprojetos', 'pendencias'];
+    // Projeto-pai (ou subprojeto de outro) onde ela é usuário-chave/
+    // terceirizado VINCULADO: leitura + colaboração na Conversa das tarefas.
+    // 16/05 — antes era só sub-projetos+pendências; o toggle "Visível p/
+    // Usuário Chave" não fazia sentido sem ela alcançar Atividades. Chegar
+    // aqui já prova vínculo (findOne exige checkProjetoAccessChave).
+    // Read-only é garantido por canManage/canAdd=false (não é membro/gestor).
+    const restrictedTabs: Tab[] = ['visaoGeral', 'subprojetos', 'atividades', 'pendencias'];
     tabs = allTabs.filter(t => restrictedTabs.includes(t.key));
   }
 
