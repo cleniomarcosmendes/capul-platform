@@ -5,6 +5,7 @@ import { ProjetoCoreService } from './services/projeto-core.service.js';
 import { ProjetoFaseService } from './services/projeto-fase.service.js';
 import { ProjetoMembroService } from './services/projeto-membro.service.js';
 import { ProjetoAtividadeService } from './services/projeto-atividade.service.js';
+import { ProjetoAtividadeHistoricoService } from './services/projeto-atividade-historico.service.js';
 import { ProjetoPendenciaService } from './services/projeto-pendencia.service.js';
 import { ProjetoTempoService } from './services/projeto-tempo.service.js';
 import { ProjetoFinanceiroService } from './services/projeto-financeiro.service.js';
@@ -35,6 +36,7 @@ export class ProjetoService {
     private readonly faseService: ProjetoFaseService,
     private readonly membroService: ProjetoMembroService,
     private readonly atividadeService: ProjetoAtividadeService,
+    private readonly atividadeHistoricoService: ProjetoAtividadeHistoricoService,
     private readonly pendenciaService: ProjetoPendenciaService,
     private readonly tempoService: ProjetoTempoService,
     private readonly financeiroService: ProjetoFinanceiroService,
@@ -176,12 +178,17 @@ export class ProjetoService {
     projetoId: string,
     atividadeId: string,
     dto: { titulo?: string; descricao?: string; faseId?: string; status?: string; dataInicio?: string; dataFimPrevista?: string; responsavelIds?: string[] },
+    actorId?: string,
   ) {
-    return this.atividadeService.updateAtividade(projetoId, atividadeId, dto);
+    return this.atividadeService.updateAtividade(projetoId, atividadeId, dto, actorId);
   }
 
   removeAtividade(projetoId: string, atividadeId: string) {
     return this.atividadeService.removeAtividade(projetoId, atividadeId);
+  }
+
+  listarHistoricoAtividade(projetoId: string, atividadeId: string) {
+    return this.atividadeHistoricoService.listar(projetoId, atividadeId);
   }
 
   // ============================================================

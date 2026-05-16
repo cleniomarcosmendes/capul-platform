@@ -16,6 +16,7 @@ import type {
   RegistroTempo,
   Chamado,
   ComentarioTarefa,
+  AtividadeHistorico,
   TipoProjeto,
   StatusProjeto,
   PapelRaci,
@@ -194,6 +195,11 @@ export const projetoService = {
 
   async removerAtividade(id: string, atividadeId: string): Promise<void> {
     await gestaoApi.delete(`/projetos/${id}/atividades/${atividadeId}`);
+  },
+
+  async listarHistoricoAtividade(id: string, atividadeId: string): Promise<AtividadeHistorico[]> {
+    const { data } = await gestaoApi.get(`/projetos/${id}/atividades/${atividadeId}/historico`);
+    return data;
   },
 
   // Registro de Tempo

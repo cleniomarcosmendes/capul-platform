@@ -291,7 +291,7 @@ export class ProjetoController {
     @GestaoTiRole() role: string,
   ) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
-    return this.service.updateAtividade(id, atividadeId, dto);
+    return this.service.updateAtividade(id, atividadeId, dto, user.sub);
   }
 
   @Delete(':id/atividades/:atividadeId')
@@ -299,6 +299,11 @@ export class ProjetoController {
   async removeAtividade(@Param('id') id: string, @Param('atividadeId') atividadeId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeAtividade(id, atividadeId);
+  }
+
+  @Get(':id/atividades/:atividadeId/historico')
+  listHistoricoAtividade(@Param('id') id: string, @Param('atividadeId') atividadeId: string) {
+    return this.service.listarHistoricoAtividade(id, atividadeId);
   }
 
   // --- Comentarios de Tarefa ---

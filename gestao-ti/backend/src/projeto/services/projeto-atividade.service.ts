@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { NotificacaoService } from '../../notificacao/notificacao.service.js';
 import { ProjetoHelpersService } from './projeto-helpers.service.js';
+import { ProjetoAtividadeHistoricoService } from './projeto-atividade-historico.service.js';
 import { isGestor } from '../../common/constants/roles.constant.js';
 
 @Injectable()
@@ -15,6 +16,7 @@ export class ProjetoAtividadeService {
     private readonly prisma: PrismaService,
     private readonly notificacaoService: NotificacaoService,
     private readonly helpers: ProjetoHelpersService,
+    private readonly historico: ProjetoAtividadeHistoricoService,
   ) {}
 
   async listAtividades(projetoId: string) {
@@ -104,6 +106,11 @@ export class ProjetoAtividadeService {
       ).catch((err) => console.error('Notificacao error:', err.message));
     }
 
+    this.historico.registrar(atividade.id, 'CRIADA', {
+      descricao: 'Tarefa criada',
+      usuarioId: userId,
+    });
+
     return atividade;
   }
 
@@ -111,6 +118,7 @@ export class ProjetoAtividadeService {
     projetoId: string,
     atividadeId: string,
     dto: { titulo?: string; descricao?: string; faseId?: string; status?: string; dataInicio?: string; dataFimPrevista?: string; responsavelIds?: string[] },
+    actorId?: string,
   ) {
     const atividade = await this.prisma.atividadeProjeto.findFirst({
       where: { id: atividadeId, projetoId },
@@ -142,6 +150,30 @@ export class ProjetoAtividadeService {
       },
     });
 
+    // Historico: registra cada mudanca relevante (timeline do drawer)
+    const statusLabelHist: Record<string, string> = {
+      PENDENTE: 'Pendente', EM_ANDAMENTO: 'Em Andamento', CONCLUIDA: 'Concluida', CANCELADA: 'Cancelada',
+    };
+    if (dto.status && dto.status !== atividade.status) {
+      this.historico.registrar(atividadeId, 'STATUS_ALTERADO', {
+        descricao: `Status alterado para ${statusLabelHist[dto.status] || dto.status}`,
+        usuarioId: actorId,
+        metadata: { de: atividade.status, para: dto.status },
+      });
+    }
+    if (dto.titulo && dto.titulo !== atividade.titulo) {
+      this.historico.registrar(atividadeId, 'TITULO_ALTERADO', {
+        descricao: `Titulo alterado para "${dto.titulo}"`,
+        usuarioId: actorId,
+      });
+    }
+    if (dto.faseId !== undefined && (dto.faseId || null) !== atividade.faseId) {
+      this.historico.registrar(atividadeId, 'FASE_ALTERADA', {
+        descricao: updated.fase ? `Movida para a fase "${updated.fase.nome}"` : 'Removida da fase',
+        usuarioId: actorId,
+      });
+    }
+
     // Sync responsaveis se informados
     const responsaveisAntigos = await this.prisma.atividadeResponsavel.findMany({
       where: { atividadeId },
@@ -150,11 +182,22 @@ export class ProjetoAtividadeService {
     const idsAntigos = responsaveisAntigos.map((r) => r.usuarioId);
 
     if (dto.responsavelIds !== undefined) {
+      const mudouResponsaveis =
+        dto.responsavelIds.length !== idsAntigos.length ||
+        dto.responsavelIds.some((uid) => !idsAntigos.includes(uid));
+
       await this.prisma.atividadeResponsavel.deleteMany({ where: { atividadeId } });
       if (dto.responsavelIds.length > 0) {
         await this.prisma.atividadeResponsavel.createMany({
           data: dto.responsavelIds.map((uid) => ({ atividadeId, usuarioId: uid })),
           skipDuplicates: true,
+        });
+      }
+
+      if (mudouResponsaveis) {
+        this.historico.registrar(atividadeId, 'RESPONSAVEL_ALTERADO', {
+          descricao: 'Responsaveis atualizados',
+          usuarioId: actorId,
         });
       }
 
@@ -368,6 +411,11 @@ export class ProjetoAtividadeService {
         { projetoId, atividadeId },
       ).catch((err) => console.error('Notificacao error:', err.message));
     }
+
+    this.historico.registrar(atividadeId, 'COMENTARIO_ADICIONADO', {
+      descricao: 'Adicionou uma nota',
+      usuarioId: userId,
+    });
 
     return comentario;
   }

@@ -7,6 +7,7 @@ import { ProjetoCoreService } from './services/projeto-core.service.js';
 import { ProjetoFaseService } from './services/projeto-fase.service.js';
 import { ProjetoMembroService } from './services/projeto-membro.service.js';
 import { ProjetoAtividadeService } from './services/projeto-atividade.service.js';
+import { ProjetoAtividadeHistoricoService } from './services/projeto-atividade-historico.service.js';
 import { ProjetoPendenciaService } from './services/projeto-pendencia.service.js';
 import { ProjetoTempoService } from './services/projeto-tempo.service.js';
 import { ProjetoFinanceiroService } from './services/projeto-financeiro.service.js';
@@ -21,6 +22,7 @@ import { ProjetoComplementoService } from './services/projeto-complemento.servic
     ProjetoFaseService,
     ProjetoMembroService,
     ProjetoAtividadeService,
+    ProjetoAtividadeHistoricoService,
     ProjetoPendenciaService,
     ProjetoTempoService,
     ProjetoFinanceiroService,
