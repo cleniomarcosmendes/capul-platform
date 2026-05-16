@@ -389,15 +389,17 @@ export class ProjetoAtividadeService {
     });
     if (!atividade) throw new NotFoundException('Tarefa nao encontrada neste projeto');
 
+    // Defesa em profundidade: non-staff sempre grava publica=true (não pode
+    // criar nota interna mesmo forjando o body). Só isTI decide.
+    const publicaEfetiva = !isTI(role || '') ? true : (publica ?? true);
+
     const comentario = await this.prisma.comentarioTarefa.create({
       data: {
         texto,
         atividadeId,
         usuarioId: userId,
         visivelPendencia: atividade.pendenciaId ? (visivelPendencia ?? false) : false,
-        // Defesa em profundidade: non-staff sempre grava publica=true (não
-        // pode criar nota interna mesmo forjando o body). Só isTI decide.
-        publica: !isTI(role || '') ? true : (publica ?? true),
+        publica: publicaEfetiva,
       },
       include: { usuario: { select: { id: true, nome: true } } },
     });
@@ -410,9 +412,21 @@ export class ProjetoAtividadeService {
       where: { atividadeId },
       select: { usuarioId: true },
     });
-    const idsNotificar = responsaveis
+    let idsNotificar = responsaveis
       .map((r) => r.usuarioId)
       .filter((uid) => uid !== userId && !mencionadoIds.includes(uid));
+    // Nota interna: não notificar USUARIO_CHAVE/TERCEIRIZADO do projeto — eles
+    // não veem o conteúdo (Regra única 14/05). A role não vive neste DB
+    // (vem do JWT); usamos o vínculo usuarios_chave_projeto, mesma fonte de
+    // checkProjetoAccessChave (cobre USUARIO_CHAVE e TERCEIRIZADO).
+    if (!publicaEfetiva && idsNotificar.length > 0) {
+      const chave = await this.prisma.usuarioChaveProjeto.findMany({
+        where: { projetoId, ativo: true, usuarioId: { in: idsNotificar } },
+        select: { usuarioId: true },
+      });
+      const chaveIds = new Set(chave.map((c) => c.usuarioId));
+      idsNotificar = idsNotificar.filter((uid) => !chaveIds.has(uid));
+    }
     if (idsNotificar.length > 0) {
       const proj = await this.prisma.projeto.findUnique({ where: { id: projetoId }, select: { nome: true } });
       this.notificacaoService.criarParaUsuarios(
