@@ -31,7 +31,7 @@ export interface ReceitaFederalData {
   } | null;
   telefone: string | null;
   email: string | null;
-  fonte: 'BRASILAPI' | 'RECEITAWS';
+  fonte: 'BRASILAPI' | 'RECEITAWS' | 'RFB_LOCAL';
   consultadoEm: string;
 }
 

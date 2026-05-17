@@ -11,6 +11,7 @@ import { CccClient, type CccConsultaRaw } from '../sefaz/ccc-client.service.js';
 import { AmbienteService } from '../ambiente/ambiente.service.js';
 import { ProtheusCadastroService } from '../protheus/protheus-cadastro.service.js';
 import { ReceitaClient, type ReceitaFederalData } from './receita.client.js';
+import { RfbConsultaService } from '../rfb/rfb-consulta.service.js';
 import { DivergenciaService } from './divergencia.service.js';
 import { onlyDigits } from '../common/helpers/cnpj.helper.js';
 import type {
@@ -241,6 +242,7 @@ export class CadastroService {
     private readonly ambiente: AmbienteService,
     private readonly protheusCadastro: ProtheusCadastroService,
     private readonly receita: ReceitaClient,
+    private readonly rfbConsulta: RfbConsultaService,
     private readonly divergencia: DivergenciaService,
   ) {}
 
@@ -443,12 +445,19 @@ export class CadastroService {
         'Para dados completos de CPF, seria necessário contratar a API Serpro (paga).';
     } else {
       try {
-        dadosReceita = await this.receita.consultarCnpj(cnpjDigits);
+        // F2: base RFB LOCAL é a fonte PRIMÁRIA (instantânea, sem rate-limit,
+        // zero risco SEFAZ). Online (BrasilAPI/ReceitaWS) só como FALLBACK
+        // quando o CNPJ não está na base local (aberto após o snapshot ou
+        // base ainda não importada).
+        dadosReceita = await this.rfbConsulta.porCnpj(cnpjDigits);
+        if (!dadosReceita) {
+          dadosReceita = await this.receita.consultarCnpj(cnpjDigits);
+        }
         if (dadosReceita) {
           enriquecimentoReceitaDisponivel = true;
         } else {
           enriquecimentoReceitaMotivo =
-            'Receita Federal não retornou dados para este CNPJ (pode estar temporariamente indisponível).';
+            'Sem dados na base RFB local nem na Receita Federal online para este CNPJ.';
         }
       } catch (err) {
         this.logger.warn(
