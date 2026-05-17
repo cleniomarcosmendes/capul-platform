@@ -176,6 +176,20 @@ export class AmbienteService {
     });
   }
 
+  /**
+   * Cron de detecção da base pública CNPJ (RFB). null/vazio = detecção
+   * automática DESATIVADA. Após gravar, chamar RfbCronService.registrar()
+   * para reaplicar sem restart (mesmo padrão dos crons de movimento).
+   */
+  async atualizarRfbCron(expr: string | null | undefined, usuario: string) {
+    const normalizado = !expr || expr.trim() === '' ? null : expr.trim();
+    if (normalizado) this.validarCron('rfbCronDeteccao', normalizado);
+    return this.prisma.ambienteConfig.update({
+      where: { id: 1 },
+      data: { rfbCronDeteccao: normalizado, ultimaAlteracaoPor: usuario },
+    });
+  }
+
   private validarCron(campo: string, expr: string): void {
     try {
       // Cria um CronJob "seco" apenas para validar a sintaxe.

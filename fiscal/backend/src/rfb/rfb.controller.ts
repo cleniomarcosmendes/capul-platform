@@ -10,6 +10,8 @@ import { RfbWebdavService } from './rfb-webdav.service.js';
 import { RfbDeteccaoService } from './rfb-deteccao.service.js';
 import { RfbImportacaoService } from './rfb-importacao.service.js';
 import { RfbCruzamentoService } from './rfb-cruzamento.service.js';
+import { RfbCronService } from './rfb-cron.service.js';
+import { AmbienteService } from '../ambiente/ambiente.service.js';
 
 // F1.2 — endpoints mínimos. `versoes` serve de smoke test E de base p/ a
 // UI supervisionada da F1.4 (não é throwaway). Import (F1.3) e cron (F1.4)
@@ -28,14 +30,31 @@ export class RfbController {
     private readonly deteccao: RfbDeteccaoService,
     private readonly importacao: RfbImportacaoService,
     private readonly cruzamento: RfbCruzamentoService,
+    private readonly rfbCron: RfbCronService,
+    private readonly ambiente: AmbienteService,
   ) {}
 
-  /** Estado local (SÓ-DB, pollável). Detecção (PROPFIND) só no cron +
-   *  POST /rfb/detectar — não a cada chamada (era lento + dava 429). */
+  /** Estado local (SÓ-DB, pollável) + agenda de detecção configurada.
+   *  Detecção (PROPFIND) só no cron + POST /rfb/detectar. */
   @Get('versoes')
   @RoleMinima('GESTOR_FISCAL')
   async versoes() {
-    return this.deteccao.statusDb();
+    const st = await this.deteccao.statusDb();
+    const cfg = await this.ambiente.getOrCreate();
+    return { ...st, cronDeteccao: cfg.rfbCronDeteccao ?? null };
+  }
+
+  /** Configura (ou desativa) a agenda de detecção automática. Vazio/null
+   *  = desativada. ADMIN_TI. Reaplica sem restart. */
+  @Post('cron')
+  @RoleMinima('ADMIN_TI')
+  async configurarCron(
+    @Body() body: { cron?: string | null },
+    @CurrentUser() user: FiscalAuthenticatedUser,
+  ) {
+    const cfg = await this.ambiente.atualizarRfbCron(body?.cron, user.email);
+    await this.rfbCron.registrar();
+    return { cronDeteccao: cfg.rfbCronDeteccao ?? null };
   }
 
   /** Lista arquivos de uma versão (debug/inspeção; tamanhos em bytes). */

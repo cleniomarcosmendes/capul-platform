@@ -1,35 +1,69 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { SchedulerRegistry } from '@nestjs/schedule';
+import { CronJob } from 'cron';
+import { AmbienteService } from '../ambiente/ambiente.service.js';
 import { RfbDeteccaoService } from './rfb-deteccao.service.js';
 
 // F1.4a — Detecção automática SEMANAL da base pública CNPJ.
 //
 // Só DETECTA (PROPFIND no share + marca DISPONIVEL) — NUNCA importa.
-// O import é sempre manual/ADMIN_TI (decisão de produto + carga pesada).
-// Não é o caso da regra SEFAZ-em-loop: aqui não há certificado nem
-// webservice SEFAZ — é um PROPFIND num share estático público, benigno.
+// Não é caso da regra SEFAZ-em-loop (sem certificado/webservice — PROPFIND
+// num share estático público, benigno).
 //
-// Schedule FIXO (segunda 07:00 BRT) — exposto na UI /operacao (F1.4b)
-// junto com histórico + gatilho manual, atendendo a regra de "nada de
-// caixa-preta no Configurador/Operação". Mudar cadência = constante aqui.
-const RFB_CRON = '0 7 * * 1'; // seg 07:00
+// Cron CONFIGURÁVEL pelo admin (pedido Clenio): expressão vive em
+// `ambiente_config.rfb_cron_deteccao` (default seg 07:00). NULL/vazio =
+// detecção automática DESATIVADA. Registro dinâmico via SchedulerRegistry
+// (mesmo padrão do SchedulerService de cruzamento) — `registrar()` reaplica
+// sem restart quando a config muda.
+const JOB = 'rfb:deteccao';
 
 @Injectable()
-export class RfbCronService {
+export class RfbCronService implements OnApplicationBootstrap {
   private readonly logger = new Logger(RfbCronService.name);
 
-  constructor(private readonly deteccao: RfbDeteccaoService) {}
+  constructor(
+    private readonly deteccao: RfbDeteccaoService,
+    private readonly ambiente: AmbienteService,
+    private readonly scheduler: SchedulerRegistry,
+  ) {}
 
-  @Cron(RFB_CRON, { name: 'rfb-deteccao', timeZone: 'America/Sao_Paulo' })
-  async detectarSemanal() {
+  async onApplicationBootstrap() {
+    await this.registrar();
+  }
+
+  /** (Re)registra o cron a partir da config. Chamar após alterar a agenda. */
+  async registrar(): Promise<void> {
+    this.removerSeExistir();
+    const cfg = await this.ambiente.getOrCreate();
+    const expr = cfg.rfbCronDeteccao?.trim();
+    if (!expr) {
+      this.logger.log('RFB detecção automática DESATIVADA (sem cron configurado)');
+      return;
+    }
+    try {
+      const job = new CronJob(expr, () => this.executar(), null, false, 'America/Sao_Paulo');
+      this.scheduler.addCronJob(JOB, job as unknown as CronJob);
+      job.start();
+      this.logger.log(`RFB detecção registrada: ${expr}`);
+    } catch (err) {
+      this.logger.error(`Cron RFB inválido (${expr}): ${(err as Error).message}`);
+    }
+  }
+
+  private async executar() {
     try {
       const r = await this.deteccao.detectar();
-      this.logger.log(
-        `RFB detecção semanal: maisRecente=${r.maisRecente} novaDisponivel=${r.novaDisponivel}`,
-      );
+      this.logger.log(`RFB detecção: maisRecente=${r.maisRecente} novaDisponivel=${r.novaDisponivel}`);
     } catch (e: any) {
-      // Não derruba o cron — só loga (rede/share pode oscilar).
-      this.logger.error(`RFB detecção semanal falhou: ${e?.message || e}`);
+      this.logger.error(`RFB detecção falhou: ${e?.message || e}`);
+    }
+  }
+
+  private removerSeExistir(): void {
+    try {
+      this.scheduler.deleteCronJob(JOB);
+    } catch {
+      // não existia
     }
   }
 }
