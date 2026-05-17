@@ -138,32 +138,85 @@ export class RfbImportacaoService {
   private async executar(versao: string, tabelas: string[]) {
     const t0 = Date.now();
     let total = 0n;
+    // Mapa de progresso p/ o painel (F1.6). status: pendente|rodando|concluida|erro.
+    const prog: Record<string, { status: string; linhas: number }> = {};
+    for (const t of tabelas) prog[t] = { status: 'pendente', linhas: 0 };
+    await this.prisma.rfbControleImportacao
+      .update({
+        where: { versaoRfb: versao },
+        data: {
+          progresso: prog, atualizadoEm: new Date(),
+          tabelaAtual: null, arquivoAtual: null, arquivosTotal: null, linhasAcumuladas: null,
+        },
+      })
+      .catch(() => undefined);
+    let nomeAtual = '';
     try {
       for (const nome of tabelas) {
-        const n = await this.importarTabela(versao, SPECS[nome]);
-        total += BigInt(n);
+        nomeAtual = nome;
+        const spec = SPECS[nome];
+        prog[nome] = { status: 'rodando', linhas: 0 };
         await this.prisma.rfbControleImportacao.update({
           where: { versaoRfb: versao },
-          data: { observacao: `${nome}: ${n.toLocaleString('pt-BR')} linhas`, totalRegistros: total },
+          data: {
+            tabelaAtual: nome, arquivoAtual: 0, arquivosTotal: spec.arquivos.length,
+            linhasAcumuladas: 0n, progresso: prog, atualizadoEm: new Date(),
+          },
+        });
+        const n = await this.importarTabela(versao, spec, async (idx, linhasAcum) => {
+          prog[nome] = { status: 'rodando', linhas: linhasAcum };
+          await this.prisma.rfbControleImportacao
+            .update({
+              where: { versaoRfb: versao },
+              data: {
+                arquivoAtual: idx, linhasAcumuladas: BigInt(linhasAcum),
+                progresso: prog, atualizadoEm: new Date(),
+              },
+            })
+            .catch(() => undefined);
+        });
+        total += BigInt(n);
+        prog[nome] = { status: 'concluida', linhas: n };
+        await this.prisma.rfbControleImportacao.update({
+          where: { versaoRfb: versao },
+          data: {
+            observacao: `${nome}: ${n.toLocaleString('pt-BR')} linhas`, totalRegistros: total,
+            progresso: prog, atualizadoEm: new Date(),
+          },
         });
       }
       await this.prisma.rfbControleImportacao.update({
         where: { versaoRfb: versao },
-        data: { status: 'CONCLUIDO', dataFim: new Date(), totalRegistros: total, observacao: `OK (${((Date.now() - t0) / 60000).toFixed(1)} min)` },
+        data: {
+          status: 'CONCLUIDO', dataFim: new Date(), totalRegistros: total,
+          observacao: `OK (${((Date.now() - t0) / 60000).toFixed(1)} min)`,
+          tabelaAtual: null, atualizadoEm: new Date(),
+        },
       });
       this.logger.log(`RFB import ${versao} CONCLUIDO — ${total} linhas`);
     } catch (e: any) {
-      await this.prisma.rfbControleImportacao.update({
-        where: { versaoRfb: versao },
-        data: { status: 'ERRO', dataFim: new Date(), observacao: String(e?.message || e).slice(0, 800) },
-      }).catch(() => undefined);
+      if (nomeAtual && prog[nomeAtual]) prog[nomeAtual] = { ...prog[nomeAtual], status: 'erro' };
+      await this.prisma.rfbControleImportacao
+        .update({
+          where: { versaoRfb: versao },
+          data: {
+            status: 'ERRO', dataFim: new Date(),
+            observacao: String(e?.message || e).slice(0, 800),
+            progresso: prog, atualizadoEm: new Date(),
+          },
+        })
+        .catch(() => undefined);
       throw e;
     }
   }
 
   /** Carrega 1 tabela (N partições) em staging e faz swap atômico.
    *  Retorna nº de linhas. */
-  async importarTabela(versao: string, spec: TabelaSpec): Promise<number> {
+  async importarTabela(
+    versao: string,
+    spec: TabelaSpec,
+    onArquivo?: (idx: number, linhasAcum: number) => Promise<void>,
+  ): Promise<number> {
     const client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
     let linhas = 0;
@@ -174,9 +227,12 @@ export class RfbImportacaoService {
         `CREATE TABLE ${stg} (${spec.colunas.map((c) => `"${c}" ${c === 'capital_social' ? 'NUMERIC(18,2)' : 'TEXT'}`).join(', ')})`,
       );
 
+      let i = 0;
       for (const arq of spec.arquivos) {
         linhas += await this.carregarArquivo(client, versao, arq, spec, stg);
+        i++;
         this.logger.log(`RFB ${spec.nome}: ${arq} ok (acum ${linhas.toLocaleString('pt-BR')})`);
+        if (onArquivo) await onArquivo(i, linhas);
       }
 
       // Índices no staging (nomes _stg_ → renomeados p/ canônico no swap).

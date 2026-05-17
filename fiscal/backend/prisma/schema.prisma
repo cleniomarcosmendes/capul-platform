@@ -906,6 +906,13 @@ model RfbControleImportacao {
   totalRegistros BigInt?   @map("total_registros")
   disparadoPor   String?   @map("disparado_por")
   observacao     String?
+  // F1.6 — progresso granular p/ o painel da aba "Base CNPJ (RFB)".
+  tabelaAtual      String?   @map("tabela_atual")
+  arquivoAtual     Int?      @map("arquivo_atual")
+  arquivosTotal    Int?      @map("arquivos_total")
+  linhasAcumuladas BigInt?   @map("linhas_acumuladas")
+  atualizadoEm     DateTime? @map("atualizado_em") @db.Timestamptz
+  progresso        Json?     @db.JsonB
 
   @@map("controle_importacao")
   @@schema("rfb")

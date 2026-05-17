@@ -46,6 +46,7 @@ export class RfbDeteccaoService {
     const ultimas = rows.map((r) => ({
       ...r,
       totalRegistros: r.totalRegistros == null ? null : Number(r.totalRegistros),
+      linhasAcumuladas: r.linhasAcumuladas == null ? null : Number(r.linhasAcumuladas),
     }));
     const maisRecente = rows[0]?.versaoRfb ?? null;
     const importada = rows[0]?.status === 'CONCLUIDO';
@@ -64,6 +65,7 @@ export class RfbDeteccaoService {
     const ultimas = rows.map((r) => ({
       ...r,
       totalRegistros: r.totalRegistros == null ? null : Number(r.totalRegistros),
+      linhasAcumuladas: r.linhasAcumuladas == null ? null : Number(r.linhasAcumuladas),
     }));
     return { ultimas };
   }
