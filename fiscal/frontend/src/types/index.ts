@@ -954,7 +954,9 @@ export interface DadosReceitaFederal {
   } | null;
   telefone: string | null;
   email: string | null;
-  fonte: 'BRASILAPI' | 'RECEITAWS';
+  fonte: 'BRASILAPI' | 'RECEITAWS' | 'RFB_LOCAL';
+  /** Quando fonte='RFB_LOCAL': versão AAAA-MM do snapshot da base RFB. */
+  versaoRfb?: string;
   consultadoEm: string;
 }
 

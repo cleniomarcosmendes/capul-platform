@@ -1035,9 +1035,15 @@ function ReceitaFederalCard({ result }: { result: CadastroConsultaResult }) {
         <span>
           Fonte:{' '}
           <strong className="text-slate-600">
-            {r.fonte === 'BRASILAPI' ? 'BrasilAPI' : 'ReceitaWS'}
+            {r.fonte === 'RFB_LOCAL'
+              ? `Base RFB local${r.versaoRfb ? ` (${r.versaoRfb})` : ''}`
+              : r.fonte === 'BRASILAPI'
+                ? 'BrasilAPI'
+                : 'ReceitaWS'}
           </strong>{' '}
-          (API pública gratuita)
+          {r.fonte === 'RFB_LOCAL'
+            ? '(base pública CNPJ importada — instantânea, sem SEFAZ)'
+            : '(API pública gratuita)'}
         </span>
         <LinkComprovanteReceita />
         <span>
