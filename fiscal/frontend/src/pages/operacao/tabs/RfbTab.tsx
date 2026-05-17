@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Database, Info, RefreshCw, DownloadCloud } from 'lucide-react';
+import { Info, RefreshCw, DownloadCloud, Clock, Save } from 'lucide-react';
 import { fiscalApi } from '../../../services/api';
 import { Button } from '../../../components/Button';
 import { useToast } from '../../../components/Toast';
@@ -24,6 +24,7 @@ interface VersoesResp {
   importada: boolean;
   novaDisponivel: boolean;
   ultimas: ControleRow[];
+  cronDeteccao: string | null; // null = detecção automática desativada
 }
 
 const fmt = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
@@ -36,14 +37,15 @@ const STATUS_CLS: Record<string, string> = {
 
 /**
  * Aba "Base CNPJ (RFB)" — visibilidade supervisionada do módulo de base
- * pública (regra: nada de cron/integração caixa-preta). Mostra o que o
- * módulo faz, o estado das versões e o histórico, com gatilhos manuais.
- * Detecção é automática (semanal); IMPORT é SEMPRE manual (ADMIN_TI).
+ * pública (regra: nada de cron/integração caixa-preta). Estado das versões,
+ * histórico, gatilhos manuais e a agenda de detecção CONFIGURÁVEL pelo
+ * admin. IMPORT é SEMPRE manual (ADMIN_TI).
  */
 export function RfbTab() {
   const [data, setData] = useState<VersoesResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
+  const [cronInput, setCronInput] = useState('');
   const toast = useToast();
   const confirm = useConfirm();
   const { fiscalRole } = useAuth();
@@ -54,6 +56,7 @@ export function RfbTab() {
     try {
       const { data } = await fiscalApi.get<VersoesResp>('/rfb/versoes');
       setData(data);
+      setCronInput(data.cronDeteccao ?? '');
       return data;
     } catch (e) {
       toast.error(extractApiError(e));
@@ -93,7 +96,6 @@ export function RfbTab() {
   }
 
   const detectar = () => acao(() => fiscalApi.post('/rfb/detectar'), 'Detecção disparada');
-  const importarCnaes = () => acao(() => fiscalApi.post('/rfb/importar/cnaes'), 'Importação de CNAEs iniciada (teste rápido)');
   const importarTudo = async () => {
     const ok = await confirm({
       title: 'Importar base completa da RFB?',
@@ -106,6 +108,11 @@ export function RfbTab() {
     });
     if (ok) acao(() => fiscalApi.post('/rfb/importar'), 'Importação completa iniciada');
   };
+  const salvarCron = () =>
+    acao(
+      () => fiscalApi.post('/rfb/cron', { cron: cronInput.trim() }),
+      cronInput.trim() ? 'Agenda de detecção atualizada' : 'Detecção automática desativada',
+    );
 
   if (loading) return <div className="text-sm text-slate-500">Carregando…</div>;
 
@@ -122,9 +129,9 @@ export function RfbTab() {
             consultar a SEFAZ</strong> — zero risco de bloqueio.
           </p>
           <p>
-            <strong>Detecção automática</strong> toda segunda 07:00 (verifica se há
-            versão mensal nova). <strong>A importação é SEMPRE manual</strong> (ADMIN_TI) —
-            o sistema nunca processa a base sozinho.
+            <strong>Detecção automática</strong> verifica se há versão mensal nova
+            (agenda configurável abaixo). <strong>A importação é SEMPRE manual</strong>{' '}
+            (ADMIN_TI) — o sistema nunca processa a base sozinho.
           </p>
         </div>
       </div>
@@ -147,14 +154,42 @@ export function RfbTab() {
         </div>
       </div>
 
+      {/* Agenda de detecção automática (configurável — sem caixa-preta) */}
+      <div className="rounded-lg border border-slate-200 p-4">
+        <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <Clock className="h-4 w-4 text-capul-600" /> Detecção automática
+        </div>
+        <p className="mb-2 text-xs text-slate-500">
+          Estado:{' '}
+          <strong className={data?.cronDeteccao ? 'text-slate-700' : 'text-amber-600'}>
+            {data?.cronDeteccao ? `agendada (cron: ${data.cronDeteccao})` : 'DESATIVADA'}
+          </strong>
+          . Só detecta (não importa). Formato cron: <code>min hora dia mês diaSemana</code>{' '}
+          — ex.: <code>0 7 * * 1</code> = seg 07:00; <code>0 6 1 * *</code> = dia 1 às 06:00.
+          Vazio = desativar.
+        </p>
+        {isAdmin ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              className="w-56 rounded-md border border-slate-300 px-2 py-1.5 font-mono text-sm"
+              placeholder="0 7 * * 1  (vazio = desativar)"
+              value={cronInput}
+              onChange={(e) => setCronInput(e.target.value)}
+            />
+            <Button size="sm" onClick={salvarCron} disabled={acting || cronInput === (data?.cronDeteccao ?? '')}>
+              <Save className="mr-1 h-3.5 w-3.5" /> Salvar agenda
+            </Button>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-400">Somente ADMIN_TI altera a agenda.</p>
+        )}
+      </div>
+
       {/* Ações (ADMIN_TI) */}
       {isAdmin && (
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={detectar} disabled={acting}>
             <RefreshCw className="mr-1.5 h-4 w-4" /> Detectar agora
-          </Button>
-          <Button variant="secondary" onClick={importarCnaes} disabled={acting}>
-            <Database className="mr-1.5 h-4 w-4" /> Importar só CNAEs (teste)
           </Button>
           <Button onClick={importarTudo} disabled={acting}>
             <DownloadCloud className="mr-1.5 h-4 w-4" /> Importar base completa
