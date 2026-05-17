@@ -12,7 +12,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["fiscal", "core"]
+  schemas  = ["fiscal", "core", "rfb"]
 }
 
 // ============================================================
@@ -812,4 +812,98 @@ model CteLoteConsulta {
   @@index([status])
   @@map("cte_lote_consulta")
   @@schema("fiscal")
+}
+
+// ============================================================
+// SCHEMA rfb — Base Pública CNPJ (Receita Federal · Dados Abertos)
+// Importação mensal supervisionada. SEM certificado, SEM SEFAZ — zero
+// risco de bloqueio. Plano: docs/PLANO_MODULO_CNPJ_RFB_v1.md (v1.1 c/
+// addendum F0/PoC). Colunas em text (Postgres: text == varchar storage;
+// footprint medido na PoC ~250 B/linha estab, ~170 B/linha empresa).
+// Índices btree + GIN pg_trgm são criados na migration.sql (autoritativa).
+// ============================================================
+
+model RfbEstabelecimento {
+  cnpjCompleto      String  @id @map("cnpj_completo")
+  cnpjBasico        String  @map("cnpj_basico")
+  cnpjOrdem         String? @map("cnpj_ordem")
+  cnpjDv            String? @map("cnpj_dv")
+  matrizFilial      String? @map("matriz_filial")
+  nomeFantasia      String? @map("nome_fantasia")
+  situacaoCadastral String? @map("situacao_cadastral")
+  dataSituacao      String? @map("data_situacao")
+  cnaePrincipal     String? @map("cnae_principal")
+  logradouro        String?
+  numero            String?
+  bairro            String?
+  cep               String?
+  uf                String?
+  municipio         String?
+  ddd1              String?
+  telefone1         String?
+  correioEletronico String? @map("correio_eletronico")
+
+  @@map("estabelecimentos")
+  @@schema("rfb")
+}
+
+model RfbEmpresa {
+  cnpjBasico       String   @id @map("cnpj_basico")
+  razaoSocial      String?  @map("razao_social")
+  naturezaJuridica String?  @map("natureza_juridica")
+  porte            String?
+  capitalSocial    Decimal? @map("capital_social") @db.Decimal(18, 2)
+
+  @@map("empresas")
+  @@schema("rfb")
+}
+
+model RfbSimples {
+  cnpjBasico          String  @id @map("cnpj_basico")
+  optanteSimples      String? @map("optante_simples")
+  dataOpcaoSimples    String? @map("data_opcao_simples")
+  optanteMei          String? @map("optante_mei")
+  dataExclusaoSimples String? @map("data_exclusao_simples")
+
+  @@map("simples")
+  @@schema("rfb")
+}
+
+model RfbCnae {
+  codigo    String  @id
+  descricao String?
+
+  @@map("cnaes")
+  @@schema("rfb")
+}
+
+model RfbMunicipio {
+  codigo    String  @id
+  descricao String?
+
+  @@map("municipios")
+  @@schema("rfb")
+}
+
+model RfbNatureza {
+  codigo    String  @id
+  descricao String?
+
+  @@map("naturezas")
+  @@schema("rfb")
+}
+
+model RfbControleImportacao {
+  id             Int       @id @default(autoincrement())
+  versaoRfb      String    @unique @map("versao_rfb")
+  status         String // DISPONIVEL | IMPORTANDO | CONCLUIDO | ERRO
+  dataDeteccao   DateTime? @map("data_deteccao")
+  dataInicio     DateTime? @map("data_inicio")
+  dataFim        DateTime? @map("data_fim")
+  totalRegistros BigInt?   @map("total_registros")
+  disparadoPor   String?   @map("disparado_por")
+  observacao     String?
+
+  @@map("controle_importacao")
+  @@schema("rfb")
 }
