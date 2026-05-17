@@ -84,11 +84,11 @@ export class RfbCruzamentoService {
         const [estabs, emps, simps] = await Promise.all([
           this.prisma.rfbEstabelecimento.findMany({
             where: { cnpjCompleto: { in: cnpj14 } },
-            select: { cnpjCompleto: true, situacaoCadastral: true, uf: true, municipio: true },
+            select: { cnpjCompleto: true, situacaoCadastral: true, uf: true, municipio: true, cnaePrincipal: true },
           }),
           this.prisma.rfbEmpresa.findMany({
             where: { cnpjBasico: { in: cnpj8 } },
-            select: { cnpjBasico: true, razaoSocial: true },
+            select: { cnpjBasico: true, razaoSocial: true, porte: true },
           }),
           this.prisma.rfbSimples.findMany({
             where: { cnpjBasico: { in: cnpj8 } },
@@ -96,7 +96,7 @@ export class RfbCruzamentoService {
           }),
         ]);
         const mE = new Map(estabs.map((e) => [e.cnpjCompleto, e]));
-        const mR = new Map(emps.map((e) => [e.cnpjBasico, e.razaoSocial]));
+        const mR = new Map(emps.map((e) => [e.cnpjBasico, e]));
         const mS = new Map(simps.map((s) => [s.cnpjBasico, s.optanteSimples]));
 
         const data = lote.map((r) => {
@@ -107,8 +107,11 @@ export class RfbCruzamentoService {
           return {
             cnpj: r.cnpj, origem: r.origem, filial: r.filial, codigo: r.codigo, loja: r.loja,
             razaoProtheus: r.razSoc, bloqueado: r.bloquead, achadoRfb: achado,
-            situacaoRfb: e?.situacaoCadastral ?? null, razaoRfb: mR.get(r.cnpj.slice(0, 8)) ?? null,
+            situacaoRfb: e?.situacaoCadastral ?? null,
+            razaoRfb: mR.get(r.cnpj.slice(0, 8))?.razaoSocial ?? null,
             ufRfb: e?.uf ?? null, municipioRfb: e?.municipio ?? null,
+            cnae: e?.cnaePrincipal ?? null,
+            porte: mR.get(r.cnpj.slice(0, 8))?.porte ?? null,
             optanteSimples: mS.get(r.cnpj.slice(0, 8)) ?? null, alerta,
           };
         });
@@ -141,24 +144,7 @@ export class RfbCruzamentoService {
   }) {
     const page = Math.max(1, Number(q.page) || 1);
     const pageSize = Math.min(200, Math.max(10, Number(q.pageSize) || 50));
-    const where: Record<string, unknown> = {};
-    if (q.alerta) where.alerta = q.alerta;
-    if (q.origem) where.origem = q.origem;
-    if (q.uf) where.ufRfb = q.uf;
-    if (q.search) {
-      const s = q.search.trim();
-      const digitos = s.replace(/\D/g, '');
-      // BUG corrigido: antes `{ cnpj: { contains: '' } }` (busca por nome →
-      // sem dígitos) casava TODOS os registros, anulando o filtro. Só
-      // inclui a cláusula de CNPJ quando há dígitos.
-      const or: Record<string, unknown>[] = [
-        { razaoProtheus: { contains: s, mode: 'insensitive' } },
-        { razaoRfb: { contains: s, mode: 'insensitive' } },
-        { codigo: { contains: s, mode: 'insensitive' } }, // matrícula Protheus
-      ];
-      if (digitos.length >= 2) or.push({ cnpj: { contains: digitos } });
-      where.OR = or;
-    }
+    const where = this.montarWhere(q);
     // Ordenação por clique no cabeçalho — whitelist (evita injeção de coluna).
     const SORTABLE: Record<string, string> = {
       cnpj: 'cnpj', origem: 'origem', razaoProtheus: 'razaoProtheus',
@@ -179,5 +165,83 @@ export class RfbCruzamentoService {
       this.prisma.rfbCruzamentoExec.findMany({ orderBy: { id: 'desc' }, take: 5 }),
     ]);
     return { itens, total, page, pageSize, execucoes: ultimas };
+  }
+
+  /** Where compartilhado entre consultar/facetas/export (filtros idênticos). */
+  private montarWhere(q: { alerta?: string; origem?: string; uf?: string; search?: string }): Record<string, unknown> {
+    const where: Record<string, unknown> = {};
+    if (q.alerta) where.alerta = q.alerta;
+    if (q.origem) where.origem = q.origem;
+    if (q.uf) where.ufRfb = q.uf;
+    if (q.search) {
+      const s = q.search.trim();
+      const digitos = s.replace(/\D/g, '');
+      const or: Record<string, unknown>[] = [
+        { razaoProtheus: { contains: s, mode: 'insensitive' } },
+        { razaoRfb: { contains: s, mode: 'insensitive' } },
+        { codigo: { contains: s, mode: 'insensitive' } },
+      ];
+      if (digitos.length >= 2) or.push({ cnpj: { contains: digitos } });
+      where.OR = or;
+    }
+    return where;
+  }
+
+  /** Facetas agregadas (counts por dimensão) respeitando os filtros atuais —
+   *  base da exploração "Inteligência Cadastral" (F3). */
+  async facetas(q: { alerta?: string; origem?: string; uf?: string; search?: string }) {
+    const where = this.montarWhere(q);
+    // groupBy explícito por campo (Prisma tipa pelo literal `by`); ordena/
+    // limita em JS — evita o inferno de tipos do groupBy dinâmico.
+    const norm = (rows: Array<{ _count: { _all: number } } & Record<string, unknown>>, campo: string, top?: number) => {
+      const arr = rows
+        .map((r) => ({ valor: (r[campo] as string | null) ?? '(vazio)', total: r._count._all }))
+        .sort((a, b) => b.total - a.total);
+      return top ? arr.slice(0, top) : arr;
+    };
+    const [gA, gO, gS, gU, gP, gM, gC, total] = await Promise.all([
+      this.prisma.rfbCruzamentoResultado.groupBy({ by: ['alerta'], where, _count: { _all: true } }),
+      this.prisma.rfbCruzamentoResultado.groupBy({ by: ['origem'], where, _count: { _all: true } }),
+      this.prisma.rfbCruzamentoResultado.groupBy({ by: ['situacaoRfb'], where, _count: { _all: true } }),
+      this.prisma.rfbCruzamentoResultado.groupBy({ by: ['ufRfb'], where, _count: { _all: true } }),
+      this.prisma.rfbCruzamentoResultado.groupBy({ by: ['porte'], where, _count: { _all: true } }),
+      this.prisma.rfbCruzamentoResultado.groupBy({ by: ['optanteSimples'], where, _count: { _all: true } }),
+      this.prisma.rfbCruzamentoResultado.groupBy({ by: ['cnae'], where, _count: { _all: true } }),
+      this.prisma.rfbCruzamentoResultado.count({ where }),
+    ]);
+    return {
+      total,
+      alerta: norm(gA, 'alerta'),
+      origem: norm(gO, 'origem'),
+      situacao: norm(gS, 'situacaoRfb'),
+      uf: norm(gU, 'ufRfb', 15),
+      porte: norm(gP, 'porte'),
+      simples: norm(gM, 'optanteSimples'),
+      cnaeTop: norm(gC, 'cnae', 15),
+    };
+  }
+
+  /** Export CSV do snapshot filtrado (sem paginação). Snapshot é limitado
+   *  (clientes/fornecedores), cabe em memória. */
+  async exportarCsv(q: { alerta?: string; origem?: string; uf?: string; search?: string }): Promise<string> {
+    const where = this.montarWhere(q);
+    const rows = await this.prisma.rfbCruzamentoResultado.findMany({
+      where, orderBy: [{ alerta: 'asc' }, { id: 'asc' }], take: 100000,
+    });
+    const head = [
+      'cnpj', 'origem', 'codigo', 'loja', 'razao_protheus', 'razao_rfb',
+      'situacao_rfb', 'uf_rfb', 'municipio_rfb', 'cnae', 'porte',
+      'optante_simples', 'bloqueado', 'achado_rfb', 'alerta',
+    ];
+    const esc = (v: unknown) => {
+      const s = v == null ? '' : String(v);
+      return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const linhas = rows.map((r) => [
+      r.cnpj, r.origem, r.codigo, r.loja, r.razaoProtheus, r.razaoRfb,
+      r.situacaoRfb, r.ufRfb, r.municipioRfb, r.cnae, r.porte,
+      r.optanteSimples, r.bloqueado, r.achadoRfb, r.alerta,
+    ].map(esc).join(';'));
+    return [head.join(';'), ...linhas].join('\n');
   }
 }

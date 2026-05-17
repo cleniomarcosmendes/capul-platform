@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { FiscalGuard } from '../common/guards/fiscal.guard.js';
@@ -94,5 +94,25 @@ export class RfbController {
       page: q.page ? Number(q.page) : 1,
       pageSize: q.pageSize ? Number(q.pageSize) : 50,
     });
+  }
+
+  /** Facetas agregadas (counts por dimensão) — Inteligência Cadastral (F3). */
+  @Get('cruzamento/facetas')
+  @RoleMinima('GESTOR_FISCAL')
+  async facetasCruzamento(
+    @Query() q: { alerta?: string; origem?: string; uf?: string; search?: string },
+  ) {
+    return this.cruzamento.facetas(q);
+  }
+
+  /** Export CSV do snapshot filtrado (Inteligência Cadastral / estratégia). */
+  @Get('cruzamento/export')
+  @RoleMinima('GESTOR_FISCAL')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="cruzamento-cnpj.csv"')
+  async exportCruzamento(
+    @Query() q: { alerta?: string; origem?: string; uf?: string; search?: string },
+  ) {
+    return this.cruzamento.exportarCsv(q);
   }
 }
