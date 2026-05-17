@@ -6,6 +6,7 @@ import { useToast } from '../../../components/Toast';
 import { useConfirm } from '../../../components/ConfirmDialog';
 import { useAuth } from '../../../contexts/AuthContext';
 import { extractApiError } from '../../../utils/errors';
+import { PageWrapper } from '../../../components/PageWrapper';
 
 interface Row {
   id: number; cnpj: string; origem: string; razaoProtheus: string | null;
@@ -93,9 +94,16 @@ export function RfbCruzamentoTab() {
   const ex = data?.execucoes?.[0];
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
 
-  if (loading) return <div className="text-sm text-slate-500">Carregando…</div>;
+  if (loading) {
+    return (
+      <PageWrapper title="Cruzamento CNPJ × RFB">
+        <div className="text-sm text-slate-500">Carregando…</div>
+      </PageWrapper>
+    );
+  }
 
   return (
+    <PageWrapper title="Cruzamento CNPJ × RFB">
     <div className="space-y-5">
       <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
         <Network className="h-5 w-5 flex-shrink-0 text-capul-600" />
@@ -215,5 +223,6 @@ export function RfbCruzamentoTab() {
         </div>
       )}
     </div>
+    </PageWrapper>
   );
 }

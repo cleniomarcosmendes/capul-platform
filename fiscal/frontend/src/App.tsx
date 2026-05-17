@@ -102,6 +102,14 @@ function App() {
             <Route path="cte/consulta-por-chave" element={<CteConsultaPage />} />
             <Route path="cadastro" element={<CadastroConsultaPage />} />
             <Route
+              path="rfb/cruzamento"
+              element={
+                <ProtectedRoute minRole="GESTOR_FISCAL">
+                  <RfbCruzamentoTab />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="execucoes"
               element={
                 <ProtectedRoute minRole="GESTOR_FISCAL">
@@ -199,14 +207,6 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-              <Route
-                path="rfb-cruzamento"
-                element={
-                  <ProtectedRoute minRole="GESTOR_FISCAL">
-                    <RfbCruzamentoTab />
-                  </ProtectedRoute>
-                }
-              />
             </Route>
 
             {/* Hub Operação: Diagnóstico (troubleshooting) */}
@@ -242,6 +242,7 @@ function App() {
             <Route path="operacao/ambiente" element={<Navigate to="/operacao/controle/ambiente" replace />} />
             <Route path="operacao/agendamentos" element={<Navigate to="/operacao/controle/agendamentos" replace />} />
             <Route path="operacao/limites" element={<Navigate to="/operacao/controle/limites" replace />} />
+            <Route path="operacao/controle/rfb-cruzamento" element={<Navigate to="/rfb/cruzamento" replace />} />
             <Route path="operacao/circuit-breaker" element={<Navigate to="/operacao/diagnostico/circuit-breaker" replace />} />
             <Route path="operacao/tls" element={<Navigate to="/operacao/diagnostico/tls" replace />} />
 
