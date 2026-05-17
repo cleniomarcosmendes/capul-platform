@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { FiscalGuard } from '../common/guards/fiscal.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
@@ -13,7 +14,13 @@ import { RfbCruzamentoService } from './rfb-cruzamento.service.js';
 // F1.2 — endpoints mínimos. `versoes` serve de smoke test E de base p/ a
 // UI supervisionada da F1.4 (não é throwaway). Import (F1.3) e cron (F1.4)
 // entram depois. Guard padrão do Fiscal.
+// SkipThrottle: endpoints RFB são 100% locais (DB/WebDAV de share público) —
+// NÃO tocam SEFAZ. O throttler global ('default' 200/60s) existe p/ proteger
+// o certificado SEFAZ; aplicá-lo aqui não protege nada e quebrava o polling
+// de 5s das abas (causava 429). Abuso dos POST pesados já é barrado por
+// lock de status (IMPORTANDO/RODANDO), não pelo throttler.
 @Controller('rfb')
+@SkipThrottle({ default: true, sefaz: true }) // pula AMBOS os throttlers nomeados (v6)
 @UseGuards(JwtAuthGuard, FiscalGuard, RolesGuard)
 export class RfbController {
   constructor(
@@ -23,13 +30,12 @@ export class RfbController {
     private readonly cruzamento: RfbCruzamentoService,
   ) {}
 
-  /** Versões publicadas na RFB + estado local das importações. */
+  /** Estado local (SÓ-DB, pollável). Detecção (PROPFIND) só no cron +
+   *  POST /rfb/detectar — não a cada chamada (era lento + dava 429). */
   @Get('versoes')
   @RoleMinima('GESTOR_FISCAL')
   async versoes() {
-    const det = await this.deteccao.detectar();
-    const st = await this.deteccao.status();
-    return { ...det, ...st };
+    return this.deteccao.statusDb();
   }
 
   /** Lista arquivos de uma versão (debug/inspeção; tamanhos em bytes). */
