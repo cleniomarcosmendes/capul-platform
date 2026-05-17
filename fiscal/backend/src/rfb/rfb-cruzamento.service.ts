@@ -58,10 +58,23 @@ export class RfbCruzamentoService {
           codigo: i.codigo, loja: i.loja, razSoc: i.razSoc, bloquead: !!i.bloquead,
         });
       }
-      const totalPag = r.paginacao?.totalPaginas ?? 1;
-      if (itens.length === 0 || pagina >= totalPag || pagina >= 10000) break;
+      // Paginação ROBUSTA: NÃO confiar em `?? 1` — o Protheus pode não
+      // mandar `paginacao` (campo opcional no contrato) e isso caparia
+      // tudo na 1ª página (= 500/tipo, bug do snapshot de 1000). Parar
+      // quando: página vazia · totalPaginas alcançado (se informado) ·
+      // página incompleta = fim natural dos dados (quando SEM metadados) ·
+      // trava de segurança (10000 pág × 500 = 5M, > universo SA1+SA2).
+      const totalPag = r.paginacao?.totalPaginas;
+      const pageCheia = itens.length >= POR_PAGINA;
+      const fim =
+        itens.length === 0 ||
+        (totalPag != null && pagina >= totalPag) ||
+        (totalPag == null && !pageCheia) ||
+        pagina >= 10000;
+      if (fim) break;
       pagina++;
     }
+    this.logger.log(`Cruzamento: ${out.length} regs coletados de ${tipo} (${pagina} pág.)`);
     return out;
   }
 
