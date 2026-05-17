@@ -4,8 +4,8 @@
 
 - **Autor:** Clenio Marcos — Departamento de T.I. · + Claude Code (análise aterrada no código)
 - **Data:** 16/05/2026
-- **Versão:** 1.0
-- **Status:** ✅ Plano aprovado (Clenio, 16/05/2026) — execução **gateada por F0 (disco Postgres PROD)** + PoC de 1 arquivo. NADA implementado.
+- **Versão:** 1.1 (addendum F0/PoC)
+- **Status:** ✅ Aprovado · **F0+PoC EXECUTADAS 16/05** (acesso WebDAV validado E2E, footprint medido em dado real). Disco PROD → **ponto de atenção no roteiro de deploy do Douglas** (decisão Clenio: ele verifica/ajusta com o número exato apurado). Núcleo F1 liberado. NADA implementado ainda. **Ler o Addendum F0/PoC abaixo — corrige §3/§7/§12.**
 - **Documento de origem:** `C:\Arquivos-de-projeto\clenio\Plano_Modulo_CNPJ_Capul_v3.docx` (v3 — escrito no Claude Desktop **sem acesso ao código** da plataforma). Este documento o **substitui e aprofunda**: corrige as suposições genéricas com o estado real do módulo Fiscal.
 - **Relacionado:** `docs/PLANO_MODULO_FISCAL_v2.0.md` (plano-mestre Fiscal — fonte de verdade), `docs/MELHORIAS_BACKLOG.md` (item "Perfil específico de cliente", 16/05).
 
@@ -17,6 +17,21 @@
 |---|---|---|
 | v3 (docx) | 15/05/2026 | Plano original (Claude Desktop). Tese correta (base pública sem certificado), mas trata como **módulo novo standalone**, só SA1010, consulta só por CNPJ, `truncate+insert` no DB compartilhado — por desconhecer o que o Fiscal já tem. |
 | **1.0** | **16/05/2026** | **Reescrita aterrada no código.** Decisões travadas com o Clenio: (1) **dentro do Fiscal** (sub-módulo, reusa ~70% do encanamento); (2) núcleo = cruzamento **SA1+SA2** × base local; (3) **schema isolado `rfb` + staging+swap** (não truncate no DB compartilhado); (4) busca por nome/razão social + base local como fonte da Consulta Cadastral; (5) "perfil específico de cliente" → backlog. |
+| **1.1** | **16/05/2026** | **Addendum F0/PoC executada.** Corrige premissa técnica (acesso) e números com **dado real medido**. Ver seção "Addendum F0/PoC" abaixo + `docs/poc-cnpj/`. |
+
+---
+
+## ⭐ Addendum F0/PoC (16/05/2026) — corrige §3, §7 e §12
+
+> F0 + PoC foram executadas (acesso validado de ponta a ponta + footprint medido em dado real RFB 2026-05). Detalhe e reprodução em **`docs/poc-cnpj/README.md`** + scripts. **Onde este addendum conflitar com §3/§7/§12, o addendum prevalece.**
+
+**1. §7 ERRADO — mecanismo de acesso mudou.** A RFB **não** serve mais diretório previsível com `HEAD` em `.../dados_abertos_cnpj/AAAA-MM/` (404 em todos os meses). Hoje é **Nextcloud público**: acesso via **WebDAV** `https://arquivos.receitafederal.gov.br/public.php/dav/files/<TOKEN>/Dados/Cadastros/CNPJ/<AAAA-MM>/`, auth `-u "<TOKEN>:"`. **Detecção** = `PROPFIND` na pasta `CNPJ/` (maior `AAAA-MM/`), **não** `HEAD`. **Token pode rotacionar → resolver dinâmico** seguindo o redirect do root (`/` → `index.php/s/<TOKEN>`); **valor configurável no Configurador, nunca hardcode**. Tese do "achado" intacta (share público, sem certificado, zero risco SEFAZ).
+
+**2. §3/§12 números reais (HEAD autoritativo 2026-05):** essenciais ≈ **6,4 GB zip** (não ~20 GB; sem Sócios). Footprint Postgres **medido** (com índices do plano, dado real): Estabelecimentos **250 B/linha**, Empresas **170 B/linha**, Simples ~100 B/l (estimado). Extrapolado: **steady-state ≈ ~32 GB** (schema `rfb`, tabelas+índices). **Provisionar ≥ ~70 GB livres no volume do Postgres PROD** (steady + swap por-tabela + scratch + temp build GIN trgm). Streaming valida-se rápido (4,7M linhas/21s, 0 malformadas; `pg_trgm` disponível).
+
+**3. Disco PROD:** por decisão do Clenio, **não bloqueia a F1** — vira **ponto de atenção destacado no roteiro de deploy** (Douglas verifica/ajusta o volume no servidor com o alvo ~70 GB). O job de import mantém o **pré-check de disco como gate** (recusa rodar sem espaço).
+
+**4. F1 ajustada:** o `verificacao.service.ts`/`importacao.service.ts` (§4/§7) devem usar **WebDAV (PROPFIND detecção + GET download, Range)** e **token resolvido dinâmico** (config Configurador), não `axios.head` em URL fixa.
 
 ---
 
