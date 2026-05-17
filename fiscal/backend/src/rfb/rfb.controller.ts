@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { FiscalGuard } from '../common/guards/fiscal.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
@@ -8,6 +8,7 @@ import type { FiscalAuthenticatedUser } from '../common/interfaces/jwt-payload.i
 import { RfbWebdavService } from './rfb-webdav.service.js';
 import { RfbDeteccaoService } from './rfb-deteccao.service.js';
 import { RfbImportacaoService } from './rfb-importacao.service.js';
+import { RfbCruzamentoService } from './rfb-cruzamento.service.js';
 
 // F1.2 — endpoints mínimos. `versoes` serve de smoke test E de base p/ a
 // UI supervisionada da F1.4 (não é throwaway). Import (F1.3) e cron (F1.4)
@@ -19,6 +20,7 @@ export class RfbController {
     private readonly webdav: RfbWebdavService,
     private readonly deteccao: RfbDeteccaoService,
     private readonly importacao: RfbImportacaoService,
+    private readonly cruzamento: RfbCruzamentoService,
   ) {}
 
   /** Versões publicadas na RFB + estado local das importações. */
@@ -65,5 +67,25 @@ export class RfbController {
     @CurrentUser() user: FiscalAuthenticatedUser,
   ) {
     return this.importacao.iniciar(undefined, user.id, [tabela]);
+  }
+
+  /** Dispara o cruzamento massa SA1+SA2 × base RFB local (assíncrono). */
+  @Post('cruzamento')
+  @RoleMinima('ADMIN_TI')
+  async rodarCruzamento(@CurrentUser() user: FiscalAuthenticatedUser) {
+    return this.cruzamento.iniciar(user.id);
+  }
+
+  /** Consulta o snapshot do cruzamento (paginado/filtrado) + execuções. */
+  @Get('cruzamento')
+  @RoleMinima('GESTOR_FISCAL')
+  async consultarCruzamento(
+    @Query() q: { alerta?: string; origem?: string; uf?: string; search?: string; page?: string; pageSize?: string },
+  ) {
+    return this.cruzamento.consultar({
+      alerta: q.alerta, origem: q.origem, uf: q.uf, search: q.search,
+      page: q.page ? Number(q.page) : 1,
+      pageSize: q.pageSize ? Number(q.pageSize) : 50,
+    });
   }
 }

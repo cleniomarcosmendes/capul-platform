@@ -907,3 +907,42 @@ model RfbControleImportacao {
   @@map("controle_importacao")
   @@schema("rfb")
 }
+
+model RfbCruzamentoResultado {
+  id              Int      @id @default(autoincrement())
+  cnpj            String
+  origem          String // SA1010 | SA2010
+  filial          String?
+  codigo          String?
+  loja            String?
+  razaoProtheus   String?  @map("razao_protheus")
+  bloqueado       Boolean  @default(false)
+  achadoRfb       Boolean  @map("achado_rfb")
+  situacaoRfb     String?  @map("situacao_rfb")
+  razaoRfb        String?  @map("razao_rfb")
+  ufRfb           String?  @map("uf_rfb")
+  municipioRfb    String?  @map("municipio_rfb")
+  optanteSimples  String?  @map("optante_simples")
+  alerta          String // OK | ATENCAO | IRREGULAR | NAO_ENCONTRADO
+  atualizadoEm    DateTime @default(now()) @map("atualizado_em")
+
+  @@map("cruzamento_resultado")
+  @@schema("rfb")
+}
+
+model RfbCruzamentoExec {
+  id              Int       @id @default(autoincrement())
+  status          String // RODANDO | CONCLUIDO | ERRO
+  iniciado        DateTime  @default(now())
+  fim             DateTime?
+  total           Int?
+  alertaIrregular Int?      @map("alerta_irregular")
+  alertaAtencao   Int?      @map("alerta_atencao")
+  alertaOk        Int?      @map("alerta_ok")
+  naoEncontrado   Int?      @map("nao_encontrado")
+  disparadoPor    String?   @map("disparado_por")
+  observacao      String?
+
+  @@map("cruzamento_exec")
+  @@schema("rfb")
+}
