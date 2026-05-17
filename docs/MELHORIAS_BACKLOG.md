@@ -19,6 +19,29 @@ esquecer — e sem poluir a conversa principal.
 
 ## Fiscal — Qualidade de dados
 
+### ⏳ 2026-05-16 — "Perfil específico de cliente" (segmentações salvas sobre a base RFB)
+
+**Contexto:** Refino do "achado" da base pública CNPJ (RFB dados abertos —
+ver `docs/PLANO_MODULO_CNPJ_RFB_v1.md` e memória
+`project-fiscal-cnpj-base-publica`). O núcleo (cruzamento SA1+SA2 × base
+RFB local + Inteligência Cadastral exploratória) será desenvolvido
+primeiro. Este item é a camada **acima**: segmentações **nomeadas e
+reutilizáveis** ("perfil de cliente/fornecedor").
+
+**Proposta:** salvar filtros compostos como perfil (ex.: "fornecedores
+ativos optantes Simples no CNAE X na minha região"; "clientes que viraram
+INAPTO desde o último snapshot"). Detecção de **mudança mês-a-mês** entre
+snapshots da RFB reusando o `fiscal.CadastroHistorico` já existente —
+alertar quando um perfil monitorado muda entre importações.
+
+**Adiada porque:** decisão Clenio 16/05 — tratar depois do núcleo. Depende
+da base RFB local + da tela de Inteligência Cadastral existirem primeiro
+(Fases 1-3 do plano). Não bloqueia o "achado" (cruzamento).
+
+**Por quê vale:** transforma o cadastro baixado em inteligência
+comercial/compliance recorrente (não consulta pontual) — é a "abertura de
+oportunidade" que o Clenio citou.
+
 ### ⏳ 2026-04-21 — Corrigir worker do cruzamento para gravar `vinculos_protheus` completos
 
 **Contexto:** O campo `fiscal.cadastro_contribuinte.vinculos_protheus` (JSON)
