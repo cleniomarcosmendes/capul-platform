@@ -318,6 +318,38 @@ Características: busca textual (nome/razão), facetas combináveis, resumo agre
 
 ---
 
+## 15. F1.6 — Painel de progresso do import (escopo B — APROVADO 17/05/2026; executar pós-import)
+
+**Motivação:** num import de 2-3h a aba "Base CNPJ (RFB)" é caixa-preta — `Status` IMPORTANDO congelado, `Registros`/`Observação` só mudam por tabela concluída, sem tempo decorrido. Fere a regra "sem caixa-preta" do módulo (esta tela *existe* pra dar visibilidade supervisionada). Decisão Clenio: escopo **B** (painel robusto), não paliativo.
+
+**Restrição de execução:** backend exige rebuild de `capul-fiscal-api` → implementar **só após** o import 60M corrente concluir (rebuild mataria a carga em curso).
+
+### Backend
+- **Migration idempotente** (hand-written, `rfb.controle_importacao`, via `fiscal-migrate`; +model Prisma `RfbControleImportacao`):
+  - `tabela_atual TEXT`, `arquivo_atual INT`, `arquivos_total INT`, `linhas_acumuladas BIGINT`, `atualizado_em TIMESTAMPTZ`, `progresso JSONB` (mapa por tabela `{cnaes:{status,linhas},…}`; status ∈ pendente|rodando|concluida|erro).
+  - JSONB = lugar canônico evolutivo (mesma filosofia das preferências de usuário JSONB) — evita migration por nova dimensão.
+- **`RfbImportacaoService`**:
+  - início de cada tabela: `tabela_atual`, `arquivos_total=spec.arquivos.length`, `arquivo_atual=0`, `progresso[nome]={status:'rodando',linhas:0}`, `atualizado_em=now`.
+  - a cada arquivo concluído (ponto já existente do log `RFB <t>: <arq> ok (acum N)`, ~26 no total): `arquivo_atual=i+1`, `linhas_acumuladas=N`, `progresso[nome].linhas=N`, `atualizado_em=now` (prisma.update barato).
+  - pós-swap da tabela: `progresso[nome]={status:'concluida',linhas:totalTabela}`.
+  - CONCLUIDO: limpa `tabela_atual`. ERRO: `progresso[nome].status='erro'` (diagnóstico).
+- **`GET /rfb/versoes`** (`RfbDeteccaoService.statusDb()` + controller): expõe os campos no row mais recente. `linhasAcumuladas` BigInt→Number no boundary (gotcha conhecida).
+
+### Frontend (`RfbTab.tsx`)
+- Estende `ControleRow` com os campos novos.
+- Row mais recente = IMPORTANDO → renderiza **painel** acima do histórico:
+  - "⏱ Rodando há HH:MM:SS" — tick local 1s a partir de `dataInicio` (poll de 5s já existe).
+  - **Checklist fixo das 6 tabelas** na ordem (cnaes→municipios→naturezas→simples→empresas→estabelecimentos): ✓ verde concluída / ⏳ spinner azul rodando / · cinza pendente; mostra linhas/tabela do `progresso`.
+  - Tabela em curso multi-arquivo: "arquivo {arquivoAtual}/{arquivosTotal}" + barra fina.
+  - Throughput: Δ`linhasAcumuladas`/Δt entre 2 polls (amostra anterior em ref) → "≈ X mil/s".
+  - Staleness: "atualizado há Ns"; se `atualizadoEm` muito antigo, aviso sutil.
+- Histórico atual permanece p/ runs passados. Cards "Já importada?/Nova disponível" → "Importando…" enquanto IMPORTANDO (bônus pequeno).
+
+### Done quando
+Builds limpos, app 200, painel anima durante import real (validável no próximo import mensal ou re-run), histórico intacto. Commit em `feat/fiscal-cnpj-rfb`. Tarefa #30.
+
+---
+
 ## Apêndice — Fonte e referências
 
 - Download oficial RFB: `https://arquivos.receitafederal.gov.br/dados/cnpj/dados_abertos_cnpj/` (partição `AAAA-MM/`)
