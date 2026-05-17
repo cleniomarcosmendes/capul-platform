@@ -23,6 +23,7 @@ import { CadastroModule } from './cadastro/cadastro.module.js';
 import { CruzamentoModule } from './cruzamento/cruzamento.module.js';
 import { RelatorioModule } from './relatorio/relatorio.module.js';
 import { HistoricoModule } from './historico/historico.module.js';
+import { RfbModule } from './rfb/rfb.module.js';
 import { LimiteDiarioModule } from './limite-diario/limite-diario.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { FiliaisModule } from './filiais/filiais.module.js';
@@ -92,6 +93,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
     DashboardModule,
     RelatorioModule,
     HistoricoModule,
+    RfbModule,
   ],
   providers: [
     // Ordem: Throttler primeiro (rate limit antes de auth) → JwtAuthGuard depois.
