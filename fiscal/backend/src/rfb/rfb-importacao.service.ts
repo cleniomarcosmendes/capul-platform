@@ -91,7 +91,15 @@ const ORDEM = ['cnaes', 'municipios', 'naturezas', 'simples', 'empresas', 'estab
 
 function escTexto(v: string | null): string {
   if (v === null) return '\\N';
-  return v.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+  // Dados abertos da RFB trazem bytes NUL (0x00) espúrios em campos texto
+  // (estabelecimentos: nome_fantasia/logradouro etc. — dado sujo conhecido).
+  // O tipo TEXT do Postgres NÃO aceita 0x00 em hipótese alguma → o COPY
+  // aborta com 'invalid byte sequence for encoding "UTF8": 0x00' e perde a
+  // tabela inteira. Removemos o NUL antes de qualquer escaping (incidente
+  // 17/05: import 60M falhou no Estabelecimentos4.zip após 1h46).
+  return v
+    .replace(/\u0000/g, '')
+    .replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
 }
 
 @Injectable()
