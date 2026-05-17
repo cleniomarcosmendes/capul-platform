@@ -146,11 +146,17 @@ export class RfbCruzamentoService {
     if (q.uf) where.ufRfb = q.uf;
     if (q.search) {
       const s = q.search.trim();
-      where.OR = [
-        { cnpj: { contains: s.replace(/\D/g, '') } },
+      const digitos = s.replace(/\D/g, '');
+      // BUG corrigido: antes `{ cnpj: { contains: '' } }` (busca por nome →
+      // sem dígitos) casava TODOS os registros, anulando o filtro. Só
+      // inclui a cláusula de CNPJ quando há dígitos.
+      const or: Record<string, unknown>[] = [
         { razaoProtheus: { contains: s, mode: 'insensitive' } },
         { razaoRfb: { contains: s, mode: 'insensitive' } },
+        { codigo: { contains: s, mode: 'insensitive' } }, // matrícula Protheus
       ];
+      if (digitos.length >= 2) or.push({ cnpj: { contains: digitos } });
+      where.OR = or;
     }
     const [itens, total, ultimas] = await Promise.all([
       this.prisma.rfbCruzamentoResultado.findMany({
