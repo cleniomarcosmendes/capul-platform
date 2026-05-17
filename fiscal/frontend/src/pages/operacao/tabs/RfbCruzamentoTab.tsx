@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Network, Play, RefreshCw } from 'lucide-react';
+import { Network, Play, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { fiscalApi } from '../../../services/api';
 import { Button } from '../../../components/Button';
 import { useToast } from '../../../components/Toast';
@@ -33,7 +33,10 @@ export function RfbCruzamentoTab() {
   const [data, setData] = useState<Resp | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
-  const [f, setF] = useState({ alerta: '', origem: '', uf: '', search: '', page: 1 });
+  const [f, setF] = useState({
+    alerta: '', origem: '', uf: '', search: '', page: 1,
+    sort: '' as string, dir: 'asc' as 'asc' | 'desc',
+  });
   const toast = useToast();
   const confirm = useConfirm();
   const { fiscalRole } = useAuth();
@@ -47,6 +50,7 @@ export function RfbCruzamentoTab() {
       if (f.origem) params.set('origem', f.origem);
       if (f.uf) params.set('uf', f.uf);
       if (f.search) params.set('search', f.search);
+      if (f.sort) { params.set('sort', f.sort); params.set('dir', f.dir); }
       params.set('page', String(f.page));
       const { data } = await fiscalApi.get<Resp>(`/rfb/cruzamento?${params}`);
       setData(data);
@@ -93,6 +97,29 @@ export function RfbCruzamentoTab() {
 
   const ex = data?.execucoes?.[0];
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+
+  // Cabeçalho clicável: 1º clique ordena asc, 2º no mesmo desc; troca de
+  // coluna volta a asc. Reseta página. Ordenação é server-side (whitelist).
+  const Th = ({ col, label }: { col: string; label: string }) => {
+    const active = f.sort === col;
+    const Icon = active ? (f.dir === 'asc' ? ChevronUp : ChevronDown) : ChevronsUpDown;
+    return (
+      <th className="px-3 py-2">
+        <button
+          type="button"
+          onClick={() => setF((p) => ({
+            ...p, page: 1, sort: col,
+            dir: p.sort === col && p.dir === 'asc' ? 'desc' : 'asc',
+          }))}
+          className={`inline-flex items-center gap-1 hover:text-slate-800 ${active ? 'text-slate-800 font-semibold' : ''}`}
+          title="Ordenar"
+        >
+          {label}
+          <Icon className={`h-3 w-3 ${active ? 'text-capul-600' : 'text-slate-300'}`} />
+        </button>
+      </th>
+    );
+  };
 
   if (loading) {
     return (
@@ -179,10 +206,13 @@ export function RfbCruzamentoTab() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs text-slate-500">
             <tr>
-              <th className="px-3 py-2">CNPJ</th><th className="px-3 py-2">Origem</th>
-              <th className="px-3 py-2">Razão (Protheus)</th><th className="px-3 py-2">Razão (RFB)</th>
-              <th className="px-3 py-2">Sit. RFB</th><th className="px-3 py-2">UF</th>
-              <th className="px-3 py-2">Alerta</th>
+              <Th col="cnpj" label="CNPJ" />
+              <Th col="origem" label="Origem" />
+              <Th col="razaoProtheus" label="Razão (Protheus)" />
+              <Th col="razaoRfb" label="Razão (RFB)" />
+              <Th col="situacaoRfb" label="Sit. RFB" />
+              <Th col="ufRfb" label="UF" />
+              <Th col="alerta" label="Alerta" />
             </tr>
           </thead>
           <tbody>

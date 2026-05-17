@@ -136,7 +136,8 @@ export class RfbCruzamentoService {
 
   /** Consulta paginada/filtrada do snapshot + resumo da última execução. */
   async consultar(q: {
-    alerta?: string; origem?: string; uf?: string; search?: string; page?: number; pageSize?: number;
+    alerta?: string; origem?: string; uf?: string; search?: string;
+    sort?: string; dir?: string; page?: number; pageSize?: number;
   }) {
     const page = Math.max(1, Number(q.page) || 1);
     const pageSize = Math.min(200, Math.max(10, Number(q.pageSize) || 50));
@@ -158,9 +159,20 @@ export class RfbCruzamentoService {
       if (digitos.length >= 2) or.push({ cnpj: { contains: digitos } });
       where.OR = or;
     }
+    // Ordenação por clique no cabeçalho — whitelist (evita injeção de coluna).
+    const SORTABLE: Record<string, string> = {
+      cnpj: 'cnpj', origem: 'origem', razaoProtheus: 'razaoProtheus',
+      razaoRfb: 'razaoRfb', situacaoRfb: 'situacaoRfb', ufRfb: 'ufRfb', alerta: 'alerta',
+    };
+    const col = q.sort && SORTABLE[q.sort];
+    const dir = q.dir === 'desc' ? 'desc' : 'asc';
+    const orderBy = col
+      ? [{ [col]: dir }, { id: 'asc' as const }]
+      : [{ alerta: 'asc' as const }, { id: 'asc' as const }];
+
     const [itens, total, ultimas] = await Promise.all([
       this.prisma.rfbCruzamentoResultado.findMany({
-        where, orderBy: [{ alerta: 'asc' }, { id: 'asc' }],
+        where, orderBy,
         skip: (page - 1) * pageSize, take: pageSize,
       }),
       this.prisma.rfbCruzamentoResultado.count({ where }),
