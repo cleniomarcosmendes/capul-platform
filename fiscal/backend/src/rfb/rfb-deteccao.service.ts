@@ -34,12 +34,18 @@ export class RfbDeteccaoService {
     return { versoes, maisRecente, importada, novaDisponivel: !importada };
   }
 
-  /** Histórico recente de importações (p/ UI F1.4). */
+  /** Histórico recente de importações (p/ UI F1.4). totalRegistros é BigInt
+   *  no Prisma — convertido p/ number aqui (RFB ~150M << 2^53; JSON não
+   *  serializa BigInt). Boundary único de leitura desses registros. */
   async status() {
-    const ultimas = await this.prisma.rfbControleImportacao.findMany({
+    const rows = await this.prisma.rfbControleImportacao.findMany({
       orderBy: { versaoRfb: 'desc' },
       take: 12,
     });
+    const ultimas = rows.map((r) => ({
+      ...r,
+      totalRegistros: r.totalRegistros == null ? null : Number(r.totalRegistros),
+    }));
     return { ultimas };
   }
 }
