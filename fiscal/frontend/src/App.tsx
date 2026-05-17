@@ -25,6 +25,7 @@ import { CadeiaTlsTab } from './pages/operacao/tabs/CadeiaTlsTab';
 import { CteDistribuicaoTab } from './pages/operacao/tabs/CteDistribuicaoTab';
 import { CteHistoricoTab } from './pages/operacao/tabs/CteHistoricoTab';
 import { RfbTab } from './pages/operacao/tabs/RfbTab';
+import { RfbCruzamentoTab } from './pages/operacao/tabs/RfbCruzamentoTab';
 import type { RoleFiscal } from './types';
 
 function ProtectedRoute({
@@ -195,6 +196,14 @@ function App() {
                 element={
                   <ProtectedRoute minRole="GESTOR_FISCAL">
                     <RfbTab />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="rfb-cruzamento"
+                element={
+                  <ProtectedRoute minRole="GESTOR_FISCAL">
+                    <RfbCruzamentoTab />
                   </ProtectedRoute>
                 }
               />
