@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Globe, Clock, ShieldAlert, Gauge, Truck, History } from 'lucide-react';
+import { Globe, Clock, ShieldAlert, Gauge, Truck, History, Database } from 'lucide-react';
 import { PageWrapper } from '../../components/PageWrapper';
 import { useAuth, hasMinRole } from '../../contexts/AuthContext';
 import type { RoleFiscal } from '../../types';
@@ -18,6 +18,7 @@ const TABS: TabDef[] = [
   { path: 'limites', label: 'Limites SEFAZ', icon: Gauge, minRole: 'GESTOR_FISCAL' },
   { path: 'cte-distribuicao', label: 'CT-e Distribuição', icon: Truck, minRole: 'GESTOR_FISCAL' },
   { path: 'cte-historico', label: 'CT-e Histórico', icon: History, minRole: 'GESTOR_FISCAL' },
+  { path: 'rfb', label: 'Base CNPJ (RFB)', icon: Database, minRole: 'GESTOR_FISCAL' },
 ];
 
 /**
