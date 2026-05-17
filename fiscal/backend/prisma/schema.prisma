@@ -922,6 +922,7 @@ model RfbCruzamentoResultado {
   razaoRfb        String?  @map("razao_rfb")
   ufRfb           String?  @map("uf_rfb")
   municipioRfb    String?  @map("municipio_rfb")
+  dataSituacao    String?  @map("data_situacao")
   cnae            String?
   porte           String?
   optanteSimples  String?  @map("optante_simples")

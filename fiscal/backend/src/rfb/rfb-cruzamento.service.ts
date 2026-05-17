@@ -84,7 +84,7 @@ export class RfbCruzamentoService {
         const [estabs, emps, simps] = await Promise.all([
           this.prisma.rfbEstabelecimento.findMany({
             where: { cnpjCompleto: { in: cnpj14 } },
-            select: { cnpjCompleto: true, situacaoCadastral: true, uf: true, municipio: true, cnaePrincipal: true },
+            select: { cnpjCompleto: true, situacaoCadastral: true, dataSituacao: true, uf: true, municipio: true, cnaePrincipal: true },
           }),
           this.prisma.rfbEmpresa.findMany({
             where: { cnpjBasico: { in: cnpj8 } },
@@ -108,6 +108,7 @@ export class RfbCruzamentoService {
             cnpj: r.cnpj, origem: r.origem, filial: r.filial, codigo: r.codigo, loja: r.loja,
             razaoProtheus: r.razSoc, bloqueado: r.bloquead, achadoRfb: achado,
             situacaoRfb: e?.situacaoCadastral ?? null,
+            dataSituacao: e?.dataSituacao ?? null,
             razaoRfb: mR.get(r.cnpj.slice(0, 8))?.razaoSocial ?? null,
             ufRfb: e?.uf ?? null, municipioRfb: e?.municipio ?? null,
             cnae: e?.cnaePrincipal ?? null,
@@ -139,8 +140,8 @@ export class RfbCruzamentoService {
 
   /** Consulta paginada/filtrada do snapshot + resumo da última execução. */
   async consultar(q: {
-    alerta?: string; origem?: string; uf?: string; search?: string;
-    sort?: string; dir?: string; page?: number; pageSize?: number;
+    alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string;
+    soRecente?: string; search?: string; sort?: string; dir?: string; page?: number; pageSize?: number;
   }) {
     const page = Math.max(1, Number(q.page) || 1);
     const pageSize = Math.min(200, Math.max(10, Number(q.pageSize) || 50));
@@ -167,12 +168,27 @@ export class RfbCruzamentoService {
     return { itens, total, page, pageSize, execucoes: ultimas };
   }
 
+  /** "Situação recente" SEM histórico: usa rfb.data_situacao (AAAAMMDD) vs
+   *  hoje-N dias. Comparação lexicográfica de YYYYMMDD = cronológica. */
+  private cutoffRecente(dias = 90): string {
+    const d = new Date();
+    d.setDate(d.getDate() - dias);
+    return d.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+  }
+
   /** Where compartilhado entre consultar/facetas/export (filtros idênticos). */
-  private montarWhere(q: { alerta?: string; origem?: string; uf?: string; search?: string }): Record<string, unknown> {
+  private montarWhere(q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string }): Record<string, unknown> {
     const where: Record<string, unknown> = {};
     if (q.alerta) where.alerta = q.alerta;
     if (q.origem) where.origem = q.origem;
     if (q.uf) where.ufRfb = q.uf;
+    if (q.situacao) where.situacaoRfb = q.situacao;
+    if (q.porte) where.porte = q.porte;
+    if (q.simples) where.optanteSimples = q.simples;
+    if (q.soRecente === '1' || q.soRecente === 'true') {
+      // data_situacao >= hoje-90d (exclui null automaticamente no Prisma).
+      where.dataSituacao = { gte: this.cutoffRecente(90) };
+    }
     if (q.search) {
       const s = q.search.trim();
       const digitos = s.replace(/\D/g, '');
@@ -189,7 +205,7 @@ export class RfbCruzamentoService {
 
   /** Facetas agregadas (counts por dimensão) respeitando os filtros atuais —
    *  base da exploração "Inteligência Cadastral" (F3). */
-  async facetas(q: { alerta?: string; origem?: string; uf?: string; search?: string }) {
+  async facetas(q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string }) {
     const where = this.montarWhere(q);
     // groupBy explícito por campo (Prisma tipa pelo literal `by`); ordena/
     // limita em JS — evita o inferno de tipos do groupBy dinâmico.
@@ -223,14 +239,14 @@ export class RfbCruzamentoService {
 
   /** Export CSV do snapshot filtrado (sem paginação). Snapshot é limitado
    *  (clientes/fornecedores), cabe em memória. */
-  async exportarCsv(q: { alerta?: string; origem?: string; uf?: string; search?: string }): Promise<string> {
+  async exportarCsv(q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string }): Promise<string> {
     const where = this.montarWhere(q);
     const rows = await this.prisma.rfbCruzamentoResultado.findMany({
       where, orderBy: [{ alerta: 'asc' }, { id: 'asc' }], take: 100000,
     });
     const head = [
       'cnpj', 'origem', 'codigo', 'loja', 'razao_protheus', 'razao_rfb',
-      'situacao_rfb', 'uf_rfb', 'municipio_rfb', 'cnae', 'porte',
+      'situacao_rfb', 'data_situacao', 'uf_rfb', 'municipio_rfb', 'cnae', 'porte',
       'optante_simples', 'bloqueado', 'achado_rfb', 'alerta',
     ];
     const esc = (v: unknown) => {
@@ -239,7 +255,7 @@ export class RfbCruzamentoService {
     };
     const linhas = rows.map((r) => [
       r.cnpj, r.origem, r.codigo, r.loja, r.razaoProtheus, r.razaoRfb,
-      r.situacaoRfb, r.ufRfb, r.municipioRfb, r.cnae, r.porte,
+      r.situacaoRfb, r.dataSituacao, r.ufRfb, r.municipioRfb, r.cnae, r.porte,
       r.optanteSimples, r.bloqueado, r.achadoRfb, r.alerta,
     ].map(esc).join(';'));
     return [head.join(';'), ...linhas].join('\n');
