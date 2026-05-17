@@ -1,5 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { Info, RefreshCw, DownloadCloud, Clock, Save } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import {
+  Info, RefreshCw, DownloadCloud, Clock, Save,
+  Activity, CheckCircle2, Loader2, Circle, XCircle,
+} from 'lucide-react';
 import { fiscalApi } from '../../../services/api';
 import { Button } from '../../../components/Button';
 import { useToast } from '../../../components/Toast';
@@ -7,6 +10,7 @@ import { useConfirm } from '../../../components/ConfirmDialog';
 import { useAuth } from '../../../contexts/AuthContext';
 import { extractApiError } from '../../../utils/errors';
 
+type ProgStatus = 'pendente' | 'rodando' | 'concluida' | 'erro';
 interface ControleRow {
   id: number;
   versaoRfb: string;
@@ -17,6 +21,13 @@ interface ControleRow {
   totalRegistros: number | null;
   disparadoPor: string | null;
   observacao: string | null;
+  // F1.6 — progresso granular do import
+  tabelaAtual: string | null;
+  arquivoAtual: number | null;
+  arquivosTotal: number | null;
+  linhasAcumuladas: number | null;
+  atualizadoEm: string | null;
+  progresso: Record<string, { status: ProgStatus; linhas: number }> | null;
 }
 interface VersoesResp {
   versoes: string[];
@@ -28,6 +39,7 @@ interface VersoesResp {
 }
 
 const fmt = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
+const hora = (s: string | null) => (s ? new Date(s).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
 const STATUS_CLS: Record<string, string> = {
   DISPONIVEL: 'bg-amber-100 text-amber-800',
   IMPORTANDO: 'bg-blue-100 text-blue-800',
@@ -35,17 +47,48 @@ const STATUS_CLS: Record<string, string> = {
   ERRO: 'bg-red-100 text-red-800',
 };
 
+// Ordem real de processamento no backend (RfbImportacaoService.ORDEM).
+const TABELAS: Array<{ k: string; label: string }> = [
+  { k: 'cnaes', label: 'CNAEs' },
+  { k: 'municipios', label: 'Municípios' },
+  { k: 'naturezas', label: 'Naturezas jurídicas' },
+  { k: 'simples', label: 'Simples / MEI' },
+  { k: 'empresas', label: 'Empresas' },
+  { k: 'estabelecimentos', label: 'Estabelecimentos' },
+];
+
+function dur(ms: number): string {
+  if (ms < 0 || !isFinite(ms)) return '—';
+  const s = Math.floor(ms / 1000);
+  const hh = Math.floor(s / 3600);
+  const mm = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(hh)}:${p(mm)}:${p(ss)}`;
+}
+function statusDe(
+  k: string, prog: ControleRow['progresso'], tabelaAtual: string | null,
+): ProgStatus {
+  const st = prog?.[k]?.status;
+  if (st) return st;
+  return k === tabelaAtual ? 'rodando' : 'pendente';
+}
+
 /**
  * Aba "Base CNPJ (RFB)" — visibilidade supervisionada do módulo de base
  * pública (regra: nada de cron/integração caixa-preta). Estado das versões,
- * histórico, gatilhos manuais e a agenda de detecção CONFIGURÁVEL pelo
- * admin. IMPORT é SEMPRE manual (ADMIN_TI).
+ * histórico, gatilhos manuais, agenda de detecção CONFIGURÁVEL e — durante
+ * um import (1-2h) — painel de progresso ao vivo (F1.6, escopo B). IMPORT
+ * é SEMPRE manual (ADMIN_TI).
  */
 export function RfbTab() {
   const [data, setData] = useState<VersoesResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [cronInput, setCronInput] = useState('');
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [taxa, setTaxa] = useState<number | null>(null); // linhas/s
+  const amostra = useRef<{ ts: number; linhas: number } | null>(null);
   const toast = useToast();
   const confirm = useConfirm();
   const { fiscalRole } = useAuth();
@@ -71,16 +114,47 @@ export function RfbTab() {
     return () => { if (timer.current) clearInterval(timer.current); };
   }, [carregar]);
 
+  const latest = useMemo(
+    () => data?.ultimas?.find((u) => u.status === 'IMPORTANDO') ?? data?.ultimas?.[0] ?? null,
+    [data],
+  );
+  const importando = latest?.status === 'IMPORTANDO';
+
   // Poll enquanto houver import em andamento.
   useEffect(() => {
-    const importando = data?.ultimas?.some((u) => u.status === 'IMPORTANDO');
     if (importando && !timer.current) {
       timer.current = setInterval(carregar, 5000);
     } else if (!importando && timer.current) {
       clearInterval(timer.current);
       timer.current = null;
     }
-  }, [data, carregar]);
+  }, [importando, carregar]);
+
+  // Relógio local 1s p/ "rodando há HH:MM:SS" (independe do poll de 5s).
+  useEffect(() => {
+    if (!importando) return;
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [importando]);
+
+  // Throughput: Δ linhas / Δ tempo entre dois polls. linhas_acumuladas
+  // zera na troca de tabela → delta negativo é ignorado (não é regressão).
+  useEffect(() => {
+    if (!importando || latest?.linhasAcumuladas == null) {
+      amostra.current = null;
+      setTaxa(null);
+      return;
+    }
+    const agora = Date.now();
+    const linhas = latest.linhasAcumuladas;
+    const ant = amostra.current;
+    if (ant && agora > ant.ts) {
+      const dl = linhas - ant.linhas;
+      const dt = (agora - ant.ts) / 1000;
+      if (dl > 0 && dt > 0) setTaxa(dl / dt);
+    }
+    amostra.current = { ts: agora, linhas };
+  }, [data, importando, latest]);
 
   async function acao(fn: () => Promise<unknown>, okMsg: string) {
     setActing(true);
@@ -102,7 +176,7 @@ export function RfbTab() {
       description:
         'Baixa e importa ~60M de registros (Estabelecimentos+Empresas+Simples+domínios). ' +
         'Pode levar horas e exige disco livre suficiente no Postgres. Roda em background; ' +
-        'acompanhe o progresso aqui.',
+        'acompanhe o progresso aqui (painel ao vivo).',
       variant: 'warning',
       confirmLabel: 'Importar tudo',
     });
@@ -115,6 +189,10 @@ export function RfbTab() {
     );
 
   if (loading) return <div className="text-sm text-slate-500">Carregando…</div>;
+
+  const arqTotal = latest?.arquivosTotal ?? 0;
+  const arqAtual = latest?.arquivoAtual ?? 0;
+  const semUpdateMs = latest?.atualizadoEm ? nowMs - new Date(latest.atualizadoEm).getTime() : 0;
 
   return (
     <div className="space-y-5">
@@ -136,6 +214,96 @@ export function RfbTab() {
         </div>
       </div>
 
+      {/* Painel de progresso ao vivo (F1.6) — só durante import */}
+      {importando && latest && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
+              <Activity className="h-4 w-4 animate-pulse text-blue-600" />
+              Importação em andamento — versão {latest.versaoRfb}
+            </div>
+            <div className="font-mono text-sm text-blue-900">
+              ⏱ rodando há {dur(nowMs - new Date(latest.dataInicio ?? Date.now()).getTime())}
+            </div>
+          </div>
+
+          {/* Tabela atual + arquivo X/Y + barra */}
+          {latest.tabelaAtual && (
+            <div className="mt-3 text-sm text-slate-700">
+              <span className="font-medium">
+                {TABELAS.find((t) => t.k === latest.tabelaAtual)?.label ?? latest.tabelaAtual}
+              </span>
+              {arqTotal > 1 && (
+                <>
+                  {' '}— arquivo {arqAtual}/{arqTotal}
+                  <div className="mt-1 h-1.5 w-full max-w-md overflow-hidden rounded bg-blue-100">
+                    <div
+                      className="h-full rounded bg-blue-500 transition-all"
+                      style={{ width: `${Math.min(100, Math.round((arqAtual / arqTotal) * 100))}%` }}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Throughput + acumulado */}
+          <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-600">
+            <span>
+              Acumulado nesta tabela:{' '}
+              <strong className="tabular-nums">
+                {(latest.linhasAcumuladas ?? 0).toLocaleString('pt-BR')}
+              </strong>
+            </span>
+            {taxa != null && taxa > 0 && (
+              <span>
+                Throughput: <strong className="tabular-nums">
+                  ≈ {(taxa / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil linhas/s
+                </strong>
+              </span>
+            )}
+            <span>
+              Última atualização: {hora(latest.atualizadoEm)}
+              {semUpdateMs > 25 * 60_000 && (
+                <span className="ml-1 text-amber-600">
+                  (há {Math.round(semUpdateMs / 60_000)} min — verifique se não travou)
+                </span>
+              )}
+            </span>
+          </div>
+
+          {/* Checklist das 6 tabelas */}
+          <ul className="mt-3 grid grid-cols-1 gap-1 sm:grid-cols-2">
+            {TABELAS.map(({ k, label }) => {
+              const st = statusDe(k, latest.progresso, latest.tabelaAtual);
+              const n = latest.progresso?.[k]?.linhas;
+              const ic =
+                st === 'concluida' ? <CheckCircle2 className="h-4 w-4 text-green-600" />
+                : st === 'rodando' ? <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                : st === 'erro' ? <XCircle className="h-4 w-4 text-red-600" />
+                : <Circle className="h-4 w-4 text-slate-300" />;
+              return (
+                <li key={k} className="flex items-center gap-2 text-sm">
+                  {ic}
+                  <span className={st === 'pendente' ? 'text-slate-400' : 'text-slate-700'}>{label}</span>
+                  {n != null && n > 0 && (
+                    <span className="tabular-nums text-xs text-slate-500">
+                      · {n.toLocaleString('pt-BR')}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+
+          <p className="mt-3 text-xs text-slate-500">
+            Arquivos grandes (Estabelecimentos/Empresas) levam minutos por etapa — ficar
+            sem atualização <em>durante</em> um arquivo é normal (COPY em massa). O painel
+            atualiza sozinho a cada 5s.
+          </p>
+        </div>
+      )}
+
       {/* Estado atual */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-lg border border-slate-200 p-4">
@@ -144,7 +312,9 @@ export function RfbTab() {
         </div>
         <div className="rounded-lg border border-slate-200 p-4">
           <div className="text-xs text-slate-500">Já importada?</div>
-          <div className="mt-1 text-lg font-semibold text-slate-800">{data?.importada ? 'Sim' : 'Não'}</div>
+          <div className={`mt-1 text-lg font-semibold ${importando ? 'text-blue-600' : 'text-slate-800'}`}>
+            {importando ? 'Importando…' : data?.importada ? 'Sim' : 'Não'}
+          </div>
         </div>
         <div className="rounded-lg border border-slate-200 p-4">
           <div className="text-xs text-slate-500">Nova disponível</div>
@@ -191,8 +361,9 @@ export function RfbTab() {
           <Button variant="secondary" onClick={detectar} disabled={acting}>
             <RefreshCw className="mr-1.5 h-4 w-4" /> Detectar agora
           </Button>
-          <Button onClick={importarTudo} disabled={acting}>
-            <DownloadCloud className="mr-1.5 h-4 w-4" /> Importar base completa
+          <Button onClick={importarTudo} disabled={acting || importando}>
+            <DownloadCloud className="mr-1.5 h-4 w-4" />
+            {importando ? 'Importação em andamento…' : 'Importar base completa'}
           </Button>
         </div>
       )}
