@@ -13,6 +13,7 @@ interface Row {
   id: number; cnpj: string; origem: string; razaoProtheus: string | null;
   razaoRfb: string | null; situacaoRfb: string | null; ufRfb: string | null;
   cnae: string | null; porte: string | null; optanteSimples: string | null;
+  dataSituacao: string | null;
   bloqueado: boolean; achadoRfb: boolean; alerta: string;
 }
 interface Exec {
@@ -26,6 +27,17 @@ interface Facetas {
   total: number; alerta: FacetItem[]; origem: FacetItem[]; situacao: FacetItem[];
   uf: FacetItem[]; porte: FacetItem[]; simples: FacetItem[]; cnaeTop: FacetItem[];
 }
+
+/** RFB data_situacao = AAAAMMDD. Formata e diz se mudou nos últimos 90d. */
+const fmtDataSit = (s: string | null): string => {
+  if (!s || !/^\d{8}$/.test(s)) return '—';
+  return `${s.slice(6, 8)}/${s.slice(4, 6)}/${s.slice(0, 4)}`;
+};
+const isRecente = (s: string | null): boolean => {
+  if (!s || !/^\d{8}$/.test(s)) return false;
+  const d = new Date(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`);
+  return (Date.now() - d.getTime()) / 86400000 <= 90;
+};
 
 const ALERTA_CLS: Record<string, string> = {
   OK: 'bg-green-100 text-green-800',
@@ -47,6 +59,7 @@ export function RfbCruzamentoTab() {
   const [acting, setActing] = useState(false);
   const [f, setF] = useState({
     alerta: '', origem: '', uf: '', situacao: '', porte: '', simples: '',
+    soRecente: false,
     search: '', page: 1, sort: '' as string, dir: 'asc' as 'asc' | 'desc',
   });
   const toast = useToast();
@@ -65,6 +78,7 @@ export function RfbCruzamentoTab() {
     if (f.situacao) p.set('situacao', f.situacao);
     if (f.porte) p.set('porte', f.porte);
     if (f.simples) p.set('simples', f.simples);
+    if (f.soRecente) p.set('soRecente', '1');
     if (f.search) p.set('search', f.search);
     return p;
   }, [f]);
@@ -143,12 +157,12 @@ export function RfbCruzamentoTab() {
   };
 
   const limpar = () => setF((p) => ({
-    ...p, alerta: '', origem: '', uf: '', situacao: '', porte: '', simples: '', search: '', page: 1,
+    ...p, alerta: '', origem: '', uf: '', situacao: '', porte: '', simples: '', soRecente: false, search: '', page: 1,
   }));
 
   const ex = data?.execucoes?.[0];
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
-  const temFiltro = !!(f.alerta || f.origem || f.uf || f.situacao || f.porte || f.simples || f.search);
+  const temFiltro = !!(f.alerta || f.origem || f.uf || f.situacao || f.porte || f.simples || f.soRecente || f.search);
 
   const Th = ({ col, label }: { col: string; label: string }) => {
     const active = f.sort === col;
@@ -288,10 +302,17 @@ export function RfbCruzamentoTab() {
         </div>
       )}
 
-      {/* Busca livre */}
-      <input className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-        placeholder="Buscar CNPJ, razão social ou matrícula Protheus" value={f.search}
-        onChange={(e) => setF({ ...f, search: e.target.value, page: 1 })} />
+      {/* Busca livre + filtro de situação recente (data_situacao RFB) */}
+      <div className="flex items-center gap-3">
+        <input className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+          placeholder="Buscar CNPJ, razão social ou matrícula Protheus" value={f.search}
+          onChange={(e) => setF({ ...f, search: e.target.value, page: 1 })} />
+        <label className="flex shrink-0 items-center gap-1.5 text-xs text-slate-600" title="Situação cadastral alterada na Receita nos últimos 90 dias">
+          <input type="checkbox" checked={f.soRecente}
+            onChange={(e) => setF({ ...f, soRecente: e.target.checked, page: 1 })} />
+          Só situação recente (≤90d)
+        </label>
+      </div>
 
       <div className="overflow-x-auto rounded-lg border border-slate-200">
         <table className="w-full text-sm">
@@ -302,6 +323,7 @@ export function RfbCruzamentoTab() {
               <Th col="razaoProtheus" label="Razão (Protheus)" />
               <Th col="razaoRfb" label="Razão (RFB)" />
               <Th col="situacaoRfb" label="Sit. RFB" />
+              <th className="px-3 py-2">Situação desde</th>
               <Th col="ufRfb" label="UF" />
               <Th col="alerta" label="Alerta" />
             </tr>
@@ -319,6 +341,14 @@ export function RfbCruzamentoTab() {
                 <td className="px-3 py-2">{r.razaoProtheus ?? '—'}</td>
                 <td className="px-3 py-2 text-slate-600">{r.razaoRfb ?? '—'}</td>
                 <td className="px-3 py-2 text-xs">{r.situacaoRfb ?? '—'}</td>
+                <td className="px-3 py-2 text-xs whitespace-nowrap">
+                  {fmtDataSit(r.dataSituacao)}
+                  {isRecente(r.dataSituacao) && (
+                    <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-medium text-amber-700">
+                      recente
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-xs">{r.ufRfb ?? '—'}</td>
                 <td className="px-3 py-2">
                   <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${ALERTA_CLS[r.alerta] ?? 'bg-slate-100'}`}>
@@ -328,7 +358,7 @@ export function RfbCruzamentoTab() {
               </tr>
             ))}
             {(data?.itens ?? []).length === 0 && (
-              <tr><td colSpan={7} className="px-3 py-4 text-center text-slate-400">
+              <tr><td colSpan={8} className="px-3 py-4 text-center text-slate-400">
                 Sem resultados. Rode o cruzamento (precisa da base RFB importada).
               </td></tr>
             )}
