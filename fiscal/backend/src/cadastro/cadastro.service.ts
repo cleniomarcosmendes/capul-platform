@@ -247,6 +247,36 @@ export class CadastroService {
   ) {}
 
   /**
+   * Consulta APENAS na base RFB local — ZERO certificado / ZERO SEFAZ.
+   * Usada pelo drill-down da Inteligência Cadastral (triagem em massa, onde
+   * disparar SEFAZ por clique queimaria cota/risco de bloqueio) e como o
+   * modo explícito "base local" da Consulta Cadastral. Retorna origem +
+   * versão + data de importação para a UI deixar claro que é foto mensal
+   * (pode estar desatualizada — o SEFAZ ao vivo é a outra forma, opt-in).
+   */
+  async consultarLocal(cnpj: string) {
+    const cnpjDigits = onlyDigits(cnpj);
+    if (cnpjDigits.length !== 14) {
+      throw new BadRequestException(
+        `A base RFB local cobre apenas CNPJ (14 dígitos). Para CPF, use a ` +
+          `consulta SEFAZ ao vivo (certificado). Recebido: ${cnpj}`,
+      );
+    }
+    const [dados, base] = await Promise.all([
+      this.rfbConsulta.porCnpj(cnpjDigits),
+      this.rfbConsulta.infoBase(),
+    ]);
+    return {
+      fonte: 'RFB_LOCAL' as const,
+      encontrado: !!dados,
+      cnpj: cnpjDigits,
+      versaoRfb: dados?.versaoRfb ?? base.versaoRfb,
+      importadaEm: base.importadaEm,
+      dados: dados ?? null,
+    };
+  }
+
+  /**
    * Consulta cadastral pontual com auditoria **multi-UF**.
    *
    * Até 24/04/2026 consultávamos só a UF informada, o que dava falso

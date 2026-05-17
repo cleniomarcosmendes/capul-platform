@@ -9,7 +9,7 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { FiscalGuard } from '../common/guards/fiscal.guard.js';
@@ -49,6 +49,20 @@ export class CadastroController {
   @Throttle({ sefaz: { ttl: 60_000, limit: 20 } })
   async consultar(@Body() body: { cnpj: string; uf?: string | null }) {
     return this.service.consultarPontual(body.cnpj, body.uf ?? null);
+  }
+
+  /**
+   * Consulta SÓ na base RFB local — ZERO certificado/SEFAZ. É a OUTRA forma
+   * de consulta (a tela deve deixar as duas explícitas): base local = foto
+   * mensal, instantânea, sem cota; SEFAZ = ao vivo, com certificado.
+   * SkipThrottle: endpoint 100% local, não toca SEFAZ — não deve consumir
+   * o throttler que protege o certificado (mesma razão do RfbController).
+   */
+  @Post('consulta-local')
+  @RoleMinima('OPERADOR_ENTRADA')
+  @SkipThrottle({ default: true, sefaz: true })
+  async consultarLocal(@Body() body: { cnpj: string }) {
+    return this.service.consultarLocal(body.cnpj);
   }
 
   // === ROTAS COM PATH ESTÁTICO PRIMEIRO ===

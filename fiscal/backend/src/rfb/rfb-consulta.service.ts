@@ -78,4 +78,15 @@ export class RfbConsultaService {
       versaoRfb: ultimo?.versaoRfb,
     };
   }
+
+  /** Metadados da base local p/ a UI deixar claro a origem/idade do dado
+   *  (foto mensal — pode estar desatualizada vs SEFAZ ao vivo). */
+  async infoBase(): Promise<{ versaoRfb: string | null; importadaEm: Date | null }> {
+    const u = await this.prisma.rfbControleImportacao.findFirst({
+      where: { status: 'CONCLUIDO' },
+      orderBy: { versaoRfb: 'desc' },
+      select: { versaoRfb: true, dataFim: true },
+    });
+    return { versaoRfb: u?.versaoRfb ?? null, importadaEm: u?.dataFim ?? null };
+  }
 }
