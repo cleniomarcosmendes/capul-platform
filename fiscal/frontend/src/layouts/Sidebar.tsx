@@ -37,7 +37,7 @@ const menuItems: MenuItem[] = [
   // nao e documento fiscal. Operadores entendem melhor com a divisao.
   { section: 'CADASTRO' },
   { label: 'Consulta Cadastral', icon: UserSearch, path: '/cadastro' },
-  { label: 'Cruzamento CNPJ', icon: Network, path: '/rfb/cruzamento', minRole: 'GESTOR_FISCAL' },
+  { label: 'Inteligência Cadastral', icon: Network, path: '/rfb/cruzamento', minRole: 'GESTOR_FISCAL' },
   { section: 'CRUZAMENTO', minRole: 'GESTOR_FISCAL' },
   { label: 'Execucoes', icon: Activity, path: '/execucoes', minRole: 'GESTOR_FISCAL' },
   { label: 'Divergencias', icon: AlertTriangle, path: '/divergencias', minRole: 'GESTOR_FISCAL' },
