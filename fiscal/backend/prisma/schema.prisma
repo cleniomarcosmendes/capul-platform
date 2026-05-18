@@ -495,6 +495,7 @@ model AmbienteConfig {
   // Detecção de nova versão da base pública CNPJ (RFB). Default seg 07:00.
   // NULL/vazio = detecção automática DESATIVADA (admin pode mudar/desligar).
   rfbCronDeteccao            String?       @default("0 7 * * 1") @map("rfb_cron_deteccao")
+  rfbSimRazaoMin             Int?          @default(80) @map("rfb_sim_razao_min") // F1.8 limiar % similaridade razão
   pauseSync                  Boolean       @default(false) @map("pause_sync") // freio de mão
   // CT-e Distribuição — controle independente do NF-e (Plano v2.0 + decisão 05/05).
   // Permite cenário "CT-e em HOM enquanto NF-e roda PROD" durante implantação.
@@ -937,6 +938,9 @@ model RfbCruzamentoResultado {
   porte           String?
   optanteSimples  String?  @map("optante_simples")
   alerta          String // OK | ATENCAO | IRREGULAR | NAO_ENCONTRADO
+  // F1.8 — divergência de razão social (dimensão independente do alerta).
+  divergenciaRazao  Boolean @default(false) @map("divergencia_razao")
+  similaridadeRazao Int?    @map("similaridade_razao")
   atualizadoEm    DateTime @default(now()) @map("atualizado_em")
 
   @@map("cruzamento_resultado")
