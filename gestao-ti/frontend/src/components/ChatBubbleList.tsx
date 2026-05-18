@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { ArrowUpDown, Bell, Check, Edit3, Paperclip, RotateCcw } from 'lucide-react';
+import { ArrowUpDown, Bell, Check, Edit3, Lock, Paperclip, RotateCcw } from 'lucide-react';
 
 /**
  * Extrai marcadores [anexo:uuid] do texto pra protegê-los na edição.
@@ -280,8 +280,11 @@ function Bubble({
             </span>
           )}
           {ev.publico === false && (
-            <span className="text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">
-              INTERNO
+            <span
+              className="inline-flex items-center gap-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-100 border border-amber-200 rounded px-1 py-0.5"
+              title="Nota interna — visível apenas para staff de TI. Usuário Chave / Terceirizado não enxerga."
+            >
+              <Lock className="w-2.5 h-2.5" />interna
             </span>
           )}
         </div>

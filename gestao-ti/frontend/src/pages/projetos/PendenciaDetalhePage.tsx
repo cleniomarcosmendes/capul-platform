@@ -57,7 +57,10 @@ export function PendenciaDetalhePage() {
   const canGerarAtividade = isStaffTI || isSubprojetoProprio;
   const [loading, setLoading] = useState(true);
   const [comentario, setComentario] = useState('');
-  const [comentarioPublico, setComentarioPublico] = useState(true);
+  // Nasce DESMARCADO (interna) — conceito restritivo, simétrico à aba
+  // Conversa da Atividade (decisão Clenio 16/05): nota de pendência é
+  // trabalho interno de equipe; só staff TI marca p/ liberar a UC/Terc.
+  const [comentarioPublico, setComentarioPublico] = useState(false);
   // Anexos no input do comentário (chat-style 13/05/2026)
   const [comentarioArquivos, setComentarioArquivos] = useState<File[]>([]);
   const comentarioFileInputRef = useRef<HTMLInputElement>(null);
