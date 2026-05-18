@@ -120,10 +120,35 @@ export class ProjetoHelpersService {
    * Ambas as roles compartilham `usuario_chave_projeto` como tabela de vinculo
    * desde 13/05/2026 — antes `TerceirizadoProjeto` era paralela mas a UI sempre
    * gravava em UsuarioChaveProjeto, criando mismatch que travava terceirizados.
+   *
+   * Politica de acesso a projeto (alinhada 18/05/2026): liberado para
+   * TI (ADMIN/GESTOR_TI/SUPORTE_TI), responsavel, membro da equipe ou
+   * USUARIO_CHAVE/TERCEIRIZADO vinculado e ativo. Qualquer outro -> 403.
+   * Antes so liberava TI + chave/terc-vinculado: responsavel/membro nao-TI
+   * tomavam 403 indevido (espelho invertido de assertMembroOuGestor — quem
+   * podia EDITAR nao conseguia VER). Esta uniao corrige o over-block e da
+   * consistencia aos 13 call-sites que herdam esta regra.
    */
   async checkProjetoAccessChave(projetoId: string, userId: string, role: string) {
+    // TI acessa qualquer projeto
     if (isTI(role)) return;
 
+    const projeto = await this.prisma.projeto.findUnique({
+      where: { id: projetoId },
+      select: { responsavelId: true },
+    });
+    if (!projeto) throw new NotFoundException('Projeto nao encontrado');
+
+    // Responsavel pelo projeto
+    if (projeto.responsavelId === userId) return;
+
+    // Membro da equipe do projeto
+    const membro = await this.prisma.membroProjeto.findUnique({
+      where: { projetoId_usuarioId: { projetoId, usuarioId: userId } },
+    });
+    if (membro) return;
+
+    // USUARIO_CHAVE / TERCEIRIZADO vinculados (compartilham usuario_chave_projeto)
     if (role === 'USUARIO_CHAVE' || role === 'TERCEIRIZADO') {
       const uc = await this.prisma.usuarioChaveProjeto.findUnique({
         where: { projetoId_usuarioId: { projetoId, usuarioId: userId } },
