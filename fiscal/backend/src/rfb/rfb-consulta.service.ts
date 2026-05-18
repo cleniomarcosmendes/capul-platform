@@ -45,6 +45,13 @@ export class RfbConsultaService {
       }),
     ]);
 
+    // Resolve a descrição da natureza jurídica (temos o domínio importado —
+    // antes mostrava só o código cru, ex. "2062"). Não dá p/ ir no Promise.all
+    // acima porque depende de `emp`; consulta pontual, custo desprezível.
+    const nat = emp?.naturezaJuridica
+      ? await this.prisma.rfbNatureza.findUnique({ where: { codigo: emp.naturezaJuridica } })
+      : null;
+
     const sit = (estab.situacaoCadastral || '').padStart(2, '0');
     const tel = estab.ddd1 && estab.telefone1 ? `(${estab.ddd1}) ${estab.telefone1}` : null;
 
@@ -55,7 +62,9 @@ export class RfbConsultaService {
       situacao: SITUACAO[sit] ?? null,
       dataSituacao: estab.dataSituacao ?? null,
       motivoSituacao: null,
-      naturezaJuridica: emp?.naturezaJuridica ?? null,
+      naturezaJuridica: emp?.naturezaJuridica
+        ? `${emp.naturezaJuridica}${nat?.descricao ? ' — ' + nat.descricao : ''}`
+        : null,
       porte: emp?.porte ? (PORTE[emp.porte] ?? 'DEMAIS') : null,
       capitalSocial: emp?.capitalSocial != null ? Number(emp.capitalSocial) : null,
       cnaeFiscal: estab.cnaePrincipal ?? null,

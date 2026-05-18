@@ -581,6 +581,12 @@ export function CadastroConsultaPage() {
   );
 }
 
+/** RFB data_situacao = AAAAMMDD → DD/MM/AAAA. */
+function fmtDataRfb(s: string | null): string {
+  if (!s || !/^\d{8}$/.test(s)) return s || '—';
+  return `${s.slice(6, 8)}/${s.slice(4, 6)}/${s.slice(0, 4)}`;
+}
+
 /** Painel da consulta SÓ-LOCAL (RFB). Sem IE/cruzamento (a base aberta não
  *  tem Inscrição Estadual). Deixa explícito que é foto mensal + opt-in SEFAZ. */
 function PainelLocal({
@@ -624,7 +630,7 @@ function PainelLocal({
         </div>
         {d.situacao && (
           <span className={`rounded px-2 py-1 text-xs font-semibold ${sitCls}`}>
-            {d.situacao}{d.dataSituacao ? ` · desde ${d.dataSituacao}` : ''}
+            {d.situacao}{d.dataSituacao ? ` · desde ${fmtDataRfb(d.dataSituacao)}` : ''}
           </span>
         )}
       </div>
