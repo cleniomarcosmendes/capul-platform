@@ -103,6 +103,14 @@ export class RfbController {
     return this.cruzamento.iniciar(user.id);
   }
 
+  /** Estado da execução do cruzamento p/ a tela de Controle Operacional
+   *  (última exec, em andamento, cooldown, limiar). Leve. */
+  @Get('cruzamento/exec')
+  @RoleMinima('GESTOR_FISCAL')
+  async statusExecCruzamento() {
+    return this.cruzamento.statusExec();
+  }
+
   /** Limiar de similaridade de razão social (F1.8). ADMIN_TI. Aplica no
    *  próximo run do cruzamento. */
   @Post('cruzamento/limiar')

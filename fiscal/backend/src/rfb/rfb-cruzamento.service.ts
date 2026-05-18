@@ -10,6 +10,10 @@ import { AmbienteService } from '../ambiente/ambiente.service.js';
 
 const POR_PAGINA = 500;
 const CHUNK = 1000;
+// Cooldown: o cruzamento é lote pesado (~2min, varre Protheus + 71M RFB).
+// Não pode ser disparado em sequência (pedido Clenio 18/05). Janela mínima
+// entre execuções bem-sucedidas.
+const COOLDOWN_MS = 30 * 60_000;
 const so = (s: string | null | undefined) => (s ? s.replace(/\D/g, '') : '');
 
 /** Código situação_cadastral RFB → alerta. 02 ATIVA · 03 SUSPENSA ·
@@ -65,11 +69,53 @@ export class RfbCruzamentoService {
   async iniciar(userId: string) {
     const rodando = await this.prisma.rfbCruzamentoExec.findFirst({ where: { status: 'RODANDO' } });
     if (rodando) throw new ConflictException('Cruzamento já em andamento');
+    // Cooldown anti-spam: bloqueia se a última execução bem-sucedida
+    // terminou há menos de COOLDOWN_MS (custo alto — defesa no backend).
+    const ultConcl = await this.prisma.rfbCruzamentoExec.findFirst({
+      where: { status: 'CONCLUIDO' }, orderBy: { id: 'desc' }, select: { fim: true },
+    });
+    if (ultConcl?.fim) {
+      const restanteMs = ultConcl.fim.getTime() + COOLDOWN_MS - Date.now();
+      if (restanteMs > 0) {
+        throw new ConflictException(
+          `Cruzamento executado há pouco (custo alto) — aguarde ${Math.ceil(restanteMs / 60_000)} min `
+          + `antes de reprocessar. Última conclusão: `
+          + `${ultConcl.fim.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`,
+        );
+      }
+    }
     const exec = await this.prisma.rfbCruzamentoExec.create({
       data: { status: 'RODANDO', disparadoPor: userId },
     });
     this.executar(exec.id).catch((e) => this.logger.error(`Cruzamento falhou: ${e?.message}`));
     return { iniciado: true, execId: exec.id };
+  }
+
+  /** Estado p/ a tela de controle (Operação): última execução, se está
+   *  rodando, cooldown e limiar. Leve (sem snapshot). */
+  async statusExec() {
+    const [rodando, ultima, ultConcl, cfg] = await Promise.all([
+      this.prisma.rfbCruzamentoExec.findFirst({ where: { status: 'RODANDO' }, orderBy: { id: 'desc' } }),
+      this.prisma.rfbCruzamentoExec.findFirst({ orderBy: { id: 'desc' } }),
+      this.prisma.rfbCruzamentoExec.findFirst({ where: { status: 'CONCLUIDO' }, orderBy: { id: 'desc' }, select: { fim: true } }),
+      this.ambiente.getOrCreate(),
+    ]);
+    const cooldownAte = ultConcl?.fim ? new Date(ultConcl.fim.getTime() + COOLDOWN_MS) : null;
+    const emCooldown = !!(cooldownAte && cooldownAte.getTime() > Date.now());
+    return {
+      emAndamento: !!rodando,
+      ultima: ultima
+        ? {
+            status: ultima.status, iniciado: ultima.iniciado, fim: ultima.fim,
+            total: ultima.total, observacao: ultima.observacao,
+            alertaIrregular: ultima.alertaIrregular, alertaAtencao: ultima.alertaAtencao,
+            alertaOk: ultima.alertaOk, naoEncontrado: ultima.naoEncontrado,
+          }
+        : null,
+      cooldownAte: emCooldown ? cooldownAte : null,
+      podeRodar: !rodando && !emCooldown,
+      limiarRazao: cfg.rfbSimRazaoMin ?? 80,
+    };
   }
 
   private async coletarProtheus(tipo: TipoCadastroProtheus): Promise<Reg[]> {
