@@ -11,6 +11,7 @@ import { RfbDeteccaoService } from './rfb-deteccao.service.js';
 import { RfbImportacaoService } from './rfb-importacao.service.js';
 import { RfbCruzamentoService } from './rfb-cruzamento.service.js';
 import { RfbCronService } from './rfb-cron.service.js';
+import { RfbConsultaService } from './rfb-consulta.service.js';
 import { AmbienteService } from '../ambiente/ambiente.service.js';
 
 // F1.2 — endpoints mínimos. `versoes` serve de smoke test E de base p/ a
@@ -31,6 +32,7 @@ export class RfbController {
     private readonly importacao: RfbImportacaoService,
     private readonly cruzamento: RfbCruzamentoService,
     private readonly rfbCron: RfbCronService,
+    private readonly rfbConsulta: RfbConsultaService,
     private readonly ambiente: AmbienteService,
   ) {}
 
@@ -147,5 +149,19 @@ export class RfbController {
     @Query() q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string },
   ) {
     return this.cruzamento.exportarCsv(q);
+  }
+
+  /** Busca reversa: nome do sócio → empresas vinculadas (base RFB local,
+   *  dado público Dados Abertos). Min 3 chars; paginado por hasMore. */
+  @Get('socios/busca')
+  @RoleMinima('GESTOR_FISCAL')
+  async buscarPorSocio(
+    @Query() q: { nome?: string; page?: string; pageSize?: string },
+  ) {
+    return this.rfbConsulta.buscarPorSocio(
+      q.nome ?? '',
+      q.page ? Number(q.page) : 1,
+      q.pageSize ? Number(q.pageSize) : 30,
+    );
   }
 }

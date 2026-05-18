@@ -119,7 +119,13 @@ const SPECS: Record<string, TabelaSpec> = {
       norm(r[0]), norm(r[1]), norm(r[2]), norm(r[3]), norm(r[4]), norm(r[5]),
       norm(r[6]), norm(r[7]), norm(r[8]), norm(r[9]), norm(r[10]),
     ],
-    indices: [{ suf: 'cnpjb', def: '(cnpj_basico)' }],
+    indices: [
+      { suf: 'cnpjb', def: '(cnpj_basico)' },
+      // Busca reversa por nome do sócio (pessoa → empresas). Recriado a
+      // cada import (swap). Índice one-off equivalente já criado na base
+      // atual (socios_nome_trgm_idx) p/ funcionar sem esperar o próximo.
+      { suf: 'nome_trgm', def: 'USING gin (nome_socio gin_trgm_ops)' },
+    ],
   },
 };
 

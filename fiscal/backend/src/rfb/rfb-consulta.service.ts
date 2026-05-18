@@ -175,4 +175,70 @@ export class RfbConsultaService {
     });
     return { versaoRfb: u?.versaoRfb ?? null, importadaEm: u?.dataFim ?? null };
   }
+
+  /**
+   * Busca reversa: nome do sócio → empresas vinculadas (base RFB local,
+   * dado público Dados Abertos). Min 3 chars (exigência do índice GIN
+   * trgm — trigramas). Paginação por hasMore (pega pageSize+1) em vez de
+   * COUNT — evita scan caro em 27M p/ nomes comuns. ILIKE %termo% usa o
+   * índice socios_nome_trgm_idx. Join empresas (razão) + estab matriz
+   * (situação/UF/município) + resolve qualificação.
+   */
+  async buscarPorSocio(nome: string, page = 1, pageSize = 30) {
+    const termo = (nome || '').trim();
+    const ps = Math.min(50, Math.max(10, Number(pageSize) || 30));
+    const pg = Math.max(1, Number(page) || 1);
+    if (termo.length < 3) {
+      return { itens: [], page: 1, pageSize: ps, hasMore: false, termoCurto: true };
+    }
+    const rows = await this.prisma.$queryRaw<Array<{
+      cnpj_basico: string; nome_socio: string | null; identificador_socio: string | null;
+      qualificacao_socio: string | null; data_entrada: string | null; faixa_etaria: string | null;
+      razao_social: string | null; cnpj_completo: string | null;
+      situacao_cadastral: string | null; uf: string | null; municipio: string | null;
+    }>>`
+      SELECT s.cnpj_basico, s.nome_socio, s.identificador_socio, s.qualificacao_socio,
+             s.data_entrada, s.faixa_etaria, e.razao_social,
+             est.cnpj_completo, est.situacao_cadastral, est.uf,
+             COALESCE(m.descricao, est.municipio) AS municipio
+      FROM rfb.socios s
+      JOIN rfb.empresas e ON e.cnpj_basico = s.cnpj_basico
+      LEFT JOIN LATERAL (
+        SELECT cnpj_completo, situacao_cadastral, uf, municipio
+        FROM rfb.estabelecimentos
+        WHERE cnpj_basico = s.cnpj_basico AND matriz_filial = '1'
+        LIMIT 1
+      ) est ON true
+      LEFT JOIN rfb.municipios m ON m.codigo = est.municipio
+      WHERE s.nome_socio ILIKE '%' || ${termo} || '%'
+      ORDER BY s.nome_socio, e.razao_social
+      LIMIT ${ps + 1} OFFSET ${(pg - 1) * ps}
+    `;
+    const hasMore = rows.length > ps;
+    const slice = rows.slice(0, ps);
+    const qCodes = [...new Set(slice.map((r) => r.qualificacao_socio).filter((x): x is string => !!x))];
+    const quals = qCodes.length
+      ? await this.prisma.rfbQualificacao.findMany({ where: { codigo: { in: qCodes } } })
+      : [];
+    const qMap = new Map(quals.map((q) => [q.codigo, q.descricao]));
+    const itens = slice.map((r) => ({
+      cnpjBasico: r.cnpj_basico,
+      cnpjCompleto: r.cnpj_completo ?? null,
+      razaoSocial: r.razao_social ?? null,
+      situacao: r.situacao_cadastral
+        ? (SITUACAO[r.situacao_cadastral.padStart(2, '0')] ?? r.situacao_cadastral)
+        : null,
+      uf: r.uf ?? null,
+      municipio: r.municipio ?? null,
+      socioNome: r.nome_socio ?? null,
+      socioTipo: r.identificador_socio === '1' ? 'PJ'
+        : r.identificador_socio === '3' ? 'Estrangeiro' : 'PF',
+      qualificacao: r.qualificacao_socio
+        ? `${r.qualificacao_socio}${qMap.get(r.qualificacao_socio) ? ' — ' + qMap.get(r.qualificacao_socio) : ''}`
+        : null,
+      dataEntrada: r.data_entrada ?? null,
+      faixaEtaria: r.faixa_etaria ?? null,
+    }));
+    return { itens, page: pg, pageSize: ps, hasMore, termoCurto: false };
+  }
 }
