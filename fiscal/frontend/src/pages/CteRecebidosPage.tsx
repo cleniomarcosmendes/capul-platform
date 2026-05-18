@@ -261,6 +261,29 @@ export function CteRecebidosPage() {
     return () => clearTimeout(t);
   }, [carregar]);
 
+  // Qualquer mudança de filtro volta pra página 1 (bug relatado 18/05/2026).
+  // Sem isso, trocar um filtro (Status Protheus, papel, schema, datas...)
+  // estando em página >1 renderizava lista vazia: o backend devolvia uma
+  // página inexistente do novo resultado e a paginação some quando
+  // totalPages===1, prendendo o usuário em "Nenhum CT-e encontrado".
+  // `page` fora das deps de propósito — evita loop. Só inconsistenciaFiltro
+  // já resetava inline; agora a regra vale para todos os filtros.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setPage(1);
+  }, [
+    search,
+    papel,
+    schema,
+    ambiente,
+    protheusStatus,
+    dataInicio,
+    dataFim,
+    recebimentoInicio,
+    recebimentoFim,
+    inconsistenciaFiltro,
+  ]);
+
   const limparFiltros = () => {
     setSearch('');
     setPapel('TOMA'); // mantém default — TOMA é a operação principal

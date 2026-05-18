@@ -472,7 +472,13 @@ export class CteDocumentoService {
     // Filtro overlay (08/05/2026): pendencias de correcao = status problematico
     // AND ainda nao resolvido manualmente.
     if (filtros.inconsistenciaFiltro === 'pendentes') {
-      where.protheusStatus = { in: ['GRAVADO_PRENOTA_FALHOU', 'GRAVADO_AGUARDANDO_AMARRACAO'] };
+      // NÃO sobrescrever um protheusStatus explícito (bug 18/05/2026): se o
+      // usuário escolheu um status específico no filtro, intersecta com ele
+      // (status escolhido AND ainda não resolvido) em vez de trocar pelo
+      // conjunto problemático inteiro.
+      if (!filtros.protheusStatus) {
+        where.protheusStatus = { in: ['GRAVADO_PRENOTA_FALHOU', 'GRAVADO_AGUARDANDO_AMARRACAO'] };
+      }
       where.inconsistenciaResolvidaEm = null;
     } else if (filtros.inconsistenciaFiltro === 'resolvidas') {
       where.inconsistenciaResolvidaEm = { not: null };
