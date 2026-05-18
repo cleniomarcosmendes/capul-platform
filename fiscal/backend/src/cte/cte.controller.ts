@@ -10,7 +10,7 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { FiscalGuard } from '../common/guards/fiscal.guard.js';
@@ -235,6 +235,11 @@ export class CteController {
    * Retorno: { items, total, page, limit, totalPages }.
    * Sumário leve — XML completo via /cte/recebidos/:id.
    */
+  // Leitura local pura (DB paginado) — NÃO toca SEFAZ. Pula os throttlers
+  // globais (default 200/60s + sefaz 20/60s, que existem p/ proteger a
+  // cota SEFAZ); sem isso filtrar/paginar a lista estourava 20/60s e dava
+  // "Erro ao carregar CT-es / ThrottlerException" (incidente Clenio 18/05).
+  @SkipThrottle({ default: true, sefaz: true })
   @Get('recebidos')
   @RoleMinima('OPERADOR_ENTRADA')
   async listarRecebidos(
@@ -284,6 +289,7 @@ export class CteController {
    *
    * Query params: page, limit, status, origem, ambiente, dataInicio, dataFim.
    */
+  @SkipThrottle({ default: true, sefaz: true }) // leitura local (DB) — não toca SEFAZ
   @Get('lotes')
   @RoleMinima('GESTOR_FISCAL')
   async listarLotes(
@@ -309,6 +315,7 @@ export class CteController {
   /**
    * Detalhe de 1 CT-e recebido — inclui XML completo + eventos vinculados.
    */
+  @SkipThrottle({ default: true, sefaz: true }) // detalhe local (DB) — não toca SEFAZ
   @Get('recebidos/:id')
   @RoleMinima('OPERADOR_ENTRADA')
   async detalheRecebido(@Param('id') id: string) {
