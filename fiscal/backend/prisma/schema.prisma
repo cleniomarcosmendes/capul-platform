@@ -976,6 +976,8 @@ model RfbCruzamentoResultado {
   // F1.8 — divergência de razão social (dimensão independente do alerta).
   divergenciaRazao  Boolean @default(false) @map("divergencia_razao")
   similaridadeRazao Int?    @map("similaridade_razao")
+  // Gap B — ação recomendada cruzando situação RFB × estado Protheus.
+  acao            String  @default("NENHUMA") // BLOQUEAR | REVISAR | NENHUMA
   atualizadoEm    DateTime @default(now()) @map("atualizado_em")
 
   @@map("cruzamento_resultado")

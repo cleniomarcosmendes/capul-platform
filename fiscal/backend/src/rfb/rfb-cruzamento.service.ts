@@ -151,6 +151,21 @@ export class RfbCruzamentoService {
           // (um CNPJ pode ser ATIVO/OK e ainda ter nome divergente no Protheus).
           const sim = achado && r.razSoc && razaoRfbVal ? simRazao(r.razSoc, razaoRfbVal) : null;
           const div = sim != null && sim < limiar;
+          // Ação acionável (pedido Clenio): cruza o problema na RFB com o
+          // estado no Protheus. Só faz sentido agir se o cadastro ainda está
+          // ATIVO no Protheus (não bloqueado). BLOQUEAR = RFB morta/inapta
+          // (04/08) e Protheus ativo. REVISAR = RFB suspensa/nula (03/01) OU
+          // razão divergente, com Protheus ativo. Senão NENHUMA (situação ok,
+          // não-encontrado, ou já bloqueado no Protheus = tratado).
+          const sitc = (e?.situacaoCadastral ?? '').padStart(2, '0');
+          const ativoProtheus = !r.bloquead;
+          const acao = !achado
+            ? 'NENHUMA'
+            : ativoProtheus && (sitc === '04' || sitc === '08')
+              ? 'BLOQUEAR'
+              : ativoProtheus && (sitc === '03' || sitc === '01' || div)
+                ? 'REVISAR'
+                : 'NENHUMA';
           return {
             cnpj: r.cnpj, origem: r.origem, filial: r.filial, codigo: r.codigo, loja: r.loja,
             razaoProtheus: r.razSoc, bloqueado: r.bloquead, achadoRfb: achado,
@@ -161,7 +176,7 @@ export class RfbCruzamentoService {
             cnae: e?.cnaePrincipal ?? null,
             porte: mR.get(r.cnpj.slice(0, 8))?.porte ?? null,
             optanteSimples: mS.get(r.cnpj.slice(0, 8)) ?? null, alerta,
-            similaridadeRazao: sim, divergenciaRazao: div,
+            similaridadeRazao: sim, divergenciaRazao: div, acao,
           };
         });
         if (data.length) await this.prisma.rfbCruzamentoResultado.createMany({ data });
@@ -190,7 +205,7 @@ export class RfbCruzamentoService {
   async consultar(q: {
     alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string;
     soRecente?: string; search?: string; sort?: string; dir?: string; page?: number; pageSize?: number;
-    divergencia?: string;
+    divergencia?: string; acao?: string;
   }) {
     const page = Math.max(1, Number(q.page) || 1);
     const pageSize = Math.min(200, Math.max(10, Number(q.pageSize) || 50));
@@ -199,7 +214,7 @@ export class RfbCruzamentoService {
     const SORTABLE: Record<string, string> = {
       cnpj: 'cnpj', origem: 'origem', razaoProtheus: 'razaoProtheus',
       razaoRfb: 'razaoRfb', situacaoRfb: 'situacaoRfb', ufRfb: 'ufRfb', alerta: 'alerta',
-      similaridadeRazao: 'similaridadeRazao',
+      similaridadeRazao: 'similaridadeRazao', acao: 'acao',
     };
     const col = q.sort && SORTABLE[q.sort];
     const dir = q.dir === 'desc' ? 'desc' : 'asc';
@@ -228,7 +243,7 @@ export class RfbCruzamentoService {
   }
 
   /** Where compartilhado entre consultar/facetas/export (filtros idênticos). */
-  private montarWhere(q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string }): Record<string, unknown> {
+  private montarWhere(q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string; acao?: string }): Record<string, unknown> {
     const where: Record<string, unknown> = {};
     if (q.alerta) where.alerta = q.alerta;
     if (q.origem) where.origem = q.origem;
@@ -238,6 +253,7 @@ export class RfbCruzamentoService {
     if (q.simples) where.optanteSimples = q.simples;
     if (q.divergencia === '1' || q.divergencia === 'true') where.divergenciaRazao = true;
     else if (q.divergencia === '0' || q.divergencia === 'false') where.divergenciaRazao = false;
+    if (q.acao) where.acao = q.acao;
     if (q.soRecente === '1' || q.soRecente === 'true') {
       // data_situacao >= hoje-90d (exclui null automaticamente no Prisma).
       where.dataSituacao = { gte: this.cutoffRecente(90) };
@@ -258,7 +274,7 @@ export class RfbCruzamentoService {
 
   /** Facetas agregadas (counts por dimensão) respeitando os filtros atuais —
    *  base da exploração "Inteligência Cadastral" (F3). */
-  async facetas(q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string }) {
+  async facetas(q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string; acao?: string }) {
     const where = this.montarWhere(q);
     // groupBy explícito por campo (Prisma tipa pelo literal `by`); ordena/
     // limita em JS — evita o inferno de tipos do groupBy dinâmico.
@@ -268,7 +284,7 @@ export class RfbCruzamentoService {
         .sort((a, b) => b.total - a.total);
       return top ? arr.slice(0, top) : arr;
     };
-    const [gA, gO, gS, gU, gP, gM, gC, gD, total] = await Promise.all([
+    const [gA, gO, gS, gU, gP, gM, gC, gD, gAc, total] = await Promise.all([
       this.prisma.rfbCruzamentoResultado.groupBy({ by: ['alerta'], where, _count: { _all: true } }),
       this.prisma.rfbCruzamentoResultado.groupBy({ by: ['origem'], where, _count: { _all: true } }),
       this.prisma.rfbCruzamentoResultado.groupBy({ by: ['situacaoRfb'], where, _count: { _all: true } }),
@@ -277,6 +293,7 @@ export class RfbCruzamentoService {
       this.prisma.rfbCruzamentoResultado.groupBy({ by: ['optanteSimples'], where, _count: { _all: true } }),
       this.prisma.rfbCruzamentoResultado.groupBy({ by: ['cnae'], where, _count: { _all: true } }),
       this.prisma.rfbCruzamentoResultado.groupBy({ by: ['divergenciaRazao'], where, _count: { _all: true } }),
+      this.prisma.rfbCruzamentoResultado.groupBy({ by: ['acao'], where, _count: { _all: true } }),
       this.prisma.rfbCruzamentoResultado.count({ where }),
     ]);
     return {
@@ -291,12 +308,13 @@ export class RfbCruzamentoService {
       divergencia: gD
         .map((r) => ({ valor: r.divergenciaRazao ? 'Sim' : 'Não', total: r._count._all }))
         .sort((a, b) => b.total - a.total),
+      acao: norm(gAc, 'acao'),
     };
   }
 
   /** Export CSV do snapshot filtrado (sem paginação). Snapshot é limitado
    *  (clientes/fornecedores), cabe em memória. */
-  async exportarCsv(q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string }): Promise<string> {
+  async exportarCsv(q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string; acao?: string }): Promise<string> {
     const where = this.montarWhere(q);
     const rows = await this.prisma.rfbCruzamentoResultado.findMany({
       where, orderBy: [{ alerta: 'asc' }, { id: 'asc' }], take: 100000,
@@ -305,7 +323,7 @@ export class RfbCruzamentoService {
       'cnpj', 'origem', 'codigo', 'loja', 'razao_protheus', 'razao_rfb',
       'situacao_rfb', 'data_situacao', 'uf_rfb', 'municipio_rfb', 'cnae', 'porte',
       'optante_simples', 'bloqueado', 'achado_rfb', 'alerta',
-      'similaridade_razao', 'divergencia_razao',
+      'similaridade_razao', 'divergencia_razao', 'acao',
     ];
     const esc = (v: unknown) => {
       const s = v == null ? '' : String(v);
@@ -315,7 +333,7 @@ export class RfbCruzamentoService {
       r.cnpj, r.origem, r.codigo, r.loja, r.razaoProtheus, r.razaoRfb,
       r.situacaoRfb, r.dataSituacao, r.ufRfb, r.municipioRfb, r.cnae, r.porte,
       r.optanteSimples, r.bloqueado, r.achadoRfb, r.alerta,
-      r.similaridadeRazao, r.divergenciaRazao,
+      r.similaridadeRazao, r.divergenciaRazao, r.acao,
     ].map(esc).join(';'));
     return [head.join(';'), ...linhas].join('\n');
   }

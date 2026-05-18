@@ -119,12 +119,12 @@ export class RfbController {
   @Get('cruzamento')
   @RoleMinima('GESTOR_FISCAL')
   async consultarCruzamento(
-    @Query() q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string; sort?: string; dir?: string; page?: string; pageSize?: string },
+    @Query() q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string; acao?: string; sort?: string; dir?: string; page?: string; pageSize?: string },
   ) {
     return this.cruzamento.consultar({
       alerta: q.alerta, origem: q.origem, uf: q.uf,
       situacao: q.situacao, porte: q.porte, simples: q.simples,
-      soRecente: q.soRecente, search: q.search, divergencia: q.divergencia,
+      soRecente: q.soRecente, search: q.search, divergencia: q.divergencia, acao: q.acao,
       sort: q.sort, dir: q.dir,
       page: q.page ? Number(q.page) : 1,
       pageSize: q.pageSize ? Number(q.pageSize) : 50,
@@ -135,7 +135,7 @@ export class RfbController {
   @Get('cruzamento/facetas')
   @RoleMinima('GESTOR_FISCAL')
   async facetasCruzamento(
-    @Query() q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string },
+    @Query() q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string; acao?: string },
   ) {
     return this.cruzamento.facetas(q);
   }
@@ -146,7 +146,7 @@ export class RfbController {
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="cruzamento-cnpj.csv"')
   async exportCruzamento(
-    @Query() q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string },
+    @Query() q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string; acao?: string },
   ) {
     return this.cruzamento.exportarCsv(q);
   }
