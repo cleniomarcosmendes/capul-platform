@@ -11,6 +11,7 @@ import { CteConsultaPage } from './pages/CteConsultaPage';
 import { CteRecebidosPage } from './pages/CteRecebidosPage';
 import { CadastroConsultaPage } from './pages/CadastroConsultaPage';
 import { BuscaSocioPage } from './pages/BuscaSocioPage';
+import { BaseRfbEmpresasPage } from './pages/BaseRfbEmpresasPage';
 import { ExecucoesListPage } from './pages/ExecucoesListPage';
 import { ExecucaoDetalhePage } from './pages/ExecucaoDetalhePage';
 import { AlertasHistoricoPage } from './pages/AlertasHistoricoPage';
@@ -115,6 +116,14 @@ function App() {
               element={
                 <ProtectedRoute minRole="GESTOR_FISCAL">
                   <BuscaSocioPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="rfb/empresas"
+              element={
+                <ProtectedRoute minRole="GESTOR_FISCAL">
+                  <BaseRfbEmpresasPage />
                 </ProtectedRoute>
               }
             />
