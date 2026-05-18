@@ -56,6 +56,11 @@ export function NfePendenciasPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
+  // Busca com DEBOUNCE (mesmo padrão de AtivosListPage/RfbCruzamentoTab):
+  // o input mexe só em `search` (UI imediata); 350ms após parar de digitar,
+  // propaga p/ `searchDebounced` (que alimenta o fetch). Sem isso era 1
+  // request/tecla → desperdício + risco de 429 no limit_req do nginx.
+  const [searchDebounced, setSearchDebounced] = useState('');
   const [filtro, setFiltro] = useState<'pendentes' | 'resolvidas' | 'todas'>('pendentes');
   const [marcandoId, setMarcandoId] = useState<string | null>(null);
   const [promptDocId, setPromptDocId] = useState<string | null>(null);
@@ -68,7 +73,7 @@ export function NfePendenciasPage() {
         limit: String(PAGE_SIZE),
         inconsistenciaFiltro: filtro,
       };
-      if (search) params.search = search.replace(/\D/g, '');
+      if (searchDebounced) params.search = searchDebounced.replace(/\D/g, '');
       const r = await fiscalApi.get<ListResp>('/nfe/pendencias', { params });
       setItems(r.data.items);
       setTotal(r.data.total);
@@ -78,11 +83,20 @@ export function NfePendenciasPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, filtro, toast]);
+  }, [page, searchDebounced, filtro, toast]);
 
   useEffect(() => {
     void carregar();
   }, [carregar]);
+
+  // Debounce: aplica a busca 350ms após parar de digitar + volta p/ pág. 1.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearchDebounced(search);
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const confirmarMarcarResolvida = async (observacao: string) => {
     const id = promptDocId;
@@ -142,10 +156,7 @@ export function NfePendenciasPage() {
           <input
             type="text"
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Cole a chave de 44 dígitos"
             className="w-full px-3 py-1.5 border rounded text-sm font-mono"
           />
