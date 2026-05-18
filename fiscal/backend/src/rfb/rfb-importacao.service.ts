@@ -266,7 +266,7 @@ export class RfbImportacaoService {
 
       let i = 0;
       for (const arq of spec.arquivos) {
-        linhas += await this.carregarArquivo(client, versao, arq, spec, stg);
+        linhas += await this.carregarComRetry(client, versao, arq, spec, stg);
         i++;
         this.logger.log(`RFB ${spec.nome}: ${arq} ok (acum ${linhas.toLocaleString('pt-BR')})`);
         if (onArquivo) await onArquivo(i, linhas);
@@ -294,6 +294,33 @@ export class RfbImportacaoService {
       throw e;
     } finally {
       await client.end().catch(() => undefined);
+    }
+  }
+
+  /**
+   * Retry LIMITADO por arquivo (incidente 18/05: "other side closed" — o
+   * Nextcloud da RFB derrubou o stream de um arquivo grande após ~3h e
+   * matou o import inteiro). NÃO é caso da regra SEFAZ-em-loop: WebDAV é
+   * share público estático benigno (sem certificado/webservice). Cota: 3
+   * tentativas, backoff 15s/30s, logado (sem caixa-preta). Seguro: COPY que
+   * falha em autocommit faz rollback só dele (zero linha parcial no staging)
+   * e abrirStream reabre conexão nova a cada tentativa.
+   */
+  private async carregarComRetry(
+    client: Client, versao: string, arquivo: string, spec: TabelaSpec, stg: string,
+  ): Promise<number> {
+    const MAX = 3;
+    for (let tent = 1; ; tent++) {
+      try {
+        return await this.carregarArquivo(client, versao, arquivo, spec, stg);
+      } catch (e: any) {
+        if (tent >= MAX) throw e;
+        const espera = tent * 15_000;
+        this.logger.warn(
+          `RFB ${spec.nome}: ${arquivo} falhou (tent ${tent}/${MAX}: ${String(e?.message || e)}) — retry em ${espera / 1000}s`,
+        );
+        await new Promise((r) => setTimeout(r, espera));
+      }
     }
   }
 
