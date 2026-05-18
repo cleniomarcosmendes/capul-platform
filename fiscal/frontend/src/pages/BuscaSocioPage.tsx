@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Users, Search, Info } from 'lucide-react';
 import { fiscalApi } from '../services/api';
 import { PageWrapper } from '../components/PageWrapper';
@@ -50,38 +50,46 @@ const fmtData = (s: string | null) =>
  * pública Dados Abertos). Sem certificado/SEFAZ. GESTOR_FISCAL+.
  */
 export function BuscaSocioPage() {
-  const [termo, setTermo] = useState('');
-  // Debounce (lição do 429): o input mexe só em `termo`; 350ms após parar
-  // de digitar propaga p/ `termoBusca` (que dispara o fetch).
-  const [termoBusca, setTermoBusca] = useState('');
-  const [page, setPage] = useState(1);
+  // A URL é a FONTE DE VERDADE da busca (?nome=&page=). Assim "voltar" do
+  // navegador (após clicar numa empresa), refresh e favoritar restauram
+  // a pesquisa exatamente como estava — sem redigitar.
+  const [sp, setSp] = useSearchParams();
+  const nomeUrl = (sp.get('nome') ?? '').trim();
+  const pageUrl = Math.max(1, Number(sp.get('page')) || 1);
+  // Input controlado; inicia do URL (mostra o termo ao restaurar).
+  const [termo, setTermo] = useState(sp.get('nome') ?? '');
   const [data, setData] = useState<Resp | null>(null);
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const navigate = useNavigate();
 
+  // Debounce (lição do 429): digitar mexe só no input; 350ms depois grava
+  // na URL (replace — não polui histórico ao digitar). Novo termo volta
+  // p/ página 1; se igual ao da URL, não faz nada (não reseta paginação).
   useEffect(() => {
     const t = setTimeout(() => {
-      setTermoBusca(termo.trim());
-      setPage(1);
+      const v = termo.trim();
+      if (v === nomeUrl) return;
+      setSp(v ? { nome: v, page: '1' } : {}, { replace: true });
     }, 350);
     return () => clearTimeout(t);
-  }, [termo]);
+  }, [termo, nomeUrl, setSp]);
 
+  // Fetch keyed na URL (nome+page).
   useEffect(() => {
-    if (termoBusca.length < 3) {
-      setData(null);
-      return;
-    }
+    if (nomeUrl.length < 3) { setData(null); return; }
     let cancelado = false;
     setLoading(true);
     fiscalApi
-      .get<Resp>('/rfb/socios/busca', { params: { nome: termoBusca, page } })
+      .get<Resp>('/rfb/socios/busca', { params: { nome: nomeUrl, page: pageUrl } })
       .then((r) => { if (!cancelado) setData(r.data); })
       .catch((e) => { if (!cancelado) toast.error(extractApiError(e)); })
       .finally(() => { if (!cancelado) setLoading(false); });
     return () => { cancelado = true; };
-  }, [termoBusca, page, toast]);
+  }, [nomeUrl, pageUrl, toast]);
+
+  const irPagina = (p: number) =>
+    setSp({ nome: nomeUrl, page: String(Math.max(1, p)) }, { replace: true });
 
   const itens = data?.itens ?? [];
 
@@ -109,7 +117,7 @@ export function BuscaSocioPage() {
         />
       </div>
 
-      {termoBusca.length > 0 && termoBusca.length < 3 && (
+      {termo.trim().length > 0 && termo.trim().length < 3 && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
           <Info className="h-4 w-4" /> Digite ao menos 3 caracteres.
         </div>
@@ -189,14 +197,14 @@ export function BuscaSocioPage() {
               </table>
             </div>
           )}
-          {(data.page > 1 || data.hasMore) && (
+          {(pageUrl > 1 || data.hasMore) && (
             <div className="mt-3 flex items-center justify-between text-sm text-slate-600">
-              <span>Página {data.page}</span>
+              <span>Página {pageUrl}</span>
               <div className="flex gap-2">
-                <Button size="sm" variant="secondary" disabled={page <= 1}
-                  onClick={() => setPage((p) => p - 1)}>Anterior</Button>
+                <Button size="sm" variant="secondary" disabled={pageUrl <= 1}
+                  onClick={() => irPagina(pageUrl - 1)}>Anterior</Button>
                 <Button size="sm" variant="secondary" disabled={!data.hasMore}
-                  onClick={() => setPage((p) => p + 1)}>Próxima</Button>
+                  onClick={() => irPagina(pageUrl + 1)}>Próxima</Button>
               </div>
             </div>
           )}
