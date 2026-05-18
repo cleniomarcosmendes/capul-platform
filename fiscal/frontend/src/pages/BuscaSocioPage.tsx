@@ -154,7 +154,17 @@ export function BuscaSocioPage() {
                       <td className="px-3 py-2 text-xs">
                         {r.socioTipo}
                         {r.faixaEtaria && FAIXA[r.faixaEtaria] && (
-                          <span className="ml-1 text-slate-400">· {FAIXA[r.faixaEtaria]}a</span>
+                          <span
+                            className="ml-1 cursor-help text-slate-400 underline decoration-dotted"
+                            title={
+                              `Faixa etária do sócio: ${FAIXA[r.faixaEtaria]} anos. `
+                              + 'A RFB não publica a idade exata (privacidade) — só a faixa. '
+                              + 'Reflete a foto mensal da base pública (Dados Abertos); '
+                              + 'código 0 = não se aplica (ex.: sócio pessoa jurídica).'
+                            }
+                          >
+                            · {FAIXA[r.faixaEtaria]}a
+                          </span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-xs">{r.qualificacao ?? '—'}</td>
