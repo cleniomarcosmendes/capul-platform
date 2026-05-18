@@ -430,7 +430,7 @@ export function RfbCruzamentoTab() {
               <th className="px-3 py-2" title="Código + Loja no Protheus (A1_COD/A1_LOJA para cliente, A2_COD/A2_LOJA para fornecedor)">Cód/Loja</th>
               <Th col="razaoProtheus" label="Razão (Protheus)" />
               <Th col="razaoRfb" label="Razão (RFB)" />
-              <Th col="similaridadeRazao" label="Razão ≈" />
+              <Th col="similaridadeRazao" label="Razão (sim.%)" />
               <Th col="situacaoRfb" label="Sit. RFB" />
               <th className="px-3 py-2">Situação desde</th>
               <Th col="ufRfb" label="UF" />
@@ -465,17 +465,18 @@ export function RfbCruzamentoTab() {
                 <td className="px-3 py-2 text-slate-600">{r.razaoRfb ?? '—'}</td>
                 <td className="px-3 py-2 text-xs whitespace-nowrap">
                   {r.similaridadeRazao == null ? (
-                    <span className="text-slate-300">—</span>
+                    <span className="text-slate-300" title="Sem comparação (não encontrado na RFB ou sem razão)">—</span>
                   ) : r.divergenciaRazao ? (
                     <span
-                      className="rounded bg-red-100 px-1.5 py-0.5 font-medium text-red-700"
-                      title="Razão social do Protheus diverge da oficial RFB"
+                      title={`Razão do Protheus diverge da oficial RFB — só ${r.similaridadeRazao}% de similaridade (quanto menor, mais diferente; 0% = nada em comum).`}
+                      className="whitespace-nowrap"
                     >
-                      {r.similaridadeRazao}% diverge
+                      <span className="rounded bg-red-100 px-1.5 py-0.5 font-semibold text-red-700">diverge</span>
+                      <span className="ml-1 text-slate-400">{r.similaridadeRazao}% sim.</span>
                     </span>
                   ) : (
-                    <span className="text-green-700" title="Razão compatível com a RFB">
-                      {r.similaridadeRazao}%
+                    <span className="text-green-700" title="Razão compatível com a RFB (similaridade alta)">
+                      {r.similaridadeRazao}% sim.
                     </span>
                   )}
                 </td>
