@@ -37,6 +37,18 @@ interface VersoesResp {
   ultimas: ControleRow[];
   cronDeteccao: string | null; // null = detecção automática desativada
 }
+interface CruzExec {
+  emAndamento: boolean;
+  ultima: {
+    status: string; iniciado: string; fim: string | null; total: number | null;
+    observacao: string | null;
+    alertaIrregular: number | null; alertaAtencao: number | null;
+    alertaOk: number | null; naoEncontrado: number | null;
+  } | null;
+  cooldownAte: string | null;
+  podeRodar: boolean;
+  limiarRazao: number;
+}
 
 const fmt = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
 const hora = (s: string | null) => (s ? new Date(s).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
@@ -187,6 +199,58 @@ export function RfbTab() {
       () => fiscalApi.post('/rfb/cron', { cron: cronInput.trim() }),
       cronInput.trim() ? 'Agenda de detecção atualizada' : 'Detecção automática desativada',
     );
+
+  // ── Cruzamento SA1+SA2 × RFB (lote pesado — movido p/ cá, fora da
+  //    tela de consulta, pedido Clenio 18/05). Cooldown no backend (C1).
+  const [cruz, setCruz] = useState<CruzExec | null>(null);
+  const [limiarCruz, setLimiarCruz] = useState('');
+  const carregarCruz = useCallback(async () => {
+    try {
+      const { data } = await fiscalApi.get<CruzExec>('/rfb/cruzamento/exec');
+      setCruz(data);
+      setLimiarCruz(String(data.limiarRazao));
+    } catch (e) {
+      toast.error(extractApiError(e));
+    }
+  }, [toast]);
+  useEffect(() => { carregarCruz(); }, [carregarCruz]);
+  useEffect(() => {
+    if (!cruz?.emAndamento) return;
+    const id = setInterval(carregarCruz, 8000);
+    return () => clearInterval(id);
+  }, [cruz?.emAndamento, carregarCruz]);
+
+  const rodarCruz = async () => {
+    const ok = await confirm({
+      title: 'Rodar cruzamento SA1+SA2 × RFB?',
+      description:
+        'Lote PESADO (~2 min): coleta TODO o cadastro Protheus (clientes + '
+        + 'fornecedores) e cruza com os ~71M da base RFB local, substituindo o '
+        + 'snapshot. Cooldown de 30 min entre execuções. Sem certificado/SEFAZ.',
+      variant: 'warning',
+      confirmLabel: 'Rodar agora',
+    });
+    if (!ok) return;
+    setActing(true);
+    try {
+      await fiscalApi.post('/rfb/cruzamento');
+      toast.success('Cruzamento iniciado — acompanhe aqui');
+    } catch (e) {
+      toast.error(extractApiError(e)); // 409 cooldown / já em andamento
+    } finally {
+      setActing(false);
+      await carregarCruz();
+    }
+  };
+  const salvarLimiarCruz = () => {
+    const v = Number(limiarCruz);
+    if (!Number.isFinite(v) || v < 0 || v > 100) {
+      toast.error('Limiar inválido — informe um inteiro 0-100.');
+      return;
+    }
+    acao(() => fiscalApi.post('/rfb/cruzamento/limiar', { valor: v }), 'Limiar salvo (aplica no próximo cruzamento)')
+      .then(carregarCruz);
+  };
 
   if (loading) return <div className="text-sm text-slate-500">Carregando…</div>;
 
@@ -370,6 +434,79 @@ export function RfbTab() {
       {!isAdmin && (
         <p className="text-xs text-slate-500">Somente ADMIN_TI dispara detecção/importação.</p>
       )}
+
+      {/* Cruzamento SA1+SA2 × RFB (lote pesado — fora da tela de consulta) */}
+      <div className="rounded-lg border border-slate-200 p-4">
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-sm font-semibold text-slate-700">Cruzamento SA1+SA2 × RFB</span>
+          {cruz?.emAndamento && (
+            <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">em andamento…</span>
+          )}
+        </div>
+        <p className="mb-2 text-xs text-slate-500">
+          Confronta o cadastro Protheus (clientes SA1 + fornecedores SA2) com a
+          base RFB e gera o snapshot consultável em <strong>Cadastro → Inteligência
+          Cadastral</strong>. <strong>Lote pesado (~2 min)</strong> — cooldown de
+          30 min entre execuções.
+        </p>
+        {cruz?.ultima ? (
+          <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+            <span>Última: <strong>{cruz.ultima.status}</strong>{cruz.ultima.observacao ? ` · ${cruz.ultima.observacao}` : ''}
+              {cruz.ultima.fim ? ` · ${new Date(cruz.ultima.fim).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` : ''}</span>
+            {cruz.ultima.total != null && (
+              <span>Total <strong>{cruz.ultima.total.toLocaleString('pt-BR')}</strong> ·
+                {' '}<span className="text-red-600">{(cruz.ultima.alertaIrregular ?? 0).toLocaleString('pt-BR')} irreg.</span> ·
+                {' '}<span className="text-amber-600">{(cruz.ultima.alertaAtencao ?? 0).toLocaleString('pt-BR')} atenç.</span> ·
+                {' '}<span className="text-green-600">{(cruz.ultima.alertaOk ?? 0).toLocaleString('pt-BR')} ok</span> ·
+                {' '}{(cruz.ultima.naoEncontrado ?? 0).toLocaleString('pt-BR')} fora RFB</span>
+            )}
+          </div>
+        ) : (
+          <p className="mb-2 text-xs text-slate-400">Nunca executado.</p>
+        )}
+        {isAdmin ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              onClick={rodarCruz}
+              disabled={acting || !cruz?.podeRodar}
+              title={
+                cruz?.emAndamento ? 'Cruzamento em andamento'
+                  : cruz?.cooldownAte
+                    ? `Cooldown — disponível após ${new Date(cruz.cooldownAte).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`
+                    : 'Reprocessar o cruzamento (lote pesado)'
+              }
+            >
+              <RefreshCw className="mr-1 h-3.5 w-3.5" /> Rodar cruzamento
+            </Button>
+            {!cruz?.podeRodar && !cruz?.emAndamento && cruz?.cooldownAte && (
+              <span className="text-xs text-amber-600">
+                cooldown até {new Date(cruz.cooldownAte).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
+              </span>
+            )}
+            <span className="ml-2 inline-flex items-center gap-1.5 text-xs text-slate-500">
+              <label title="% mínimo de similaridade de razão p/ NÃO marcar divergência. Aplica no próximo cruzamento.">
+                Limiar divergência:
+              </label>
+              <input
+                type="number" min={0} max={100}
+                value={limiarCruz}
+                onChange={(e) => setLimiarCruz(e.target.value)}
+                className="w-16 rounded-md border border-slate-300 px-2 py-1 text-xs"
+              />
+              <span className="text-slate-400">%</span>
+              <Button
+                size="sm" variant="secondary" onClick={salvarLimiarCruz}
+                disabled={acting || limiarCruz === String(cruz?.limiarRazao ?? '')}
+              >
+                Salvar limiar
+              </Button>
+            </span>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-400">Somente ADMIN_TI dispara o cruzamento / altera o limiar.</p>
+        )}
+      </div>
 
       {/* Histórico */}
       <div>

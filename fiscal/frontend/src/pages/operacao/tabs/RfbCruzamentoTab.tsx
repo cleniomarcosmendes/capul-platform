@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Network, Play, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, Download, X } from 'lucide-react';
+import { Network, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, Download, X } from 'lucide-react';
 import { fiscalApi } from '../../../services/api';
 import { Button } from '../../../components/Button';
 import { useToast } from '../../../components/Toast';
-import { useConfirm } from '../../../components/ConfirmDialog';
-import { useAuth } from '../../../contexts/AuthContext';
 import { extractApiError } from '../../../utils/errors';
 import { PageWrapper } from '../../../components/PageWrapper';
 
@@ -111,16 +109,8 @@ export function RfbCruzamentoTab() {
   // nginx (30 r/s) e volta 429 (incidente Clenio 18/05). Inicia do URL.
   const [searchInput, setSearchInput] = useState(sp.get('search') ?? '');
   const toast = useToast();
-  const confirm = useConfirm();
   const navigate = useNavigate();
-  const { fiscalRole } = useAuth();
-  const isAdmin = fiscalRole === 'ADMIN_TI';
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [limiarInput, setLimiarInput] = useState('');
-
-  useEffect(() => {
-    if (data?.limiarRazao != null) setLimiarInput(String(data.limiarRazao));
-  }, [data?.limiarRazao]);
 
   /** Filtros (sem page/sort) — compartilhado por lista, facetas e export. */
   const filtroParams = useCallback(() => {
@@ -175,29 +165,6 @@ export function RfbCruzamentoTab() {
     return () => clearTimeout(t);
   }, [searchInput, f.search, patch]);
 
-  async function rodar() {
-    const ok = await confirm({
-      title: 'Rodar cruzamento SA1+SA2 × RFB?',
-      description:
-        'Coleta clientes e fornecedores do Protheus e cruza com a base CNPJ local ' +
-        '(sem certificado, sem SEFAZ — zero risco). Roda em background; o snapshot ' +
-        'anterior é substituído. Requer a base RFB já importada.',
-      variant: 'info',
-      confirmLabel: 'Rodar agora',
-    });
-    if (!ok) return;
-    setActing(true);
-    try {
-      await fiscalApi.post('/rfb/cruzamento');
-      toast.success('Cruzamento iniciado');
-      await carregar();
-    } catch (e) {
-      toast.error(extractApiError(e));
-    } finally {
-      setActing(false);
-    }
-  }
-
   async function exportar() {
     setActing(true);
     try {
@@ -206,24 +173,6 @@ export function RfbCruzamentoTab() {
       const a = document.createElement('a');
       a.href = url; a.download = 'inteligencia-cadastral.csv'; a.click();
       URL.revokeObjectURL(url);
-    } catch (e) {
-      toast.error(extractApiError(e));
-    } finally {
-      setActing(false);
-    }
-  }
-
-  async function salvarLimiar() {
-    const v = Number(limiarInput);
-    if (!Number.isFinite(v) || v < 0 || v > 100) {
-      toast.error('Limiar inválido — informe um inteiro 0-100.');
-      return;
-    }
-    setActing(true);
-    try {
-      await fiscalApi.post('/rfb/cruzamento/limiar', { valor: v });
-      toast.success('Limiar salvo — aplica no próximo cruzamento');
-      await carregar();
     } catch (e) {
       toast.error(extractApiError(e));
     } finally {
@@ -342,44 +291,19 @@ export function RfbCruzamentoTab() {
 
       <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
         <span>
-          Última execução: <strong>{ex?.status ?? '—'}</strong>
+          Snapshot de: <strong>{ex?.status ?? '—'}</strong>
           {ex?.observacao ? ` · ${ex.observacao}` : ''}
           {ex?.fim ? ` · ${new Date(ex.fim).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` : ''}
+          <span className="ml-1 text-slate-400" title="Reprocessar o cruzamento (lote pesado) é feito em Operação → Controle Operacional → Base CNPJ (RFB), por ADMIN_TI.">
+            · reprocessar em Operação → Controle
+          </span>
         </span>
-        {isAdmin && (
-          <Button size="sm" onClick={rodar} disabled={acting || ex?.status === 'RODANDO'}>
-            <Play className="mr-1 h-3.5 w-3.5" /> Rodar cruzamento
-          </Button>
-        )}
         <Button size="sm" variant="secondary" onClick={() => carregar()} disabled={acting}>
           <RefreshCw className="mr-1 h-3.5 w-3.5" /> Atualizar
         </Button>
         <Button size="sm" variant="secondary" onClick={exportar} disabled={acting || (data?.total ?? 0) === 0}>
           <Download className="mr-1 h-3.5 w-3.5" /> Exportar CSV
         </Button>
-        {isAdmin && (
-          <span className="inline-flex items-center gap-1.5">
-            <label
-              className="text-slate-500"
-              title="% mínimo de similaridade de razão p/ NÃO marcar divergência. Aplica no próximo cruzamento."
-            >
-              Limiar divergência:
-            </label>
-            <input
-              type="number" min={0} max={100}
-              value={limiarInput}
-              onChange={(e) => setLimiarInput(e.target.value)}
-              className="w-16 rounded-md border border-slate-300 px-2 py-1 text-xs"
-            />
-            <span className="text-slate-400">%</span>
-            <Button
-              size="sm" variant="secondary" onClick={salvarLimiar}
-              disabled={acting || limiarInput === String(data?.limiarRazao ?? '')}
-            >
-              Salvar limiar
-            </Button>
-          </span>
-        )}
       </div>
 
       {/* Facetas combináveis */}
