@@ -11,6 +11,7 @@ import { PageWrapper } from '../../../components/PageWrapper';
 
 interface Row {
   id: number; cnpj: string; origem: string; razaoProtheus: string | null;
+  codigo: string | null; loja: string | null;
   razaoRfb: string | null; situacaoRfb: string | null; ufRfb: string | null;
   cnae: string | null; porte: string | null; optanteSimples: string | null;
   dataSituacao: string | null;
@@ -390,6 +391,7 @@ export function RfbCruzamentoTab() {
             <tr>
               <Th col="cnpj" label="CNPJ" />
               <Th col="origem" label="Origem" />
+              <th className="px-3 py-2" title="Código + Loja no Protheus (A1_COD/A1_LOJA para cliente, A2_COD/A2_LOJA para fornecedor)">Cód/Loja</th>
               <Th col="razaoProtheus" label="Razão (Protheus)" />
               <Th col="razaoRfb" label="Razão (RFB)" />
               <Th col="similaridadeRazao" label="Razão ≈" />
@@ -409,6 +411,9 @@ export function RfbCruzamentoTab() {
               >
                 <td className="px-3 py-2 font-mono text-xs">{r.cnpj}</td>
                 <td className="px-3 py-2 text-xs">{r.origem === 'SA1010' ? 'Cliente' : 'Fornec.'}</td>
+                <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">
+                  {r.codigo ? `${r.codigo}${r.loja ? '/' + r.loja : ''}` : '—'}
+                </td>
                 <td className="px-3 py-2">{r.razaoProtheus ?? '—'}</td>
                 <td className="px-3 py-2 text-slate-600">{r.razaoRfb ?? '—'}</td>
                 <td className="px-3 py-2 text-xs whitespace-nowrap">
@@ -445,7 +450,7 @@ export function RfbCruzamentoTab() {
               </tr>
             ))}
             {(data?.itens ?? []).length === 0 && (
-              <tr><td colSpan={9} className="px-3 py-4 text-center text-slate-400">
+              <tr><td colSpan={10} className="px-3 py-4 text-center text-slate-400">
                 Sem resultados. Rode o cruzamento (precisa da base RFB importada).
               </td></tr>
             )}
