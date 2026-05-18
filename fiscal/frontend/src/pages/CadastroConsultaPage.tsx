@@ -115,6 +115,10 @@ export function CadastroConsultaPage() {
     searchParams.get('fonte') === 'local' ? 'local' : 'sefaz',
   );
   const [local, setLocal] = useState<ConsultaLocalResp | null>(null);
+  // CPF digitado no modo Base local: os Dados Abertos da RFB são só CNPJ
+  // (não publicam PF/produtor rural). Em vez de erro seco, guardamos o CPF
+  // e oferecemos trocar p/ SEFAZ ao vivo (lá produtor rural consulta por CPF).
+  const [cpfBloqueadoLocal, setCpfBloqueadoLocal] = useState<string | null>(null);
 
   const docDigits = documento.replace(/\D/g, '');
 
@@ -144,14 +148,24 @@ export function CadastroConsultaPage() {
 
   /** Consulta SÓ na base RFB local — sem certificado, sem SEFAZ. */
   async function consultarLocal(cnpjLimpo: string) {
+    if (cnpjLimpo.length === 11) {
+      // CPF: a base RFB Dados Abertos é só CNPJ (PF/produtor rural não
+      // consta). Não é erro do usuário — oferece o caminho SEFAZ ao vivo.
+      setCpfBloqueadoLocal(cnpjLimpo);
+      setError(null);
+      setResult(null);
+      setLocal(null);
+      return;
+    }
     if (cnpjLimpo.length !== 14) {
-      setError('A base local cobre apenas CNPJ (14 dígitos). Para CPF, use a consulta SEFAZ ao vivo.');
+      setError('Informe um CNPJ de 14 dígitos.');
       return;
     }
     setError(null);
     setErrorCode(null);
     setResult(null);
     setLocal(null);
+    setCpfBloqueadoLocal(null);
     setCopied(false);
     try {
       setLoading(true);
@@ -267,7 +281,7 @@ export function CadastroConsultaPage() {
       <div className="mb-3 inline-flex rounded-lg border border-slate-200 bg-white p-1 text-sm">
         <button
           type="button"
-          onClick={() => { setModo('local'); setResult(null); setError(null); }}
+          onClick={() => { setModo('local'); setResult(null); setError(null); setCpfBloqueadoLocal(null); }}
           className={modo === 'local'
             ? 'rounded-md bg-capul-600 px-3 py-1.5 font-medium text-white'
             : 'rounded-md px-3 py-1.5 text-slate-600 hover:bg-slate-50'}
@@ -276,7 +290,7 @@ export function CadastroConsultaPage() {
         </button>
         <button
           type="button"
-          onClick={() => { setModo('sefaz'); setLocal(null); setError(null); }}
+          onClick={() => { setModo('sefaz'); setLocal(null); setError(null); setCpfBloqueadoLocal(null); }}
           className={modo === 'sefaz'
             ? 'rounded-md bg-capul-600 px-3 py-1.5 font-medium text-white'
             : 'rounded-md px-3 py-1.5 text-slate-600 hover:bg-slate-50'}
@@ -317,7 +331,10 @@ export function CadastroConsultaPage() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-80">
             <label className="mb-1 block text-xs font-medium text-slate-700">
-              CNPJ ou CPF
+              {modo === 'local' ? 'CNPJ' : 'CNPJ ou CPF'}
+              {modo === 'local' && (
+                <span className="ml-1 font-normal text-slate-400">(base local é só CNPJ)</span>
+              )}
             </label>
             <input
               type="text"
@@ -330,7 +347,7 @@ export function CadastroConsultaPage() {
                   setDocumento(raw.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5'));
                 }
               }}
-              placeholder="000.000.000-00 ou 00.000.000/0000-00"
+              placeholder={modo === 'local' ? '00.000.000/0000-00 (só CNPJ)' : '000.000.000-00 ou 00.000.000/0000-00'}
               className="w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm tracking-tight focus:border-slate-500 focus:ring-slate-500"
               required
             />
@@ -364,6 +381,33 @@ export function CadastroConsultaPage() {
       </form>
 
       {error && <ErrorDisplay error={error} errorCode={errorCode} documento={docDigits} />}
+
+      {modo === 'local' && cpfBloqueadoLocal && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-medium">Isto é um CPF — a base local não cobre pessoa física.</p>
+          <p className="mt-1 text-xs">
+            Os Dados Abertos da RFB são uma base <strong>só de CNPJ</strong>: pessoa
+            física e <strong>produtor rural</strong> (que se identifica por CPF) não
+            constam aqui. Mas o <strong>SEFAZ ao vivo</strong> consulta produtor rural
+            por CPF (+ UF) — a Inscrição Estadual fica atrelada ao CPF.
+          </p>
+          <div className="mt-2">
+            <Button
+              size="sm"
+              onClick={() => {
+                const cpf = cpfBloqueadoLocal;
+                setCpfBloqueadoLocal(null);
+                setModo('sefaz');
+                setLocal(null);
+                setError(null);
+                consultar(cpf, null);
+              }}
+            >
+              Consultar no SEFAZ ao vivo (certificado)
+            </Button>
+          </div>
+        </div>
+      )}
 
       {modo === 'local' && local && (
         <PainelLocal
