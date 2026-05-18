@@ -20,11 +20,32 @@ const PORTE: Record<string, string> = {
   '01': 'MICRO EMPRESA', '03': 'EMPRESA DE PEQUENO PORTE',
 };
 
+export interface SocioLocal {
+  tipo: string; // PF | PJ | Estrangeiro
+  nome: string | null;
+  documento: string | null;
+  qualificacao: string | null;
+  dataEntrada: string | null;
+  pais: string | null;
+  faixaEtaria: string | null;
+  representante: string | null;
+}
+/** Campos analíticos F1.9 (Camada 2+3) anexados ao ReceitaFederalData. */
+export type ReceitaLocalExtra = {
+  versaoRfb?: string;
+  situacaoEspecial?: string | null;
+  dataSituacaoEspecial?: string | null;
+  qualificacaoResponsavel?: string | null;
+  enteFederativo?: string | null;
+  paisEstab?: string | null;
+  socios?: SocioLocal[];
+};
+
 @Injectable()
 export class RfbConsultaService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async porCnpj(cnpj: string): Promise<(ReceitaFederalData & { versaoRfb?: string }) | null> {
+  async porCnpj(cnpj: string): Promise<(ReceitaFederalData & ReceitaLocalExtra) | null> {
     const c = (cnpj || '').replace(/\D/g, '');
     if (c.length !== 14) return null; // base RFB é só CNPJ (não CPF)
 
@@ -52,6 +73,54 @@ export class RfbConsultaService {
       ? await this.prisma.rfbNatureza.findUnique({ where: { codigo: emp.naturezaJuridica } })
       : null;
 
+    // F1.9 — enriquecimento analítico (Camada 2 campos + Camada 3 QSA).
+    const secCodes = (estab.cnaeSecundaria || '')
+      .split(',').map((x) => x.trim()).filter(Boolean).slice(0, 30);
+    const socsRaw = await this.prisma.$queryRaw<Array<{
+      identificador_socio: string | null; nome_socio: string | null;
+      cnpj_cpf_socio: string | null; qualificacao_socio: string | null;
+      data_entrada: string | null; pais: string | null;
+      repr_legal_nome: string | null; faixa_etaria: string | null;
+    }>>`SELECT identificador_socio, nome_socio, cnpj_cpf_socio, qualificacao_socio,
+          data_entrada, pais, repr_legal_nome, faixa_etaria
+        FROM rfb.socios WHERE cnpj_basico = ${basico}
+        ORDER BY nome_socio LIMIT 50`;
+
+    const qCodes = [...new Set(socsRaw.map((s) => s.qualificacao_socio).filter((x): x is string => !!x))];
+    if (emp?.qualificacaoResponsavel) qCodes.push(emp.qualificacaoResponsavel);
+    const pCodes = [...new Set(
+      [estab.pais, ...socsRaw.map((s) => s.pais)].filter((x): x is string => !!x),
+    )];
+    const [motivo, secCnaes, quals, paises] = await Promise.all([
+      estab.motivoSituacao
+        ? this.prisma.rfbMotivo.findUnique({ where: { codigo: estab.motivoSituacao } })
+        : Promise.resolve(null),
+      secCodes.length
+        ? this.prisma.rfbCnae.findMany({ where: { codigo: { in: secCodes } } })
+        : Promise.resolve([] as { codigo: string; descricao: string | null }[]),
+      qCodes.length
+        ? this.prisma.rfbQualificacao.findMany({ where: { codigo: { in: qCodes } } })
+        : Promise.resolve([] as { codigo: string; descricao: string | null }[]),
+      pCodes.length
+        ? this.prisma.rfbPais.findMany({ where: { codigo: { in: pCodes } } })
+        : Promise.resolve([] as { codigo: string; descricao: string | null }[]),
+    ]);
+    const qMap = new Map(quals.map((q) => [q.codigo, q.descricao]));
+    const pMap = new Map(paises.map((p) => [p.codigo, p.descricao]));
+    const cMap = new Map(secCnaes.map((x) => [x.codigo, x.descricao]));
+    const comDesc = (cod: string | null | undefined, m: Map<string, string | null>) =>
+      cod ? `${cod}${m.get(cod) ? ' — ' + m.get(cod) : ''}` : null;
+    const socios: SocioLocal[] = socsRaw.map((s) => ({
+      tipo: s.identificador_socio === '1' ? 'PJ' : s.identificador_socio === '3' ? 'Estrangeiro' : 'PF',
+      nome: s.nome_socio ?? null,
+      documento: s.cnpj_cpf_socio ?? null,
+      qualificacao: comDesc(s.qualificacao_socio, qMap),
+      dataEntrada: s.data_entrada ?? null,
+      pais: s.pais ? (pMap.get(s.pais) ?? s.pais) : null,
+      faixaEtaria: s.faixa_etaria ?? null,
+      representante: s.repr_legal_nome || null,
+    }));
+
     const sit = (estab.situacaoCadastral || '').padStart(2, '0');
     const tel = estab.ddd1 && estab.telefone1 ? `(${estab.ddd1}) ${estab.telefone1}` : null;
 
@@ -61,7 +130,9 @@ export class RfbConsultaService {
       nomeFantasia: estab.nomeFantasia ?? null,
       situacao: SITUACAO[sit] ?? null,
       dataSituacao: estab.dataSituacao ?? null,
-      motivoSituacao: null,
+      motivoSituacao: estab.motivoSituacao
+        ? `${estab.motivoSituacao}${motivo?.descricao ? ' — ' + motivo.descricao : ''}`
+        : null,
       naturezaJuridica: emp?.naturezaJuridica
         ? `${emp.naturezaJuridica}${nat?.descricao ? ' — ' + nat.descricao : ''}`
         : null,
@@ -69,8 +140,8 @@ export class RfbConsultaService {
       capitalSocial: emp?.capitalSocial != null ? Number(emp.capitalSocial) : null,
       cnaeFiscal: estab.cnaePrincipal ?? null,
       cnaeFiscalDescricao: cnae?.descricao ?? null,
-      cnaesSecundarios: [],
-      dataAbertura: null,
+      cnaesSecundarios: secCodes.map((cod) => ({ codigo: cod, descricao: cMap.get(cod) ?? '' })),
+      dataAbertura: estab.dataInicioAtividade ?? null,
       endereco: {
         logradouro: estab.logradouro ?? null,
         numero: estab.numero ?? null,
@@ -84,6 +155,12 @@ export class RfbConsultaService {
       email: estab.correioEletronico ?? null,
       fonte: 'RFB_LOCAL',
       consultadoEm: new Date().toISOString(),
+      situacaoEspecial: estab.situacaoEspecial ?? null,
+      dataSituacaoEspecial: estab.dataSituacaoEspecial ?? null,
+      qualificacaoResponsavel: comDesc(emp?.qualificacaoResponsavel, qMap),
+      enteFederativo: emp?.enteFederativo ?? null,
+      paisEstab: estab.pais ? (pMap.get(estab.pais) ?? estab.pais) : null,
+      socios,
       versaoRfb: ultimo?.versaoRfb,
     };
   }

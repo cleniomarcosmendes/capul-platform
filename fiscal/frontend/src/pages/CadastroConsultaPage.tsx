@@ -69,6 +69,20 @@ interface ReceitaLocalData {
   } | null;
   telefone: string | null;
   email: string | null;
+  // F1.9 Camada 2+3
+  dataAbertura: string | null;
+  motivoSituacao: string | null;
+  cnaesSecundarios: Array<{ codigo: string; descricao: string }>;
+  situacaoEspecial: string | null;
+  dataSituacaoEspecial: string | null;
+  qualificacaoResponsavel: string | null;
+  enteFederativo: string | null;
+  paisEstab: string | null;
+  socios: Array<{
+    tipo: string; nome: string | null; documento: string | null;
+    qualificacao: string | null; dataEntrada: string | null;
+    pais: string | null; faixaEtaria: string | null; representante: string | null;
+  }>;
 }
 interface ConsultaLocalResp {
   fonte: 'RFB_LOCAL';
@@ -652,6 +666,17 @@ function PainelLocal({
         />
         <CampoLocal k="Telefone" v={d.telefone} />
         <CampoLocal k="E-mail" v={d.email} />
+        <CampoLocal k="Data de abertura" v={d.dataAbertura ? fmtDataRfb(d.dataAbertura) : null} />
+        <CampoLocal k="Motivo da situação" v={d.motivoSituacao} />
+        <CampoLocal
+          k="Situação especial"
+          v={d.situacaoEspecial
+            ? `${d.situacaoEspecial}${d.dataSituacaoEspecial ? ' (' + fmtDataRfb(d.dataSituacaoEspecial) + ')' : ''}`
+            : null}
+        />
+        <CampoLocal k="Qualif. responsável" v={d.qualificacaoResponsavel} />
+        <CampoLocal k="Ente federativo" v={d.enteFederativo} />
+        <CampoLocal k="País" v={d.paisEstab} />
         <CampoLocal
           k="Endereço"
           v={d.endereco
@@ -661,6 +686,58 @@ function PainelLocal({
             : null}
         />
       </dl>
+
+      {d.cnaesSecundarios?.length > 0 && (
+        <div className="mt-3">
+          <div className="mb-1 text-xs font-semibold text-slate-500">CNAEs secundários ({d.cnaesSecundarios.length})</div>
+          <div className="flex flex-wrap gap-1">
+            {d.cnaesSecundarios.map((c) => (
+              <span key={c.codigo} className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600" title={c.descricao}>
+                {c.codigo}{c.descricao ? ` — ${c.descricao}` : ''}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {d.socios?.length > 0 && (
+        <div className="mt-4">
+          <div className="mb-1 text-xs font-semibold text-slate-500">
+            Quadro de sócios e administradores (QSA) — {d.socios.length}
+          </div>
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 text-left text-slate-500">
+                <tr>
+                  <th className="px-2 py-1.5">Nome</th>
+                  <th className="px-2 py-1.5">Tipo</th>
+                  <th className="px-2 py-1.5">Documento</th>
+                  <th className="px-2 py-1.5">Qualificação</th>
+                  <th className="px-2 py-1.5">Entrada</th>
+                  <th className="px-2 py-1.5">Faixa etária</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.socios.map((s, i) => (
+                  <tr key={i} className="border-t border-slate-100">
+                    <td className="px-2 py-1.5">
+                      {s.nome ?? '—'}
+                      {s.representante && (
+                        <span className="block text-[10px] text-slate-400">repr.: {s.representante}</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1.5">{s.tipo}</td>
+                    <td className="px-2 py-1.5 font-mono">{s.documento ?? '—'}</td>
+                    <td className="px-2 py-1.5">{s.qualificacao ?? '—'}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap">{s.dataEntrada ? fmtDataRfb(s.dataEntrada) : '—'}</td>
+                    <td className="px-2 py-1.5">{s.faixaEtaria ?? '—'}{s.pais && s.pais !== 'BRASIL' ? ` · ${s.pais}` : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
         <span className="text-xs text-slate-400">
           Fonte: base RFB local{local.versaoRfb ? ` v${local.versaoRfb}` : ''} — foto mensal,
