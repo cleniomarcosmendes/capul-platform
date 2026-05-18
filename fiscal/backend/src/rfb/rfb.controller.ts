@@ -101,6 +101,18 @@ export class RfbController {
     return this.cruzamento.iniciar(user.id);
   }
 
+  /** Limiar de similaridade de razão social (F1.8). ADMIN_TI. Aplica no
+   *  próximo run do cruzamento. */
+  @Post('cruzamento/limiar')
+  @RoleMinima('ADMIN_TI')
+  async configurarLimiarRazao(
+    @Body() body: { valor: number },
+    @CurrentUser() user: FiscalAuthenticatedUser,
+  ) {
+    const cfg = await this.ambiente.atualizarRfbSimRazao(body?.valor, user.email);
+    return { limiarRazao: cfg.rfbSimRazaoMin ?? 80 };
+  }
+
   /** Consulta o snapshot do cruzamento (paginado/filtrado) + execuções. */
   @Get('cruzamento')
   @RoleMinima('GESTOR_FISCAL')

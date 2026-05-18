@@ -215,7 +215,8 @@ export class RfbCruzamentoService {
       this.prisma.rfbCruzamentoResultado.count({ where }),
       this.prisma.rfbCruzamentoExec.findMany({ orderBy: { id: 'desc' }, take: 5 }),
     ]);
-    return { itens, total, page, pageSize, execucoes: ultimas };
+    const cfg = await this.ambiente.getOrCreate();
+    return { itens, total, page, pageSize, execucoes: ultimas, limiarRazao: cfg.rfbSimRazaoMin ?? 80 };
   }
 
   /** "Situação recente" SEM histórico: usa rfb.data_situacao (AAAAMMDD) vs

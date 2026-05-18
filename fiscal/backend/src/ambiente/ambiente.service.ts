@@ -190,6 +190,21 @@ export class AmbienteService {
     });
   }
 
+  /**
+   * Limiar de similaridade de razão social (F1.8): % mínimo p/ NÃO ser
+   * considerado divergência no cruzamento. 0-100. Aplica no PRÓXIMO run.
+   */
+  async atualizarRfbSimRazao(valor: number, usuario: string) {
+    const v = Math.round(Number(valor));
+    if (!Number.isFinite(v) || v < 0 || v > 100) {
+      throw new BadRequestException(`Limiar inválido: informe um inteiro 0-100 (recebido: ${valor})`);
+    }
+    return this.prisma.ambienteConfig.update({
+      where: { id: 1 },
+      data: { rfbSimRazaoMin: v, ultimaAlteracaoPor: usuario },
+    });
+  }
+
   private validarCron(campo: string, expr: string): void {
     try {
       // Cria um CronJob "seco" apenas para validar a sintaxe.

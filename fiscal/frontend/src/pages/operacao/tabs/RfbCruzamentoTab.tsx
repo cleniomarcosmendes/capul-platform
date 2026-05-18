@@ -15,17 +15,22 @@ interface Row {
   cnae: string | null; porte: string | null; optanteSimples: string | null;
   dataSituacao: string | null;
   bloqueado: boolean; achadoRfb: boolean; alerta: string;
+  similaridadeRazao: number | null; divergenciaRazao: boolean;
 }
 interface Exec {
   id: number; status: string; iniciado: string; fim: string | null; total: number | null;
   alertaIrregular: number | null; alertaAtencao: number | null; alertaOk: number | null;
   naoEncontrado: number | null; observacao: string | null;
 }
-interface Resp { itens: Row[]; total: number; page: number; pageSize: number; execucoes: Exec[] }
+interface Resp {
+  itens: Row[]; total: number; page: number; pageSize: number;
+  execucoes: Exec[]; limiarRazao?: number;
+}
 type FacetItem = { valor: string; total: number };
 interface Facetas {
   total: number; alerta: FacetItem[]; origem: FacetItem[]; situacao: FacetItem[];
   uf: FacetItem[]; porte: FacetItem[]; simples: FacetItem[]; cnaeTop: FacetItem[];
+  divergencia: FacetItem[];
 }
 
 /** RFB data_situacao = AAAAMMDD. Formata e diz se mudou nos últimos 90d. */
@@ -59,7 +64,7 @@ export function RfbCruzamentoTab() {
   const [acting, setActing] = useState(false);
   const [f, setF] = useState({
     alerta: '', origem: '', uf: '', situacao: '', porte: '', simples: '',
-    soRecente: false,
+    divergencia: '', soRecente: false,
     search: '', page: 1, sort: '' as string, dir: 'asc' as 'asc' | 'desc',
   });
   const toast = useToast();
@@ -68,6 +73,11 @@ export function RfbCruzamentoTab() {
   const { fiscalRole } = useAuth();
   const isAdmin = fiscalRole === 'ADMIN_TI';
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [limiarInput, setLimiarInput] = useState('');
+
+  useEffect(() => {
+    if (data?.limiarRazao != null) setLimiarInput(String(data.limiarRazao));
+  }, [data?.limiarRazao]);
 
   /** Filtros (sem page/sort) — compartilhado por lista, facetas e export. */
   const filtroParams = useCallback(() => {
@@ -78,6 +88,7 @@ export function RfbCruzamentoTab() {
     if (f.situacao) p.set('situacao', f.situacao);
     if (f.porte) p.set('porte', f.porte);
     if (f.simples) p.set('simples', f.simples);
+    if (f.divergencia) p.set('divergencia', f.divergencia === 'Sim' ? '1' : '0');
     if (f.soRecente) p.set('soRecente', '1');
     if (f.search) p.set('search', f.search);
     return p;
@@ -150,19 +161,37 @@ export function RfbCruzamentoTab() {
     }
   }
 
+  async function salvarLimiar() {
+    const v = Number(limiarInput);
+    if (!Number.isFinite(v) || v < 0 || v > 100) {
+      toast.error('Limiar inválido — informe um inteiro 0-100.');
+      return;
+    }
+    setActing(true);
+    try {
+      await fiscalApi.post('/rfb/cruzamento/limiar', { valor: v });
+      toast.success('Limiar salvo — aplica no próximo cruzamento');
+      await carregar();
+    } catch (e) {
+      toast.error(extractApiError(e));
+    } finally {
+      setActing(false);
+    }
+  }
+
   /** Clique numa faceta = aplica/limpa o filtro daquela dimensão. */
-  const toggleFacet = (dim: 'alerta' | 'origem' | 'uf' | 'situacao' | 'porte' | 'simples', val: string) => {
+  const toggleFacet = (dim: 'alerta' | 'origem' | 'uf' | 'situacao' | 'porte' | 'simples' | 'divergencia', val: string) => {
     const v = val === '(vazio)' ? '' : val;
     setF((p) => ({ ...p, [dim]: p[dim] === v ? '' : v, page: 1 }));
   };
 
   const limpar = () => setF((p) => ({
-    ...p, alerta: '', origem: '', uf: '', situacao: '', porte: '', simples: '', soRecente: false, search: '', page: 1,
+    ...p, alerta: '', origem: '', uf: '', situacao: '', porte: '', simples: '', divergencia: '', soRecente: false, search: '', page: 1,
   }));
 
   const ex = data?.execucoes?.[0];
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
-  const temFiltro = !!(f.alerta || f.origem || f.uf || f.situacao || f.porte || f.simples || f.soRecente || f.search);
+  const temFiltro = !!(f.alerta || f.origem || f.uf || f.situacao || f.porte || f.simples || f.divergencia || f.soRecente || f.search);
 
   const Th = ({ col, label }: { col: string; label: string }) => {
     const active = f.sort === col;
@@ -275,6 +304,29 @@ export function RfbCruzamentoTab() {
         <Button size="sm" variant="secondary" onClick={exportar} disabled={acting || (data?.total ?? 0) === 0}>
           <Download className="mr-1 h-3.5 w-3.5" /> Exportar CSV
         </Button>
+        {isAdmin && (
+          <span className="inline-flex items-center gap-1.5">
+            <label
+              className="text-slate-500"
+              title="% mínimo de similaridade de razão p/ NÃO marcar divergência. Aplica no próximo cruzamento."
+            >
+              Limiar divergência:
+            </label>
+            <input
+              type="number" min={0} max={100}
+              value={limiarInput}
+              onChange={(e) => setLimiarInput(e.target.value)}
+              className="w-16 rounded-md border border-slate-300 px-2 py-1 text-xs"
+            />
+            <span className="text-slate-400">%</span>
+            <Button
+              size="sm" variant="secondary" onClick={salvarLimiar}
+              disabled={acting || limiarInput === String(data?.limiarRazao ?? '')}
+            >
+              Salvar limiar
+            </Button>
+          </span>
+        )}
       </div>
 
       {/* Facetas combináveis */}
@@ -297,6 +349,7 @@ export function RfbCruzamentoTab() {
             <FacetGroup titulo="UF" itens={fac.uf} dim="uf" />
             <FacetGroup titulo="Porte" itens={fac.porte} dim="porte" />
             <FacetGroup titulo="Simples" itens={fac.simples} dim="simples" />
+            <FacetGroup titulo="Divergência razão" itens={fac.divergencia} dim="divergencia" />
             <FacetGroup titulo="Top CNAE" itens={fac.cnaeTop} />
           </div>
         </div>
@@ -322,6 +375,7 @@ export function RfbCruzamentoTab() {
               <Th col="origem" label="Origem" />
               <Th col="razaoProtheus" label="Razão (Protheus)" />
               <Th col="razaoRfb" label="Razão (RFB)" />
+              <Th col="similaridadeRazao" label="Razão ≈" />
               <Th col="situacaoRfb" label="Sit. RFB" />
               <th className="px-3 py-2">Situação desde</th>
               <Th col="ufRfb" label="UF" />
@@ -340,6 +394,22 @@ export function RfbCruzamentoTab() {
                 <td className="px-3 py-2 text-xs">{r.origem === 'SA1010' ? 'Cliente' : 'Fornec.'}</td>
                 <td className="px-3 py-2">{r.razaoProtheus ?? '—'}</td>
                 <td className="px-3 py-2 text-slate-600">{r.razaoRfb ?? '—'}</td>
+                <td className="px-3 py-2 text-xs whitespace-nowrap">
+                  {r.similaridadeRazao == null ? (
+                    <span className="text-slate-300">—</span>
+                  ) : r.divergenciaRazao ? (
+                    <span
+                      className="rounded bg-red-100 px-1.5 py-0.5 font-medium text-red-700"
+                      title="Razão social do Protheus diverge da oficial RFB"
+                    >
+                      {r.similaridadeRazao}% diverge
+                    </span>
+                  ) : (
+                    <span className="text-green-700" title="Razão compatível com a RFB">
+                      {r.similaridadeRazao}%
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-xs">{r.situacaoRfb ?? '—'}</td>
                 <td className="px-3 py-2 text-xs whitespace-nowrap">
                   {fmtDataSit(r.dataSituacao)}
@@ -358,7 +428,7 @@ export function RfbCruzamentoTab() {
               </tr>
             ))}
             {(data?.itens ?? []).length === 0 && (
-              <tr><td colSpan={8} className="px-3 py-4 text-center text-slate-400">
+              <tr><td colSpan={9} className="px-3 py-4 text-center text-slate-400">
                 Sem resultados. Rode o cruzamento (precisa da base RFB importada).
               </td></tr>
             )}
