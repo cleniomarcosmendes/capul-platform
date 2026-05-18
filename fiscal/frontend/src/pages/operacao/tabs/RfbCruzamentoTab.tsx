@@ -67,6 +67,11 @@ export function RfbCruzamentoTab() {
     divergencia: '', soRecente: false,
     search: '', page: 1, sort: '' as string, dir: 'asc' as 'asc' | 'desc',
   });
+  // Busca com DEBOUNCE: o input mexe só em `searchInput` (imediato); 400ms
+  // após parar de digitar, propaga p/ f.search (que dispara carregar). Sem
+  // isso cada tecla = 2 fetches (lista+facetas) → estoura o limit_req do
+  // nginx (30 r/s) e volta 429 (incidente Clenio 18/05).
+  const [searchInput, setSearchInput] = useState('');
   const toast = useToast();
   const confirm = useConfirm();
   const navigate = useNavigate();
@@ -122,6 +127,15 @@ export function RfbCruzamentoTab() {
     if (rodando && !timer.current) timer.current = setInterval(carregar, 5000);
     else if (!rodando && timer.current) { clearInterval(timer.current); timer.current = null; }
   }, [data, carregar]);
+
+  // Debounce do texto de busca → 1 reload ~400ms após parar de digitar
+  // (facetas/página continuam imediatas — são cliques discretos).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setF((p) => (p.search === searchInput ? p : { ...p, search: searchInput, page: 1 }));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   async function rodar() {
     const ok = await confirm({
@@ -185,9 +199,12 @@ export function RfbCruzamentoTab() {
     setF((p) => ({ ...p, [dim]: p[dim] === v ? '' : v, page: 1 }));
   };
 
-  const limpar = () => setF((p) => ({
-    ...p, alerta: '', origem: '', uf: '', situacao: '', porte: '', simples: '', divergencia: '', soRecente: false, search: '', page: 1,
-  }));
+  const limpar = () => {
+    setSearchInput('');
+    setF((p) => ({
+      ...p, alerta: '', origem: '', uf: '', situacao: '', porte: '', simples: '', divergencia: '', soRecente: false, search: '', page: 1,
+    }));
+  };
 
   const ex = data?.execucoes?.[0];
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
@@ -358,8 +375,8 @@ export function RfbCruzamentoTab() {
       {/* Busca livre + filtro de situação recente (data_situacao RFB) */}
       <div className="flex items-center gap-3">
         <input className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-          placeholder="Buscar CNPJ, razão social ou matrícula Protheus" value={f.search}
-          onChange={(e) => setF({ ...f, search: e.target.value, page: 1 })} />
+          placeholder="Buscar CNPJ, razão social ou matrícula Protheus" value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)} />
         <label className="flex shrink-0 items-center gap-1.5 text-xs text-slate-600" title="Situação cadastral alterada na Receita nos últimos 90 dias">
           <input type="checkbox" checked={f.soRecente}
             onChange={(e) => setF({ ...f, soRecente: e.target.checked, page: 1 })} />
