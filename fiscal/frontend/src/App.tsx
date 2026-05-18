@@ -10,6 +10,7 @@ import { NfePendenciasPage } from './pages/NfePendenciasPage';
 import { CteConsultaPage } from './pages/CteConsultaPage';
 import { CteRecebidosPage } from './pages/CteRecebidosPage';
 import { CadastroConsultaPage } from './pages/CadastroConsultaPage';
+import { BuscaSocioPage } from './pages/BuscaSocioPage';
 import { ExecucoesListPage } from './pages/ExecucoesListPage';
 import { ExecucaoDetalhePage } from './pages/ExecucaoDetalhePage';
 import { AlertasHistoricoPage } from './pages/AlertasHistoricoPage';
@@ -106,6 +107,14 @@ function App() {
               element={
                 <ProtectedRoute minRole="GESTOR_FISCAL">
                   <RfbCruzamentoTab />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="rfb/socios"
+              element={
+                <ProtectedRoute minRole="GESTOR_FISCAL">
+                  <BuscaSocioPage />
                 </ProtectedRoute>
               }
             />

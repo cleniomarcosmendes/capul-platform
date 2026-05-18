@@ -14,6 +14,7 @@ import {
   FileSearch,
   AlertTriangle,
   Network,
+  Users,
   X,
 } from 'lucide-react';
 import type { RoleFiscal } from '../types';
@@ -38,6 +39,7 @@ const menuItems: MenuItem[] = [
   { section: 'CADASTRO' },
   { label: 'Consulta Cadastral', icon: UserSearch, path: '/cadastro' },
   { label: 'Inteligência Cadastral', icon: Network, path: '/rfb/cruzamento', minRole: 'GESTOR_FISCAL' },
+  { label: 'Busca por Sócio', icon: Users, path: '/rfb/socios', minRole: 'GESTOR_FISCAL' },
   { section: 'CRUZAMENTO', minRole: 'GESTOR_FISCAL' },
   { label: 'Execucoes', icon: Activity, path: '/execucoes', minRole: 'GESTOR_FISCAL' },
   { label: 'Divergencias', icon: AlertTriangle, path: '/divergencias', minRole: 'GESTOR_FISCAL' },
