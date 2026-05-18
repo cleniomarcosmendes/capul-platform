@@ -51,6 +51,21 @@ const SPECS: Record<string, TabelaSpec> = {
     projetar: (r) => [norm(r[0]), norm(r[1])],
     indices: [{ suf: 'codigo', def: '(codigo)', unique: true }],
   },
+  motivos: {
+    nome: 'motivos', arquivos: ['Motivos.zip'], colunas: ['codigo', 'descricao'],
+    projetar: (r) => [norm(r[0]), norm(r[1])],
+    indices: [{ suf: 'codigo', def: '(codigo)', unique: true }],
+  },
+  qualificacoes: {
+    nome: 'qualificacoes', arquivos: ['Qualificacoes.zip'], colunas: ['codigo', 'descricao'],
+    projetar: (r) => [norm(r[0]), norm(r[1])],
+    indices: [{ suf: 'codigo', def: '(codigo)', unique: true }],
+  },
+  paises: {
+    nome: 'paises', arquivos: ['Paises.zip'], colunas: ['codigo', 'descricao'],
+    projetar: (r) => [norm(r[0]), norm(r[1])],
+    indices: [{ suf: 'codigo', def: '(codigo)', unique: true }],
+  },
   simples: {
     nome: 'simples', arquivos: ['Simples.zip'],
     colunas: ['cnpj_basico', 'optante_simples', 'data_opcao_simples', 'optante_mei', 'data_exclusao_simples'],
@@ -59,8 +74,10 @@ const SPECS: Record<string, TabelaSpec> = {
   },
   empresas: {
     nome: 'empresas', arquivos: Array.from({ length: 10 }, (_, i) => EMPRE(i)),
-    colunas: ['cnpj_basico', 'razao_social', 'natureza_juridica', 'porte', 'capital_social'],
-    projetar: (r) => [norm(r[0]), norm(r[1]), norm(r[2]), norm(r[5]), numBR(r[4])],
+    colunas: ['cnpj_basico', 'razao_social', 'natureza_juridica', 'porte', 'capital_social',
+      'qualificacao_responsavel', 'ente_federativo'],
+    projetar: (r) => [norm(r[0]), norm(r[1]), norm(r[2]), norm(r[5]), numBR(r[4]),
+      norm(r[3]), norm(r[6])],
     indices: [
       { suf: 'cnpjb', def: '(cnpj_basico)', unique: true },
       { suf: 'razao_trgm', def: 'USING gin (razao_social gin_trgm_ops)' },
@@ -70,11 +87,14 @@ const SPECS: Record<string, TabelaSpec> = {
     nome: 'estabelecimentos', arquivos: Array.from({ length: 10 }, (_, i) => ESTAB(i)),
     colunas: ['cnpj_completo', 'cnpj_basico', 'cnpj_ordem', 'cnpj_dv', 'matriz_filial',
       'nome_fantasia', 'situacao_cadastral', 'data_situacao', 'cnae_principal', 'logradouro',
-      'numero', 'bairro', 'cep', 'uf', 'municipio', 'ddd1', 'telefone1', 'correio_eletronico'],
+      'numero', 'bairro', 'cep', 'uf', 'municipio', 'ddd1', 'telefone1', 'correio_eletronico',
+      'motivo_situacao', 'data_inicio_atividade', 'cnae_secundaria', 'situacao_especial',
+      'data_situacao_especial', 'pais'],
     projetar: (r) => [
       (r[0] || '') + (r[1] || '') + (r[2] || ''), norm(r[0]), norm(r[1]), norm(r[2]), norm(r[3]),
       norm(r[4]), norm(r[5]), norm(r[6]), norm(r[11]), norm(r[14]), norm(r[15]), norm(r[17]),
       norm(r[18]), norm(r[19]), norm(r[20]), norm(r[21]), norm(r[22]), norm(r[27]),
+      norm(r[7]), norm(r[10]), norm(r[12]), norm(r[28]), norm(r[29]), norm(r[9]),
     ],
     indices: [
       { suf: 'cnpj', def: '(cnpj_completo)', unique: true },
@@ -85,9 +105,26 @@ const SPECS: Record<string, TabelaSpec> = {
       { suf: 'fant_trgm', def: 'USING gin (nome_fantasia gin_trgm_ops)' },
     ],
   },
+  // Camada 3 — QSA. Sem chave natural (vários sócios/CNPJ); índice
+  // não-único por cnpj_basico (consultado via $queryRaw). Layout RFB
+  // Socios: 0 cnpj_basico · 1 ident_socio · 2 nome/razão · 3 cnpj_cpf ·
+  // 4 qualif_socio · 5 data_entrada · 6 país · 7 repr_cpf · 8 repr_nome ·
+  // 9 repr_qualif · 10 faixa_etária.
+  socios: {
+    nome: 'socios', arquivos: Array.from({ length: 10 }, (_, i) => `Socios${i}.zip`),
+    colunas: ['cnpj_basico', 'identificador_socio', 'nome_socio', 'cnpj_cpf_socio',
+      'qualificacao_socio', 'data_entrada', 'pais', 'repr_legal_cpf', 'repr_legal_nome',
+      'repr_legal_qualif', 'faixa_etaria'],
+    projetar: (r) => [
+      norm(r[0]), norm(r[1]), norm(r[2]), norm(r[3]), norm(r[4]), norm(r[5]),
+      norm(r[6]), norm(r[7]), norm(r[8]), norm(r[9]), norm(r[10]),
+    ],
+    indices: [{ suf: 'cnpjb', def: '(cnpj_basico)' }],
+  },
 };
 
-const ORDEM = ['cnaes', 'municipios', 'naturezas', 'simples', 'empresas', 'estabelecimentos'];
+const ORDEM = ['cnaes', 'municipios', 'naturezas', 'motivos', 'qualificacoes', 'paises',
+  'simples', 'empresas', 'estabelecimentos', 'socios'];
 
 function escTexto(v: string | null): string {
   if (v === null) return '\\N';

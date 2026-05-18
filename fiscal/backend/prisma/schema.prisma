@@ -846,6 +846,13 @@ model RfbEstabelecimento {
   ddd1              String?
   telefone1         String?
   correioEletronico String? @map("correio_eletronico")
+  // F1.9 Camada 2 — campos analíticos extras (já vinham no ZIP).
+  motivoSituacao       String? @map("motivo_situacao")
+  dataInicioAtividade  String? @map("data_inicio_atividade")
+  cnaeSecundaria       String? @map("cnae_secundaria")
+  situacaoEspecial     String? @map("situacao_especial")
+  dataSituacaoEspecial String? @map("data_situacao_especial")
+  pais                 String?
 
   @@map("estabelecimentos")
   @@schema("rfb")
@@ -857,8 +864,36 @@ model RfbEmpresa {
   naturezaJuridica String?  @map("natureza_juridica")
   porte            String?
   capitalSocial    Decimal? @map("capital_social") @db.Decimal(18, 2)
+  // F1.9 Camada 2
+  qualificacaoResponsavel String? @map("qualificacao_responsavel")
+  enteFederativo          String? @map("ente_federativo")
 
   @@map("empresas")
+  @@schema("rfb")
+}
+
+// F1.9 — domínios de descrição (mesmo padrão de RfbCnae).
+model RfbMotivo {
+  codigo    String  @id
+  descricao String?
+
+  @@map("motivos")
+  @@schema("rfb")
+}
+
+model RfbQualificacao {
+  codigo    String  @id
+  descricao String?
+
+  @@map("qualificacoes")
+  @@schema("rfb")
+}
+
+model RfbPais {
+  codigo    String  @id
+  descricao String?
+
+  @@map("paises")
   @@schema("rfb")
 }
 
