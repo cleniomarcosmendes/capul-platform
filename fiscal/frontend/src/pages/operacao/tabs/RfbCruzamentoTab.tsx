@@ -332,9 +332,9 @@ export function RfbCruzamentoTab() {
             {(data?.itens ?? []).map((r) => (
               <tr
                 key={r.id}
-                onClick={() => navigate(`/cadastro?cnpj=${r.cnpj.replace(/\D/g, '')}${r.ufRfb ? `&uf=${r.ufRfb}` : ''}&auto=1`)}
+                onClick={() => navigate(`/cadastro?cnpj=${r.cnpj.replace(/\D/g, '')}${r.ufRfb ? `&uf=${r.ufRfb}` : ''}&fonte=local&auto=1`)}
                 className="cursor-pointer border-t border-slate-100 hover:bg-slate-50"
-                title="Abrir na Consulta Cadastral"
+                title="Abrir na Consulta Cadastral (base local — zero certificado)"
               >
                 <td className="px-3 py-2 font-mono text-xs">{r.cnpj}</td>
                 <td className="px-3 py-2 text-xs">{r.origem === 'SA1010' ? 'Cliente' : 'Fornec.'}</td>

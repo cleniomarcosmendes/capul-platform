@@ -52,6 +52,33 @@ const CRUZAMENTO_LABEL: Record<StatusCruzamentoIe, string> = {
   APENAS_SEFAZ: 'Apenas SEFAZ',
 };
 
+interface ReceitaLocalData {
+  cnpj: string;
+  razaoSocial: string | null;
+  nomeFantasia: string | null;
+  situacao: string | null;
+  dataSituacao: string | null;
+  naturezaJuridica: string | null;
+  porte: string | null;
+  capitalSocial: number | null;
+  cnaeFiscal: string | null;
+  cnaeFiscalDescricao: string | null;
+  endereco: {
+    logradouro: string | null; numero: string | null; bairro: string | null;
+    municipio: string | null; uf: string | null; cep: string | null;
+  } | null;
+  telefone: string | null;
+  email: string | null;
+}
+interface ConsultaLocalResp {
+  fonte: 'RFB_LOCAL';
+  encontrado: boolean;
+  cnpj: string;
+  versaoRfb: string | null;
+  importadaEm: string | null;
+  dados: ReceitaLocalData | null;
+}
+
 export function CadastroConsultaPage() {
   const [searchParams] = useSearchParams();
   const [documento, setDocumento] = useState('');
@@ -64,6 +91,16 @@ export function CadastroConsultaPage() {
   const [result, setResult] = useState<CadastroConsultaResult | null>(null);
   const [copied, setCopied] = useState(false);
   const autoTriggeredRef = useRef<string | null>(null);
+
+  // Duas formas de consulta — devem ficar EXPLÍCITAS na tela:
+  //  • 'local'  = base RFB Dados Abertos (foto mensal, instantânea, ZERO
+  //               certificado/SEFAZ). Padrão no drill-down da Inteligência
+  //               Cadastral (triagem em massa não pode queimar cota SEFAZ).
+  //  • 'sefaz'  = CCC/Sintegra ao vivo, usa certificado A1 + cota SEFAZ.
+  const [modo, setModo] = useState<'local' | 'sefaz'>(
+    searchParams.get('fonte') === 'local' ? 'local' : 'sefaz',
+  );
+  const [local, setLocal] = useState<ConsultaLocalResp | null>(null);
 
   const docDigits = documento.replace(/\D/g, '');
 
@@ -91,8 +128,37 @@ export function CadastroConsultaPage() {
     }
   }
 
+  /** Consulta SÓ na base RFB local — sem certificado, sem SEFAZ. */
+  async function consultarLocal(cnpjLimpo: string) {
+    if (cnpjLimpo.length !== 14) {
+      setError('A base local cobre apenas CNPJ (14 dígitos). Para CPF, use a consulta SEFAZ ao vivo.');
+      return;
+    }
+    setError(null);
+    setErrorCode(null);
+    setResult(null);
+    setLocal(null);
+    setCopied(false);
+    try {
+      setLoading(true);
+      const { data } = await fiscalApi.post<ConsultaLocalResp>('/cadastro/consulta-local', {
+        cnpj: cnpjLimpo,
+      });
+      setLocal(data);
+    } catch (err) {
+      setError(extractApiError(err, 'Falha ao consultar a base RFB local.'));
+      setErrorCode(extractApiErrorCode(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleConsultar(e: React.FormEvent) {
     e.preventDefault();
+    if (modo === 'local') {
+      await consultarLocal(docDigits);
+      return;
+    }
     // UF vazia é permitida: backend tentará inferir a partir dos vínculos Protheus.
     await consultar(docDigits, uf || null);
   }
@@ -143,7 +209,11 @@ export function CadastroConsultaPage() {
 
     if (auto === '1' && autoTriggeredRef.current !== cnpjLimpo) {
       autoTriggeredRef.current = cnpjLimpo;
-      consultar(cnpjLimpo, ufFinal);
+      if (searchParams.get('fonte') === 'local') {
+        consultarLocal(cnpjLimpo);
+      } else {
+        consultar(cnpjLimpo, ufFinal);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
@@ -179,6 +249,53 @@ export function CadastroConsultaPage() {
         <span className="text-slate-600">Para auditoria de cadastro já existente, deixe a UF em branco — o sistema descobre as UFs a partir dos vínculos Protheus (até 5).</span>
       </p>
 
+      {/* Duas formas de consulta — EXPLÍCITAS */}
+      <div className="mb-3 inline-flex rounded-lg border border-slate-200 bg-white p-1 text-sm">
+        <button
+          type="button"
+          onClick={() => { setModo('local'); setResult(null); setError(null); }}
+          className={modo === 'local'
+            ? 'rounded-md bg-capul-600 px-3 py-1.5 font-medium text-white'
+            : 'rounded-md px-3 py-1.5 text-slate-600 hover:bg-slate-50'}
+        >
+          <Database className="mr-1 inline h-4 w-4" /> Base local (RFB)
+        </button>
+        <button
+          type="button"
+          onClick={() => { setModo('sefaz'); setLocal(null); setError(null); }}
+          className={modo === 'sefaz'
+            ? 'rounded-md bg-capul-600 px-3 py-1.5 font-medium text-white'
+            : 'rounded-md px-3 py-1.5 text-slate-600 hover:bg-slate-50'}
+        >
+          <AlertTriangle className="mr-1 inline h-4 w-4" /> SEFAZ ao vivo (certificado)
+        </button>
+      </div>
+
+      {modo === 'local' ? (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+          <Database className="mt-0.5 h-4 w-4 flex-shrink-0" />
+          <div>
+            <strong>Base RFB local (Dados Abertos).</strong> Foto mensal — instantânea,
+            sem certificado e sem consumir cota SEFAZ.
+            {local?.versaoRfb && (
+              <> Versão <strong>{local.versaoRfb}</strong>
+                {local.importadaEm && <> · importada em {new Date(local.importadaEm).toLocaleString('pt-BR')}</>}.</>
+            )}{' '}
+            <strong>Pode estar desatualizada</strong> — para o dado em tempo real, use a
+            consulta SEFAZ ao vivo.
+          </div>
+        </div>
+      ) : (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+          <div>
+            <strong>SEFAZ ao vivo (CCC/Sintegra).</strong> Dado em tempo real — porém{' '}
+            <strong>usa o certificado A1 e consome cota SEFAZ</strong> (rate-limit · limite
+            2.000/dia · circuit breaker). Para triagem em massa, prefira a base local.
+          </div>
+        </div>
+      )}
+
       <form
         onSubmit={handleConsultar}
         className="mb-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
@@ -204,24 +321,26 @@ export function CadastroConsultaPage() {
               required
             />
           </div>
-          <div className="w-28">
-            <label className="mb-1 block text-xs font-medium text-slate-700">
-              UF <span className="font-normal text-slate-400">(opcional)</span>
-            </label>
-            <select
-              value={uf}
-              onChange={(e) => setUf(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-slate-500"
-              title="Deixe em branco para consultar todas as UFs onde o contribuinte tem vínculo no Protheus"
-            >
-              <option value="">— auto —</option>
-              {UFS.map((u) => (
-                <option key={u} value={u}>
-                  {u}
-                </option>
-              ))}
-            </select>
-          </div>
+          {modo === 'sefaz' && (
+            <div className="w-28">
+              <label className="mb-1 block text-xs font-medium text-slate-700">
+                UF <span className="font-normal text-slate-400">(opcional)</span>
+              </label>
+              <select
+                value={uf}
+                onChange={(e) => setUf(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-slate-500"
+                title="Deixe em branco para consultar todas as UFs onde o contribuinte tem vínculo no Protheus"
+              >
+                <option value="">— auto —</option>
+                {UFS.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <Button type="submit" loading={loading}>
               Consultar
@@ -232,7 +351,19 @@ export function CadastroConsultaPage() {
 
       {error && <ErrorDisplay error={error} errorCode={errorCode} documento={docDigits} />}
 
-      {result && (
+      {modo === 'local' && local && (
+        <PainelLocal
+          local={local}
+          onConsultarSefaz={() => {
+            setModo('sefaz');
+            setLocal(null);
+            setError(null);
+            consultar(local.cnpj, null);
+          }}
+        />
+      )}
+
+      {modo === 'sefaz' && result && (
         <div className="space-y-5">
           {/* Banner de estado Protheus */}
           <ProtheusStatusBanner result={result} />
@@ -447,6 +578,102 @@ export function CadastroConsultaPage() {
         </div>
       )}
     </PageWrapper>
+  );
+}
+
+/** Painel da consulta SÓ-LOCAL (RFB). Sem IE/cruzamento (a base aberta não
+ *  tem Inscrição Estadual). Deixa explícito que é foto mensal + opt-in SEFAZ. */
+function PainelLocal({
+  local,
+  onConsultarSefaz,
+}: {
+  local: ConsultaLocalResp;
+  onConsultarSefaz: () => void;
+}) {
+  const d = local.dados;
+  const sitCls =
+    d?.situacao === 'ATIVA' ? 'bg-green-100 text-green-700'
+      : d?.situacao === 'BAIXADA' || d?.situacao === 'INAPTA' || d?.situacao === 'NULA' ? 'bg-red-100 text-red-700'
+        : d?.situacao === 'SUSPENSA' ? 'bg-amber-100 text-amber-700'
+          : 'bg-slate-100 text-slate-600';
+
+  if (!local.encontrado || !d) {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <p className="font-medium">CNPJ {fmtCnpj(local.cnpj)} não encontrado na base RFB local.</p>
+        <p className="mt-1 text-xs">
+          Pode ter sido aberto/alterado após o snapshot
+          {local.versaoRfb ? ` (versão ${local.versaoRfb})` : ''} ou não constar nos
+          Dados Abertos. Para o dado em tempo real:
+        </p>
+        <div className="mt-2">
+          <Button size="sm" onClick={onConsultarSefaz}>
+            Consultar no SEFAZ ao vivo (usa certificado)
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div>
+          <div className="text-lg font-semibold text-slate-800">{d.razaoSocial ?? '—'}</div>
+          {d.nomeFantasia && <div className="text-sm text-slate-500">{d.nomeFantasia}</div>}
+        </div>
+        {d.situacao && (
+          <span className={`rounded px-2 py-1 text-xs font-semibold ${sitCls}`}>
+            {d.situacao}{d.dataSituacao ? ` · desde ${d.dataSituacao}` : ''}
+          </span>
+        )}
+      </div>
+      <dl className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">
+        <CampoLocal k="CNPJ" v={fmtCnpj(d.cnpj)} />
+        <CampoLocal k="Natureza jurídica" v={d.naturezaJuridica} />
+        <CampoLocal k="Porte" v={d.porte} />
+        <CampoLocal
+          k="Capital social"
+          v={d.capitalSocial != null
+            ? d.capitalSocial.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+            : null}
+        />
+        <CampoLocal
+          k="CNAE"
+          v={d.cnaeFiscal
+            ? `${d.cnaeFiscal}${d.cnaeFiscalDescricao ? ' — ' + d.cnaeFiscalDescricao : ''}`
+            : null}
+        />
+        <CampoLocal k="Telefone" v={d.telefone} />
+        <CampoLocal k="E-mail" v={d.email} />
+        <CampoLocal
+          k="Endereço"
+          v={d.endereco
+            ? `${d.endereco.logradouro ?? ''}${d.endereco.numero ? ', ' + d.endereco.numero : ''} — `
+              + `${d.endereco.bairro ?? ''} — ${d.endereco.municipio ?? ''}/${d.endereco.uf ?? ''} `
+              + `${fmtCep(d.endereco.cep)}`
+            : null}
+        />
+      </dl>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+        <span className="text-xs text-slate-400">
+          Fonte: base RFB local{local.versaoRfb ? ` v${local.versaoRfb}` : ''} — foto mensal,
+          pode estar desatualizada.
+        </span>
+        <Button size="sm" variant="secondary" onClick={onConsultarSefaz}>
+          Confirmar no SEFAZ ao vivo (certificado)
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function CampoLocal({ k, v }: { k: string; v: string | null }) {
+  return (
+    <div className="flex gap-2 border-b border-slate-50 py-1 text-sm">
+      <dt className="w-40 flex-shrink-0 text-slate-500">{k}</dt>
+      <dd className="text-slate-800">{v || '—'}</dd>
+    </div>
   );
 }
 
