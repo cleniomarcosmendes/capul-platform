@@ -164,4 +164,22 @@ export class RfbController {
       q.pageSize ? Number(q.pageSize) : 30,
     );
   }
+
+  /** Gap A — explorador da base RFB (universo de empresas; filtro
+   *  semProtheus=1 = só as NÃO cadastradas no Protheus). GESTOR_FISCAL. */
+  @Get('empresas/busca')
+  @RoleMinima('GESTOR_FISCAL')
+  async buscarEmpresas(
+    @Query() q: {
+      razao?: string; uf?: string; situacao?: string; cnae?: string;
+      porte?: string; semProtheus?: string; page?: string; pageSize?: string;
+    },
+  ) {
+    return this.rfbConsulta.buscarEmpresas({
+      razao: q.razao, uf: q.uf, situacao: q.situacao, cnae: q.cnae, porte: q.porte,
+      semProtheus: q.semProtheus === '1' || q.semProtheus === 'true',
+      page: q.page ? Number(q.page) : 1,
+      pageSize: q.pageSize ? Number(q.pageSize) : 30,
+    });
+  }
 }

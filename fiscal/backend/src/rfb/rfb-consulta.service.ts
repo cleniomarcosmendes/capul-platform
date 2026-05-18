@@ -241,4 +241,72 @@ export class RfbConsultaService {
     }));
     return { itens, page: pg, pageSize: ps, hasMore, termoCurto: false };
   }
+
+  /**
+   * Gap A — explorador da base RFB (universo de empresas, NÃO só as do
+   * Protheus). Filtros: razão (trgm), UF, situação, CNAE (prefixo), porte
+   * + toggle `semProtheus` (NOT EXISTS no snapshot do cruzamento) p/
+   * prospecção / validar antes de cadastrar. Anchor = matriz (1 linha
+   * por empresa). Exige ≥1 filtro relevante (razão≥3 OU uf OU cnae) p/
+   * não varrer 71M. Paginação por hasMore (sem COUNT). $queryRawUnsafe
+   * com params posicionais ($N) — parametrizado (sem injeção).
+   */
+  async buscarEmpresas(q: {
+    razao?: string; uf?: string; situacao?: string; cnae?: string;
+    porte?: string; semProtheus?: boolean; page?: number; pageSize?: number;
+  }) {
+    const razao = (q.razao ?? '').trim();
+    const uf = (q.uf ?? '').trim().toUpperCase();
+    const cnae = (q.cnae ?? '').replace(/\D/g, '');
+    const ps = Math.min(50, Math.max(10, Number(q.pageSize) || 30));
+    const pg = Math.max(1, Number(q.page) || 1);
+    const temFiltro = razao.length >= 3 || !!uf || !!cnae;
+    if (!temFiltro) {
+      return { itens: [], page: 1, pageSize: ps, hasMore: false, semFiltro: true };
+    }
+    const cond: string[] = [`est.matriz_filial = '1'`];
+    const params: unknown[] = [];
+    const add = (frag: string, val: unknown) => { params.push(val); cond.push(frag.replace('?', `$${params.length}`)); };
+    if (razao.length >= 3) add(`e.razao_social ILIKE '%' || ? || '%'`, razao);
+    if (uf) add(`est.uf = ?`, uf);
+    if (q.situacao) add(`est.situacao_cadastral = ?`, q.situacao);
+    if (cnae) add(`est.cnae_principal LIKE ? || '%'`, cnae);
+    if (q.porte) add(`e.porte = ?`, q.porte);
+    if (q.semProtheus) cond.push(`NOT EXISTS (SELECT 1 FROM rfb.cruzamento_resultado c WHERE c.cnpj = est.cnpj_completo)`);
+    params.push(ps + 1, (pg - 1) * ps);
+    const sql = `
+      SELECT est.cnpj_completo, est.situacao_cadastral, est.uf, est.cnae_principal,
+             est.data_situacao, e.razao_social, e.porte,
+             COALESCE(m.descricao, est.municipio) AS municipio,
+             cn.descricao AS cnae_desc,
+             EXISTS (SELECT 1 FROM rfb.cruzamento_resultado c WHERE c.cnpj = est.cnpj_completo) AS no_protheus
+      FROM rfb.estabelecimentos est
+      JOIN rfb.empresas e ON e.cnpj_basico = est.cnpj_basico
+      LEFT JOIN rfb.municipios m ON m.codigo = est.municipio
+      LEFT JOIN rfb.cnaes cn ON cn.codigo = est.cnae_principal
+      WHERE ${cond.join(' AND ')}
+      ORDER BY e.razao_social
+      LIMIT $${params.length - 1} OFFSET $${params.length}`;
+    const rows = await this.prisma.$queryRawUnsafe<Array<{
+      cnpj_completo: string; situacao_cadastral: string | null; uf: string | null;
+      cnae_principal: string | null; data_situacao: string | null;
+      razao_social: string | null; porte: string | null; municipio: string | null;
+      cnae_desc: string | null; no_protheus: boolean;
+    }>>(sql, ...params);
+    const hasMore = rows.length > ps;
+    const itens = rows.slice(0, ps).map((r) => ({
+      cnpjCompleto: r.cnpj_completo,
+      razaoSocial: r.razao_social ?? null,
+      situacao: r.situacao_cadastral
+        ? (SITUACAO[r.situacao_cadastral.padStart(2, '0')] ?? r.situacao_cadastral) : null,
+      uf: r.uf ?? null,
+      municipio: r.municipio ?? null,
+      cnae: r.cnae_principal
+        ? `${r.cnae_principal}${r.cnae_desc ? ' — ' + r.cnae_desc : ''}` : null,
+      porte: r.porte ? (PORTE[r.porte] ?? 'DEMAIS') : null,
+      dataSituacao: r.data_situacao ?? null,
+      emProtheus: r.no_protheus, // true = JÁ é cliente/fornecedor da CAPUL
+    }));
+    return { itens, page: pg, pageSize: ps, hasMore, semFiltro: false };
+  }
 }
