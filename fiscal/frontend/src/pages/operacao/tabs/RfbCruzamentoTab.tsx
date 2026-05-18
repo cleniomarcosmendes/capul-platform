@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Network, Play, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, Download, X } from 'lucide-react';
 import { fiscalApi } from '../../../services/api';
 import { Button } from '../../../components/Button';
@@ -63,16 +63,50 @@ export function RfbCruzamentoTab() {
   const [fac, setFac] = useState<Facetas | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
-  const [f, setF] = useState({
-    alerta: '', origem: '', uf: '', situacao: '', porte: '', simples: '',
-    divergencia: '', soRecente: false,
-    search: '', page: 1, sort: '' as string, dir: 'asc' as 'asc' | 'desc',
-  });
+  // A URL é a FONTE DE VERDADE dos filtros/busca/ordenação/página. Assim
+  // "voltar" do navegador (após clicar numa linha), refresh e favoritar
+  // restauram a exploração exatamente como estava. useMemo([sp]) mantém
+  // `f` estável entre renders (senão carregar/useEffect entram em loop).
+  const [sp, setSp] = useSearchParams();
+  const f = useMemo(() => ({
+    alerta: sp.get('alerta') ?? '',
+    origem: sp.get('origem') ?? '',
+    uf: sp.get('uf') ?? '',
+    situacao: sp.get('situacao') ?? '',
+    porte: sp.get('porte') ?? '',
+    simples: sp.get('simples') ?? '',
+    divergencia: sp.get('divergencia') ?? '',
+    soRecente: sp.get('soRecente') === '1',
+    search: sp.get('search') ?? '',
+    page: Math.max(1, Number(sp.get('page')) || 1),
+    sort: sp.get('sort') ?? '',
+    dir: (sp.get('dir') === 'desc' ? 'desc' : 'asc') as 'asc' | 'desc',
+  }), [sp]);
+
+  /** Atualiza filtros na URL (replace — não polui histórico ao filtrar/
+   *  digitar; o snapshot p/ "voltar" é o push do clique na linha). */
+  const patch = useCallback((partial: Partial<typeof f>) => {
+    const n = { ...f, ...partial };
+    const q = new URLSearchParams();
+    if (n.alerta) q.set('alerta', n.alerta);
+    if (n.origem) q.set('origem', n.origem);
+    if (n.uf) q.set('uf', n.uf);
+    if (n.situacao) q.set('situacao', n.situacao);
+    if (n.porte) q.set('porte', n.porte);
+    if (n.simples) q.set('simples', n.simples);
+    if (n.divergencia) q.set('divergencia', n.divergencia);
+    if (n.soRecente) q.set('soRecente', '1');
+    if (n.search) q.set('search', n.search);
+    if (n.page > 1) q.set('page', String(n.page));
+    if (n.sort) { q.set('sort', n.sort); q.set('dir', n.dir); }
+    setSp(q, { replace: true });
+  }, [f, setSp]);
+
   // Busca com DEBOUNCE: o input mexe só em `searchInput` (imediato); 400ms
-  // após parar de digitar, propaga p/ f.search (que dispara carregar). Sem
+  // após parar de digitar, propaga p/ a URL (que dispara carregar). Sem
   // isso cada tecla = 2 fetches (lista+facetas) → estoura o limit_req do
-  // nginx (30 r/s) e volta 429 (incidente Clenio 18/05).
-  const [searchInput, setSearchInput] = useState('');
+  // nginx (30 r/s) e volta 429 (incidente Clenio 18/05). Inicia do URL.
+  const [searchInput, setSearchInput] = useState(sp.get('search') ?? '');
   const toast = useToast();
   const confirm = useConfirm();
   const navigate = useNavigate();
@@ -133,10 +167,10 @@ export function RfbCruzamentoTab() {
   // (facetas/página continuam imediatas — são cliques discretos).
   useEffect(() => {
     const t = setTimeout(() => {
-      setF((p) => (p.search === searchInput ? p : { ...p, search: searchInput, page: 1 }));
+      if (searchInput !== f.search) patch({ search: searchInput, page: 1 });
     }, 400);
     return () => clearTimeout(t);
-  }, [searchInput]);
+  }, [searchInput, f.search, patch]);
 
   async function rodar() {
     const ok = await confirm({
@@ -197,14 +231,12 @@ export function RfbCruzamentoTab() {
   /** Clique numa faceta = aplica/limpa o filtro daquela dimensão. */
   const toggleFacet = (dim: 'alerta' | 'origem' | 'uf' | 'situacao' | 'porte' | 'simples' | 'divergencia', val: string) => {
     const v = val === '(vazio)' ? '' : val;
-    setF((p) => ({ ...p, [dim]: p[dim] === v ? '' : v, page: 1 }));
+    patch({ [dim]: f[dim] === v ? '' : v, page: 1 });
   };
 
   const limpar = () => {
     setSearchInput('');
-    setF((p) => ({
-      ...p, alerta: '', origem: '', uf: '', situacao: '', porte: '', simples: '', divergencia: '', soRecente: false, search: '', page: 1,
-    }));
+    setSp({}, { replace: true });
   };
 
   const ex = data?.execucoes?.[0];
@@ -218,10 +250,10 @@ export function RfbCruzamentoTab() {
       <th className="px-3 py-2">
         <button
           type="button"
-          onClick={() => setF((p) => ({
-            ...p, page: 1, sort: col,
-            dir: p.sort === col && p.dir === 'asc' ? 'desc' : 'asc',
-          }))}
+          onClick={() => patch({
+            page: 1, sort: col,
+            dir: f.sort === col && f.dir === 'asc' ? 'desc' : 'asc',
+          })}
           className={`inline-flex items-center gap-1 hover:text-slate-800 ${active ? 'text-slate-800 font-semibold' : ''}`}
           title="Ordenar"
         >
@@ -380,7 +412,7 @@ export function RfbCruzamentoTab() {
           onChange={(e) => setSearchInput(e.target.value)} />
         <label className="flex shrink-0 items-center gap-1.5 text-xs text-slate-600" title="Situação cadastral alterada na Receita nos últimos 90 dias">
           <input type="checkbox" checked={f.soRecente}
-            onChange={(e) => setF({ ...f, soRecente: e.target.checked, page: 1 })} />
+            onChange={(e) => patch({ soRecente: e.target.checked, page: 1 })} />
           Só situação recente (≤90d)
         </label>
       </div>
@@ -463,9 +495,9 @@ export function RfbCruzamentoTab() {
           <span>{data.total.toLocaleString('pt-BR')} registros · página {data.page}/{totalPages}</span>
           <div className="flex gap-2">
             <Button size="sm" variant="secondary" disabled={f.page <= 1}
-              onClick={() => setF({ ...f, page: f.page - 1 })}>Anterior</Button>
+              onClick={() => patch({ page: f.page - 1 })}>Anterior</Button>
             <Button size="sm" variant="secondary" disabled={f.page >= totalPages}
-              onClick={() => setF({ ...f, page: f.page + 1 })}>Próxima</Button>
+              onClick={() => patch({ page: f.page + 1 })}>Próxima</Button>
           </div>
         </div>
       )}
