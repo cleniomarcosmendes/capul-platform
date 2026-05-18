@@ -17,6 +17,7 @@ interface Row {
   dataSituacao: string | null;
   bloqueado: boolean; achadoRfb: boolean; alerta: string;
   similaridadeRazao: number | null; divergenciaRazao: boolean;
+  acao: string; // BLOQUEAR | REVISAR | NENHUMA
 }
 interface Exec {
   id: number; status: string; iniciado: string; fim: string | null; total: number | null;
@@ -31,7 +32,7 @@ type FacetItem = { valor: string; total: number };
 interface Facetas {
   total: number; alerta: FacetItem[]; origem: FacetItem[]; situacao: FacetItem[];
   uf: FacetItem[]; porte: FacetItem[]; simples: FacetItem[]; cnaeTop: FacetItem[];
-  divergencia: FacetItem[];
+  divergencia: FacetItem[]; acao: FacetItem[];
 }
 
 /** RFB data_situacao = AAAAMMDD. Formata e diz se mudou nos últimos 90d. */
@@ -76,6 +77,7 @@ export function RfbCruzamentoTab() {
     porte: sp.get('porte') ?? '',
     simples: sp.get('simples') ?? '',
     divergencia: sp.get('divergencia') ?? '',
+    acao: sp.get('acao') ?? '',
     soRecente: sp.get('soRecente') === '1',
     search: sp.get('search') ?? '',
     page: Math.max(1, Number(sp.get('page')) || 1),
@@ -95,6 +97,7 @@ export function RfbCruzamentoTab() {
     if (n.porte) q.set('porte', n.porte);
     if (n.simples) q.set('simples', n.simples);
     if (n.divergencia) q.set('divergencia', n.divergencia);
+    if (n.acao) q.set('acao', n.acao);
     if (n.soRecente) q.set('soRecente', '1');
     if (n.search) q.set('search', n.search);
     if (n.page > 1) q.set('page', String(n.page));
@@ -229,7 +232,7 @@ export function RfbCruzamentoTab() {
   }
 
   /** Clique numa faceta = aplica/limpa o filtro daquela dimensão. */
-  const toggleFacet = (dim: 'alerta' | 'origem' | 'uf' | 'situacao' | 'porte' | 'simples' | 'divergencia', val: string) => {
+  const toggleFacet = (dim: 'alerta' | 'origem' | 'uf' | 'situacao' | 'porte' | 'simples' | 'divergencia' | 'acao', val: string) => {
     const v = val === '(vazio)' ? '' : val;
     patch({ [dim]: f[dim] === v ? '' : v, page: 1 });
   };
@@ -241,7 +244,7 @@ export function RfbCruzamentoTab() {
 
   const ex = data?.execucoes?.[0];
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
-  const temFiltro = !!(f.alerta || f.origem || f.uf || f.situacao || f.porte || f.simples || f.divergencia || f.soRecente || f.search);
+  const temFiltro = !!(f.alerta || f.origem || f.uf || f.situacao || f.porte || f.simples || f.divergencia || f.acao || f.soRecente || f.search);
 
   const Th = ({ col, label }: { col: string; label: string }) => {
     const active = f.sort === col;
@@ -393,6 +396,7 @@ export function RfbCruzamentoTab() {
             )}
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-3">
+            <FacetGroup titulo="Ação" itens={fac.acao} dim="acao" />
             <FacetGroup titulo="Alerta" itens={fac.alerta} dim="alerta" />
             <FacetGroup titulo="Situação RFB" itens={fac.situacao} dim="situacao" />
             <FacetGroup titulo="Origem" itens={fac.origem} dim="origem" />
@@ -431,6 +435,7 @@ export function RfbCruzamentoTab() {
               <th className="px-3 py-2">Situação desde</th>
               <Th col="ufRfb" label="UF" />
               <Th col="alerta" label="Alerta" />
+              <Th col="acao" label="Ação" />
             </tr>
           </thead>
           <tbody>
@@ -442,7 +447,17 @@ export function RfbCruzamentoTab() {
                 title="Abrir na Consulta Cadastral (base local — zero certificado)"
               >
                 <td className="px-3 py-2 font-mono text-xs">{r.cnpj}</td>
-                <td className="px-3 py-2 text-xs">{r.origem === 'SA1010' ? 'Cliente' : 'Fornec.'}</td>
+                <td className="px-3 py-2 text-xs">
+                  {r.origem === 'SA1010' ? 'Cliente' : 'Fornec.'}
+                  {r.bloqueado && (
+                    <span
+                      className="ml-1 rounded bg-slate-200 px-1 py-0.5 text-[10px] font-medium text-slate-600"
+                      title="Cliente/fornecedor BLOQUEADO no Protheus"
+                    >
+                      bloq.
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">
                   {r.codigo ? `${r.codigo}${r.loja ? '/' + r.loja : ''}` : '—'}
                 </td>
@@ -479,10 +494,34 @@ export function RfbCruzamentoTab() {
                     {r.alerta}
                   </span>
                 </td>
+                <td className="px-3 py-2">
+                  {r.acao === 'BLOQUEAR' ? (
+                    <span
+                      className="rounded bg-red-100 px-1.5 py-0.5 text-xs font-semibold text-red-700"
+                      title="RFB INAPTA/BAIXADA e ainda ATIVO no Protheus — bloquear/atualizar o cadastro."
+                    >
+                      BLOQUEAR
+                    </span>
+                  ) : r.acao === 'REVISAR' ? (
+                    <span
+                      className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-700"
+                      title="RFB SUSPENSA/NULA, ou razão social divergente, com Protheus ativo — revisar o cadastro."
+                    >
+                      REVISAR
+                    </span>
+                  ) : (
+                    <span
+                      className="text-slate-300"
+                      title="Sem ação: situação OK, não encontrado na RFB, ou já bloqueado no Protheus (tratado)."
+                    >
+                      —
+                    </span>
+                  )}
+                </td>
               </tr>
             ))}
             {(data?.itens ?? []).length === 0 && (
-              <tr><td colSpan={10} className="px-3 py-4 text-center text-slate-400">
+              <tr><td colSpan={11} className="px-3 py-4 text-center text-slate-400">
                 Sem resultados. Rode o cruzamento (precisa da base RFB importada).
               </td></tr>
             )}
