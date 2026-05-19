@@ -90,6 +90,8 @@ interface ConsultaLocalResp {
   cnpj: string;
   versaoRfb: string | null;
   importadaEm: string | null;
+  /** QSA omitido por falta de capability de sócio (LGPD, F3). */
+  sociosRestrito?: boolean;
   dados: ReceitaLocalData | null;
 }
 
@@ -780,6 +782,14 @@ function PainelLocal({
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {local.sociosRestrito && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+          <strong>Quadro societário (QSA) restrito.</strong> O acesso a dados de
+          sócios (pessoa física) exige autorização específica por usuário (LGPD).
+          Solicite a um ADMIN a liberação no Configurador.
         </div>
       )}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">

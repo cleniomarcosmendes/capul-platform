@@ -22,7 +22,7 @@ import type { RoleFiscal } from '../types';
 
 type MenuItem =
   | { section: string; minRole?: RoleFiscal }
-  | { label: string; icon: React.ComponentType<{ className?: string }>; path: string; minRole?: RoleFiscal };
+  | { label: string; icon: React.ComponentType<{ className?: string }>; path: string; minRole?: RoleFiscal; requireSocioCap?: boolean };
 
 // Regra 23/04/2026, revista 19/05/2026: OPERADOR_ENTRADA só usa NF-e, CT-e
 // e Consulta Cadastral. ANALISTA_CADASTRO também acessa as telas de
@@ -45,7 +45,7 @@ const menuItems: MenuItem[] = [
   { section: 'CADASTRO' },
   { label: 'Consulta Cadastral', icon: UserSearch, path: '/cadastro' },
   { label: 'Inteligência Cadastral', icon: Network, path: '/rfb/cruzamento', minRole: 'ANALISTA_CADASTRO' },
-  { label: 'Busca por Sócio', icon: Users, path: '/rfb/socios', minRole: 'ANALISTA_CADASTRO' },
+  { label: 'Busca por Sócio', icon: Users, path: '/rfb/socios', minRole: 'ANALISTA_CADASTRO', requireSocioCap: true },
   { label: 'Base RFB — Empresas', icon: Building2, path: '/rfb/empresas', minRole: 'ANALISTA_CADASTRO' },
   { section: 'CRUZAMENTO', minRole: 'GESTOR_FISCAL' },
   { label: 'Execucoes', icon: Activity, path: '/execucoes', minRole: 'GESTOR_FISCAL' },
@@ -56,8 +56,17 @@ const menuItems: MenuItem[] = [
   { label: 'Diagnóstico', icon: Stethoscope, path: '/operacao/diagnostico', minRole: 'GESTOR_FISCAL' },
 ];
 
-function filterMenuByRole(items: MenuItem[], role: RoleFiscal | null): MenuItem[] {
+function filterMenuByRole(
+  items: MenuItem[],
+  role: RoleFiscal | null,
+  socioPermitido: boolean | null,
+): MenuItem[] {
   const filtered = items.filter((item) => {
+    // Capability LGPD (sócio): só mostra com permissão explícita
+    // (null = ainda resolvendo → esconde p/ não piscar).
+    if ('requireSocioCap' in item && item.requireSocioCap && socioPermitido !== true) {
+      return false;
+    }
     if ('minRole' in item && item.minRole) {
       return hasMinRole(role, item.minRole);
     }
@@ -81,8 +90,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open = false, onClose }: SidebarProps = {}) {
-  const { usuario, fiscalRole, logout } = useAuth();
-  const visibleItems = filterMenuByRole(menuItems, fiscalRole);
+  const { usuario, fiscalRole, socioPermitido, logout } = useAuth();
+  const visibleItems = filterMenuByRole(menuItems, fiscalRole, socioPermitido);
 
   return (
     <>

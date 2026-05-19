@@ -33,11 +33,13 @@ import type { RoleFiscal } from './types';
 function ProtectedRoute({
   children,
   minRole,
+  requireSocioCap,
 }: {
   children: ReactNode;
   minRole?: RoleFiscal;
+  requireSocioCap?: boolean;
 }) {
-  const { usuario, loading, fiscalRole } = useAuth();
+  const { usuario, loading, fiscalRole, socioPermitido } = useAuth();
 
   if (loading) {
     return (
@@ -70,6 +72,21 @@ function ProtectedRoute({
     // Operador/Analista nao tem acesso a Dashboard ou rotas avancadas —
     // manda para a primeira tela permitida (Consulta NF-e).
     return <Navigate to="/nfe" replace />;
+  }
+
+  // Capability LGPD (sócio): null = ainda resolvendo (mostra loading p/
+  // não redirecionar quem TEM acesso); false = sem capability → /nfe.
+  if (requireSocioCap) {
+    if (socioPermitido === null) {
+      return (
+        <div className="flex min-h-screen items-center justify-center text-slate-500">
+          Carregando…
+        </div>
+      );
+    }
+    if (!socioPermitido) {
+      return <Navigate to="/nfe" replace />;
+    }
   }
 
   return <>{children}</>;
@@ -114,7 +131,7 @@ function App() {
             <Route
               path="rfb/socios"
               element={
-                <ProtectedRoute minRole="ANALISTA_CADASTRO">
+                <ProtectedRoute minRole="ANALISTA_CADASTRO" requireSocioCap>
                   <BuscaSocioPage />
                 </ProtectedRoute>
               }

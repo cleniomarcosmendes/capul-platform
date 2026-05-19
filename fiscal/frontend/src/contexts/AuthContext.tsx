@@ -7,7 +7,7 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
-import { authApi, coreApi } from '../services/api';
+import { authApi, coreApi, fiscalApi } from '../services/api';
 import type { UsuarioLogado, RoleFiscal } from '../types';
 
 // Default 60min se o usuário não tiver preferência configurada (Configurador →
@@ -18,6 +18,8 @@ interface AuthContextType {
   usuario: UsuarioLogado | null;
   loading: boolean;
   fiscalRole: RoleFiscal | null;
+  /** Capability LGPD p/ ver sócio (F3). null = ainda resolvendo. */
+  socioPermitido: boolean | null;
   refreshUser: () => Promise<void>;
   logout: () => void;
 }
@@ -33,6 +35,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fiscalRole =
     (usuario?.modulos.find((m) => m.codigo === 'FISCAL')?.role as RoleFiscal | undefined) ?? null;
+
+  // Capability de sócio (LGPD) — não vem no JWT (D3); resolve via backend
+  // (lê core cacheado). 1× por sessão/usuário. null enquanto resolve.
+  const [socioPermitido, setSocioPermitido] = useState<boolean | null>(null);
+  useEffect(() => {
+    const temFiscal = !!usuario?.modulos.some((m) => m.codigo === 'FISCAL');
+    if (!temFiscal) { setSocioPermitido(null); return; }
+    let cancel = false;
+    fiscalApi
+      .get<{ permitido: boolean }>('/rfb/socios/capability')
+      .then((r) => { if (!cancel) setSocioPermitido(!!r.data?.permitido); })
+      .catch(() => { if (!cancel) setSocioPermitido(false); });
+    return () => { cancel = true; };
+  }, [usuario]);
 
   async function refreshUser() {
     try {
@@ -97,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [resetInactivityTimer]);
 
   return (
-    <AuthContext.Provider value={{ usuario, loading, fiscalRole, refreshUser, logout }}>
+    <AuthContext.Provider value={{ usuario, loading, fiscalRole, socioPermitido, refreshUser, logout }}>
       {children}
     </AuthContext.Provider>
   );
