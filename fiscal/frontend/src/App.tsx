@@ -106,7 +106,7 @@ function App() {
             <Route
               path="rfb/cruzamento"
               element={
-                <ProtectedRoute minRole="GESTOR_FISCAL">
+                <ProtectedRoute minRole="ANALISTA_CADASTRO">
                   <RfbCruzamentoTab />
                 </ProtectedRoute>
               }
@@ -114,7 +114,7 @@ function App() {
             <Route
               path="rfb/socios"
               element={
-                <ProtectedRoute minRole="GESTOR_FISCAL">
+                <ProtectedRoute minRole="ANALISTA_CADASTRO">
                   <BuscaSocioPage />
                 </ProtectedRoute>
               }
@@ -122,7 +122,7 @@ function App() {
             <Route
               path="rfb/empresas"
               element={
-                <ProtectedRoute minRole="GESTOR_FISCAL">
+                <ProtectedRoute minRole="ANALISTA_CADASTRO">
                   <BaseRfbEmpresasPage />
                 </ProtectedRoute>
               }

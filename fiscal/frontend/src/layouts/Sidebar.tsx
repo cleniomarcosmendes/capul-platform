@@ -24,9 +24,13 @@ type MenuItem =
   | { section: string; minRole?: RoleFiscal }
   | { label: string; icon: React.ComponentType<{ className?: string }>; path: string; minRole?: RoleFiscal };
 
-// Regra 23/04/2026: OPERADOR_ENTRADA e ANALISTA_CADASTRO só usam NF-e, CT-e
-// e Consulta Cadastral. Itens de cruzamento, alertas e operação exigem
-// GESTOR_FISCAL+. Dashboard também — tem KPIs operacionais sensíveis.
+// Regra 23/04/2026, revista 19/05/2026: OPERADOR_ENTRADA só usa NF-e, CT-e
+// e Consulta Cadastral. ANALISTA_CADASTRO também acessa as telas de
+// análise cadastral RFB (Inteligência Cadastral, Busca por Sócio, Base
+// RFB — Empresas) — consulta read-only, zero certificado/SEFAZ, é o
+// trabalho do papel. Cruzamento operacional (Execuções/Divergências/
+// Alertas), Operação e Dashboard seguem GESTOR_FISCAL+ (ações pesadas
+// e KPIs sensíveis). Rodar cruzamento/Importar base RFB = ADMIN_TI.
 const menuItems: MenuItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/', minRole: 'GESTOR_FISCAL' },
   { section: 'DOCUMENTOS FISCAIS' },
@@ -39,9 +43,9 @@ const menuItems: MenuItem[] = [
   // nao e documento fiscal. Operadores entendem melhor com a divisao.
   { section: 'CADASTRO' },
   { label: 'Consulta Cadastral', icon: UserSearch, path: '/cadastro' },
-  { label: 'Inteligência Cadastral', icon: Network, path: '/rfb/cruzamento', minRole: 'GESTOR_FISCAL' },
-  { label: 'Busca por Sócio', icon: Users, path: '/rfb/socios', minRole: 'GESTOR_FISCAL' },
-  { label: 'Base RFB — Empresas', icon: Building2, path: '/rfb/empresas', minRole: 'GESTOR_FISCAL' },
+  { label: 'Inteligência Cadastral', icon: Network, path: '/rfb/cruzamento', minRole: 'ANALISTA_CADASTRO' },
+  { label: 'Busca por Sócio', icon: Users, path: '/rfb/socios', minRole: 'ANALISTA_CADASTRO' },
+  { label: 'Base RFB — Empresas', icon: Building2, path: '/rfb/empresas', minRole: 'ANALISTA_CADASTRO' },
   { section: 'CRUZAMENTO', minRole: 'GESTOR_FISCAL' },
   { label: 'Execucoes', icon: Activity, path: '/execucoes', minRole: 'GESTOR_FISCAL' },
   { label: 'Divergencias', icon: AlertTriangle, path: '/divergencias', minRole: 'GESTOR_FISCAL' },

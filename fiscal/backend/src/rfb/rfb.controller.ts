@@ -125,7 +125,7 @@ export class RfbController {
 
   /** Consulta o snapshot do cruzamento (paginado/filtrado) + execuções. */
   @Get('cruzamento')
-  @RoleMinima('GESTOR_FISCAL')
+  @RoleMinima('ANALISTA_CADASTRO')
   async consultarCruzamento(
     @Query() q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string; acao?: string; semIe?: string; sort?: string; dir?: string; page?: string; pageSize?: string },
   ) {
@@ -141,7 +141,7 @@ export class RfbController {
 
   /** Facetas agregadas (counts por dimensão) — Inteligência Cadastral (F3). */
   @Get('cruzamento/facetas')
-  @RoleMinima('GESTOR_FISCAL')
+  @RoleMinima('ANALISTA_CADASTRO')
   async facetasCruzamento(
     @Query() q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string; acao?: string; semIe?: string },
   ) {
@@ -150,7 +150,7 @@ export class RfbController {
 
   /** Export CSV do snapshot filtrado (Inteligência Cadastral / estratégia). */
   @Get('cruzamento/export')
-  @RoleMinima('GESTOR_FISCAL')
+  @RoleMinima('ANALISTA_CADASTRO')
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="cruzamento-cnpj.csv"')
   async exportCruzamento(
@@ -162,7 +162,7 @@ export class RfbController {
   /** Busca reversa: nome do sócio → empresas vinculadas (base RFB local,
    *  dado público Dados Abertos). Min 3 chars; paginado por hasMore. */
   @Get('socios/busca')
-  @RoleMinima('GESTOR_FISCAL')
+  @RoleMinima('ANALISTA_CADASTRO')
   async buscarPorSocio(
     @Query() q: { nome?: string; page?: string; pageSize?: string; sort?: string; dir?: string },
   ) {
@@ -176,9 +176,9 @@ export class RfbController {
   }
 
   /** Gap A — explorador da base RFB (universo de empresas; filtro
-   *  semProtheus=1 = só as NÃO cadastradas no Protheus). GESTOR_FISCAL. */
+   *  semProtheus=1 = só as NÃO cadastradas no Protheus). ANALISTA_CADASTRO+. */
   @Get('empresas/busca')
-  @RoleMinima('GESTOR_FISCAL')
+  @RoleMinima('ANALISTA_CADASTRO')
   async buscarEmpresas(
     @Query() q: {
       razao?: string; uf?: string; situacao?: string; cnae?: string;
