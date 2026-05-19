@@ -149,8 +149,11 @@ export class RfbController {
   }
 
   /** Export CSV do snapshot filtrado (Inteligência Cadastral / estratégia). */
+  // Export CSV restrito a GESTOR_FISCAL+ (LGPD/governança — extração em
+  // massa de dado cadastral/fiscal). ANALISTA_CADASTRO consulta nas
+  // telas mas NÃO exporta. Decisão Clenio 19/05.
   @Get('cruzamento/export')
-  @RoleMinima('ANALISTA_CADASTRO')
+  @RoleMinima('GESTOR_FISCAL')
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="cruzamento-cnpj.csv"')
   async exportCruzamento(

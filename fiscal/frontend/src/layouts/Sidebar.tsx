@@ -30,7 +30,8 @@ type MenuItem =
 // RFB — Empresas) — consulta read-only, zero certificado/SEFAZ, é o
 // trabalho do papel. Cruzamento operacional (Execuções/Divergências/
 // Alertas), Operação e Dashboard seguem GESTOR_FISCAL+ (ações pesadas
-// e KPIs sensíveis). Rodar cruzamento/Importar base RFB = ADMIN_TI.
+// e KPIs sensíveis). Export CSV do cruzamento = GESTOR_FISCAL+ (LGPD —
+// extração em massa). Rodar cruzamento/Importar base RFB = ADMIN_TI.
 const menuItems: MenuItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/', minRole: 'GESTOR_FISCAL' },
   { section: 'DOCUMENTOS FISCAIS' },

@@ -6,6 +6,7 @@ import { Button } from '../../../components/Button';
 import { useToast } from '../../../components/Toast';
 import { extractApiError } from '../../../utils/errors';
 import { PageWrapper } from '../../../components/PageWrapper';
+import { useAuth, hasMinRole } from '../../../contexts/AuthContext';
 
 interface Row {
   id: number; cnpj: string; origem: string; razaoProtheus: string | null;
@@ -129,6 +130,12 @@ export function RfbCruzamentoTab() {
   const [searchInput, setSearchInput] = useState(sp.get('search') ?? '');
   const toast = useToast();
   const navigate = useNavigate();
+  // Export CSV (extração em massa de dado cadastral/fiscal) restrito a
+  // GESTOR_FISCAL+ por LGPD/governança — ANALISTA_CADASTRO consulta na
+  // tela mas não exporta (decisão Clenio 19/05). Backend espelha em
+  // @RoleMinima('GESTOR_FISCAL') no /cruzamento/export.
+  const { fiscalRole } = useAuth();
+  const podeExportar = hasMinRole(fiscalRole, 'GESTOR_FISCAL');
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   /** Filtros (sem page/sort) — compartilhado por lista, facetas e export. */
@@ -356,9 +363,11 @@ export function RfbCruzamentoTab() {
         <Button size="sm" variant="secondary" onClick={() => carregar()} disabled={acting}>
           <RefreshCw className="mr-1 h-3.5 w-3.5" /> Atualizar
         </Button>
-        <Button size="sm" variant="secondary" onClick={exportar} disabled={acting || (data?.total ?? 0) === 0}>
-          <Download className="mr-1 h-3.5 w-3.5" /> Exportar CSV
-        </Button>
+        {podeExportar && (
+          <Button size="sm" variant="secondary" onClick={exportar} disabled={acting || (data?.total ?? 0) === 0}>
+            <Download className="mr-1 h-3.5 w-3.5" /> Exportar CSV
+          </Button>
+        )}
       </div>
 
       {/* Camada 1 — Foco: atalhos pro objetivo da tela (acionável) */}
