@@ -2,7 +2,7 @@
 
 **Versão:** 1.0
 **Data:** 15/05/2026
-**Status:** Decisão de design aprovada · Implementação aguardando janela
+**Status:** ✅ PR1+PR2+PR3 (+PR3a backend) implementados em `feat/projetos-atividades-v2` (16/05) · aguardando validação equipe + soak HOM antes de PROD
 **Autor:** Clenio + Claude Code
 **Mockup de referência:** `docs/mockups/atividades-projeto-v3.html`
 
@@ -236,7 +236,8 @@ Verde Capul (`#047857` = `emerald-700`) — mantém identidade da plataforma.
 ## 9. Histórico do plano
 
 - **15/05/2026** — Plano criado após sessão de design com 3 iterações de mockup (V1, V2 do outro Claude, V3 consolidada). Decisões de responsividade + ícones + dark mode tomadas em conjunto com Clenio.
+- **16/05/2026** — Implementação completa em `feat/projetos-atividades-v2` (4 commits: PR1 `05f84b0`, PR2 `8e4ff8e`, PR3a backend `5690dfb`, PR3 frontend `ca22a3e`). Pré-requisito #3 resolvido: `gestao_ti.atividade_historico` criado (migration `20260515120000_add_atividade_historico` + service + endpoint). Desvios conscientes do plano: (a) aba **Anexos** = empty state honesto — `AtividadeProjeto` não tem anexos no backend (fora de escopo, igual ao mockup); (b) **TempoTab** sem botão "Adicionar manual" — evita feature pela metade (ajuste inline mantido); (c) Conversa reusa **MentionInput** mas tem chat-list próprio (não `ChatBubbleList`, que é acoplado a tipos de Chamado — reuso forçado seria paliativo). Branch **não** foi pushada (decisão do Clenio).
 
 ---
 
-**Próxima ação:** validar mockup V3 com equipe → após aprovação, abrir branch `feat/projetos-atividades-v2` e começar PR 1.
+**Próxima ação:** pré-requisito #1 ainda aberto — validar com Diego/Marco/Juliana (em DEV na branch). Depois seguir §6: push → HOM via roteiro Douglas (a migration entra pelo init job `gestao-ti-migrate`) → soak ≥30min → PROD.

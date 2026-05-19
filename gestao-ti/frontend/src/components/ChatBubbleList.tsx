@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { Bell, Check, Edit3, Paperclip, RotateCcw } from 'lucide-react';
+import { ArrowUpDown, Bell, Check, Edit3, Lock, Paperclip, RotateCcw } from 'lucide-react';
 
 /**
  * Extrai marcadores [anexo:uuid] do texto pra protegê-los na edição.
@@ -95,6 +95,14 @@ export interface ChatBubbleListProps {
    * da edição — o chip "anexo removido" some quando o usuário re-salva.
    */
   validAnexoIds?: Set<string>;
+  /**
+   * Quando true, renderiza uma barra fixa no topo com contador + botão de
+   * alternar ordem (Recentes ↔ Antigas) — paridade com o ConversaTab de
+   * Atividade (16/05/2026). Default false = comportamento legado (ordem
+   * vem do backend DESC, sem controle). Ordenação por `createdAt` (não
+   * `.reverse()` — robusto a empates/ordem do backend).
+   */
+  sortable?: boolean;
 }
 
 const SYSTEM_LABELS: Record<string, string> = {
@@ -120,6 +128,7 @@ export function ChatBubbleList({
   canEdit,
   renderTexto,
   validAnexoIds,
+  sortable = false,
 }: ChatBubbleListProps) {
   // Merge: labels customizadas sobrescrevem default. Default cobre o
   // chamado; pendência pode injetar STATUS_ALTERADO, RESPONSAVEL_ALTERADO,
@@ -129,17 +138,43 @@ export function ChatBubbleList({
   const [editingTexto, setEditingTexto] = useState('');
   // Marcadores [anexo:uuid] preservados — re-anexados ao texto editado no save.
   const [editingMarkers, setEditingMarkers] = useState<string[]>([]);
+  // false = Recentes primeiro (espelha o DESC que vem do backend + default
+  // do ConversaTab). Só usado quando `sortable`.
+  const [ordemAsc, setOrdemAsc] = useState(false);
 
   if (eventos.length === 0) {
     return <p className="text-sm text-slate-400 text-center py-6">Nenhum evento</p>;
   }
 
+  // Ordena por createdAt (não `.reverse()` — robusto a empates e a qualquer
+  // ordem do backend). Sem `sortable`, mantém a ordem recebida (legado).
+  const ordenados = sortable
+    ? [...eventos].sort((a, b) => {
+        const d = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        return ordemAsc ? d : -d;
+      })
+    : eventos;
+
   const fmtDataHora = (iso: string) =>
     new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 
   return (
-    <div className="space-y-3">
-      {eventos.map((ev) => {
+    <div>
+      {sortable && (
+        <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm flex items-center justify-between py-2 mb-2 border-b border-slate-100">
+          <span className="text-[11px] text-slate-400">{eventos.length} evento(s)</span>
+          <button
+            onClick={() => setOrdemAsc((v) => !v)}
+            className="text-[11px] text-slate-500 hover:text-capul-600 inline-flex items-center gap-1"
+            title="Alternar ordem"
+          >
+            <ArrowUpDown className="w-3 h-3" />
+            {ordemAsc ? 'Antigas primeiro' : 'Recentes primeiro'}
+          </button>
+        </div>
+      )}
+      <div className="space-y-3">
+      {ordenados.map((ev) => {
         if (highlightTypes.includes(ev.tipo)) {
           return <HighlightBubble key={ev.id} ev={ev} fmtDataHora={fmtDataHora} />;
         }
@@ -185,6 +220,7 @@ export function ChatBubbleList({
           />
         );
       })}
+      </div>
     </div>
   );
 }
@@ -244,8 +280,11 @@ function Bubble({
             </span>
           )}
           {ev.publico === false && (
-            <span className="text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">
-              INTERNO
+            <span
+              className="inline-flex items-center gap-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-100 border border-amber-200 rounded px-1 py-0.5"
+              title="Nota interna — visível apenas para staff de TI. Usuário Chave / Terceirizado não enxerga."
+            >
+              <Lock className="w-2.5 h-2.5" />interna
             </span>
           )}
         </div>

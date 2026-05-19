@@ -7,12 +7,14 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { UpdateRegistroTempoDto } from '../dto/update-registro-tempo.dto.js';
 import { CreateApontamentoDto } from '../dto/create-apontamento.dto.js';
 import { ProjetoHelpersService } from './projeto-helpers.service.js';
+import { ProjetoAtividadeHistoricoService } from './projeto-atividade-historico.service.js';
 
 @Injectable()
 export class ProjetoTempoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly helpers: ProjetoHelpersService,
+    private readonly historico: ProjetoAtividadeHistoricoService,
   ) {}
 
   async listarRegistrosTempo(projetoId: string, atividadeId: string) {
@@ -55,7 +57,7 @@ export class ProjetoTempoService {
       });
     }
 
-    return this.prisma.registroTempo.create({
+    const novo = await this.prisma.registroTempo.create({
       data: {
         horaInicio: new Date(),
         atividadeId,
@@ -63,6 +65,11 @@ export class ProjetoTempoService {
       },
       include: { usuario: { select: { id: true, nome: true } } },
     });
+    this.historico.registrar(atividadeId, 'TEMPO_INICIADO', {
+      descricao: 'Iniciou o cronometro',
+      usuarioId: userId,
+    });
+    return novo;
   }
 
   async encerrarRegistroTempo(projetoId: string, atividadeId: string, userId: string) {
@@ -78,11 +85,20 @@ export class ProjetoTempoService {
     if (!registro) throw new NotFoundException('Nenhum registro ativo para esta atividade');
 
     const duracao = Math.round((Date.now() - new Date(registro.horaInicio).getTime()) / 60000);
-    return this.prisma.registroTempo.update({
+    const encerrado = await this.prisma.registroTempo.update({
       where: { id: registro.id },
       data: { horaFim: new Date(), duracaoMinutos: duracao },
       include: { usuario: { select: { id: true, nome: true } } },
     });
+    const h = Math.floor(duracao / 60);
+    const m = duracao % 60;
+    const dur = h > 0 ? `${h}h${m > 0 ? ` ${m}min` : ''}` : `${m}min`;
+    this.historico.registrar(atividadeId, 'TEMPO_ENCERRADO', {
+      descricao: `Encerrou o cronometro (${dur})`,
+      usuarioId: userId,
+      metadata: { duracaoMinutos: duracao },
+    });
+    return encerrado;
   }
 
   async ajustarRegistroTempo(projetoId: string, registroId: string, dto: UpdateRegistroTempoDto, userId?: string, role?: string) {

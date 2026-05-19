@@ -414,7 +414,7 @@ export class ProjetoPendenciaService {
     // Processar @mencoes
     const mencionadoIds: string[] = [];
     if (dto.descricao) {
-      const ids = await this.helpers.processarMencoes(dto.descricao, projetoId, userId, `um comentario na pendencia #${pendencia.numero}`, { pendenciaId });
+      const ids = await this.helpers.processarMencoes(dto.descricao, projetoId, userId, `um comentario na pendencia #${pendencia.numero}`, { pendenciaId }, !publica);
       mencionadoIds.push(...ids);
     }
 
@@ -429,6 +429,16 @@ export class ProjetoPendenciaService {
     });
     if (pendenciaFull?.criadorId && pendenciaFull.criadorId !== userId && !mencionadoIds.includes(pendenciaFull.criadorId)) {
       idsNotificar.add(pendenciaFull.criadorId);
+    }
+    // Interação INTERNA: não notificar responsável/criador que seja
+    // USUARIO_CHAVE/TERCEIRIZADO vinculado (espelha o filtro de addComentario
+    // de atividade — Regra única 14/05, simétrico UC/TERC).
+    if (!publica && idsNotificar.size > 0) {
+      const chave = await this.prisma.usuarioChaveProjeto.findMany({
+        where: { projetoId, ativo: true, usuarioId: { in: Array.from(idsNotificar) } },
+        select: { usuarioId: true },
+      });
+      chave.forEach((c) => idsNotificar.delete(c.usuarioId));
     }
     if (idsNotificar.size > 0) {
       const proj = await this.prisma.projeto.findUnique({ where: { id: projetoId }, select: { nome: true } });

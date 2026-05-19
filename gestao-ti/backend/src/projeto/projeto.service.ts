@@ -5,6 +5,7 @@ import { ProjetoCoreService } from './services/projeto-core.service.js';
 import { ProjetoFaseService } from './services/projeto-fase.service.js';
 import { ProjetoMembroService } from './services/projeto-membro.service.js';
 import { ProjetoAtividadeService } from './services/projeto-atividade.service.js';
+import { ProjetoAtividadeHistoricoService } from './services/projeto-atividade-historico.service.js';
 import { ProjetoPendenciaService } from './services/projeto-pendencia.service.js';
 import { ProjetoTempoService } from './services/projeto-tempo.service.js';
 import { ProjetoFinanceiroService } from './services/projeto-financeiro.service.js';
@@ -35,6 +36,7 @@ export class ProjetoService {
     private readonly faseService: ProjetoFaseService,
     private readonly membroService: ProjetoMembroService,
     private readonly atividadeService: ProjetoAtividadeService,
+    private readonly atividadeHistoricoService: ProjetoAtividadeHistoricoService,
     private readonly pendenciaService: ProjetoPendenciaService,
     private readonly tempoService: ProjetoTempoService,
     private readonly financeiroService: ProjetoFinanceiroService,
@@ -160,8 +162,8 @@ export class ProjetoService {
   // ATIVIDADES
   // ============================================================
 
-  listAtividades(projetoId: string) {
-    return this.atividadeService.listAtividades(projetoId);
+  listAtividades(projetoId: string, role?: string) {
+    return this.atividadeService.listAtividades(projetoId, role);
   }
 
   addAtividade(
@@ -176,36 +178,41 @@ export class ProjetoService {
     projetoId: string,
     atividadeId: string,
     dto: { titulo?: string; descricao?: string; faseId?: string; status?: string; dataInicio?: string; dataFimPrevista?: string; responsavelIds?: string[] },
+    actorId?: string,
   ) {
-    return this.atividadeService.updateAtividade(projetoId, atividadeId, dto);
+    return this.atividadeService.updateAtividade(projetoId, atividadeId, dto, actorId);
   }
 
   removeAtividade(projetoId: string, atividadeId: string) {
     return this.atividadeService.removeAtividade(projetoId, atividadeId);
   }
 
+  listarHistoricoAtividade(projetoId: string, atividadeId: string) {
+    return this.atividadeHistoricoService.listar(projetoId, atividadeId);
+  }
+
   // ============================================================
   // COMENTARIOS DE TAREFA
   // ============================================================
 
-  listComentarios(projetoId: string, atividadeId: string) {
-    return this.atividadeService.listComentarios(projetoId, atividadeId);
+  listComentarios(projetoId: string, atividadeId: string, role?: string) {
+    return this.atividadeService.listComentarios(projetoId, atividadeId, role);
   }
 
-  addComentario(projetoId: string, atividadeId: string, texto: string, userId: string, visivelPendencia?: boolean) {
-    return this.atividadeService.addComentario(projetoId, atividadeId, texto, userId, visivelPendencia);
+  addComentario(projetoId: string, atividadeId: string, texto: string, userId: string, visivelPendencia?: boolean, publica?: boolean, role?: string) {
+    return this.atividadeService.addComentario(projetoId, atividadeId, texto, userId, visivelPendencia, publica, role);
   }
 
   removeComentario(projetoId: string, comentarioId: string, userId: string, role?: string) {
     return this.atividadeService.removeComentario(projetoId, comentarioId, userId, role);
   }
 
-  updateComentario(projetoId: string, comentarioId: string, texto: string, userId: string, role?: string, visivelPendencia?: boolean) {
-    return this.atividadeService.updateComentario(projetoId, comentarioId, texto, userId, role, visivelPendencia);
+  updateComentario(projetoId: string, comentarioId: string, texto: string, userId: string, role?: string, visivelPendencia?: boolean, publica?: boolean) {
+    return this.atividadeService.updateComentario(projetoId, comentarioId, texto, userId, role, visivelPendencia, publica);
   }
 
-  buscarComentarios(query: string) {
-    return this.atividadeService.buscarComentarios(query);
+  buscarComentarios(query: string, role?: string) {
+    return this.atividadeService.buscarComentarios(query, role);
   }
 
   // ============================================================

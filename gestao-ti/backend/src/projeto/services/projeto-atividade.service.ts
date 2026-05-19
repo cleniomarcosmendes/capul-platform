@@ -7,7 +7,8 @@ import {
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { NotificacaoService } from '../../notificacao/notificacao.service.js';
 import { ProjetoHelpersService } from './projeto-helpers.service.js';
-import { isGestor } from '../../common/constants/roles.constant.js';
+import { ProjetoAtividadeHistoricoService } from './projeto-atividade-historico.service.js';
+import { isGestor, isTI } from '../../common/constants/roles.constant.js';
 
 @Injectable()
 export class ProjetoAtividadeService {
@@ -15,17 +16,21 @@ export class ProjetoAtividadeService {
     private readonly prisma: PrismaService,
     private readonly notificacaoService: NotificacaoService,
     private readonly helpers: ProjetoHelpersService,
+    private readonly historico: ProjetoAtividadeHistoricoService,
   ) {}
 
-  async listAtividades(projetoId: string) {
+  async listAtividades(projetoId: string, role?: string) {
     await this.helpers.ensureProjetoExists(projetoId);
+    // Badge de notas na linha não conta internas p/ non-staff (senão vaza a
+    // quantidade de notas internas). Espelha o filtro de listComentarios.
+    const comentariosCount = isTI(role || '') ? true : { where: { publica: true } };
     return this.prisma.atividadeProjeto.findMany({
       where: { projetoId },
       include: {
         usuario: { select: { id: true, nome: true } },
         fase: { select: { id: true, nome: true } },
         pendencia: { select: { id: true, numero: true, titulo: true, status: true } },
-        _count: { select: { registrosTempo: true, comentarios: true } },
+        _count: { select: { registrosTempo: true, comentarios: comentariosCount } },
         registrosTempo: {
           where: { horaFim: null },
           select: { id: true, usuarioId: true, horaInicio: true },
@@ -104,6 +109,11 @@ export class ProjetoAtividadeService {
       ).catch((err) => console.error('Notificacao error:', err.message));
     }
 
+    this.historico.registrar(atividade.id, 'CRIADA', {
+      descricao: 'Tarefa criada',
+      usuarioId: userId,
+    });
+
     return atividade;
   }
 
@@ -111,6 +121,7 @@ export class ProjetoAtividadeService {
     projetoId: string,
     atividadeId: string,
     dto: { titulo?: string; descricao?: string; faseId?: string; status?: string; dataInicio?: string; dataFimPrevista?: string; responsavelIds?: string[] },
+    actorId?: string,
   ) {
     const atividade = await this.prisma.atividadeProjeto.findFirst({
       where: { id: atividadeId, projetoId },
@@ -142,6 +153,30 @@ export class ProjetoAtividadeService {
       },
     });
 
+    // Historico: registra cada mudanca relevante (timeline do drawer)
+    const statusLabelHist: Record<string, string> = {
+      PENDENTE: 'Pendente', EM_ANDAMENTO: 'Em Andamento', CONCLUIDA: 'Concluida', CANCELADA: 'Cancelada',
+    };
+    if (dto.status && dto.status !== atividade.status) {
+      this.historico.registrar(atividadeId, 'STATUS_ALTERADO', {
+        descricao: `Status alterado para ${statusLabelHist[dto.status] || dto.status}`,
+        usuarioId: actorId,
+        metadata: { de: atividade.status, para: dto.status },
+      });
+    }
+    if (dto.titulo && dto.titulo !== atividade.titulo) {
+      this.historico.registrar(atividadeId, 'TITULO_ALTERADO', {
+        descricao: `Titulo alterado para "${dto.titulo}"`,
+        usuarioId: actorId,
+      });
+    }
+    if (dto.faseId !== undefined && (dto.faseId || null) !== atividade.faseId) {
+      this.historico.registrar(atividadeId, 'FASE_ALTERADA', {
+        descricao: updated.fase ? `Movida para a fase "${updated.fase.nome}"` : 'Removida da fase',
+        usuarioId: actorId,
+      });
+    }
+
     // Sync responsaveis se informados
     const responsaveisAntigos = await this.prisma.atividadeResponsavel.findMany({
       where: { atividadeId },
@@ -150,11 +185,22 @@ export class ProjetoAtividadeService {
     const idsAntigos = responsaveisAntigos.map((r) => r.usuarioId);
 
     if (dto.responsavelIds !== undefined) {
+      const mudouResponsaveis =
+        dto.responsavelIds.length !== idsAntigos.length ||
+        dto.responsavelIds.some((uid) => !idsAntigos.includes(uid));
+
       await this.prisma.atividadeResponsavel.deleteMany({ where: { atividadeId } });
       if (dto.responsavelIds.length > 0) {
         await this.prisma.atividadeResponsavel.createMany({
           data: dto.responsavelIds.map((uid) => ({ atividadeId, usuarioId: uid })),
           skipDuplicates: true,
+        });
+      }
+
+      if (mudouResponsaveis) {
+        this.historico.registrar(atividadeId, 'RESPONSAVEL_ALTERADO', {
+          descricao: 'Responsaveis atualizados',
+          usuarioId: actorId,
         });
       }
 
@@ -317,26 +363,35 @@ export class ProjetoAtividadeService {
 
   // --- Comentarios de Tarefa ---
 
-  async listComentarios(projetoId: string, atividadeId: string) {
+  async listComentarios(projetoId: string, atividadeId: string, role?: string) {
     await this.helpers.ensureProjetoExists(projetoId);
     const atividade = await this.prisma.atividadeProjeto.findFirst({
       where: { id: atividadeId, projetoId },
     });
     if (!atividade) throw new NotFoundException('Tarefa nao encontrada neste projeto');
 
-    return this.prisma.comentarioTarefa.findMany({
+    const comentarios = await this.prisma.comentarioTarefa.findMany({
       where: { atividadeId },
       include: { usuario: { select: { id: true, nome: true } } },
       orderBy: { createdAt: 'desc' },
     });
+    // Regra única 14/05: nota interna (publica=false) só p/ staff TI (isTI:
+    // ADMIN/GESTOR_TI/SUPORTE_TI). USUARIO_CHAVE/TERCEIRIZADO/non-staff só veem
+    // públicas. Filtro no backend — frontend pode ser bypassado via API.
+    if (!isTI(role || '')) return comentarios.filter((c) => c.publica);
+    return comentarios;
   }
 
-  async addComentario(projetoId: string, atividadeId: string, texto: string, userId: string, visivelPendencia?: boolean) {
+  async addComentario(projetoId: string, atividadeId: string, texto: string, userId: string, visivelPendencia?: boolean, publica?: boolean, role?: string) {
     await this.helpers.ensureProjetoExists(projetoId);
     const atividade = await this.prisma.atividadeProjeto.findFirst({
       where: { id: atividadeId, projetoId },
     });
     if (!atividade) throw new NotFoundException('Tarefa nao encontrada neste projeto');
+
+    // Defesa em profundidade: non-staff sempre grava publica=true (não pode
+    // criar nota interna mesmo forjando o body). Só isTI decide.
+    const publicaEfetiva = !isTI(role || '') ? true : (publica ?? true);
 
     const comentario = await this.prisma.comentarioTarefa.create({
       data: {
@@ -344,21 +399,34 @@ export class ProjetoAtividadeService {
         atividadeId,
         usuarioId: userId,
         visivelPendencia: atividade.pendenciaId ? (visivelPendencia ?? false) : false,
+        publica: publicaEfetiva,
       },
       include: { usuario: { select: { id: true, nome: true } } },
     });
 
     // Processar @mencoes
-    const mencionadoIds = await this.helpers.processarMencoes(texto, projetoId, userId, `um comentario na tarefa "${atividade.titulo}"`, { atividadeId });
+    const mencionadoIds = await this.helpers.processarMencoes(texto, projetoId, userId, `um comentario na tarefa "${atividade.titulo}"`, { atividadeId }, !publicaEfetiva);
 
     // Notificar responsaveis da atividade (exceto autor e ja mencionados)
     const responsaveis = await this.prisma.atividadeResponsavel.findMany({
       where: { atividadeId },
       select: { usuarioId: true },
     });
-    const idsNotificar = responsaveis
+    let idsNotificar = responsaveis
       .map((r) => r.usuarioId)
       .filter((uid) => uid !== userId && !mencionadoIds.includes(uid));
+    // Nota interna: não notificar USUARIO_CHAVE/TERCEIRIZADO do projeto — eles
+    // não veem o conteúdo (Regra única 14/05). A role não vive neste DB
+    // (vem do JWT); usamos o vínculo usuarios_chave_projeto, mesma fonte de
+    // checkProjetoAccessChave (cobre USUARIO_CHAVE e TERCEIRIZADO).
+    if (!publicaEfetiva && idsNotificar.length > 0) {
+      const chave = await this.prisma.usuarioChaveProjeto.findMany({
+        where: { projetoId, ativo: true, usuarioId: { in: idsNotificar } },
+        select: { usuarioId: true },
+      });
+      const chaveIds = new Set(chave.map((c) => c.usuarioId));
+      idsNotificar = idsNotificar.filter((uid) => !chaveIds.has(uid));
+    }
     if (idsNotificar.length > 0) {
       const proj = await this.prisma.projeto.findUnique({ where: { id: projetoId }, select: { nome: true } });
       this.notificacaoService.criarParaUsuarios(
@@ -368,6 +436,11 @@ export class ProjetoAtividadeService {
         { projetoId, atividadeId },
       ).catch((err) => console.error('Notificacao error:', err.message));
     }
+
+    this.historico.registrar(atividadeId, 'COMENTARIO_ADICIONADO', {
+      descricao: 'Adicionou uma nota',
+      usuarioId: userId,
+    });
 
     return comentario;
   }
@@ -386,7 +459,7 @@ export class ProjetoAtividadeService {
     return { deleted: true };
   }
 
-  async updateComentario(projetoId: string, comentarioId: string, texto: string, userId: string, role?: string, visivelPendencia?: boolean) {
+  async updateComentario(projetoId: string, comentarioId: string, texto: string, userId: string, role?: string, visivelPendencia?: boolean, publica?: boolean) {
     await this.helpers.ensureProjetoExists(projetoId);
     const comentario = await this.prisma.comentarioTarefa.findFirst({
       where: { id: comentarioId, atividade: { projetoId } },
@@ -401,6 +474,11 @@ export class ProjetoAtividadeService {
     if (visivelPendencia !== undefined && comentario.atividade?.pendenciaId) {
       data.visivelPendencia = visivelPendencia;
     }
+    // Só staff TI altera o flag interno (defesa em profundidade — non-staff
+    // não muda publica nem editando a própria nota via API).
+    if (publica !== undefined && isTI(role || '')) {
+      data.publica = publica;
+    }
     return this.prisma.comentarioTarefa.update({
       where: { id: comentarioId },
       data,
@@ -408,13 +486,15 @@ export class ProjetoAtividadeService {
     });
   }
 
-  async buscarComentarios(query: string) {
+  async buscarComentarios(query: string, role?: string) {
     if (!query || query.trim().length < 2) return [];
 
     const termo = query.trim();
     const comentarios = await this.prisma.comentarioTarefa.findMany({
       where: {
         texto: { contains: termo, mode: 'insensitive' },
+        // Busca global não vaza nota interna p/ non-staff (Regra única 14/05).
+        ...(isTI(role || '') ? {} : { publica: true }),
       },
       include: {
         usuario: { select: { id: true, nome: true } },

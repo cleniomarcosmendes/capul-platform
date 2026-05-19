@@ -1,0 +1,21 @@
+-- Backfill: comentários de tarefa LEGADOS viram internos (publica=false).
+--
+-- Contexto (16/05/2026): a migration 20260516120000 adicionou
+-- comentarios_tarefa.publica com DEFAULT true (paridade chamado/pendência —
+-- nota nova nasce pública salvo staff marcar interna). PORÉM o conceito
+-- ANTERIOR da aba "Atividades" era RESTRITIVO (acesso já limitado por outra
+-- camada de role). Logo, toda nota escrita ANTES desta feature foi redigida
+-- assumindo audiência restrita à equipe — expô-las como públicas a
+-- USUARIO_CHAVE/TERCEIRIZADO em produção seria regressão de privacidade.
+--
+-- Decisão Clenio (16/05): ao aplicar em PRODUÇÃO, todos os comentários
+-- existentes devem ficar "visível somente para o depto de T.I." (interna).
+-- Esta migration roda via init job `gestao-ti-migrate` em todo deploy — não
+-- há passo manual a esquecer (solução robusta vs. SQL manual em PROD).
+--
+-- Escopo: blanket em todas as linhas existentes. Seguro porque a feature é
+-- atômica (20260516120000 + esta) — no momento em que rodam num ambiente,
+-- nenhum staff marcou nada ainda. Notas criadas DEPOIS do deploy seguem o
+-- DEFAULT true da coluna + toggle do staff. Roda 1x (migrate deploy).
+
+UPDATE "gestao_ti"."comentarios_tarefa" SET "publica" = false;

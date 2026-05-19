@@ -58,6 +58,7 @@ model Usuario {
   membrosProjeto       MembroProjeto[]
   atividadesProjeto    AtividadeProjeto[] @relation("AtividadeProjetoUsuario")
   atividadeResponsavel AtividadeResponsavel[] @relation("AtividadeResponsavelUsuario")
+  atividadeHistorico   AtividadeHistorico[] @relation("AtividadeHistoricoUsuario")
   registrosTempo       RegistroTempo[]    @relation("RegistroTempoUsuario")
   riscosResponsavel    RiscoProjeto[]     @relation("RiscoResponsavel")
   anexosProjeto        AnexoProjeto[]     @relation("AnexoProjetoUsuario")
@@ -1719,10 +1720,42 @@ model AtividadeProjeto {
   registrosTempo RegistroTempo[]
   comentarios    ComentarioTarefa[]
   responsaveis   AtividadeResponsavel[]
+  historico      AtividadeHistorico[]
 
   @@index([projetoId, dataAtividade])
   @@index([pendenciaId])
   @@map("atividades_projeto")
+  @@schema("gestao_ti")
+}
+
+// Timeline imutável de eventos da tarefa (criada, status, cronômetro, nota...).
+// Mesmo padrão de ParadaHistorico — append-only, nome do autor resolvido na leitura.
+model AtividadeHistorico {
+  id          String              @id @default(uuid())
+  atividadeId String              @map("atividade_id")
+  atividade   AtividadeProjeto    @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  tipo        TipoEventoAtividade
+  descricao   String?
+  usuarioId   String?             @map("usuario_id")
+  usuario     Usuario?            @relation("AtividadeHistoricoUsuario", fields: [usuarioId], references: [id])
+  metadata    Json?
+  createdAt   DateTime            @default(now()) @map("created_at")
+
+  @@index([atividadeId, createdAt])
+  @@map("atividade_historico")
+  @@schema("gestao_ti")
+}
+
+enum TipoEventoAtividade {
+  CRIADA
+  STATUS_ALTERADO
+  TITULO_ALTERADO
+  RESPONSAVEL_ALTERADO
+  FASE_ALTERADA
+  TEMPO_INICIADO
+  TEMPO_ENCERRADO
+  COMENTARIO_ADICIONADO
+
   @@schema("gestao_ti")
 }
 
@@ -1766,6 +1799,10 @@ model ComentarioTarefa {
   id                String   @id @default(uuid())
   texto             String
   visivelPendencia  Boolean  @default(false) @map("visivel_pendencia")
+  // publica=false => nota interna: só staff TI (isTI: ADMIN/GESTOR_TI/
+  // SUPORTE_TI) vê/cria. Regra única 14/05 — espelha HistoricoChamado.publico
+  // e InteracaoPendencia.publica. Default true (compat com notas existentes).
+  publica           Boolean  @default(true)
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 

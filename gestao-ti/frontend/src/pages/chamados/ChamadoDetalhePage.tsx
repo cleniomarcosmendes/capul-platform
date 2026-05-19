@@ -491,6 +491,7 @@ export function ChamadoDetalhePage() {
                   <p className="text-sm text-slate-400">Nenhum historico</p>
                 ) : (
                   <ChatBubbleList
+                    sortable
                     eventos={chamado.historicos as unknown as ChatEvent[]}
                     currentUserId={usuario?.id ?? ''}
                     validAnexoIds={new Set(anexos.map((a) => a.id))}

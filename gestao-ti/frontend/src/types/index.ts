@@ -1019,6 +1019,8 @@ export interface ComentarioTarefa {
   id: string;
   texto: string;
   visivelPendencia?: boolean;
+  /** false = nota interna (só staff TI vê/cria). Regra única 14/05. */
+  publica?: boolean;
   atividadeId: string;
   usuarioId: string;
   usuario: { id: string; nome: string };
@@ -1031,6 +1033,27 @@ export interface ComentarioTarefa {
   };
   createdAt: string;
   updatedAt: string;
+}
+
+export type TipoEventoAtividade =
+  | 'CRIADA'
+  | 'STATUS_ALTERADO'
+  | 'TITULO_ALTERADO'
+  | 'RESPONSAVEL_ALTERADO'
+  | 'FASE_ALTERADA'
+  | 'TEMPO_INICIADO'
+  | 'TEMPO_ENCERRADO'
+  | 'COMENTARIO_ADICIONADO';
+
+export interface AtividadeHistorico {
+  id: string;
+  atividadeId: string;
+  tipo: TipoEventoAtividade;
+  descricao: string | null;
+  usuarioId: string | null;
+  usuario: { id: string; nome: string } | null;
+  metadata?: Record<string, unknown> | null;
+  createdAt: string;
 }
 
 export interface RegistroTempo {

@@ -59,6 +59,7 @@ import { NotasFiscaisListPage } from './pages/compras/NotasFiscaisListPage';
 import { NotaFiscalFormPage } from './pages/compras/NotaFiscalFormPage';
 import { NotaFiscalDetalhePage } from './pages/compras/NotaFiscalDetalhePage';
 import { ToastProvider } from './components/Toast';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import type { ReactNode } from 'react';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -179,7 +180,9 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
-          <AppRoutes />
+          <ErrorBoundary>
+            <AppRoutes />
+          </ErrorBoundary>
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
