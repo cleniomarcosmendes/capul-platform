@@ -345,7 +345,7 @@ export function ChamadoDetalhePage() {
           {/* Coluna principal — split-screen no lg+ (chat-style): topo
               com banners/cabeçalho, meio rolando histórico, rodapé fixo
               com ações + input de comentário (pedido suporte 14/05/2026). */}
-          <div className="lg:col-span-3 flex flex-col space-y-4 lg:space-y-3 lg:min-h-0 lg:overflow-hidden">
+          <div className="lg:col-span-3 flex flex-col space-y-4 lg:space-y-3 lg:min-h-0 lg:overflow-y-auto">
             {/* Topo fixo */}
             <div className="space-y-4 lg:flex-shrink-0">
             {/* Banner Pendente Usuário — visível enquanto o chamado aguarda
@@ -478,8 +478,11 @@ export function ChamadoDetalhePage() {
             )}
             </div>
 
-            {/* Histórico — rolagem interna (chat-style) */}
-            <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:flex-1 lg:min-h-0 overflow-hidden">
+            {/* Histórico — rolagem interna (chat-style). min-h floor: em
+                alta-res/zoom o topo cresce (badges quebram) e antes o
+                histórico colapsava p/ ~0; o piso garante leitura e a
+                coluna rola (lg:overflow-y-auto) se não couber. */}
+            <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:flex-1 lg:min-h-[18rem] overflow-hidden">
               <div className="px-4 py-2.5 border-b border-slate-200">
                 <h4 className="font-semibold text-slate-700 text-sm">Historico</h4>
               </div>

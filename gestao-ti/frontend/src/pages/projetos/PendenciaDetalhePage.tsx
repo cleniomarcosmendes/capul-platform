@@ -334,8 +334,11 @@ export function PendenciaDetalhePage() {
             Principal: histórico rolando + compositor fixo no rodapé.
             Direita: detalhes + ações + atividades + anexos + notas. */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:flex-1 lg:min-h-0 lg:overflow-hidden">
-          <div className="lg:col-span-3 flex flex-col space-y-3 lg:min-h-0 lg:overflow-hidden">
-            <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:flex-1 lg:min-h-0 overflow-hidden">
+          <div className="lg:col-span-3 flex flex-col space-y-3 lg:min-h-0 lg:overflow-y-auto">
+            {/* Histórico — min-h floor + coluna rolável: em alta-res/zoom
+                o topo cresce e antes o histórico colapsava p/ ~0 (mesmo
+                bug do Chamado, estrutura idêntica). */}
+            <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:flex-1 lg:min-h-[18rem] overflow-hidden">
               <div className="px-4 py-2.5 border-b border-slate-200">
           <h4 className="font-semibold text-slate-700 text-sm">Historico ({pendencia.interacoes?.length || 0})</h4>
               </div>
