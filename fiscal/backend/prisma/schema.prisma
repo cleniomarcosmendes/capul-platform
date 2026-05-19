@@ -34,6 +34,19 @@ model UsuarioCore {
   @@schema("core")
 }
 
+/// MIRROR read-only de core.usuario_capability (owned pelo auth-gateway,
+/// F1). O Fiscal só LÊ p/ enforcement da capability FISCAL_CONSULTA_SOCIOS
+/// (PII de sócios). Sem migration fiscal — auth-gateway é dono da tabela.
+model UsuarioCapabilityCore {
+  id         String  @id
+  usuarioId  String  @map("usuario_id")
+  capability String
+  ativo      Boolean
+
+  @@map("usuario_capability")
+  @@schema("core")
+}
+
 model UsuarioFilialCore {
   // core.usuario_filiais — pivot user ↔ filiais (gerenciado pelo Configurador).
   // Fonte de verdade para "quais filiais esse usuário pode consultar/operar".
@@ -1003,4 +1016,21 @@ model RfbCruzamentoExec {
 
   @@map("cruzamento_exec")
   @@schema("rfb")
+}
+
+/// Auditoria de ACESSO a PII de sócios (LGPD, D4). Append-only. Escrito
+/// pelo Fiscal a cada consulta que exponha sócio (Busca por Sócio ou QSA
+/// da Consulta Cadastral). Plano: docs/PLANO_FISCAL_CONSULTA_SOCIOS_LGPD_v1.md
+model SocioAcessoLog {
+  id           Int      @id @default(autoincrement())
+  usuarioId    String   @map("usuario_id")
+  usuarioEmail String?  @map("usuario_email")
+  escopo       String // BUSCA_SOCIO | QSA
+  termo        String? // nome buscado ou CNPJ consultado
+  resultadoQtd Int      @map("resultado_qtd")
+  em           DateTime @default(now())
+
+  @@index([usuarioId, em])
+  @@map("socio_acesso_log")
+  @@schema("fiscal")
 }

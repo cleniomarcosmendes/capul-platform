@@ -12,6 +12,8 @@ import { AmbienteService } from '../ambiente/ambiente.service.js';
 import { ProtheusCadastroService } from '../protheus/protheus-cadastro.service.js';
 import { ReceitaClient, type ReceitaFederalData } from './receita.client.js';
 import { RfbConsultaService } from '../rfb/rfb-consulta.service.js';
+import { SocioCapabilityService } from '../rfb/socio-capability.service.js';
+import type { FiscalAuthenticatedUser } from '../common/interfaces/jwt-payload.interface.js';
 import { DivergenciaService } from './divergencia.service.js';
 import { onlyDigits } from '../common/helpers/cnpj.helper.js';
 import type {
@@ -244,6 +246,7 @@ export class CadastroService {
     private readonly receita: ReceitaClient,
     private readonly rfbConsulta: RfbConsultaService,
     private readonly divergencia: DivergenciaService,
+    private readonly socioCap: SocioCapabilityService,
   ) {}
 
   /**
@@ -254,7 +257,7 @@ export class CadastroService {
    * versão + data de importação para a UI deixar claro que é foto mensal
    * (pode estar desatualizada — o SEFAZ ao vivo é a outra forma, opt-in).
    */
-  async consultarLocal(cnpj: string) {
+  async consultarLocal(cnpj: string, user: FiscalAuthenticatedUser) {
     const cnpjDigits = onlyDigits(cnpj);
     if (cnpjDigits.length !== 14) {
       throw new BadRequestException(
@@ -266,12 +269,26 @@ export class CadastroService {
       this.rfbConsulta.porCnpj(cnpjDigits),
       this.rfbConsulta.infoBase(),
     ]);
+    // QSA (sócios = PII) gateado por capability (LGPD, F3); demais dados
+    // de empresa seguem liberados (OPERADOR_ENTRADA+). Acesso auditado.
+    let sociosRestrito = false;
+    if (dados && Array.isArray(dados.socios) && dados.socios.length > 0) {
+      if (await this.socioCap.temCapacidade(user.id)) {
+        await this.socioCap.registrarAcesso(
+          user.id, user.email, 'QSA', cnpjDigits, dados.socios.length,
+        );
+      } else {
+        sociosRestrito = true;
+        dados.socios = [];
+      }
+    }
     return {
       fonte: 'RFB_LOCAL' as const,
       encontrado: !!dados,
       cnpj: cnpjDigits,
       versaoRfb: dados?.versaoRfb ?? base.versaoRfb,
       importadaEm: base.importadaEm,
+      sociosRestrito,
       dados: dados ?? null,
     };
   }

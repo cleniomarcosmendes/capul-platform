@@ -12,6 +12,7 @@ import { RfbImportacaoService } from './rfb-importacao.service.js';
 import { RfbCruzamentoService } from './rfb-cruzamento.service.js';
 import { RfbCronService } from './rfb-cron.service.js';
 import { RfbConsultaService } from './rfb-consulta.service.js';
+import { SocioCapabilityService } from './socio-capability.service.js';
 import { AmbienteService } from '../ambiente/ambiente.service.js';
 
 // F1.2 — endpoints mínimos. `versoes` serve de smoke test E de base p/ a
@@ -33,6 +34,7 @@ export class RfbController {
     private readonly cruzamento: RfbCruzamentoService,
     private readonly rfbCron: RfbCronService,
     private readonly rfbConsulta: RfbConsultaService,
+    private readonly socioCap: SocioCapabilityService,
     private readonly ambiente: AmbienteService,
   ) {}
 
@@ -168,14 +170,30 @@ export class RfbController {
   @RoleMinima('ANALISTA_CADASTRO')
   async buscarPorSocio(
     @Query() q: { nome?: string; page?: string; pageSize?: string; sort?: string; dir?: string },
+    @CurrentUser() user: FiscalAuthenticatedUser,
   ) {
-    return this.rfbConsulta.buscarPorSocio(
+    // PII de sócios — exige capability explícita (LGPD), independente do
+    // papel. 403 sem ela. Cada acesso é auditado (F3).
+    await this.socioCap.assertCapacidade(user.id);
+    const r = await this.rfbConsulta.buscarPorSocio(
       q.nome ?? '',
       q.page ? Number(q.page) : 1,
       q.pageSize ? Number(q.pageSize) : 30,
       q.sort,
       q.dir,
     );
+    await this.socioCap.registrarAcesso(
+      user.id, user.email, 'BUSCA_SOCIO', q.nome, r.itens?.length ?? 0,
+    );
+    return r;
+  }
+
+  /** A UI usa p/ decidir se mostra a Busca por Sócio / QSA (F4). O
+   *  enforcement real é nos endpoints sensíveis — isto é só sinalização. */
+  @Get('socios/capability')
+  @RoleMinima('OPERADOR_ENTRADA')
+  async capabilitySocio(@CurrentUser() user: FiscalAuthenticatedUser) {
+    return { permitido: await this.socioCap.temCapacidade(user.id) };
   }
 
   /** Gap A — explorador da base RFB (universo de empresas; filtro

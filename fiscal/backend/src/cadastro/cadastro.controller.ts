@@ -15,6 +15,8 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { FiscalGuard } from '../common/guards/fiscal.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { RoleMinima } from '../common/decorators/roles.decorator.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import type { FiscalAuthenticatedUser } from '../common/interfaces/jwt-payload.interface.js';
 import { CadastroService } from './cadastro.service.js';
 import { ComprovanteIeGeneratorService } from './pdf/comprovante-ie-generator.service.js';
 
@@ -61,8 +63,13 @@ export class CadastroController {
   @Post('consulta-local')
   @RoleMinima('OPERADOR_ENTRADA')
   @SkipThrottle({ default: true, sefaz: true })
-  async consultarLocal(@Body() body: { cnpj: string }) {
-    return this.service.consultarLocal(body.cnpj);
+  async consultarLocal(
+    @Body() body: { cnpj: string },
+    @CurrentUser() user: FiscalAuthenticatedUser,
+  ) {
+    // Dados de empresa = OPERADOR_ENTRADA+. O bloco QSA (sócios = PII)
+    // é gateado por capability dentro do service (F3 / LGPD).
+    return this.service.consultarLocal(body.cnpj, user);
   }
 
   // === ROTAS COM PATH ESTÁTICO PRIMEIRO ===
