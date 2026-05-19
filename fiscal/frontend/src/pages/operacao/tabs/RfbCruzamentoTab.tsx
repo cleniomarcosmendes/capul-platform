@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Network, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, Download, X } from 'lucide-react';
+import { Network, RefreshCw, ChevronUp, ChevronDown, ChevronRight, ChevronsUpDown, Download, X, SlidersHorizontal } from 'lucide-react';
 import { fiscalApi } from '../../../services/api';
 import { Button } from '../../../components/Button';
 import { useToast } from '../../../components/Toast';
@@ -51,6 +51,16 @@ const ALERTA_CLS: Record<string, string> = {
   NAO_ENCONTRADO: 'bg-slate-100 text-slate-600',
 };
 
+// Rótulos amigáveis p/ os listboxes (a base guarda códigos crus da RFB).
+const SIT_LABEL: Record<string, string> = {
+  '01': 'Nula', '02': 'Ativa', '03': 'Suspensa', '04': 'Inapta', '08': 'Baixada',
+};
+const PORTE_LABEL: Record<string, string> = {
+  '00': 'Não informado', '01': 'Microempresa', '03': 'Pequeno porte', '05': 'Demais',
+};
+const ORIGEM_LABEL: Record<string, string> = { SA1010: 'Cliente', SA2010: 'Fornecedor' };
+const SIMPLES_LABEL: Record<string, string> = { S: 'Optante', N: 'Não optante' };
+
 /**
  * "Inteligência Cadastral" — exploração estruturada de clientes (SA1) +
  * fornecedores (SA2) do Protheus × base pública CNPJ local. Sem
@@ -82,6 +92,12 @@ export function RfbCruzamentoTab() {
     sort: sp.get('sort') ?? '',
     dir: (sp.get('dir') === 'desc' ? 'desc' : 'asc') as 'asc' | 'desc',
   }), [sp]);
+
+  // "Mais filtros" recolhível: começa aberto se a URL já trouxe algum
+  // filtro secundário (refresh/favoritar/voltar restauram visível).
+  const [maisAberto, setMaisAberto] = useState(
+    () => ['alerta', 'origem', 'uf', 'situacao', 'porte', 'simples'].some((k) => sp.get(k)),
+  );
 
   /** Atualiza filtros na URL (replace — não polui histórico ao filtrar/
    *  digitar; o snapshot p/ "voltar" é o push do clique na linha). */
@@ -180,11 +196,14 @@ export function RfbCruzamentoTab() {
     }
   }
 
-  /** Clique numa faceta = aplica/limpa o filtro daquela dimensão. */
-  const toggleFacet = (dim: 'alerta' | 'origem' | 'uf' | 'situacao' | 'porte' | 'simples' | 'divergencia' | 'acao', val: string) => {
-    const v = val === '(vazio)' ? '' : val;
-    patch({ [dim]: f[dim] === v ? '' : v, page: 1 });
-  };
+  /** Conta de um valor numa dimensão de faceta (p/ os atalhos de Foco).
+   *  null = dimensão filtrada fora do resultado atual (não exibe número). */
+  const facCount = (itens: FacetItem[] | undefined, valor: string): number | null =>
+    itens?.find((i) => i.valor === valor)?.total ?? null;
+
+  /** Atalho de "Foco": liga/desliga um filtro-objetivo (toggle). */
+  const togglePreset = (dim: 'acao' | 'divergencia', val: string) =>
+    patch({ [dim]: f[dim] === val ? '' : val, page: 1 });
 
   const limpar = () => {
     setSearchInput('');
@@ -194,6 +213,8 @@ export function RfbCruzamentoTab() {
   const ex = data?.execucoes?.[0];
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
   const temFiltro = !!(f.alerta || f.origem || f.uf || f.situacao || f.porte || f.simples || f.divergencia || f.acao || f.soRecente || f.search);
+  const filtrosAvancados = (['alerta', 'origem', 'uf', 'situacao', 'porte', 'simples'] as const)
+    .filter((k) => f[k]).length;
 
   const Th = ({ col, label }: { col: string; label: string }) => {
     const active = f.sort === col;
@@ -216,36 +237,65 @@ export function RfbCruzamentoTab() {
     );
   };
 
-  /** Grupo de facetas: chips clicáveis (dim filtrável) ou só leitura. */
-  const FacetGroup = ({
-    titulo, itens, dim,
-  }: { titulo: string; itens?: FacetItem[]; dim?: Parameters<typeof toggleFacet>[0] }) => {
-    if (!itens || itens.length === 0) return null;
+  /** Atalho de Foco: botão-objetivo com contagem (toggle visual). */
+  const PresetBtn = ({
+    active, tone, label, count, title, onClick,
+  }: {
+    active: boolean; tone: 'red' | 'amber' | 'slate'; label: string;
+    count: number | null; title: string; onClick: () => void;
+  }) => {
+    const palette = {
+      red: active ? 'border-red-600 bg-red-600 text-white' : 'border-red-200 text-red-700 hover:bg-red-50',
+      amber: active ? 'border-amber-600 bg-amber-600 text-white' : 'border-amber-200 text-amber-700 hover:bg-amber-50',
+      slate: active ? 'border-slate-600 bg-slate-700 text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50',
+    }[tone];
     return (
-      <div className="min-w-[150px]">
-        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{titulo}</div>
-        <div className="flex flex-wrap gap-1">
-          {itens.slice(0, 8).map((it) => {
-            const sel = dim && f[dim] === (it.valor === '(vazio)' ? '' : it.valor) && f[dim] !== '';
-            return (
-              <button
-                key={it.valor}
-                type="button"
-                disabled={!dim}
-                onClick={() => dim && toggleFacet(dim, it.valor)}
-                className={`rounded-full border px-2 py-0.5 text-[11px] ${
-                  sel ? 'border-capul-500 bg-capul-50 text-capul-700'
-                  : dim ? 'border-slate-200 text-slate-600 hover:border-slate-400'
-                  : 'border-slate-200 text-slate-500 cursor-default'
-                }`}
-                title={dim ? 'Filtrar' : undefined}
-              >
-                {it.valor} <span className="text-slate-400">{it.total.toLocaleString('pt-BR')}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <button
+        type="button"
+        onClick={onClick}
+        title={title}
+        aria-pressed={active}
+        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${palette}`}
+      >
+        {label}
+        {count != null && (
+          <span className={active ? 'text-white/80' : 'text-slate-400'}>
+            {count.toLocaleString('pt-BR')}
+          </span>
+        )}
+      </button>
+    );
+  };
+
+  /** Listbox de dimensão secundária (rótulo amigável + contagem).
+   *  "(vazio)" é omitido — o backend não filtra por nulo (montarWhere usa
+   *  truthy), então ofertá-lo seria um "Todos" disfarçado. */
+  const FacetSelect = ({
+    titulo, dim, itens, labels,
+  }: {
+    titulo: string;
+    dim: 'alerta' | 'origem' | 'uf' | 'situacao' | 'porte' | 'simples';
+    itens?: FacetItem[];
+    labels?: Record<string, string>;
+  }) => {
+    const opts = (itens ?? []).filter((it) => it.valor !== '(vazio)');
+    if (opts.length === 0) return null;
+    return (
+      <label className="flex min-w-[160px] flex-col gap-1">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{titulo}</span>
+        <select
+          value={f[dim]}
+          onChange={(e) => patch({ [dim]: e.target.value, page: 1 })}
+          className="rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-slate-500 focus:ring-slate-500"
+        >
+          <option value="">Todos</option>
+          {opts.map((it) => (
+            <option key={it.valor} value={it.valor}>
+              {labels?.[it.valor] ?? it.valor} ({it.total.toLocaleString('pt-BR')})
+            </option>
+          ))}
+        </select>
+      </label>
     );
   };
 
@@ -265,7 +315,8 @@ export function RfbCruzamentoTab() {
         <p>
           Exploração de <strong>clientes (SA1) + fornecedores (SA2)</strong> do Protheus ×
           <strong> base pública CNPJ local</strong> — sem certificado, sem SEFAZ, zero risco.
-          Clique nas facetas para filtrar; clique numa linha para abrir a Consulta Cadastral.
+          Use o <strong>Foco</strong> para os casos acionáveis (irregular × ativo no Protheus);
+          <strong> Mais filtros</strong> refina. Clique numa linha para a Consulta Cadastral.
           O snapshot é gerado sob demanda (ADMIN_TI).
         </p>
       </div>
@@ -306,43 +357,96 @@ export function RfbCruzamentoTab() {
         </Button>
       </div>
 
-      {/* Facetas combináveis */}
+      {/* Camada 1 — Foco: atalhos pro objetivo da tela (acionável) */}
       {fac && (
-        <div className="rounded-lg border border-slate-200 p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-600">
-              Facetas {temFiltro && <span className="text-slate-400">· {fac.total.toLocaleString('pt-BR')} no filtro atual</span>}
-            </span>
-            {temFiltro && (
-              <button onClick={limpar} className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-capul-600">
-                <X className="h-3 w-3" /> Limpar filtros
-              </button>
-            )}
+        <div className="space-y-3">
+          <div className="rounded-lg border border-slate-200 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-600">
+                Foco {temFiltro && <span className="text-slate-400">· {fac.total.toLocaleString('pt-BR')} no resultado</span>}
+              </span>
+              {temFiltro && (
+                <button onClick={limpar} className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-capul-600">
+                  <X className="h-3 w-3" /> Limpar tudo
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <PresetBtn
+                active={f.acao === 'BLOQUEAR'} tone="red" label="Bloquear"
+                count={facCount(fac.acao, 'BLOQUEAR')}
+                title="RFB inapta/baixada e ainda ATIVO no Protheus — ação concreta."
+                onClick={() => togglePreset('acao', 'BLOQUEAR')}
+              />
+              <PresetBtn
+                active={f.acao === 'REVISAR'} tone="amber" label="Revisar"
+                count={facCount(fac.acao, 'REVISAR')}
+                title="RFB suspensa/nula, ou razão divergente, com Protheus ativo."
+                onClick={() => togglePreset('acao', 'REVISAR')}
+              />
+              <PresetBtn
+                active={f.divergencia === 'Sim'} tone="amber" label="Razão divergente"
+                count={facCount(fac.divergencia, 'Sim')}
+                title="Razão social do Protheus diverge da oficial da RFB."
+                onClick={() => togglePreset('divergencia', 'Sim')}
+              />
+              <PresetBtn
+                active={f.soRecente} tone="slate" label="Situação recente ≤90d"
+                count={null}
+                title="Situação cadastral alterada na Receita nos últimos 90 dias."
+                onClick={() => patch({ soRecente: !f.soRecente, page: 1 })}
+              />
+            </div>
           </div>
-          <div className="flex flex-wrap gap-x-6 gap-y-3">
-            <FacetGroup titulo="Ação" itens={fac.acao} dim="acao" />
-            <FacetGroup titulo="Alerta" itens={fac.alerta} dim="alerta" />
-            <FacetGroup titulo="Situação RFB" itens={fac.situacao} dim="situacao" />
-            <FacetGroup titulo="Origem" itens={fac.origem} dim="origem" />
-            <FacetGroup titulo="UF" itens={fac.uf} dim="uf" />
-            <FacetGroup titulo="Porte" itens={fac.porte} dim="porte" />
-            <FacetGroup titulo="Simples" itens={fac.simples} dim="simples" />
-            <FacetGroup titulo="Divergência razão" itens={fac.divergencia} dim="divergencia" />
-            <FacetGroup titulo="Top CNAE" itens={fac.cnaeTop} />
+
+          {/* Camada 2 — Mais filtros (listboxes), recolhível */}
+          <div className="rounded-lg border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setMaisAberto((v) => !v)}
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              aria-expanded={maisAberto}
+            >
+              {maisAberto ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              <SlidersHorizontal className="h-3.5 w-3.5 text-slate-400" />
+              Mais filtros
+              {filtrosAvancados > 0 && (
+                <span className="rounded-full bg-capul-100 px-1.5 py-0.5 text-[10px] font-medium text-capul-700">
+                  {filtrosAvancados} ativo{filtrosAvancados > 1 ? 's' : ''}
+                </span>
+              )}
+            </button>
+            {maisAberto && (
+              <div className="border-t border-slate-100 p-3">
+                <div className="flex flex-wrap gap-x-5 gap-y-3">
+                  <FacetSelect titulo="Alerta" dim="alerta" itens={fac.alerta} />
+                  <FacetSelect titulo="Situação RFB" dim="situacao" itens={fac.situacao} labels={SIT_LABEL} />
+                  <FacetSelect titulo="Origem" dim="origem" itens={fac.origem} labels={ORIGEM_LABEL} />
+                  <FacetSelect titulo="UF" dim="uf" itens={fac.uf} />
+                  <FacetSelect titulo="Porte" dim="porte" itens={fac.porte} labels={PORTE_LABEL} />
+                  <FacetSelect titulo="Simples" dim="simples" itens={fac.simples} labels={SIMPLES_LABEL} />
+                </div>
+                {fac.cnaeTop.filter((c) => c.valor !== '(vazio)').length > 0 && (
+                  <div className="mt-3 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
+                    <span className="font-semibold uppercase tracking-wide text-slate-400">Top CNAE</span>{' '}
+                    {fac.cnaeTop.filter((c) => c.valor !== '(vazio)').slice(0, 8).map((c) => (
+                      <span key={c.valor} className="mr-2 whitespace-nowrap">
+                        {c.valor} <span className="text-slate-400">{c.total.toLocaleString('pt-BR')}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Busca livre + filtro de situação recente (data_situacao RFB) */}
+      {/* Busca livre (situação recente virou atalho de Foco) */}
       <div className="flex items-center gap-3">
         <input className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm"
           placeholder="Buscar CNPJ, razão social ou matrícula Protheus" value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)} />
-        <label className="flex shrink-0 items-center gap-1.5 text-xs text-slate-600" title="Situação cadastral alterada na Receita nos últimos 90 dias">
-          <input type="checkbox" checked={f.soRecente}
-            onChange={(e) => patch({ soRecente: e.target.checked, page: 1 })} />
-          Só situação recente (≤90d)
-        </label>
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-slate-200">
