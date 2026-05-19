@@ -962,6 +962,10 @@ model RfbCruzamentoResultado {
   codigo          String?
   loja            String?
   razaoProtheus   String?  @map("razao_protheus")
+  // IE do Protheus (SA1/SA2) — dado bruto do ERP, NÃO validado contra
+  // SEFAZ/CCC. A base RFB Dados Abertos não tem IE (registro estadual).
+  inscricaoEstadual   String? @map("inscricao_estadual")
+  inscricaoEstadualUf String? @map("inscricao_estadual_uf")
   bloqueado       Boolean  @default(false)
   achadoRfb       Boolean  @map("achado_rfb")
   situacaoRfb     String?  @map("situacao_rfb")

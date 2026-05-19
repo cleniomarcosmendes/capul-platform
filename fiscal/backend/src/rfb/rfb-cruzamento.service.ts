@@ -54,6 +54,9 @@ function simRazao(a: string | null | undefined, b: string | null | undefined): n
 interface Reg {
   cnpj: string; origem: TipoCadastroProtheus; filial?: string | null;
   codigo: string; loja: string; razSoc: string; bloquead: boolean;
+  // IE do PROTHEUS (SA1/SA2) — dado bruto do ERP, NÃO validado contra
+  // SEFAZ/CCC. A base RFB Dados Abertos não tem IE (registro estadual).
+  inscEst?: string | null; inscUf?: string | null;
 }
 
 @Injectable()
@@ -128,6 +131,7 @@ export class RfbCruzamentoService {
         out.push({
           cnpj: so(i.cnpj), origem: tipo, filial: i.filial ?? null,
           codigo: i.codigo, loja: i.loja, razSoc: i.razSoc, bloquead: !!i.bloquead,
+          inscEst: i.inscIE ?? null, inscUf: i.inscUF ?? null,
         });
       }
       // Paginação ROBUSTA: NÃO confiar em `?? 1` — o Protheus pode não
@@ -212,8 +216,12 @@ export class RfbCruzamentoService {
               : ativoProtheus && (sitc === '03' || sitc === '01' || div)
                 ? 'REVISAR'
                 : 'NENHUMA';
+          // IE do Protheus normalizada: vazio/espaços → null (deixa o
+          // filtro "Sem IE" trivial = inscricaoEstadual IS NULL).
+          const ieP = r.inscEst && r.inscEst.trim() ? r.inscEst.trim() : null;
           return {
             cnpj: r.cnpj, origem: r.origem, filial: r.filial, codigo: r.codigo, loja: r.loja,
+            inscricaoEstadual: ieP, inscricaoEstadualUf: r.inscUf?.trim() || null,
             razaoProtheus: r.razSoc, bloqueado: r.bloquead, achadoRfb: achado,
             situacaoRfb: e?.situacaoCadastral ?? null,
             dataSituacao: e?.dataSituacao ?? null,
@@ -251,7 +259,7 @@ export class RfbCruzamentoService {
   async consultar(q: {
     alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string;
     soRecente?: string; search?: string; sort?: string; dir?: string; page?: number; pageSize?: number;
-    divergencia?: string; acao?: string;
+    divergencia?: string; acao?: string; semIe?: string;
   }) {
     const page = Math.max(1, Number(q.page) || 1);
     const pageSize = Math.min(200, Math.max(10, Number(q.pageSize) || 50));
@@ -261,6 +269,7 @@ export class RfbCruzamentoService {
       cnpj: 'cnpj', origem: 'origem', razaoProtheus: 'razaoProtheus',
       razaoRfb: 'razaoRfb', situacaoRfb: 'situacaoRfb', ufRfb: 'ufRfb', alerta: 'alerta',
       similaridadeRazao: 'similaridadeRazao', acao: 'acao',
+      inscricaoEstadual: 'inscricaoEstadual',
     };
     const col = q.sort && SORTABLE[q.sort];
     const dir = q.dir === 'desc' ? 'desc' : 'asc';
@@ -289,7 +298,7 @@ export class RfbCruzamentoService {
   }
 
   /** Where compartilhado entre consultar/facetas/export (filtros idênticos). */
-  private montarWhere(q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string; acao?: string }): Record<string, unknown> {
+  private montarWhere(q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string; acao?: string; semIe?: string }): Record<string, unknown> {
     const where: Record<string, unknown> = {};
     if (q.alerta) where.alerta = q.alerta;
     if (q.origem) where.origem = q.origem;
@@ -304,6 +313,9 @@ export class RfbCruzamentoService {
       // data_situacao >= hoje-90d (exclui null automaticamente no Prisma).
       where.dataSituacao = { gte: this.cutoffRecente(90) };
     }
+    // "Sem IE (Protheus)": cliente/fornecedor sem inscrição estadual no
+    // ERP. executar() normaliza vazio→null, então o filtro é só IS NULL.
+    if (q.semIe === '1' || q.semIe === 'true') where.inscricaoEstadual = null;
     if (q.search) {
       const s = q.search.trim();
       const digitos = s.replace(/\D/g, '');
@@ -311,6 +323,7 @@ export class RfbCruzamentoService {
         { razaoProtheus: { contains: s, mode: 'insensitive' } },
         { razaoRfb: { contains: s, mode: 'insensitive' } },
         { codigo: { contains: s, mode: 'insensitive' } },
+        { inscricaoEstadual: { contains: s, mode: 'insensitive' } },
       ];
       if (digitos.length >= 2) or.push({ cnpj: { contains: digitos } });
       where.OR = or;
@@ -320,7 +333,7 @@ export class RfbCruzamentoService {
 
   /** Facetas agregadas (counts por dimensão) respeitando os filtros atuais —
    *  base da exploração "Inteligência Cadastral" (F3). */
-  async facetas(q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string; acao?: string }) {
+  async facetas(q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string; acao?: string; semIe?: string }) {
     const where = this.montarWhere(q);
     // groupBy explícito por campo (Prisma tipa pelo literal `by`); ordena/
     // limita em JS — evita o inferno de tipos do groupBy dinâmico.
@@ -360,13 +373,14 @@ export class RfbCruzamentoService {
 
   /** Export CSV do snapshot filtrado (sem paginação). Snapshot é limitado
    *  (clientes/fornecedores), cabe em memória. */
-  async exportarCsv(q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string; acao?: string }): Promise<string> {
+  async exportarCsv(q: { alerta?: string; origem?: string; uf?: string; situacao?: string; porte?: string; simples?: string; soRecente?: string; search?: string; divergencia?: string; acao?: string; semIe?: string }): Promise<string> {
     const where = this.montarWhere(q);
     const rows = await this.prisma.rfbCruzamentoResultado.findMany({
       where, orderBy: [{ alerta: 'asc' }, { id: 'asc' }], take: 100000,
     });
     const head = [
-      'cnpj', 'origem', 'codigo', 'loja', 'razao_protheus', 'razao_rfb',
+      'cnpj', 'origem', 'codigo', 'loja', 'razao_protheus',
+      'inscricao_estadual', 'inscricao_estadual_uf', 'razao_rfb',
       'situacao_rfb', 'data_situacao', 'uf_rfb', 'municipio_rfb', 'cnae', 'porte',
       'optante_simples', 'bloqueado', 'achado_rfb', 'alerta',
       'similaridade_razao', 'divergencia_razao', 'acao',
@@ -376,7 +390,8 @@ export class RfbCruzamentoService {
       return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const linhas = rows.map((r) => [
-      r.cnpj, r.origem, r.codigo, r.loja, r.razaoProtheus, r.razaoRfb,
+      r.cnpj, r.origem, r.codigo, r.loja, r.razaoProtheus,
+      r.inscricaoEstadual, r.inscricaoEstadualUf, r.razaoRfb,
       r.situacaoRfb, r.dataSituacao, r.ufRfb, r.municipioRfb, r.cnae, r.porte,
       r.optanteSimples, r.bloqueado, r.achadoRfb, r.alerta,
       r.similaridadeRazao, r.divergenciaRazao, r.acao,

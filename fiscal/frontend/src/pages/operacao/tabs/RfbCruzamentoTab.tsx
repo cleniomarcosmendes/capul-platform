@@ -9,6 +9,7 @@ import { PageWrapper } from '../../../components/PageWrapper';
 
 interface Row {
   id: number; cnpj: string; origem: string; razaoProtheus: string | null;
+  inscricaoEstadual: string | null; inscricaoEstadualUf: string | null;
   codigo: string | null; loja: string | null;
   razaoRfb: string | null; situacaoRfb: string | null; ufRfb: string | null;
   cnae: string | null; porte: string | null; optanteSimples: string | null;
@@ -87,6 +88,7 @@ export function RfbCruzamentoTab() {
     divergencia: sp.get('divergencia') ?? '',
     acao: sp.get('acao') ?? '',
     soRecente: sp.get('soRecente') === '1',
+    semIe: sp.get('semIe') === '1',
     search: sp.get('search') ?? '',
     page: Math.max(1, Number(sp.get('page')) || 1),
     sort: sp.get('sort') ?? '',
@@ -113,6 +115,7 @@ export function RfbCruzamentoTab() {
     if (n.divergencia) q.set('divergencia', n.divergencia);
     if (n.acao) q.set('acao', n.acao);
     if (n.soRecente) q.set('soRecente', '1');
+    if (n.semIe) q.set('semIe', '1');
     if (n.search) q.set('search', n.search);
     if (n.page > 1) q.set('page', String(n.page));
     if (n.sort) { q.set('sort', n.sort); q.set('dir', n.dir); }
@@ -139,6 +142,7 @@ export function RfbCruzamentoTab() {
     if (f.simples) p.set('simples', f.simples);
     if (f.divergencia) p.set('divergencia', f.divergencia === 'Sim' ? '1' : '0');
     if (f.soRecente) p.set('soRecente', '1');
+    if (f.semIe) p.set('semIe', '1');
     if (f.search) p.set('search', f.search);
     return p;
   }, [f]);
@@ -212,15 +216,15 @@ export function RfbCruzamentoTab() {
 
   const ex = data?.execucoes?.[0];
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
-  const temFiltro = !!(f.alerta || f.origem || f.uf || f.situacao || f.porte || f.simples || f.divergencia || f.acao || f.soRecente || f.search);
+  const temFiltro = !!(f.alerta || f.origem || f.uf || f.situacao || f.porte || f.simples || f.divergencia || f.acao || f.soRecente || f.semIe || f.search);
   const filtrosAvancados = (['alerta', 'origem', 'uf', 'situacao', 'porte', 'simples'] as const)
     .filter((k) => f[k]).length;
 
-  const Th = ({ col, label }: { col: string; label: string }) => {
+  const Th = ({ col, label, hint }: { col: string; label: string; hint?: string }) => {
     const active = f.sort === col;
     const Icon = active ? (f.dir === 'asc' ? ChevronUp : ChevronDown) : ChevronsUpDown;
     return (
-      <th className="px-3 py-2">
+      <th className="px-3 py-2" title={hint}>
         <button
           type="button"
           onClick={() => patch({
@@ -396,6 +400,12 @@ export function RfbCruzamentoTab() {
                 title="Situação cadastral alterada na Receita nos últimos 90 dias."
                 onClick={() => patch({ soRecente: !f.soRecente, page: 1 })}
               />
+              <PresetBtn
+                active={f.semIe} tone="slate" label="Sem IE (Protheus)"
+                count={null}
+                title="Cliente/fornecedor sem Inscrição Estadual no Protheus (dado bruto do ERP, não validado contra SEFAZ). Ausência pode ser legítima (CPF/produtor, isento, serviço) — exige análise."
+                onClick={() => patch({ semIe: !f.semIe, page: 1 })}
+              />
             </div>
           </div>
 
@@ -445,7 +455,7 @@ export function RfbCruzamentoTab() {
       {/* Busca livre (situação recente virou atalho de Foco) */}
       <div className="flex items-center gap-3">
         <input className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-          placeholder="Buscar CNPJ, razão social ou matrícula Protheus" value={searchInput}
+          placeholder="Buscar CNPJ, razão social, matrícula Protheus ou IE" value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)} />
       </div>
 
@@ -457,6 +467,8 @@ export function RfbCruzamentoTab() {
               <Th col="origem" label="Origem" />
               <th className="px-3 py-2" title="Código + Loja no Protheus (A1_COD/A1_LOJA para cliente, A2_COD/A2_LOJA para fornecedor)">Cód/Loja</th>
               <Th col="razaoProtheus" label="Razão (Protheus)" />
+              <Th col="inscricaoEstadual" label="IE (Protheus)"
+                hint="Inscrição Estadual como está no Protheus (SA1/SA2). Dado bruto do ERP — NÃO validado contra SEFAZ/CCC. A base RFB Dados Abertos não tem IE." />
               <Th col="razaoRfb" label="Razão (RFB)" />
               <Th col="similaridadeRazao" label="Razão (sim.%)" />
               <Th col="situacaoRfb" label="Sit. RFB" />
@@ -490,6 +502,18 @@ export function RfbCruzamentoTab() {
                   {r.codigo ? `${r.codigo}${r.loja ? '/' + r.loja : ''}` : '—'}
                 </td>
                 <td className="px-3 py-2">{r.razaoProtheus ?? '—'}</td>
+                <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">
+                  {r.inscricaoEstadual ? (
+                    <>
+                      {r.inscricaoEstadual}
+                      {r.inscricaoEstadualUf && (
+                        <span className="ml-1 text-slate-400">{r.inscricaoEstadualUf}</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-slate-300" title="Sem IE no Protheus (pode ser legítimo: CPF/produtor, isento, serviço)">—</span>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-slate-600">{r.razaoRfb ?? '—'}</td>
                 <td className="px-3 py-2 text-xs whitespace-nowrap">
                   {r.similaridadeRazao == null ? (
@@ -550,7 +574,7 @@ export function RfbCruzamentoTab() {
               </tr>
             ))}
             {(data?.itens ?? []).length === 0 && (
-              <tr><td colSpan={11} className="px-3 py-4 text-center text-slate-400">
+              <tr><td colSpan={12} className="px-3 py-4 text-center text-slate-400">
                 Sem resultados. Rode o cruzamento (precisa da base RFB importada).
               </td></tr>
             )}
