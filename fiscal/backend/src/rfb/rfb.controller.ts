@@ -164,12 +164,14 @@ export class RfbController {
   @Get('socios/busca')
   @RoleMinima('GESTOR_FISCAL')
   async buscarPorSocio(
-    @Query() q: { nome?: string; page?: string; pageSize?: string },
+    @Query() q: { nome?: string; page?: string; pageSize?: string; sort?: string; dir?: string },
   ) {
     return this.rfbConsulta.buscarPorSocio(
       q.nome ?? '',
       q.page ? Number(q.page) : 1,
       q.pageSize ? Number(q.pageSize) : 30,
+      q.sort,
+      q.dir,
     );
   }
 
@@ -181,6 +183,7 @@ export class RfbController {
     @Query() q: {
       razao?: string; uf?: string; situacao?: string; cnae?: string;
       porte?: string; semProtheus?: string; page?: string; pageSize?: string;
+      sort?: string; dir?: string;
     },
   ) {
     return this.rfbConsulta.buscarEmpresas({
@@ -188,6 +191,7 @@ export class RfbController {
       semProtheus: q.semProtheus === '1' || q.semProtheus === 'true',
       page: q.page ? Number(q.page) : 1,
       pageSize: q.pageSize ? Number(q.pageSize) : 30,
+      sort: q.sort, dir: q.dir,
     });
   }
 }

@@ -182,21 +182,30 @@ export class RfbConsultaService {
    * trgm — trigramas). Paginação por hasMore (pega pageSize+1) em vez de
    * COUNT — evita scan caro em 27M p/ nomes comuns. ILIKE %termo% usa o
    * índice socios_nome_trgm_idx. Join empresas (razão) + estab matriz
-   * (situação/UF/município) + resolve qualificação.
+   * (situação/UF/município) + resolve qualificação. Ordenação opcional
+   * por WHITELIST de colunas (sort/dir) — $queryRawUnsafe c/ params
+   * posicionais (mesmo padrão de buscarEmpresas; zero injeção, pois o
+   * ORDER BY vem de mapa fixo, nunca da string do usuário).
    */
-  async buscarPorSocio(nome: string, page = 1, pageSize = 30) {
+  async buscarPorSocio(nome: string, page = 1, pageSize = 30, sort?: string, dir?: string) {
     const termo = (nome || '').trim();
     const ps = Math.min(50, Math.max(10, Number(pageSize) || 30));
     const pg = Math.max(1, Number(page) || 1);
     if (termo.length < 3) {
       return { itens: [], page: 1, pageSize: ps, hasMore: false, termoCurto: true };
     }
-    const rows = await this.prisma.$queryRaw<Array<{
-      cnpj_basico: string; nome_socio: string | null; identificador_socio: string | null;
-      qualificacao_socio: string | null; data_entrada: string | null; faixa_etaria: string | null;
-      razao_social: string | null; cnpj_completo: string | null;
-      situacao_cadastral: string | null; uf: string | null; municipio: string | null;
-    }>>`
+    const SORTABLE: Record<string, string> = {
+      socio: 's.nome_socio', qualificacao: 's.qualificacao_socio',
+      entrada: 's.data_entrada', empresa: 'e.razao_social',
+      cnpj: 'est.cnpj_completo', situacao: 'est.situacao_cadastral', uf: 'est.uf',
+    };
+    const col = sort ? SORTABLE[sort] : undefined;
+    const direction = dir === 'desc' ? 'DESC' : 'ASC';
+    // Tiebreaker estável (cnpj_basico) → paginação determinística no OFFSET.
+    const orderBy = col
+      ? `${col} ${direction} NULLS LAST, s.cnpj_basico`
+      : `s.nome_socio, e.razao_social`;
+    const sql = `
       SELECT s.cnpj_basico, s.nome_socio, s.identificador_socio, s.qualificacao_socio,
              s.data_entrada, s.faixa_etaria, e.razao_social,
              est.cnpj_completo, est.situacao_cadastral, est.uf,
@@ -210,10 +219,15 @@ export class RfbConsultaService {
         LIMIT 1
       ) est ON true
       LEFT JOIN rfb.municipios m ON m.codigo = est.municipio
-      WHERE s.nome_socio ILIKE '%' || ${termo} || '%'
-      ORDER BY s.nome_socio, e.razao_social
-      LIMIT ${ps + 1} OFFSET ${(pg - 1) * ps}
-    `;
+      WHERE s.nome_socio ILIKE '%' || $1 || '%'
+      ORDER BY ${orderBy}
+      LIMIT $2 OFFSET $3`;
+    const rows = await this.prisma.$queryRawUnsafe<Array<{
+      cnpj_basico: string; nome_socio: string | null; identificador_socio: string | null;
+      qualificacao_socio: string | null; data_entrada: string | null; faixa_etaria: string | null;
+      razao_social: string | null; cnpj_completo: string | null;
+      situacao_cadastral: string | null; uf: string | null; municipio: string | null;
+    }>>(sql, termo, ps + 1, (pg - 1) * ps);
     const hasMore = rows.length > ps;
     const slice = rows.slice(0, ps);
     const qCodes = [...new Set(slice.map((r) => r.qualificacao_socio).filter((x): x is string => !!x))];
@@ -254,6 +268,7 @@ export class RfbConsultaService {
   async buscarEmpresas(q: {
     razao?: string; uf?: string; situacao?: string; cnae?: string;
     porte?: string; semProtheus?: boolean; page?: number; pageSize?: number;
+    sort?: string; dir?: string;
   }) {
     const razao = (q.razao ?? '').trim();
     const uf = (q.uf ?? '').trim().toUpperCase();
@@ -273,6 +288,17 @@ export class RfbConsultaService {
     if (cnae) add(`est.cnae_principal LIKE ? || '%'`, cnae);
     if (q.porte) add(`e.porte = ?`, q.porte);
     if (q.semProtheus) cond.push(`NOT EXISTS (SELECT 1 FROM rfb.cruzamento_resultado c WHERE c.cnpj = est.cnpj_completo)`);
+    // Ordenação por WHITELIST (sort/dir) — coluna vem de mapa fixo, nunca
+    // da string do usuário (params já são posicionais $N). Tiebreaker
+    // estável (cnpj_completo) p/ paginação OFFSET determinística.
+    const SORTABLE: Record<string, string> = {
+      razao: 'e.razao_social', cnpj: 'est.cnpj_completo',
+      situacao: 'est.situacao_cadastral', uf: 'est.uf',
+      cnae: 'est.cnae_principal', porte: 'e.porte', situacaoDesde: 'est.data_situacao',
+    };
+    const sCol = q.sort ? SORTABLE[q.sort] : undefined;
+    const sDir = q.dir === 'desc' ? 'DESC' : 'ASC';
+    const orderBy = sCol ? `${sCol} ${sDir} NULLS LAST, est.cnpj_completo` : 'e.razao_social';
     params.push(ps + 1, (pg - 1) * ps);
     const sql = `
       SELECT est.cnpj_completo, est.situacao_cadastral, est.uf, est.cnae_principal,
@@ -285,7 +311,7 @@ export class RfbConsultaService {
       LEFT JOIN rfb.municipios m ON m.codigo = est.municipio
       LEFT JOIN rfb.cnaes cn ON cn.codigo = est.cnae_principal
       WHERE ${cond.join(' AND ')}
-      ORDER BY e.razao_social
+      ORDER BY ${orderBy}
       LIMIT $${params.length - 1} OFFSET $${params.length}`;
     const rows = await this.prisma.$queryRawUnsafe<Array<{
       cnpj_completo: string; situacao_cadastral: string | null; uf: string | null;

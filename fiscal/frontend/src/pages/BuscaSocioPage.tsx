@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Users, Search, Info } from 'lucide-react';
+import { Users, Search, Info, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { fiscalApi } from '../services/api';
 import { PageWrapper } from '../components/PageWrapper';
 import { Button } from '../components/Button';
@@ -56,6 +56,8 @@ export function BuscaSocioPage() {
   const [sp, setSp] = useSearchParams();
   const nomeUrl = (sp.get('nome') ?? '').trim();
   const pageUrl = Math.max(1, Number(sp.get('page')) || 1);
+  const sortUrl = sp.get('sort') ?? '';
+  const dirUrl: 'asc' | 'desc' = sp.get('dir') === 'desc' ? 'desc' : 'asc';
   // Input controlado; inicia do URL (mostra o termo ao restaurar).
   const [termo, setTermo] = useState(sp.get('nome') ?? '');
   const [data, setData] = useState<Resp | null>(null);
@@ -63,33 +65,67 @@ export function BuscaSocioPage() {
   const toast = useToast();
   const navigate = useNavigate();
 
+  /** Atualiza a URL preservando o que não mudou (replace — não polui o
+   *  histórico ao digitar/ordenar; o push p/ "voltar" é o clique na linha). */
+  const setParams = useCallback((partial: Record<string, string>) => {
+    const q = new URLSearchParams(sp);
+    for (const [k, v] of Object.entries(partial)) {
+      if (v) q.set(k, v); else q.delete(k);
+    }
+    setSp(q, { replace: true });
+  }, [sp, setSp]);
+
   // Debounce (lição do 429): digitar mexe só no input; 350ms depois grava
-  // na URL (replace — não polui histórico ao digitar). Novo termo volta
-  // p/ página 1; se igual ao da URL, não faz nada (não reseta paginação).
+  // na URL. Novo termo volta p/ página 1 (preserva ordenação); se igual
+  // ao da URL, não faz nada. Termo vazio limpa tudo.
   useEffect(() => {
     const t = setTimeout(() => {
       const v = termo.trim();
       if (v === nomeUrl) return;
-      setSp(v ? { nome: v, page: '1' } : {}, { replace: true });
+      if (v) setParams({ nome: v, page: '1' });
+      else setSp({}, { replace: true });
     }, 350);
     return () => clearTimeout(t);
-  }, [termo, nomeUrl, setSp]);
+  }, [termo, nomeUrl, setParams, setSp]);
 
-  // Fetch keyed na URL (nome+page).
+  // Fetch keyed na URL (nome+page+sort+dir).
   useEffect(() => {
     if (nomeUrl.length < 3) { setData(null); return; }
     let cancelado = false;
     setLoading(true);
     fiscalApi
-      .get<Resp>('/rfb/socios/busca', { params: { nome: nomeUrl, page: pageUrl } })
+      .get<Resp>('/rfb/socios/busca', {
+        params: { nome: nomeUrl, page: pageUrl, ...(sortUrl ? { sort: sortUrl, dir: dirUrl } : {}) },
+      })
       .then((r) => { if (!cancelado) setData(r.data); })
       .catch((e) => { if (!cancelado) toast.error(extractApiError(e)); })
       .finally(() => { if (!cancelado) setLoading(false); });
     return () => { cancelado = true; };
-  }, [nomeUrl, pageUrl, toast]);
+  }, [nomeUrl, pageUrl, sortUrl, dirUrl, toast]);
 
-  const irPagina = (p: number) =>
-    setSp({ nome: nomeUrl, page: String(Math.max(1, p)) }, { replace: true });
+  const irPagina = (p: number) => setParams({ page: String(Math.max(1, p)) });
+
+  /** Ordena por coluna (clique no cabeçalho) — volta p/ página 1. */
+  const toggleSort = (col: string) =>
+    setParams({ sort: col, dir: sortUrl === col && dirUrl === 'asc' ? 'desc' : 'asc', page: '1' });
+
+  const Th = ({ col, label }: { col: string; label: string }) => {
+    const active = sortUrl === col;
+    const Icon = active ? (dirUrl === 'asc' ? ChevronUp : ChevronDown) : ChevronsUpDown;
+    return (
+      <th className="px-3 py-2">
+        <button
+          type="button"
+          onClick={() => toggleSort(col)}
+          className={`inline-flex items-center gap-1 hover:text-slate-800 ${active ? 'font-semibold text-slate-800' : ''}`}
+          title="Ordenar"
+        >
+          {label}
+          <Icon className={`h-3 w-3 ${active ? 'text-capul-600' : 'text-slate-300'}`} />
+        </button>
+      </th>
+    );
+  };
 
   const itens = data?.itens ?? [];
 
@@ -137,14 +173,14 @@ export function BuscaSocioPage() {
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-xs text-slate-500">
                   <tr>
-                    <th className="px-3 py-2">Sócio</th>
+                    <Th col="socio" label="Sócio" />
                     <th className="px-3 py-2">Tipo</th>
-                    <th className="px-3 py-2">Qualificação</th>
-                    <th className="px-3 py-2">Entrada</th>
-                    <th className="px-3 py-2">Empresa</th>
-                    <th className="px-3 py-2">CNPJ</th>
-                    <th className="px-3 py-2">Situação</th>
-                    <th className="px-3 py-2">UF/Município</th>
+                    <Th col="qualificacao" label="Qualificação" />
+                    <Th col="entrada" label="Entrada" />
+                    <Th col="empresa" label="Empresa" />
+                    <Th col="cnpj" label="CNPJ" />
+                    <Th col="situacao" label="Situação" />
+                    <Th col="uf" label="UF/Município" />
                   </tr>
                 </thead>
                 <tbody>

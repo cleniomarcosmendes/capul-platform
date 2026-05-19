@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Building2, Search, Info } from 'lucide-react';
+import { Building2, Search, Info, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { fiscalApi } from '../services/api';
 import { PageWrapper } from '../components/PageWrapper';
 import { Button } from '../components/Button';
@@ -55,6 +55,8 @@ export function BaseRfbEmpresasPage() {
   const cnae = sp.get('cnae') ?? '';
   const semProtheus = sp.get('semProtheus') === '1';
   const pageUrl = Math.max(1, Number(sp.get('page')) || 1);
+  const sortUrl = sp.get('sort') ?? '';
+  const dirUrl: 'asc' | 'desc' = sp.get('dir') === 'desc' ? 'desc' : 'asc';
   const [razao, setRazao] = useState(sp.get('razao') ?? '');
   const [data, setData] = useState<Resp | null>(null);
   const [loading, setLoading] = useState(false);
@@ -70,6 +72,28 @@ export function BaseRfbEmpresasPage() {
     }
     setSp(q, { replace: true });
   }
+
+  /** Ordena por coluna (clique no cabeçalho) — volta p/ página 1. */
+  const toggleSort = (col: string) =>
+    patch({ sort: col, dir: sortUrl === col && dirUrl === 'asc' ? 'desc' : 'asc', page: '' });
+
+  const Th = ({ col, label }: { col: string; label: string }) => {
+    const active = sortUrl === col;
+    const Icon = active ? (dirUrl === 'asc' ? ChevronUp : ChevronDown) : ChevronsUpDown;
+    return (
+      <th className="px-3 py-2">
+        <button
+          type="button"
+          onClick={() => toggleSort(col)}
+          className={`inline-flex items-center gap-1 hover:text-slate-800 ${active ? 'font-semibold text-slate-800' : ''}`}
+          title="Ordenar"
+        >
+          {label}
+          <Icon className={`h-3 w-3 ${active ? 'text-capul-600' : 'text-slate-300'}`} />
+        </button>
+      </th>
+    );
+  };
 
   // Debounce 350ms da razão → URL (volta p/ página 1).
   useEffect(() => {
@@ -91,6 +115,7 @@ export function BaseRfbEmpresasPage() {
         params: {
           razao: razaoUrl, uf, situacao, cnae,
           ...(semProtheus ? { semProtheus: '1' } : {}),
+          ...(sortUrl ? { sort: sortUrl, dir: dirUrl } : {}),
           page: pageUrl,
         },
       })
@@ -98,7 +123,7 @@ export function BaseRfbEmpresasPage() {
       .catch((e) => { if (!cancelado) toast.error(extractApiError(e)); })
       .finally(() => { if (!cancelado) setLoading(false); });
     return () => { cancelado = true; };
-  }, [razaoUrl, uf, situacao, cnae, semProtheus, pageUrl, toast]);
+  }, [razaoUrl, uf, situacao, cnae, semProtheus, sortUrl, dirUrl, pageUrl, toast]);
 
   const itens = data?.itens ?? [];
   const semFiltroAtivo = razaoUrl.length < 3 && !uf && !cnae.replace(/\D/g, '');
@@ -177,12 +202,12 @@ export function BaseRfbEmpresasPage() {
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-xs text-slate-500">
                   <tr>
-                    <th className="px-3 py-2">Razão social</th>
-                    <th className="px-3 py-2">CNPJ</th>
-                    <th className="px-3 py-2">Situação</th>
-                    <th className="px-3 py-2">UF/Município</th>
-                    <th className="px-3 py-2">CNAE</th>
-                    <th className="px-3 py-2">Porte</th>
+                    <Th col="razao" label="Razão social" />
+                    <Th col="cnpj" label="CNPJ" />
+                    <Th col="situacao" label="Situação" />
+                    <Th col="uf" label="UF/Município" />
+                    <Th col="cnae" label="CNAE" />
+                    <Th col="porte" label="Porte" />
                     <th className="px-3 py-2">Cadastro CAPUL</th>
                   </tr>
                 </thead>
