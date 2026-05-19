@@ -486,9 +486,9 @@ export function ChamadoDetalhePage() {
               <div className="px-4 py-2.5 border-b border-slate-200">
                 <h4 className="font-semibold text-slate-700 text-sm">Historico</h4>
               </div>
-              <div className="p-4 lg:flex-1 lg:min-h-0 overflow-y-auto">
+              <div className="flex flex-col lg:flex-1 lg:min-h-0 lg:overflow-hidden">
                 {!chamado.historicos || chamado.historicos.length === 0 ? (
-                  <p className="text-sm text-slate-400">Nenhum historico</p>
+                  <p className="text-sm text-slate-400 p-4">Nenhum historico</p>
                 ) : (
                   <ChatBubbleList
                     sortable

@@ -159,9 +159,14 @@ export function ChatBubbleList({
     new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 
   return (
-    <div>
+    // Padrão ConversaTab (Atividades): header de ordenação NÃO-scroll
+    // (flex-shrink-0) + UM único scroll interno (lg:overflow-y-auto nos
+    // balões). Evita o sticky-dentro-de-scroll-aninhado que vazava
+    // (a coluna lg:overflow-y-auto do fix de colapso criava 2 scrolls).
+    // lg: only — no mobile o fluxo da página continua natural.
+    <div className="flex flex-col lg:flex-1 lg:min-h-0">
       {sortable && (
-        <div className="sticky top-0 z-20 -mx-4 -mt-4 px-4 pt-4 pb-2 mb-2 bg-white flex items-center justify-between border-b border-slate-100">
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-slate-100 bg-white">
           <span className="text-[11px] text-slate-400">{eventos.length} evento(s)</span>
           <button
             onClick={() => setOrdemAsc((v) => !v)}
@@ -173,7 +178,7 @@ export function ChatBubbleList({
           </button>
         </div>
       )}
-      <div className="space-y-3">
+      <div className="space-y-3 p-4 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
       {ordenados.map((ev) => {
         if (highlightTypes.includes(ev.tipo)) {
           return <HighlightBubble key={ev.id} ev={ev} fmtDataHora={fmtDataHora} />;

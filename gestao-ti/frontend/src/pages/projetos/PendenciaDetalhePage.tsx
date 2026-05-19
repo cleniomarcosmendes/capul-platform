@@ -345,9 +345,9 @@ export function PendenciaDetalhePage() {
               <div className="px-4 py-2.5 border-b border-slate-200">
           <h4 className="font-semibold text-slate-700 text-sm">Historico ({pendencia.interacoes?.length || 0})</h4>
               </div>
-              <div className="p-4 lg:flex-1 lg:min-h-0 overflow-y-auto">
+              <div className="flex flex-col lg:flex-1 lg:min-h-0 lg:overflow-hidden">
           {(pendencia.interacoes || []).length === 0 ? (
-            <p className="text-sm text-slate-400">Nenhuma interacao</p>
+            <p className="text-sm text-slate-400 p-4">Nenhuma interacao</p>
           ) : (
             <ChatBubbleList
               sortable
