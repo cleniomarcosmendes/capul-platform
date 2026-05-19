@@ -3,8 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { usuarioService } from '../../services/usuario.service';
 import { departamentoService } from '../../services/departamento.service';
-import { ArrowLeft, Save, Shield, KeyRound, Clock, AlertTriangle } from 'lucide-react';
-import type { UsuarioDetalhe, ModuloSistema, FilialOption, Departamento } from '../../types';
+import { ArrowLeft, Save, Shield, KeyRound, Clock, AlertTriangle, Lock } from 'lucide-react';
+import type { UsuarioDetalhe, ModuloSistema, FilialOption, Departamento, UsuarioCapability } from '../../types';
+import { useConfirm } from '../../components/ConfirmDialog';
+import { useAuth } from '../../contexts/AuthContext';
+
+// Capability sensível (LGPD) — acesso a PII de sócios. Plano:
+// docs/PLANO_FISCAL_CONSULTA_SOCIOS_LGPD_v1.md
+const CAP_SOCIO = 'FISCAL_CONSULTA_SOCIOS';
 
 interface PermissaoForm {
   moduloId: string;
@@ -22,11 +28,18 @@ export function UsuarioFormPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEdicao = !!id;
+  const { configuradorRole } = useAuth();
+  const confirm = useConfirm();
+  const isAdminConfig = configuradorRole === 'ADMIN';
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [erro, setErro] = useState('');
   const [msg, setMsg] = useState('');
+  // Capabilities (LGPD) — só gerenciável por ADMIN em usuário existente.
+  const [caps, setCaps] = useState<UsuarioCapability[]>([]);
+  const [capMotivo, setCapMotivo] = useState('');
+  const [capBusy, setCapBusy] = useState(false);
 
   const [username, setUsername] = useState('');
   const [nome, setNome] = useState('');
@@ -67,6 +80,66 @@ export function UsuarioFormPage() {
       departamentoService.listar(filialPrincipalId).then(setDepartamentos).catch(() => {});
     }
   }, [filialPrincipalId]);
+
+  // Capabilities só fazem sentido em usuário existente e p/ ADMIN
+  // (o backend já barra via guard; aqui evita 403 e UI vazia).
+  useEffect(() => {
+    if (isEdicao && isAdminConfig && id) carregarCaps(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, isEdicao, isAdminConfig]);
+
+  async function carregarCaps(uid: string) {
+    try {
+      setCaps(await usuarioService.listarCapabilities(uid));
+    } catch {
+      /* silencioso — seção some se não tiver acesso */
+    }
+  }
+
+  async function concederCapSocio() {
+    if (!id) return;
+    if (capMotivo.trim().length < 5) {
+      setErro('Informe o motivo da concessão (mín. 5 caracteres) — exigência LGPD.');
+      return;
+    }
+    setCapBusy(true);
+    setErro('');
+    setMsg('');
+    try {
+      await usuarioService.concederCapability(id, CAP_SOCIO, capMotivo.trim());
+      setCapMotivo('');
+      await carregarCaps(id);
+      setMsg('Acesso a dados de sócio concedido.');
+    } catch (err) {
+      setErro(extrairMensagemErro(err));
+    } finally {
+      setCapBusy(false);
+    }
+  }
+
+  async function revogarCapSocio() {
+    if (!id) return;
+    const ok = await confirm({
+      title: 'Revogar acesso a dados de sócio?',
+      description:
+        'O usuário deixará de acessar a Busca por Sócio e o QSA da Consulta Cadastral. A concessão fica registrada para auditoria (LGPD).',
+      variant: 'danger',
+      confirmLabel: 'Revogar',
+    });
+    if (!ok) return;
+    setCapBusy(true);
+    setErro('');
+    setMsg('');
+    try {
+      await usuarioService.revogarCapability(id, CAP_SOCIO);
+      await carregarCaps(id);
+      setMsg('Acesso a dados de sócio revogado.');
+    } catch (err) {
+      setErro(extrairMensagemErro(err));
+    } finally {
+      setCapBusy(false);
+    }
+  }
 
   async function carregarDados() {
     try {
@@ -519,6 +592,7 @@ export function UsuarioFormPage() {
           {/* === ABA: PERMISSÕES === (linhas compactas + scroll: escala com
               N módulos sem virar "linguiça" — queixa 15/05) */}
           {activeTab === 'permissoes' && (
+          <div className="space-y-6">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-slate-800 flex items-center gap-2">
@@ -562,6 +636,74 @@ export function UsuarioFormPage() {
                 );
               })}
             </div>
+          </div>
+
+          {/* Capability sensível (LGPD) — só ADMIN, em usuário existente.
+              Plano: docs/PLANO_FISCAL_CONSULTA_SOCIOS_LGPD_v1.md */}
+          {isEdicao && isAdminConfig && (() => {
+            const socioCap = caps.find((c) => c.capability === CAP_SOCIO);
+            const ativo = !!socioCap?.ativo;
+            return (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                <h2 className="font-semibold text-slate-800 flex items-center gap-2 mb-1">
+                  <Lock className="w-5 h-5 text-rose-600" />
+                  Dados sensíveis (LGPD)
+                </h2>
+                <p className="text-xs text-slate-500 mb-4">
+                  Acesso a <strong>dados de sócios (PII)</strong> — tela "Busca por Sócio"
+                  e o QSA da Consulta Cadastral. Concessão nominal, independente do papel,
+                  com motivo registrado para auditoria.
+                </p>
+                <div className={`rounded-lg border p-4 ${ativo ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200'}`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-800">Consulta de Sócios</span>
+                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                          {ativo ? 'Concedida' : 'Sem acesso'}
+                        </span>
+                      </div>
+                      {ativo && socioCap && (
+                        <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                          Concedida em {new Date(socioCap.concedidoEm).toLocaleString('pt-BR')}
+                          {socioCap.motivo ? ` · motivo: ${socioCap.motivo}` : ''}
+                        </p>
+                      )}
+                    </div>
+                    {ativo && (
+                      <button
+                        type="button"
+                        onClick={revogarCapSocio}
+                        disabled={capBusy}
+                        className="px-3 py-1.5 text-xs font-medium rounded-md border border-rose-300 text-rose-700 hover:bg-rose-50 disabled:opacity-50 flex-shrink-0"
+                      >
+                        Revogar
+                      </button>
+                    )}
+                  </div>
+                  {!ativo && (
+                    <div className="mt-3 space-y-2">
+                      <textarea
+                        value={capMotivo}
+                        onChange={(e) => setCapMotivo(e.target.value)}
+                        rows={2}
+                        placeholder="Motivo da concessão (obrigatório — LGPD: necessidade de conhecer)"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent"
+                      />
+                      <button
+                        type="button"
+                        onClick={concederCapSocio}
+                        disabled={capBusy || capMotivo.trim().length < 5}
+                        className="px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        Conceder acesso
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
           </div>
           )}
 

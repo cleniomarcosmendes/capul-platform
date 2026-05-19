@@ -1,5 +1,5 @@
 import { coreApi } from './api';
-import type { UsuarioListItem, UsuarioDetalhe, ModuloSistema, FilialOption } from '../types';
+import type { UsuarioListItem, UsuarioDetalhe, ModuloSistema, FilialOption, UsuarioCapability } from '../types';
 
 export const usuarioService = {
   async listar(filialId?: string): Promise<UsuarioListItem[]> {
@@ -81,5 +81,19 @@ export const usuarioService = {
   async atualizarPreferencias(id: string, patch: Record<string, any>): Promise<Record<string, any>> {
     const { data } = await coreApi.patch(`/usuarios/${id}/preferencias`, patch);
     return data;
+  },
+
+  // Capabilities por usuário (LGPD) — só ADMIN (guard no backend).
+  async listarCapabilities(id: string): Promise<UsuarioCapability[]> {
+    const { data } = await coreApi.get(`/usuarios/${id}/capabilities`);
+    return data;
+  },
+
+  async concederCapability(id: string, capability: string, motivo: string): Promise<void> {
+    await coreApi.post(`/usuarios/${id}/capabilities`, { capability, motivo });
+  },
+
+  async revogarCapability(id: string, capability: string): Promise<void> {
+    await coreApi.delete(`/usuarios/${id}/capabilities/${capability}`);
   },
 };

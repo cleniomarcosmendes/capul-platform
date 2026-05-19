@@ -136,6 +136,19 @@ export interface UsuarioDetalhe extends UsuarioListItem {
   }[];
 }
 
+/** Capability explícita por usuário (LGPD) — ver auth-gateway F1. */
+export interface UsuarioCapability {
+  id: string;
+  usuarioId: string;
+  capability: string;
+  ativo: boolean;
+  motivo: string;
+  concedidoPor: string;
+  concedidoEm: string;
+  revogadoPor: string | null;
+  revogadoEm: string | null;
+}
+
 export interface ModuloSistema {
   id: string;
   codigo: string;
