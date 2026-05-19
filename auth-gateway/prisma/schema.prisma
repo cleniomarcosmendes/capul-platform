@@ -153,8 +153,33 @@ model Usuario {
   filiais       UsuarioFilial[]
   permissoes    PermissaoModulo[]
   refreshTokens RefreshToken[]
+  capabilities  UsuarioCapability[]
 
   @@map("usuarios")
+  @@schema("core")
+}
+
+/// Capability explícita POR USUÁRIO p/ dado sensível (LGPD), desacoplada
+/// do papel. v1: FISCAL_CONSULTA_SOCIOS (acesso a PII de sócios — Busca
+/// por Sócio + QSA da Consulta Cadastral). Concedida só por ADMIN no
+/// Configurador, com motivo. Linha preservada na revogação (auditoria
+/// de concessão: concedido_por/em + revogado_por/em). Plano:
+/// docs/PLANO_FISCAL_CONSULTA_SOCIOS_LGPD_v1.md
+model UsuarioCapability {
+  id           String    @id @default(uuid())
+  usuarioId    String    @map("usuario_id")
+  usuario      Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  capability   String
+  ativo        Boolean   @default(true)
+  motivo       String
+  concedidoPor String    @map("concedido_por")
+  concedidoEm  DateTime  @default(now()) @map("concedido_em")
+  revogadoPor  String?   @map("revogado_por")
+  revogadoEm   DateTime? @map("revogado_em")
+
+  @@unique([usuarioId, capability])
+  @@index([capability, ativo])
+  @@map("usuario_capability")
   @@schema("core")
 }
 

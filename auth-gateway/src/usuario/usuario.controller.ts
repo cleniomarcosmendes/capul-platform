@@ -10,7 +10,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { UsuarioService } from './usuario.service';
+import { CapabilityService } from './capability.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ConfiguradorAdminGuard } from '../presenca/configurador-admin.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import {
   CreateUsuarioDto,
@@ -18,11 +20,15 @@ import {
   UpdateStatusDto,
   AtribuirPermissaoDto,
 } from './dto/create-usuario.dto';
+import { ConcederCapabilityDto, type Capability } from './dto/conceder-capability.dto';
 
 @Controller('api/v1/core/usuarios')
 @UseGuards(JwtAuthGuard)
 export class UsuarioController {
-  constructor(private readonly usuarioService: UsuarioService) {}
+  constructor(
+    private readonly usuarioService: UsuarioService,
+    private readonly capabilityService: CapabilityService,
+  ) {}
 
   @Get()
   findAll(@Query('filialId') filialId?: string) {
@@ -83,5 +89,34 @@ export class UsuarioController {
     @Param('moduloId') moduloId: string,
   ) {
     return this.usuarioService.revogarPermissao(id, moduloId);
+  }
+
+  // --- Capabilities por usuário (LGPD) — só ADMIN do Configurador (D5).
+  //     Plano: docs/PLANO_FISCAL_CONSULTA_SOCIOS_LGPD_v1.md
+
+  @Get(':id/capabilities')
+  @UseGuards(ConfiguradorAdminGuard)
+  listarCapabilities(@Param('id') id: string) {
+    return this.capabilityService.listar(id);
+  }
+
+  @Post(':id/capabilities')
+  @UseGuards(ConfiguradorAdminGuard)
+  concederCapability(
+    @Param('id') id: string,
+    @Body() dto: ConcederCapabilityDto,
+    @CurrentUser('id') adminId: string,
+  ) {
+    return this.capabilityService.conceder(id, dto.capability, dto.motivo, adminId);
+  }
+
+  @Delete(':id/capabilities/:capability')
+  @UseGuards(ConfiguradorAdminGuard)
+  revogarCapability(
+    @Param('id') id: string,
+    @Param('capability') capability: Capability,
+    @CurrentUser('id') adminId: string,
+  ) {
+    return this.capabilityService.revogar(id, capability, adminId);
   }
 }
