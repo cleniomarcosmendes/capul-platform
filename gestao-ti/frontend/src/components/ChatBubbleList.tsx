@@ -161,7 +161,7 @@ export function ChatBubbleList({
   return (
     <div>
       {sortable && (
-        <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm flex items-center justify-between py-2 mb-2 border-b border-slate-100">
+        <div className="sticky top-0 z-20 -mx-4 -mt-4 px-4 pt-4 pb-2 mb-2 bg-white flex items-center justify-between border-b border-slate-100">
           <span className="text-[11px] text-slate-400">{eventos.length} evento(s)</span>
           <button
             onClick={() => setOrdemAsc((v) => !v)}
