@@ -97,7 +97,11 @@ export function ParadaDetalhePage() {
       });
       setParada(updated);
       setShowFinalizar(false);
-    } catch { /* empty */ }
+      toast('success', 'Parada finalizada');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast('error', msg || 'Erro ao finalizar parada');
+    }
     setActionLoading(false);
   }
 
@@ -107,7 +111,11 @@ export function ParadaDetalhePage() {
     try {
       const updated = await paradaService.cancelar(id);
       setParada(updated);
-    } catch { /* empty */ }
+      toast('success', 'Parada cancelada');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast('error', msg || 'Erro ao cancelar parada');
+    }
     setActionLoading(false);
   }
 
@@ -123,7 +131,11 @@ export function ParadaDetalhePage() {
     try {
       const updated = await paradaService.reabrir(id);
       setParada(updated);
-    } catch { /* empty */ }
+      toast('success', 'Parada reaberta');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast('error', msg || 'Erro ao reabrir parada');
+    }
     setActionLoading(false);
   }
 
