@@ -8,7 +8,7 @@ import { useToast } from '../../components/Toast';
 
 export function MotivosParadaPage() {
   const { gestaoTiRole } = useAuth();
-  const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const canManage = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
   const { toast, confirm } = useToast();
 
   const [motivos, setMotivos] = useState<MotivoParada[]>([]);

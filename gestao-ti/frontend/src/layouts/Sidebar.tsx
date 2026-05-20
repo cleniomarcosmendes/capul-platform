@@ -64,7 +64,7 @@ const menuItems: MenuItem[] = [
   { label: 'Notas Fiscais', icon: Receipt, path: '/gestao-ti/notas-fiscais', roles: STAFF },
   { section: 'SUSTENTACAO', roles: STAFF },
   { label: 'Paradas', icon: Activity, path: '/gestao-ti/paradas', roles: STAFF },
-  { label: 'Motivos de Parada', icon: AlertTriangle, path: '/gestao-ti/motivos-parada', roles: MANAGERS },
+  { label: 'Motivos de Parada', icon: AlertTriangle, path: '/gestao-ti/motivos-parada', roles: STAFF },
   { section: 'PROJETOS', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'] },
   { label: 'Projetos', icon: FolderKanban, path: '/gestao-ti/projetos', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'] },
   { label: 'Minhas Pendencias', icon: ListChecks, path: '/gestao-ti/minhas-pendencias', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'] },

@@ -55,19 +55,19 @@ export class ParadaController {
   }
 
   @Post('motivos')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   createMotivo(@Body() dto: CreateMotivoParadaDto) {
     return this.service.createMotivo(dto);
   }
 
   @Patch('motivos/:motivoId')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   updateMotivo(@Param('motivoId') id: string, @Body() dto: UpdateMotivoParadaDto) {
     return this.service.updateMotivo(id, dto);
   }
 
   @Delete('motivos/:motivoId')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   removeMotivo(@Param('motivoId') id: string) {
     return this.service.removeMotivo(id);
   }
@@ -131,17 +131,18 @@ export class ParadaController {
   }
 
   @Post(':id/cancelar')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   cancelar(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.service.cancelar(id, user.sub);
   }
 
   /**
-   * Reabre parada FINALIZADA → EM_ANDAMENTO. Apenas ADMIN/GESTOR_TI —
-   * não cabe ao operador comum. CANCELADA não reabre (terminal).
+   * Reabre parada FINALIZADA → EM_ANDAMENTO. Equipe T.I. (ADMIN/GESTOR_TI/
+   * SUPORTE_TI) pode reabrir — necessário para editar/anexar/adicionar
+   * colaborador após finalização. CANCELADA não reabre (terminal).
    */
   @Post(':id/reabrir')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   reabrir(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.service.reabrir(id, user.sub);
   }

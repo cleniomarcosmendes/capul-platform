@@ -59,7 +59,10 @@ export function ParadaDetalhePage() {
   const { gestaoTiRole } = useAuth();
   const canManage = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
   const { toast, confirm } = useToast();
-  const canCancel = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
+  // Igualdade total entre ADMIN/GESTOR_TI/SUPORTE_TI no módulo Paradas
+  // (pedido 20/05/2026). Cancelar e Reabrir mantêm aliases para clareza.
+  const canCancel = canManage;
+  const canReabrir = canManage;
 
   const [parada, setParada] = useState<RegistroParada | null>(null);
   // canMutate combina role + status: bloqueia mutações (anexo/colaborador/chamado)
@@ -232,7 +235,7 @@ export function ParadaDetalhePage() {
                 )}
               </div>
             )}
-            {parada.status === 'FINALIZADA' && canCancel && (
+            {parada.status === 'FINALIZADA' && canReabrir && (
               <div className="flex gap-2">
                 <button
                   onClick={handleReabrir}
