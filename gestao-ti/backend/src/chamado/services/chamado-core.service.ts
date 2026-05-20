@@ -101,8 +101,19 @@ export class ChamadoCoreService {
       where.notaSatisfacao = null;
     } else {
       if (filters.status) {
+        // `incluirAgrupados` é ortogonal ao filtro de status: ele SOMA AGRUPADO
+        // ao conjunto filtrado (a menos que o próprio status escolhido já seja
+        // AGRUPADO). Bug 20/05/2026: o `else if` abaixo nunca disparava quando
+        // havia status (caso default `ATIVOS`), então o checkbox não influenciava
+        // a lista. Agora composição é aditiva.
         if ((filters.status as string) === 'ATIVOS') {
-          where.status = { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE', 'PENDENTE_USUARIO', 'REABERTO'] };
+          const atvs = ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE', 'PENDENTE_USUARIO', 'REABERTO'];
+          if (filters.incluirAgrupados) atvs.push('AGRUPADO');
+          where.status = { in: atvs };
+        } else if ((filters.status as string) === 'AGRUPADO') {
+          where.status = 'AGRUPADO';
+        } else if (filters.incluirAgrupados) {
+          where.status = { in: [filters.status, 'AGRUPADO'] };
         } else {
           where.status = filters.status;
         }
