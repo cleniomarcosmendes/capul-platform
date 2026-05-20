@@ -1418,9 +1418,36 @@ export function ChamadoDetalhePage() {
                                 )}
                               </p>
                             </div>
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${f.status === 'AGRUPADO' ? 'bg-amber-100 text-amber-700' : f.status === 'RESOLVIDO' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
-                              {f.status}
-                            </span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${f.status === 'AGRUPADO' ? 'bg-amber-100 text-amber-700' : f.status === 'RESOLVIDO' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+                                {f.status}
+                              </span>
+                              {isTecnico && f.status === 'AGRUPADO' && (
+                                <button
+                                  onClick={async () => {
+                                    if (!await confirm(
+                                      'Remover do agrupamento',
+                                      `O chamado #${f.numero} voltará ao status anterior e o SLA será retomado. Continuar?`,
+                                      { variant: 'warning' },
+                                    )) return;
+                                    try {
+                                      await chamadoService.desagrupar(f.id);
+                                      const full = await chamadoService.buscar(chamado.id);
+                                      setChamado(full);
+                                      if (full.copias) setCopias(full.copias);
+                                      toast('success', `Chamado #${f.numero} removido do agrupamento`);
+                                    } catch (err: unknown) {
+                                      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+                                      toast('error', msg || 'Erro ao remover do agrupamento');
+                                    }
+                                  }}
+                                  title="Remover este chamado do agrupamento"
+                                  className="text-amber-600 hover:text-amber-800 p-1 rounded hover:bg-amber-50 transition-colors"
+                                >
+                                  <Unlink className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
