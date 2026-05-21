@@ -468,6 +468,59 @@ dark-aware.
 
 ---
 
+### ⏳ 2026-05-21 — Busca profunda em Chamados e Projetos (full-text com `pg_trgm`)
+
+**Origem:** pedido do Clenio — buscar um termo (ex.: `MV_DATAFIN`, um
+parâmetro Protheus) e retornar todos os chamados/projetos que o mencionam
+em **qualquer** campo, inclusive comentários. Hoje as buscas são rasas.
+
+**Estado atual:**
+- Chamado (`chamado-core.service.ts:208`): busca cobre número, título,
+  descrição, solicitante — **não varre comentários/histórico**.
+- Projeto (`projeto-core.service.ts:65`): cobre nome, descrição — **não
+  varre atividades, comentários de tarefa, pendências**.
+
+**Tecnologia:** `pg_trgm` (extensão nativa do Postgres) + índices GIN
+trigram. Casa código técnico exato (`MV_DATAFIN`) **e** linguagem natural,
+tolera erro de digitação, escala. **Não** usar Full-Text Search nativo
+(tsvector) — o stemming/tokenização quebra termos técnicos com underscore
+e maiúsculas. **Não** usar engine externa (Elastic/Meili) — overkill pro
+volume da CAPUL.
+
+**Plano — 3 PRs, ~20-23h:**
+- **PR1 — Fundação (~2-3h):** 1 migration gestao-ti — `CREATE EXTENSION
+  pg_trgm` + ~9 índices GIN trigram (`chamados`, `historicos_chamado`,
+  `projetos`, `atividades_projeto`, `comentarios_tarefa`,
+  `pendencias_projeto`). Additive, idempotente.
+- **PR2 — Busca profunda Chamado (~8h):** backend soma ao `OR` do
+  `filters.search` um `historicos.some` (campo `descricao`); frontend
+  mostra origem do match (badge "achado em comentário" + snippet com termo
+  destacado).
+- **PR3 — Busca profunda Projeto (~10h):** backend soma EXISTS em
+  `atividades_projeto`, `comentarios_tarefa` (campo `texto`),
+  `pendencias_projeto`; frontend com mesmo snippet/badge.
+
+**Transversal (nos 3 PRs):**
+- **Visibilidade (D29) — inegociável:** a busca varre comentários, então o
+  `WHERE` precisa filtrar `historicos_chamado.publico` /
+  `comentarios_tarefa.publica` por role — non-staff (não-`isTI`) só casa
+  conteúdo público. Sem isso, a busca vira vazamento de nota interna.
+- **Ranking:** `ORDER BY` ponderado — match no título/nome da entidade
+  pesa mais que match em campo-filho.
+- **Compat multi-depto:** a busca soma com o `WHERE` existente — quando
+  Chamado/Projeto ganharem `departamento_id` (projeto Workspace), já
+  compõe naturalmente.
+
+**Fora deste plano (evolução):** busca **global** — caixa única no topo,
+chamados + projetos (e futuros módulos) num resultado só. Reusa 100% da
+infra dos PR1-3; trabalho extra é só a página de resultados unificada.
+~12-18h. Decidir após validar a busca por módulo.
+
+**Sem migration destrutiva, sem serviço novo, sem dependência nova**
+(pg_trgm é nativo do PostgreSQL).
+
+---
+
 ## Histórico (feitos)
 
 ### ✅ 2026-05-05 — Módulo CT-e Distribuição completo (Fases 1+2+3+4 + extras)
