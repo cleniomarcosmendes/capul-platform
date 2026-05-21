@@ -18,6 +18,7 @@
 - Master `PlatformCapul_Roteiro_Completo.md` continua separado (DR/zero, atualizado eventualmente)
 - Histórico de deploys preservado em `C:\Arquivos-de-projeto\` por data
 - Destinatário fixo: Douglas — Infra (172.16.0.203, Ubuntu 24.04)
+- **Todo bloco de validação SQL deve ser precedido do comando de conexão** (feedback Douglas 21/05/2026) — `docker compose exec postgres psql -U capul_user -d capul_platform` logo antes do bloco ```` ```sql ````, pra quem executa não precisar rolar o documento. Vale por subseção (um comando cobre blocos SQL consecutivos da mesma subseção). SQL one-liner com `-c "..."` já é autocontido.
 
 ---
 
@@ -318,7 +319,7 @@ The following migration(s) have been applied:
 All migrations have been successfully applied.
 ```
 
-**Validar:**
+**Validar** (conectar ao banco: `docker compose exec postgres psql -U capul_user -d capul_platform`):
 ```sql
 -- {{descrição da validação}}
 SELECT ... FROM ...;
@@ -354,6 +355,10 @@ docker compose ps | grep -E "{{containers_afetados}}"
 
 ### 7.1 Validações SQL
 
+Conectar ao banco:
+```bash
+docker compose exec postgres psql -U capul_user -d capul_platform
+```
 ```sql
 -- Confirmar que migration nova foi aplicada
 SELECT EXISTS(SELECT 1 FROM information_schema.{{tables|columns}}
@@ -431,6 +436,7 @@ Marcar **todos** antes de enviar:
 - [ ] Pré-requisitos novos (chaves cripto, env vars, etc.) listados na Seção 3 com comandos prontos
 - [ ] Saídas anômalas comuns documentadas em cada passo (não só caso feliz)
 - [ ] Containers afetados estão na sequência de rebuild (Seção 6 PASSO 3)
+- [ ] **Todo bloco de validação SQL é precedido do comando de conexão** `docker compose exec postgres psql -U capul_user -d capul_platform` (feedback Douglas 21/05/2026)
 
 ---
 
