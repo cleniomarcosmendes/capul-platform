@@ -314,10 +314,16 @@ backup_db() {
     log_info "Iniciando backup do banco de dados..."
     log_info "Container: $DB_CONTAINER | Banco: $DB_NAME"
 
+    # Schema `rfb` (base pública CNPJ da Receita) é excluído do dump:
+    # dado público re-importável, ~40-60 GB. --exclude-table-data preserva
+    # a ESTRUTURA (schema/tabelas/índices) pra manter _prisma_migrations
+    # consistente no restore — só os dados ficam de fora. Re-importar a
+    # base RFB é passo do procedimento de DR.
     docker exec "$DB_CONTAINER" pg_dump \
         -U "$DB_USER" \
         -d "$DB_NAME" \
         --format=custom \
+        --exclude-table-data='rfb.*' \
         -f /tmp/capul_db_dump.dump
 
     docker cp "${DB_CONTAINER}:/tmp/capul_db_dump.dump" "$plain"
@@ -481,12 +487,13 @@ backup_full() {
     backup_env      || { send_failure_alert "$?" "env";   exit 1; }
     backup_redis    || { send_failure_alert "$?" "redis"; exit 1; }
 
-    # Dump do banco
+    # Dump do banco — schema `rfb` sem dados (ver nota em backup_db)
     log_info "  → Exportando banco de dados..."
     docker exec "$DB_CONTAINER" pg_dump \
         -U "$DB_USER" \
         -d "$DB_NAME" \
         --format=custom \
+        --exclude-table-data='rfb.*' \
         -f /tmp/capul_db_dump.dump
 
     docker cp "${DB_CONTAINER}:/tmp/capul_db_dump.dump" "$db_dump_tmp"
@@ -617,6 +624,7 @@ restore_from_prod() {
         -U "$DB_USER" \
         -d "$DB_NAME" \
         --format=custom \
+        --exclude-table-data='rfb.*' \
         -f /tmp/hom_pre_restore.dump 2>/dev/null || {
             log_warn "  → pg_dump pre-restore falhou (banco pode estar inacessivel) — seguindo."
         }
