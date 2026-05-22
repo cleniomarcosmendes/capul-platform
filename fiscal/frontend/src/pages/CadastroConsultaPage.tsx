@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { AlertCircle, Check, Copy, Sparkles, AlertTriangle, Database, UserSearch, Info, Building2, GitCompareArrows, MapPin, ChevronDown, ChevronRight, FileText, Printer } from 'lucide-react';
 import { fiscalApi } from '../services/api';
 import { PageWrapper } from '../components/PageWrapper';
@@ -767,7 +767,20 @@ function PainelLocal({
                 {d.socios.map((s, i) => (
                   <tr key={i} className="border-t border-slate-100">
                     <td className="px-2 py-1.5">
-                      {s.nome ?? '—'}
+                      {s.nome ? (
+                        // Cruzamento: nome do sócio → Busca por Sócio com todas
+                        // as empresas vinculadas a ele. A Busca por Sócio é a
+                        // tela LGPD-gated (FISCAL_CONSULTA_SOCIOS) para esse
+                        // grafo — e o QSA só é renderizado p/ quem tem a cap.
+                        <Link
+                          to={`/rfb/socios?nome=${encodeURIComponent(s.nome)}`}
+                          className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                          title="Ver todas as empresas vinculadas a este sócio"
+                        >
+                          {s.nome}
+                          <Building2 className="h-3 w-3 opacity-60" />
+                        </Link>
+                      ) : '—'}
                       {s.representante && (
                         <span className="block text-[10px] text-slate-400">repr.: {s.representante}</span>
                       )}
