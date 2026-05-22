@@ -58,6 +58,11 @@ export function BuscaSocioPage() {
   const pageUrl = Math.max(1, Number(sp.get('page')) || 1);
   const sortUrl = sp.get('sort') ?? '';
   const dirUrl: 'asc' | 'desc' = sp.get('dir') === 'desc' ? 'desc' : 'asc';
+  // Busca exata: chega via clique no nome do sócio (ex.: do QSA). Casa o nome
+  // INTEIRO + o documento — desambigua homônimos com CPF diferente. Digitar
+  // amplia p/ busca por trecho (o handler do input limpa exato/doc).
+  const exatoUrl = sp.get('exato') === '1';
+  const docUrl = sp.get('doc') ?? '';
   // Input controlado; inicia do URL (mostra o termo ao restaurar).
   const [termo, setTermo] = useState(sp.get('nome') ?? '');
   const [data, setData] = useState<Resp | null>(null);
@@ -82,7 +87,8 @@ export function BuscaSocioPage() {
     const t = setTimeout(() => {
       const v = termo.trim();
       if (v === nomeUrl) return;
-      if (v) setParams({ nome: v, page: '1' });
+      // Digitar = busca nova por trecho → sai do modo exato (limpa exato/doc).
+      if (v) setParams({ nome: v, page: '1', exato: '', doc: '' });
       else setSp({}, { replace: true });
     }, 350);
     return () => clearTimeout(t);
@@ -95,13 +101,17 @@ export function BuscaSocioPage() {
     setLoading(true);
     fiscalApi
       .get<Resp>('/rfb/socios/busca', {
-        params: { nome: nomeUrl, page: pageUrl, ...(sortUrl ? { sort: sortUrl, dir: dirUrl } : {}) },
+        params: {
+          nome: nomeUrl, page: pageUrl,
+          ...(sortUrl ? { sort: sortUrl, dir: dirUrl } : {}),
+          ...(exatoUrl ? { exato: '1', ...(docUrl ? { doc: docUrl } : {}) } : {}),
+        },
       })
       .then((r) => { if (!cancelado) setData(r.data); })
       .catch((e) => { if (!cancelado) toast.error(extractApiError(e)); })
       .finally(() => { if (!cancelado) setLoading(false); });
     return () => { cancelado = true; };
-  }, [nomeUrl, pageUrl, sortUrl, dirUrl, toast]);
+  }, [nomeUrl, pageUrl, sortUrl, dirUrl, exatoUrl, docUrl, toast]);
 
   const irPagina = (p: number) => setParams({ page: String(Math.max(1, p)) });
 
@@ -152,6 +162,24 @@ export function BuscaSocioPage() {
           className="w-full rounded-md border border-slate-300 py-2 pl-9 pr-3 text-sm focus:border-slate-500 focus:ring-slate-500"
         />
       </div>
+
+      {exatoUrl && nomeUrl && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+          <Info className="h-4 w-4 flex-shrink-0" />
+          <span>
+            Busca <strong>exata</strong>: apenas o sócio <strong>{nomeUrl}</strong>
+            {docUrl && <> (documento <span className="font-mono">{docUrl}</span>)</>}
+            {' '}— homônimos com documento diferente ficam de fora.
+          </span>
+          <button
+            type="button"
+            onClick={() => setParams({ exato: '', doc: '' })}
+            className="ml-auto rounded border border-sky-300 px-2 py-0.5 font-medium hover:bg-sky-100"
+          >
+            Ampliar (busca por trecho)
+          </button>
+        </div>
+      )}
 
       {termo.trim().length > 0 && termo.trim().length < 3 && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">

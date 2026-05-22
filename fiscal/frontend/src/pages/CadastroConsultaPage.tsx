@@ -783,9 +783,9 @@ function PainelLocal({
                         // tela LGPD-gated (FISCAL_CONSULTA_SOCIOS) para esse
                         // grafo — e o QSA só é renderizado p/ quem tem a cap.
                         <Link
-                          to={`/rfb/socios?nome=${encodeURIComponent(s.nome)}`}
+                          to={`/rfb/socios?nome=${encodeURIComponent(s.nome)}&exato=1${s.documento ? `&doc=${encodeURIComponent(s.documento)}` : ''}`}
                           className="inline-flex items-center gap-1 text-blue-600 hover:underline"
-                          title="Ver todas as empresas vinculadas a este sócio"
+                          title="Ver as empresas vinculadas a este sócio (busca exata por nome + documento)"
                         >
                           {s.nome}
                           <Building2 className="h-3 w-3 opacity-60" />

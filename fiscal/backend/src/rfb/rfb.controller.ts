@@ -169,18 +169,21 @@ export class RfbController {
   @Get('socios/busca')
   @RoleMinima('ANALISTA_CADASTRO')
   async buscarPorSocio(
-    @Query() q: { nome?: string; page?: string; pageSize?: string; sort?: string; dir?: string },
+    @Query() q: { nome?: string; page?: string; pageSize?: string; sort?: string; dir?: string; exato?: string; doc?: string },
     @CurrentUser() user: FiscalAuthenticatedUser,
   ) {
     // PII de sócios — exige capability explícita (LGPD), independente do
     // papel. 403 sem ela. Cada acesso é auditado (F3).
     await this.socioCap.assertCapacidade(user.id);
+    // exato=1 (clique no nome do sócio): casa nome inteiro + documento —
+    // desambigua homônimos com CPF diferente.
     const r = await this.rfbConsulta.buscarPorSocio(
       q.nome ?? '',
       q.page ? Number(q.page) : 1,
       q.pageSize ? Number(q.pageSize) : 30,
       q.sort,
       q.dir,
+      { exato: q.exato === '1', doc: q.doc },
     );
     await this.socioCap.registrarAcesso(
       user.id, user.email, 'BUSCA_SOCIO', q.nome, r.itens?.length ?? 0,

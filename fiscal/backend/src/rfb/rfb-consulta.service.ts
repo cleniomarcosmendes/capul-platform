@@ -187,7 +187,10 @@ export class RfbConsultaService {
    * posicionais (mesmo padrão de buscarEmpresas; zero injeção, pois o
    * ORDER BY vem de mapa fixo, nunca da string do usuário).
    */
-  async buscarPorSocio(nome: string, page = 1, pageSize = 30, sort?: string, dir?: string) {
+  async buscarPorSocio(
+    nome: string, page = 1, pageSize = 30, sort?: string, dir?: string,
+    opts?: { exato?: boolean; doc?: string },
+  ) {
     const termo = (nome || '').trim();
     const ps = Math.min(50, Math.max(10, Number(pageSize) || 30));
     const pg = Math.max(1, Number(page) || 1);
@@ -205,6 +208,30 @@ export class RfbConsultaService {
     const orderBy = col
       ? `${col} ${direction} NULLS LAST, s.cnpj_basico`
       : `s.nome_socio, e.razao_social`;
+    // WHERE dinâmico. Exato (clique no nome do sócio — ex.: do QSA): casa o
+    // nome INTEIRO + o documento, desambiguando homônimos com CPF diferente.
+    // Fuzzy (digitação): casa trecho. Ambos via ILIKE → usam o índice GIN
+    // trgm de nome_socio; um `=` faria seq scan nos ~22M de sócios.
+    const params: unknown[] = [];
+    let whereSql: string;
+    if (opts?.exato) {
+      // ILIKE sem curinga = igualdade case-insensitive (e ainda usa o GIN).
+      // Escapa %/_/\ caso o nome contenha esses caracteres (raro em PF,
+      // possível em sócio PJ).
+      params.push(termo.replace(/[\\%_]/g, '\\$&'));
+      whereSql = 's.nome_socio ILIKE $1';
+      const doc = (opts.doc || '').trim();
+      if (doc) {
+        params.push(doc);
+        whereSql += ` AND s.cnpj_cpf_socio = $${params.length}`;
+      }
+    } else {
+      params.push(termo);
+      whereSql = `s.nome_socio ILIKE '%' || $1 || '%'`;
+    }
+    const pLimit = params.length + 1;
+    const pOffset = params.length + 2;
+    params.push(ps + 1, (pg - 1) * ps);
     const sql = `
       SELECT s.cnpj_basico, s.nome_socio, s.identificador_socio, s.qualificacao_socio,
              s.data_entrada, s.faixa_etaria, e.razao_social,
@@ -219,15 +246,15 @@ export class RfbConsultaService {
         LIMIT 1
       ) est ON true
       LEFT JOIN rfb.municipios m ON m.codigo = est.municipio
-      WHERE s.nome_socio ILIKE '%' || $1 || '%'
+      WHERE ${whereSql}
       ORDER BY ${orderBy}
-      LIMIT $2 OFFSET $3`;
+      LIMIT $${pLimit} OFFSET $${pOffset}`;
     const rows = await this.prisma.$queryRawUnsafe<Array<{
       cnpj_basico: string; nome_socio: string | null; identificador_socio: string | null;
       qualificacao_socio: string | null; data_entrada: string | null; faixa_etaria: string | null;
       razao_social: string | null; cnpj_completo: string | null;
       situacao_cadastral: string | null; uf: string | null; municipio: string | null;
-    }>>(sql, termo, ps + 1, (pg - 1) * ps);
+    }>>(sql, ...params);
     const hasMore = rows.length > ps;
     const slice = rows.slice(0, ps);
     const qCodes = [...new Set(slice.map((r) => r.qualificacao_socio).filter((x): x is string => !!x))];
