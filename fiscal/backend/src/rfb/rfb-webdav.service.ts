@@ -11,6 +11,15 @@ import type { Readable } from 'node:stream';
 const RFB_HOST = (process.env.RFB_BASE_HOST || 'https://arquivos.receitafederal.gov.br').replace(/\/+$/, '');
 const CNPJ_PATH = 'Dados/Cadastros/CNPJ';
 const TOKEN_TTL_MS = 6 * 60 * 60 * 1000;
+// Timeout de INATIVIDADE do corpo do download (undici: tempo máximo entre dois
+// chunks consecutivos — NÃO é duração total). Um arquivo grande saudável emite
+// chunks continuamente, então nunca chega perto disto; só dispara se o socket
+// do Nextcloud da RFB ficar mudo (sem mandar dados e sem fechar). Antes era 0
+// (desligado) — e um socket pendurado deixava o pipeline esperando p/ sempre,
+// virando import zumbi (incidente 22/05: ~8h travado em `empresas`, COPY
+// congelada, status IMPORTANDO eterno). Com timeout finito o hang vira erro →
+// o retry 3× de RfbImportacaoService.carregarComRetry passa a resolver sozinho.
+const STREAM_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
 export interface RfbEntry {
   name: string;
@@ -106,8 +115,9 @@ export class RfbWebdavService {
     return (await this.propfind(`${CNPJ_PATH}/${versao}`)).filter((e) => !e.isDir);
   }
 
-  /** Stream de download (F1.3). Suporta Range p/ retomada. bodyTimeout=0
-   *  (arquivos grandes — sem timeout no corpo). */
+  /** Stream de download (F1.3). Suporta Range p/ retomada. `bodyTimeout` é
+   *  timeout de INATIVIDADE entre chunks (não duração total) — ver
+   *  STREAM_IDLE_TIMEOUT_MS: protege contra socket pendurado da RFB. */
   async abrirStream(versao: string, arquivo: string, range?: string): Promise<Readable> {
     const token = await this.resolverToken();
     const url = `${this.davBase(token)}/${CNPJ_PATH}/${versao}/${arquivo}`;
@@ -117,7 +127,7 @@ export class RfbWebdavService {
       method: 'GET',
       headers,
       headersTimeout: 30000,
-      bodyTimeout: 0,
+      bodyTimeout: STREAM_IDLE_TIMEOUT_MS,
     });
     if (statusCode >= 400) throw new Error(`RFB GET ${versao}/${arquivo} → HTTP ${statusCode}`);
     return body as unknown as Readable;
