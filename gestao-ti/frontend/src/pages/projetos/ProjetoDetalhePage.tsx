@@ -14,6 +14,7 @@ import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
 import { NovaTarefaModal } from '../../components/NovaTarefaModal';
 import { NovaTarefaButton } from '../../components/NovaTarefaButton';
 import { TarefaDrawer, type DrawerTab } from '../../components/TarefaDrawer';
+import { TabBar } from '../../components/TabBar';
 import { InlineAddTarefa } from '../../components/InlineAddTarefa';
 import { VisaoTab } from '../../components/tarefa-tabs/VisaoTab';
 import { TempoTab } from '../../components/tarefa-tabs/TempoTab';
@@ -663,26 +664,14 @@ export function ProjetoDetalhePage() {
           )}
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 mb-4 border-b border-slate-200 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            return (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap flex-shrink-0 ${
-                  tab === t.key
-                    ? tabActiveColor
-                    : 'border-transparent text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* Tabs — abas que não couberem recolhem para o menu "Mais" */}
+        <TabBar
+          tabs={tabs}
+          active={tab}
+          onChange={(k) => setTab(k as Tab)}
+          activeClassName={tabActiveColor}
+          className="mb-4"
+        />
 
         {/* Tab Content */}
         {tab === 'visaoGeral' && (

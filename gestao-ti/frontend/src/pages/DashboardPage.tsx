@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { formatDateBR } from '../utils/date';
 import { PeriodFilter } from '../components/PeriodFilter';
+import { TabBar } from '../components/TabBar';
 import type { DashboardResumo, DashboardExecutivo, DashboardCsat, DashboardFinanceiro, DashboardDisponibilidade, Chamado, Departamento, Software, TipoAtivo } from '../types';
 import type { LucideIcon } from 'lucide-react';
 
@@ -1388,26 +1389,13 @@ export function DashboardPage() {
           </div>
         </PeriodFilter>
 
-        {/* Tabs */}
-        <div className="flex gap-1 mb-6 border-b border-slate-200 overflow-x-auto">
-          {tabsDef.filter((t) => !t.roles || (gestaoTiRole && t.roles.includes(gestaoTiRole))).map((t) => {
-            const Icon = t.icon;
-            return (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
-                  tab === t.key
-                    ? 'border-capul-600 text-capul-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* Tabs — abas que não couberem recolhem para o menu "Mais" */}
+        <TabBar
+          tabs={tabsDef.filter((t) => !t.roles || (gestaoTiRole && t.roles.includes(gestaoTiRole)))}
+          active={tab}
+          onChange={(k) => setTab(k as TabKey)}
+          className="mb-6"
+        />
 
         {/* Main dashboard tabs (use resumo data) */}
         {!isMetricTab && (

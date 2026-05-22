@@ -15,6 +15,7 @@ import {
 import { projetoService } from '../../services/projeto.service';
 import { SearchSelect } from '../../components/SearchSelect';
 import type { SearchSelectOption } from '../../components/SearchSelect';
+import { TabBar } from '../../components/TabBar';
 import { abrirAnexoOuBaixar } from '../../utils/anexo';
 import type {
   Contrato,
@@ -438,20 +439,13 @@ export function ContratoDetalhePage() {
           )}
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 mb-4 border-b border-slate-200 overflow-x-auto">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            return (
-              <button key={t.key} onClick={() => setTab(t.key)}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                  tab === t.key ? 'border-capul-600 text-capul-600' : 'border-transparent text-slate-500 hover:text-slate-700'
-                }`}>
-                <Icon className="w-4 h-4" /> {t.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* Tabs — abas que não couberem recolhem para o menu "Mais" */}
+        <TabBar
+          tabs={tabs}
+          active={tab}
+          onChange={(k) => setTab(k as Tab)}
+          className="mb-4"
+        />
 
         {tab === 'geral' && <TabGeral contrato={contrato} canManage={canManage} onReload={load} toast={toast} confirm={confirm} />}
         {tab === 'parcelas' && <TabParcelas contrato={contrato} canManage={canManage} onReload={load} toast={toast} confirm={confirm} />}
