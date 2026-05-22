@@ -488,10 +488,13 @@ e maiúsculas. **Não** usar engine externa (Elastic/Meili) — overkill pro
 volume da CAPUL.
 
 **Plano — 3 PRs, ~20-23h:**
-- **PR1 — Fundação (~2-3h):** 1 migration gestao-ti — `CREATE EXTENSION
-  pg_trgm` + ~9 índices GIN trigram (`chamados`, `historicos_chamado`,
-  `projetos`, `atividades_projeto`, `comentarios_tarefa`,
-  `pendencias_projeto`). Additive, idempotente.
+- **PR1 — Fundação ✅ FEITO 22/05 (commit `16aad20`):** migration
+  `20260522110000_add_pg_trgm_search_indexes` — `CREATE EXTENSION pg_trgm`
+  + 10 índices GIN trigram (`chamados` titulo/descricao, `historicos_chamado`
+  descricao, `projetos` nome/descricao, `atividades_projeto` titulo/descricao,
+  `comentarios_tarefa` texto, `pendencias_projeto` titulo/descricao). Additive,
+  idempotente, aplicada e verificada em DEV. Já acelera as buscas `contains`
+  atuais. **Não entra no deploy 20/05 (v8) — feature própria, deploy à parte.**
 - **PR2 — Busca profunda Chamado (~8h):** backend soma ao `OR` do
   `filters.search` um `historicos.some` (campo `descricao`); frontend
   mostra origem do match (badge "achado em comentário" + snippet com termo
