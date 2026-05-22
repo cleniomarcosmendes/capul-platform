@@ -13,6 +13,35 @@ import { projetoListInclude, projetoDetailInclude } from './projeto.constants.js
 import { isGestor, isTI } from '../../common/constants/roles.constant.js';
 import { ROLES_EXTERNOS } from '../../common/constants/roles.constant.js';
 import { paginate } from '../../common/prisma/paginate.helper.js';
+import { Prisma } from '@prisma/client';
+
+/** Origem de um match da busca profunda em Projeto (PR3) — badge + snippet. */
+interface BuscaMatchProjeto {
+  campo: 'atividade' | 'comentario' | 'pendencia';
+  trecho: string;
+}
+
+/**
+ * Janela de ~`contexto` chars em volta da 1ª ocorrência do termo, com
+ * reticências nas pontas. O frontend destaca o termo dentro do trecho.
+ */
+function extrairTrecho(texto: string, termo: string, contexto = 60): string {
+  const idx = texto.toLowerCase().indexOf(termo.toLowerCase());
+  if (idx < 0) {
+    return texto.length > contexto * 2 ? texto.slice(0, contexto * 2) + '…' : texto;
+  }
+  const ini = Math.max(0, idx - contexto);
+  const fim = Math.min(texto.length, idx + termo.length + contexto);
+  return (ini > 0 ? '…' : '') + texto.slice(ini, fim) + (fim < texto.length ? '…' : '');
+}
+
+/** Dado titulo + descricao, devolve o campo que contém o termo (p/ o snippet). */
+function campoComTermo(titulo: string, descricao: string | null, termo: string): string {
+  const t = termo.toLowerCase();
+  if (titulo.toLowerCase().includes(t)) return titulo;
+  if (descricao && descricao.toLowerCase().includes(t)) return descricao;
+  return descricao || titulo;
+}
 
 @Injectable()
 export class ProjetoCoreService {
@@ -62,10 +91,28 @@ export class ProjetoCoreService {
       ];
     }
 
-    if (filters.search) {
+    // Busca: nome + descricao do projeto + busca profunda nas atividades,
+    // comentarios de tarefa e pendencias (PR3 — pg_trgm). `searchTerm` e
+    // `comentVisib` ficam no escopo do metodo porque o enriquecimento
+    // pos-query (anexarMatchProjeto) reusa.
+    const searchTerm = filters.search?.trim();
+    // Visibilidade D29: comentario de tarefa interno (publica=false) so casa
+    // p/ staff TI — sem isto a busca varreria nota interna (vazamento).
+    const comentVisib: Prisma.ComentarioTarefaWhereInput = isTI(filters.role ?? '')
+      ? {}
+      : { publica: true };
+
+    if (searchTerm) {
+      const contains = { contains: searchTerm, mode: 'insensitive' as const };
       const searchCondition = [
-        { nome: { contains: filters.search, mode: 'insensitive' } },
-        { descricao: { contains: filters.search, mode: 'insensitive' } },
+        { nome: contains },
+        { descricao: contains },
+        // Atividade do projeto: titulo OU descricao.
+        { atividades: { some: { OR: [{ titulo: contains }, { descricao: contains }] } } },
+        // Comentario de tarefa (texto) — visibilidade D29 via comentVisib.
+        { atividades: { some: { comentarios: { some: { texto: contains, ...comentVisib } } } } },
+        // Pendencia do projeto: titulo OU descricao.
+        { pendencias: { some: { OR: [{ titulo: contains }, { descricao: contains }] } } },
       ];
       if (where.OR) {
         where.AND = [{ OR: where.OR }, { OR: searchCondition }];
@@ -75,12 +122,83 @@ export class ProjetoCoreService {
       }
     }
 
-    return paginate(this.prisma, this.prisma.projeto, {
+    const resultado = await paginate(this.prisma, this.prisma.projeto, {
       where,
       include: projetoListInclude,
       orderBy: { numero: 'desc' },
       page: filters.page,
       pageSize: filters.pageSize,
+    });
+    if (!searchTerm) return resultado;
+    // Enriquecimento pos-busca: anexa a origem do match (badge + snippet).
+    resultado.items = await this.anexarMatchProjeto(
+      resultado.items as { id: string }[],
+      searchTerm,
+      comentVisib,
+    );
+    return resultado;
+  }
+
+  /**
+   * Enriquecimento pos-busca profunda (PR3): para os projetos da pagina,
+   * anexa `buscaMatch` quando o termo casou numa atividade, comentario de
+   * tarefa ou pendencia — com o trecho para o badge + snippet do frontend.
+   * 3 queries (uma por fonte), todas com IN dos ids da pagina e aceleradas
+   * pelos indices GIN trgm do PR1. Prioridade do snippet: atividade >
+   * comentario > pendencia (qualquer um serve — so decide qual trecho mostrar).
+   */
+  private async anexarMatchProjeto(
+    items: { id: string }[],
+    termo: string,
+    comentVisib: Prisma.ComentarioTarefaWhereInput,
+  ): Promise<unknown[]> {
+    if (items.length === 0) return items;
+    const ids = items.map((p) => p.id);
+    const contains = { contains: termo, mode: 'insensitive' as const };
+    const [atividades, comentarios, pendencias] = await this.prisma.$transaction([
+      this.prisma.atividadeProjeto.findMany({
+        where: { projetoId: { in: ids }, OR: [{ titulo: contains }, { descricao: contains }] },
+        select: { projetoId: true, titulo: true, descricao: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.comentarioTarefa.findMany({
+        where: { texto: contains, ...comentVisib, atividade: { projetoId: { in: ids } } },
+        select: { texto: true, atividade: { select: { projetoId: true } } },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.pendenciaProjeto.findMany({
+        where: { projetoId: { in: ids }, OR: [{ titulo: contains }, { descricao: contains }] },
+        select: { projetoId: true, titulo: true, descricao: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+    // 1 match por projeto (prioridade atividade > comentario > pendencia).
+    const matches = new Map<string, BuscaMatchProjeto>();
+    for (const a of atividades) {
+      if (!matches.has(a.projetoId)) {
+        matches.set(a.projetoId, {
+          campo: 'atividade',
+          trecho: extrairTrecho(campoComTermo(a.titulo, a.descricao, termo), termo),
+        });
+      }
+    }
+    for (const c of comentarios) {
+      const pid = c.atividade?.projetoId;
+      if (pid && !matches.has(pid)) {
+        matches.set(pid, { campo: 'comentario', trecho: extrairTrecho(c.texto, termo) });
+      }
+    }
+    for (const p of pendencias) {
+      if (!matches.has(p.projetoId)) {
+        matches.set(p.projetoId, {
+          campo: 'pendencia',
+          trecho: extrairTrecho(campoComTermo(p.titulo, p.descricao, termo), termo),
+        });
+      }
+    }
+    return items.map((p) => {
+      const m = matches.get(p.id);
+      return m ? { ...p, buscaMatch: m } : p;
     });
   }
 

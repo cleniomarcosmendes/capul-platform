@@ -939,6 +939,9 @@ export interface Projeto {
   custoPrevisto: number | null;
   custoRealizado: number | null;
   observacoes: string | null;
+  /** Origem do match da busca profunda — presente só quando há `search`
+   *  e o termo casou em atividade/comentário/pendência (PR3 pg_trgm). */
+  buscaMatch?: { campo: string; trecho: string };
   projetoPaiId: string | null;
   projetoPai: { id: string; numero: number; nome: string } | null;
   softwareId: string | null;

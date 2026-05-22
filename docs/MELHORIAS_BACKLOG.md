@@ -468,7 +468,7 @@ dark-aware.
 
 ---
 
-### ⏳ 2026-05-21 — Busca profunda em Chamados e Projetos (full-text com `pg_trgm`)
+### ✅ 2026-05-22 — Busca profunda em Chamados e Projetos (full-text com `pg_trgm`) — CONCLUÍDO (PR1+PR2+PR3)
 
 **Origem:** pedido do Clenio — buscar um termo (ex.: `MV_DATAFIN`, um
 parâmetro Protheus) e retornar todos os chamados/projetos que o mencionam
@@ -502,9 +502,13 @@ volume da CAPUL.
   Frontend (`ChamadosListPage`) mostra badge "achado em comentário/
   histórico" + snippet com termo destacado. Verificado em DEV via smoke
   test de API.
-- **PR3 — Busca profunda Projeto (~10h):** backend soma EXISTS em
-  `atividades_projeto`, `comentarios_tarefa` (campo `texto`),
-  `pendencias_projeto`; frontend com mesmo snippet/badge.
+- **PR3 — Busca profunda Projeto ✅ FEITO 22/05:** backend (`projeto-core.
+  service.ts`) soma ao `OR` da busca EXISTS em `atividades_projeto`,
+  `comentarios_tarefa` (campo `texto`, visibilidade D29 via `publica`) e
+  `pendencias_projeto`; enriquecimento `anexarMatchProjeto` (3 queries)
+  anexa `buscaMatch {campo, trecho}`. Frontend (`ProjetosListPage`) com
+  badge "achado em atividade/comentário/pendência" + snippet. Verificado em
+  DEV: os 3 caminhos (atividade/comentário/pendência) achados via smoke test.
 
 **Transversal (nos 3 PRs):**
 - **Visibilidade (D29) — inegociável:** a busca varre comentários, então o

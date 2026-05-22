@@ -1,15 +1,47 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, Fragment, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { projetoService } from '../../services/projeto.service';
 import { softwareService } from '../../services/software.service';
 import { compraService } from '../../services/compra.service';
-import { FolderKanban, Plus, Search, Download, Star, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { FolderKanban, Plus, Search, Download, Star, ArrowUp, ArrowDown, ArrowUpDown, MessageSquare } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import type { Projeto, Software, TipoProjetoConfig } from '../../types';
 import { formatDateBR } from '../../utils/date';
 import { Paginator } from '../../components/Paginator';
+
+/** Rótulo do campo onde a busca profunda casou (PR3). */
+const LABEL_CAMPO: Record<string, string> = {
+  atividade: 'atividade',
+  comentario: 'comentário',
+  pendencia: 'pendência',
+};
+
+/** Destaca todas as ocorrências de `termo` (case-insensitive) dentro de
+ *  `texto` envolvendo cada match num <mark> — usado no snippet da busca. */
+function destacarTermo(texto: string, termo: string): ReactNode {
+  if (!termo) return texto;
+  const alvo = termo.toLowerCase();
+  const partes: ReactNode[] = [];
+  let resto = texto;
+  let k = 0;
+  while (resto) {
+    const idx = resto.toLowerCase().indexOf(alvo);
+    if (idx < 0) {
+      partes.push(resto);
+      break;
+    }
+    if (idx > 0) partes.push(resto.slice(0, idx));
+    partes.push(
+      <mark key={k++} className="bg-amber-200 text-slate-900 rounded px-0.5">
+        {resto.slice(idx, idx + termo.length)}
+      </mark>,
+    );
+    resto = resto.slice(idx + termo.length);
+  }
+  return partes;
+}
 
 const statusLabel: Record<string, string> = {
   PLANEJAMENTO: 'Planejamento',
@@ -290,7 +322,7 @@ export function ProjetosListPage() {
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Buscar por nome ou descricao..."
+              placeholder="Buscar em nome, descricao, atividades, comentarios..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm w-72"
@@ -400,7 +432,8 @@ export function ProjetosListPage() {
                     const isSubprojeto = p.nivel > 1;
                     const indentPx = (p.nivel - 1) * 24;
                     return (
-                    <tr key={p.id} className={`hover:bg-slate-100 ${isSubprojeto ? 'bg-slate-50/60' : ''}`}>
+                    <Fragment key={p.id}>
+                    <tr className={`hover:bg-slate-100 ${isSubprojeto ? 'bg-slate-50/60' : ''}`}>
                       <td className="px-4 py-3 text-slate-500">{p.numero}</td>
                       <td className="px-4 py-3" style={{ paddingLeft: `${16 + indentPx}px` }}>
                         <div className="flex items-center gap-2">
@@ -450,6 +483,22 @@ export function ProjetosListPage() {
                         )}
                       </td>
                     </tr>
+                    {p.buscaMatch && (
+                      <tr className="bg-amber-50/50">
+                        <td colSpan={8} className="px-4 pb-2.5 pt-0">
+                          <div className="flex items-start gap-1.5 text-xs text-slate-500 ml-2 border-l-2 border-amber-300 pl-2">
+                            <MessageSquare className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                            <span>
+                              <span className="font-medium text-amber-700">
+                                achado em {LABEL_CAMPO[p.buscaMatch.campo] || p.buscaMatch.campo}:
+                              </span>{' '}
+                              <span className="italic">{destacarTermo(p.buscaMatch.trecho, searchDebounced.trim())}</span>
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                     );
                   })}
                 </tbody>
