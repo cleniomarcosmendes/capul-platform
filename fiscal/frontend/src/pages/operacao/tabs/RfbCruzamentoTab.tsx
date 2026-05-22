@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Network, RefreshCw, ChevronUp, ChevronDown, ChevronRight, ChevronsUpDown, Download, X, SlidersHorizontal } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Network, RefreshCw, ChevronUp, ChevronDown, ChevronRight, ChevronsUpDown, Download, X, SlidersHorizontal, Users } from 'lucide-react';
 import { fiscalApi } from '../../../services/api';
 import { Button } from '../../../components/Button';
 import { useToast } from '../../../components/Toast';
@@ -495,7 +495,21 @@ export function RfbCruzamentoTab() {
                 className="cursor-pointer border-t border-slate-100 hover:bg-slate-50"
                 title="Abrir na Consulta Cadastral (base local — zero certificado)"
               >
-                <td className="px-3 py-2 font-mono text-xs">{r.cnpj}</td>
+                <td className="px-3 py-2 font-mono text-xs">
+                  <span className="inline-flex items-center gap-1.5">
+                    {r.cnpj}
+                    {/* Cruzamento: "ver sócios" → Consulta Cadastral ancorada no QSA.
+                        stopPropagation: a linha em si abre a Consulta Cadastral no topo. */}
+                    <Link
+                      to={`/cadastro?cnpj=${r.cnpj.replace(/\D/g, '')}${r.ufRfb ? `&uf=${r.ufRfb}` : ''}&fonte=local&auto=1#qsa`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-slate-400 hover:text-blue-600"
+                      title="Ver os sócios desta empresa (QSA)"
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                    </Link>
+                  </span>
+                </td>
                 <td className="px-3 py-2 text-xs">
                   {r.origem === 'SA1010' ? 'Cliente' : 'Fornec.'}
                   {r.bloqueado && (

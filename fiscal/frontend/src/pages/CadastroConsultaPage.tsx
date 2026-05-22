@@ -657,6 +657,16 @@ function PainelLocal({
   onConsultarSefaz: () => void;
 }) {
   const d = local.dados;
+
+  // Deep-link "#qsa": quando se chega aqui via "ver sócios" (ex.: da
+  // Inteligência Cadastral), rola direto até o Quadro de Sócios. PainelLocal
+  // só monta com os dados prontos, então o QSA já está no DOM.
+  useEffect(() => {
+    if (window.location.hash === '#qsa') {
+      document.getElementById('qsa')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
+
   const sitCls =
     d?.situacao === 'ATIVA' ? 'bg-green-100 text-green-700'
       : d?.situacao === 'BAIXADA' || d?.situacao === 'INAPTA' || d?.situacao === 'NULA' ? 'bg-red-100 text-red-700'
@@ -747,7 +757,7 @@ function PainelLocal({
       )}
 
       {d.socios?.length > 0 && (
-        <div className="mt-4">
+        <div id="qsa" className="mt-4 scroll-mt-4">
           <div className="mb-1 text-xs font-semibold text-slate-500">
             Quadro de sócios e administradores (QSA) — {d.socios.length}
           </div>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Users, Search, Info, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { fiscalApi } from '../services/api';
 import { PageWrapper } from '../components/PageWrapper';
@@ -213,7 +213,20 @@ export function BuscaSocioPage() {
                       </td>
                       <td className="px-3 py-2 text-xs">{r.qualificacao ?? '—'}</td>
                       <td className="px-3 py-2 text-xs whitespace-nowrap">{fmtData(r.dataEntrada)}</td>
-                      <td className="px-3 py-2">{r.razaoSocial ?? '—'}</td>
+                      <td className="px-3 py-2">
+                        {r.razaoSocial ? (
+                          // Cruzamento: razão da empresa → Base RFB — Empresas.
+                          // stopPropagation: a linha em si abre a Consulta Cadastral.
+                          <Link
+                            to={`/rfb/empresas?razao=${encodeURIComponent(r.razaoSocial)}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-blue-600 hover:underline"
+                            title="Ver esta empresa na Base RFB — Empresas"
+                          >
+                            {r.razaoSocial}
+                          </Link>
+                        ) : '—'}
+                      </td>
                       <td className="px-3 py-2 font-mono text-xs">
                         {r.cnpjCompleto ? fmtCnpj(r.cnpjCompleto) : `${r.cnpjBasico}…`}
                       </td>
