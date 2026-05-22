@@ -115,6 +115,9 @@ export class ChamadoCoreService {
     incluirAgrupados?: boolean;
   }) {
     const where: Record<string, unknown> = {};
+    // Termo de busca — no escopo do metodo: o filtro "Meus Chamados" e o
+    // enriquecimento pos-query (anexarMatchHistorico) tambem usam.
+    const searchTerm = filters.search?.trim();
 
     if (filters.pendentesAvaliacao) {
       where.solicitanteId = user.sub;
@@ -202,7 +205,10 @@ export class ChamadoCoreService {
         // ele não enxerga PRIVADO na listagem. Criação já é restrita a
         // ROLES_PODE_PRIVADO; este é o filtro de leitura espelhado.
         where.visibilidade = 'PUBLICO';
-      } else if (filters.meusChamados) {
+      } else if (filters.meusChamados && !searchTerm) {
+        // `!searchTerm`: com termo digitado a busca e GLOBAL (decisao 22/05) —
+        // ignora "Meus Chamados" p/ achar o termo em qualquer chamado. As
+        // restricoes de seguranca (USUARIO_FINAL / UC / TERC, acima) seguem.
         where.OR = [
           { solicitanteId: user.sub },
           { tecnicoId: user.sub },
@@ -228,9 +234,7 @@ export class ChamadoCoreService {
 
     // Busca: numero exato (se numerico) + titulo + descricao + nome do
     // solicitante + busca profunda no historico/comentarios do chamado
-    // (PR2 — pg_trgm). `searchTerm` e `histVisibilidade` ficam no escopo do
-    // metodo porque o enriquecimento pos-query (anexarMatchHistorico) reusa.
-    const searchTerm = filters.search?.trim();
+    // (PR2 — pg_trgm). `histVisibilidade` reusado no enriquecimento pos-query.
     // Visibilidade D29: nao-staff TI so casa historico publico — sem isto a
     // busca profunda varreria nota interna e viraria vazamento.
     const histVisibilidade: Prisma.HistoricoChamadoWhereInput = isTI(role)

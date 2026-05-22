@@ -409,14 +409,16 @@ export function ChamadosListPage() {
                     placeholder="Atividade até"
                   />
 
-                  <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                  <label className={`flex items-center gap-2 text-sm ${busca ? 'text-slate-400' : 'text-slate-600 cursor-pointer'}`}>
                     <input
                       type="checkbox"
                       checked={meusChamados}
                       onChange={(e) => setMeusChamados(e.target.checked)}
+                      disabled={!!busca}
                       className="rounded border-slate-300"
                     />
                     Meus chamados
+                    {busca && <span className="text-xs italic text-slate-400">(busca abrange todos)</span>}
                   </label>
 
                   <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer" title="Mostrar chamados agrupados em outros (filhos)">

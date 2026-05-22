@@ -341,14 +341,16 @@ export function ProjetosListPage() {
             <option value="">Todos Softwares</option>
             {softwares.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
           </select>
-          <label className="flex items-center gap-2 text-sm text-slate-600">
+          <label className={`flex items-center gap-2 text-sm ${search ? 'text-slate-400' : 'text-slate-600'}`}>
             <input
               type="checkbox"
               checked={meusProjetos}
               onChange={(e) => setMeusProjetos(e.target.checked)}
+              disabled={!!search}
               className="rounded"
             />
             Meus Projetos
+            {search && <span className="text-xs italic text-slate-400">(busca abrange todos)</span>}
           </label>
           <label className="flex items-center gap-2 text-sm text-slate-600">
             <input

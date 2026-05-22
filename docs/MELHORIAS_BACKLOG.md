@@ -509,6 +509,12 @@ volume da CAPUL.
   anexa `buscaMatch {campo, trecho}`. Frontend (`ProjetosListPage`) com
   badge "achado em atividade/comentário/pendência" + snippet. Verificado em
   DEV: os 3 caminhos (atividade/comentário/pendência) achados via smoke test.
+- **PR4 — Busca global ✅ FEITO 22/05:** ajuste pós-feedback (busca por
+  `CPFINE61` não retornava — projeto não era "meu"). Quando há termo
+  digitado, a busca ignora os filtros "Meus Projetos"/"Meus Chamados" e
+  varre tudo (como o objetivo do item pede: "achar TODOS"). Restrições de
+  segurança (USUARIO_FINAL / USUARIO_CHAVE / TERCEIRIZADO) seguem aplicadas.
+  Frontend desabilita o toggle com aviso "(busca abrange todos)".
 
 **Transversal (nos 3 PRs):**
 - **Visibilidade (D29) — inegociável:** a busca varre comentários, então o

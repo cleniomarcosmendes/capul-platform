@@ -66,6 +66,9 @@ export class ProjetoCoreService {
     pageSize?: number;
   }) {
     const where: Record<string, unknown> = {};
+    // Termo de busca — no escopo do metodo: o filtro "Meus Projetos" e o
+    // enriquecimento pos-query (anexarMatchProjeto) tambem usam.
+    const searchTerm = filters.search?.trim();
 
     if (filters.status) {
       const statuses = filters.status.split(',');
@@ -84,7 +87,10 @@ export class ProjetoCoreService {
     // Ambos compartilham `usuariosChave` desde 13/05/2026.
     if ((filters.role === 'USUARIO_CHAVE' || filters.role === 'TERCEIRIZADO') && filters.usuarioId) {
       where.usuariosChave = { some: { usuarioId: filters.usuarioId, ativo: true } };
-    } else if (filters.meusProjetos === 'true' && filters.usuarioId) {
+    } else if (filters.meusProjetos === 'true' && filters.usuarioId && !searchTerm) {
+      // `!searchTerm`: com termo digitado a busca e GLOBAL (decisao 22/05) —
+      // ignora "Meus Projetos" p/ achar o termo em qualquer projeto. A
+      // restricao de seguranca de USUARIO_CHAVE/TERCEIRIZADO (acima) segue.
       where.OR = [
         { responsavelId: filters.usuarioId },
         { membros: { some: { usuarioId: filters.usuarioId } } },
@@ -92,10 +98,8 @@ export class ProjetoCoreService {
     }
 
     // Busca: nome + descricao do projeto + busca profunda nas atividades,
-    // comentarios de tarefa e pendencias (PR3 — pg_trgm). `searchTerm` e
-    // `comentVisib` ficam no escopo do metodo porque o enriquecimento
-    // pos-query (anexarMatchProjeto) reusa.
-    const searchTerm = filters.search?.trim();
+    // comentarios de tarefa e pendencias (PR3 — pg_trgm). `comentVisib`
+    // reusado no enriquecimento pos-query (anexarMatchProjeto).
     // Visibilidade D29: comentario de tarefa interno (publica=false) so casa
     // p/ staff TI — sem isto a busca varreria nota interna (vazamento).
     const comentVisib: Prisma.ComentarioTarefaWhereInput = isTI(filters.role ?? '')
