@@ -384,6 +384,35 @@ export function CadastroConsultaPage() {
 
       {error && <ErrorDisplay error={error} errorCode={errorCode} documento={docDigits} />}
 
+      {/* Ponte SEFAZ → base local: quando a consulta SEFAZ não retorna nada
+          (CNPJ sem Inscrição Estadual é o caso típico), oferece a base RFB.
+          Espelha a ponte inversa (CPF no modo local → SEFAZ). Só p/ CNPJ —
+          a base RFB Dados Abertos não cobre CPF. */}
+      {modo === 'sefaz' && error && docDigits.length === 14 && (
+        <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+          <p className="flex items-center gap-1.5 font-medium">
+            <Database className="h-4 w-4 flex-shrink-0" />
+            Pode haver dados na base RFB local
+          </p>
+          <p className="mt-1 text-xs text-sky-800">
+            A SEFAZ não retornou nada — o CNPJ pode não ter Inscrição Estadual.
+            A <strong>base RFB (Dados Abertos da Receita)</strong> costuma ter os
+            dados cadastrais (razão social, situação, endereço, CNAE, sócios).
+            {' '}<strong>Atenção:</strong> é uma <strong>foto mensal</strong>, não
+            é consulta on-line — pode estar desatualizada em relação à Receita.
+          </p>
+          <div className="mt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => { setModo('local'); consultarLocal(docDigits); }}
+            >
+              Consultar na base RFB local
+            </Button>
+          </div>
+        </div>
+      )}
+
       {modo === 'local' && cpfBloqueadoLocal && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <p className="font-medium">Isto é um CPF — a base local não cobre pessoa física.</p>
