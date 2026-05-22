@@ -495,10 +495,13 @@ volume da CAPUL.
   `comentarios_tarefa` texto, `pendencias_projeto` titulo/descricao). Additive,
   idempotente, aplicada e verificada em DEV. Já acelera as buscas `contains`
   atuais. **Não entra no deploy 20/05 (v8) — feature própria, deploy à parte.**
-- **PR2 — Busca profunda Chamado (~8h):** backend soma ao `OR` do
-  `filters.search` um `historicos.some` (campo `descricao`); frontend
-  mostra origem do match (badge "achado em comentário" + snippet com termo
-  destacado).
+- **PR2 — Busca profunda Chamado ✅ FEITO 22/05:** backend (`chamado-core.
+  service.ts`) soma ao `OR` do `filters.search` um `historicos.some`
+  (campo `descricao`) com visibilidade D29 por role; enriquecimento
+  pós-query `anexarMatchHistorico` anexa `buscaMatch {tipo, trecho}`.
+  Frontend (`ChamadosListPage`) mostra badge "achado em comentário/
+  histórico" + snippet com termo destacado. Verificado em DEV via smoke
+  test de API.
 - **PR3 — Busca profunda Projeto (~10h):** backend soma EXISTS em
   `atividades_projeto`, `comentarios_tarefa` (campo `texto`),
   `pendencias_projeto`; frontend com mesmo snippet/badge.

@@ -249,6 +249,9 @@ export interface Chamado {
   nomeColaborador: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Origem do match da busca profunda — presente só quando há `search`
+   *  e o termo casou em comentário/histórico (PR2 pg_trgm). */
+  buscaMatch?: { campo: string; tipo: string; trecho: string };
   historicos?: HistoricoChamado[];
   anexos?: AnexoChamado[];
   projetoId: string | null;

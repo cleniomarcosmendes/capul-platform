@@ -17,9 +17,30 @@ import { ChamadoAgrupamentoService } from './chamado-agrupamento.service.js';
 import { ChamadoTempoService } from './chamado-tempo.service.js';
 import { chamadoInclude } from './chamado.constants.js';
 import { isGestor, isTI } from '../../common/constants/roles.constant.js';
-import { StatusChamado, Visibilidade } from '@prisma/client';
+import { Prisma, StatusChamado, Visibilidade } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
+
+/** Origem de um match da busca profunda (PR2) — alimenta badge + snippet. */
+interface BuscaMatch {
+  campo: 'historico';
+  tipo: string;
+  trecho: string;
+}
+
+/**
+ * Janela de ~`contexto` chars em volta da 1ª ocorrência do termo, com
+ * reticências nas pontas. O frontend destaca o termo dentro do trecho.
+ */
+function extrairTrecho(texto: string, termo: string, contexto = 60): string {
+  const idx = texto.toLowerCase().indexOf(termo.toLowerCase());
+  if (idx < 0) {
+    return texto.length > contexto * 2 ? texto.slice(0, contexto * 2) + '…' : texto;
+  }
+  const ini = Math.max(0, idx - contexto);
+  const fim = Math.min(texto.length, idx + termo.length + contexto);
+  return (ini > 0 ? '…' : '') + texto.slice(ini, fim) + (fim < texto.length ? '…' : '');
+}
 
 @Injectable()
 export class ChamadoCoreService {
@@ -205,16 +226,33 @@ export class ChamadoCoreService {
       }
     }
 
-    if (filters.search) {
-      const term = filters.search.trim();
-      const numero = parseInt(term, 10);
-      // Busca cobre: numero exato (se numerico) + titulo + descricao + nome
-      // do solicitante. Pedido suporte 13/05/2026 — "achar pelo nome de
-      // quem abriu e por texto do chamado".
+    // Busca: numero exato (se numerico) + titulo + descricao + nome do
+    // solicitante + busca profunda no historico/comentarios do chamado
+    // (PR2 — pg_trgm). `searchTerm` e `histVisibilidade` ficam no escopo do
+    // metodo porque o enriquecimento pos-query (anexarMatchHistorico) reusa.
+    const searchTerm = filters.search?.trim();
+    // Visibilidade D29: nao-staff TI so casa historico publico — sem isto a
+    // busca profunda varreria nota interna e viraria vazamento.
+    const histVisibilidade: Prisma.HistoricoChamadoWhereInput = isTI(role)
+      ? {}
+      : { publico: true };
+
+    if (searchTerm) {
+      const numero = parseInt(searchTerm, 10);
       const orClauses: Record<string, unknown>[] = [
-        { titulo: { contains: term, mode: 'insensitive' } },
-        { descricao: { contains: term, mode: 'insensitive' } },
-        { solicitante: { nome: { contains: term, mode: 'insensitive' } } },
+        { titulo: { contains: searchTerm, mode: 'insensitive' } },
+        { descricao: { contains: searchTerm, mode: 'insensitive' } },
+        { solicitante: { nome: { contains: searchTerm, mode: 'insensitive' } } },
+        // Busca profunda: varre comentarios/historico (campo descricao).
+        // Visibilidade por role aplicada via histVisibilidade.
+        {
+          historicos: {
+            some: {
+              descricao: { contains: searchTerm, mode: 'insensitive' },
+              ...histVisibilidade,
+            },
+          },
+        },
       ];
       if (numero) orClauses.unshift({ numero });
       const searchCondition = { OR: orClauses };
@@ -270,7 +308,53 @@ export class ChamadoCoreService {
         take: pageSize,
       }),
     ]);
-    return { items, total, page, pageSize };
+    if (!searchTerm) return { items, total, page, pageSize };
+    // Enriquecimento pos-busca: anexa a origem do match (badge + snippet).
+    const itemsComMatch = await this.anexarMatchHistorico(items, searchTerm, histVisibilidade);
+    return { items: itemsComMatch, total, page, pageSize };
+  }
+
+  /**
+   * Enriquecimento pos-busca profunda (PR2): para os chamados da pagina,
+   * anexa `buscaMatch` quando o termo casou no historico/comentarios — com o
+   * trecho em volta do termo, para o badge + snippet do frontend. So roda
+   * quando ha `searchTerm`. Uma query extra (IN dos ids da pagina), acelerada
+   * pelo indice GIN trgm de historicos_chamado.descricao (PR1).
+   */
+  private async anexarMatchHistorico<T extends { id: string }>(
+    items: T[],
+    termo: string,
+    histVisibilidade: Prisma.HistoricoChamadoWhereInput,
+  ): Promise<(T & { buscaMatch?: BuscaMatch })[]> {
+    if (items.length === 0) return items;
+    const historicos = await this.prisma.historicoChamado.findMany({
+      where: {
+        chamadoId: { in: items.map((c) => c.id) },
+        descricao: { contains: termo, mode: 'insensitive' },
+        ...histVisibilidade,
+      },
+      select: { chamadoId: true, descricao: true, tipo: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    // 1 match por chamado — o historico visivel mais recente que casou.
+    const porChamado = new Map<string, { tipo: string; descricao: string }>();
+    for (const h of historicos) {
+      if (h.descricao && !porChamado.has(h.chamadoId)) {
+        porChamado.set(h.chamadoId, { tipo: h.tipo, descricao: h.descricao });
+      }
+    }
+    return items.map((c) => {
+      const hit = porChamado.get(c.id);
+      if (!hit) return c;
+      return {
+        ...c,
+        buscaMatch: {
+          campo: 'historico' as const,
+          tipo: hit.tipo,
+          trecho: extrairTrecho(hit.descricao, termo),
+        },
+      };
+    });
   }
 
   async findOne(id: string, user: JwtPayload, role: string) {

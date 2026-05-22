@@ -1,14 +1,39 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, Fragment, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { chamadoService } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
-import { Plus, Eye, Download, Star, Search, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Plus, Eye, Download, Star, Search, ArrowUp, ArrowDown, ArrowUpDown, MessageSquare } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import { Paginator } from '../../components/Paginator';
 import type { Chamado, EquipeTI, Departamento, StatusChamado, Visibilidade, UsuarioCore } from '../../types';
+
+/** Destaca todas as ocorrências de `termo` (case-insensitive) dentro de
+ *  `texto` envolvendo cada match num <mark> — usado no snippet da busca. */
+function destacarTermo(texto: string, termo: string): ReactNode {
+  if (!termo) return texto;
+  const alvo = termo.toLowerCase();
+  const partes: ReactNode[] = [];
+  let resto = texto;
+  let k = 0;
+  while (resto) {
+    const idx = resto.toLowerCase().indexOf(alvo);
+    if (idx < 0) {
+      partes.push(resto);
+      break;
+    }
+    if (idx > 0) partes.push(resto.slice(0, idx));
+    partes.push(
+      <mark key={k++} className="bg-amber-200 text-slate-900 rounded px-0.5">
+        {resto.slice(idx, idx + termo.length)}
+      </mark>,
+    );
+    resto = resto.slice(idx + termo.length);
+  }
+  return partes;
+}
 
 interface FilialOption {
   id: string;
@@ -281,7 +306,7 @@ export function ChamadosListPage() {
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Buscar por titulo ou descricao..."
+                  placeholder="Buscar em titulo, descricao, comentarios..."
                   value={busca}
                   onChange={(e) => setBusca(e.target.value)}
                   className="border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm bg-white w-64"
@@ -508,7 +533,8 @@ export function ChamadosListPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {chamadosFiltrados.map((c) => (
-                  <tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                  <Fragment key={c.id}>
+                  <tr className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 text-slate-500 font-mono">#{c.numero}</td>
                     <td className="px-4 py-3 text-slate-500 text-xs font-medium">{c.filial?.codigo || '—'}</td>
                     <td className="px-4 py-3">
@@ -564,6 +590,22 @@ export function ChamadosListPage() {
                       </div>
                     </td>
                   </tr>
+                  {c.buscaMatch && (
+                    <tr className="bg-amber-50/50">
+                      <td colSpan={11} className="px-4 pb-2.5 pt-0">
+                        <div className="flex items-start gap-1.5 text-xs text-slate-500 ml-2 border-l-2 border-amber-300 pl-2">
+                          <MessageSquare className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                          <span>
+                            <span className="font-medium text-amber-700">
+                              achado em {c.buscaMatch.tipo === 'COMENTARIO' ? 'comentário' : 'histórico'}:
+                            </span>{' '}
+                            <span className="italic">{destacarTermo(c.buscaMatch.trecho, buscaDebounced.trim())}</span>
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
