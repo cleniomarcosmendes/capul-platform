@@ -1,9 +1,9 @@
 # Plano — Onda 1 — Sub-fase 1.1
 
-**Sub-fase:** 1.1 — Migration `add_departamento_id_em_entidades_workspace`
+**Sub-fase:** 1.1 — Migration `add_departamento_id_workspace_entities`
 **Branch:** `feat/workspace-foundation` (criada de `main`@65fd7d4 em 22/05/2026)
 **Esforço estimado:** ~8h (estimado no doc-mestre v1.2 §7.1)
-**Status:** Plano escrito (aguardando aprovação do Clenio antes de codar)
+**Status:** Plano fechado em 22/05/2026 23:00 — P1-P5 todas decididas (ver §14). Aguarda execução no sábado (23/05).
 
 > Documento de referência: `C:\Arquivos-de-projeto\clenio\Multi departamento\Workspace_Multi_Departamento_Design.md` v1.2 (§4.2.2-4.2.13, §6.2 Etapa 4, §11.1).
 
@@ -84,7 +84,20 @@ A migration **adiciona** `departamento_id`; não altera filial_id.
 
 ## 4. Migration SQL (estrutura, sem código final)
 
-Nome proposto: `20260523xxxxxx_add_departamento_id_workspace_entities`
+Nome: `20260523xxxxxx_add_departamento_id_workspace_entities` (P1 fechada)
+
+**Pré-flight check embutido no topo da migration** (P3 fechada — Opção C):
+
+```sql
+-- Pré-flight: garantir que depto T.I. existe antes de qualquer ALTER.
+-- Se faltar, aborta com mensagem clara (não cria depto silenciosamente).
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM core.departamentos WHERE codigo = 'TI') THEN
+    RAISE EXCEPTION 'Migration abortada: depto codigo=TI nao encontrado em core.departamentos. Rodar seed do auth-gateway antes.';
+  END IF;
+END $$;
+```
 
 **Padrão repetido pra cada uma das 10 tabelas:**
 
@@ -107,7 +120,7 @@ CREATE INDEX <tabela>_departamento_id_idx
   ON gestao_ti.<tabela>(departamento_id);
 ```
 
-**Adicional para `software_licencas` (D8):**
+**Adicional para `software_licencas` (D8 — P2 fechada, entra junto na sub-fase 1.1):**
 
 ```sql
 ALTER TABLE gestao_ti.software_licencas
@@ -124,10 +137,9 @@ CREATE INDEX software_licencas_equipe_responsavel_id_idx
 (Sem backfill — coluna fica NULL para registros existentes. Onda 2/3 preenche
 via UX quando relevante.)
 
-**Pré-condição da migration:** o depto `codigo = 'TI'` em `core.departamentos`
-**deve existir** antes da migration rodar. Em DEV deve já existir (vide seed).
-Vou conferir antes de gerar a migration; se não existir, migration falha com
-mensagem clara (não cria depto silenciosamente — seria magic).
+**Pré-condição da migration garantida pelo bloco DO $$ no topo (P3 fechada).**
+Se em qualquer ambiente (DEV/HOM/PROD futuro) o depto T.I. não existir, a
+migration aborta antes de qualquer ALTER — sem deixar tabelas em estado parcial.
 
 ---
 
@@ -183,13 +195,10 @@ model Departamento {
 
 ### Em DEV (no `gestao-ti-backend` container)
 
-1. **Pré-flight check** (script SQL ad-hoc):
-   ```sql
-   SELECT EXISTS (SELECT 1 FROM core.departamentos WHERE codigo = 'TI');
-   -- Se false, ABORTA — depto T.I. não existe, seed precisa rodar antes.
-   ```
-2. Editar `gestao-ti/backend/prisma/schema.prisma` com as adições (§5).
-3. Gerar a migration:
+1. Editar `gestao-ti/backend/prisma/schema.prisma` com as adições (§5).
+   - Pré-flight é embutido na própria migration via bloco `DO $$` (P3 fechada),
+     então não precisa de validação ad-hoc separada aqui.
+2. Gerar a migration:
    ```bash
    docker compose exec gestao-ti-backend npx prisma migrate dev --create-only \
      --name add_departamento_id_workspace_entities
@@ -334,14 +343,29 @@ Sub-fases 1.6 (UI Configurador), 1.9 (smoke automatizados) e 1.10 (soak HOM)
 
 ---
 
-## 13. Pontos abertos pra Clenio revisar antes de eu codar
+## 13. Pontos abertos — TODOS FECHADOS em 22/05/2026 23:00
 
-1. **Nome da migration:** `add_departamento_id_workspace_entities` — OK ou prefere outro?
-2. **`equipeResponsavelId` em `SoftwareLicenca`:** doc-mestre §4.2.8 sugere nesta sub-fase; confirmo que entra junto com `departamento_id` (em vez de adiar pra outra sub-fase)?
-3. **Pré-flight check do depto T.I.:** posso assumir que existe em DEV (você sabe que existe), ou prefere script ad-hoc?
-4. **Relações reversas em `Departamento`:** vou adicionar todas as 10. Algum motivo pra não adicionar alguma?
-5. **Sub-fase 1.1 fecha em quanto tempo estimado seu?** Doc-mestre fala 8h; quero entender se cabe em 1 dia (sábado) ou se quebra.
+Ver §14 para o registro das decisões.
 
 ---
 
-_Plano criado por Claude em 22/05/2026 22:50, branch `feat/workspace-foundation`. Aguarda aprovação do Clenio antes de qualquer commit de código._
+## 14. Decisões fechadas (22/05/2026)
+
+| # | Pergunta | Decisão | Onde está aplicada |
+|---|---|---|---|
+| P1 | Nome da migration | `add_departamento_id_workspace_entities` (inglês, padrão do projeto) | §4 (nome), §10 (commit 3) |
+| P2 | `equipeResponsavelId` em `SoftwareLicenca` | Adicionar **junto** na sub-fase 1.1 (D8 implementado de uma vez) | §3 (tabela), §4 (SQL adicional), §5 (schema) |
+| P3 | Pré-flight check do depto T.I. | **Embutido na migration SQL** via bloco `DO $$ ... RAISE EXCEPTION ... $$;` no topo (Opção C) | §4 (pré-flight block), §6 (passo 1 simplificado) |
+| P4 | Relações reversas em `Departamento` | **Adicionar todas as 10** (consistência, custo baixo) | §5 (lista completa) |
+| P5 | Ritmo de execução no sábado | **Híbrido**: 2 pausas de revisão (após schema; após smoke test) | §6 (passos 6 e 8), §10 (entre commits) |
+
+**Princípio das 5 decisões:** consistência com convenções do projeto + robustez
+embutida no schema/migration (em vez de processo manual) + entrega completa de
+D8 já na primeira sub-fase + 2 pontos de revisão pra Clenio intervir cedo se
+algo não fizer sentido.
+
+---
+
+_Plano criado por Claude em 22/05/2026 22:50, fechado em 23:00 após
+saneamento das 5 questões com Clenio. Branch `feat/workspace-foundation`.
+Pronto para execução no sábado 23/05/2026._
