@@ -215,11 +215,13 @@ async function main() {
         },
         permissoes: {
           createMany: {
+            // Onda 1 Sub-fase 1.2 — departamentoId NOT NULL em permissoes_modulo.
+            // Admin inicial recebe todas as permissões no depto T.I.
             data: [
-              { moduloId: modConfigurador.id, roleModuloId: roleAdminConfig.id },
-              { moduloId: modInventario.id, roleModuloId: roleAdminInv.id },
-              { moduloId: modGestaoTi.id, roleModuloId: roleAdminTi.id },
-              { moduloId: modFiscal.id, roleModuloId: roleAdminTiFiscal.id },
+              { moduloId: modConfigurador.id, roleModuloId: roleAdminConfig.id, departamentoId: deptoTI.id },
+              { moduloId: modInventario.id, roleModuloId: roleAdminInv.id, departamentoId: deptoTI.id },
+              { moduloId: modGestaoTi.id, roleModuloId: roleAdminTi.id, departamentoId: deptoTI.id },
+              { moduloId: modFiscal.id, roleModuloId: roleAdminTiFiscal.id, departamentoId: deptoTI.id },
             ],
           },
         },
@@ -247,8 +249,9 @@ async function main() {
 
     for (const p of permissoesDesejadas) {
       if (!modulosComPermissao.has(p.moduloId)) {
+        // Onda 1 Sub-fase 1.2 — departamentoId NOT NULL.
         await prisma.permissaoModulo.create({
-          data: { usuarioId: admin.id, ...p },
+          data: { usuarioId: admin.id, ...p, departamentoId: deptoTI.id },
         });
         console.log(`Permissao adicionada ao admin: modulo ${p.moduloId}`);
       }

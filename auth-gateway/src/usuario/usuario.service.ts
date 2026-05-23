@@ -12,6 +12,7 @@ import {
   UpdateUsuarioDto,
   AtribuirPermissaoDto,
 } from './dto/create-usuario.dto';
+import { getDefaultDepartamentoId } from '../common/utils/default-departamento';
 
 // Roles do módulo Fiscal cujos titulares recebem alertas por e-mail
 // (DestinatariosResolver). Sem e-mail cadastrado o usuário é silenciosamente
@@ -167,10 +168,15 @@ export class UsuarioService {
           : undefined,
         permissoes: dto.permissoes
           ? {
-              create: dto.permissoes.map((p) => ({
-                moduloId: p.moduloId,
-                roleModuloId: p.roleModuloId,
-              })),
+              create: await Promise.all(
+                dto.permissoes.map(async (p) => ({
+                  moduloId: p.moduloId,
+                  roleModuloId: p.roleModuloId,
+                  // Onda 1 Sub-fase 1.2 — departamentoId NOT NULL.
+                  // Usa depto do próprio usuário como default (fallback T.I.).
+                  departamentoId: dto.departamentoId ?? await getDefaultDepartamentoId(this.prisma),
+                })),
+              ),
             }
           : undefined,
       },
@@ -262,17 +268,24 @@ export class UsuarioService {
 
     await this.assertEmailParaPermissaoFiscal(usuario.email, dto.moduloId, dto.roleModuloId);
 
+    // Onda 1 Sub-fase 1.2 — departamentoId NOT NULL em permissoes_modulo.
+    // Fallback T.I. enquanto a UI Configurador multi-perfil (Sub-fase 1.6)
+    // não envia departamentoId explícito no DTO.
+    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+
     const result = await this.prisma.permissaoModulo.upsert({
       where: {
-        usuarioId_moduloId: {
+        usuarioId_moduloId_departamentoId: {
           usuarioId,
           moduloId: dto.moduloId,
+          departamentoId,
         },
       },
       create: {
         usuarioId,
         moduloId: dto.moduloId,
         roleModuloId: dto.roleModuloId,
+        departamentoId,
       },
       update: {
         roleModuloId: dto.roleModuloId,
@@ -285,10 +298,14 @@ export class UsuarioService {
   }
 
   async revogarPermissao(usuarioId: string, moduloId: string) {
-    const permissao = await this.prisma.permissaoModulo.findUnique({
-      where: {
-        usuarioId_moduloId: { usuarioId, moduloId },
-      },
+    // Onda 1 Sub-fase 1.2 — unique composta agora inclui departamentoId.
+    // Mantém semantica atual de "revogar permissão deste usuário neste módulo"
+    // via findFirst (todas as permissões têm depto T.I. enquanto Sub-fase 1.6
+    // não introduz multi-perfil real).
+    // TODO Sub-fase 1.6: aceitar departamentoId como parâmetro pra revogar
+    // permissão específica em depto específico.
+    const permissao = await this.prisma.permissaoModulo.findFirst({
+      where: { usuarioId, moduloId },
     });
     if (!permissao) {
       throw new NotFoundException('Permissao nao encontrada');
