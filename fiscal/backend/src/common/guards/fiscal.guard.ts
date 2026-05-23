@@ -45,6 +45,9 @@ export class FiscalGuard implements CanActivate {
       filialId: payload.filialId,
       filialCodigo: payload.filialCodigo,
       fiscalRole: moduloFiscal.role,
+      // Workspace Multi-Departamento (Onda 1 Sub-fase 1.5)
+      // Vazio se JWT antigo (pré 1.4) — retrocompat preservada.
+      fiscalDepartamentos: moduloFiscal.departamentos ?? [],
     };
 
     return true;

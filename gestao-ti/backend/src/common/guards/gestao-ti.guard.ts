@@ -19,6 +19,10 @@ export class GestaoTiGuard implements CanActivate {
     }
 
     request.gestaoTiRole = modulo.role;
+    // Workspace Multi-Departamento (Onda 1 Sub-fase 1.5)
+    // Popula info departamental pra @RequiresFuncionalidade + futuros checks
+    // departamentais em controllers. Vazio se JWT antigo (pré Sub-fase 1.4).
+    request.gestaoTiDepartamentos = modulo.departamentos ?? [];
     return true;
   }
 }

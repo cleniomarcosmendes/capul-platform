@@ -14,6 +14,8 @@ import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
+import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
+import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
 import { CreateChamadoDto, AddChamadoCopiasDto } from './dto/create-chamado.dto.js';
 import { UpdateChamadoHeaderDto } from './dto/update-chamado-header.dto.js';
 import { TransferirEquipeDto, TransferirTecnicoDto } from './dto/transferir-chamado.dto.js';
@@ -63,6 +65,8 @@ export class ChamadoController {
   }
 
   @Get()
+  @UseGuards(FuncionalidadeGuard)
+  @RequiresFuncionalidade('CHAMADO')  // Workspace Sub-fase 1.5 — piloto
   findAll(
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
