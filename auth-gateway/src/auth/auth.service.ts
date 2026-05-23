@@ -16,6 +16,7 @@ import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { buildModulosPayload } from './helpers/build-modulos-payload';
+import { buildModulosResponse } from './helpers/build-modulos-response';
 
 @Injectable()
 export class AuthService {
@@ -127,15 +128,8 @@ export class AuthService {
           nome: usuario.departamento.nome,
         },
         filialAtual: filialFallback,
-        modulos: usuario.permissoes.map((p) => ({
-          codigo: p.modulo.codigo,
-          nome: p.modulo.nome,
-          icone: p.modulo.icone,
-          cor: p.modulo.cor,
-          url: p.modulo.urlFrontend,
-          role: p.roleModulo.codigo,
-          roleNome: p.roleModulo.nome,
-        })),
+        // Onda 1 Sub-fase 1.6.2 — response inclui departamentos[]+funcionalidades[].
+        modulos: await buildModulosResponse(this.prisma, usuario.id),
       },
     };
   }
@@ -356,10 +350,8 @@ export class AuthService {
         mfaEnabled: usuario.mfaEnabled,
         departamento: { id: usuario.departamento?.id, nome: usuario.departamento?.nome },
         filialAtual: filialFallback,
-        modulos: usuario.permissoes.map((p) => ({
-          codigo: p.modulo.codigo, nome: p.modulo.nome, icone: p.modulo.icone,
-          cor: p.modulo.cor, url: p.modulo.urlFrontend, role: p.roleModulo.codigo, roleNome: p.roleModulo.nome,
-        })),
+        // Onda 1 Sub-fase 1.6.2 — response inclui departamentos[]+funcionalidades[].
+        modulos: await buildModulosResponse(this.prisma, usuario.id),
       },
     };
   }
@@ -424,15 +416,8 @@ export class AuthService {
         nome: uf.filial.nomeFantasia,
         isDefault: uf.isDefault,
       })),
-      modulos: usuario.permissoes.map((p) => ({
-        codigo: p.modulo.codigo,
-        nome: p.modulo.nome,
-        icone: p.modulo.icone,
-        cor: p.modulo.cor,
-        url: p.modulo.urlFrontend,
-        role: p.roleModulo.codigo,
-        roleNome: p.roleModulo.nome,
-      })),
+      // Onda 1 Sub-fase 1.6.2 — response inclui departamentos[]+funcionalidades[].
+      modulos: await buildModulosResponse(this.prisma, usuario.id),
     };
   }
 

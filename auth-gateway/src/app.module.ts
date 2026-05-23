@@ -10,6 +10,7 @@ import { EmpresaModule } from './empresa/empresa.module';
 import { FilialModule } from './filial/filial.module';
 import { UsuarioModule } from './usuario/usuario.module';
 import { DepartamentoModule } from './departamento/departamento.module';
+import { DepartamentoFuncionalidadeModule } from './departamento-funcionalidade/departamento-funcionalidade.module';
 import { TipoDepartamentoModule } from './tipo-departamento/tipo-departamento.module';
 import { CentroCustoModule } from './centro-custo/centro-custo.module';
 import { ModuloModule } from './modulo/modulo.module';
@@ -90,6 +91,7 @@ class ProxyAwareThrottlerGuard extends ThrottlerGuard {
     FilialModule,
     UsuarioModule,
     DepartamentoModule,
+    DepartamentoFuncionalidadeModule,
     TipoDepartamentoModule,
     CentroCustoModule,
     ModuloModule,
