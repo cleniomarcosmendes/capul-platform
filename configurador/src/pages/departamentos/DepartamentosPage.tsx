@@ -7,7 +7,8 @@ import { extractApiError } from '../../utils/errors';
 import { departamentoService } from '../../services/departamento.service';
 import { filialService } from '../../services/filial.service';
 import { tipoDepartamentoService } from '../../services/tipo-departamento.service';
-import { Plus, Building, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Building, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Boxes } from 'lucide-react';
+import { DepartamentoFuncionalidadesDrawer } from './DepartamentoFuncionalidadesDrawer';
 import type { Departamento, FilialOption, TipoDepartamento } from '../../types';
 
 type SortKey = 'nome' | 'tipo' | 'status';
@@ -34,6 +35,9 @@ export function DepartamentosPage() {
 
   const [sortKey, setSortKey] = useState<SortKey>('nome');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  // Workspace Multi-Departamento (Onda 1 Sub-fase 1.6.2) — drawer de funcionalidades
+  const [funcDrawer, setFuncDrawer] = useState<{ id: string; nome: string } | null>(null);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -242,6 +246,13 @@ export function DepartamentosPage() {
                           <button onClick={() => iniciarEdicao(depto)} className="flex items-center gap-1 text-xs text-emerald-600 hover:underline">
                             <Pencil className="w-3.5 h-3.5" /> Editar
                           </button>
+                          <button
+                            onClick={() => setFuncDrawer({ id: depto.id, nome: depto.nome })}
+                            className="flex items-center gap-1 text-xs text-indigo-600 hover:underline"
+                            title="Habilitar funcionalidades do Workspace"
+                          >
+                            <Boxes className="w-3.5 h-3.5" /> Funcionalidades
+                          </button>
                           <button onClick={() => toggleStatus(depto)} className="text-xs text-emerald-600 hover:underline">
                             {depto.status === 'ATIVO' ? 'Inativar' : 'Ativar'}
                           </button>
@@ -273,6 +284,16 @@ export function DepartamentosPage() {
           </div>
         )}
       </div>
+
+      {/* Workspace Multi-Departamento (Onda 1 Sub-fase 1.6.2) */}
+      {funcDrawer && (
+        <DepartamentoFuncionalidadesDrawer
+          departamentoId={funcDrawer.id}
+          departamentoNome={funcDrawer.nome}
+          open={true}
+          onClose={() => setFuncDrawer(null)}
+        />
+      )}
     </>
   );
 }
