@@ -18,12 +18,13 @@ import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 export class EquipeService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(status?: StatusGeral, user?: JwtPayload, role?: string) {
-    const baseWhere: Record<string, unknown> = status ? { status } : {};
-    // Workspace Onda 2 C2.4 — filtro departamental. ADMIN escapa (D36).
-    const where = applyDepartamentoFilter(baseWhere, user ?? null, role ?? null);
+  async findAll(status?: StatusGeral) {
+    // Workspace Onda 2 C2.7 — leitura GLOBAL: qualquer user precisa ver
+    // qualquer equipe pra poder abrir chamado pra ela (T.I. atende todos os
+    // deptos, Fiscal pode demandar pra Controladoria, etc.). Filtro
+    // departamental movido pra create/update/delete (escrita por depto-dono).
     return this.prisma.equipeTI.findMany({
-      where,
+      where: status ? { status } : {},
       include: {
         membros: {
           include: { usuario: true },

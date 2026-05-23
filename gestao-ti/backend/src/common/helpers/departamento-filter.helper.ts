@@ -56,3 +56,23 @@ export function buildDepartamentoFilterClause(
 
   return { departamentoId: { in: deptoIds } };
 }
+
+/**
+ * Workspace Onda 2 C2.7 — extrai os IDs dos deptos do user no módulo.
+ * Retorna `null` se ADMIN (escape D36). Retorna `[]` se user sem deptos.
+ *
+ * Útil para construir filtros customizados (ex: chamados, onde a regra
+ * é "solicitante OU depto-dono em deptos_user").
+ */
+export function getDeptoIdsDoUser(
+  user: JwtPayload | null | undefined,
+  role: string | null | undefined,
+  moduloCodigo: string = 'WORKSPACE',
+): string[] | null {
+  if (role === 'ADMIN') return null;
+  return (
+    user?.modulos
+      ?.find((m) => m.codigo === moduloCodigo)
+      ?.departamentos?.map((d) => d.id) ?? []
+  );
+}
