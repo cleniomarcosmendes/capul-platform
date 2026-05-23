@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { ProjetoHelpersService } from './services/projeto-helpers.service.js';
 import { ProjetoCoreService } from './services/projeto-core.service.js';
 import { ProjetoFaseService } from './services/projeto-fase.service.js';
@@ -60,6 +61,7 @@ export class ProjetoService {
     role?: string;
     page?: number;
     pageSize?: number;
+    user?: JwtPayload;
   }) {
     return this.core.findAll(filters);
   }
