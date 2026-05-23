@@ -17,7 +17,7 @@ export function EquipesListPage() {
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState<string>('');
 
-  const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
   const { toast, confirm } = useToast();
 
   const [sortKey, setSortKey] = useState<SortKey>('nome');

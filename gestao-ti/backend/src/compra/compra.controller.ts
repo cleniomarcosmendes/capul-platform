@@ -65,19 +65,19 @@ export class CompraController {
   }
 
   @Post('tipos-produto')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   createTipoProduto(@Body() dto: CreateTipoProdutoDto) {
     return this.service.createTipoProduto(dto);
   }
 
   @Patch('tipos-produto/:id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   updateTipoProduto(@Param('id') id: string, @Body() dto: UpdateTipoProdutoDto) {
     return this.service.updateTipoProduto(id, dto);
   }
 
   @Delete('tipos-produto/:id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   removeTipoProduto(@Param('id') id: string) {
     return this.service.removeTipoProduto(id);
   }
@@ -90,19 +90,19 @@ export class CompraController {
   }
 
   @Post('tipos-projeto')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   createTipoProjeto(@Body() dto: CreateTipoProjetoDto) {
     return this.service.createTipoProjeto(dto);
   }
 
   @Patch('tipos-projeto/:id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   updateTipoProjeto(@Param('id') id: string, @Body() dto: UpdateTipoProjetoDto) {
     return this.service.updateTipoProjeto(id, dto);
   }
 
   @Delete('tipos-projeto/:id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   removeTipoProjeto(@Param('id') id: string) {
     return this.service.removeTipoProjeto(id);
   }
@@ -148,7 +148,7 @@ export class CompraController {
   }
 
   @Post('notas-fiscais/validar-chave')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   validarChaveNotaFiscal(
     @Body() dto: ValidarChaveNfeDto,
     @Req() req: express.Request,
@@ -158,7 +158,7 @@ export class CompraController {
   }
 
   @Post('notas-fiscais')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   createNotaFiscal(
     @Body() dto: CreateNotaFiscalDto,
     @CurrentUser() user: JwtPayload,
@@ -170,7 +170,7 @@ export class CompraController {
   }
 
   @Patch('notas-fiscais/:id')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   updateNotaFiscal(
     @Param('id') id: string,
     @Body() dto: UpdateNotaFiscalDto,
@@ -183,7 +183,7 @@ export class CompraController {
   }
 
   @Delete('notas-fiscais/:id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   removeNotaFiscal(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -193,7 +193,7 @@ export class CompraController {
   }
 
   @Post('notas-fiscais/:id/duplicar')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   duplicarNotaFiscal(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -210,7 +210,7 @@ export class CompraController {
   }
 
   @Post('notas-fiscais/:id/anexos')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   // Auditoria 10/05/2026 #DT3-M2 — Multer config compartilhado (ver multer-upload.helper.ts)
   @UseInterceptors(FileInterceptor('file', createUploadConfig({
     uploadsDir: NF_UPLOADS_DIR,
@@ -247,7 +247,7 @@ export class CompraController {
   }
 
   @Delete('notas-fiscais/:id/anexos/:anexoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   removeAnexoNF(@Param('id') id: string, @Param('anexoId') anexoId: string) {
     return this.service.removeAnexoNF(id, anexoId);
   }

@@ -42,25 +42,25 @@ export class AtivoController {
   }
 
   @Post()
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   create(@Body() dto: CreateAtivoDto, @CurrentUser() user: JwtPayload) {
     return this.service.create(dto, user);
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   update(@Param('id') id: string, @Body() dto: UpdateAtivoDto) {
     return this.service.update(id, dto);
   }
 
   @Patch(':id/status')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusAtivoDto) {
     return this.service.updateStatus(id, dto.status);
   }
 
   @Delete(':id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   delete(@Param('id') id: string) {
     return this.service.delete(id);
   }
@@ -71,13 +71,13 @@ export class AtivoController {
   }
 
   @Post(':id/softwares')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   addSoftware(@Param('id') id: string, @Body() dto: AddAtivoSoftwareDto) {
     return this.service.addSoftware(id, dto);
   }
 
   @Delete(':id/softwares/:softwareId')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   removeSoftware(@Param('id') id: string, @Param('softwareId') softwareId: string) {
     return this.service.removeSoftware(id, softwareId);
   }

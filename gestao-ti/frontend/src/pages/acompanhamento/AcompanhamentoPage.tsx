@@ -314,7 +314,7 @@ export function AcompanhamentoPage() {
   const [loading, setLoading] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<TimelineItem | null>(null);
 
-  const isManager = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
+  const isManager = ['ADMIN', 'GESTOR'].includes(gestaoTiRole || '');
 
   useEffect(() => {
     dashboardService.getTecnicos().then(setTecnicos).catch(() => {});

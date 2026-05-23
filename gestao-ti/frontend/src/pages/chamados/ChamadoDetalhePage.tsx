@@ -14,7 +14,7 @@ import { coreService } from '../../services/core.service';
 import { useToast } from '../../components/Toast';
 import type { Chamado, EquipeTI, AnexoChamado, StatusChamado, ChamadoColaborador, ChamadoCopiaResumo, RegistroTempoChamado, UsuarioCore } from '../../types';
 
-const ROLES_TI_SET = new Set(['ADMIN', 'GESTOR_TI', 'SUPORTE_TI']);
+const ROLES_TI_SET = new Set(['ADMIN', 'GESTOR', 'SUPORTE']);
 function isUsuarioTI(u: UsuarioCore): boolean {
   return (u.permissoes ?? []).some((p) => p.modulo.codigo === 'GESTAO_TI' && ROLES_TI_SET.has(p.roleModulo.codigo));
 }
@@ -158,8 +158,8 @@ export function ChamadoDetalhePage() {
   );
   const { ConfirmDialog, guardedNavigate } = useUnsavedChanges(isEditing);
 
-  const isTecnico = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
-  const isGestor = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
+  const isTecnico = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole || '');
+  const isGestor = ['ADMIN', 'GESTOR'].includes(gestaoTiRole || '');
   const isSolicitante = chamado?.solicitanteId === usuario?.id;
   const isTecnicoAtribuido = chamado?.tecnicoId === usuario?.id;
   const canEditHeader = isSolicitante || isGestor;
@@ -1070,7 +1070,7 @@ export function ChamadoDetalhePage() {
                         // Filtra apenas staff de TI — colaboradores de chamado devem ser
                         // técnicos atuando, não usuários finais (mesma lógica de OS).
                         coreService.listarUsuarios().then((users) => {
-                          const rolesStaff = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
+                          const rolesStaff = ['ADMIN', 'GESTOR', 'SUPORTE'];
                           const staff = users.filter((u: any) =>
                             u.permissoes?.some((p: any) => p.modulo?.codigo === 'GESTAO_TI' && rolesStaff.includes(p.roleModulo?.codigo))
                           );

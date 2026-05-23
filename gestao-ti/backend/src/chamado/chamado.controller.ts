@@ -140,13 +140,13 @@ export class ChamadoController {
   }
 
   @Post(':id/assumir')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   assumir(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.service.assumir(id, user);
   }
 
   @Post(':id/transferir-equipe')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   transferirEquipe(
     @Param('id') id: string,
     @Body() dto: TransferirEquipeDto,
@@ -157,7 +157,7 @@ export class ChamadoController {
   }
 
   @Post(':id/transferir-tecnico')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   transferirTecnico(
     @Param('id') id: string,
     @Body() dto: TransferirTecnicoDto,
@@ -189,7 +189,7 @@ export class ChamadoController {
   }
 
   @Patch(':id/resolver')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   resolver(
     @Param('id') id: string,
     @Body() dto: ResolverChamadoDto,
@@ -200,7 +200,7 @@ export class ChamadoController {
   }
 
   @Patch(':id/fechar')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   fechar(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -220,7 +220,7 @@ export class ChamadoController {
   }
 
   @Patch(':id/cancelar')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   cancelar(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -230,7 +230,7 @@ export class ChamadoController {
   }
 
   @Delete(':id')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   excluir(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -240,7 +240,7 @@ export class ChamadoController {
   }
 
   @Patch(':id/vincular-projeto')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   vincularProjeto(
     @Param('id') id: string,
     @Body('projetoId') projetoId: string,
@@ -313,7 +313,7 @@ export class ChamadoController {
   }
 
   @Delete(':id/anexos/:anexoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   removeAnexo(@Param('id') id: string, @Param('anexoId') anexoId: string) {
     return this.service.removeAnexo(id, anexoId);
   }
@@ -326,7 +326,7 @@ export class ChamadoController {
   }
 
   @Post(':id/colaboradores')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   adicionarColaborador(
     @Param('id') id: string,
     @Body('usuarioId') usuarioId: string,
@@ -337,7 +337,7 @@ export class ChamadoController {
   }
 
   @Delete(':id/colaboradores/:colaboradorId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   removerColaborador(
     @Param('id') id: string,
     @Param('colaboradorId') colaboradorId: string,
@@ -365,7 +365,7 @@ export class ChamadoController {
   }
 
   @Post(':id/agrupar-em')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   agruparEm(
     @Param('id') id: string,
     @Body('agrupadorId') agrupadorId: string,
@@ -378,7 +378,7 @@ export class ChamadoController {
   // Agrupa varios chamados (filhosIds[]) neste chamado-pai de uma vez.
   // Pedido suporte 13/05/2026 — UX de selecao multipla.
   @Post(':id/agrupar-multiplos')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   agruparMultiplos(
     @Param('id') id: string,
     @Body('filhosIds') filhosIds: string[],
@@ -389,7 +389,7 @@ export class ChamadoController {
   }
 
   @Post(':id/desagrupar')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   desagrupar(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,

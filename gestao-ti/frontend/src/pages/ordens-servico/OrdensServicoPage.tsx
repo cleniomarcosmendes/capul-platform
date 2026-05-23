@@ -43,7 +43,7 @@ function formatDuracao(inicio: string, fim: string | null): string {
 export function OrdensServicoPage() {
   const { usuario, gestaoTiRole } = useAuth();
   const { toast, confirm } = useToast();
-  const isTecnico = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
+  const isTecnico = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole || '');
 
   const [ordens, setOrdens] = useState<OrdemServico[]>([]);
   // Paginação (23/04/2026)
@@ -109,7 +109,7 @@ export function OrdensServicoPage() {
       // Filtra apenas staff de TI (ADMIN, GESTOR_TI, SUPORTE_TI) — outros usuários
       // não devem ser atribuíveis como técnico de OS. Mesma lógica de ChamadosListPage.
       coreService.listarUsuarios().then((users) => {
-        const rolesStaff = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
+        const rolesStaff = ['ADMIN', 'GESTOR', 'SUPORTE'];
         const staff = users.filter((u: any) =>
           u.permissoes?.some((p: any) => p.modulo?.codigo === 'GESTAO_TI' && rolesStaff.includes(p.roleModulo?.codigo))
         );
@@ -117,7 +117,7 @@ export function OrdensServicoPage() {
       }).catch(() => {});
     }
     if (showForm && filiais.length === 0) {
-      const isStaff = gestaoTiRole && ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole);
+      const isStaff = gestaoTiRole && ['ADMIN', 'GESTOR'].includes(gestaoTiRole);
       if (isStaff) {
         coreService.listarFiliais().then(setFiliais).catch(() => {});
       } else if (usuario?.filiais?.length) {
@@ -481,7 +481,7 @@ export function OrdensServicoPage() {
                         ) : h.descricao && isComentario ? (
                           <div className="flex items-start gap-2 mt-1 group/comment">
                             <p className="text-sm text-slate-700 flex-1 whitespace-pre-wrap">{h.descricao}</p>
-                            {(h.usuario.id === usuario?.id || ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '')) && (
+                            {(h.usuario.id === usuario?.id || ['ADMIN', 'GESTOR'].includes(gestaoTiRole || '')) && (
                               <button onClick={() => { setEditingHistoricoId(h.id); setEditingTexto(h.descricao || ''); }}
                                 className="opacity-0 group-hover/comment:opacity-100 text-slate-300 hover:text-capul-600 transition-all p-0.5 flex-shrink-0" title="Editar comentario">
                                 <Edit3 className="w-3.5 h-3.5" />

@@ -16,7 +16,7 @@ const prioridadeLabels: Record<Prioridade, string> = {
 
 export function CatalogoServicosPage() {
   const { gestaoTiRole } = useAuth();
-  const isAdmin = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
+  const isAdmin = ['ADMIN', 'GESTOR'].includes(gestaoTiRole || '');
   const { toast, confirm } = useToast();
 
   const [items, setItems] = useState<CatalogoServico[]>([]);

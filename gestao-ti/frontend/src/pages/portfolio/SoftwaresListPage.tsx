@@ -49,7 +49,7 @@ const criticidadeCores: Record<string, string> = {
 
 export function SoftwaresListPage() {
   const { gestaoTiRole } = useAuth();
-  const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
 
   const [softwares, setSoftwares] = useState<Software[]>([]);
   // Paginação 23/04/2026

@@ -128,7 +128,7 @@ export class CompraNotaFiscalService {
    * ADMIN e GESTOR_TI sempre tem acesso. Outros precisam ser membro da equipe com podeGerirCompras.
    */
   async ensureNFPermission(equipeId: string | null | undefined, usuarioId: string, role: string) {
-    if (role === 'ADMIN' || role === 'GESTOR_TI') return;
+    if (role === 'ADMIN' || role === 'GESTOR') return;
     if (!equipeId) {
       throw new ForbiddenException('NF sem equipe associada. Associe uma equipe ou solicite a um ADMIN/GESTOR_TI.');
     }
@@ -144,7 +144,7 @@ export class CompraNotaFiscalService {
    * Retorna equipes onde o usuario pode gerenciar compras.
    */
   async findEquipesParaCompras(usuarioId: string, role: string) {
-    if (role === 'ADMIN' || role === 'GESTOR_TI') {
+    if (role === 'ADMIN' || role === 'GESTOR') {
       return this.prisma.equipeTI.findMany({
         where: { status: 'ATIVO' },
         select: { id: true, nome: true, sigla: true, cor: true },
@@ -188,7 +188,7 @@ export class CompraNotaFiscalService {
     }
 
     // Filtro por equipe para nao-admin
-    if (usuarioId && role && role !== 'ADMIN' && role !== 'GESTOR_TI') {
+    if (usuarioId && role && role !== 'ADMIN' && role !== 'GESTOR') {
       const membrosComPermissao = await this.prisma.membroEquipe.findMany({
         where: { usuarioId, status: 'ATIVO', podeGerirCompras: true },
         select: { equipeId: true },

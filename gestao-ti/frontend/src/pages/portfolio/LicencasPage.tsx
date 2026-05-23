@@ -36,7 +36,7 @@ const statusCores: Record<string, string> = {
 
 export function LicencasPage() {
   const { gestaoTiRole } = useAuth();
-  const isAdmin = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
+  const isAdmin = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole || '');
   const { toast, confirm } = useToast();
 
   const [licencas, setLicencas] = useState<SoftwareLicenca[]>([]);

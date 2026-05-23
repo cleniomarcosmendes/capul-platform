@@ -11,7 +11,7 @@ type SortDir = 'asc' | 'desc';
 
 export function CentrosCustoPage() {
   const { usuario, gestaoTiRole } = useAuth();
-  const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
   const { toast, confirm } = useToast();
 
   const [centrosCusto, setCentrosCusto] = useState<CentroCusto[]>([]);

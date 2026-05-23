@@ -146,7 +146,7 @@ export function ContratoDetalhePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
-  const canManage = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
+  const canManage = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole || '');
   const toast = useToast();
 
   const [contrato, setContrato] = useState<Contrato | null>(null);

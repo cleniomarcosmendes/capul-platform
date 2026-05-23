@@ -63,7 +63,7 @@ describe('ChamadoService', () => {
       prisma.historicoChamado.create.mockResolvedValue({});
 
       const dto = { titulo: 'Teste', descricao: 'Desc', equipeAtualId: 'eq-1' };
-      await service.create(dto as any, mockUser as any, 'SUPORTE_TI');
+      await service.create(dto as any, mockUser as any, 'SUPORTE');
 
       expect(prisma.chamado.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -87,7 +87,7 @@ describe('ChamadoService', () => {
       prisma.historicoChamado.create.mockResolvedValue({});
 
       const dto = { titulo: 'Teste', descricao: 'Desc', equipeAtualId: 'eq-1', prioridade: 'MEDIA' };
-      await service.create(dto as any, mockUser as any, 'SUPORTE_TI');
+      await service.create(dto as any, mockUser as any, 'SUPORTE');
 
       const createCall = prisma.chamado.create.mock.calls[0][0];
       expect(createCall.data.slaDefinicaoId).toBe('sla-1');

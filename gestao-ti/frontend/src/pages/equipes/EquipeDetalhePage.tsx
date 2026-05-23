@@ -13,7 +13,7 @@ export function EquipeDetalhePage() {
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
 
-  const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
   const { toast, confirm } = useToast();
 
   const [equipe, setEquipe] = useState<EquipeTI | null>(null);

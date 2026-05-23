@@ -21,7 +21,7 @@ const ANOS = [ANO_ATUAL, ANO_ATUAL + 1, ANO_ATUAL + 2];
 
 export function ChamadosExternosPage() {
   const { gestaoTiRole } = useAuth();
-  const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
   const { toast, confirm } = useToast();
 
   const [registros, setRegistros] = useState<ChamadoExternoMensal[]>([]);

@@ -125,13 +125,13 @@ export class ProjetoController {
   }
 
   @Post()
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   create(@Body() dto: CreateProjetoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     return this.service.create(dto, user.sub, role, user);
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async update(@Param('id') id: string, @Body() dto: UpdateProjetoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.update(id, dto);
@@ -142,28 +142,28 @@ export class ProjetoController {
   // clara, validação de origem específica e notificação direcionada.
 
   @Patch(':id/liberar-homologacao')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async liberarHomologacao(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.liberarHomologacao(id, user.sub);
   }
 
   @Patch(':id/liberar-producao')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async liberarProducao(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.liberarProducao(id, user.sub);
   }
 
   @Patch(':id/concluir-producao')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async concluirProducao(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.concluirProducao(id, user.sub);
   }
 
   @Patch(':id/voltar-andamento')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async voltarAndamento(
     @Param('id') id: string,
     @Body('motivo') motivo: string | undefined,
@@ -175,13 +175,13 @@ export class ProjetoController {
   }
 
   @Delete(':id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   remove(@Param('id') id: string) {
     return this.service.remove(id);
   }
 
   @Post(':id/duplicar')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   duplicar(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.service.duplicar(id, user.sub);
   }
@@ -196,20 +196,20 @@ export class ProjetoController {
   // --- Membros ---
 
   @Get(':id/membros')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   listMembros(@Param('id') id: string) {
     return this.service.listMembros(id);
   }
 
   @Post(':id/membros')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async addMembro(@Param('id') id: string, @Body() dto: CreateMembroDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.addMembro(id, dto);
   }
 
   @Delete(':id/membros/:membroId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async removeMembro(@Param('id') id: string, @Param('membroId') membroId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeMembro(id, membroId);
@@ -226,14 +226,14 @@ export class ProjetoController {
   }
 
   @Post(':id/fases')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async addFase(@Param('id') id: string, @Body() dto: CreateFaseDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.addFase(id, dto);
   }
 
   @Patch(':id/fases/:faseId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async updateFase(
     @Param('id') id: string,
     @Param('faseId') faseId: string,
@@ -246,7 +246,7 @@ export class ProjetoController {
   }
 
   @Delete(':id/fases/:faseId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async removeFase(@Param('id') id: string, @Param('faseId') faseId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeFase(id, faseId);
@@ -264,7 +264,7 @@ export class ProjetoController {
   }
 
   @Post(':id/atividades')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async addAtividade(
     @Param('id') id: string,
     @Body() dto: { titulo: string; descricao?: string; faseId?: string; pendenciaId?: string; dataInicio?: string; dataFimPrevista?: string; responsavelIds?: string[] },
@@ -276,7 +276,7 @@ export class ProjetoController {
   }
 
   @Post(':id/pendencias/:pendenciaId/gerar-atividade')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async gerarAtividadeFromPendencia(
     @Param('id') id: string,
     @Param('pendenciaId') pendenciaId: string,
@@ -289,7 +289,7 @@ export class ProjetoController {
   }
 
   @Patch(':id/atividades/:atividadeId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async updateAtividade(
     @Param('id') id: string,
     @Param('atividadeId') atividadeId: string,
@@ -302,7 +302,7 @@ export class ProjetoController {
   }
 
   @Delete(':id/atividades/:atividadeId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async removeAtividade(@Param('id') id: string, @Param('atividadeId') atividadeId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeAtividade(id, atividadeId);
@@ -328,7 +328,7 @@ export class ProjetoController {
   }
 
   @Post(':id/atividades/:atividadeId/comentarios')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async addComentario(
     @Param('id') id: string,
     @Param('atividadeId') atividadeId: string,
@@ -356,7 +356,7 @@ export class ProjetoController {
   }
 
   @Patch(':id/comentarios/:comentarioId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async updateComentario(
     @Param('id') id: string,
     @Param('comentarioId') comentarioId: string,
@@ -418,14 +418,14 @@ export class ProjetoController {
   // --- Chamados (vincular/desvincular) ---
 
   @Post(':id/chamados/:chamadoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async vincularChamado(@Param('id') id: string, @Param('chamadoId') chamadoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.vincularChamado(id, chamadoId);
   }
 
   @Delete(':id/chamados/:chamadoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async desvincularChamado(@Param('id') id: string, @Param('chamadoId') chamadoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.desvincularChamado(id, chamadoId);
@@ -439,14 +439,14 @@ export class ProjetoController {
   }
 
   @Post(':id/cotacoes')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async addCotacao(@Param('id') id: string, @Body() dto: CreateCotacaoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.addCotacao(id, dto);
   }
 
   @Patch(':id/cotacoes/:cotacaoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async updateCotacao(
     @Param('id') id: string,
     @Param('cotacaoId') cotacaoId: string,
@@ -459,7 +459,7 @@ export class ProjetoController {
   }
 
   @Delete(':id/cotacoes/:cotacaoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async removeCotacao(@Param('id') id: string, @Param('cotacaoId') cotacaoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeCotacao(id, cotacaoId);
@@ -473,14 +473,14 @@ export class ProjetoController {
   }
 
   @Post(':id/custos-detalhados')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async addCusto(@Param('id') id: string, @Body() dto: CreateCustoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.addCusto(id, dto);
   }
 
   @Patch(':id/custos-detalhados/:custoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async updateCusto(
     @Param('id') id: string,
     @Param('custoId') custoId: string,
@@ -493,7 +493,7 @@ export class ProjetoController {
   }
 
   @Delete(':id/custos-detalhados/:custoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async removeCusto(@Param('id') id: string, @Param('custoId') custoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeCusto(id, custoId);
@@ -507,14 +507,14 @@ export class ProjetoController {
   }
 
   @Post(':id/riscos')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async addRisco(@Param('id') id: string, @Body() dto: CreateRiscoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.addRisco(id, dto);
   }
 
   @Patch(':id/riscos/:riscoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async updateRisco(
     @Param('id') id: string,
     @Param('riscoId') riscoId: string,
@@ -527,7 +527,7 @@ export class ProjetoController {
   }
 
   @Delete(':id/riscos/:riscoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async removeRisco(@Param('id') id: string, @Param('riscoId') riscoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeRisco(id, riscoId);
@@ -541,14 +541,14 @@ export class ProjetoController {
   }
 
   @Post(':id/dependencias')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async addDependencia(@Param('id') id: string, @Body() dto: CreateDependenciaDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.addDependencia(id, dto);
   }
 
   @Delete(':id/dependencias/:depId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async removeDependencia(@Param('id') id: string, @Param('depId') depId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeDependencia(id, depId);
@@ -557,13 +557,13 @@ export class ProjetoController {
   // --- Anexos ---
 
   @Get(':id/anexos')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   listAnexos(@Param('id') id: string) {
     return this.service.listAnexos(id);
   }
 
   @Post(':id/anexos')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async addAnexo(
     @Param('id') id: string,
     @Body() dto: CreateAnexoDto,
@@ -575,7 +575,7 @@ export class ProjetoController {
   }
 
   @Post(':id/anexos/upload')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   // Auditoria 10/05/2026 #DT3-M2 — Multer config compartilhado (ver multer-upload.helper.ts)
   // Ganhou bônus: verificação fs.existsSync + W_OK (antes só chamado tinha)
   @UseInterceptors(FileInterceptor('file', createUploadConfig({
@@ -595,7 +595,7 @@ export class ProjetoController {
   }
 
   @Get(':id/anexos/:anexoId/download')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async downloadAnexo(
     @Param('id') id: string,
     @Param('anexoId') anexoId: string,
@@ -617,7 +617,7 @@ export class ProjetoController {
   }
 
   @Delete(':id/anexos/:anexoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async removeAnexo(@Param('id') id: string, @Param('anexoId') anexoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeAnexo(id, anexoId);
@@ -631,7 +631,7 @@ export class ProjetoController {
   }
 
   @Post(':id/apontamentos')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async addApontamento(
     @Param('id') id: string,
     @Body() dto: CreateApontamentoDto,
@@ -643,7 +643,7 @@ export class ProjetoController {
   }
 
   @Delete(':id/apontamentos/:apontamentoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async removeApontamento(
     @Param('id') id: string,
     @Param('apontamentoId') apontamentoId: string,
@@ -685,20 +685,20 @@ export class ProjetoController {
   // --- Usuarios-Chave ---
 
   @Get(':id/usuarios-chave')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   listUsuariosChave(@Param('id') id: string) {
     return this.service.listUsuariosChave(id);
   }
 
   @Post(':id/usuarios-chave')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async addUsuarioChave(@Param('id') id: string, @Body() dto: CreateUsuarioChaveDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.addUsuarioChave(id, dto);
   }
 
   @Delete(':id/usuarios-chave/:ucId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async removeUsuarioChave(@Param('id') id: string, @Param('ucId') ucId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
     await this.service.assertMembroOuGestor(id, user.sub, role);
     return this.service.removeUsuarioChave(id, ucId);
@@ -707,7 +707,7 @@ export class ProjetoController {
   // --- Pendencias ---
 
   @Get(':id/pendencias')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   listPendencias(
     @Param('id') id: string,
     @Query('status') status?: string,
@@ -722,7 +722,7 @@ export class ProjetoController {
   }
 
   @Post(':id/pendencias')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   createPendencia(
     @Param('id') id: string,
     @Body() dto: CreatePendenciaDto,
@@ -733,7 +733,7 @@ export class ProjetoController {
   }
 
   @Get(':id/pendencias/:pid')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   getPendencia(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -744,7 +744,7 @@ export class ProjetoController {
   }
 
   @Patch(':id/pendencias/:pid')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   updatePendencia(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -758,7 +758,7 @@ export class ProjetoController {
   // --- Interacoes Pendencia ---
 
   @Post(':id/pendencias/:pid/interacoes')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   addInteracao(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -770,7 +770,7 @@ export class ProjetoController {
   }
 
   @Patch(':id/pendencias/:pid/interacoes/:iid')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   editarInteracao(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -785,7 +785,7 @@ export class ProjetoController {
   // --- Anexos Pendencia ---
 
   @Post(':id/pendencias/:pid/anexos')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
       destination: PENDENCIA_UPLOADS_DIR,
@@ -808,7 +808,7 @@ export class ProjetoController {
   }
 
   @Get(':id/pendencias/:pid/anexos/:anexoId/download')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async downloadAnexoPendencia(
     @Param('id') id: string,
     @Param('pid') pid: string,
@@ -831,7 +831,7 @@ export class ProjetoController {
   }
 
   @Delete(':id/pendencias/:pid/anexos/:anexoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   removeAnexoPendencia(
     @Param('id') id: string,
     @Param('pid') pid: string,

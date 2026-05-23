@@ -11,7 +11,7 @@ type SortDir = 'asc' | 'desc';
 
 export function NaturezasPage() {
   const { gestaoTiRole } = useAuth();
-  const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
   const { toast, confirm } = useToast();
 
   const [naturezas, setNaturezas] = useState<NaturezaContrato[]>([]);

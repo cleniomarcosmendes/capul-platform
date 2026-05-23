@@ -11,7 +11,7 @@ type SortDir = 'asc' | 'desc';
 
 export function DepartamentosPage() {
   const { usuario, gestaoTiRole } = useAuth();
-  const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
   const { toast, confirm } = useToast();
 
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);

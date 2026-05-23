@@ -63,7 +63,7 @@ const statusLabels: Record<string, string> = {
 
 export function RelatorioOsPage() {
   const { gestaoTiRole, usuario } = useAuth();
-  const isManager = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
+  const isManager = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole || '');
 
   const [tecnicos, setTecnicos] = useState<{ id: string; nome: string; username: string }[]>([]);
   const [tecnicoId, setTecnicoId] = useState('');

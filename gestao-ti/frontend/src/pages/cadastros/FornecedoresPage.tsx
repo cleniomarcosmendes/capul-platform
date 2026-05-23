@@ -11,7 +11,7 @@ type SortDir = 'asc' | 'desc';
 
 export function FornecedoresPage() {
   const { gestaoTiRole } = useAuth();
-  const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
   const { toast, confirm } = useToast();
 
   const [fornecedores, setFornecedores] = useState<FornecedorConfig[]>([]);

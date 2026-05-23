@@ -196,7 +196,7 @@ export function ProjetoDetalhePage() {
   const [projeto, setProjeto] = useState<Projeto | null>(null);
   // canManage: usuario deve ser membro/responsavel do projeto (ou ADMIN/GESTOR_TI)
   const isMembro = (projeto as unknown as Record<string, unknown>)?.isMembro === true;
-  const isGestorOrAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const isGestorOrAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
   const canManage = (isGestorOrAdmin || isMembro) && Boolean(gestaoTiRole);
   const canAddAtividade = canManage;
 
@@ -684,7 +684,7 @@ export function ProjetoDetalhePage() {
           <TabEquipe projetoId={projeto.id} canManage={canManage} onEditingChange={setChildEditing} />
         )}
         {tab === 'atividades' && (
-          <TabCronograma projetoId={projeto.id} isCompleto={isCompleto} canManage={canManage} canAdd={canAddAtividade} userId={usuario?.id || ''} isGestor={gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI'} onEditingChange={setChildEditing} />
+          <TabCronograma projetoId={projeto.id} isCompleto={isCompleto} canManage={canManage} canAdd={canAddAtividade} userId={usuario?.id || ''} isGestor={gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR'} onEditingChange={setChildEditing} />
         )}
         {tab === 'financeiro' && (
           <TabFinanceiro projetoId={projeto.id} projeto={projeto} canManage={canManage} onEditingChange={setChildEditing} />
@@ -855,7 +855,7 @@ function TabEquipe({ projetoId, canManage, onEditingChange }: { projetoId: strin
     } catch { /* empty */ }
   }
 
-  const ROLES_TI_SET = new Set(['ADMIN', 'GESTOR_TI', 'SUPORTE_TI']);
+  const ROLES_TI_SET = new Set(['ADMIN', 'GESTOR', 'SUPORTE']);
   const membrosIds = new Set(membros.map((m) => m.usuarioId));
   const availableUsers = usuarios
     .filter((u) => !membrosIds.has(u.id))
@@ -933,7 +933,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   const { confirm, toast } = useToast();
   const { gestaoTiRole } = useAuth();
   // Staff TI (Regra única 14/05): só eles criam/veem nota interna na Conversa.
-  const isStaffTI = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
+  const isStaffTI = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole || '');
   const [fases, setFases] = useState<FaseProjeto[]>([]);
   const [atividades, setAtividades] = useState<AtividadeProjeto[]>([]);
   const [loading, setLoading] = useState(true);

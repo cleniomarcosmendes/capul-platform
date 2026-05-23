@@ -115,7 +115,7 @@ export function AcompanhamentoItemPage() {
   const paramTipo = searchParams.get('tipo');
   const paramId = searchParams.get('id');
 
-  const isManager = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
+  const isManager = ['ADMIN', 'GESTOR'].includes(gestaoTiRole || '');
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>(paramTipo === 'atividade' ? 'atividade' : 'chamado');
   const [autoLoaded, setAutoLoaded] = useState(false);

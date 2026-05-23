@@ -4,10 +4,10 @@
  */
 
 /** Roles com acesso de gestao (ADMIN + GESTOR_TI) */
-export const ROLES_GESTORES = ['ADMIN', 'GESTOR_TI'] as const;
+export const ROLES_GESTORES = ['ADMIN', 'GESTOR'] as const;
 
 /** Roles de TI (inclui SUPORTE_TI) */
-export const ROLES_TI = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'] as const;
+export const ROLES_TI = ['ADMIN', 'GESTOR', 'SUPORTE'] as const;
 
 /** Roles com acesso restrito a projetos vinculados */
 export const ROLES_EXTERNOS = ['USUARIO_CHAVE', 'TERCEIRIZADO'] as const;

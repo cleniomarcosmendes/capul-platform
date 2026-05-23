@@ -28,7 +28,7 @@ type SortDir = 'asc' | 'desc';
 
 export function NotasFiscaisListPage() {
   const { gestaoTiRole } = useAuth();
-  const canManage = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
+  const canManage = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole || '');
   const { toast } = useToast();
 
   const [notas, setNotas] = useState<NotaFiscal[]>([]);

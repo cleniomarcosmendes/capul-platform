@@ -61,25 +61,25 @@ export class ConhecimentoController {
   }
 
   @Post()
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   create(@Body() dto: CreateArtigoDto, @CurrentUser('sub') autorId: string) {
     return this.service.create(dto, autorId);
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   update(@Param('id') id: string, @Body() dto: UpdateArtigoDto) {
     return this.service.update(id, dto);
   }
 
   @Patch(':id/status')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusArtigoDto) {
     return this.service.updateStatus(id, dto.status);
   }
 
   @Delete(':id')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   delete(@Param('id') id: string) {
     return this.service.delete(id);
   }
@@ -92,7 +92,7 @@ export class ConhecimentoController {
   }
 
   @Post(':id/anexos')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   // Auditoria 10/05/2026 #DT3-M2 — Multer config compartilhado (ver multer-upload.helper.ts)
   @UseInterceptors(FileInterceptor('file', createUploadConfig({
     uploadsDir: UPLOADS_DIR,
@@ -131,7 +131,7 @@ export class ConhecimentoController {
   }
 
   @Delete(':id/anexos/:anexoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   removeAnexo(@Param('id') id: string, @Param('anexoId') anexoId: string) {
     return this.service.removeAnexo(id, anexoId);
   }

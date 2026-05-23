@@ -40,9 +40,9 @@ export function PendenciaDetalhePage() {
   const navigate = useNavigate();
   const { gestaoTiRole, usuario } = useAuth();
   const { toast, confirm } = useToast();
-  const isGestor = ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole || '');
+  const isGestor = ['ADMIN', 'GESTOR'].includes(gestaoTiRole || '');
   const canManage = gestaoTiRole !== 'USUARIO_FINAL' && Boolean(gestaoTiRole);
-  const isStaffTI = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
+  const isStaffTI = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole || '');
   const isRestrictedRole = ['USUARIO_CHAVE', 'TERCEIRIZADO'].includes(gestaoTiRole || '');
 
   const [pendencia, setPendencia] = useState<PendenciaProjeto | null>(null);

@@ -25,7 +25,7 @@ const statusCores: Record<StatusArtigo, string> = {
 
 export function ConhecimentoListPage() {
   const { gestaoTiRole } = useAuth();
-  const canCreate = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
+  const canCreate = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole || '');
 
   const [artigos, setArtigos] = useState<ArtigoConhecimento[]>([]);
   // Paginação 23/04/2026

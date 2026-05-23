@@ -29,19 +29,19 @@ export class LicencaController {
   }
 
   @Post('categorias')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   createCategoria(@Body() dto: CreateCategoriaLicencaDto) {
     return this.service.createCategoria(dto);
   }
 
   @Patch('categorias/:id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   updateCategoria(@Param('id') id: string, @Body() dto: UpdateCategoriaLicencaDto) {
     return this.service.updateCategoria(id, dto);
   }
 
   @Delete('categorias/:id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   removeCategoria(@Param('id') id: string) {
     return this.service.removeCategoria(id);
   }

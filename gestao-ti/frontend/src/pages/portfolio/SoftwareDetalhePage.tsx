@@ -68,7 +68,7 @@ export function SoftwareDetalhePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
-  const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
   const { toast, confirm } = useToast();
 
   const [software, setSoftware] = useState<Software | null>(null);

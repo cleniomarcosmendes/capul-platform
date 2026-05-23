@@ -27,8 +27,8 @@ export function NotaFiscalDetalhePage() {
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
   const { toast, confirm } = useToast();
-  const canManage = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
-  const canDelete = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const canManage = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole || '');
+  const canDelete = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
 
   const [nf, setNf] = useState<NotaFiscal | null>(null);
   const [loading, setLoading] = useState(true);

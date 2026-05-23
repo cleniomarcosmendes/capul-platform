@@ -57,7 +57,7 @@ export function ParadaDetalhePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
-  const canManage = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole || '');
+  const canManage = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole || '');
   const { toast, confirm } = useToast();
   // Igualdade total entre ADMIN/GESTOR_TI/SUPORTE_TI no módulo Paradas
   // (pedido 20/05/2026). Cancelar e Reabrir mantêm aliases para clareza.

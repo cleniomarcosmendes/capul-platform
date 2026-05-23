@@ -41,10 +41,10 @@ type MenuItem =
   | { section: string; roles?: string[] }
   | { label: string; icon: React.ComponentType<{ className?: string }>; path: string; roles?: string[] };
 
-const STAFF = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
-const MANAGERS = ['ADMIN', 'GESTOR_TI'];
-const CONTRATO_ROLES_STATIC = ['ADMIN', 'GESTOR_TI'];
-const CONTRATO_ROLES_DYNAMIC = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
+const STAFF = ['ADMIN', 'GESTOR', 'SUPORTE'];
+const MANAGERS = ['ADMIN', 'GESTOR'];
+const CONTRATO_ROLES_STATIC = ['ADMIN', 'GESTOR'];
+const CONTRATO_ROLES_DYNAMIC = ['ADMIN', 'GESTOR', 'SUPORTE'];
 
 const menuItems: MenuItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/gestao-ti/' },
@@ -117,13 +117,13 @@ export function Sidebar({ open = false, onClose }: SidebarProps = {}) {
   const [podeGerirContratos, setPodeGerirContratos] = useState(false);
 
   useEffect(() => {
-    if (gestaoTiRole === 'SUPORTE_TI') {
+    if (gestaoTiRole === 'SUPORTE') {
       contratoService.verificarAcesso().then(setPodeGerirContratos);
     }
   }, [gestaoTiRole]);
 
   const effectiveItems = menuItems.map((item) => {
-    if ('label' in item && item.label === 'Contratos' && gestaoTiRole === 'SUPORTE_TI') {
+    if ('label' in item && item.label === 'Contratos' && gestaoTiRole === 'SUPORTE') {
       return podeGerirContratos ? { ...item, roles: CONTRATO_ROLES_DYNAMIC } : item;
     }
     return item;

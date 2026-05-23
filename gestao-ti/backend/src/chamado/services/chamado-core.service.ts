@@ -449,7 +449,7 @@ export class ChamadoCoreService {
     // TERCEIRIZADO) só podem criar PUBLICO — solicitante tem direito de
     // acompanhar. Defesa em profundidade — frontend já oculta a opção,
     // backend valida pra defender contra request manipulado.
-    const ROLES_PODE_PRIVADO = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
+    const ROLES_PODE_PRIVADO = ['ADMIN', 'GESTOR', 'SUPORTE'];
     const visibilidade = dto.visibilidade ?? 'PUBLICO';
 
     if (visibilidade === 'PRIVADO' && !ROLES_PODE_PRIVADO.includes(role)) {
@@ -1379,7 +1379,7 @@ export class ChamadoCoreService {
   }
 
   async excluir(id: string, user: JwtPayload, role: string) {
-    const rolesPermitidas = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
+    const rolesPermitidas = ['ADMIN', 'GESTOR', 'SUPORTE'];
     if (!rolesPermitidas.includes(role)) {
       throw new ForbiddenException('Sem permissao para excluir chamados');
     }

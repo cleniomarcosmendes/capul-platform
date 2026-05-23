@@ -46,25 +46,25 @@ export class SoftwareController {
   }
 
   @Post()
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   create(@Body() dto: CreateSoftwareDto, @CurrentUser() user: JwtPayload) {
     return this.service.create(dto, user);
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   update(@Param('id') id: string, @Body() dto: UpdateSoftwareDto) {
     return this.service.update(id, dto);
   }
 
   @Patch(':id/status')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusSoftwareDto) {
     return this.service.updateStatus(id, dto.status);
   }
 
   @Delete(':id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   remove(@Param('id') id: string) {
     return this.service.remove(id);
   }
@@ -72,13 +72,13 @@ export class SoftwareController {
   // ─── Software ↔ Filial ────────────────────────────────────
 
   @Post(':id/filiais')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   addFilial(@Param('id') id: string, @Body('filialId') filialId: string) {
     return this.service.addFilial(id, filialId);
   }
 
   @Delete(':id/filiais/:filialId')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   removeFilial(@Param('id') id: string, @Param('filialId') filialId: string) {
     return this.service.removeFilial(id, filialId);
   }
@@ -91,13 +91,13 @@ export class SoftwareController {
   }
 
   @Post(':id/modulos')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   createModulo(@Param('id') id: string, @Body() dto: CreateModuloDto) {
     return this.service.createModulo(id, dto);
   }
 
   @Patch(':id/modulos/:moduloId')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   updateModulo(
     @Param('id') id: string,
     @Param('moduloId') moduloId: string,
@@ -107,7 +107,7 @@ export class SoftwareController {
   }
 
   @Patch(':id/modulos/:moduloId/status')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   updateModuloStatus(
     @Param('id') id: string,
     @Param('moduloId') moduloId: string,
@@ -119,7 +119,7 @@ export class SoftwareController {
   // ─── Módulo ↔ Filial ─────────────────────────────────────
 
   @Post(':id/modulos/:moduloId/filiais')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   addModuloFilial(
     @Param('id') id: string,
     @Param('moduloId') moduloId: string,
@@ -129,7 +129,7 @@ export class SoftwareController {
   }
 
   @Delete(':id/modulos/:moduloId/filiais/:filialId')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   removeModuloFilial(
     @Param('id') id: string,
     @Param('moduloId') moduloId: string,

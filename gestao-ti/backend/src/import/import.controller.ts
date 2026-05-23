@@ -15,7 +15,7 @@ export class ImportController {
   constructor(private readonly service: ImportService) {}
 
   @Post('preview')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   @UseInterceptors(FileInterceptor('file', {
     limits: { fileSize: 5 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
@@ -34,7 +34,7 @@ export class ImportController {
   }
 
   @Post('executar')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   async executar(@Body() dto: ExecutarImportDto) {
     return this.service.executar(dto.entidade, dto.dados);
   }

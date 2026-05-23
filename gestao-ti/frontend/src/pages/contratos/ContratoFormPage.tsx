@@ -16,7 +16,7 @@ export function ContratoFormPage() {
   const navigate = useNavigate();
   const { gestaoTiRole, usuario } = useAuth();
 
-  const isManager = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const isManager = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
 
   const [softwares, setSoftwares] = useState<Software[]>([]);
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);

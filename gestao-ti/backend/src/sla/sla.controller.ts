@@ -24,25 +24,25 @@ export class SlaController {
   }
 
   @Post()
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   create(@Body() dto: CreateSlaDto) {
     return this.service.create(dto);
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   update(@Param('id') id: string, @Body() dto: UpdateSlaDto) {
     return this.service.update(id, dto);
   }
 
   @Patch(':id/status')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto) {
     return this.service.updateStatus(id, dto.status);
   }
 
   @Delete(':id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   remove(@Param('id') id: string) {
     return this.service.remove(id);
   }

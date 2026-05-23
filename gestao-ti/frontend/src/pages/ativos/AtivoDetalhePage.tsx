@@ -30,7 +30,7 @@ export function AtivoDetalhePage() {
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
   const { confirm } = useToast();
-  const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
 
   const [ativo, setAtivo] = useState<Ativo | null>(null);
   const [loading, setLoading] = useState(true);

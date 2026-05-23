@@ -40,7 +40,7 @@ export class EquipeController {
    * Outros: apenas equipes onde o usuario pode gerir contratos.
    */
   @Get('para-contratos')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   findEquipesParaContratos(
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
@@ -54,19 +54,19 @@ export class EquipeController {
   }
 
   @Post()
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   create(@Body() dto: CreateEquipeDto, @CurrentUser() user: JwtPayload) {
     return this.equipeService.create(dto, user);
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   update(@Param('id') id: string, @Body() dto: UpdateEquipeDto) {
     return this.equipeService.update(id, dto);
   }
 
   @Patch(':id/status')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto) {
     return this.equipeService.updateStatus(id, dto.status);
   }
@@ -74,13 +74,13 @@ export class EquipeController {
   // ---- Membros ----
 
   @Post(':id/membros')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   addMembro(@Param('id') id: string, @Body() dto: AddMembroDto) {
     return this.equipeService.addMembro(id, dto);
   }
 
   @Patch(':id/membros/:membroId')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   updateMembro(
     @Param('id') id: string,
     @Param('membroId') membroId: string,
@@ -90,13 +90,13 @@ export class EquipeController {
   }
 
   @Delete(':id')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   remove(@Param('id') id: string) {
     return this.equipeService.remove(id);
   }
 
   @Delete(':id/membros/:membroId')
-  @Roles('ADMIN', 'GESTOR_TI')
+  @Roles('ADMIN', 'GESTOR')
   removeMembro(
     @Param('id') id: string,
     @Param('membroId') membroId: string,

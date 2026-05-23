@@ -55,19 +55,19 @@ export class ParadaController {
   }
 
   @Post('motivos')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   createMotivo(@Body() dto: CreateMotivoParadaDto, @CurrentUser() user: JwtPayload) {
     return this.service.createMotivo(dto, user);
   }
 
   @Patch('motivos/:motivoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   updateMotivo(@Param('motivoId') id: string, @Body() dto: UpdateMotivoParadaDto) {
     return this.service.updateMotivo(id, dto);
   }
 
   @Delete('motivos/:motivoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   removeMotivo(@Param('motivoId') id: string) {
     return this.service.removeMotivo(id);
   }
@@ -109,19 +109,19 @@ export class ParadaController {
   }
 
   @Post()
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   create(@Body() dto: CreateParadaDto, @CurrentUser() user: JwtPayload) {
     return this.service.create(dto, user.sub, user);
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   update(@Param('id') id: string, @Body() dto: UpdateParadaDto, @CurrentUser() user: JwtPayload) {
     return this.service.update(id, dto, user.sub);
   }
 
   @Post(':id/finalizar')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   finalizar(
     @Param('id') id: string,
     @Body() dto: FinalizarParadaDto,
@@ -131,7 +131,7 @@ export class ParadaController {
   }
 
   @Post(':id/cancelar')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   cancelar(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.service.cancelar(id, user.sub);
   }
@@ -142,13 +142,13 @@ export class ParadaController {
    * colaborador após finalização. CANCELADA não reabre (terminal).
    */
   @Post(':id/reabrir')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   reabrir(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.service.reabrir(id, user.sub);
   }
 
   @Post(':id/chamados')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   vincularChamado(
     @Param('id') id: string,
     @Body() body: { chamadoId: string },
@@ -157,7 +157,7 @@ export class ParadaController {
   }
 
   @Delete(':id/chamados/:chamadoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   desvincularChamado(
     @Param('id') id: string,
     @Param('chamadoId') chamadoId: string,
@@ -171,7 +171,7 @@ export class ParadaController {
   }
 
   @Post(':id/colaboradores')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   adicionarColaborador(
     @Param('id') id: string,
     @Body('usuarioId') usuarioId: string,
@@ -180,7 +180,7 @@ export class ParadaController {
   }
 
   @Delete(':id/colaboradores/:colaboradorId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   removerColaborador(
     @Param('id') id: string,
     @Param('colaboradorId') colaboradorId: string,
@@ -196,7 +196,7 @@ export class ParadaController {
   }
 
   @Post(':id/anexos')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   @UseFilters(UploadEaccesFilter)
   @UseInterceptors(
     FileInterceptor('file', {
@@ -244,7 +244,7 @@ export class ParadaController {
   }
 
   @Delete(':id/anexos/:anexoId')
-  @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   removeAnexo(
     @Param('id') id: string,
     @Param('anexoId') anexoId: string,

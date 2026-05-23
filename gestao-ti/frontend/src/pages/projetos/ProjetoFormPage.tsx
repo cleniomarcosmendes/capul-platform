@@ -61,7 +61,7 @@ export function ProjetoFormPage() {
     // Filtra apenas perfis aptos a serem Responsável de Projeto:
     // ADMIN, GESTOR_TI, SUPORTE_TI (staff TI) + USUARIO_CHAVE (negócio liderando projeto).
     coreService.listarUsuarios().then((users) => {
-      const rolesElegiveis = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE'];
+      const rolesElegiveis = ['ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE'];
       const elegiveis = users.filter((u: any) =>
         u.permissoes?.some((p: any) => p.modulo?.codigo === 'GESTAO_TI' && rolesElegiveis.includes(p.roleModulo?.codigo))
       );

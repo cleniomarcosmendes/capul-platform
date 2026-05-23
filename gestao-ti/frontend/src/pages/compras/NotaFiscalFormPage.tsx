@@ -92,7 +92,7 @@ export function NotaFiscalFormPage() {
   const [equipes, setEquipes] = useState<EquipeResumo[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
-  const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
 
   // Edição da chave fica BLOQUEADA quando NF já está CONFERIDA ou CANCELADA.
   // (Backend reforça — esta flag só esconde/desabilita no UI.)

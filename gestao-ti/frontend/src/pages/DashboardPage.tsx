@@ -69,8 +69,8 @@ const osStatusColor: Record<string, string> = {
 
 type TabKey = 'suporte' | 'portfolio' | 'contratos' | 'sustentacao' | 'projetos' | 'infraestrutura' | 'executivo' | 'csat' | 'metricas_os' | 'financeiro' | 'disponibilidade';
 
-const STAFF_ROLES = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
-const MANAGERS = ['ADMIN', 'GESTOR_TI'];
+const STAFF_ROLES = ['ADMIN', 'GESTOR', 'SUPORTE'];
+const MANAGERS = ['ADMIN', 'GESTOR'];
 const END_USER_ROLES = ['USUARIO_FINAL', 'USUARIO_CHAVE', 'TERCEIRIZADO'];
 
 const tabsDef: { key: TabKey; label: string; icon: LucideIcon; roles?: string[] }[] = [

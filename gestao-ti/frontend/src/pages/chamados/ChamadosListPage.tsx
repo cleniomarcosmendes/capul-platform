@@ -101,7 +101,7 @@ export function ChamadosListPage() {
   const [tecnicos, setTecnicos] = useState<UsuarioCore[]>([]);
   const [loading, setLoading] = useState(true);
   const [defaultsApplied, setDefaultsApplied] = useState(false);
-  const isStaffTI = gestaoTiRole && ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'TECNICO', 'DESENVOLVEDOR', 'INFRAESTRUTURA', 'MANUTENCAO'].includes(gestaoTiRole);
+  const isStaffTI = gestaoTiRole && ['ADMIN', 'GESTOR', 'SUPORTE', 'TECNICO', 'DESENVOLVEDOR', 'INFRAESTRUTURA', 'MANUTENCAO'].includes(gestaoTiRole);
 
   // Restaurar filtros de sessionStorage (persistem ao navegar entre paginas)
   const saved = sessionStorage.getItem('chamados_filtros');
@@ -151,7 +151,7 @@ export function ChamadosListPage() {
   useEffect(() => {
     equipeService.listar('ATIVO').then(setEquipes).catch(() => {});
     // Staff vê todas as filiais; demais usuários veem apenas suas filiais vinculadas
-    const isStaff = gestaoTiRole && ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole);
+    const isStaff = gestaoTiRole && ['ADMIN', 'GESTOR'].includes(gestaoTiRole);
     if (isStaff) {
       coreService.listarFiliais().then(setFiliais).catch(() => {});
     } else if (usuario?.filiais?.length) {
@@ -160,7 +160,7 @@ export function ChamadosListPage() {
     coreService.listarDepartamentos().then(setDepartamentos).catch(() => {});
     if (!isUsuarioFinal) {
       coreService.listarUsuarios().then((users: any[]) => {
-        const rolesStaff = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'];
+        const rolesStaff = ['ADMIN', 'GESTOR', 'SUPORTE'];
         const tecnicos = users.filter((u) =>
           u.permissoes?.some((p: any) => p.modulo?.codigo === 'GESTAO_TI' && rolesStaff.includes(p.roleModulo?.codigo))
         );

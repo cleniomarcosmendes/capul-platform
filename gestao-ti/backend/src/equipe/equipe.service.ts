@@ -213,7 +213,7 @@ export class EquipeService {
    * Para outros roles, retorna apenas equipes onde o usuario tem podeGerirContratos.
    */
   async findEquipesParaContratos(usuarioId: string, role: string) {
-    if (role === 'ADMIN' || role === 'GESTOR_TI') {
+    if (role === 'ADMIN' || role === 'GESTOR') {
       return this.prisma.equipeTI.findMany({
         where: { status: 'ATIVO' },
         orderBy: { ordem: 'asc' },

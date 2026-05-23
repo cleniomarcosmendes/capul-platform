@@ -47,7 +47,7 @@ const statusCores: Record<StatusAtivo, string> = {
 
 export function AtivosListPage() {
   const { gestaoTiRole } = useAuth();
-  const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
 
   const [ativos, setAtivos] = useState<Ativo[]>([]);
   // Paginação 23/04/2026

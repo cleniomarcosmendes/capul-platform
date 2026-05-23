@@ -15,7 +15,7 @@ import { coreService } from '../../services/core.service';
 import { ArrowLeft, FolderKanban, Paperclip, X, CheckCircle, Users2 } from 'lucide-react';
 import type { EquipeTI, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento, Ativo, UsuarioCore } from '../../types';
 
-const ROLES_TI_SET = new Set(['ADMIN', 'GESTOR_TI', 'SUPORTE_TI']);
+const ROLES_TI_SET = new Set(['ADMIN', 'GESTOR', 'SUPORTE']);
 function isUsuarioTI(u: UsuarioCore): boolean {
   return (u.permissoes ?? []).some((p) => p.modulo.codigo === 'GESTAO_TI' && ROLES_TI_SET.has(p.roleModulo.codigo));
 }
@@ -34,7 +34,7 @@ export function ChamadoCreatePage() {
   // Demais roles (USUARIO_FINAL, DESENVOLVEDOR, MANUTENCAO, INFRAESTRUTURA,
   // USUARIO_CHAVE, TERCEIRIZADO) sempre criam chamado PUBLICO — solicitante
   // tem direito de acompanhar resoluções.
-  const podeEscolherVisibilidade = ['ADMIN', 'GESTOR_TI', 'SUPORTE_TI'].includes(gestaoTiRole ?? '');
+  const podeEscolherVisibilidade = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole ?? '');
   const [projetoVinculado, setProjetoVinculado] = useState<Projeto | null>(null);
 
   const [equipes, setEquipes] = useState<EquipeTI[]>([]);
@@ -143,7 +143,7 @@ export function ChamadoCreatePage() {
     }
     // Carregar filiais e ativos para tecnicos
     if (!isUsuarioFinal) {
-      const isStaff = gestaoTiRole && ['ADMIN', 'GESTOR_TI'].includes(gestaoTiRole);
+      const isStaff = gestaoTiRole && ['ADMIN', 'GESTOR'].includes(gestaoTiRole);
       if (isStaff) {
         coreService.listarFiliais().then(setFiliais).catch(() => {});
       } else if (usuario?.filiais?.length) {

@@ -11,7 +11,7 @@ type SortDir = 'asc' | 'desc';
 
 export function TiposContratoPage() {
   const { gestaoTiRole } = useAuth();
-  const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR_TI';
+  const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
   const { toast, confirm } = useToast();
 
   const [tipos, setTipos] = useState<TipoContratoConfig[]>([]);
