@@ -14,10 +14,11 @@ import { ativoService } from '../../services/ativo.service';
 import { coreService } from '../../services/core.service';
 import { ArrowLeft, FolderKanban, Paperclip, X, CheckCircle, Users2 } from 'lucide-react';
 import type { EquipeTI, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento, Ativo, UsuarioCore } from '../../types';
+import { isWorkspaceModulo } from '../../lib/workspace-modulo';
 
 const ROLES_TI_SET = new Set(['ADMIN', 'GESTOR', 'SUPORTE']);
 function isUsuarioTI(u: UsuarioCore): boolean {
-  return (u.permissoes ?? []).some((p) => p.modulo.codigo === 'GESTAO_TI' && ROLES_TI_SET.has(p.roleModulo.codigo));
+  return (u.permissoes ?? []).some((p) => isWorkspaceModulo(p.modulo.codigo) && ROLES_TI_SET.has(p.roleModulo.codigo));
 }
 
 export function ChamadoCreatePage() {

@@ -14,6 +14,7 @@ import {
   Edit3, Check, Search,
 } from 'lucide-react';
 import type { OrdemServico, StatusOS, UsuarioCore, Chamado, StatusChamado, FilialResumo } from '../../types';
+import { isWorkspaceModulo } from '../../lib/workspace-modulo';
 
 const statusLabels: Record<StatusOS, string> = {
   ABERTA: 'Aberta', EM_EXECUCAO: 'Em Execucao', CONCLUIDA: 'Concluida', CANCELADA: 'Cancelada',
@@ -111,7 +112,7 @@ export function OrdensServicoPage() {
       coreService.listarUsuarios().then((users) => {
         const rolesStaff = ['ADMIN', 'GESTOR', 'SUPORTE'];
         const staff = users.filter((u: any) =>
-          u.permissoes?.some((p: any) => p.modulo?.codigo === 'GESTAO_TI' && rolesStaff.includes(p.roleModulo?.codigo))
+          u.permissoes?.some((p: any) => isWorkspaceModulo(p.modulo?.codigo) && rolesStaff.includes(p.roleModulo?.codigo))
         );
         setTecnicos(staff);
       }).catch(() => {});

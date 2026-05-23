@@ -60,6 +60,7 @@ import { NotaFiscalFormPage } from './pages/compras/NotaFiscalFormPage';
 import { NotaFiscalDetalhePage } from './pages/compras/NotaFiscalDetalhePage';
 import { ToastProvider } from './components/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { isWorkspaceModulo } from './lib/workspace-modulo';
 import type { ReactNode } from 'react';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -77,7 +78,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
-  const temAcesso = usuario.modulos.some((m) => m.codigo === 'GESTAO_TI');
+  const temAcesso = usuario.modulos.some((m) => isWorkspaceModulo(m.codigo));
   if (!temAcesso) {
     return (
       <div className="min-h-screen flex items-center justify-center">

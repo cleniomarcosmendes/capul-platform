@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { authApi, coreApi } from '../services/api';
+import { isWorkspaceModulo } from '../lib/workspace-modulo';
 import type { UsuarioLogado } from '../types';
 
 // Default 60min se o usuário não tiver preferência configurada (Configurador →
@@ -24,7 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [inactivityMs, setInactivityMs] = useState<number | null>(DEFAULT_INACTIVITY_MS);
   const inactivityTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const gestaoTiRole = usuario?.modulos.find((m) => m.codigo === 'GESTAO_TI')?.role ?? null;
+  const gestaoTiRole = usuario?.modulos.find((m) => isWorkspaceModulo(m.codigo))?.role ?? null;
 
   async function refreshUser() {
     try {

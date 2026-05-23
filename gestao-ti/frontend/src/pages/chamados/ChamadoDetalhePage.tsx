@@ -16,13 +16,14 @@ import type { Chamado, EquipeTI, AnexoChamado, StatusChamado, ChamadoColaborador
 
 const ROLES_TI_SET = new Set(['ADMIN', 'GESTOR', 'SUPORTE']);
 function isUsuarioTI(u: UsuarioCore): boolean {
-  return (u.permissoes ?? []).some((p) => p.modulo.codigo === 'GESTAO_TI' && ROLES_TI_SET.has(p.roleModulo.codigo));
+  return (u.permissoes ?? []).some((p) => isWorkspaceModulo(p.modulo.codigo) && ROLES_TI_SET.has(p.roleModulo.codigo));
 }
 import { MentionInput } from '../../components/MentionInput';
 import { ChatBubbleList, type ChatEvent } from '../../components/ChatBubbleList';
 import { ComentarioTexto } from '../../components/ComentarioTexto';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { abrirAnexoOuBaixar } from '../../utils/anexo';
+import { isWorkspaceModulo } from '../../lib/workspace-modulo';
 
 const statusLabels: Record<StatusChamado, string> = {
   ABERTO: 'Aberto', EM_ATENDIMENTO: 'Em Atendimento', PENDENTE: 'Pendente',
@@ -1072,7 +1073,7 @@ export function ChamadoDetalhePage() {
                         coreService.listarUsuarios().then((users) => {
                           const rolesStaff = ['ADMIN', 'GESTOR', 'SUPORTE'];
                           const staff = users.filter((u: any) =>
-                            u.permissoes?.some((p: any) => p.modulo?.codigo === 'GESTAO_TI' && rolesStaff.includes(p.roleModulo?.codigo))
+                            u.permissoes?.some((p: any) => isWorkspaceModulo(p.modulo?.codigo) && rolesStaff.includes(p.roleModulo?.codigo))
                           );
                           setUsuariosDisponiveis(staff);
                         }).catch(() => {});

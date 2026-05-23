@@ -9,6 +9,7 @@ import { Plus, Eye, Download, Star, Search, ArrowUp, ArrowDown, ArrowUpDown, Mes
 import { exportService } from '../../services/export.service';
 import { Paginator } from '../../components/Paginator';
 import type { Chamado, EquipeTI, Departamento, StatusChamado, Visibilidade, UsuarioCore } from '../../types';
+import { isWorkspaceModulo } from '../../lib/workspace-modulo';
 
 /** Destaca todas as ocorrências de `termo` (case-insensitive) dentro de
  *  `texto` envolvendo cada match num <mark> — usado no snippet da busca. */
@@ -162,7 +163,7 @@ export function ChamadosListPage() {
       coreService.listarUsuarios().then((users: any[]) => {
         const rolesStaff = ['ADMIN', 'GESTOR', 'SUPORTE'];
         const tecnicos = users.filter((u) =>
-          u.permissoes?.some((p: any) => p.modulo?.codigo === 'GESTAO_TI' && rolesStaff.includes(p.roleModulo?.codigo))
+          u.permissoes?.some((p: any) => isWorkspaceModulo(p.modulo?.codigo) && rolesStaff.includes(p.roleModulo?.codigo))
         );
         setTecnicos(tecnicos);
       }).catch(() => {});

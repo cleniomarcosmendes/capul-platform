@@ -11,6 +11,7 @@ import { compraService } from '../../services/compra.service';
 import { coreService } from '../../services/core.service';
 import { ArrowLeft } from 'lucide-react';
 import type { Software, Contrato, UsuarioCore, Projeto, TipoProjetoConfig } from '../../types';
+import { isWorkspaceModulo } from '../../lib/workspace-modulo';
 
 export function ProjetoFormPage() {
   const { id } = useParams();
@@ -63,7 +64,7 @@ export function ProjetoFormPage() {
     coreService.listarUsuarios().then((users) => {
       const rolesElegiveis = ['ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE'];
       const elegiveis = users.filter((u: any) =>
-        u.permissoes?.some((p: any) => p.modulo?.codigo === 'GESTAO_TI' && rolesElegiveis.includes(p.roleModulo?.codigo))
+        u.permissoes?.some((p: any) => isWorkspaceModulo(p.modulo?.codigo) && rolesElegiveis.includes(p.roleModulo?.codigo))
       );
       setUsuarios(elegiveis);
     }).catch(() => {});

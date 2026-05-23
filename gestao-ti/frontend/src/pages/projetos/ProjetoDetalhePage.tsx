@@ -59,6 +59,7 @@ import type {
   VisaoGeralAtividade,
   VisaoGeralPendencia,
 } from '../../types';
+import { isWorkspaceModulo } from '../../lib/workspace-modulo';
 
 const statusLabel: Record<string, string> = {
   PLANEJAMENTO: 'Planejamento',
@@ -859,7 +860,7 @@ function TabEquipe({ projetoId, canManage, onEditingChange }: { projetoId: strin
   const membrosIds = new Set(membros.map((m) => m.usuarioId));
   const availableUsers = usuarios
     .filter((u) => !membrosIds.has(u.id))
-    .filter((u) => u.permissoes?.some((p) => p.modulo.codigo === 'GESTAO_TI' && ROLES_TI_SET.has(p.roleModulo.codigo)))
+    .filter((u) => u.permissoes?.some((p) => isWorkspaceModulo(p.modulo.codigo) && ROLES_TI_SET.has(p.roleModulo.codigo)))
     .sort((a, b) => a.nome.localeCompare(b.nome));
 
   return (
@@ -2975,7 +2976,7 @@ function TabUsuariosChave({ projetoId, canManage, onEditingChange }: { projetoId
   const idsExistentes = new Set(itens.filter((i) => i.ativo).map((i) => i.usuarioId));
   const usuariosDisponiveis = usuarios
     .filter((u) => !idsExistentes.has(u.id))
-    .filter((u) => u.permissoes?.some((p) => p.modulo.codigo === 'GESTAO_TI' && ROLES_CHAVE_SET.has(p.roleModulo.codigo)))
+    .filter((u) => u.permissoes?.some((p) => isWorkspaceModulo(p.modulo.codigo) && ROLES_CHAVE_SET.has(p.roleModulo.codigo)))
     .sort((a, b) => a.nome.localeCompare(b.nome));
 
   return (
