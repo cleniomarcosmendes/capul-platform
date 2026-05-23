@@ -57,7 +57,7 @@ export class OrdemServicoService {
     const departamentoId = await resolveDepartamento(
       this.prisma,
       user,
-      'GESTAO_TI',
+      'WORKSPACE',
       dto.departamentoId,
     );
 

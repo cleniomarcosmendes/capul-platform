@@ -59,8 +59,8 @@ async function main() {
       ordem: 1,
     },
     {
-      codigo: 'GESTAO_TI',
-      nome: 'Gestao de T.I.',
+      codigo: 'WORKSPACE',
+      nome: 'Workspace',
       descricao: 'Sistema de gestao do departamento de TI',
       icone: 'monitor',
       cor: '#8B5CF6',
@@ -91,9 +91,9 @@ async function main() {
   }
   const modConfigurador = modulos['CONFIGURADOR'];
   const modInventario = modulos['INVENTARIO'];
-  const modGestaoTi = modulos['GESTAO_TI'];
+  const modGestaoTi = modulos['WORKSPACE'];
   const modFiscal = modulos['FISCAL'];
-  console.log('Modulos: CONFIGURADOR, INVENTARIO, GESTAO_TI, FISCAL');
+  console.log('Modulos: CONFIGURADOR, INVENTARIO, WORKSPACE, FISCAL');
 
   // 4. Roles (upsert por modulo_id + codigo)
   const rolesData = [
@@ -106,9 +106,9 @@ async function main() {
     { codigo: 'SUPERVISOR', nome: 'Supervisor', descricao: 'Criar e gerenciar inventarios da filial', moduloId: modInventario.id },
     { codigo: 'OPERATOR', nome: 'Operador', descricao: 'Contar itens do inventario', moduloId: modInventario.id },
     // Gestao TI
-    { codigo: 'ADMIN', nome: 'Administrador', descricao: 'Acesso total a gestao de TI', moduloId: modGestaoTi.id },
-    { codigo: 'GESTOR_TI', nome: 'Gestor de TI', descricao: 'Gestao completa do departamento', moduloId: modGestaoTi.id },
-    { codigo: 'SUPORTE_TI', nome: 'Suporte de TI', descricao: 'Equipe de TI: atender chamados, projetos, contratos, OS, paradas e base de conhecimento', moduloId: modGestaoTi.id },
+    { codigo: 'ADMIN', nome: 'Administrador', descricao: 'Acesso total ao Workspace', moduloId: modGestaoTi.id },
+    { codigo: 'GESTOR', nome: 'Gestor', descricao: 'Gestao completa do departamento (Workspace)', moduloId: modGestaoTi.id },
+    { codigo: 'SUPORTE', nome: 'Suporte', descricao: 'Equipe que atende chamados, projetos, contratos, OS, paradas e base de conhecimento (Workspace)', moduloId: modGestaoTi.id },
     { codigo: 'USUARIO_FINAL', nome: 'Usuario Final', descricao: 'Abrir chamados publicos e consultar status dos proprios chamados', moduloId: modGestaoTi.id },
     { codigo: 'USUARIO_CHAVE', nome: 'Usuario-Chave', descricao: 'Usuarios-chave de projetos (acesso limitado a pendencias)', moduloId: modGestaoTi.id },
     { codigo: 'TERCEIRIZADO', nome: 'Terceirizado', descricao: 'Analista externo com acesso restrito a projetos e pendencias vinculados', moduloId: modGestaoTi.id },

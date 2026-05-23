@@ -370,7 +370,7 @@ export class ProjetoCoreService {
       departamentoId = await resolveDepartamento(
         this.prisma,
         user ?? null,
-        'GESTAO_TI',
+        'WORKSPACE',
         dto.departamentoId,
       );
     }

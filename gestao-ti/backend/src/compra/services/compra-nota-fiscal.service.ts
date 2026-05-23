@@ -280,7 +280,7 @@ export class CompraNotaFiscalService {
     const departamentoId = await resolveDepartamento(
       this.prisma,
       user ?? null,
-      'GESTAO_TI',
+      'WORKSPACE',
       dto.departamentoId,
     );
 

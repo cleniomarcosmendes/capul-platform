@@ -12,7 +12,7 @@ export class GestaoTiGuard implements CanActivate {
     const user = request.user;
 
     const modulo = user.modulos?.find(
-      (m: { codigo: string }) => m.codigo === 'GESTAO_TI',
+      (m: { codigo: string }) => m.codigo === 'WORKSPACE',
     );
     if (!modulo) {
       throw new ForbiddenException('Sem acesso ao módulo Gestão de TI');

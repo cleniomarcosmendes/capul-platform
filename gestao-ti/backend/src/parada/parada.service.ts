@@ -125,7 +125,7 @@ export class ParadaService {
     const departamentoId = await resolveDepartamento(
       this.prisma,
       user ?? null,
-      'GESTAO_TI',
+      'WORKSPACE',
       dto.departamentoId,
     );
 
@@ -421,7 +421,7 @@ export class ParadaService {
     const departamentoId = await resolveDepartamento(
       this.prisma,
       user ?? null,
-      'GESTAO_TI',
+      'WORKSPACE',
       (dto as { departamentoId?: string }).departamentoId,
     );
     return this.prisma.motivoParada.create({ data: { ...dto, departamentoId } });

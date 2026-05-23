@@ -90,7 +90,7 @@ export class DashboardController {
   @Roles(...STAFF)
   getTecnicos(@CurrentUser() user: JwtPayload) {
     // SUPORTE_TI: retorna apenas tecnicos das equipes onde e lider
-    const role = user.modulos?.find((m: { codigo: string; role: string }) => m.codigo === 'GESTAO_TI')?.role;
+    const role = user.modulos?.find((m: { codigo: string; role: string }) => m.codigo === 'WORKSPACE')?.role;
     if (role === 'SUPORTE_TI') {
       return this.service.getTecnicosDaEquipe(user.sub);
     }
@@ -169,7 +169,7 @@ export class DashboardController {
     @CurrentUser() user: JwtPayload,
   ) {
     // Gestores e líderes de equipe (SUPORTE_TI) podem ver relatórios de outros técnicos
-    const role = user.modulos?.find((m: { codigo: string; role: string }) => m.codigo === 'GESTAO_TI')?.role;
+    const role = user.modulos?.find((m: { codigo: string; role: string }) => m.codigo === 'WORKSPACE')?.role;
     const isManager = MANAGERS.some((r) => r === role);
     const isSuporte = role === 'SUPORTE_TI';
 
