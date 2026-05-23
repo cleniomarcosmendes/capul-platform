@@ -11,15 +11,19 @@ import { AddMembroDto } from './dto/add-membro.dto.js';
 import { UpdateMembroDto } from './dto/update-membro.dto.js';
 import { StatusGeral } from '@prisma/client';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
+import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class EquipeService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(status?: StatusGeral) {
+  async findAll(status?: StatusGeral, user?: JwtPayload, role?: string) {
+    const baseWhere: Record<string, unknown> = status ? { status } : {};
+    // Workspace Onda 2 C2.4 — filtro departamental. ADMIN escapa (D36).
+    const where = applyDepartamentoFilter(baseWhere, user ?? null, role ?? null);
     return this.prisma.equipeTI.findMany({
-      where: status ? { status } : undefined,
+      where,
       include: {
         membros: {
           include: { usuario: true },

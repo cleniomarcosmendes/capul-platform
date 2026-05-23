@@ -129,6 +129,7 @@ export class CompraController {
       user?.filialId,
       user?.sub,
       role,
+      user,
     );
   }
 

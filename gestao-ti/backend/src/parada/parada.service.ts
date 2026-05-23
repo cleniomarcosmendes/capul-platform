@@ -12,6 +12,7 @@ import { CreateMotivoParadaDto } from './dto/create-motivo-parada.dto';
 import { UpdateMotivoParadaDto } from './dto/update-motivo-parada.dto';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
+import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 
 const paradaListInclude = {
@@ -59,7 +60,7 @@ export class ParadaService {
     dataFim?: string;
     page?: number;
     pageSize?: number;
-  }) {
+  }, user?: JwtPayload, role?: string) {
     const where: Record<string, unknown> = {};
 
     if (filters.softwareId) where.softwareId = filters.softwareId;
@@ -80,8 +81,11 @@ export class ParadaService {
       where.inicio = inicio;
     }
 
+    // Workspace Onda 2 C2.4 — filtro departamental. ADMIN escapa (D36).
+    const whereFiltrado = applyDepartamentoFilter(where, user ?? null, role ?? null);
+
     return paginate(this.prisma, this.prisma.registroParada, {
-      where,
+      where: whereFiltrado,
       include: paradaListInclude,
       orderBy: { inicio: 'desc' },
       page: filters.page,

@@ -8,6 +8,7 @@ import { AddAtivoSoftwareDto } from './dto/add-ativo-software.dto.js';
 import { StatusAtivo } from '@prisma/client';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
+import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 const ativoListInclude = {
@@ -46,7 +47,7 @@ export class AtivoService {
     search?: string;
     page?: number;
     pageSize?: number;
-  }) {
+  }, user?: JwtPayload, role?: string) {
     const where: Record<string, unknown> = {};
     if (filters.tipo) where.tipo = filters.tipo;
     if (filters.status) where.status = filters.status;
@@ -60,8 +61,11 @@ export class AtivoService {
       ];
     }
 
+    // Workspace Onda 2 C2.4 — filtro departamental. ADMIN escapa (D36).
+    const whereFiltrado = applyDepartamentoFilter(where, user ?? null, role ?? null);
+
     return paginate(this.prisma, this.prisma.ativo, {
-      where,
+      where: whereFiltrado,
       include: ativoListInclude,
       orderBy: { tag: 'asc' },
       page: filters.page,

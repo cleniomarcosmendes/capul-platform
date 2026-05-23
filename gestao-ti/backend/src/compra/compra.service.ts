@@ -59,8 +59,8 @@ export class CompraService {
     dataInicio?: string;
     dataFim?: string;
     equipeId?: string;
-  }, filialId?: string, usuarioId?: string, role?: string) {
-    return this.notaFiscalService.findAll(filters, filialId, usuarioId, role);
+  }, filialId?: string, usuarioId?: string, role?: string, user?: JwtPayload) {
+    return this.notaFiscalService.findAll(filters, filialId, usuarioId, role, user);
   }
 
   findOneNotaFiscal(id: string) {

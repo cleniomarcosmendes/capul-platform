@@ -29,6 +29,7 @@ import { GestaoTiGuard } from '../common/guards/gestao-ti.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 import { CreateParadaDto } from './dto/create-parada.dto';
 import { UpdateParadaDto } from './dto/update-parada.dto';
@@ -90,6 +91,8 @@ export class ParadaController {
     @Query('dataFim') dataFim?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
   ) {
     return this.service.findAll({
       softwareId,
@@ -103,7 +106,7 @@ export class ParadaController {
       dataFim,
       page: page ? parseInt(page, 10) : undefined,
       pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
-    });
+    }, user, role);
   }
 
   @Get(':id')

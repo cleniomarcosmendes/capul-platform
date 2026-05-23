@@ -14,6 +14,7 @@ import { isGestor, isTI } from '../../common/constants/roles.constant.js';
 import { ROLES_EXTERNOS } from '../../common/constants/roles.constant.js';
 import { paginate } from '../../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../../common/helpers/resolve-departamento.helper.js';
+import { applyDepartamentoFilter } from '../../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 import { Prisma } from '@prisma/client';
 
@@ -66,6 +67,7 @@ export class ProjetoCoreService {
     role?: string;
     page?: number;
     pageSize?: number;
+    user?: JwtPayload;
   }) {
     const where: Record<string, unknown> = {};
     // Termo de busca — no escopo do metodo: o filtro "Meus Projetos" e o
@@ -128,8 +130,12 @@ export class ProjetoCoreService {
       }
     }
 
+    // Workspace Onda 2 C2.4 — filtro departamental.
+    // ADMIN escapa (D36). Demais roles: somente projetos dos seus deptos.
+    const whereFiltrado = applyDepartamentoFilter(where, filters.user ?? null, filters.role ?? null);
+
     const resultado = await paginate(this.prisma, this.prisma.projeto, {
-      where,
+      where: whereFiltrado,
       include: projetoListInclude,
       orderBy: { numero: 'desc' },
       page: filters.page,

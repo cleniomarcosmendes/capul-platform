@@ -11,6 +11,7 @@ import { TransferirEquipeDto, TransferirTecnicoDto } from '../dto/transferir-cha
 import { ComentarioChamadoDto } from '../dto/comentario-chamado.dto.js';
 import { ResolverChamadoDto, ReabrirChamadoDto, CsatDto } from '../dto/resolver-chamado.dto.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
+import { applyDepartamentoFilter } from '../../common/helpers/departamento-filter.helper.js';
 import { NotificacaoService } from '../../notificacao/notificacao.service.js';
 import { ChamadoHelpersService } from './chamado-helpers.service.js';
 import { ChamadoAgrupamentoService } from './chamado-agrupamento.service.js';
@@ -302,10 +303,16 @@ export class ChamadoCoreService {
       ? SORT_MAP[filters.sortBy]
       : { updatedAt: 'desc' as const };
 
+    // Workspace Onda 2 C2.4 — filtro departamental por última camada.
+    // ADMIN escapa (D36). Demais roles: somente chamados dos seus deptos.
+    // Aplicado por último para sobrescrever filters.departamentoId que
+    // venha do UI (segurança > escolha de UI).
+    const whereFiltrado = applyDepartamentoFilter(where, user, role);
+
     const [total, items] = await this.prisma.$transaction([
-      this.prisma.chamado.count({ where }),
+      this.prisma.chamado.count({ where: whereFiltrado }),
       this.prisma.chamado.findMany({
-        where,
+        where: whereFiltrado,
         include: chamadoInclude,
         orderBy,
         skip: (page - 1) * pageSize,

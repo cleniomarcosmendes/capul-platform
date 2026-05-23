@@ -54,6 +54,7 @@ export class LicencaController {
   @Get()
   findAll(
     @GestaoTiRole() role: string,
+    @CurrentUser() user: JwtPayload,
     @Query('softwareId') softwareId?: string,
     @Query('status') status?: StatusLicenca,
     @Query('vencendoEm') vencendoEm?: string,
@@ -73,6 +74,7 @@ export class LicencaController {
         pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
       },
       role,
+      user,
     );
   }
 

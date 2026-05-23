@@ -7,6 +7,7 @@ import { StatusOS } from '@prisma/client';
 import { isGestor } from '../common/constants/roles.constant.js';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
+import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
 
 const osListInclude = {
   filial: { select: { id: true, codigo: true, nomeFantasia: true } },
@@ -30,12 +31,22 @@ const osListInclude = {
 export class OrdemServicoService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(status?: StatusOS, filialId?: string, page?: number, pageSize?: number) {
+  async findAll(
+    status?: StatusOS,
+    filialId?: string,
+    page?: number,
+    pageSize?: number,
+    user?: JwtPayload,
+    role?: string,
+  ) {
+    const where: Record<string, unknown> = {
+      ...(status ? { status } : {}),
+      ...(filialId ? { filialId } : {}),
+    };
+    // Workspace Onda 2 C2.4 — filtro departamental. ADMIN escapa (D36).
+    const whereFiltrado = applyDepartamentoFilter(where, user ?? null, role ?? null);
     return paginate(this.prisma, this.prisma.ordemServico, {
-      where: {
-        ...(status ? { status } : {}),
-        ...(filialId ? { filialId } : {}),
-      },
+      where: whereFiltrado,
       include: osListInclude,
       orderBy: { createdAt: 'desc' },
       page,

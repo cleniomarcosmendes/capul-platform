@@ -8,6 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { CreateNotaFiscalDto, UpdateNotaFiscalDto } from '../dto/create-nota-fiscal.dto.js';
 import { FiscalNfeClient, FiscalConsultaRetorno } from './fiscal-nfe.client.js';
 import { resolveDepartamento } from '../../common/helpers/resolve-departamento.helper.js';
+import { applyDepartamentoFilter } from '../../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -168,7 +169,7 @@ export class CompraNotaFiscalService {
     dataInicio?: string;
     dataFim?: string;
     equipeId?: string;
-  }, filialId?: string, usuarioId?: string, role?: string) {
+  }, filialId?: string, usuarioId?: string, role?: string, user?: JwtPayload) {
     const where: Record<string, unknown> = {};
     if (filialId) where.filialId = filialId;
     if (filters.fornecedorId) where.fornecedorId = filters.fornecedorId;
@@ -200,8 +201,11 @@ export class CompraNotaFiscalService {
       where.equipeId = { in: equipeIds };
     }
 
+    // Workspace Onda 2 C2.4 — filtro departamental. ADMIN escapa (D36).
+    const whereFiltrado = applyDepartamentoFilter(where, user ?? null, role ?? null);
+
     return this.prisma.notaFiscal.findMany({
-      where,
+      where: whereFiltrado,
       include: NF_INCLUDE,
       orderBy: { dataLancamento: 'desc' },
     });

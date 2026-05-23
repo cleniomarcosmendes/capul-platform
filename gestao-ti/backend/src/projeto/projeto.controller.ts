@@ -101,6 +101,7 @@ export class ProjetoController {
       role,
       page: page ? parseInt(page, 10) : undefined,
       pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+      user,
     });
   }
 

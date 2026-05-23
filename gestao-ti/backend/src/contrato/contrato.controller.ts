@@ -175,7 +175,7 @@ export class ContratoController {
       vencendoEm: vencendoEm ? parseInt(vencendoEm, 10) : undefined,
       page: page ? parseInt(page, 10) : undefined,
       pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
-    }, user?.sub, role);
+    }, user?.sub, role, user);
   }
 
   @Get(':id')

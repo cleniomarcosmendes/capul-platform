@@ -11,6 +11,7 @@ import { StatusLicenca, ModeloLicenca } from '@prisma/client';
 import { isGestor } from '../common/constants/roles.constant.js';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
+import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 const MODELOS_POR_USUARIO: ModeloLicenca[] = ['POR_USUARIO', 'SUBSCRICAO', 'SAAS'];
@@ -44,7 +45,7 @@ export class LicencaService {
     avulsas?: boolean;
     page?: number;
     pageSize?: number;
-  }, role: string) {
+  }, role: string, user?: JwtPayload) {
     const where: Record<string, unknown> = {};
 
     if (filters.softwareId) where.softwareId = filters.softwareId;
@@ -59,8 +60,11 @@ export class LicencaService {
       where.status = 'ATIVA';
     }
 
+    // Workspace Onda 2 C2.4 — filtro departamental. ADMIN escapa (D36).
+    const whereFiltrado = applyDepartamentoFilter(where, user ?? null, role);
+
     const resultado = await paginate(this.prisma, this.prisma.softwareLicenca, {
-      where,
+      where: whereFiltrado,
       include: {
         ...licencaInclude,
         _count: { select: { usuarios: true } },

@@ -25,12 +25,16 @@ export class OrdemServicoController {
     @Query('filialId') filialId?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
   ) {
     return this.service.findAll(
       status,
       filialId,
       page ? parseInt(page, 10) : undefined,
       pageSize ? parseInt(pageSize, 10) : undefined,
+      user,
+      role,
     );
   }
 

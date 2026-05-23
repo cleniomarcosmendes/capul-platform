@@ -8,6 +8,7 @@ import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CreateSoftwareDto } from './dto/create-software.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
 import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
@@ -32,6 +33,8 @@ export class SoftwareController {
     @Query('equipeId') equipeId?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
   ) {
     return this.service.findAll({
       tipo,
@@ -40,7 +43,7 @@ export class SoftwareController {
       equipeId,
       page: page ? parseInt(page, 10) : undefined,
       pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
-    });
+    }, user, role);
   }
 
   @Get(':id')

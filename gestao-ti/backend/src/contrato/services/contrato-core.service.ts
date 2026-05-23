@@ -12,6 +12,7 @@ import { RenovarContratoDto } from '../dto/renovar-contrato.dto.js';
 import { contratoListInclude, contratoDetailInclude, TRANSICOES_VALIDAS } from './contrato.constants.js';
 import { paginate } from '../../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../../common/helpers/resolve-departamento.helper.js';
+import { applyDepartamentoFilter } from '../../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
@@ -79,7 +80,7 @@ export class ContratoCoreService {
     vencendoEm?: number;
     page?: number;
     pageSize?: number;
-  }, usuarioId?: string, role?: string) {
+  }, usuarioId?: string, role?: string, user?: JwtPayload) {
     const where: Record<string, unknown> = {};
 
     if (filters.tipoContratoId) where.tipoContratoId = filters.tipoContratoId;
@@ -114,8 +115,12 @@ export class ContratoCoreService {
       where.equipeId = { in: equipeIds };
     }
 
+    // Workspace Onda 2 C2.4 — filtro departamental.
+    // ADMIN escapa (D36). Demais roles: somente contratos dos seus deptos.
+    const whereFiltrado = applyDepartamentoFilter(where, user ?? null, role ?? null);
+
     return paginate(this.prisma, this.prisma.contrato, {
-      where,
+      where: whereFiltrado,
       include: contratoListInclude,
       orderBy: { numero: 'desc' },
       page: filters.page,

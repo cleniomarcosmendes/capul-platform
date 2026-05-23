@@ -33,8 +33,12 @@ export class EquipeController {
   constructor(private readonly equipeService: EquipeService) {}
 
   @Get()
-  findAll(@Query('status') status?: StatusGeral) {
-    return this.equipeService.findAll(status);
+  findAll(
+    @Query('status') status?: StatusGeral,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
+  ) {
+    return this.equipeService.findAll(status, user, role);
   }
 
   /**

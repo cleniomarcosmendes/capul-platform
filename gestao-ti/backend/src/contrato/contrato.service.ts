@@ -5,6 +5,7 @@ import { ContratoParcelaService } from './services/contrato-parcela.service.js';
 import { ContratoRateioService } from './services/contrato-rateio.service.js';
 import { ContratoConfigService } from './services/contrato-config.service.js';
 import { ContratoAnexoService } from './services/contrato-anexo.service.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { CreateContratoDto } from './dto/create-contrato.dto';
 import { UpdateContratoDto } from './dto/update-contrato.dto';
 import { CreateParcelaDto } from './dto/create-parcela.dto';
@@ -41,8 +42,8 @@ export class ContratoService {
     vencendoEm?: number;
     page?: number;
     pageSize?: number;
-  }, usuarioId?: string, role?: string) {
-    return this.core.findAll(filters, usuarioId, role);
+  }, usuarioId?: string, role?: string, user?: JwtPayload) {
+    return this.core.findAll(filters, usuarioId, role, user);
   }
 
   async findOneWithPermission(id: string, usuarioId: string, role: string) {

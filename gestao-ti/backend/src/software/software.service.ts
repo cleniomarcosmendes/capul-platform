@@ -12,6 +12,7 @@ import { UpdateModuloDto } from './dto/update-modulo.dto.js';
 import { TipoSoftware, Criticidade, StatusSoftware, StatusModulo } from '@prisma/client';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
+import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 const softwareListInclude = {
@@ -50,15 +51,18 @@ export class SoftwareService {
     equipeId?: string;
     page?: number;
     pageSize?: number;
-  }) {
+  }, user?: JwtPayload, role?: string) {
     const where: Record<string, unknown> = {};
     if (filters.tipo) where.tipo = filters.tipo;
     if (filters.criticidade) where.criticidade = filters.criticidade;
     if (filters.status) where.status = filters.status;
     if (filters.equipeId) where.equipeResponsavelId = filters.equipeId;
 
+    // Workspace Onda 2 C2.4 — filtro departamental. ADMIN escapa (D36).
+    const whereFiltrado = applyDepartamentoFilter(where, user ?? null, role ?? null);
+
     return paginate(this.prisma, this.prisma.software, {
-      where,
+      where: whereFiltrado,
       include: softwareListInclude,
       orderBy: { nome: 'asc' },
       page: filters.page,
