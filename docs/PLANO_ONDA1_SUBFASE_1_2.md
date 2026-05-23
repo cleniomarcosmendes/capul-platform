@@ -3,7 +3,7 @@
 **Sub-fase:** 1.2 — Refactor `core.permissoes_modulo` (escopo departamental)
 **Branch:** `feat/workspace-foundation` (continuação)
 **Esforço estimado:** ~3-5h (escopo menor que 1.1 — 1 tabela, 2 call sites)
-**Status:** Plano fechado em 23/05/2026 manhã. P1-P8 todas decididas. Pronto pra execução.
+**Status:** ✅ **CONCLUÍDA em 23/05/2026** — ver §15 (Resultado) para detalhes.
 
 > Documento de referência: `Workspace_Multi_Departamento_Design.md` v1.2 §4.2.1 + §6.2 Etapa 3 + D36 (Q5 fechada).
 > Pré-requisito: Sub-fase 1.1 concluída (commit `50624df`).
@@ -255,3 +255,61 @@ git checkout HEAD~ auth-gateway/prisma/schema.prisma
 ---
 
 _Plano criado por Claude em 23/05/2026 manhã. Continuação da sub-fase 1.1 (commit `50624df`). Branch `feat/workspace-foundation`._
+
+---
+
+## 15. Resultado (execução em 23/05/2026)
+
+**Status:** ✅ **CONCLUÍDA**
+
+### 15.1 Commits aplicados
+
+| # | Hash | Conteúdo |
+|---|---|---|
+| 1 | `6058037` | Plano sub-fase 1.2 (este doc — versão inicial) |
+| 2 | **`169c999`** | **Schema auth-gateway** — PermissaoModulo + reversa em Departamento |
+| 3 | **`626c97f`** | **Migration + helper + 4 fixes** (3 em usuario.service.ts + 1 em seed.ts) |
+| 4 | (este commit) | **Fechamento** — plano atualizado com §15 |
+
+### 15.2 Smoke tests — todos passaram
+
+| # | Check | Resultado |
+|---|---|---|
+| 1 | `prisma migrate status` (auth-gateway) | ✅ aplicada |
+| 2 | `prisma validate` (auth-gateway) | ✅ OK |
+| 3 | `COUNT(*) WHERE departamento_id IS NULL` em permissoes_modulo | ✅ **0** (46 permissões backfilled) |
+| 4 | `COUNT(DISTINCT departamento_id)` | ✅ **1** (todas T.I.) |
+| 5 | Constraint UNIQUE antiga não existe mais | ✅ confirmado via `pg_indexes` |
+| 6 | UNIQUE nova existe | ✅ `permissoes_modulo_usuario_id_modulo_id_departamento_id_key` |
+| 7 | **🔴 CRÍTICO — `POST /auth/login`** | ✅ **HTTP 200 + JWT válido** com payload completo (sub, username, email, departamentoId, modulos[]) |
+| 8 | auth-gateway up & healthy | ✅ |
+| 9 | Gestão TI continua validando JWT do auth-gateway | ✅ (JWT_SECRET não mudou; payload retrocompatível) |
+
+### 15.3 Achados durante a execução (não previstos no plano)
+
+| # | Achado | Mitigação aplicada | Documentado em |
+|---|---|---|---|
+| 1 | UNIQUE em (usuario_id, modulo_id) era **UNIQUE INDEX**, não CONSTRAINT formal | Primeira execução falhou com P3018 ("constraint not found"). Corrigido pra `DROP INDEX` + `CREATE UNIQUE INDEX`. Migration marcada `rolled-back` + re-aplicada. | commit `626c97f` |
+| 2 | `revogarPermissao` em usuario.service.ts:295 usava o composite key antigo | Trocado `findUnique({ usuarioId_moduloId })` por `findFirst({ usuarioId, moduloId })`. TODO Sub-fase 1.6 registrado pra evoluir quando multi-perfil real chegar. | usuario.service.ts |
+| 3 | Adicional call site em `createUsuario` (linha 169) — criação inline de permissões | DTO da criação de usuário ganha `departamentoId` via helper (fallback dto.departamentoId do próprio user). | usuario.service.ts |
+| 4 | Endpoint de login espera `login` (não `username`) | Smoke test ajustado | sessão de execução |
+
+### 15.4 Esforço real vs estimado
+
+- **Estimado:** ~3-5h
+- **Real:** ~2h efetivas (incluindo investigação do DROP INDEX vs DROP CONSTRAINT)
+- **Diferença:** abaixo do estimado porque escopo era menor e o padrão da 1.1 acelerou a execução
+
+### 15.5 Pendências técnicas registradas
+
+- [ ] **Sub-fase 1.5/1.6** — trocar `getDefaultDepartamentoId` por `dto.departamentoId` (Configurador multi-perfil) ou `currentUser.departamentoId` (JWT contexto). Aplica-se aos 4 call sites + helper.
+- [ ] **Sub-fase 1.6** — `revogarPermissao` deve aceitar `departamentoId` como parâmetro pra revogar permissão específica em depto específico (multi-perfil real).
+- [ ] **Padrão pra sub-fases futuras** — todo DROP de UNIQUE Prisma-gerado precisa ser `DROP INDEX` (não `DROP CONSTRAINT`). Vide commit `626c97f` ou memória dedicada.
+
+### 15.6 Próximo passo — Sub-fase 1.3
+
+Criar `core.departamento_funcionalidades` + enum `FuncionalidadeWorkspace`:
+- Tabela nova no auth-gateway (12 valores no enum: CHAMADO, PROJETO, OS, EQUIPE, CONTRATO, NOTA_FISCAL, SOFTWARE, LICENCA, ATIVO, PARADA, INDICADOR_OPERACIONAL, INDICADOR_ESTRATEGICO)
+- Seed inicial: T.I. com todas as 12 ativas; Fiscal com CHAMADO + EQUIPE + INDICADOR_OPERACIONAL; Controladoria idem com PROJETO; demais sem nada
+- Esforço estimado: ~6h (doc-mestre §7.1 lote 1.3)
+- Pode ser executado imediatamente após esta sub-fase
