@@ -88,13 +88,18 @@ Nome: `20260523xxxxxx_add_departamento_id_workspace_entities` (P1 fechada)
 
 **Pré-flight check embutido no topo da migration** (P3 fechada — Opção C):
 
+> **Ajuste 23/05** após investigação (`INVESTIGACAO_DRIFT_DEV_23MAI.md`): em DEV
+> o `codigo` do depto T.I. está vazio. Sistema identifica deptos por `nome` ou
+> `id`. Pré-flight original (`WHERE codigo='TI'`) abortaria sempre. Ajuste:
+> usar `WHERE nome ILIKE 'Tecnologia%'`.
+
 ```sql
 -- Pré-flight: garantir que depto T.I. existe antes de qualquer ALTER.
 -- Se faltar, aborta com mensagem clara (não cria depto silenciosamente).
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM core.departamentos WHERE codigo = 'TI') THEN
-    RAISE EXCEPTION 'Migration abortada: depto codigo=TI nao encontrado em core.departamentos. Rodar seed do auth-gateway antes.';
+  IF NOT EXISTS (SELECT 1 FROM core.departamentos WHERE nome ILIKE 'Tecnologia%') THEN
+    RAISE EXCEPTION 'Migration abortada: depto Tecnologia da Informacao nao encontrado em core.departamentos. Rodar seed do auth-gateway antes.';
   END IF;
 END $$;
 ```
@@ -108,7 +113,7 @@ ALTER TABLE gestao_ti.<tabela>
 
 -- Passo B — Backfill com depto T.I.
 UPDATE gestao_ti.<tabela>
-   SET departamento_id = (SELECT id FROM core.departamentos WHERE codigo = 'TI');
+   SET departamento_id = (SELECT id FROM core.departamentos WHERE nome ILIKE 'Tecnologia%' LIMIT 1);
 
 -- Passo C — Tornar NOT NULL + FK + index
 ALTER TABLE gestao_ti.<tabela>
@@ -195,25 +200,30 @@ model Departamento {
 
 ### Em DEV (no `gestao-ti-backend` container)
 
+> **Ajuste 23/05** após investigação do drift (vide `INVESTIGACAO_DRIFT_DEV_23MAI.md`):
+> NÃO usar `prisma migrate dev --create-only` — `migrate dev` cria shadow DB
+> que falha (schema `core` ausente, pertence ao auth-gateway). Escrever
+> migration MANUAL + aplicar com `prisma migrate deploy`.
+
 1. Editar `gestao-ti/backend/prisma/schema.prisma` com as adições (§5).
    - Pré-flight é embutido na própria migration via bloco `DO $$` (P3 fechada),
      então não precisa de validação ad-hoc separada aqui.
-   - Commit 2: **schema.prisma atualizado** com 10 modelos + 10 reversas em Departamento.
+   - Commit 2: **schema.prisma atualizado** com 10 modelos + 10 reversas em Departamento. ✅ Feito (19d150b)
 2. **PAUSA DE REVISÃO #1 com Clenio (P5 — ritmo híbrido):** schema pronto;
    aguardar OK antes de gerar a migration. Clenio confere se relações estão
-   coerentes, nomes batem, nada quebrou no `prisma validate`.
-3. Gerar a migration:
+   coerentes, nomes batem, nada quebrou no `prisma validate`. ✅ Feito (Clenio aprovou).
+3. **Escrever migration.sql MANUALMENTE** (não usar `migrate dev --create-only`):
+   - Criar pasta `gestao-ti/backend/prisma/migrations/<timestamp>_add_departamento_id_workspace_entities/`
+   - Escrever `migration.sql` à mão com o conteúdo do §4 (pré-flight + 10 blocos A→B→C ordenados + caso especial Ativo)
+4. Aplicar via `prisma migrate deploy`:
    ```bash
-   docker compose exec gestao-ti-backend npx prisma migrate dev --create-only \
-     --name add_departamento_id_workspace_entities
+   docker compose exec gestao-ti-backend npx prisma migrate deploy
    ```
-4. **Editar manualmente o SQL gerado** para garantir 3 coisas:
-   - Adicionar o bloco `DO $$ ... RAISE EXCEPTION ... $$;` no topo (pré-flight P3).
-   - Garantir backfill (`UPDATE`) entre `ADD COLUMN` (nullable) e `ALTER NOT NULL`. Prisma `migrate dev` gera ALTERs mas pode esquecer o `UPDATE` no meio.
-   - Confirmar ordem A→B→C (§4) em cada uma das 10 tabelas.
-5. Aplicar:
+   - `migrate deploy` aplica somente migrations pendentes; não cria shadow DB.
+   - Mesmo comando que rodaria em HOM/PROD — comportamento consistente.
+5. Confirmar registro com:
    ```bash
-   docker compose exec gestao-ti-backend npx prisma migrate dev
+   docker compose exec gestao-ti-backend npx prisma migrate status
    ```
 6. Rodar smoke tests (§7) e capturar evidências (saída SQL + status dos endpoints).
 7. **PAUSA DE REVISÃO #2 com Clenio (P5):** migration aplicada em DEV, smoke
@@ -367,6 +377,7 @@ Ver §14 para o registro das decisões.
 | P3 | Pré-flight check do depto T.I. | **Embutido na migration SQL** via bloco `DO $$ ... RAISE EXCEPTION ... $$;` no topo (Opção C) | §4 (pré-flight block), §6 (passo 1 simplificado) |
 | P4 | Relações reversas em `Departamento` | **Adicionar todas as 10** (consistência, custo baixo) | §5 (lista completa) |
 | P5 | Ritmo de execução no sábado | **Híbrido**: 2 pausas de revisão (após schema; após smoke test) | §6 (passos 6 e 8), §10 (entre commits) |
+| P6 (novo 23/05) | Estratégia de migration após drift falso-positivo investigado | Escrever migration.sql **manualmente** + aplicar com `migrate deploy`. Pré-flight usa `nome ILIKE 'Tecnologia%'` (codigo vazio em DEV) | §4 (pré-flight + nota), §6 (passos 3-5), `INVESTIGACAO_DRIFT_DEV_23MAI.md` |
 
 **Princípio das 5 decisões:** consistência com convenções do projeto + robustez
 embutida no schema/migration (em vez de processo manual) + entrega completa de
