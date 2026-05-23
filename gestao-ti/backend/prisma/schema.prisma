@@ -125,8 +125,21 @@ model Departamento {
   tipoDepartamentoId String           @map("tipo_departamento_id")
   tipoDepartamento   TipoDepartamento @relation(fields: [tipoDepartamentoId], references: [id])
 
+  // Reversas pré-existentes
   ativos          Ativo[]
   chamados        Chamado[]
+
+  // Workspace Multi-Departamento (Onda 1 Sub-fase 1.1 — D31/D32)
+  // 9 reversas novas para as entidades operacionais multi-depto.
+  equipes          EquipeTI[]
+  projetos         Projeto[]
+  ordensServico    OrdemServico[]
+  contratos        Contrato[]
+  notasFiscais     NotaFiscal[]
+  softwares        Software[]
+  softwareLicencas SoftwareLicenca[]
+  registrosParada  RegistroParada[]
+  motivosParada    MotivoParada[]
 
   @@map("departamentos")
   @@schema("core")
@@ -157,6 +170,11 @@ model EquipeTI {
   createdAt            DateTime    @default(now()) @map("created_at")
   updatedAt            DateTime    @updatedAt @map("updated_at")
 
+  // Workspace Multi-Departamento (Onda 1 Sub-fase 1.1 — D31/D32)
+  // Equipe pertence a um departamento (depto dono). GESTOR só vê equipes do dele.
+  departamentoId String       @map("departamento_id")
+  departamento   Departamento @relation(fields: [departamentoId], references: [id])
+
   membros              MembroEquipe[]
   chamados             Chamado[]
   catalogoServicos     CatalogoServico[]
@@ -164,10 +182,12 @@ model EquipeTI {
   historicosOrigem     HistoricoChamado[] @relation("HistoricoEquipeOrigem")
   historicosDestino    HistoricoChamado[] @relation("HistoricoEquipeDestino")
   softwaresResponsavel Software[]
+  licencasResponsavel  SoftwareLicenca[] @relation("EquipeResponsavelLicenca")
   artigos              ArtigoConhecimento[]
   contratos            Contrato[]
   notasFiscais         NotaFiscal[]
 
+  @@index([departamentoId])
   @@map("equipes_ti")
   @@schema("gestao_ti")
 }
@@ -543,11 +563,16 @@ model OrdemServico {
   solicitanteId String  @map("solicitante_id")
   solicitante   Usuario @relation("OsSolicitante", fields: [solicitanteId], references: [id])
 
+  // Workspace Multi-Departamento (Onda 1 Sub-fase 1.1 — D31/D32)
+  departamentoId String       @map("departamento_id")
+  departamento   Departamento @relation(fields: [departamentoId], references: [id])
+
   chamados    OsChamado[]
   tecnicos    OsTecnico[]
   historicos  HistoricoOrdemServico[]
 
   @@index([status])
+  @@index([departamentoId])
   @@map("ordens_servico")
   @@schema("gestao_ti")
 }
@@ -1077,6 +1102,11 @@ model Software {
   equipeResponsavelId String?  @map("equipe_responsavel_id")
   equipeResponsavel   EquipeTI? @relation(fields: [equipeResponsavelId], references: [id])
 
+  // Workspace Multi-Departamento (Onda 1 Sub-fase 1.1 — D31/D32)
+  // D31 (v1.1, 20/05): software vira multi-depto NOT NULL (era nullable no v1.0).
+  departamentoId String       @map("departamento_id")
+  departamento   Departamento @relation(fields: [departamentoId], references: [id])
+
   modulos          SoftwareModulo[]
   filiais          SoftwareFilial[]
   licencas         SoftwareLicenca[]
@@ -1088,6 +1118,7 @@ model Software {
   artigos          ArtigoConhecimento[]
   chamadosExternos ChamadoExternoMensal[]
 
+  @@index([departamentoId])
   @@map("softwares")
   @@schema("gestao_ti")
 }
@@ -1199,10 +1230,21 @@ model SoftwareLicenca {
   categoriaId   String?    @map("categoria_id")
   categoria     CategoriaLicenca? @relation(fields: [categoriaId], references: [id])
 
+  // Workspace Multi-Departamento (Onda 1 Sub-fase 1.1 — D8/D31/D32, P2 fechada 22/05)
+  // departamentoId = depto que USA a licença (NOT NULL).
+  // equipeResponsavelId = equipe T.I. responsável técnica (NULLABLE — preenchido por UX).
+  departamentoId      String       @map("departamento_id")
+  departamento        Departamento @relation(fields: [departamentoId], references: [id])
+
+  equipeResponsavelId String?      @map("equipe_responsavel_id")
+  equipeResponsavel   EquipeTI?    @relation("EquipeResponsavelLicenca", fields: [equipeResponsavelId], references: [id])
+
   usuarios LicencaUsuario[]
 
   @@index([dataVencimento])
   @@index([softwareId, status])
+  @@index([departamentoId])
+  @@index([equipeResponsavelId])
   @@map("software_licencas")
   @@schema("gestao_ti")
 }
@@ -1274,6 +1316,10 @@ model Contrato {
   contratoOriginal   Contrato? @relation("ContratoRenovacao", fields: [contratoOriginalId], references: [id])
   contratosRenovados Contrato[] @relation("ContratoRenovacao")
 
+  // Workspace Multi-Departamento (Onda 1 Sub-fase 1.1 — D31/D32)
+  departamentoId String       @map("departamento_id")
+  departamento   Departamento @relation(fields: [departamentoId], references: [id])
+
   parcelas                ParcelaContrato[]
   rateioTemplate          RateioTemplate?
   historicos              ContratoHistorico[]
@@ -1286,6 +1332,7 @@ model Contrato {
   @@index([status])
   @@index([dataFim])
   @@index([softwareId])
+  @@index([departamentoId])
   @@map("contratos")
   @@schema("gestao_ti")
 }
@@ -1453,8 +1500,13 @@ model MotivoParada {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  // Workspace Multi-Departamento (Onda 1 Sub-fase 1.1 — D31/D32)
+  departamentoId String       @map("departamento_id")
+  departamento   Departamento @relation(fields: [departamentoId], references: [id])
+
   paradas RegistroParada[]
 
+  @@index([departamentoId])
   @@map("motivos_parada")
   @@schema("gestao_ti")
 }
@@ -1496,6 +1548,10 @@ model RegistroParada {
   reabertaPorId   String?   @map("reaberta_por_id")
   reabertaPor     Usuario?  @relation("ParadaReabertaPor", fields: [reabertaPorId], references: [id])
 
+  // Workspace Multi-Departamento (Onda 1 Sub-fase 1.1 — D31/D32)
+  departamentoId String       @map("departamento_id")
+  departamento   Departamento @relation(fields: [departamentoId], references: [id])
+
   filiaisAfetadas ParadaFilialAfetada[]
   chamados        ParadaChamado[]
   colaboradores   ParadaColaborador[]
@@ -1505,6 +1561,7 @@ model RegistroParada {
   @@index([softwareId, status])
   @@index([status])
   @@index([inicio])
+  @@index([departamentoId])
   @@map("registros_parada")
   @@schema("gestao_ti")
 }
@@ -1611,6 +1668,11 @@ model Projeto {
   responsavelId String  @map("responsavel_id")
   responsavel   Usuario @relation("ProjetoResponsavel", fields: [responsavelId], references: [id])
 
+  // Workspace Multi-Departamento (Onda 1 Sub-fase 1.1 — D31/D32)
+  // Subprojetos herdam departamento do projeto-pai (D14, validado no service).
+  departamentoId String       @map("departamento_id")
+  departamento   Departamento @relation(fields: [departamentoId], references: [id])
+
   membros    MembroProjeto[]
   fases      FaseProjeto[]
   atividades AtividadeProjeto[]
@@ -1632,6 +1694,7 @@ model Projeto {
   @@index([status])
   @@index([projetoPaiId])
   @@index([softwareId])
+  @@index([departamentoId])
   @@map("projetos")
   @@schema("gestao_ti")
 }
@@ -1982,8 +2045,11 @@ model Ativo {
   responsavelId   String?       @map("responsavel_id")
   responsavel     Usuario?      @relation("AtivoResponsavel", fields: [responsavelId], references: [id])
 
-  departamentoId  String?       @map("departamento_id")
-  departamento    Departamento? @relation(fields: [departamentoId], references: [id])
+  // Workspace Multi-Departamento (Onda 1 Sub-fase 1.1 — D31/D32)
+  // D31 (20/05): Ativo era T.I.-only; vira multi-depto NOT NULL.
+  // Schema originalmente nullable — migration faz backfill T.I. + ALTER NOT NULL.
+  departamentoId  String        @map("departamento_id")
+  departamento    Departamento  @relation(fields: [departamentoId], references: [id])
 
   ativoPaiId      String?       @map("ativo_pai_id")
   ativoPai        Ativo?        @relation("AtivoHierarquia", fields: [ativoPaiId], references: [id])
@@ -1996,6 +2062,7 @@ model Ativo {
   @@index([status])
   @@index([filialId])
   @@index([ativoPaiId])
+  @@index([departamentoId])
   @@map("ativos")
   @@schema("gestao_ti")
 }
@@ -2282,6 +2349,12 @@ model NotaFiscal {
   equipeId String?   @map("equipe_id")
   equipe   EquipeTI? @relation(fields: [equipeId], references: [id])
 
+  // Workspace Multi-Departamento (Onda 1 Sub-fase 1.1 — D31/D32/D38)
+  // filialId continua NOT NULL (D38/Q2 — Workspace NÃO é escrituração fiscal;
+  // filial é vestigial mas DB preserva integridade). RBAC usa departamentoId.
+  departamentoId String       @map("departamento_id")
+  departamento   Departamento @relation(fields: [departamentoId], references: [id])
+
   itens          NotaFiscalItem[]
   anexos         AnexoNotaFiscal[]
   chaveHistorico NotaFiscalChaveHistorico[]
@@ -2291,6 +2364,7 @@ model NotaFiscal {
   @@index([filialId])
   @@index([equipeId])
   @@index([dataLancamento])
+  @@index([departamentoId])
   @@map("notas_fiscais")
   @@schema("gestao_ti")
 }
