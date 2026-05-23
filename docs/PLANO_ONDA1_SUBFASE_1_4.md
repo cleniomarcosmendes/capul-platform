@@ -3,7 +3,7 @@
 **Sub-fase:** 1.4 — JWT payload novo (caminho A — retrocompatível)
 **Branch:** `feat/workspace-foundation` (continuação)
 **Esforço estimado:** ~2-3h
-**Status:** Plano fechado em 23/05/2026. Pronto pra execução.
+**Status:** ✅ **CONCLUÍDA em 23/05/2026** — ver §15 (Resultado).
 
 > Documento de referência: `Workspace_Multi_Departamento_Design.md` v1.2 §7.1 lote 1.4 + D36/D41.
 > Pré-requisitos: Sub-fases 1.1 (`50624df`) + 1.2 (`dfb362b`) + 1.3 (`ede895a`) concluídas.
@@ -300,3 +300,60 @@ docker compose up -d --build auth-gateway
 ---
 
 _Plano criado por Claude em 23/05/2026 manhã. Continuação da sub-fase 1.3 (commit `ede895a`). Branch `feat/workspace-foundation`._
+
+---
+
+## 15. Resultado (execução em 23/05/2026)
+
+**Status:** ✅ **CONCLUÍDA**
+
+### 15.1 Commits aplicados
+
+| # | Hash | Conteúdo |
+|---|---|---|
+| 1 | `4ab7b77` | Plano sub-fase 1.4 |
+| 2 | **`c192f0f`** | **Helper + interface + 4 call sites** |
+| 3 | (este commit) | **Fechamento** — plano §15 |
+
+### 15.2 Smoke tests — todos passaram
+
+| # | Check | Resultado |
+|---|---|---|
+| 1 | Build TS (auth-gateway) | ✅ OK |
+| 2 | `POST /auth/login` | ✅ HTTP 200 + JWT |
+| 3 | JWT decodificado tem `modulos[X].departamentos[Y].funcionalidades[]` em todos os 4 módulos | ✅ |
+| 4 | `modulos[X].role` continua presente (retrocompat) | ✅ |
+| 5 | Gestão TI (GET /chamados com JWT) | ✅ HTTP 200 |
+| 6 | Fiscal (GET /health com JWT) | ✅ HTTP 200 |
+| 7 | Inventário Python (GET /health com JWT) | ✅ HTTP 200 |
+| 8 | 4 backends up & healthy | ✅ |
+| 9 | Auth-gateway healthy | ✅ |
+
+### 15.3 Sem achados surpresa
+
+Caminho A (retrocompat) provou seu valor:
+- 4 consumidores funcionaram sem nenhuma mudança
+- Migration zero (apenas código TS)
+- Build na primeira tentativa
+- Smoke verde em todos os módulos
+
+### 15.4 Esforço real vs estimado
+
+- **Estimado:** ~2-3h
+- **Real:** ~1h efetiva
+- **Diferença:** Caminho A pequeno + padrões já consolidados (helper, plano)
+
+### 15.5 Pendências técnicas registradas
+
+- [ ] **Sub-fase 1.5** — guards backend (gestao-ti.guard, fiscal.guard, dashboard.controller, inventário security.py) iteram `departamentos[]` + `funcionalidades[]` em vez de `role` denormalizada. Aí o `role` no nível do módulo pode ser removido.
+- [ ] **Sub-fase 1.6** — atualizar 3 responses HTTP do login (`auth.service.ts` linhas 130, 359, 427) que ainda usam `usuario.permissoes.map(...)` com extras (cor, ícone, url). UI Configurador vai precisar de `departamentos[]` também.
+- [ ] **Atualizar interfaces dos 4 consumidores** (gestao-ti, fiscal, inventario, configurador) na Sub-fase 1.5 — adicionar `departamentos?: ModuloDepartamentoPayload[]` no tipo `ModuloPayload`.
+
+### 15.6 Próximo passo — Sub-fase 1.5
+
+RBAC guards backend:
+- Refatorar `gestao-ti.guard.ts` pra aceitar parâmetro de funcionalidade (`@RequiresFuncionalidade('CHAMADO')`)
+- Filtros departamentais em controllers (chamados, projetos, etc.) — passar `departamentoId` do JWT
+- Substituir `getDefaultDepartamentoId` helper (16 call sites do Gestão TI + 4 do auth-gateway) por contexto do usuário
+- Esforço estimado: ~8h (doc-mestre §7.1 lote 1.5)
+- **Mais delicado da Onda 1** — toca em todos os controllers do Gestão TI
