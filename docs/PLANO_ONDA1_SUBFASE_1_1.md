@@ -198,19 +198,28 @@ model Departamento {
 1. Editar `gestao-ti/backend/prisma/schema.prisma` com as adições (§5).
    - Pré-flight é embutido na própria migration via bloco `DO $$` (P3 fechada),
      então não precisa de validação ad-hoc separada aqui.
-2. Gerar a migration:
+   - Commit 2: **schema.prisma atualizado** com 10 modelos + 10 reversas em Departamento.
+2. **PAUSA DE REVISÃO #1 com Clenio (P5 — ritmo híbrido):** schema pronto;
+   aguardar OK antes de gerar a migration. Clenio confere se relações estão
+   coerentes, nomes batem, nada quebrou no `prisma validate`.
+3. Gerar a migration:
    ```bash
    docker compose exec gestao-ti-backend npx prisma migrate dev --create-only \
      --name add_departamento_id_workspace_entities
    ```
-4. Revisar o SQL gerado (Prisma pode otimizar/diferir do nosso plano). Editar
-   manualmente se necessário para garantir backfill (Prisma `migrate dev` cria
-   ALTER mas pode esquecer o `UPDATE` no meio).
+4. **Editar manualmente o SQL gerado** para garantir 3 coisas:
+   - Adicionar o bloco `DO $$ ... RAISE EXCEPTION ... $$;` no topo (pré-flight P3).
+   - Garantir backfill (`UPDATE`) entre `ADD COLUMN` (nullable) e `ALTER NOT NULL`. Prisma `migrate dev` gera ALTERs mas pode esquecer o `UPDATE` no meio.
+   - Confirmar ordem A→B→C (§4) em cada uma das 10 tabelas.
 5. Aplicar:
    ```bash
    docker compose exec gestao-ti-backend npx prisma migrate dev
    ```
-6. Smoke tests (§7).
+6. Rodar smoke tests (§7) e capturar evidências (saída SQL + status dos endpoints).
+7. **PAUSA DE REVISÃO #2 com Clenio (P5):** migration aplicada em DEV, smoke
+   tests passados; aguardar OK antes do commit 4 (atualização do plano com
+   resultado e marcação como concluída).
+8. Atualizar §15 do plano com seção "Resultado" (commit 4).
 
 ### Em HOM/PROD
 
