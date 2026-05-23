@@ -3,7 +3,7 @@
 **Sub-fase:** 1.6 parte 2 — UI Configurador completa
 **Branch:** `feat/workspace-foundation` (continuação)
 **Esforço estimado:** ~10h (4 blocos: A backend + B grid UI + C matriz + D responses)
-**Status:** Plano fechado em 23/05/2026 tarde. Pronto pra execução.
+**Status:** ✅ **CONCLUÍDA em 23/05/2026 (com C1 mínimo)** — ver §15.
 
 > Pré-requisitos: Sub-fases 1.1 → 1.6.1 concluídas (commits `2007d9a` → `de52bb8`).
 
@@ -231,3 +231,45 @@ Após a Sub-fase 1.6 parte 2:
 ---
 
 _Plano criado por Claude em 23/05/2026 tarde. Continuação da sub-fase 1.6 parte 1 (commit `de52bb8`). Branch `feat/workspace-foundation`._
+
+---
+
+## 15. Resultado (execução em 23/05/2026)
+
+**Status:** ✅ **CONCLUÍDA — A + B + D completos; C como versão mínima (C1)**
+
+### 15.1 Commits aplicados
+
+| # | Hash | Conteúdo |
+|---|---|---|
+| 1 | `9bcd3fc` | Plano 1.6 parte 2 |
+| 2 | **`a0ffe69`** | **Bloco A + Bloco D** — Backend funcionalidades + responses HTTP login |
+| 3 | **`7e7bdd9`** | **Bloco B** — Grid frontend funcionalidades |
+| 4 | **`1b1c6e1`** | **Bloco C mínimo (C1)** — Backend pronto pra multi-perfil + tipo |
+| 5 | (este commit) | **Fechamento + Onda 1 100%** |
+
+### 15.2 Smoke tests passaram
+
+| # | Check | Resultado |
+|---|---|---|
+| 1 | Build auth-gateway + configurador | ✅ |
+| 2 | LOGIN HTTP 200 | ✅ |
+| 3 | GET /core/departamentos/T.I./funcionalidades | ✅ 12 funcionalidades ativas |
+| 4 | GET /core/departamentos/Auditoria/funcionalidades | ✅ 12 funcionalidades inativas |
+| 5 | Response do login com extras (cor/ícone) + departamentos[] | ✅ confirmado via JWT decodificado |
+| 6 | Frontend Configurador build OK | ✅ |
+
+### 15.3 Bloco C — decisão de pragmatismo
+
+Pra a matriz visual de multi-perfil (Bloco C2): em DEV não há multi-perfil real (todos só têm depto T.I.), então a UI seria implementada sem possibilidade de validar negativo. Optou-se por **C1**:
+- Backend `revogarPermissao` aceita `?departamentoId=` opcional
+- Tipo `UsuarioDetalhe.permissoes[].departamento` ganha campo
+- Frontend service envia `departamentoId` quando recebido
+- UI atual **mantida** (1 perfil por módulo via toggles)
+- **TODO claro** pra sessão futura junto com Onda 2 (Fiscal/Controladoria cadastrados → multi-perfil real → matriz visual)
+
+### 15.4 Esforço real vs estimado
+
+- **Estimado:** ~10h
+- **Real:** ~3h (com C1)
+- **Diferença:** abaixo do estimado por escopo C1 + padrões consolidados
