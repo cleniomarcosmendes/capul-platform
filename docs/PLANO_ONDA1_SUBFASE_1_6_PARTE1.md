@@ -3,7 +3,7 @@
 **Sub-fase:** 1.6 parte 1 — Substituir `getDefaultDepartamentoId` por contexto JWT
 **Branch:** `feat/workspace-foundation` (continuação)
 **Esforço estimado:** ~3h
-**Status:** Plano fechado em 23/05/2026. Pronto pra execução.
+**Status:** ✅ **CONCLUÍDA em 23/05/2026** — ver §15 (Resultado).
 
 > Documento de referência: `Workspace_Multi_Departamento_Design.md` v1.2.
 > Pré-requisitos: Sub-fases 1.1 → 1.5 concluídas (commits `2007d9a` → `08c71e4`).
@@ -210,3 +210,68 @@ Adicionar `departamentoId?: string` (com `@IsOptional() @IsString()`) em:
 ---
 
 _Plano criado por Claude em 23/05/2026. Continuação da sub-fase 1.5 (commit `08c71e4`). Branch `feat/workspace-foundation`._
+
+---
+
+## 15. Resultado (execução em 23/05/2026)
+
+**Status:** ✅ **CONCLUÍDA**
+
+### 15.1 Commits aplicados
+
+| # | Hash | Conteúdo |
+|---|---|---|
+| 1 | `f03c1bb` | Plano sub-fase 1.6 parte 1 |
+| 2 | **`aef98b1`** | **Helpers + 33 arquivos refatorados** (services + controllers + DTOs em Gestão TI e auth-gateway) |
+| 3 | (este commit) | **Fechamento** — plano §15 |
+
+### 15.2 Resumo numérico
+
+- **2 helpers** novos (gestao-ti + auth-gateway)
+- **10 services** refatorados no Gestão TI (assinatura ganha `user?: JwtPayload`)
+- **9 controllers** refatorados (passam `@CurrentUser()` ao service)
+- **3 services agregadores** (compra/contrato/projeto) propagam user
+- **2 call sites** refatorados no auth-gateway
+- **10 DTOs** com `departamentoId?` opcional
+- **33 arquivos** tocados (+274 / −72 linhas)
+
+### 15.3 Smoke tests — todos passaram
+
+| # | Check | Resultado |
+|---|---|---|
+| 1 | Build Gestão TI | ✅ OK |
+| 2 | Build auth-gateway | ✅ OK (após ajuste `import type` pra decoradores) |
+| 3 | LOGIN | ✅ HTTP 200 + JWT |
+| 4 | `GET /chamados` com JWT | ✅ HTTP 200 |
+| 5 | `GET /projetos` com JWT | ✅ HTTP 200 |
+| 6 | 4 backends up & healthy | ✅ |
+
+### 15.4 Achados durante execução
+
+| # | Achado | Mitigação |
+|---|---|---|
+| 1 | Existem **services agregadores** (compra/contrato/projeto) que delegam a sub-services. Precisei refatorar AMBOS pra propagar `user`. | Atualizei agregadores + sub-services consistentemente |
+| 2 | TS `isolatedModules` + `emitDecoratorMetadata` exige `import type` pra tipos usados em decoradores (`@CurrentUser() user: JwtPayload`) | Trocado pra `import type { JwtPayload }` no auth-gateway controller |
+| 3 | Copy/renew/duplicar já tinham `... ?? helper` redundante — simplificado pra usar só herança | Removi fallback nesses casos |
+
+### 15.5 Esforço real vs estimado
+
+- **Estimado:** ~3h
+- **Real:** ~1.5h efetiva (incluindo correção dos 2 erros de build)
+- **Diferença:** padrão repetitivo + helpers consistentes aceleraram
+
+### 15.6 Pendências técnicas registradas
+
+- [ ] **Sub-fase 1.6 parte 2 (UI Configurador):**
+  - Matriz user × depto × role
+  - Grid depto × funcionalidade
+  - 3 responses HTTP do login com extras (cor/ícone/url) — `auth.service.ts:130/359/427` ainda usam `usuario.permissoes.map(...)`
+  - (Opcional) Aplicar `@RequiresFuncionalidade` em massa OU Onda 2
+- [ ] **Remover `role` denormalizada do JWT** — após consumidores migrarem (não previsto agora)
+- [ ] **Inventário Python** — atualizar tipagem `modulos[X].departamentos[]` quando começar a usar
+
+### 15.7 Próximo passo
+
+Sub-fase 1.6 parte 2 (UI Configurador) é a maior peça restante. Esforço estimado: ~9h. **Frontend novo** — perfil diferente das anteriores. Pode rodar em outra sessão dedicada.
+
+Backend da Onda 1 está praticamente completo após esta sub-fase.
