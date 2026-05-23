@@ -15,6 +15,7 @@ import { AuditLogService } from '../audit-log/audit-log.service';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
+import { buildModulosPayload } from './helpers/build-modulos-payload';
 
 @Injectable()
 export class AuthService {
@@ -80,10 +81,8 @@ export class AuthService {
       filialCodigo: filialFallback?.codigo || null,
       departamentoId: usuario.departamentoId,
       departamentoNome: usuario.departamento.nome,
-      modulos: usuario.permissoes.map((p) => ({
-        codigo: p.modulo.codigo,
-        role: p.roleModulo.codigo,
-      })),
+      // Onda 1 Sub-fase 1.4 — payload agora inclui departamentos[] + funcionalidades[].
+      modulos: await buildModulosPayload(this.prisma, usuario.id),
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -187,10 +186,8 @@ export class AuthService {
       filialCodigo: filialAtiva?.filial?.codigo || null,
       departamentoId: usuario.departamentoId,
       departamentoNome: usuario.departamento.nome,
-      modulos: usuario.permissoes.map((p) => ({
-        codigo: p.modulo.codigo,
-        role: p.roleModulo.codigo,
-      })),
+      // Onda 1 Sub-fase 1.4 — payload agora inclui departamentos[] + funcionalidades[].
+      modulos: await buildModulosPayload(this.prisma, usuario.id),
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -334,7 +331,8 @@ export class AuthService {
       filialCodigo: filialFallback?.codigo,
       departamentoId: usuario.departamento?.id,
       departamentoNome: usuario.departamento?.nome,
-      modulos: usuario.permissoes.map((p) => ({ codigo: p.modulo.codigo, role: p.roleModulo.codigo })),
+      // Onda 1 Sub-fase 1.4 — payload agora inclui departamentos[] + funcionalidades[].
+      modulos: await buildModulosPayload(this.prisma, usuario.id),
     };
 
     const accessToken = this.jwtService.sign(jwtPayload, {
@@ -492,10 +490,8 @@ export class AuthService {
       filialCodigo: usuarioFilial.filial.codigo,
       departamentoId: usuario.departamentoId,
       departamentoNome: usuario.departamento.nome,
-      modulos: usuario.permissoes.map((p) => ({
-        codigo: p.modulo.codigo,
-        role: p.roleModulo.codigo,
-      })),
+      // Onda 1 Sub-fase 1.4 — payload agora inclui departamentos[] + funcionalidades[].
+      modulos: await buildModulosPayload(this.prisma, usuario.id),
     };
 
     const accessToken = this.jwtService.sign(payload, {
