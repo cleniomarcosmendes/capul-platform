@@ -2,7 +2,7 @@
 
 **Branch:** `feat/workspace-foundation` (continuação)
 **Esforço estimado:** ~6h
-**Status:** Plano fechado em 23/05/2026 noite. Pronto pra execução.
+**Status:** ✅ **CONCLUÍDO 23/05/2026 noite** (5 sub-blocos; C1.2 adiado). Real: ~2h.
 
 > Pré-requisitos: Onda 1 100% concluída (commits `2007d9a` → `03de8a1`). Onda 1 validada em DEV via browser.
 > Insumo: `docs/WORKSPACE_AUDITORIA_LITERAIS.md` (517 literais mapeados em Pré-Onda 0).

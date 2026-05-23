@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { usuarioService } from '../../services/usuario.service';
 import { departamentoService } from '../../services/departamento.service';
-import { ArrowLeft, Save, Shield, KeyRound, Clock, AlertTriangle, Lock } from 'lucide-react';
+import { ArrowLeft, Save, Shield, KeyRound, Clock, AlertTriangle, Lock, Plus, Trash2 } from 'lucide-react';
 import type { UsuarioDetalhe, ModuloSistema, FilialOption, Departamento, UsuarioCapability } from '../../types';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useAuth } from '../../contexts/AuthContext';
@@ -12,10 +12,16 @@ import { useAuth } from '../../contexts/AuthContext';
 // docs/PLANO_FISCAL_CONSULTA_SOCIOS_LGPD_v1.md
 const CAP_SOCIO = 'FISCAL_CONSULTA_SOCIOS';
 
+/**
+ * Workspace Multi-Departamento (Onda 2 C2.2 — matriz multi-perfil).
+ * Cada linha = 1 perfil = (módulo, depto, role). User pode ter N linhas
+ * pro mesmo módulo se atuar em deptos diferentes.
+ */
 interface PermissaoForm {
+  id?: string;            // se já existe no DB
   moduloId: string;
+  departamentoId: string;
   roleModuloId: string;
-  habilitado: boolean;
 }
 
 // Roles do módulo Fiscal que recebem alertas por e-mail (digest de cruzamento,
@@ -57,7 +63,8 @@ export function UsuarioFormPage() {
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [modulos, setModulos] = useState<ModuloSistema[]>([]);
   const [permissoes, setPermissoes] = useState<PermissaoForm[]>([]);
-  const [permissoesOriginais, setPermissoesOriginais] = useState<{ moduloId: string; roleModuloId: string }[]>([]);
+  // Onda 2 C2.2 — chave composta (moduloId + departamentoId) pro diff de save
+  const [permissoesOriginais, setPermissoesOriginais] = useState<{ moduloId: string; departamentoId: string; roleModuloId: string }[]>([]);
   const [showResetSenha, setShowResetSenha] = useState(false);
   const [novaSenha, setNovaSenha] = useState('');
   const [resetMsg, setResetMsg] = useState('');
@@ -150,12 +157,6 @@ export function UsuarioFormPage() {
       setFiliais(filiaisData);
       setModulos(modulosData);
 
-      const permsVazias: PermissaoForm[] = modulosData.map((m) => ({
-        moduloId: m.id,
-        roleModuloId: m.rolesDisponiveis[0]?.id || '',
-        habilitado: false,
-      }));
-
       if (isEdicao) {
         const usuario: UsuarioDetalhe = await usuarioService.buscar(id!);
         setUsername(usuario.username);
@@ -168,16 +169,18 @@ export function UsuarioFormPage() {
         setDepartamentoId(usuario.departamento?.id || '');
         setFilialIds(usuario.filiais.map((f) => f.filial.id));
 
+        // Onda 2 C2.2 — multi-perfil: cada linha em usuario.permissoes vira 1 PermissaoForm
         const permsExistentes = usuario.permissoes
           .filter((p) => p.status === 'ATIVO')
-          .map((p) => ({ moduloId: p.modulo.id, roleModuloId: p.roleModulo.id }));
+          .map((p) => ({
+            id: p.id,
+            moduloId: p.modulo.id,
+            departamentoId: p.departamento?.id || '',
+            roleModuloId: p.roleModulo.id,
+          }))
+          .filter((p) => p.departamentoId); // exclui perms sem depto (legado)
         setPermissoesOriginais(permsExistentes);
-
-        const permsComDados = permsVazias.map((pv) => {
-          const existente = permsExistentes.find((pe) => pe.moduloId === pv.moduloId);
-          return existente ? { ...pv, roleModuloId: existente.roleModuloId, habilitado: true } : pv;
-        });
-        setPermissoes(permsComDados);
+        setPermissoes(permsExistentes);
 
         try {
           const prefs = await usuarioService.getPreferencias(id!);
@@ -192,7 +195,8 @@ export function UsuarioFormPage() {
           // fallback silencioso pro default
         }
       } else {
-        setPermissoes(permsVazias);
+        // Usuário novo: começa sem perfis (admin adiciona via "+ Adicionar perfil")
+        setPermissoes([]);
       }
     } catch {
       setErro('Erro ao carregar dados');
@@ -205,20 +209,41 @@ export function UsuarioFormPage() {
     setFilialIds((prev) => prev.includes(fId) ? prev.filter((f) => f !== fId) : [...prev, fId]);
   }
 
-  function togglePermissao(moduloId: string) {
-    setPermissoes((prev) => prev.map((p) => p.moduloId === moduloId ? { ...p, habilitado: !p.habilitado } : p));
+  // Onda 2 C2.2 — multi-perfil: tabela de linhas (modulo, depto, role)
+  function adicionarPerfil() {
+    setPermissoes((prev) => [
+      ...prev,
+      { moduloId: '', departamentoId: '', roleModuloId: '' },
+    ]);
   }
 
-  function setPermissaoRole(moduloId: string, roleModuloId: string) {
-    setPermissoes((prev) => prev.map((p) => p.moduloId === moduloId ? { ...p, roleModuloId } : p));
+  function removerPerfil(index: number) {
+    setPermissoes((prev) => prev.filter((_, i) => i !== index));
   }
+
+  function atualizarPerfil(index: number, campo: 'moduloId' | 'departamentoId' | 'roleModuloId', valor: string) {
+    setPermissoes((prev) =>
+      prev.map((p, i) => {
+        if (i !== index) return p;
+        const atualizada = { ...p, [campo]: valor };
+        // Se mudou módulo, reseta role pra primeira disponível
+        if (campo === 'moduloId') {
+          const mod = modulos.find((m) => m.id === valor);
+          atualizada.roleModuloId = mod?.rolesDisponiveis[0]?.id || '';
+        }
+        return atualizada;
+      }),
+    );
+  }
+
 
   // True quando a combinação atual de permissões inclui uma role fiscal que
   // recebe alertas — usado para forçar email e mostrar feedback visual.
   function exigeEmailFiscal(): { exige: boolean; roleNome: string | null } {
     const moduloFiscal = modulos.find((m) => m.codigo === MODULO_FISCAL_CODIGO);
     if (!moduloFiscal) return { exige: false, roleNome: null };
-    const perm = permissoes.find((p) => p.moduloId === moduloFiscal.id && p.habilitado);
+    // C2.2 — sem flag habilitado; presença na lista = ativo
+    const perm = permissoes.find((p) => p.moduloId === moduloFiscal.id && p.roleModuloId);
     if (!perm) return { exige: false, roleNome: null };
     const role = moduloFiscal.rolesDisponiveis.find((r) => r.id === perm.roleModuloId);
     if (!role || !ROLES_FISCAIS_COM_EMAIL.includes(role.codigo)) {
@@ -276,7 +301,7 @@ export function UsuarioFormPage() {
     setSaving(true);
 
     try {
-      const permsHabilitadas = permissoes.filter((p) => p.habilitado && p.roleModuloId);
+      const permsHabilitadas = permissoes.filter((p) => p.moduloId && p.departamentoId && p.roleModuloId);
 
       if (isEdicao) {
         await usuarioService.atualizar(id!, {
@@ -291,17 +316,29 @@ export function UsuarioFormPage() {
           filialIds,
         });
 
-        for (const perm of permsHabilitadas) {
-          const original = permissoesOriginais.find((po) => po.moduloId === perm.moduloId);
+        // Onda 2 C2.2 — diff por (moduloId, departamentoId)
+        const atuaisValidas = permissoes.filter((p) => p.moduloId && p.departamentoId && p.roleModuloId);
+
+        for (const perm of atuaisValidas) {
+          const original = permissoesOriginais.find(
+            (po) => po.moduloId === perm.moduloId && po.departamentoId === perm.departamentoId,
+          );
+          // Nova OU role mudou → atribuirPermissao (upsert no backend)
           if (!original || original.roleModuloId !== perm.roleModuloId) {
-            await usuarioService.atribuirPermissao(id!, { moduloId: perm.moduloId, roleModuloId: perm.roleModuloId });
+            await usuarioService.atribuirPermissao(id!, {
+              moduloId: perm.moduloId,
+              roleModuloId: perm.roleModuloId,
+              departamentoId: perm.departamentoId,
+            });
           }
         }
 
         for (const original of permissoesOriginais) {
-          const aindaHabilitada = permsHabilitadas.find((p) => p.moduloId === original.moduloId);
-          if (!aindaHabilitada) {
-            await usuarioService.revogarPermissao(id!, original.moduloId);
+          const aindaPresente = atuaisValidas.find(
+            (p) => p.moduloId === original.moduloId && p.departamentoId === original.departamentoId,
+          );
+          if (!aindaPresente) {
+            await usuarioService.revogarPermissao(id!, original.moduloId, original.departamentoId);
           }
         }
 
@@ -323,7 +360,8 @@ export function UsuarioFormPage() {
           filialPrincipalId: filialPrincipalId || undefined,
           departamentoId,
           filialIds: filialIds.length > 0 ? filialIds : undefined,
-          permissoes: permsHabilitadas.map((p) => ({ moduloId: p.moduloId, roleModuloId: p.roleModuloId })),
+          // C2.2 — permissões já vão com departamentoId no usuário novo
+          permissoes: permsHabilitadas.map((p) => ({ moduloId: p.moduloId, roleModuloId: p.roleModuloId, departamentoId: p.departamentoId })),
         });
         navigate('/configurador/usuarios');
       }
@@ -597,45 +635,100 @@ export function UsuarioFormPage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-slate-800 flex items-center gap-2">
                 <Shield className="w-5 h-5 text-emerald-600" />
-                Permissões de Módulos
+                Perfis (Módulo × Departamento × Role)
               </h2>
               <span className="text-xs text-slate-400">
-                {permissoes.filter((p) => p.habilitado).length} de {modulos.length} ativos
+                {permissoes.filter((p) => p.moduloId && p.departamentoId && p.roleModuloId).length} perfil(is)
               </span>
             </div>
-            <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-[28rem] overflow-y-auto">
-              {modulos.map((modulo) => {
-                const perm = permissoes.find((p) => p.moduloId === modulo.id);
-                if (!perm) return null;
-                const descricao = perm.habilitado
-                  ? modulo.rolesDisponiveis.find((r) => r.id === perm.roleModuloId)?.descricao || ''
-                  : '';
-                return (
-                  <div
-                    key={modulo.id}
-                    className={`px-3 py-2.5 transition-colors ${perm.habilitado ? 'bg-emerald-50/50' : 'hover:bg-slate-50'}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
-                        <input type="checkbox" checked={perm.habilitado} onChange={() => togglePermissao(modulo.id)} className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600 flex-shrink-0" />
-                        <span className="text-sm font-medium text-slate-800 truncate">{modulo.nome}</span>
-                        <span className="text-[11px] text-slate-400 flex-shrink-0">{modulo.codigo}</span>
-                      </label>
-                      {perm.habilitado && modulo.rolesDisponiveis.length > 0 && (
-                        <select value={perm.roleModuloId} onChange={(e) => setPermissaoRole(modulo.id, e.target.value)} className="px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent flex-shrink-0 max-w-[10rem]">
-                          {modulo.rolesDisponiveis.map((role) => (
-                            <option key={role.id} value={role.id}>{role.nome}</option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
-                    {descricao && (
-                      <p className="text-[11px] text-slate-400 mt-1 ml-6 leading-snug">{descricao}</p>
-                    )}
-                  </div>
-                );
-              })}
+            <p className="text-xs text-slate-500 mb-3">
+              Workspace Multi-Departamento (Onda 2): cada linha = 1 perfil. Mesmo usuário pode operar em deptos diferentes do mesmo módulo (ex: ADMIN em T.I. + GESTOR em Fiscal).
+            </p>
+            {/* Tabela de perfis */}
+            <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-xs text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium w-1/3">Módulo</th>
+                    <th className="px-3 py-2 text-left font-medium w-1/3">Departamento</th>
+                    <th className="px-3 py-2 text-left font-medium w-1/4">Role</th>
+                    <th className="px-3 py-2 text-center font-medium w-12">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {permissoes.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-6 text-center text-slate-400 text-xs">
+                        Nenhum perfil. Clique em "+ Adicionar perfil" abaixo.
+                      </td>
+                    </tr>
+                  )}
+                  {permissoes.map((perm, idx) => {
+                    const moduloAtual = modulos.find((m) => m.id === perm.moduloId);
+                    const rolesDisp = moduloAtual?.rolesDisponiveis || [];
+                    return (
+                      <tr key={idx} className="hover:bg-slate-50">
+                        <td className="px-3 py-2">
+                          <select
+                            value={perm.moduloId}
+                            onChange={(e) => atualizarPerfil(idx, 'moduloId', e.target.value)}
+                            className="w-full px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                          >
+                            <option value="">— escolher —</option>
+                            {modulos.map((m) => (
+                              <option key={m.id} value={m.id}>{m.nome}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-3 py-2">
+                          <select
+                            value={perm.departamentoId}
+                            onChange={(e) => atualizarPerfil(idx, 'departamentoId', e.target.value)}
+                            className="w-full px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                          >
+                            <option value="">— escolher —</option>
+                            {departamentos.map((d) => (
+                              <option key={d.id} value={d.id}>{d.nome}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-3 py-2">
+                          <select
+                            value={perm.roleModuloId}
+                            onChange={(e) => atualizarPerfil(idx, 'roleModuloId', e.target.value)}
+                            disabled={!perm.moduloId}
+                            className="w-full px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:bg-slate-50 disabled:text-slate-400"
+                          >
+                            <option value="">— escolher —</option>
+                            {rolesDisp.map((r) => (
+                              <option key={r.id} value={r.id}>{r.nome}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => removerPerfil(idx)}
+                            className="text-rose-600 hover:bg-rose-50 rounded p-1"
+                            title="Remover perfil"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
+            <button
+              type="button"
+              onClick={adicionarPerfil}
+              className="mt-3 inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Adicionar perfil
+            </button>
           </div>
 
           {/* Capability sensível (LGPD) — só ADMIN, em usuário existente.

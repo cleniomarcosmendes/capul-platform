@@ -189,7 +189,7 @@ export class UsuarioService {
       },
       include: {
         filiais: { include: { filial: true } },
-        permissoes: { include: { modulo: true, roleModulo: true } },
+        permissoes: { include: { modulo: true, roleModulo: true, departamento: true } },
       },
     });
     this.auditLog.log({ action: 'USER_CREATE', metadata: { targetUserId: novoUsuario.id, username: dto.username } });
@@ -240,7 +240,7 @@ export class UsuarioService {
         filialPrincipal: true,
         departamento: true,
         filiais: { include: { filial: true } },
-        permissoes: { include: { modulo: true, roleModulo: true } },
+        permissoes: { include: { modulo: true, roleModulo: true, departamento: true } },
       },
     });
   }
