@@ -152,7 +152,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps = {}) {
           <div className="flex items-center gap-2">
             <Monitor className="w-6 h-6 text-capul-400" />
             <div>
-              <h1 className="text-white font-bold text-sm">Gestao de T.I.</h1>
+              <h1 className="text-white font-bold text-sm">Workspace</h1>
               <p className="text-slate-400 text-xs">
                 {usuario?.filialAtual?.codigo} - {usuario?.filialAtual?.nome}
               </p>

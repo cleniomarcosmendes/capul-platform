@@ -83,7 +83,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-lg font-semibold text-slate-700 mb-2">Acesso Negado</p>
-          <p className="text-slate-500 mb-4">Voce nao tem permissao para acessar a Gestao de T.I.</p>
+          <p className="text-slate-500 mb-4">Voce nao tem permissao para acessar a Workspace</p>
           <a href="/" className="text-capul-600 hover:underline">Voltar ao Hub</a>
         </div>
       </div>

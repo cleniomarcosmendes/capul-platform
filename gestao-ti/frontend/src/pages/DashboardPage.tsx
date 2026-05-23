@@ -1365,7 +1365,7 @@ export function DashboardPage() {
             Bem-vindo, {usuario?.nome}!
           </h3>
           <p className="text-slate-500 text-sm mt-1">
-            Modulo Gestao de T.I. — Role: {gestaoTiRole}
+            Modulo Workspace — Role: {gestaoTiRole}
           </p>
         </div>
 

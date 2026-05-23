@@ -28,7 +28,7 @@ export function MainLayout() {
             <Menu className="w-5 h-5" />
           </button>
           <Monitor className="w-5 h-5 text-capul-600" />
-          <h1 className="font-semibold text-sm text-slate-800">Gestao de T.I.</h1>
+          <h1 className="font-semibold text-sm text-slate-800">Workspace</h1>
         </div>
         <AvisoPlataformaBanner aviso={aviso} />
         <Outlet />
