@@ -1,3 +1,11 @@
+export interface DepartamentoModulo {
+  id: string;
+  nome: string;
+  role: string;
+  roleNome: string;
+  funcionalidades: string[];
+}
+
 export interface ModuloUsuario {
   codigo: string;
   nome: string;
@@ -6,6 +14,8 @@ export interface ModuloUsuario {
   url: string;
   role: string;
   roleNome: string;
+  /** Workspace Multi-Departamento (Onda 1 Sub-fase 1.6.2). */
+  departamentos?: DepartamentoModulo[];
 }
 
 export interface FilialUsuario {

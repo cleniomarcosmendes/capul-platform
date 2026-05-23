@@ -39,7 +39,16 @@ import {
 
 type MenuItem =
   | { section: string; roles?: string[] }
-  | { label: string; icon: React.ComponentType<{ className?: string }>; path: string; roles?: string[] };
+  | {
+      label: string;
+      icon: React.ComponentType<{ className?: string }>;
+      path: string;
+      roles?: string[];
+      /** Workspace Onda 2 C2.5 — item visível só se a funcionalidade está
+       *  ativa em pelo menos um depto do user no módulo. ADMIN segue a
+       *  mesma regra (consistência com C2.3 guard que não escapa ADMIN). */
+      funcionalidade?: string;
+    };
 
 const STAFF = ['ADMIN', 'GESTOR', 'SUPORTE'];
 const MANAGERS = ['ADMIN', 'GESTOR'];
@@ -52,29 +61,29 @@ const menuItems: MenuItem[] = [
   { label: 'Monitor', icon: Gauge, path: '/gestao-ti/monitor', roles: STAFF },
   { label: 'Acompanhamento', icon: Timer, path: '/gestao-ti/acompanhamento', roles: STAFF },
   { label: 'Acomp. por Item', icon: Search, path: '/gestao-ti/acompanhamento-item', roles: STAFF },
-  { label: 'Relatorio de OS', icon: FileText, path: '/gestao-ti/relatorio-os', roles: STAFF },
+  { label: 'Relatorio de OS', icon: FileText, path: '/gestao-ti/relatorio-os', roles: STAFF, funcionalidade: 'OS' },
   { section: 'SUPORTE' },
-  { label: 'Chamados', icon: Ticket, path: '/gestao-ti/chamados' },
-  { label: 'Ordens de Servico', icon: ClipboardList, path: '/gestao-ti/ordens-servico', roles: STAFF },
-  { label: 'Base de Conhecimento', icon: BookMarked, path: '/gestao-ti/conhecimento' },
+  { label: 'Chamados', icon: Ticket, path: '/gestao-ti/chamados', funcionalidade: 'CHAMADO' },
+  { label: 'Ordens de Servico', icon: ClipboardList, path: '/gestao-ti/ordens-servico', roles: STAFF, funcionalidade: 'OS' },
+  { label: 'Base de Conhecimento', icon: BookMarked, path: '/gestao-ti/conhecimento', funcionalidade: 'CHAMADO' },
   { section: 'PORTFOLIO', roles: STAFF },
-  { label: 'Softwares', icon: AppWindow, path: '/gestao-ti/softwares', roles: STAFF },
-  { label: 'Licencas', icon: KeyRound, path: '/gestao-ti/licencas', roles: STAFF },
-  { label: 'Contratos', icon: FileText, path: '/gestao-ti/contratos', roles: CONTRATO_ROLES_STATIC },
-  { label: 'Notas Fiscais', icon: Receipt, path: '/gestao-ti/notas-fiscais', roles: STAFF },
+  { label: 'Softwares', icon: AppWindow, path: '/gestao-ti/softwares', roles: STAFF, funcionalidade: 'SOFTWARE' },
+  { label: 'Licencas', icon: KeyRound, path: '/gestao-ti/licencas', roles: STAFF, funcionalidade: 'LICENCA' },
+  { label: 'Contratos', icon: FileText, path: '/gestao-ti/contratos', roles: CONTRATO_ROLES_STATIC, funcionalidade: 'CONTRATO' },
+  { label: 'Notas Fiscais', icon: Receipt, path: '/gestao-ti/notas-fiscais', roles: STAFF, funcionalidade: 'NOTA_FISCAL' },
   { section: 'SUSTENTACAO', roles: STAFF },
-  { label: 'Paradas', icon: Activity, path: '/gestao-ti/paradas', roles: STAFF },
-  { label: 'Motivos de Parada', icon: AlertTriangle, path: '/gestao-ti/motivos-parada', roles: STAFF },
+  { label: 'Paradas', icon: Activity, path: '/gestao-ti/paradas', roles: STAFF, funcionalidade: 'PARADA' },
+  { label: 'Motivos de Parada', icon: AlertTriangle, path: '/gestao-ti/motivos-parada', roles: STAFF, funcionalidade: 'PARADA' },
   { section: 'PROJETOS', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'] },
-  { label: 'Projetos', icon: FolderKanban, path: '/gestao-ti/projetos', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'] },
-  { label: 'Minhas Pendencias', icon: ListChecks, path: '/gestao-ti/minhas-pendencias', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'] },
+  { label: 'Projetos', icon: FolderKanban, path: '/gestao-ti/projetos', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'], funcionalidade: 'PROJETO' },
+  { label: 'Minhas Pendencias', icon: ListChecks, path: '/gestao-ti/minhas-pendencias', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'], funcionalidade: 'PROJETO' },
   { section: 'INFRAESTRUTURA', roles: STAFF },
-  { label: 'Ativos', icon: Server, path: '/gestao-ti/ativos', roles: STAFF },
+  { label: 'Ativos', icon: Server, path: '/gestao-ti/ativos', roles: STAFF, funcionalidade: 'ATIVO' },
   { section: 'CONFIGURACOES', roles: MANAGERS },
-  { label: 'Equipes de T.I.', icon: Users, path: '/gestao-ti/equipes', roles: MANAGERS },
-  { label: 'Catalogo de Servicos', icon: BookOpen, path: '/gestao-ti/catalogo', roles: MANAGERS },
-  { label: 'SLA', icon: Clock, path: '/gestao-ti/sla', roles: MANAGERS },
-  { label: 'Horarios de Trabalho', icon: Timer, path: '/gestao-ti/horarios-trabalho', roles: MANAGERS },
+  { label: 'Equipes de T.I.', icon: Users, path: '/gestao-ti/equipes', roles: MANAGERS, funcionalidade: 'EQUIPE' },
+  { label: 'Catalogo de Servicos', icon: BookOpen, path: '/gestao-ti/catalogo', roles: MANAGERS, funcionalidade: 'CHAMADO' },
+  { label: 'SLA', icon: Clock, path: '/gestao-ti/sla', roles: MANAGERS, funcionalidade: 'CHAMADO' },
+  { label: 'Horarios de Trabalho', icon: Timer, path: '/gestao-ti/horarios-trabalho', roles: MANAGERS, funcionalidade: 'CHAMADO' },
   { label: 'Importar Dados', icon: Upload, path: '/gestao-ti/importar', roles: MANAGERS },
   { section: 'CADASTROS', roles: MANAGERS },
   { label: 'Departamentos', icon: Building2, path: '/gestao-ti/departamentos', roles: MANAGERS },
@@ -86,16 +95,31 @@ const menuItems: MenuItem[] = [
   { label: 'Tipos de Produto', icon: Tag, path: '/gestao-ti/tipos-produto', roles: MANAGERS },
   { label: 'Tipos de Projeto', icon: FolderKanban, path: '/gestao-ti/tipos-projeto', roles: MANAGERS },
   { label: 'Cat. Licencas', icon: Tag, path: '/gestao-ti/categorias-licenca', roles: MANAGERS },
-  { label: 'Chamados Externos', icon: Globe2, path: '/gestao-ti/chamados-externos', roles: MANAGERS },
+  { label: 'Chamados Externos', icon: Globe2, path: '/gestao-ti/chamados-externos', roles: MANAGERS, funcionalidade: 'INDICADOR_ESTRATEGICO' },
 ];
 
-function filterMenuByRole(items: MenuItem[], role: string | null): MenuItem[] {
+/**
+ * Workspace Onda 2 C2.5 — filtra menu por (1) role e (2) funcionalidade
+ * ativa em pelo menos um depto do user no módulo WORKSPACE/GESTAO_TI.
+ */
+function filterMenu(
+  items: MenuItem[],
+  role: string | null,
+  funcionalidadesAtivas: Set<string>,
+): MenuItem[] {
   const filtered = items.filter((item) => {
-    if (!item.roles) return true;
-    return role ? item.roles.includes(role) : false;
+    if ('section' in item) {
+      if (!item.roles) return true;
+      return role ? item.roles.includes(role) : false;
+    }
+    // Filtro de role (legado)
+    if (item.roles && (!role || !item.roles.includes(role))) return false;
+    // Filtro de funcionalidade (Workspace Onda 2)
+    if (item.funcionalidade && !funcionalidadesAtivas.has(item.funcionalidade)) return false;
+    return true;
   });
 
-  // Remove section headers that have no items after them
+  // Remove section headers órfãos (sem itens em seguida)
   return filtered.filter((item, idx) => {
     if ('section' in item) {
       const next = filtered[idx + 1];
@@ -129,7 +153,15 @@ export function Sidebar({ open = false, onClose }: SidebarProps = {}) {
     return item;
   });
 
-  const visibleItems = filterMenuByRole(effectiveItems, gestaoTiRole);
+  // Workspace Onda 2 C2.5 — funcionalidades ativas agregadas de todos os
+  // deptos do user no módulo (WORKSPACE ou GESTAO_TI legacy).
+  const funcionalidadesAtivas = new Set<string>();
+  const moduloWS = usuario?.modulos.find((m) => m.codigo === 'WORKSPACE' || m.codigo === 'GESTAO_TI');
+  for (const d of moduloWS?.departamentos ?? []) {
+    for (const f of d.funcionalidades ?? []) funcionalidadesAtivas.add(f);
+  }
+
+  const visibleItems = filterMenu(effectiveItems, gestaoTiRole, funcionalidadesAtivas);
 
   return (
     <>
