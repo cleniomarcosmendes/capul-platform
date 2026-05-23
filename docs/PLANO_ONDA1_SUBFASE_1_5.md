@@ -3,7 +3,7 @@
 **Sub-fase:** 1.5 — RBAC guards backend + decorator de funcionalidade
 **Branch:** `feat/workspace-foundation` (continuação)
 **Esforço estimado:** ~3-4h (escopo enxuto: infra + piloto)
-**Status:** Plano fechado em 23/05/2026. Pronto pra execução.
+**Status:** ✅ **CONCLUÍDA em 23/05/2026** — ver §15 (Resultado).
 
 > Documento de referência: `Workspace_Multi_Departamento_Design.md` v1.2 §7.1 lote 1.5 + D32/D36.
 > Pré-requisitos: Sub-fases 1.1 (`50624df`), 1.2 (`dfb362b`), 1.3 (`ede895a`), 1.4 (`5e5ba8d`) concluídas.
@@ -232,3 +232,58 @@ docker compose up -d gestao-ti-backend fiscal-backend
 ---
 
 _Plano criado por Claude em 23/05/2026. Continuação da sub-fase 1.4 (commit `5e5ba8d`). Branch `feat/workspace-foundation`._
+
+---
+
+## 15. Resultado (execução em 23/05/2026)
+
+**Status:** ✅ **CONCLUÍDA**
+
+### 15.1 Commits aplicados
+
+| # | Hash | Conteúdo |
+|---|---|---|
+| 1 | `c1eab5a` | Plano sub-fase 1.5 |
+| 2 | **`a601f38`** | **Interfaces + guards + decorator + 1 endpoint piloto** |
+| 3 | (este commit) | **Fechamento** — plano §15 |
+
+### 15.2 Smoke tests — todos passaram
+
+| # | Check | Resultado |
+|---|---|---|
+| 1 | Build Gestão TI | ✅ OK |
+| 2 | Build Fiscal | ✅ OK |
+| 3 | LOGIN | ✅ HTTP 200 + JWT com departamentos[] |
+| 4 | `GET /chamados` com `@RequiresFuncionalidade('CHAMADO')` (admin tem CHAMADO ativo) | ✅ HTTP 200 (guard novo aceita) |
+| 5 | `GET /projetos` sem decorator | ✅ HTTP 200 (FuncionalidadeGuard ignora endpoints sem decorator) |
+| 6 | `GET /api/v1/fiscal/health` | ✅ HTTP 200 (`fiscalDepartamentos` populado) |
+| 7 | 4 backends up & healthy | ✅ |
+
+### 15.3 Sem achados surpresa
+
+Sub-fase 1.5 saiu na primeira tentativa. Caminho A da Sub-fase 1.4 (retrocompat) já tinha preparado o terreno — guards leem `modulo.departamentos ?? []` com fallback vazio pra JWT antigo.
+
+### 15.4 Esforço real vs estimado
+
+- **Estimado:** ~3-4h
+- **Real:** ~1.5h efetivas
+- **Diferença:** abaixo do estimado por causa do escopo enxuto (1 piloto) e dos padrões consolidados das sub-fases anteriores
+
+### 15.5 Pendências técnicas registradas
+
+- [ ] **Sub-fase 1.6** — aplicar `@RequiresFuncionalidade` em massa nos ~55 endpoints (decisão tomada na 1.5: deixar pra Onda 2 quando outros deptos forem cadastrados, mas pode ser feito também na 1.6 se quiser). Aplicar filtros departamentais nos listings.
+- [ ] **Sub-fase 1.6** — UI Configurador (matriz user×depto×role + grid funcionalidades).
+- [ ] **Sub-fase 1.6** — Substituir `getDefaultDepartamentoId` em ~20 call sites por contexto JWT (`currentUser.departamentoId` ou `dto.departamentoId`).
+- [ ] **Sub-fase 1.6** — Remover role denormalizada do JWT após consumidores migrarem.
+- [ ] **Inventário Python** — atualizar tipagem/docstring quando ele consumir `departamentos[]` (Sub-fase 1.6 ou Onda 2).
+- [ ] **Teste negativo** do `FuncionalidadeGuard` — criar user sem funcionalidade e validar 403. Não há esse user em DEV; ficou pra quando outros deptos forem cadastrados.
+
+### 15.6 Próximo passo — Sub-fase 1.6 ou pausa
+
+**Sub-fase 1.6** é a maior e mais complexa da Onda 1:
+- UI Configurador (matriz user×depto×role + grid depto×funcionalidade) — frontend novo
+- 3 responses HTTP do login com extras cor/ícone passam a usar `buildModulosPayload` com extras
+- Substituir 20 call sites do `getDefaultDepartamentoId` por contexto JWT
+- (Opcional) aplicar `@RequiresFuncionalidade` em massa
+- Esforço estimado: ~12h (doc-mestre §7.1 lote 1.6 sugere 12h — confirmar quando começar)
+- Maior parte é frontend → tem perfil diferente das anteriores
