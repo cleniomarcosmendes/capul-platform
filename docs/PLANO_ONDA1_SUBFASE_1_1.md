@@ -3,7 +3,7 @@
 **Sub-fase:** 1.1 — Migration `add_departamento_id_workspace_entities`
 **Branch:** `feat/workspace-foundation` (criada de `main`@65fd7d4 em 22/05/2026)
 **Esforço estimado:** ~8h (estimado no doc-mestre v1.2 §7.1)
-**Status:** Plano fechado em 22/05/2026 23:00 — P1-P5 todas decididas (ver §14). Aguarda execução no sábado (23/05).
+**Status:** ✅ **CONCLUÍDA em 23/05/2026** — ver §15 (Resultado) para detalhes.
 
 > Documento de referência: `C:\Arquivos-de-projeto\clenio\Multi departamento\Workspace_Multi_Departamento_Design.md` v1.2 (§4.2.2-4.2.13, §6.2 Etapa 4, §11.1).
 
@@ -389,3 +389,72 @@ algo não fizer sentido.
 _Plano criado por Claude em 22/05/2026 22:50, fechado em 23:00 após
 saneamento das 5 questões com Clenio. Branch `feat/workspace-foundation`.
 Pronto para execução no sábado 23/05/2026._
+
+---
+
+## 15. Resultado (execução em 23/05/2026)
+
+**Status:** ✅ **CONCLUÍDA**
+
+### 15.1 Commits aplicados
+
+| # | Hash | Conteúdo |
+|---|---|---|
+| 1 | `2007d9a` | Plano inicial sub-fase 1.1 |
+| 2 | `9b534f8` | P1-P5 fechadas |
+| 3 | `c8b984c` | Correção de numeração + 2 pausas explicitadas no §6 |
+| 4 | **`19d150b`** | **Commit 2 (schema.prisma)** — 10 modelos + 9 reversas em Departamento + reversa nomeada em EquipeTI |
+| 5 | `d05df28` | Relatório de investigação do drift DEV (achado: artefato cross-projeto) |
+| 6 | `e989cb5` | Plano ajustado pós-investigação (P6 novo: migration manual + migrate deploy) |
+| 7 | **`4d7b4ed`** | **Commit 3 (migration + helper + 16 fixes)** — migration aplicada em DEV, todos os call sites de prisma.X.create() atualizados |
+| 8 | (este commit) | **Commit 4 (fechamento)** — plano atualizado com seção Resultado |
+
+### 15.2 Smoke tests — todos passaram
+
+| # | Check | Resultado |
+|---|---|---|
+| 1 | `prisma migrate status` | ✅ "Database schema is up to date!" |
+| 2 | `prisma validate` | ✅ "The schema at prisma/schema.prisma is valid 🚀" |
+| 3 | `COUNT(*) WHERE departamento_id IS NULL` (10 tabelas) | ✅ **0** em todas |
+| 4 | `COUNT(DISTINCT departamento_id)` em equipes_ti | ✅ **1** (todas T.I.) |
+| 5 | Backend health endpoint | ✅ ok, latência DB 1ms |
+| 6 | `GET /chamados` sem JWT | ✅ 401 (auth correto, sem 500) |
+| 7 | Backend up & healthy após migration | ✅ |
+| 8 | Init job `gestao-ti-migrate` aplicou sem erro | ✅ "All migrations have been successfully applied." |
+| 9 | Frontend Gestão TI funcional em DEV | ⏭️ pulado (sem nginx subido nesta sessão) |
+
+### 15.3 Achados durante a execução (não previstos no plano)
+
+| # | Achado | Mitigação aplicada | Documentado em |
+|---|---|---|---|
+| 1 | `prisma migrate dev --create-only` falha (shadow DB sem schema "core") | Escrever migration MANUAL + aplicar com `migrate deploy` (decisão P6 nova) | `INVESTIGACAO_DRIFT_DEV_23MAI.md` |
+| 2 | `prisma migrate diff` reporta 165 mudanças (drift aparente) | Investigação mostrou que **é artefato cross-projeto + cosmético + índices SQL puros**; zero drift real | idem |
+| 3 | `core.departamentos.codigo` está vazio no T.I. em DEV (apenas 2 de 13 deptos têm codigo) | Pré-flight + backfill usam `nome ILIKE 'Tecnologia%'` em vez de `codigo='TI'` | plano §4 + helper |
+| 4 | NOT NULL em `departamentoId` quebra 16 call sites de `prisma.X.create()` | Helper `getDefaultDepartamentoId` centralizado + atualização dos 10 services | commit `4d7b4ed` |
+| 5 | Container não vê migration nova sem rebuild (sem bind mount em `prisma/`) | `docker compose build` + `up -d` antes de aplicar | sessão de execução |
+
+### 15.4 Esforço real vs estimado
+
+- **Estimado:** ~8h
+- **Real:** ~5h efetivas (incluindo investigação do drift, helper, 16 fixes)
+- **Diferença:** abaixo do estimado, principalmente porque os 16 fixes seguiam padrão repetitivo
+
+### 15.5 Pendências técnicas (registradas pra sub-fases futuras)
+
+- [ ] **Sub-fase 1.5** — trocar `getDefaultDepartamentoId` por derivação a partir de `currentUser.departamentoId` (do JWT) ou `equipeAtual.departamentoId`. Quando todos os call sites estiverem usando contexto, o helper pode ser removido.
+- [ ] **Cleanup futuro** — preencher `codigo` em todos os deptos via migration de dados (1 migration separada). Daria robustez a queries que dependem do `codigo`. Ver `INVESTIGACAO_DRIFT_DEV_23MAI.md` §3.
+- [ ] **Frontend smoke test** — validar com Gestão TI rodando completo (nginx + frontend + backend) que listagens de chamados, projetos, etc. continuam funcionais. Não executado nesta sessão.
+
+### 15.6 Próximo passo — Sub-fase 1.2
+
+Refactor de `core.permissoes_modulo`:
+- ADD COLUMN `departamento_id` (TEXT, nullable inicialmente)
+- Backfill com depto T.I. para todas as permissões do módulo Gestao_TI
+- ALTER NOT NULL após backfill
+- DROP UNIQUE antigo `(usuario_id, modulo_id)` + ADD UNIQUE novo `(usuario_id, modulo_id, departamento_id)`
+- FK + INDEX
+- **SEM** flag `is_super_admin` (D36 — Q5 fechada)
+
+Mesmo padrão da sub-fase 1.1: schema.prisma → pausa #1 → migration manual → pausa #2 → commit final. Esforço estimado: ~8h (doc-mestre §7.1 lote 1.2).
+
+**Decisão pendente antes de iniciar 1.2:** continuar hoje (domingo) ou pausar até segunda quando deploy 20/05 estiver no monitor?
