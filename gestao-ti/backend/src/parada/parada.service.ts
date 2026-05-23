@@ -11,7 +11,8 @@ import { FinalizarParadaDto } from './dto/finalizar-parada.dto';
 import { CreateMotivoParadaDto } from './dto/create-motivo-parada.dto';
 import { UpdateMotivoParadaDto } from './dto/update-motivo-parada.dto';
 import { paginate } from '../common/prisma/paginate.helper.js';
-import { getDefaultDepartamentoId } from '../common/helpers/default-departamento.helper.js';
+import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 
 const paradaListInclude = {
   motivoParada: { select: { id: true, nome: true } },
@@ -97,7 +98,7 @@ export class ParadaService {
     return parada;
   }
 
-  async create(dto: CreateParadaDto, userId: string) {
+  async create(dto: CreateParadaDto, userId: string, user?: JwtPayload) {
     const software = await this.prisma.software.findUnique({ where: { id: dto.softwareId } });
     if (!software) throw new NotFoundException('Software nao encontrado');
 
@@ -120,8 +121,13 @@ export class ParadaService {
       status = 'FINALIZADA';
     }
 
-    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL.
-    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+    // Onda 1 Sub-fase 1.6.1 — resolveDepartamento em cascata.
+    const departamentoId = await resolveDepartamento(
+      this.prisma,
+      user ?? null,
+      'GESTAO_TI',
+      dto.departamentoId,
+    );
 
     const criada = await this.prisma.registroParada.create({
       data: {
@@ -410,9 +416,14 @@ export class ParadaService {
     });
   }
 
-  async createMotivo(dto: CreateMotivoParadaDto) {
-    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL.
-    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+  async createMotivo(dto: CreateMotivoParadaDto, user?: JwtPayload) {
+    // Onda 1 Sub-fase 1.6.1 — resolveDepartamento em cascata.
+    const departamentoId = await resolveDepartamento(
+      this.prisma,
+      user ?? null,
+      'GESTAO_TI',
+      (dto as { departamentoId?: string }).departamentoId,
+    );
     return this.prisma.motivoParada.create({ data: { ...dto, departamentoId } });
   }
 

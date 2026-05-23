@@ -4,6 +4,7 @@ import { CompraNotaFiscalService } from './services/compra-nota-fiscal.service.j
 import { CreateTipoProdutoDto, UpdateTipoProdutoDto } from './dto/create-tipo-produto.dto.js';
 import { CreateTipoProjetoDto, UpdateTipoProjetoDto } from './dto/create-tipo-projeto.dto.js';
 import { CreateNotaFiscalDto, UpdateNotaFiscalDto } from './dto/create-nota-fiscal.dto.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class CompraService {
@@ -74,8 +75,8 @@ export class CompraService {
     return this.notaFiscalService.findEquipesParaCompras(usuarioId, role);
   }
 
-  createNotaFiscal(dto: CreateNotaFiscalDto, userId: string, filialId: string, role: string, jwt?: string) {
-    return this.notaFiscalService.create(dto, userId, filialId, role, jwt);
+  createNotaFiscal(dto: CreateNotaFiscalDto, userId: string, filialId: string, role: string, jwt?: string, user?: JwtPayload) {
+    return this.notaFiscalService.create(dto, userId, filialId, role, jwt, user);
   }
 
   updateNotaFiscal(id: string, dto: UpdateNotaFiscalDto, usuarioId: string, role: string, jwt?: string) {

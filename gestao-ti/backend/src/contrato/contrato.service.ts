@@ -53,8 +53,8 @@ export class ContratoService {
     return this.core.findOne(id);
   }
 
-  async create(dto: CreateContratoDto, usuarioId: string, role: string = 'ADMIN') {
-    return this.core.create(dto, usuarioId, role);
+  async create(dto: CreateContratoDto, usuarioId: string, role: string = 'ADMIN', user?: import('../common/interfaces/jwt-payload.interface').JwtPayload) {
+    return this.core.create(dto, usuarioId, role, user);
   }
 
   async update(id: string, dto: UpdateContratoDto, usuarioId: string, role: string = 'ADMIN') {

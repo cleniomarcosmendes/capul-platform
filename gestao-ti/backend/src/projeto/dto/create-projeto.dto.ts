@@ -61,4 +61,9 @@ export class CreateProjetoDto {
   @IsOptional()
   @IsUUID()
   tipoProjetoId?: string;
+
+  // Workspace Sub-fase 1.6.1 — UI multi-perfil envia depto explícito
+  @IsOptional()
+  @IsString()
+  departamentoId?: string;
 }

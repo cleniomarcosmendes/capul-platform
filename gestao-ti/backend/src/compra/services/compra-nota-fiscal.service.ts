@@ -7,7 +7,8 @@ import {
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CreateNotaFiscalDto, UpdateNotaFiscalDto } from '../dto/create-nota-fiscal.dto.js';
 import { FiscalNfeClient, FiscalConsultaRetorno } from './fiscal-nfe.client.js';
-import { getDefaultDepartamentoId } from '../../common/helpers/default-departamento.helper.js';
+import { resolveDepartamento } from '../../common/helpers/resolve-departamento.helper.js';
+import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -237,6 +238,7 @@ export class CompraNotaFiscalService {
     filialId: string,
     role: string = 'ADMIN',
     jwt?: string,
+    user?: JwtPayload,
   ) {
     if (!dto.itens || dto.itens.length === 0) {
       throw new BadRequestException('A nota fiscal deve ter pelo menos um item');
@@ -274,8 +276,13 @@ export class CompraNotaFiscalService {
 
     const valorTotalNF = itensData.reduce((sum, i) => sum + i.valorTotal, 0);
 
-    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL.
-    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+    // Onda 1 Sub-fase 1.6.1 — resolveDepartamento em cascata.
+    const departamentoId = await resolveDepartamento(
+      this.prisma,
+      user ?? null,
+      'GESTAO_TI',
+      dto.departamentoId,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const nf = await tx.notaFiscal.create({
@@ -456,8 +463,8 @@ export class CompraNotaFiscalService {
       observacao: item.observacao,
     }));
 
-    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL. Cópia herda do original.
-    const departamentoId = original.departamentoId ?? await getDefaultDepartamentoId(this.prisma);
+    // Cópia herda do original (departamentoId NOT NULL desde Sub-fase 1.1).
+    const departamentoId = original.departamentoId;
 
     return this.prisma.notaFiscal.create({
       data: {

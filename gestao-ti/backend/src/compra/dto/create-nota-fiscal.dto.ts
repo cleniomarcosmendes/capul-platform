@@ -81,6 +81,11 @@ export class CreateNotaFiscalDto {
   @ValidateNested({ each: true })
   @Type(() => NotaFiscalItemDto)
   itens: NotaFiscalItemDto[];
+
+  // Workspace Sub-fase 1.6.1 — UI multi-perfil envia depto explícito
+  @IsOptional()
+  @IsString()
+  departamentoId?: string;
 }
 
 export class UpdateNotaFiscalDto {

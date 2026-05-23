@@ -12,7 +12,8 @@ import {
   UpdateUsuarioDto,
   AtribuirPermissaoDto,
 } from './dto/create-usuario.dto';
-import { getDefaultDepartamentoId } from '../common/utils/default-departamento';
+import { resolveDepartamento } from '../common/utils/resolve-departamento';
+import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 
 // Roles do módulo Fiscal cujos titulares recebem alertas por e-mail
 // (DestinatariosResolver). Sem e-mail cadastrado o usuário é silenciosamente
@@ -172,9 +173,15 @@ export class UsuarioService {
                 dto.permissoes.map(async (p) => ({
                   moduloId: p.moduloId,
                   roleModuloId: p.roleModuloId,
-                  // Onda 1 Sub-fase 1.2 — departamentoId NOT NULL.
-                  // Usa depto do próprio usuário como default (fallback T.I.).
-                  departamentoId: dto.departamentoId ?? await getDefaultDepartamentoId(this.prisma),
+                  // Onda 1 Sub-fase 1.6.1 — resolveDepartamento cascata.
+                  // Permissão criada herda do dto.departamentoId (depto
+                  // organizacional do user); senão fallback T.I.
+                  departamentoId: await resolveDepartamento(
+                    this.prisma,
+                    null,
+                    '',
+                    dto.departamentoId,
+                  ),
                 })),
               ),
             }
@@ -263,15 +270,23 @@ export class UsuarioService {
     return { success: true, message: 'Senha redefinida com sucesso. O usuario devera trocar a senha no proximo login.' };
   }
 
-  async atribuirPermissao(usuarioId: string, dto: AtribuirPermissaoDto) {
+  async atribuirPermissao(usuarioId: string, dto: AtribuirPermissaoDto, user?: JwtPayload) {
     const usuario = await this.findOne(usuarioId);
 
     await this.assertEmailParaPermissaoFiscal(usuario.email, dto.moduloId, dto.roleModuloId);
 
-    // Onda 1 Sub-fase 1.2 — departamentoId NOT NULL em permissoes_modulo.
-    // Fallback T.I. enquanto a UI Configurador multi-perfil (Sub-fase 1.6)
-    // não envia departamentoId explícito no DTO.
-    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+    // Onda 1 Sub-fase 1.6.1 — resolveDepartamento em cascata.
+    // DTO opcional → contexto do user no módulo (do JWT) → fallback T.I.
+    const moduloAlvo = await this.prisma.moduloSistema.findUniqueOrThrow({
+      where: { id: dto.moduloId },
+      select: { codigo: true },
+    });
+    const departamentoId = await resolveDepartamento(
+      this.prisma,
+      user ?? null,
+      moduloAlvo.codigo,
+      dto.departamentoId,
+    );
 
     const result = await this.prisma.permissaoModulo.upsert({
       where: {

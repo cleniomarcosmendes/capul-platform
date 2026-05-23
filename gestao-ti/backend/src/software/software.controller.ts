@@ -7,6 +7,8 @@ import { GestaoTiGuard } from '../common/guards/gestao-ti.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CreateSoftwareDto } from './dto/create-software.dto.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { UpdateSoftwareDto, UpdateStatusSoftwareDto } from './dto/update-software.dto.js';
 import { CreateModuloDto } from './dto/create-modulo.dto.js';
 import { UpdateModuloDto, UpdateStatusModuloDto } from './dto/update-modulo.dto.js';
@@ -45,8 +47,8 @@ export class SoftwareController {
 
   @Post()
   @Roles('ADMIN', 'GESTOR_TI')
-  create(@Body() dto: CreateSoftwareDto) {
-    return this.service.create(dto);
+  create(@Body() dto: CreateSoftwareDto, @CurrentUser() user: JwtPayload) {
+    return this.service.create(dto, user);
   }
 
   @Patch(':id')

@@ -56,8 +56,8 @@ export class ParadaController {
 
   @Post('motivos')
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
-  createMotivo(@Body() dto: CreateMotivoParadaDto) {
-    return this.service.createMotivo(dto);
+  createMotivo(@Body() dto: CreateMotivoParadaDto, @CurrentUser() user: JwtPayload) {
+    return this.service.createMotivo(dto, user);
   }
 
   @Patch('motivos/:motivoId')
@@ -111,7 +111,7 @@ export class ParadaController {
   @Post()
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   create(@Body() dto: CreateParadaDto, @CurrentUser() user: JwtPayload) {
-    return this.service.create(dto, user.sub);
+    return this.service.create(dto, user.sub, user);
   }
 
   @Patch(':id')

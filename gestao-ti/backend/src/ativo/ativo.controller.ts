@@ -9,6 +9,8 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CreateAtivoDto } from './dto/create-ativo.dto.js';
 import { UpdateAtivoDto, UpdateStatusAtivoDto } from './dto/update-ativo.dto.js';
 import { AddAtivoSoftwareDto } from './dto/add-ativo-software.dto.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Controller('ativos')
 @UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
@@ -41,8 +43,8 @@ export class AtivoController {
 
   @Post()
   @Roles('ADMIN', 'GESTOR_TI')
-  create(@Body() dto: CreateAtivoDto) {
-    return this.service.create(dto);
+  create(@Body() dto: CreateAtivoDto, @CurrentUser() user: JwtPayload) {
+    return this.service.create(dto, user);
   }
 
   @Patch(':id')

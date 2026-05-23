@@ -10,6 +10,8 @@ import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { CreateLicencaDto } from './dto/create-licenca.dto.js';
 import { UpdateLicencaDto } from './dto/update-licenca.dto.js';
 import { AtribuirUsuarioDto } from './dto/atribuir-usuario.dto.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { CreateCategoriaLicencaDto, UpdateCategoriaLicencaDto } from './dto/create-categoria-licenca.dto.js';
 import { StatusLicenca } from '@prisma/client';
 import { ROLES_TI } from '../common/constants/roles.constant.js';
@@ -78,8 +80,8 @@ export class LicencaController {
 
   @Post()
   @Roles(...ROLES_TI)
-  create(@Body() dto: CreateLicencaDto) {
-    return this.service.create(dto);
+  create(@Body() dto: CreateLicencaDto, @CurrentUser() user: JwtPayload) {
+    return this.service.create(dto, user);
   }
 
   @Patch(':id')

@@ -11,7 +11,8 @@ import { CreateModuloDto } from './dto/create-modulo.dto.js';
 import { UpdateModuloDto } from './dto/update-modulo.dto.js';
 import { TipoSoftware, Criticidade, StatusSoftware, StatusModulo } from '@prisma/client';
 import { paginate } from '../common/prisma/paginate.helper.js';
-import { getDefaultDepartamentoId } from '../common/helpers/default-departamento.helper.js';
+import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 const softwareListInclude = {
   equipeResponsavel: { select: { id: true, nome: true, sigla: true, cor: true } },
@@ -74,12 +75,17 @@ export class SoftwareService {
     return software;
   }
 
-  async create(dto: CreateSoftwareDto) {
+  async create(dto: CreateSoftwareDto, user?: JwtPayload) {
     const existing = await this.prisma.software.findUnique({ where: { nome: dto.nome } });
     if (existing) throw new ConflictException('Ja existe um software com este nome');
 
-    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL.
-    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+    // Onda 1 Sub-fase 1.6.1 — resolveDepartamento em cascata.
+    const departamentoId = await resolveDepartamento(
+      this.prisma,
+      user ?? null,
+      'GESTAO_TI',
+      dto.departamentoId,
+    );
 
     return this.prisma.software.create({
       data: { ...dto, departamentoId },

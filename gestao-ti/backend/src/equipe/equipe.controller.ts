@@ -55,8 +55,8 @@ export class EquipeController {
 
   @Post()
   @Roles('ADMIN', 'GESTOR_TI')
-  create(@Body() dto: CreateEquipeDto) {
-    return this.equipeService.create(dto);
+  create(@Body() dto: CreateEquipeDto, @CurrentUser() user: JwtPayload) {
+    return this.equipeService.create(dto, user);
   }
 
   @Patch(':id')

@@ -127,4 +127,11 @@ export class AtribuirPermissaoDto {
   @IsNotEmpty()
   @IsUUID()
   roleModuloId: string;
+
+  // Workspace Sub-fase 1.6.1 — UI multi-perfil envia depto operacional
+  // do user nesse módulo. Se omitido: cascata cai no JWT do caller, depois
+  // no fallback T.I.
+  @IsOptional()
+  @IsUUID()
+  departamentoId?: string;
 }

@@ -10,7 +10,8 @@ import { CreateCategoriaLicencaDto, UpdateCategoriaLicencaDto } from './dto/crea
 import { StatusLicenca, ModeloLicenca } from '@prisma/client';
 import { isGestor } from '../common/constants/roles.constant.js';
 import { paginate } from '../common/prisma/paginate.helper.js';
-import { getDefaultDepartamentoId } from '../common/helpers/default-departamento.helper.js';
+import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 const MODELOS_POR_USUARIO: ModeloLicenca[] = ['POR_USUARIO', 'SUBSCRICAO', 'SAAS'];
 
@@ -86,7 +87,7 @@ export class LicencaService {
     return this.filterSensitiveField(licenca, role);
   }
 
-  async create(dto: CreateLicencaDto) {
+  async create(dto: CreateLicencaDto, user?: JwtPayload) {
     // Validar: deve ter softwareId OU (nome + categoria) para licenca avulsa
     if (!dto.softwareId && !dto.nome) {
       throw new BadRequestException('Informe o software ou o nome da licenca avulsa');
@@ -97,8 +98,13 @@ export class LicencaService {
       if (!software) throw new BadRequestException('Software nao encontrado');
     }
 
-    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL.
-    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+    // Onda 1 Sub-fase 1.6.1 — resolveDepartamento em cascata.
+    const departamentoId = await resolveDepartamento(
+      this.prisma,
+      user ?? null,
+      'GESTAO_TI',
+      dto.departamentoId,
+    );
 
     return this.prisma.softwareLicenca.create({
       data: {
@@ -142,8 +148,8 @@ export class LicencaService {
       data: { status: 'INATIVA' },
     });
 
-    // Onda 1 Sub-fase 1.1 — renovação herda departamentoId da licença anterior.
-    const departamentoId = anterior.departamentoId ?? await getDefaultDepartamentoId(this.prisma);
+    // Renovação herda departamentoId da licença anterior (NOT NULL desde 1.1).
+    const departamentoId = anterior.departamentoId;
 
     // Criar nova licenca copiando dados da anterior (RN-LIC-08)
     const nova = await this.prisma.softwareLicenca.create({

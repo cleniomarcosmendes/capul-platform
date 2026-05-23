@@ -6,7 +6,7 @@ import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { StatusOS } from '@prisma/client';
 import { isGestor } from '../common/constants/roles.constant.js';
 import { paginate } from '../common/prisma/paginate.helper.js';
-import { getDefaultDepartamentoId } from '../common/helpers/default-departamento.helper.js';
+import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
 
 const osListInclude = {
   filial: { select: { id: true, codigo: true, nomeFantasia: true } },
@@ -53,8 +53,13 @@ export class OrdemServicoService {
   }
 
   async create(dto: CreateOsDto, user: JwtPayload) {
-    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL.
-    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+    // Onda 1 Sub-fase 1.6.1 — resolveDepartamento em cascata.
+    const departamentoId = await resolveDepartamento(
+      this.prisma,
+      user,
+      'GESTAO_TI',
+      dto.departamentoId,
+    );
 
     const os = await this.prisma.ordemServico.create({
       data: {

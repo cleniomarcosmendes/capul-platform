@@ -68,8 +68,8 @@ export class ProjetoService {
     return this.core.findOne(id, userId, role);
   }
 
-  create(dto: CreateProjetoDto, userId?: string, role?: string) {
-    return this.core.create(dto, userId, role);
+  create(dto: CreateProjetoDto, userId?: string, role?: string, user?: import('../common/interfaces/jwt-payload.interface').JwtPayload) {
+    return this.core.create(dto, userId, role, user);
   }
 
   update(id: string, dto: UpdateProjetoDto) {

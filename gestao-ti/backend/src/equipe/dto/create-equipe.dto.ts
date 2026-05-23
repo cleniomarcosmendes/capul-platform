@@ -47,4 +47,9 @@ export class CreateEquipeDto {
   @IsInt()
   @Min(0)
   ordem?: number;
+
+  // Workspace Sub-fase 1.6.1 — UI multi-perfil envia depto explícito
+  @IsOptional()
+  @IsString()
+  departamentoId?: string;
 }

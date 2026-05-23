@@ -13,7 +13,8 @@ import { projetoListInclude, projetoDetailInclude } from './projeto.constants.js
 import { isGestor, isTI } from '../../common/constants/roles.constant.js';
 import { ROLES_EXTERNOS } from '../../common/constants/roles.constant.js';
 import { paginate } from '../../common/prisma/paginate.helper.js';
-import { getDefaultDepartamentoId } from '../../common/helpers/default-departamento.helper.js';
+import { resolveDepartamento } from '../../common/helpers/resolve-departamento.helper.js';
+import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 import { Prisma } from '@prisma/client';
 
 /** Origem de um match da busca profunda em Projeto (PR3) — badge + snippet. */
@@ -296,7 +297,7 @@ export class ProjetoCoreService {
     return [];
   }
 
-  async create(dto: CreateProjetoDto, userId?: string, role?: string) {
+  async create(dto: CreateProjetoDto, userId?: string, role?: string, user?: JwtPayload) {
     const isExterno = role && (ROLES_EXTERNOS as readonly string[]).includes(role);
 
     // Roles externos so podem criar subprojetos (exigem projetoPaiId)
@@ -356,8 +357,8 @@ export class ProjetoCoreService {
       if (!resp) throw new NotFoundException('Usuario responsavel nao encontrado');
     }
 
-    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL.
-    // D14: subprojeto herda departamento do projeto-pai. Senão, default T.I.
+    // Onda 1 Sub-fase 1.6.1 — D14 subprojeto herda do pai;
+    // se projeto novo (sem pai), resolveDepartamento em cascata.
     let departamentoId: string;
     if (dto.projetoPaiId) {
       const pai = await this.prisma.projeto.findUniqueOrThrow({
@@ -366,7 +367,12 @@ export class ProjetoCoreService {
       });
       departamentoId = pai.departamentoId;
     } else {
-      departamentoId = await getDefaultDepartamentoId(this.prisma);
+      departamentoId = await resolveDepartamento(
+        this.prisma,
+        user ?? null,
+        'GESTAO_TI',
+        dto.departamentoId,
+      );
     }
 
     const projeto = await this.prisma.projeto.create({

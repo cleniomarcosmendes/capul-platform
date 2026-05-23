@@ -14,6 +14,7 @@ import { CapabilityService } from './capability.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ConfiguradorAdminGuard } from '../presenca/configurador-admin.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import {
   CreateUsuarioDto,
   UpdateUsuarioDto,
@@ -79,8 +80,9 @@ export class UsuarioController {
   atribuirPermissao(
     @Param('id') id: string,
     @Body() dto: AtribuirPermissaoDto,
+    @CurrentUser() user: JwtPayload,
   ) {
-    return this.usuarioService.atribuirPermissao(id, dto);
+    return this.usuarioService.atribuirPermissao(id, dto, user);
   }
 
   @Delete(':id/permissoes/:moduloId')

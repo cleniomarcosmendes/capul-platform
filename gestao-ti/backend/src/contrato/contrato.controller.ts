@@ -183,7 +183,7 @@ export class ContratoController {
   @Post()
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI')
   create(@Body() dto: CreateContratoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    return this.service.create(dto, user.sub, role);
+    return this.service.create(dto, user.sub, role, user);
   }
 
   @Patch(':id')

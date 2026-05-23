@@ -10,7 +10,8 @@ import { UpdateEquipeDto } from './dto/update-equipe.dto.js';
 import { AddMembroDto } from './dto/add-membro.dto.js';
 import { UpdateMembroDto } from './dto/update-membro.dto.js';
 import { StatusGeral } from '@prisma/client';
-import { getDefaultDepartamentoId } from '../common/helpers/default-departamento.helper.js';
+import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class EquipeService {
@@ -47,7 +48,7 @@ export class EquipeService {
     return equipe;
   }
 
-  async create(dto: CreateEquipeDto) {
+  async create(dto: CreateEquipeDto, user?: JwtPayload) {
     const existing = await this.prisma.equipeTI.findFirst({
       where: {
         OR: [{ nome: dto.nome }, { sigla: dto.sigla }],
@@ -62,8 +63,13 @@ export class EquipeService {
       );
     }
 
-    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL. Default T.I. (helper).
-    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+    // Onda 1 Sub-fase 1.6.1 — resolveDepartamento em cascata.
+    const departamentoId = await resolveDepartamento(
+      this.prisma,
+      user ?? null,
+      'GESTAO_TI',
+      dto.departamentoId,
+    );
 
     return this.prisma.equipeTI.create({
       data: {

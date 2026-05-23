@@ -53,4 +53,9 @@ export class CreateParadaDto {
   @IsString()
   @MaxLength(2000)
   observacoes?: string;
+
+  // Workspace Sub-fase 1.6.1 — UI multi-perfil envia depto explícito
+  @IsOptional()
+  @IsString()
+  departamentoId?: string;
 }

@@ -166,7 +166,7 @@ export class CompraController {
     @Req() req: express.Request,
   ) {
     const jwt = dto.chaveNfe ? extrairJwt(req) : undefined;
-    return this.service.createNotaFiscal(dto, user.sub, user.filialId, role, jwt);
+    return this.service.createNotaFiscal(dto, user.sub, user.filialId, role, jwt, user);
   }
 
   @Patch('notas-fiscais/:id')

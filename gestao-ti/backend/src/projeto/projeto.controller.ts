@@ -127,7 +127,7 @@ export class ProjetoController {
   @Post()
   @Roles('ADMIN', 'GESTOR_TI', 'SUPORTE_TI', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   create(@Body() dto: CreateProjetoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    return this.service.create(dto, user.sub, role);
+    return this.service.create(dto, user.sub, role, user);
   }
 
   @Patch(':id')

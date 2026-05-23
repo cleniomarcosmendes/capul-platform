@@ -11,7 +11,8 @@ import { UpdateContratoDto } from '../dto/update-contrato.dto.js';
 import { RenovarContratoDto } from '../dto/renovar-contrato.dto.js';
 import { contratoListInclude, contratoDetailInclude, TRANSICOES_VALIDAS } from './contrato.constants.js';
 import { paginate } from '../../common/prisma/paginate.helper.js';
-import { getDefaultDepartamentoId } from '../../common/helpers/default-departamento.helper.js';
+import { resolveDepartamento } from '../../common/helpers/resolve-departamento.helper.js';
+import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class ContratoCoreService {
@@ -141,7 +142,7 @@ export class ContratoCoreService {
     return contrato;
   }
 
-  async create(dto: CreateContratoDto, usuarioId: string, role: string = 'ADMIN') {
+  async create(dto: CreateContratoDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
     await this.ensureContratoPermission(dto.equipeId, usuarioId, role);
 
     if (dto.softwareId) {
@@ -149,8 +150,13 @@ export class ContratoCoreService {
       if (!sw) throw new BadRequestException('Software nao encontrado');
     }
 
-    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL.
-    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+    // Onda 1 Sub-fase 1.6.1 — resolveDepartamento em cascata.
+    const departamentoId = await resolveDepartamento(
+      this.prisma,
+      user ?? null,
+      'GESTAO_TI',
+      dto.departamentoId,
+    );
 
     const contrato = await this.prisma.contrato.create({
       data: {

@@ -127,4 +127,9 @@ export class CreateContratoDto {
   @IsOptional()
   @IsDateString()
   primeiroVencimento?: string;
+
+  // Workspace Sub-fase 1.6.1 — UI multi-perfil envia depto explícito
+  @IsOptional()
+  @IsString()
+  departamentoId?: string;
 }

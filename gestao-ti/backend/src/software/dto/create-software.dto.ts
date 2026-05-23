@@ -42,4 +42,10 @@ export class CreateSoftwareDto {
   @IsString()
   @MaxLength(2000)
   observacoes?: string;
+
+  // Workspace Multi-Departamento (Onda 1 Sub-fase 1.6.1) — UI multi-perfil
+  // pode enviar o depto explícito; senão helper resolve via JWT/fallback.
+  @IsOptional()
+  @IsString()
+  departamentoId?: string;
 }
