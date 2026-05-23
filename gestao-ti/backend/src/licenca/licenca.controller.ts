@@ -15,9 +15,12 @@ import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { CreateCategoriaLicencaDto, UpdateCategoriaLicencaDto } from './dto/create-categoria-licenca.dto.js';
 import { StatusLicenca } from '@prisma/client';
 import { ROLES_TI } from '../common/constants/roles.constant.js';
+import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
+import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
 
 @Controller('licencas')
-@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard, FuncionalidadeGuard)
+@RequiresFuncionalidade('LICENCA')
 export class LicencaController {
   constructor(private readonly service: LicencaService) {}
 

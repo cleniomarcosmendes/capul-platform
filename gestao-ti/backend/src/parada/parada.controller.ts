@@ -38,9 +38,12 @@ import { UpdateMotivoParadaDto } from './dto/update-motivo-parada.dto';
 
 // Whitelist centralizada — common/constants/anexo-mime.constant.ts (06/05/2026).
 import { isAnexoPermitido } from '../common/constants/anexo-mime.constant';
+import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
+import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
 
 @Controller('paradas')
-@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard, FuncionalidadeGuard)
+@RequiresFuncionalidade('PARADA')
 export class ParadaController {
   constructor(
     private readonly service: ParadaService,

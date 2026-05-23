@@ -32,9 +32,11 @@ export class FuncionalidadeGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const funcionalidade = this.reflector.get<string | undefined>(
+    // Onda 2 C2.3 — aceitar decorator no método OU no controller.
+    // getAllAndOverride: método sobrescreve controller; senão usa controller.
+    const funcionalidade = this.reflector.getAllAndOverride<string | undefined>(
       REQUIRES_FUNCIONALIDADE_KEY,
-      context.getHandler(),
+      [context.getHandler(), context.getClass()],
     );
     if (!funcionalidade) return true;
 

@@ -11,9 +11,12 @@ import { UpdateAtivoDto, UpdateStatusAtivoDto } from './dto/update-ativo.dto.js'
 import { AddAtivoSoftwareDto } from './dto/add-ativo-software.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
+import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
+import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
 
 @Controller('ativos')
-@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard, FuncionalidadeGuard)
+@RequiresFuncionalidade('ATIVO')
 export class AtivoController {
   constructor(private readonly service: AtivoService) {}
 

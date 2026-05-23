@@ -17,6 +17,8 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
+import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
+import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
 import { CreateEquipeDto } from './dto/create-equipe.dto.js';
 import { UpdateEquipeDto } from './dto/update-equipe.dto.js';
 import { UpdateStatusDto } from './dto/update-status.dto.js';
@@ -25,7 +27,8 @@ import { UpdateMembroDto } from './dto/update-membro.dto.js';
 import { StatusGeral } from '@prisma/client';
 
 @Controller('equipes')
-@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard, FuncionalidadeGuard)
+@RequiresFuncionalidade('EQUIPE')
 export class EquipeController {
   constructor(private readonly equipeService: EquipeService) {}
 

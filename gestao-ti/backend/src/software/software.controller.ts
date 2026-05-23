@@ -9,13 +9,16 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CreateSoftwareDto } from './dto/create-software.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
+import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
+import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
 import { UpdateSoftwareDto, UpdateStatusSoftwareDto } from './dto/update-software.dto.js';
 import { CreateModuloDto } from './dto/create-modulo.dto.js';
 import { UpdateModuloDto, UpdateStatusModuloDto } from './dto/update-modulo.dto.js';
 import { TipoSoftware, Criticidade, StatusSoftware } from '@prisma/client';
 
 @Controller('softwares')
-@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard, FuncionalidadeGuard)
+@RequiresFuncionalidade('SOFTWARE')
 export class SoftwareController {
   constructor(private readonly service: SoftwareService) {}
 

@@ -30,6 +30,8 @@ import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 import { isAnexoPermitido } from '../common/constants/anexo-mime.constant';
 import { createUploadConfig } from '../common/helpers/multer-upload.helper.js';
+import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
+import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
 import { CreateTipoProdutoDto, UpdateTipoProdutoDto } from './dto/create-tipo-produto.dto';
 import { CreateTipoProjetoDto, UpdateTipoProjetoDto } from './dto/create-tipo-projeto.dto';
 import { CreateNotaFiscalDto, UpdateNotaFiscalDto, ValidarChaveNfeDto } from './dto/create-nota-fiscal.dto';
@@ -53,7 +55,8 @@ function extrairJwt(req: express.Request): string {
 }
 
 @Controller('compras')
-@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard, FuncionalidadeGuard)
+@RequiresFuncionalidade('NOTA_FISCAL')
 export class CompraController {
   constructor(private readonly service: CompraService) {}
 

@@ -52,11 +52,14 @@ if (!fs.existsSync(PROJETO_UPLOADS_DIR)) {
 // Whitelist centralizada — common/constants/anexo-mime.constant.ts (06/05/2026).
 import { isAnexoPermitido } from '../common/constants/anexo-mime.constant';
 import { createUploadConfig } from '../common/helpers/multer-upload.helper.js';
+import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
+import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
 
 const PENDENCIA_UPLOADS_DIR = path.resolve('./uploads/pendencias');
 
 @Controller('projetos')
-@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard, FuncionalidadeGuard)
+@RequiresFuncionalidade('PROJETO')
 export class ProjetoController {
   constructor(private readonly service: ProjetoService) {}
 

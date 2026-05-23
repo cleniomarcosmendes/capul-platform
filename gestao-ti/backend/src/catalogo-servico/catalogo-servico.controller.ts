@@ -4,13 +4,16 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { GestaoTiGuard } from '../common/guards/gestao-ti.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
+import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
+import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
 import { CreateCatalogoDto } from './dto/create-catalogo.dto.js';
 import { UpdateCatalogoDto } from './dto/update-catalogo.dto.js';
 import { UpdateStatusDto } from '../equipe/dto/update-status.dto.js';
 import { StatusGeral } from '@prisma/client';
 
 @Controller('catalogo-servicos')
-@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard, FuncionalidadeGuard)
+@RequiresFuncionalidade('CHAMADO')
 export class CatalogoServicoController {
   constructor(private readonly service: CatalogoServicoService) {}
 

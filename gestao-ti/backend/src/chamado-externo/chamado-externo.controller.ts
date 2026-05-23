@@ -8,12 +8,15 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { ROLES_GESTORES, ROLES_TI } from '../common/constants/roles.constant.js';
+import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
+import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
 
 const READERS = [...ROLES_TI];
 const WRITERS = [...ROLES_GESTORES];
 
 @Controller('chamados-externos')
-@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard, FuncionalidadeGuard)
+@RequiresFuncionalidade('INDICADOR_ESTRATEGICO')
 export class ChamadoExternoController {
   constructor(private readonly service: ChamadoExternoService) {}
 

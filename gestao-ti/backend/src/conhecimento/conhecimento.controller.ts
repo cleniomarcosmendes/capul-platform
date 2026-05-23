@@ -26,9 +26,12 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 // Whitelist centralizada — common/constants/anexo-mime.constant.ts (06/05/2026).
 import { isAnexoPermitido } from '../common/constants/anexo-mime.constant';
 import { createUploadConfig } from '../common/helpers/multer-upload.helper.js';
+import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
+import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
 
 @Controller('conhecimento')
-@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard, FuncionalidadeGuard)
+@RequiresFuncionalidade('EQUIPE')
 export class ConhecimentoController {
   constructor(private readonly service: ConhecimentoService) {}
 

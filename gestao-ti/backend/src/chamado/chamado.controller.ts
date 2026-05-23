@@ -53,7 +53,8 @@ import { ALLOWED_MIMES_ANEXO, isAnexoPermitido, mimeTypeParaDownload } from '../
 import { createUploadConfig } from '../common/helpers/multer-upload.helper.js';
 
 @Controller('chamados')
-@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard, FuncionalidadeGuard)
+@RequiresFuncionalidade('CHAMADO')
 export class ChamadoController {
   constructor(private readonly service: ChamadoService) {}
 
@@ -65,8 +66,6 @@ export class ChamadoController {
   }
 
   @Get()
-  @UseGuards(FuncionalidadeGuard)
-  @RequiresFuncionalidade('CHAMADO')  // Workspace Sub-fase 1.5 — piloto
   findAll(
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,

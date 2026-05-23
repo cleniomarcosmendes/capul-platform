@@ -37,11 +37,14 @@ import { CreateTipoContratoDto, UpdateTipoContratoDto } from './dto/create-tipo-
 import { CreateFornecedorDto, UpdateFornecedorDto } from './dto/create-fornecedor.dto';
 import { CreateProdutoDto, UpdateProdutoDto } from './dto/create-produto.dto';
 import { isAnexoPermitido } from '../common/constants/anexo-mime.constant';
+import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
+import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
 
 const UPLOADS_DIR = path.resolve('./uploads/contratos');
 
 @Controller('contratos')
-@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard, FuncionalidadeGuard)
+@RequiresFuncionalidade('CONTRATO')
 export class ContratoController {
   constructor(private readonly service: ContratoService) {}
 

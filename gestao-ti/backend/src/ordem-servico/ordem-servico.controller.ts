@@ -9,10 +9,13 @@ import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { CreateOsDto } from './dto/create-os.dto.js';
 import { UpdateOsDto } from './dto/update-os.dto.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
+import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
+import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
 import { StatusOS } from '@prisma/client';
 
 @Controller('ordens-servico')
-@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard, FuncionalidadeGuard)
+@RequiresFuncionalidade('OS')
 export class OrdemServicoController {
   constructor(private readonly service: OrdemServicoService) {}
 
