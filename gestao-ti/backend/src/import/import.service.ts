@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import ExcelJS from 'exceljs';
 import { TipoAtivo, TipoSoftware } from '@prisma/client';
+import { getDefaultDepartamentoId } from '../common/helpers/default-departamento.helper.js';
 
 export interface LinhaPreview {
   linha: number;
@@ -125,6 +126,9 @@ export class ImportService {
     let criados = 0;
     const erros: { linha: number; erro: string }[] = [];
 
+    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL.
+    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+
     for (let i = 0; i < dados.length; i++) {
       const d = dados[i];
       try {
@@ -139,6 +143,7 @@ export class ImportService {
             sistemaOperacional: d['sistemaOperacional'] ? String(d['sistemaOperacional']) : undefined,
             ip: d['ip'] ? String(d['ip']) : undefined,
             hostname: d['hostname'] ? String(d['hostname']) : undefined,
+            departamentoId,
           },
         });
         criados++;
@@ -189,6 +194,9 @@ export class ImportService {
     let criados = 0;
     const erros: { linha: number; erro: string }[] = [];
 
+    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL.
+    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+
     for (let i = 0; i < dados.length; i++) {
       const d = dados[i];
       try {
@@ -198,6 +206,7 @@ export class ImportService {
             tipo: d['tipo'] as TipoSoftware,
             fabricante: d['fabricante'] ? String(d['fabricante']) : undefined,
             versaoAtual: d['versaoAtual'] ? String(d['versaoAtual']) : undefined,
+            departamentoId,
           },
         });
         criados++;

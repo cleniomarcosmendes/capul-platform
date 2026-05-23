@@ -11,6 +11,7 @@ import { CreateModuloDto } from './dto/create-modulo.dto.js';
 import { UpdateModuloDto } from './dto/update-modulo.dto.js';
 import { TipoSoftware, Criticidade, StatusSoftware, StatusModulo } from '@prisma/client';
 import { paginate } from '../common/prisma/paginate.helper.js';
+import { getDefaultDepartamentoId } from '../common/helpers/default-departamento.helper.js';
 
 const softwareListInclude = {
   equipeResponsavel: { select: { id: true, nome: true, sigla: true, cor: true } },
@@ -77,8 +78,11 @@ export class SoftwareService {
     const existing = await this.prisma.software.findUnique({ where: { nome: dto.nome } });
     if (existing) throw new ConflictException('Ja existe um software com este nome');
 
+    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL.
+    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+
     return this.prisma.software.create({
-      data: dto,
+      data: { ...dto, departamentoId },
       include: softwareListInclude,
     });
   }

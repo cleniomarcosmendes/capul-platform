@@ -10,6 +10,7 @@ import { CreateCategoriaLicencaDto, UpdateCategoriaLicencaDto } from './dto/crea
 import { StatusLicenca, ModeloLicenca } from '@prisma/client';
 import { isGestor } from '../common/constants/roles.constant.js';
 import { paginate } from '../common/prisma/paginate.helper.js';
+import { getDefaultDepartamentoId } from '../common/helpers/default-departamento.helper.js';
 
 const MODELOS_POR_USUARIO: ModeloLicenca[] = ['POR_USUARIO', 'SUBSCRICAO', 'SAAS'];
 
@@ -96,6 +97,9 @@ export class LicencaService {
       if (!software) throw new BadRequestException('Software nao encontrado');
     }
 
+    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL.
+    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+
     return this.prisma.softwareLicenca.create({
       data: {
         softwareId: dto.softwareId || null,
@@ -110,6 +114,7 @@ export class LicencaService {
         chaveSerial: dto.chaveSerial,
         fornecedor: dto.fornecedor,
         observacoes: dto.observacoes,
+        departamentoId,
       },
       include: licencaInclude,
     });
@@ -137,6 +142,9 @@ export class LicencaService {
       data: { status: 'INATIVA' },
     });
 
+    // Onda 1 Sub-fase 1.1 — renovação herda departamentoId da licença anterior.
+    const departamentoId = anterior.departamentoId ?? await getDefaultDepartamentoId(this.prisma);
+
     // Criar nova licenca copiando dados da anterior (RN-LIC-08)
     const nova = await this.prisma.softwareLicenca.create({
       data: {
@@ -147,6 +155,7 @@ export class LicencaService {
         quantidade: anterior.quantidade,
         valorTotal: anterior.valorTotal,
         valorUnitario: anterior.valorUnitario,
+        departamentoId,
         fornecedor: anterior.fornecedor,
         chaveSerial: anterior.chaveSerial,
         observacoes: `Renovacao da licenca anterior (${anterior.id})`,

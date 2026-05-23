@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CreateNotaFiscalDto, UpdateNotaFiscalDto } from '../dto/create-nota-fiscal.dto.js';
 import { FiscalNfeClient, FiscalConsultaRetorno } from './fiscal-nfe.client.js';
+import { getDefaultDepartamentoId } from '../../common/helpers/default-departamento.helper.js';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -273,6 +274,9 @@ export class CompraNotaFiscalService {
 
     const valorTotalNF = itensData.reduce((sum, i) => sum + i.valorTotal, 0);
 
+    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL.
+    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+
     return this.prisma.$transaction(async (tx) => {
       const nf = await tx.notaFiscal.create({
         data: {
@@ -286,6 +290,7 @@ export class CompraNotaFiscalService {
           observacao: dto.observacao || null,
           valorTotal: valorTotalNF,
           chaveNfe: dto.chaveNfe ?? null,
+          departamentoId,
           itens: {
             create: itensData,
           },
@@ -451,6 +456,9 @@ export class CompraNotaFiscalService {
       observacao: item.observacao,
     }));
 
+    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL. Cópia herda do original.
+    const departamentoId = original.departamentoId ?? await getDefaultDepartamentoId(this.prisma);
+
     return this.prisma.notaFiscal.create({
       data: {
         numero: `${original.numero}-COPIA`,
@@ -461,6 +469,7 @@ export class CompraNotaFiscalService {
         equipeId: original.equipeId,
         observacao: original.observacao,
         valorTotal: Number(original.valorTotal),
+        departamentoId,
         itens: { create: itensData },
       },
       include: NF_INCLUDE,

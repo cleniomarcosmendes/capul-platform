@@ -7,6 +7,7 @@ import { UpdateAtivoDto } from './dto/update-ativo.dto.js';
 import { AddAtivoSoftwareDto } from './dto/add-ativo-software.dto.js';
 import { StatusAtivo } from '@prisma/client';
 import { paginate } from '../common/prisma/paginate.helper.js';
+import { getDefaultDepartamentoId } from '../common/helpers/default-departamento.helper.js';
 
 const ativoListInclude = {
   filial: { select: { id: true, codigo: true, nomeFantasia: true } },
@@ -80,6 +81,9 @@ export class AtivoService {
     const exists = await this.prisma.ativo.findUnique({ where: { tag: dto.tag } });
     if (exists) throw new BadRequestException('Tag ja existe');
 
+    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL. Fallback T.I. se DTO não trouxer.
+    const departamentoId = dto.departamentoId ?? await getDefaultDepartamentoId(this.prisma);
+
     return this.prisma.ativo.create({
       data: {
         tag: dto.tag,
@@ -91,7 +95,7 @@ export class AtivoService {
         numeroSerie: dto.numeroSerie,
         filialId: dto.filialId,
         responsavelId: dto.responsavelId,
-        departamentoId: dto.departamentoId,
+        departamentoId,
         dataAquisicao: dto.dataAquisicao ? new Date(dto.dataAquisicao) : undefined,
         dataGarantia: dto.dataGarantia ? new Date(dto.dataGarantia) : undefined,
         processador: dto.processador,

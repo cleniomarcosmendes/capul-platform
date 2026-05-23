@@ -13,6 +13,7 @@ import { projetoListInclude, projetoDetailInclude } from './projeto.constants.js
 import { isGestor, isTI } from '../../common/constants/roles.constant.js';
 import { ROLES_EXTERNOS } from '../../common/constants/roles.constant.js';
 import { paginate } from '../../common/prisma/paginate.helper.js';
+import { getDefaultDepartamentoId } from '../../common/helpers/default-departamento.helper.js';
 import { Prisma } from '@prisma/client';
 
 /** Origem de um match da busca profunda em Projeto (PR3) — badge + snippet. */
@@ -355,6 +356,19 @@ export class ProjetoCoreService {
       if (!resp) throw new NotFoundException('Usuario responsavel nao encontrado');
     }
 
+    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL.
+    // D14: subprojeto herda departamento do projeto-pai. Senão, default T.I.
+    let departamentoId: string;
+    if (dto.projetoPaiId) {
+      const pai = await this.prisma.projeto.findUniqueOrThrow({
+        where: { id: dto.projetoPaiId },
+        select: { departamentoId: true },
+      });
+      departamentoId = pai.departamentoId;
+    } else {
+      departamentoId = await getDefaultDepartamentoId(this.prisma);
+    }
+
     const projeto = await this.prisma.projeto.create({
       data: {
         nome: dto.nome,
@@ -371,6 +385,7 @@ export class ProjetoCoreService {
         contratoId: isExterno ? undefined : contratoId,
         responsavelId,
         tipoProjetoId: dto.tipoProjetoId || undefined,
+        departamentoId,
       },
       include: projetoDetailInclude,
     });
@@ -727,6 +742,7 @@ export class ProjetoCoreService {
     if (!original) throw new NotFoundException('Projeto nao encontrado');
 
     // Criar projeto duplicado
+    // Onda 1 Sub-fase 1.1 — duplicata herda departamentoId do original.
     const novoProjeto = await this.prisma.projeto.create({
       data: {
         nome: `${original.nome} (Copia)`,
@@ -746,6 +762,7 @@ export class ProjetoCoreService {
         softwareId: original.softwareId,
         contratoId: original.contratoId,
         projetoPaiId: original.projetoPaiId,
+        departamentoId: original.departamentoId,
       },
     });
 

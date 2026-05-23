@@ -10,6 +10,7 @@ import { UpdateEquipeDto } from './dto/update-equipe.dto.js';
 import { AddMembroDto } from './dto/add-membro.dto.js';
 import { UpdateMembroDto } from './dto/update-membro.dto.js';
 import { StatusGeral } from '@prisma/client';
+import { getDefaultDepartamentoId } from '../common/helpers/default-departamento.helper.js';
 
 @Injectable()
 export class EquipeService {
@@ -61,6 +62,9 @@ export class EquipeService {
       );
     }
 
+    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL. Default T.I. (helper).
+    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+
     return this.prisma.equipeTI.create({
       data: {
         nome: dto.nome,
@@ -71,6 +75,7 @@ export class EquipeService {
         aceitaChamadoExterno: dto.aceitaChamadoExterno,
         emailEquipe: dto.emailEquipe,
         ordem: dto.ordem,
+        departamentoId,
       },
     });
   }

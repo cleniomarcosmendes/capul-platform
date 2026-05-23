@@ -11,6 +11,7 @@ import { FinalizarParadaDto } from './dto/finalizar-parada.dto';
 import { CreateMotivoParadaDto } from './dto/create-motivo-parada.dto';
 import { UpdateMotivoParadaDto } from './dto/update-motivo-parada.dto';
 import { paginate } from '../common/prisma/paginate.helper.js';
+import { getDefaultDepartamentoId } from '../common/helpers/default-departamento.helper.js';
 
 const paradaListInclude = {
   motivoParada: { select: { id: true, nome: true } },
@@ -119,6 +120,9 @@ export class ParadaService {
       status = 'FINALIZADA';
     }
 
+    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL.
+    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+
     const criada = await this.prisma.registroParada.create({
       data: {
         titulo: dto.titulo,
@@ -135,6 +139,7 @@ export class ParadaService {
         softwareModuloId: dto.softwareModuloId,
         registradoPorId: userId,
         finalizadoPorId: status === 'FINALIZADA' ? userId : undefined,
+        departamentoId,
         filiaisAfetadas: {
           create: dto.filialIds.map((filialId) => ({ filialId })),
         },
@@ -406,7 +411,9 @@ export class ParadaService {
   }
 
   async createMotivo(dto: CreateMotivoParadaDto) {
-    return this.prisma.motivoParada.create({ data: dto });
+    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL.
+    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+    return this.prisma.motivoParada.create({ data: { ...dto, departamentoId } });
   }
 
   async updateMotivo(id: string, dto: UpdateMotivoParadaDto) {

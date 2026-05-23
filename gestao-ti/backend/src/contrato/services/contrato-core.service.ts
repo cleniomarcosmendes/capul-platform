@@ -11,6 +11,7 @@ import { UpdateContratoDto } from '../dto/update-contrato.dto.js';
 import { RenovarContratoDto } from '../dto/renovar-contrato.dto.js';
 import { contratoListInclude, contratoDetailInclude, TRANSICOES_VALIDAS } from './contrato.constants.js';
 import { paginate } from '../../common/prisma/paginate.helper.js';
+import { getDefaultDepartamentoId } from '../../common/helpers/default-departamento.helper.js';
 
 @Injectable()
 export class ContratoCoreService {
@@ -148,6 +149,9 @@ export class ContratoCoreService {
       if (!sw) throw new BadRequestException('Software nao encontrado');
     }
 
+    // Onda 1 Sub-fase 1.1 — departamentoId NOT NULL.
+    const departamentoId = await getDefaultDepartamentoId(this.prisma);
+
     const contrato = await this.prisma.contrato.create({
       data: {
         titulo: dto.titulo,
@@ -167,6 +171,7 @@ export class ContratoCoreService {
         dataInicio: this.parseDate(dto.dataInicio),
         dataFim: this.parseDate(dto.dataFim),
         dataAssinatura: dto.dataAssinatura ? this.parseDate(dto.dataAssinatura) : undefined,
+        departamentoId,
         modalidadeValor: (dto.modalidadeValor as 'FIXO' | 'VARIAVEL') || 'FIXO',
         renovacaoAutomatica: dto.renovacaoAutomatica,
         diasAlertaVencimento: dto.diasAlertaVencimento,
@@ -327,6 +332,8 @@ export class ContratoCoreService {
           observacoes: contrato.observacoes,
           dataRenovacao: new Date(),
           status: 'ATIVO',
+          // Onda 1 Sub-fase 1.1 — renovação herda depto do contrato original.
+          departamentoId: contrato.departamentoId,
           contratoOriginalId: contrato.id,
         },
         include: contratoListInclude,
