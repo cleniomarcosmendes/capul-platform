@@ -3,7 +3,7 @@
 **Sub-fase:** 1.3 — `core.departamento_funcionalidades` + enum `FuncionalidadeWorkspace`
 **Branch:** `feat/workspace-foundation` (continuação)
 **Esforço estimado:** ~3-4h (escopo: tabela nova + seed, sem call sites a atualizar)
-**Status:** Plano fechado em 23/05/2026. Pronto pra execução.
+**Status:** ✅ **CONCLUÍDA em 23/05/2026** — ver §15 (Resultado).
 
 > Documento de referência: `Workspace_Multi_Departamento_Design.md` v1.2 §4.2.12 + D32.
 > Pré-requisitos: Sub-fases 1.1 (`50624df`) e 1.2 (`dfb362b`) concluídas.
@@ -242,3 +242,62 @@ Reverter schema via `git checkout HEAD~ auth-gateway/prisma/schema.prisma`.
 ---
 
 _Plano criado por Claude em 23/05/2026 manhã. Continuação da sub-fase 1.2 (commit `dfb362b`). Branch `feat/workspace-foundation`._
+
+---
+
+## 15. Resultado (execução em 23/05/2026)
+
+**Status:** ✅ **CONCLUÍDA**
+
+### 15.1 Commits aplicados
+
+| # | Hash | Conteúdo |
+|---|---|---|
+| 1 | `7633c9f` | Plano sub-fase 1.3 (este doc) |
+| 2 | **`14b18c9`** | **Schema** — enum `FuncionalidadeWorkspace` + model `DepartamentoFuncionalidade` + reversa em Departamento |
+| 3 | **`104009f`** | **Migration + seed** — tabela criada, T.I. com 12 funcionalidades ativas |
+| 4 | (este commit) | **Fechamento** — plano §15 |
+
+### 15.2 Smoke tests — todos passaram
+
+| # | Check | Resultado |
+|---|---|---|
+| 1 | Enum `core.FuncionalidadeWorkspace` existe | ✅ 12 valores |
+| 2 | Tabela `core.departamento_funcionalidades` existe | ✅ estrutura correta (8 cols + 3 indexes + FK CASCADE) |
+| 3 | T.I. tem 12 funcionalidades ativas | ✅ **12** |
+| 4 | Demais deptos com 0 | ✅ **0** |
+| 5 | Listagem confirma todas as 12 funcionalidades | ✅ |
+| 6 | **🔴 CRÍTICO — POST /auth/login** | ✅ **HTTP 200** |
+| 7 | `prisma migrate status` | ✅ aplicada |
+| 8 | `prisma validate` | ✅ OK |
+| 9 | auth-gateway healthy | ✅ |
+
+### 15.3 Sem achados surpresa
+
+Sub-fase 1.3 foi a mais limpa até agora:
+- Migration aplicou na primeira tentativa (padrão `DROP INDEX` aprendido na 1.2 já estava na cabeça)
+- Tabela nova, sem call sites de runtime
+- Login intacto (migration não toca em permissoes_modulo nem usuarios)
+- Pré-flight de ambos (depto T.I. + usuário admin) protege re-execução em outros ambientes
+
+### 15.4 Esforço real vs estimado
+
+- **Estimado:** ~3-4h
+- **Real:** ~1h efetiva (escopo enxuto + lições da 1.2)
+- **Diferença:** bem abaixo. Subfases ganham velocidade conforme aprendizado se acumula.
+
+### 15.5 Pendências técnicas registradas
+
+- [ ] **Sub-fase 1.6** — UI Configurador: grid `depto × funcionalidade` pra ADMIN ativar/desativar. Atualmente apenas T.I. tem funcionalidades; demais deptos ficam silenciosamente sem nada até alguém ativar.
+- [ ] **Cadastro dos deptos Fiscal e Controladoria** — pré-requisito pra ativar funcionalidades neles (D34: piloto Onda 2). Hoje em DEV não existem. Pode ser cadastro manual via UI atual do Configurador, ou seed novo.
+
+### 15.6 Próximo passo — Sub-fase 1.4
+
+JWT payload novo no auth-gateway:
+- Atual: `modulos: [{ codigo, role }]`
+- Alvo: `modulos: [{ codigo, departamentos: [{ id, nome, role, funcionalidades: [...] }] }]`
+- Backend monta `departamentos[]` juntando `permissoes_modulo` × `departamento_funcionalidades`
+- Token velho deixa de funcionar (decisão D41/Q6 — invalidar sessões)
+- Esforço estimado: ~6h (doc-mestre §7.1 lote 1.4). Mas é mais delicado — afeta todos os módulos que validam JWT.
+
+**Decisão pendente após esta sub-fase:** continuar com 1.4 ou pausar?
