@@ -491,23 +491,21 @@ export class ChamadoCoreService {
       if (mod) moduloNome = mod.nome;
     }
 
-    // Determinar filial, departamento e centro de custo:
-    // Tecnicos podem informar valores diferentes (abertura em nome de outro setor)
+    // Filial do SOLICITANTE — técnico pode informar outra ao abrir em nome
+    // de outro setor (label do form "Filial do solicitante").
     let filialId = user.filialId;
-    let departamentoId: string | undefined = user.departamentoId;
 
-    if (role !== 'USUARIO_FINAL') {
-      if (dto.filialId) {
-        const filial = await this.prisma.filial.findUnique({ where: { id: dto.filialId } });
-        if (!filial) throw new BadRequestException('Filial nao encontrada');
-        filialId = dto.filialId;
-      }
-      if (dto.departamentoId) {
-        const depto = await this.prisma.departamento.findUnique({ where: { id: dto.departamentoId } });
-        if (!depto) throw new BadRequestException('Departamento nao encontrado');
-        departamentoId = dto.departamentoId;
-      }
+    if (role !== 'USUARIO_FINAL' && dto.filialId) {
+      const filial = await this.prisma.filial.findUnique({ where: { id: dto.filialId } });
+      if (!filial) throw new BadRequestException('Filial nao encontrada');
+      filialId = dto.filialId;
     }
+
+    // Workspace Onda 2 C2.7 — `chamado.departamentoId` é o depto-dono
+    // (workspace que ATENDE), derivado SEMPRE da equipe escolhida.
+    // `dto.departamentoId` (campo "Departamento do solicitante" no form) é
+    // ignorado aqui — segue como info visual no form mas não define dono.
+    const departamentoId = equipe.departamentoId ?? undefined;
 
     // Se tecnico/gestor/admin, auto-assumir o chamado
     // USUARIO_CHAVE e TERCEIRIZADO nao auto-assumem (mesmo perfil que usuario final)
@@ -756,10 +754,13 @@ export class ChamadoCoreService {
       }
     }
 
+    // Workspace Onda 2 C2.7 — re-derivar departamentoId quando a equipe
+    // muda (o workspace dono acompanha a equipe que atende).
     const updated = await this.prisma.chamado.update({
       where: { id },
       data: {
         equipeAtualId: dto.equipeDestinoId,
+        departamentoId: equipeDestino.departamentoId ?? undefined,
         tecnicoId: dto.tecnicoDestinoId || null,
         status: dto.tecnicoDestinoId ? 'EM_ATENDIMENTO' : 'ABERTO',
       },
