@@ -55,12 +55,18 @@ export const usuarioService = {
     return data;
   },
 
-  async atribuirPermissao(id: string, dto: { moduloId: string; roleModuloId: string }): Promise<void> {
+  async atribuirPermissao(
+    id: string,
+    dto: { moduloId: string; roleModuloId: string; departamentoId?: string },
+  ): Promise<void> {
+    // Sub-fase 1.6.2 — departamentoId opcional (multi-perfil real).
     await coreApi.post(`/usuarios/${id}/permissoes`, dto);
   },
 
-  async revogarPermissao(id: string, moduloId: string): Promise<void> {
-    await coreApi.delete(`/usuarios/${id}/permissoes/${moduloId}`);
+  async revogarPermissao(id: string, moduloId: string, departamentoId?: string): Promise<void> {
+    // Sub-fase 1.6.2 — departamentoId opcional via query string.
+    const params = departamentoId ? { departamentoId } : {};
+    await coreApi.delete(`/usuarios/${id}/permissoes/${moduloId}`, { params });
   },
 
   async listarModulos(): Promise<ModuloSistema[]> {

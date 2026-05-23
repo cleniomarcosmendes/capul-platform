@@ -133,6 +133,10 @@ export interface UsuarioDetalhe extends UsuarioListItem {
     status: string;
     modulo: ModuloSistema;
     roleModulo: RoleModulo;
+    // Sub-fase 1.6.2 — depto operacional do user no módulo (NOT NULL desde Sub-fase 1.2).
+    // Em DEV todos apontam pra T.I.; multi-perfil real surge na Onda 2 quando outros
+    // deptos forem cadastrados. UI atual mostra 1 perfil por módulo (TODO matriz).
+    departamento?: { id: string; nome: string };
   }[];
 }
 

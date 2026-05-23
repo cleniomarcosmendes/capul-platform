@@ -89,8 +89,12 @@ export class UsuarioController {
   revogarPermissao(
     @Param('id') id: string,
     @Param('moduloId') moduloId: string,
+    @Query('departamentoId') departamentoId?: string,
   ) {
-    return this.usuarioService.revogarPermissao(id, moduloId);
+    // Workspace Sub-fase 1.6.2 — depto opcional (multi-perfil real).
+    // Sem departamentoId: revoga a permissão única (comportamento atual).
+    // Com departamentoId: revoga somente o perfil naquele depto.
+    return this.usuarioService.revogarPermissao(id, moduloId, departamentoId);
   }
 
   // --- Capabilities por usuário (LGPD) — só ADMIN do Configurador (D5).

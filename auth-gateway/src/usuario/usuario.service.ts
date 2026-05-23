@@ -312,15 +312,13 @@ export class UsuarioService {
     return result;
   }
 
-  async revogarPermissao(usuarioId: string, moduloId: string) {
-    // Onda 1 Sub-fase 1.2 — unique composta agora inclui departamentoId.
-    // Mantém semantica atual de "revogar permissão deste usuário neste módulo"
-    // via findFirst (todas as permissões têm depto T.I. enquanto Sub-fase 1.6
-    // não introduz multi-perfil real).
-    // TODO Sub-fase 1.6: aceitar departamentoId como parâmetro pra revogar
-    // permissão específica em depto específico.
+  async revogarPermissao(usuarioId: string, moduloId: string, departamentoId?: string) {
+    // Onda 1 Sub-fase 1.6.2 — departamentoId opcional para multi-perfil real.
+    // Sem departamentoId: revoga a permissão única do user no módulo
+    // (comportamento legado — funciona em DEV onde todos só têm 1 perfil).
+    // Com departamentoId: revoga somente o perfil específico (multi-perfil).
     const permissao = await this.prisma.permissaoModulo.findFirst({
-      where: { usuarioId, moduloId },
+      where: { usuarioId, moduloId, ...(departamentoId ? { departamentoId } : {}) },
     });
     if (!permissao) {
       throw new NotFoundException('Permissao nao encontrada');
