@@ -104,6 +104,9 @@ model Departamento {
 
   usuarios Usuario[]
 
+  // Workspace Multi-Departamento (Onda 1 Sub-fase 1.2 — D36)
+  permissoesModulo PermissaoModulo[]
+
   @@unique([filialId, nome])
   @@map("departamentos")
   @@schema("core")
@@ -250,7 +253,18 @@ model PermissaoModulo {
   roleModuloId String        @map("role_modulo_id")
   roleModulo   RoleModulo    @relation(fields: [roleModuloId], references: [id])
 
-  @@unique([usuarioId, moduloId])
+  // Workspace Multi-Departamento (Onda 1 Sub-fase 1.2 — D36/P7)
+  // departamentoId NOT NULL — toda permissão tem depto explícito.
+  // Multi-perfil habilitado pela @@unique abaixo (mesmo usuário pode ter
+  // role diferente em depto diferente do mesmo módulo).
+  // NÃO criar coluna is_super_admin (D36/Q5): ADMIN é global via role,
+  // guard backend detecta role==='ADMIN' e pula filtros departamentais.
+  departamentoId String       @map("departamento_id")
+  departamento   Departamento @relation(fields: [departamentoId], references: [id])
+
+  @@unique([usuarioId, moduloId, departamentoId])
+  @@index([departamentoId])
+  @@index([usuarioId])
   @@map("permissoes_modulo")
   @@schema("core")
 }
