@@ -24,10 +24,12 @@ export class DepartamentoFuncionalidadeService {
     'PARADA',
     'INDICADOR_OPERACIONAL',
     'INDICADOR_ESTRATEGICO',
+    'PAINEL_GESTAO_CHAMADO',
+    'PAINEL_GESTAO_PROJETO',
   ];
 
   /**
-   * Lista todas as 12 funcionalidades + status (ativo true/false) pro depto.
+   * Lista todas as 14 funcionalidades + status (ativo true/false) pro depto.
    * Funcionalidades nunca ativadas retornam `ativo: false` (registro inexistente
    * no DB). Funcionalidades inativadas (mas com histórico) retornam o registro
    * com `desativadoEm/Por`.

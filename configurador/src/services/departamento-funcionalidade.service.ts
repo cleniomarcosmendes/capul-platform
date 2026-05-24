@@ -12,9 +12,11 @@ export type FuncionalidadeWorkspace =
   | 'ATIVO'
   | 'PARADA'
   | 'INDICADOR_OPERACIONAL'
-  | 'INDICADOR_ESTRATEGICO';
+  | 'INDICADOR_ESTRATEGICO'
+  | 'PAINEL_GESTAO_CHAMADO'
+  | 'PAINEL_GESTAO_PROJETO';
 
-export type FuncionalidadeSecao = 'OPERACAO' | 'EQUIPE' | 'PORTFOLIO' | 'SUSTENTACAO' | 'INDICADORES';
+export type FuncionalidadeSecao = 'OPERACAO' | 'EQUIPE' | 'PORTFOLIO' | 'SUSTENTACAO' | 'INDICADORES' | 'PAINEIS';
 
 export interface FuncionalidadeMeta {
   codigo: FuncionalidadeWorkspace;
@@ -34,11 +36,14 @@ export interface FuncionalidadeMeta {
     | 'Server'
     | 'Activity'
     | 'BarChart3'
-    | 'TrendingUp';
+    | 'TrendingUp'
+    | 'Flame'
+    | 'ListChecks';
 }
 
 export const SECOES: { id: FuncionalidadeSecao; rotulo: string }[] = [
   { id: 'OPERACAO', rotulo: 'Operação' },
+  { id: 'PAINEIS', rotulo: 'Painéis de Gestão' },
   { id: 'EQUIPE', rotulo: 'Equipe' },
   { id: 'PORTFOLIO', rotulo: 'Portfólio' },
   { id: 'SUSTENTACAO', rotulo: 'Sustentação' },
@@ -60,6 +65,9 @@ export const TODAS_FUNCIONALIDADES: FuncionalidadeMeta[] = [
   // Sustentação
   { codigo: 'ATIVO', rotulo: 'Ativos', descricao: 'Inventário de ativos (hardware/dispositivos)', secao: 'SUSTENTACAO', icone: 'Server' },
   { codigo: 'PARADA', rotulo: 'Paradas', descricao: 'Registro de paradas operacionais', secao: 'SUSTENTACAO', icone: 'Activity' },
+  // Painéis de Gestão (foco em "o que devo entregar" — SLA crítico, atribuídos, atrasos, marcos)
+  { codigo: 'PAINEL_GESTAO_CHAMADO', rotulo: 'Painel de Gestão (Chamado)', descricao: 'Visão pessoal de SLA crítico, atribuídos a mim e aguardando resposta. Requer Chamados.', secao: 'PAINEIS', icone: 'Flame' },
+  { codigo: 'PAINEL_GESTAO_PROJETO', rotulo: 'Painel de Gestão (Projeto)', descricao: 'Visão pessoal de atividades, pendências, projetos atrasados e marcos próximos. Requer Projetos.', secao: 'PAINEIS', icone: 'ListChecks' },
   // Indicadores
   { codigo: 'INDICADOR_OPERACIONAL', rotulo: 'Indicadores Operacionais', descricao: 'KPIs do dia a dia (SLA, CSAT, etc.)', secao: 'INDICADORES', icone: 'BarChart3' },
   { codigo: 'INDICADOR_ESTRATEGICO', rotulo: 'Indicadores Estratégicos', descricao: 'KPIs de planejamento (investimentos, disponibilidade)', secao: 'INDICADORES', icone: 'TrendingUp' },

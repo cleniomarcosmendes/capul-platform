@@ -3,6 +3,7 @@ import {
   X, Save, Loader2, Check, Sparkles,
   Ticket, FolderKanban, ClipboardList, Users, FileText, Receipt,
   AppWindow, KeyRound, Server, Activity, BarChart3, TrendingUp,
+  Flame, ListChecks,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -27,6 +28,7 @@ interface Props {
 const ICONES: Record<FuncionalidadeMeta['icone'], LucideIcon> = {
   Ticket, FolderKanban, ClipboardList, Users, FileText, Receipt,
   AppWindow, KeyRound, Server, Activity, BarChart3, TrendingUp,
+  Flame, ListChecks,
 };
 
 /**
