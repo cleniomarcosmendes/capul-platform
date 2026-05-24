@@ -144,6 +144,13 @@ export class UpdateNotaFiscalDto {
   @IsString()
   @MaxLength(500, { message: 'Motivo deve ter no máximo 500 caracteres' })
   motivoAlteracaoChave?: string;
+
+  // Workspace Onda 3 S2 (24/05) — permite TI realocar a NF pra outro depto
+  // via UI <DepartamentoField> (alocação ≠ lançamento; lançamento é
+  // imutável). Backend valida que departamentoId ∈ deptos_user em S10.
+  @IsOptional()
+  @IsString()
+  departamentoId?: string;
 }
 
 /**

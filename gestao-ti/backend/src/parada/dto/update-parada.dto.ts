@@ -58,4 +58,11 @@ export class UpdateParadaDto {
   @IsString()
   @MaxLength(2000)
   observacoes?: string;
+
+  // Workspace Onda 3 S2 (24/05) — permite TI realocar a parada pra outro
+  // depto via UI <DepartamentoField> (alocação ≠ lançamento; lançamento é
+  // imutável). Backend valida que departamentoId ∈ deptos_user em S10.
+  @IsOptional()
+  @IsUUID()
+  departamentoId?: string;
 }
