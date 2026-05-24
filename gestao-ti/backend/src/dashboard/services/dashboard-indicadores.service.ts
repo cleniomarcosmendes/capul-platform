@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ChamadoExternoService } from '../../chamado-externo/chamado-externo.service.js';
-import { getDeptoIdsDoUser } from '../../common/helpers/departamento-filter.helper.js';
+import { getDeptoIdsDoUser, applyDepartamentoFilter } from '../../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
@@ -19,9 +19,9 @@ export class DashboardIndicadoresService {
     const horasTotais = diasNoMes * 24;
 
     const [investimentos, licencas, disponibilidade, chamados, horasDesenvolvimento, chamadosExternos] = await Promise.all([
-      this.getInvestimentos(dataInicio, dataFim),
-      this.getLicencas(),
-      this.getDisponibilidade(dataInicio, dataFim, horasTotais, tiposParada),
+      this.getInvestimentos(dataInicio, dataFim, user, role),
+      this.getLicencas(user, role),
+      this.getDisponibilidade(dataInicio, dataFim, horasTotais, tiposParada, user, role),
       this.getChamados(dataInicio, dataFim, user, role),
       this.getHorasDesenvolvimento(dataInicio, dataFim),
       this.chamadoExternoService.getKpiPeriodo(mes, ano),
@@ -38,12 +38,20 @@ export class DashboardIndicadoresService {
     };
   }
 
-  private async getInvestimentos(dataInicio: Date, dataFim: Date) {
+  private async getInvestimentos(dataInicio: Date, dataFim: Date, user?: JwtPayload, role?: string) {
+    // Workspace Onda 2 C2.7 — escopo workspace. Parcela filtra pelo
+    // departamento do contrato (parcela não tem depto próprio).
+    const deptoIds = getDeptoIdsDoUser(user, role);
+    const parcelaDeptoWhere =
+      deptoIds === null ? {} : { contrato: { departamentoId: { in: deptoIds } } };
+    const nfDeptoWhere = applyDepartamentoFilter({}, user, role);
+
     // Parcelas de contratos pagas no periodo
     const parcelas = await this.prisma.parcelaContrato.findMany({
       where: {
         status: 'PAGA',
         dataPagamento: { gte: dataInicio, lte: dataFim },
+        ...parcelaDeptoWhere,
       },
       include: {
         contrato: { select: { id: true, numero: true, titulo: true } },
@@ -58,6 +66,7 @@ export class DashboardIndicadoresService {
       where: {
         status: { not: 'CANCELADA' },
         dataLancamento: { gte: dataInicio, lte: dataFim },
+        ...nfDeptoWhere,
       },
       include: {
         fornecedor: true,
@@ -92,21 +101,25 @@ export class DashboardIndicadoresService {
     };
   }
 
-  private async getLicencas() {
+  private async getLicencas(user?: JwtPayload, role?: string) {
     const licSelect = {
       id: true, nome: true, modeloLicenca: true, quantidade: true, dataVencimento: true, status: true,
       software: { select: { id: true, nome: true } },
       categoria: { select: { id: true, nome: true } },
     };
 
+    // Workspace Onda 2 C2.7 — licenças e softwares filtram por depto-dono.
+    const licDeptoWhere = applyDepartamentoFilter({}, user, role);
+    const swDeptoWhere = applyDepartamentoFilter({}, user, role);
+
     const [licencasAtivasList, softwaresAtivosList, licencasVencendo30List, licencasVencendo90List] = await Promise.all([
       this.prisma.softwareLicenca.findMany({
-        where: { status: 'ATIVA' },
+        where: { status: 'ATIVA', ...licDeptoWhere },
         select: licSelect,
         orderBy: [{ software: { nome: 'asc' } }, { nome: 'asc' }],
       }),
       this.prisma.software.findMany({
-        where: { status: 'ATIVO' },
+        where: { status: 'ATIVO', ...swDeptoWhere },
         select: { id: true, nome: true, fabricante: true, tipo: true, criticidade: true, versaoAtual: true, _count: { select: { licencas: true, modulos: true } } },
         orderBy: { nome: 'asc' },
       }),
@@ -114,6 +127,7 @@ export class DashboardIndicadoresService {
         where: {
           status: 'ATIVA',
           dataVencimento: { gte: new Date(), lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
+          ...licDeptoWhere,
         },
         select: licSelect,
         orderBy: { dataVencimento: 'asc' },
@@ -122,6 +136,7 @@ export class DashboardIndicadoresService {
         where: {
           status: 'ATIVA',
           dataVencimento: { gte: new Date(), lte: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) },
+          ...licDeptoWhere,
         },
         select: licSelect,
         orderBy: { dataVencimento: 'asc' },
@@ -141,11 +156,14 @@ export class DashboardIndicadoresService {
     };
   }
 
-  private async getDisponibilidade(dataInicio: Date, dataFim: Date, horasTotais: number, tiposParada?: string[]) {
+  private async getDisponibilidade(dataInicio: Date, dataFim: Date, horasTotais: number, tiposParada?: string[], user?: JwtPayload, role?: string) {
     // Tipos para calculo de disponibilidade (default: nao-programadas)
     const tiposCalculo = tiposParada && tiposParada.length > 0
       ? tiposParada
       : ['PARADA_NAO_PROGRAMADA'];
+
+    // Workspace Onda 2 C2.7 — paradas filtram pelo depto-dono.
+    const paradaDeptoWhere = applyDepartamentoFilter({}, user, role);
 
     // Buscar TODAS as paradas finalizadas no periodo (para exibir visao completa)
     const paradas = await this.prisma.registroParada.findMany({
@@ -156,6 +174,7 @@ export class DashboardIndicadoresService {
           { fim: { gte: dataInicio } },
           { fim: null },
         ],
+        ...paradaDeptoWhere,
       },
       include: {
         software: { select: { id: true, nome: true } },
