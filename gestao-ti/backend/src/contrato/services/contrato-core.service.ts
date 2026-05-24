@@ -12,6 +12,7 @@ import { RenovarContratoDto } from '../dto/renovar-contrato.dto.js';
 import { contratoListInclude, contratoDetailInclude, TRANSICOES_VALIDAS } from './contrato.constants.js';
 import { paginate } from '../../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../../common/helpers/resolve-departamento.helper.js';
+import { resolveDepartamentoLancamento } from '../../common/helpers/resolve-departamento-lancamento.helper.js';
 import { applyDepartamentoFilter } from '../../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
@@ -183,6 +184,7 @@ export class ContratoCoreService {
         dataFim: this.parseDate(dto.dataFim),
         dataAssinatura: dto.dataAssinatura ? this.parseDate(dto.dataAssinatura) : undefined,
         departamentoId,
+        departamentoLancamentoId: resolveDepartamentoLancamento(user, departamentoId),
         modalidadeValor: (dto.modalidadeValor as 'FIXO' | 'VARIAVEL') || 'FIXO',
         renovacaoAutomatica: dto.renovacaoAutomatica,
         diasAlertaVencimento: dto.diasAlertaVencimento,
@@ -344,7 +346,9 @@ export class ContratoCoreService {
           dataRenovacao: new Date(),
           status: 'ATIVO',
           // Onda 1 Sub-fase 1.1 — renovação herda depto do contrato original.
+          // Onda 3 S1 — preserva também o lançamento (renovação ≠ novo cadastro).
           departamentoId: contrato.departamentoId,
+          departamentoLancamentoId: contrato.departamentoLancamentoId,
           contratoOriginalId: contrato.id,
         },
         include: contratoListInclude,

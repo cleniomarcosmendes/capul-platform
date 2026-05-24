@@ -12,6 +12,7 @@ import { UpdateModuloDto } from './dto/update-modulo.dto.js';
 import { TipoSoftware, Criticidade, StatusSoftware, StatusModulo } from '@prisma/client';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
+import { resolveDepartamentoLancamento } from '../common/helpers/resolve-departamento-lancamento.helper.js';
 import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
@@ -91,8 +92,10 @@ export class SoftwareService {
       dto.departamentoId,
     );
 
+    const departamentoLancamentoId = resolveDepartamentoLancamento(user, departamentoId);
+
     return this.prisma.software.create({
-      data: { ...dto, departamentoId },
+      data: { ...dto, departamentoId, departamentoLancamentoId },
       include: softwareListInclude,
     });
   }

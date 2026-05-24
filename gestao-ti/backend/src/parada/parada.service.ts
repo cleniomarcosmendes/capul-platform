@@ -12,6 +12,7 @@ import { CreateMotivoParadaDto } from './dto/create-motivo-parada.dto';
 import { UpdateMotivoParadaDto } from './dto/update-motivo-parada.dto';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
+import { resolveDepartamentoLancamento } from '../common/helpers/resolve-departamento-lancamento.helper.js';
 import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 
@@ -150,6 +151,7 @@ export class ParadaService {
         registradoPorId: userId,
         finalizadoPorId: status === 'FINALIZADA' ? userId : undefined,
         departamentoId,
+        departamentoLancamentoId: resolveDepartamentoLancamento(user, departamentoId),
         filiaisAfetadas: {
           create: dto.filialIds.map((filialId) => ({ filialId })),
         },

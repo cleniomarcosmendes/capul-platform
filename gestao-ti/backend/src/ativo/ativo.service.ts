@@ -8,6 +8,7 @@ import { AddAtivoSoftwareDto } from './dto/add-ativo-software.dto.js';
 import { StatusAtivo } from '@prisma/client';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
+import { resolveDepartamentoLancamento } from '../common/helpers/resolve-departamento-lancamento.helper.js';
 import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
@@ -106,6 +107,7 @@ export class AtivoService {
         filialId: dto.filialId,
         responsavelId: dto.responsavelId,
         departamentoId,
+        departamentoLancamentoId: resolveDepartamentoLancamento(user, departamentoId),
         dataAquisicao: dto.dataAquisicao ? new Date(dto.dataAquisicao) : undefined,
         dataGarantia: dto.dataGarantia ? new Date(dto.dataGarantia) : undefined,
         processador: dto.processador,

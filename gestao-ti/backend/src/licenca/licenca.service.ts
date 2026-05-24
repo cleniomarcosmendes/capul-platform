@@ -11,6 +11,7 @@ import { StatusLicenca, ModeloLicenca } from '@prisma/client';
 import { isGestor } from '../common/constants/roles.constant.js';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
+import { resolveDepartamentoLancamento } from '../common/helpers/resolve-departamento-lancamento.helper.js';
 import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
@@ -110,6 +111,8 @@ export class LicencaService {
       dto.departamentoId,
     );
 
+    const departamentoLancamentoId = resolveDepartamentoLancamento(user, departamentoId);
+
     return this.prisma.softwareLicenca.create({
       data: {
         softwareId: dto.softwareId || null,
@@ -125,6 +128,7 @@ export class LicencaService {
         fornecedor: dto.fornecedor,
         observacoes: dto.observacoes,
         departamentoId,
+        departamentoLancamentoId,
       },
       include: licencaInclude,
     });
@@ -155,7 +159,8 @@ export class LicencaService {
     // Renovação herda departamentoId da licença anterior (NOT NULL desde 1.1).
     const departamentoId = anterior.departamentoId;
 
-    // Criar nova licenca copiando dados da anterior (RN-LIC-08)
+    // Criar nova licenca copiando dados da anterior (RN-LIC-08).
+    // Lançamento herda do registro original (renovação preserva auditoria).
     const nova = await this.prisma.softwareLicenca.create({
       data: {
         softwareId: anterior.softwareId,
@@ -166,6 +171,7 @@ export class LicencaService {
         valorTotal: anterior.valorTotal,
         valorUnitario: anterior.valorUnitario,
         departamentoId,
+        departamentoLancamentoId: anterior.departamentoLancamentoId,
         fornecedor: anterior.fornecedor,
         chaveSerial: anterior.chaveSerial,
         observacoes: `Renovacao da licenca anterior (${anterior.id})`,

@@ -8,6 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { CreateNotaFiscalDto, UpdateNotaFiscalDto } from '../dto/create-nota-fiscal.dto.js';
 import { FiscalNfeClient, FiscalConsultaRetorno } from './fiscal-nfe.client.js';
 import { resolveDepartamento } from '../../common/helpers/resolve-departamento.helper.js';
+import { resolveDepartamentoLancamento } from '../../common/helpers/resolve-departamento-lancamento.helper.js';
 import { applyDepartamentoFilter } from '../../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 import * as path from 'path';
@@ -302,6 +303,7 @@ export class CompraNotaFiscalService {
           valorTotal: valorTotalNF,
           chaveNfe: dto.chaveNfe ?? null,
           departamentoId,
+          departamentoLancamentoId: resolveDepartamentoLancamento(user, departamentoId),
           itens: {
             create: itensData,
           },
@@ -481,6 +483,8 @@ export class CompraNotaFiscalService {
         observacao: original.observacao,
         valorTotal: Number(original.valorTotal),
         departamentoId,
+        // Onda 3 S1 — cópia preserva lançamento original (cópia ≠ novo cadastro).
+        departamentoLancamentoId: original.departamentoLancamentoId,
         itens: { create: itensData },
       },
       include: NF_INCLUDE,

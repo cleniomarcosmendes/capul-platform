@@ -1112,6 +1112,10 @@ model Software {
   // D31 (v1.1, 20/05): software vira multi-depto NOT NULL (era nullable no v1.0).
   departamentoId String       @map("departamento_id")
   departamento   Departamento @relation(fields: [departamentoId], references: [id])
+  // Workspace Onda 3 S1 (24/05) — depto-lançamento (snapshot do depto do user
+  // que cadastrou). FK existe no DB; relation Prisma omitida pra evitar
+  // 12 reversas no model Departamento. Adicionar se precisar JOIN no futuro.
+  departamentoLancamentoId String @map("departamento_lancamento_id")
 
   modulos          SoftwareModulo[]
   filiais          SoftwareFilial[]
@@ -1249,6 +1253,8 @@ model SoftwareLicenca {
   // equipeResponsavelId = equipe T.I. responsável técnica (NULLABLE — preenchido por UX).
   departamentoId      String       @map("departamento_id")
   departamento        Departamento @relation(fields: [departamentoId], references: [id])
+  // Workspace Onda 3 S1 (24/05) — depto-lançamento (ver Software).
+  departamentoLancamentoId String   @map("departamento_lancamento_id")
 
   equipeResponsavelId String?      @map("equipe_responsavel_id")
   equipeResponsavel   Equipe?    @relation("EquipeResponsavelLicenca", fields: [equipeResponsavelId], references: [id])
@@ -1333,6 +1339,8 @@ model Contrato {
   // Workspace Multi-Departamento (Onda 1 Sub-fase 1.1 — D31/D32)
   departamentoId String       @map("departamento_id")
   departamento   Departamento @relation(fields: [departamentoId], references: [id])
+  // Workspace Onda 3 S1 (24/05) — depto-lançamento (ver Software).
+  departamentoLancamentoId String @map("departamento_lancamento_id")
 
   parcelas                ParcelaContrato[]
   rateioTemplate          RateioTemplate?
@@ -1565,6 +1573,8 @@ model RegistroParada {
   // Workspace Multi-Departamento (Onda 1 Sub-fase 1.1 — D31/D32)
   departamentoId String       @map("departamento_id")
   departamento   Departamento @relation(fields: [departamentoId], references: [id])
+  // Workspace Onda 3 S1 (24/05) — depto-lançamento (ver Software).
+  departamentoLancamentoId String @map("departamento_lancamento_id")
 
   filiaisAfetadas ParadaFilialAfetada[]
   chamados        ParadaChamado[]
@@ -2064,6 +2074,8 @@ model Ativo {
   // Schema originalmente nullable — migration faz backfill T.I. + ALTER NOT NULL.
   departamentoId  String        @map("departamento_id")
   departamento    Departamento  @relation(fields: [departamentoId], references: [id])
+  // Workspace Onda 3 S1 (24/05) — depto-lançamento (ver Software).
+  departamentoLancamentoId String @map("departamento_lancamento_id")
 
   ativoPaiId      String?       @map("ativo_pai_id")
   ativoPai        Ativo?        @relation("AtivoHierarquia", fields: [ativoPaiId], references: [id])
@@ -2368,6 +2380,8 @@ model NotaFiscal {
   // filial é vestigial mas DB preserva integridade). RBAC usa departamentoId.
   departamentoId String       @map("departamento_id")
   departamento   Departamento @relation(fields: [departamentoId], references: [id])
+  // Workspace Onda 3 S1 (24/05) — depto-lançamento (ver Software).
+  departamentoLancamentoId String @map("departamento_lancamento_id")
 
   itens          NotaFiscalItem[]
   anexos         AnexoNotaFiscal[]

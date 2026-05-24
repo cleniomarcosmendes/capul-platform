@@ -144,6 +144,8 @@ export class ImportService {
             ip: d['ip'] ? String(d['ip']) : undefined,
             hostname: d['hostname'] ? String(d['hostname']) : undefined,
             departamentoId,
+            // Onda 3 S1 — import sem user; lançamento = mesmo depto da alocação (T.I.).
+            departamentoLancamentoId: departamentoId,
           },
         });
         criados++;
@@ -207,6 +209,8 @@ export class ImportService {
             fabricante: d['fabricante'] ? String(d['fabricante']) : undefined,
             versaoAtual: d['versaoAtual'] ? String(d['versaoAtual']) : undefined,
             departamentoId,
+            // Onda 3 S1 — import sem user; lançamento = mesmo depto da alocação (T.I.).
+            departamentoLancamentoId: departamentoId,
           },
         });
         criados++;
