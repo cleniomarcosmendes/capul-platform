@@ -5,17 +5,20 @@ import { isWorkspaceModulo } from '../lib/workspace-modulo';
 import type { Departamento } from '../types';
 
 /**
- * Workspace Onda 3 S3 (24/05) — campo Departamento reusável pros forms
- * de cadastros operacionais (Software/Licença/Contrato/NF/Ativo/Parada).
+ * Workspace Onda 3 S3 (24/05, refinado pós-S7) — campo Departamento
+ * reusável pros forms de cadastros operacionais (Software/Licença/Contrato/
+ * NF/Ativo/Parada).
  *
  * Comportamento (decisão Clenio):
  *  - **OVERSIGHT_PLATAFORMA** (capability): dropdown com TODOS os deptos
- *    da plataforma — "olho fiscalizador" cria/aloca onde quiser.
- *  - **0 deptos no user** com a funcionalidade ativa: erro "sem deptos
- *    ativos — contate ADMIN".
- *  - **1 depto**: readonly + badge informativo (sem clique, sem dúvida).
- *  - **N deptos**: <select> obrigatório com placeholder "Selecione..."
- *    (escolha consciente).
+ *    da plataforma. Default: depto do cadastro do user. Olho fiscalizador
+ *    cria/aloca onde quiser.
+ *  - **0 deptos elegíveis**: erro "sem deptos ativos — contate ADMIN".
+ *  - **Demais (1 ou N deptos)**: dropdown SEMPRE — pré-selecionado com
+ *    `usuario.departamento.id` (depto do cadastro/principal do user). User
+ *    pode mudar se quiser, mas o caso comum é manter o default. Mais
+ *    seguro e visualmente consistente do que esconder o dropdown quando
+ *    só há 1 opção (decisão pós-S7).
  *
  * Prop `funcionalidade` filtra os deptos que têm a funcionalidade ativa
  * no toggle do Configurador (ex: `funcionalidade="SOFTWARE"` exibe só
@@ -74,44 +77,25 @@ export function DepartamentoField({
       .finally(() => setLoadingTodos(false));
   }, [isOversight, funcionalidade]);
 
-  // Auto-seleção quando 1 depto único (e value ainda não setado).
+  // ─── Lista efetiva pra renderizar dropdown ─────────────────────
+  const opcoes = isOversight ? todosDeptos : deptosDoUser;
+
+  // ─── Default = depto do cadastro do user (se estiver na lista) ─
+  // Pre-seleciona quando: value vazio + opcoes carregadas + cadastro elegível.
+  // Fallback: se cadastro NÃO está na lista (caso raro), pega o primeiro.
   useEffect(() => {
-    if (isOversight) return;
-    if (deptosDoUser.length === 1 && !value) {
-      onChange(deptosDoUser[0].id);
-    }
-  }, [deptosDoUser, value, onChange, isOversight]);
+    if (value) return;
+    if (opcoes.length === 0) return;
+    if (isOversight && loadingTodos) return;
+    const cadastroId = usuario?.departamento?.id;
+    const cadastroNaLista = cadastroId && opcoes.some((d) => d.id === cadastroId);
+    onChange(cadastroNaLista ? cadastroId! : opcoes[0].id);
+  }, [value, opcoes, isOversight, loadingTodos, usuario, onChange]);
 
   // ─── Render ─────────────────────────────────────────────────────
 
-  // OVERSIGHT — dropdown com todos os deptos da plataforma.
-  if (isOversight) {
-    return (
-      <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          disabled={disabled || loadingTodos}
-          required
-          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-slate-50 disabled:text-slate-500"
-        >
-          <option value="">{loadingTodos ? 'Carregando...' : 'Selecione o departamento'}</option>
-          {todosDeptos.map((d) => (
-            <option key={d.id} value={d.id}>{d.nome}</option>
-          ))}
-        </select>
-        <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
-          Você tem permissão OVERSIGHT — dropdown lista todos os departamentos da plataforma.
-        </p>
-        {help && <p className="text-xs text-slate-500 mt-1">{help}</p>}
-      </div>
-    );
-  }
-
-  // 0 deptos — erro.
-  if (deptosDoUser.length === 0) {
+  // 0 deptos elegíveis (sem OVERSIGHT) — erro.
+  if (!isOversight && deptosDoUser.length === 0) {
     return (
       <div>
         <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
@@ -122,37 +106,28 @@ export function DepartamentoField({
     );
   }
 
-  // 1 depto — readonly + badge.
-  if (deptosDoUser.length === 1) {
-    const d = deptosDoUser[0];
-    return (
-      <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
-        <div className="w-full border border-slate-200 bg-slate-50 text-slate-700 text-sm rounded-lg px-3 py-2 flex items-center justify-between">
-          <span>{d.nome}</span>
-          <span className="text-[10px] text-slate-500 italic">cadastrando neste departamento</span>
-        </div>
-        {help && <p className="text-xs text-slate-500 mt-1">{help}</p>}
-      </div>
-    );
-  }
-
-  // N deptos — dropdown obrigatório com escolha consciente.
+  // Dropdown (caso geral: OVERSIGHT ou user com 1+ deptos).
   return (
     <div>
       <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
+        disabled={disabled || (isOversight && loadingTodos)}
         required
         className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-slate-50 disabled:text-slate-500"
       >
-        <option value="">Selecione o departamento</option>
-        {deptosDoUser.map((d) => (
+        <option value="">{loadingTodos ? 'Carregando...' : 'Selecione...'}</option>
+        {opcoes.map((d) => (
           <option key={d.id} value={d.id}>{d.nome}</option>
         ))}
       </select>
+      {isOversight && (
+        <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+          OVERSIGHT — dropdown lista todos os departamentos da plataforma.
+        </p>
+      )}
       {help && <p className="text-xs text-slate-500 mt-1">{help}</p>}
     </div>
   );
