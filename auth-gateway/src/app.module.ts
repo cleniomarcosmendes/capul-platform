@@ -82,7 +82,13 @@ class ProxyAwareThrottlerGuard extends ThrottlerGuard {
     }),
     ThrottlerModule.forRoot([{
       ttl: 60000,
-      limit: 100,
+      // Workspace Onda 2 (24/05) — subiu de 100 pra 500. Uso real do
+      // Workspace abre 4-5 módulos por sessão, cada um faz N requests a
+      // /core/* e /auth/me no carregamento. 100/min saturava muito rápido,
+      // gerando loops de retry no interceptor axios. /auth/login e
+      // /auth/refresh continuam com throttle apertado (10 e 5/min) via
+      // @Throttle nos controllers.
+      limit: 500,
     }]),
     PrismaModule,
     AuditLogModule,
