@@ -676,7 +676,17 @@ export class DashboardAcompanhamentoService {
     });
   }
 
-  async buscarAtividades(q?: string, projetoId?: string, status?: string, dataInicio?: string, dataFim?: string, responsavelId?: string, faseId?: string) {
+  async buscarAtividades(
+    user: JwtPayload,
+    role: string,
+    q?: string,
+    projetoId?: string,
+    status?: string,
+    dataInicio?: string,
+    dataFim?: string,
+    responsavelId?: string,
+    faseId?: string,
+  ) {
     const where: Record<string, unknown> = {};
     if (projetoId) where.projetoId = projetoId;
     if (status) where.status = status;
@@ -690,6 +700,20 @@ export class DashboardAcompanhamentoService {
       if (dataInicio) createdAt.gte = new Date(dataInicio);
       if (dataFim) createdAt.lte = new Date(dataFim + 'T23:59:59');
       where.createdAt = createdAt;
+    }
+    // Workspace Onda 2 C2.10 — escopa atividades pelos projetos visíveis.
+    // ADMIN escapa. Senão: projeto deve estar nos deptos do user, OR ele é
+    // responsável/membro/UC ativo. Espelha regra de projeto-core.service.
+    const deptoIds = getDeptoIdsDoUser(user, role);
+    if (deptoIds !== null) {
+      where.projeto = {
+        OR: [
+          { departamentoId: { in: deptoIds } },
+          { responsavelId: user.sub },
+          { membros: { some: { usuarioId: user.sub } } },
+          { usuariosChave: { some: { usuarioId: user.sub, ativo: true } } },
+        ],
+      };
     }
     const atividades = await this.prisma.atividadeProjeto.findMany({
       where,
@@ -726,7 +750,7 @@ export class DashboardAcompanhamentoService {
     });
   }
 
-  async getAcompanhamentoAtividade(atividadeId: string) {
+  async getAcompanhamentoAtividade(user: JwtPayload, role: string, atividadeId: string) {
     const atividade = await this.prisma.atividadeProjeto.findUnique({
       where: { id: atividadeId },
       include: {
@@ -734,7 +758,11 @@ export class DashboardAcompanhamentoService {
         projeto: {
           select: {
             id: true, numero: true, nome: true, status: true, tipo: true,
+            departamentoId: true,
+            responsavelId: true,
             responsavel: { select: { id: true, nome: true } },
+            membros: { select: { usuarioId: true } },
+            usuariosChave: { where: { ativo: true }, select: { usuarioId: true } },
           },
         },
         fase: { select: { id: true, nome: true, status: true } },
@@ -745,6 +773,20 @@ export class DashboardAcompanhamentoService {
       },
     });
     if (!atividade) return null;
+
+    // Workspace Onda 2 C2.10 — gate de visibilidade no projeto da atividade.
+    // ADMIN escapa. Senão: projeto.dept ∈ deptos_user OR é responsável/membro/UC.
+    const deptoIds = getDeptoIdsDoUser(user, role);
+    if (deptoIds !== null) {
+      const p = atividade.projeto;
+      const isResponsavel = p.responsavelId === user.sub;
+      const isMembro = p.membros.some((m) => m.usuarioId === user.sub);
+      const isUC = p.usuariosChave.some((uc) => uc.usuarioId === user.sub);
+      const inDepto = p.departamentoId !== null && deptoIds.includes(p.departamentoId);
+      if (!inDepto && !isResponsavel && !isMembro && !isUC) {
+        return null;
+      }
+    }
 
     // Registros de tempo
     const registrosTempo = await this.prisma.registroTempo.findMany({

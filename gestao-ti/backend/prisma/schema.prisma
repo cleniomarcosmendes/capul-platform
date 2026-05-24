@@ -386,8 +386,11 @@ model Chamado {
   ativoId String? @map("ativo_id")
   ativo   Ativo?  @relation(fields: [ativoId], references: [id])
 
-  departamentoId String?       @map("departamento_id")
-  departamento   Departamento? @relation(fields: [departamentoId], references: [id])
+  // Workspace Multi-Departamento C2.7 (24/05) — depto-dono do chamado
+  // derivado da equipe que ATENDE (`equipeAtual.departamentoId`).
+  // Tornado NOT NULL em 24/05 após auditoria confirmar 0 órfãos.
+  departamentoId String       @map("departamento_id")
+  departamento   Departamento @relation(fields: [departamentoId], references: [id])
 
   /// Agrupamento de chamados (decidido em 13/05/2026): quando varios usuarios
   /// abrem chamados com o mesmo problema, TI agrupa todos em um chamado-pai.

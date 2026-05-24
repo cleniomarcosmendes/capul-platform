@@ -8,6 +8,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { ROLES_GESTORES, ROLES_TI } from '../common/constants/roles.constant.js';
+import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
 
 const STAFF = [...ROLES_TI];
 const MANAGERS = [...ROLES_GESTORES];
@@ -138,13 +139,19 @@ export class DashboardController {
 
   @Get('acompanhamento-atividade')
   @Roles(...STAFF)
-  getAcompanhamentoAtividade(@Query('atividadeId') atividadeId: string) {
-    return this.service.getAcompanhamentoAtividade(atividadeId);
+  getAcompanhamentoAtividade(
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+    @Query('atividadeId') atividadeId: string,
+  ) {
+    return this.service.getAcompanhamentoAtividade(user, role, atividadeId);
   }
 
   @Get('acompanhamento-atividade/buscar')
   @Roles(...STAFF)
   buscarAtividades(
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
     @Query('q') q?: string,
     @Query('projetoId') projetoId?: string,
     @Query('status') status?: string,
@@ -153,7 +160,7 @@ export class DashboardController {
     @Query('responsavelId') responsavelId?: string,
     @Query('faseId') faseId?: string,
   ) {
-    return this.service.buscarAtividades(q, projetoId, status, dataInicio, dataFim, responsavelId, faseId);
+    return this.service.buscarAtividades(user, role, q, projetoId, status, dataInicio, dataFim, responsavelId, faseId);
   }
 
   @Get('acompanhamento-atividade/projetos')
@@ -179,6 +186,7 @@ export class DashboardController {
   // (produtividade), Indicadores (KPIs mensais).
 
   @Get('painel-chamados')
+  @RequiresFuncionalidade('PAINEL_GESTAO_CHAMADO')
   getPainelChamados(
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
@@ -188,6 +196,7 @@ export class DashboardController {
   }
 
   @Get('painel-projetos')
+  @RequiresFuncionalidade('PAINEL_GESTAO_PROJETO')
   getPainelProjetos(
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,

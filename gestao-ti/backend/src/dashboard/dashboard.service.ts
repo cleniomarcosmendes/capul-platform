@@ -116,16 +116,26 @@ export class DashboardService {
     return this.acompanhamento.listarProjetosAtivos();
   }
 
-  async buscarAtividades(q?: string, projetoId?: string, status?: string, dataInicio?: string, dataFim?: string, responsavelId?: string, faseId?: string) {
-    return this.acompanhamento.buscarAtividades(q, projetoId, status, dataInicio, dataFim, responsavelId, faseId);
+  async buscarAtividades(
+    user: JwtPayload,
+    role: string,
+    q?: string,
+    projetoId?: string,
+    status?: string,
+    dataInicio?: string,
+    dataFim?: string,
+    responsavelId?: string,
+    faseId?: string,
+  ) {
+    return this.acompanhamento.buscarAtividades(user, role, q, projetoId, status, dataInicio, dataFim, responsavelId, faseId);
   }
 
   async listarFasesAtivas() {
     return this.acompanhamento.listarFasesAtivas();
   }
 
-  async getAcompanhamentoAtividade(atividadeId: string) {
-    return this.acompanhamento.getAcompanhamentoAtividade(atividadeId);
+  async getAcompanhamentoAtividade(user: JwtPayload, role: string, atividadeId: string) {
+    return this.acompanhamento.getAcompanhamentoAtividade(user, role, atividadeId);
   }
 
   async getMinhasPendencias(userId: string) {
