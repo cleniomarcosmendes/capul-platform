@@ -9,8 +9,21 @@ export class DepartamentoController {
   constructor(private readonly departamentoService: DepartamentoService) {}
 
   @Get()
-  findAll(@Query('filialId') filialId?: string) {
-    return this.departamentoService.findAll(filialId);
+  findAll(
+    @Query('filialId') filialId?: string,
+    @Query('workspaceOnly') workspaceOnly?: string,
+    @Query('funcionalidade') funcionalidade?: string,
+  ) {
+    // Workspace Onda 2 C2.8 — quando `workspaceOnly=true`, retorna apenas
+    // deptos que têm pelo menos 1 funcionalidade ativa em
+    // `core.departamento_funcionalidades`. Quando `funcionalidade=X` é
+    // especificado, retorna apenas deptos com aquela funcionalidade ativa.
+    // `filialId` continua respeitado pra casos de depto organizacional.
+    return this.departamentoService.findAll({
+      filialId,
+      workspaceOnly: workspaceOnly === 'true',
+      funcionalidade,
+    });
   }
 
   @Post()

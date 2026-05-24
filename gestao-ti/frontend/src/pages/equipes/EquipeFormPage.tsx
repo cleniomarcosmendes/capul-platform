@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { equipeService } from '../../services/equipe.service';
+import { coreService } from '../../services/core.service';
+import type { Departamento } from '../../types';
 import { Save, ArrowLeft } from 'lucide-react';
 
 interface FormData {
@@ -14,6 +16,9 @@ interface FormData {
   aceitaChamadoExterno: boolean;
   emailEquipe: string;
   ordem: number;
+  /** Workspace Onda 2 C2.8 — depto-dono explícito no form (antes vinha
+   *  implícito do cascade do criador). */
+  departamentoId: string;
 }
 
 const initialForm: FormData = {
@@ -25,6 +30,7 @@ const initialForm: FormData = {
   aceitaChamadoExterno: true,
   emailEquipe: '',
   ordem: 0,
+  departamentoId: '',
 };
 
 export function EquipeFormPage() {
@@ -33,11 +39,19 @@ export function EquipeFormPage() {
   const isEdit = !!id;
 
   const [form, setForm] = useState<FormData>(initialForm);
+  const [departamentosWorkspace, setDepartamentosWorkspace] = useState<Departamento[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [dirty, setDirty] = useState(false);
   const { ConfirmDialog, guardedNavigate } = useUnsavedChanges(dirty);
+
+  // Workspace Onda 2 C2.8 — deptos-workspace com EQUIPE ativa.
+  useEffect(() => {
+    coreService.listarDepartamentos({ funcionalidade: 'EQUIPE' })
+      .then(setDepartamentosWorkspace)
+      .catch(() => setDepartamentosWorkspace([]));
+  }, []);
 
   useEffect(() => {
     if (isEdit) {
@@ -54,6 +68,7 @@ export function EquipeFormPage() {
             aceitaChamadoExterno: equipe.aceitaChamadoExterno,
             emailEquipe: equipe.emailEquipe || '',
             ordem: equipe.ordem,
+            departamentoId: equipe.departamentoId ?? '',
           });
         })
         .catch(() => setError('Equipe nao encontrada'))
@@ -71,6 +86,7 @@ export function EquipeFormPage() {
         ...form,
         descricao: form.descricao || undefined,
         emailEquipe: form.emailEquipe || undefined,
+        departamentoId: form.departamentoId || undefined,
       };
 
       if (isEdit) {
@@ -146,6 +162,25 @@ export function EquipeFormPage() {
                 placeholder="Ex: SS"
               />
             </div>
+          </div>
+
+          {/* Workspace Onda 2 C2.8 — depto-dono (workspace que opera). */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Departamento (workspace) *</label>
+            <select
+              value={form.departamentoId}
+              onChange={(e) => handleChange('departamentoId', e.target.value)}
+              required
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-capul-600"
+            >
+              <option value="">Selecione o departamento</option>
+              {departamentosWorkspace.map((d) => (
+                <option key={d.id} value={d.id}>{d.nome}</option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500 mt-1">
+              Workspace que vai gerenciar esta equipe. Só aparecem deptos com a funcionalidade Equipe ativa.
+            </p>
           </div>
 
           <div>

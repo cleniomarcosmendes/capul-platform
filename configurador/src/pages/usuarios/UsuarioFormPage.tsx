@@ -61,6 +61,12 @@ export function UsuarioFormPage() {
   const [filiais, setFiliais] = useState<FilialOption[]>([]);
   const [filialSearch, setFilialSearch] = useState('');
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
+  // Workspace Onda 2 C2.8 — deptos pra MATRIZ DE PERMISSÕES (aba
+  // Permissões). É lista global, independe da filial principal do
+  // usuário, e mostra só deptos que são "workspaces" (têm ao menos 1
+  // funcionalidade ativa). A aba Dados continua usando `departamentos`
+  // (filtrado por filial — eixo organizacional).
+  const [departamentosWorkspace, setDepartamentosWorkspace] = useState<Departamento[]>([]);
   const [modulos, setModulos] = useState<ModuloSistema[]>([]);
   const [permissoes, setPermissoes] = useState<PermissaoForm[]>([]);
   // Onda 2 C2.2 — chave composta (moduloId + departamentoId) pro diff de save
@@ -87,6 +93,12 @@ export function UsuarioFormPage() {
       departamentoService.listar(filialPrincipalId).then(setDepartamentos).catch(() => {});
     }
   }, [filialPrincipalId]);
+
+  // Workspace Onda 2 C2.8 — carrega deptos-workspace uma vez (lista global
+  // independente da filial). Usado só pela matriz de permissões.
+  useEffect(() => {
+    departamentoService.listar({ workspaceOnly: true }).then(setDepartamentosWorkspace).catch(() => {});
+  }, []);
 
   // Capabilities só fazem sentido em usuário existente e p/ ADMIN
   // (o backend já barra via guard; aqui evita 403 e UI vazia).
@@ -687,7 +699,9 @@ export function UsuarioFormPage() {
                             className="w-full px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
                           >
                             <option value="">— escolher —</option>
-                            {departamentos.map((d) => (
+                            {/* Workspace Onda 2 C2.8 — deptos-workspace (lista global,
+                                independe da filial principal do user). */}
+                            {departamentosWorkspace.map((d) => (
                               <option key={d.id} value={d.id}>{d.nome}</option>
                             ))}
                           </select>

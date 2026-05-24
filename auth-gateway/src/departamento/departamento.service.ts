@@ -8,9 +8,31 @@ const tipoDepartamentoSelect = { id: true, nome: true, descricao: true, ordem: t
 export class DepartamentoService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(filialId?: string) {
+  async findAll(opts?: {
+    filialId?: string;
+    workspaceOnly?: boolean;
+    funcionalidade?: string;
+  }) {
+    const filialId = opts?.filialId;
+    const workspaceOnly = opts?.workspaceOnly ?? false;
+    const funcionalidade = opts?.funcionalidade;
+
+    // Workspace Onda 2 C2.8 — escopo workspace é ortogonal ao filtro de
+    // filial. Filtro por funcionalidade exige `workspaceOnly` implícito.
+    const where: Record<string, unknown> = {};
+    if (filialId) where.filialId = filialId;
+
+    if (workspaceOnly || funcionalidade) {
+      where.funcionalidades = {
+        some: {
+          ativo: true,
+          ...(funcionalidade ? { funcionalidade: funcionalidade as never } : {}),
+        },
+      };
+    }
+
     return this.prisma.departamento.findMany({
-      where: filialId ? { filialId } : {},
+      where,
       include: {
         filial: { select: { id: true, codigo: true, nomeFantasia: true } },
         tipoDepartamento: { select: tipoDepartamentoSelect },

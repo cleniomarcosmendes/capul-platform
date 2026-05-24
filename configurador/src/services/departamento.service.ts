@@ -1,9 +1,25 @@
 import { coreApi } from './api';
 import type { Departamento } from '../types';
 
+export interface ListarDeptosOpts {
+  filialId?: string;
+  /** Workspace Onda 2 C2.8 — só deptos com pelo menos 1 funcionalidade ativa. */
+  workspaceOnly?: boolean;
+  /** Workspace Onda 2 C2.8 — só deptos com esta funcionalidade ativa. */
+  funcionalidade?: string;
+}
+
 export const departamentoService = {
-  async listar(filialId?: string): Promise<Departamento[]> {
-    const params = filialId ? { filialId } : {};
+  /**
+   * Compat: aceita string (filialId) OU objeto de opções.
+   * Forma nova é `listar({ workspaceOnly: true, funcionalidade: 'EQUIPE' })`.
+   */
+  async listar(arg?: string | ListarDeptosOpts): Promise<Departamento[]> {
+    const opts: ListarDeptosOpts = typeof arg === 'string' ? { filialId: arg } : (arg ?? {});
+    const params: Record<string, string> = {};
+    if (opts.filialId) params.filialId = opts.filialId;
+    if (opts.workspaceOnly) params.workspaceOnly = 'true';
+    if (opts.funcionalidade) params.funcionalidade = opts.funcionalidade;
     const { data } = await coreApi.get('/departamentos', { params });
     return data;
   },
