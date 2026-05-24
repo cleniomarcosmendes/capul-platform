@@ -4,6 +4,7 @@ import { Header } from '../../layouts/Header';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { softwareService } from '../../services/software.service';
 import { equipeService } from '../../services/equipe.service';
+import { DepartamentoField } from '../../components/DepartamentoField';
 import { ArrowLeft } from 'lucide-react';
 import type { Equipe, TipoSoftware, Criticidade, AmbienteSoftware } from '../../types';
 
@@ -28,6 +29,8 @@ export function SoftwareFormPage() {
   const [urlAcesso, setUrlAcesso] = useState('');
   const [equipeResponsavelId, setEquipeResponsavelId] = useState('');
   const [observacoes, setObservacoes] = useState('');
+  // Workspace Onda 3 S4 — depto de alocação (visibilidade).
+  const [departamentoId, setDepartamentoId] = useState('');
 
   useEffect(() => {
     equipeService.listar('ATIVO').then(setEquipes).catch(() => {});
@@ -47,6 +50,7 @@ export function SoftwareFormPage() {
           setUrlAcesso(sw.urlAcesso || '');
           setEquipeResponsavelId(sw.equipeResponsavelId || '');
           setObservacoes(sw.observacoes || '');
+          setDepartamentoId(sw.departamentoId || '');
         })
         .catch(() => setError('Erro ao carregar software'))
         .finally(() => setLoadingData(false));
@@ -68,6 +72,7 @@ export function SoftwareFormPage() {
       urlAcesso: urlAcesso || undefined,
       equipeResponsavelId: equipeResponsavelId || undefined,
       observacoes: observacoes || undefined,
+      departamentoId: departamentoId || undefined,
     };
 
     try {
@@ -117,6 +122,13 @@ export function SoftwareFormPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          <DepartamentoField
+            value={departamentoId}
+            onChange={setDepartamentoId}
+            funcionalidade="SOFTWARE"
+            help="Departamento ONDE o software está alocado (visibilidade). Quem cadastrou é registrado separadamente para auditoria."
+          />
+
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Nome *</label>
             <input

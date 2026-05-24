@@ -448,6 +448,10 @@ export interface Software {
   observacoes: string | null;
   createdAt: string;
   updatedAt: string;
+  // Workspace Onda 3 S4 (24/05) — depto de alocação (existente desde 1.1) +
+  // depto de lançamento (snapshot do user criador — auditoria).
+  departamentoId: string;
+  departamentoLancamentoId?: string;
   _count: { modulos: number; licencas: number; chamados: number };
   modulos?: SoftwareModulo[];
   filiais?: SoftwareFilialItem[];
