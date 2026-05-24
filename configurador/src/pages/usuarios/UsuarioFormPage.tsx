@@ -3,10 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { usuarioService } from '../../services/usuario.service';
 import { departamentoService } from '../../services/departamento.service';
-import { ArrowLeft, Save, Shield, KeyRound, Clock, AlertTriangle, Lock, Plus, Trash2 } from 'lucide-react';
+import { departamentoFuncionalidadeService } from '../../services/departamento-funcionalidade.service';
+import { ArrowLeft, Save, Shield, KeyRound, Clock, AlertTriangle, Lock, Plus, Trash2, Eye, Check, X } from 'lucide-react';
 import type { UsuarioDetalhe, ModuloSistema, FilialOption, Departamento, UsuarioCapability } from '../../types';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useAuth } from '../../contexts/AuthContext';
+import { WORKSPACE_MENUS, perfilEnxerga } from '../../lib/workspace-menus';
 
 // Capability sensível (LGPD) — acesso a PII de sócios. Plano:
 // docs/PLANO_FISCAL_CONSULTA_SOCIOS_LGPD_v1.md
@@ -67,6 +69,8 @@ export function UsuarioFormPage() {
   // funcionalidade ativa). A aba Dados continua usando `departamentos`
   // (filtrado por filial — eixo organizacional).
   const [departamentosWorkspace, setDepartamentosWorkspace] = useState<Departamento[]>([]);
+  // B.1 (25/05) — funcionalidades ativas por depto pra resumo de acesso (read-only).
+  const [funcionalidadesPorDepto, setFuncionalidadesPorDepto] = useState<Record<string, Set<string>>>({});
   const [modulos, setModulos] = useState<ModuloSistema[]>([]);
   const [permissoes, setPermissoes] = useState<PermissaoForm[]>([]);
   // Onda 2 C2.2 — chave composta (moduloId + departamentoId) pro diff de save
@@ -99,6 +103,28 @@ export function UsuarioFormPage() {
   useEffect(() => {
     departamentoService.listar({ workspaceOnly: true }).then(setDepartamentosWorkspace).catch(() => {});
   }, []);
+
+  // B.1 (25/05) — pra cada depto único nas permissões, busca as
+  // funcionalidades ativas. Usado pelo "Resumo de Acesso" (read-only).
+  useEffect(() => {
+    const deptosUnicos = Array.from(new Set(permissoes.map((p) => p.departamentoId).filter(Boolean)));
+    const novosDeptos = deptosUnicos.filter((id) => !(id in funcionalidadesPorDepto));
+    if (novosDeptos.length === 0) return;
+    Promise.all(
+      novosDeptos.map((deptoId) =>
+        departamentoFuncionalidadeService
+          .listar(deptoId)
+          .then((rows) => ({ deptoId, ativas: new Set(rows.filter((r) => r.ativo).map((r) => r.funcionalidade)) }))
+          .catch(() => ({ deptoId, ativas: new Set<string>() })),
+      ),
+    ).then((results) => {
+      setFuncionalidadesPorDepto((prev) => {
+        const next = { ...prev };
+        for (const r of results) next[r.deptoId] = r.ativas;
+        return next;
+      });
+    });
+  }, [permissoes, funcionalidadesPorDepto]);
 
   // Capabilities só fazem sentido em usuário existente e p/ ADMIN
   // (o backend já barra via guard; aqui evita 403 e UI vazia).
@@ -745,69 +771,92 @@ export function UsuarioFormPage() {
             </button>
           </div>
 
-          {/* Capability sensível (LGPD) — só ADMIN, em usuário existente.
-              Plano: docs/PLANO_FISCAL_CONSULTA_SOCIOS_LGPD_v1.md */}
-          {isEdicao && isAdminConfig && (() => {
-            const socioCap = caps.find((c) => c.capability === CAP_SOCIO);
-            const ativo = !!socioCap?.ativo;
+          {/* B.1 (25/05) — Resumo de Acesso: visualização READ-ONLY do que
+              o user vê na sidebar do Workspace, calculado a partir de:
+              (perfis × funcionalidades ativas do depto × roles do menu) */}
+          {permissoes.filter((p) => p.moduloId && p.departamentoId && p.roleModuloId).length > 0 && (() => {
+            // Identifica role do user no Workspace (módulo "WORKSPACE" ou "GESTAO_TI")
+            const moduloWorkspace = modulos.find((m) => m.codigo === 'WORKSPACE' || m.codigo === 'GESTAO_TI');
+            const perfisWorkspace = permissoes.filter(
+              (p) => moduloWorkspace && p.moduloId === moduloWorkspace.id && p.departamentoId && p.roleModuloId,
+            );
+            if (perfisWorkspace.length === 0) return null;
+
             return (
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
                 <h2 className="font-semibold text-slate-800 flex items-center gap-2 mb-1">
-                  <Lock className="w-5 h-5 text-rose-600" />
-                  Dados sensíveis (LGPD)
+                  <Eye className="w-5 h-5 text-blue-600" />
+                  Resumo de Acesso ao Workspace (visualização)
                 </h2>
                 <p className="text-xs text-slate-500 mb-4">
-                  Acesso a <strong>dados de sócios (PII)</strong> — tela "Busca por Sócio"
-                  e o QSA da Consulta Cadastral. Concessão nominal, independente do papel,
-                  com motivo registrado para auditoria.
+                  Calculado a partir dos perfis acima. Combina <strong>funcionalidades ativas no
+                  departamento</strong> (Configurador → Departamentos) com <strong>regras de
+                  role</strong> da sidebar. Read-only.
                 </p>
-                <div className={`rounded-lg border p-4 ${ativo ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200'}`}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-slate-800">Consulta de Sócios</span>
-                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                          {ativo ? 'Concedida' : 'Sem acesso'}
+
+                {perfisWorkspace.map((perfil, idx) => {
+                  const depto = departamentosWorkspace.find((d) => d.id === perfil.departamentoId);
+                  const roleObj = moduloWorkspace?.rolesDisponiveis.find((r) => r.id === perfil.roleModuloId);
+                  const roleCodigo = roleObj?.codigo ?? '';
+                  const funcs = funcionalidadesPorDepto[perfil.departamentoId] ?? new Set<string>();
+                  const carregando = !(perfil.departamentoId in funcionalidadesPorDepto);
+
+                  // Filtra itens da sidebar pra esse perfil (skip seções; mostra label só)
+                  const itensVisiveis = WORKSPACE_MENUS.filter(
+                    (it) => 'label' in it && perfilEnxerga(it, roleCodigo, funcs),
+                  ) as Extract<typeof WORKSPACE_MENUS[number], { label: string }>[];
+                  const itensOcultos = WORKSPACE_MENUS.filter(
+                    (it) => 'label' in it && !perfilEnxerga(it, roleCodigo, funcs),
+                  ) as Extract<typeof WORKSPACE_MENUS[number], { label: string }>[];
+
+                  return (
+                    <div key={idx} className={idx > 0 ? 'mt-4 pt-4 border-t border-slate-200' : ''}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-sm font-semibold text-slate-800">
+                          {depto?.nome ?? 'Departamento'}
                         </span>
+                        <span className="text-[11px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                          {roleObj?.nome ?? roleCodigo}
+                        </span>
+                        {carregando && (
+                          <span className="text-[11px] text-slate-400">carregando funcionalidades…</span>
+                        )}
                       </div>
-                      {ativo && socioCap && (
-                        <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                          Concedida em {new Date(socioCap.concedidoEm).toLocaleString('pt-BR')}
-                          {socioCap.motivo ? ` · motivo: ${socioCap.motivo}` : ''}
+
+                      {!carregando && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                          {itensVisiveis.map((it) => (
+                            <div
+                              key={it.label}
+                              className="flex items-center gap-2 text-xs px-2.5 py-1.5 bg-emerald-50/60 border border-emerald-200 rounded-md"
+                              title={it.path}
+                            >
+                              <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                              <span className="truncate text-slate-700">{it.label}</span>
+                            </div>
+                          ))}
+                          {itensOcultos.map((it) => (
+                            <div
+                              key={it.label}
+                              className="flex items-center gap-2 text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-md opacity-60"
+                              title={`${it.path}\n${it.roles && !it.roles.includes(roleCodigo) ? `Bloqueado por role: ${it.roles.join(', ')}` : ''}${it.funcionalidade && !funcs.has(it.funcionalidade) ? `\nFuncionalidade '${it.funcionalidade}' inativa no depto` : ''}`}
+                            >
+                              <X className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                              <span className="truncate text-slate-500 line-through">{it.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {!carregando && (
+                        <p className="text-[11px] text-slate-400 mt-2">
+                          {itensVisiveis.length} de {WORKSPACE_MENUS.filter((it) => 'label' in it).length} menus
+                          visíveis. Passe o mouse nos bloqueados pra ver o motivo.
                         </p>
                       )}
                     </div>
-                    {ativo && (
-                      <button
-                        type="button"
-                        onClick={revogarCapSocio}
-                        disabled={capBusy}
-                        className="px-3 py-1.5 text-xs font-medium rounded-md border border-rose-300 text-rose-700 hover:bg-rose-50 disabled:opacity-50 flex-shrink-0"
-                      >
-                        Revogar
-                      </button>
-                    )}
-                  </div>
-                  {!ativo && (
-                    <div className="mt-3 space-y-2">
-                      <textarea
-                        value={capMotivo}
-                        onChange={(e) => setCapMotivo(e.target.value)}
-                        rows={2}
-                        placeholder="Motivo da concessão (obrigatório — LGPD: necessidade de conhecer)"
-                        className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent"
-                      />
-                      <button
-                        type="button"
-                        onClick={concederCapSocio}
-                        disabled={capBusy || capMotivo.trim().length < 5}
-                        className="px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
-                      >
-                        Conceder acesso
-                      </button>
-                    </div>
-                  )}
-                </div>
+                  );
+                })}
               </div>
             );
           })()}
@@ -816,42 +865,113 @@ export function UsuarioFormPage() {
 
           {/* === ABA: SESSÃO & SEGURANÇA === (só na edição) */}
           {activeTab === 'sessao' && isEdicao && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-              <h2 className="font-semibold text-slate-800 mb-1 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-emerald-600" />
-                Sessão & Segurança
-              </h2>
-              <p className="text-xs text-slate-400 mb-4">
-                Tempo sem interação antes de desconectar automaticamente. Aplica-se a
-                todos os módulos (Gestão TI, Inventário, Fiscal).
-              </p>
-              <div className="max-w-sm">
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Timeout de inatividade</label>
-                <select
-                  value={String(inactivityTimeout)}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setInactivityTimeout(v === 'never' ? 'never' : (Number(v) as TimeoutPref));
-                  }}
-                  className={inputClass}
-                >
-                  <option value="30">30 minutos</option>
-                  <option value="60">60 minutos (padrão)</option>
-                  <option value="120">120 minutos (2 horas)</option>
-                  <option value="240">240 minutos (4 horas)</option>
-                  <option value="never">Manter sempre conectado</option>
-                </select>
-              </div>
-              {inactivityTimeout === 'never' && (
-                <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2.5 rounded-lg max-w-lg">
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <span>
-                    A sessão deste usuário <strong>não expira por inatividade</strong>. Use apenas
-                    em estações pessoais — em PCs compartilhados qualquer pessoa pode acessar o
-                    sistema sem login. (O refresh token ainda expira em 7 dias.)
-                  </span>
+            <div className="space-y-6">
+              {/* Timeout de inatividade */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                <h2 className="font-semibold text-slate-800 mb-1 flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-emerald-600" />
+                  Sessão & Segurança
+                </h2>
+                <p className="text-xs text-slate-400 mb-4">
+                  Tempo sem interação antes de desconectar automaticamente. Aplica-se a
+                  todos os módulos (Gestão TI, Inventário, Fiscal).
+                </p>
+                <div className="max-w-sm">
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Timeout de inatividade</label>
+                  <select
+                    value={String(inactivityTimeout)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setInactivityTimeout(v === 'never' ? 'never' : (Number(v) as TimeoutPref));
+                    }}
+                    className={inputClass}
+                  >
+                    <option value="30">30 minutos</option>
+                    <option value="60">60 minutos (padrão)</option>
+                    <option value="120">120 minutos (2 horas)</option>
+                    <option value="240">240 minutos (4 horas)</option>
+                    <option value="never">Manter sempre conectado</option>
+                  </select>
                 </div>
-              )}
+                {inactivityTimeout === 'never' && (
+                  <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2.5 rounded-lg max-w-lg">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <span>
+                      A sessão deste usuário <strong>não expira por inatividade</strong>. Use apenas
+                      em estações pessoais — em PCs compartilhados qualquer pessoa pode acessar o
+                      sistema sem login. (O refresh token ainda expira em 7 dias.)
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Capability sensível (LGPD) — movido de Permissões em 25/05.
+                  Só ADMIN, em usuário existente.
+                  Plano: docs/PLANO_FISCAL_CONSULTA_SOCIOS_LGPD_v1.md */}
+              {isAdminConfig && (() => {
+                const socioCap = caps.find((c) => c.capability === CAP_SOCIO);
+                const ativo = !!socioCap?.ativo;
+                return (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                    <h2 className="font-semibold text-slate-800 flex items-center gap-2 mb-1">
+                      <Lock className="w-5 h-5 text-rose-600" />
+                      Dados sensíveis (LGPD)
+                    </h2>
+                    <p className="text-xs text-slate-500 mb-4">
+                      Acesso a <strong>dados de sócios (PII)</strong> — tela "Busca por Sócio"
+                      e o QSA da Consulta Cadastral. Concessão nominal, independente do papel,
+                      com motivo registrado para auditoria.
+                    </p>
+                    <div className={`rounded-lg border p-4 ${ativo ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200'}`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-slate-800">Consulta de Sócios</span>
+                            <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                              {ativo ? 'Concedida' : 'Sem acesso'}
+                            </span>
+                          </div>
+                          {ativo && socioCap && (
+                            <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                              Concedida em {new Date(socioCap.concedidoEm).toLocaleString('pt-BR')}
+                              {socioCap.motivo ? ` · motivo: ${socioCap.motivo}` : ''}
+                            </p>
+                          )}
+                        </div>
+                        {ativo && (
+                          <button
+                            type="button"
+                            onClick={revogarCapSocio}
+                            disabled={capBusy}
+                            className="px-3 py-1.5 text-xs font-medium rounded-md border border-rose-300 text-rose-700 hover:bg-rose-50 disabled:opacity-50 flex-shrink-0"
+                          >
+                            Revogar
+                          </button>
+                        )}
+                      </div>
+                      {!ativo && (
+                        <div className="mt-3 space-y-2">
+                          <textarea
+                            value={capMotivo}
+                            onChange={(e) => setCapMotivo(e.target.value)}
+                            rows={2}
+                            placeholder="Motivo da concessão (obrigatório — LGPD: necessidade de conhecer)"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent"
+                          />
+                          <button
+                            type="button"
+                            onClick={concederCapSocio}
+                            disabled={capBusy || capMotivo.trim().length < 5}
+                            className="px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                          >
+                            Conceder acesso
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
