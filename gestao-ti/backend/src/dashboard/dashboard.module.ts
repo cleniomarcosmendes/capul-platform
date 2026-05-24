@@ -7,6 +7,7 @@ import { DashboardFinanceiroService } from './services/dashboard-financeiro.serv
 import { DashboardAcompanhamentoService } from './services/dashboard-acompanhamento.service.js';
 import { DashboardRelatorioService } from './services/dashboard-relatorio.service.js';
 import { DashboardIndicadoresService } from './services/dashboard-indicadores.service.js';
+import { DashboardPainelService } from './services/dashboard-painel.service.js';
 import { HorarioModule } from '../horario/horario.module.js';
 import { ChamadoExternoModule } from '../chamado-externo/chamado-externo.module.js';
 
@@ -20,6 +21,7 @@ import { ChamadoExternoModule } from '../chamado-externo/chamado-externo.module.
     DashboardAcompanhamentoService,
     DashboardRelatorioService,
     DashboardIndicadoresService,
+    DashboardPainelService,
     DashboardService,
   ],
 })

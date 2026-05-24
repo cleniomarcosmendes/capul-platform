@@ -5,6 +5,7 @@ import { DashboardFinanceiroService } from './services/dashboard-financeiro.serv
 import { DashboardAcompanhamentoService } from './services/dashboard-acompanhamento.service.js';
 import { DashboardRelatorioService } from './services/dashboard-relatorio.service.js';
 import { DashboardIndicadoresService } from './services/dashboard-indicadores.service.js';
+import { DashboardPainelService } from './services/dashboard-painel.service.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
@@ -16,7 +17,18 @@ export class DashboardService {
     private readonly acompanhamento: DashboardAcompanhamentoService,
     private readonly relatorio: DashboardRelatorioService,
     private readonly indicadores: DashboardIndicadoresService,
+    private readonly painel: DashboardPainelService,
   ) {}
+
+  // ─── Painel de Gestão (25/05) ─────────────────────────────────────
+
+  getPainelChamados(user: JwtPayload, role: string, equipeId?: string) {
+    return this.painel.getPainelChamados(user, role, equipeId);
+  }
+
+  getPainelProjetos(user: JwtPayload, role: string) {
+    return this.painel.getPainelProjetos(user, role);
+  }
 
   async getResumo(
     filters?: { dataInicio?: string; dataFim?: string; departamentoId?: string },

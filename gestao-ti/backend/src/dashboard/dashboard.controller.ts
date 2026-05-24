@@ -173,6 +173,28 @@ export class DashboardController {
     return this.service.getMinhasPendencias(user.sub);
   }
 
+  // ─── Painel de Gestão (25/05) ──────────────────────────────────
+  // Foco: itens com prazo onde o user tem vínculo formal. Distinto
+  // de Dashboard (agregação), Monitor (real-time), Acompanhamento
+  // (produtividade), Indicadores (KPIs mensais).
+
+  @Get('painel-chamados')
+  getPainelChamados(
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+    @Query('equipeId') equipeId?: string,
+  ) {
+    return this.service.getPainelChamados(user, role, equipeId);
+  }
+
+  @Get('painel-projetos')
+  getPainelProjetos(
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.getPainelProjetos(user, role);
+  }
+
   @Get('relatorio-os')
   @Roles(...STAFF)
   async getRelatorioOs(
