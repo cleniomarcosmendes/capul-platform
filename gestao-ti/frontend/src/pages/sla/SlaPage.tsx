@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { slaService } from '../../services/sla.service';
 import { equipeService } from '../../services/equipe.service';
 import { Plus, X, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
-import type { SlaDefinicao, EquipeTI, Prioridade } from '../../types';
+import type { SlaDefinicao, Equipe, Prioridade } from '../../types';
 import { useToast } from '../../components/Toast';
 
 type SortKey = 'nome' | 'equipe' | 'prioridade' | 'horasResposta' | 'horasResolucao' | 'status';
@@ -20,7 +20,7 @@ export function SlaPage() {
   const { toast, confirm } = useToast();
 
   const [items, setItems] = useState<SlaDefinicao[]>([]);
-  const [equipes, setEquipes] = useState<EquipeTI[]>([]);
+  const [equipes, setEquipes] = useState<Equipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterEquipe, setFilterEquipe] = useState('');
 

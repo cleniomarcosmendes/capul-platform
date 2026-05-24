@@ -36,7 +36,7 @@ export interface UsuarioLogado {
   modulos: ModuloUsuario[];
 }
 
-export interface EquipeTI {
+export interface Equipe {
   id: string;
   nome: string;
   sigla: string;

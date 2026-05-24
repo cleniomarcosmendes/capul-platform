@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { catalogoService } from '../../services/catalogo.service';
 import { equipeService } from '../../services/equipe.service';
 import { Plus, X, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Search } from 'lucide-react';
-import type { CatalogoServico, EquipeTI, Prioridade } from '../../types';
+import type { CatalogoServico, Equipe, Prioridade } from '../../types';
 import { useToast } from '../../components/Toast';
 
 type SortKey = 'nome' | 'equipe' | 'prioridadePadrao' | 'ordem' | 'status';
@@ -20,7 +20,7 @@ export function CatalogoServicosPage() {
   const { toast, confirm } = useToast();
 
   const [items, setItems] = useState<CatalogoServico[]>([]);
-  const [equipes, setEquipes] = useState<EquipeTI[]>([]);
+  const [equipes, setEquipes] = useState<Equipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterEquipe, setFilterEquipe] = useState('');
   const [search, setSearch] = useState('');

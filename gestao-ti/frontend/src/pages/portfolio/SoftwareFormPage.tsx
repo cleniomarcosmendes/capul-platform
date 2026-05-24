@@ -5,14 +5,14 @@ import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { softwareService } from '../../services/software.service';
 import { equipeService } from '../../services/equipe.service';
 import { ArrowLeft } from 'lucide-react';
-import type { EquipeTI, TipoSoftware, Criticidade, AmbienteSoftware } from '../../types';
+import type { Equipe, TipoSoftware, Criticidade, AmbienteSoftware } from '../../types';
 
 export function SoftwareFormPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEdit = !!id;
 
-  const [equipes, setEquipes] = useState<EquipeTI[]>([]);
+  const [equipes, setEquipes] = useState<Equipe[]>([]);
   const [saving, setSaving] = useState(false);
   const [loadingData, setLoadingData] = useState(isEdit);
   const [error, setError] = useState('');

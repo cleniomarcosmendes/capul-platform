@@ -49,7 +49,7 @@ import type {
   RegistroTempo,
   ComentarioTarefa,
   AtividadeHistorico,
-  EquipeTI,
+  Equipe,
   UsuarioChaveProjeto,
   PendenciaProjeto,
   PrioridadePendencia,
@@ -3313,7 +3313,7 @@ function TabPendencias({ projetoId, projetoNumero, isSubProjeto, onEditingChange
 function ModalVincularChamadosProjeto({ projetoId, itensVinculados, onDone, onClose }: { projetoId: string; itensVinculados: Chamado[]; onDone: () => void; onClose: () => void }) {
   const { toast } = useToast();
   const [chamados, setChamados] = useState<Chamado[]>([]);
-  const [equipes, setEquipes] = useState<EquipeTI[]>([]);
+  const [equipes, setEquipes] = useState<Equipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [vinculando, setVinculando] = useState(false);

@@ -30,7 +30,7 @@ describe('DashboardService', () => {
     it('retorna estrutura completa do dashboard', async () => {
       prisma.chamado.count.mockResolvedValue(5);
       prisma.chamado.groupBy.mockResolvedValue([]);
-      prisma.equipeTI.findMany.mockResolvedValue([]);
+      prisma.equipe.findMany.mockResolvedValue([]);
       prisma.ordemServico.count.mockResolvedValue(2);
       prisma.software.count.mockResolvedValue(10);
       prisma.softwareLicenca.count.mockResolvedValue(8);
@@ -62,7 +62,7 @@ describe('DashboardService', () => {
         { equipeAtualId: 'eq-2', _count: 5 },
       ]);
       prisma.chamado.groupBy.mockResolvedValueOnce([]); // porPrioridade
-      prisma.equipeTI.findMany.mockResolvedValue([
+      prisma.equipe.findMany.mockResolvedValue([
         { id: 'eq-1', nome: 'Suporte', sigla: 'SUP', cor: '#333' },
         { id: 'eq-2', nome: 'Infra', sigla: 'INF', cor: '#666' },
       ]);

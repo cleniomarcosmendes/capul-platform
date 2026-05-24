@@ -23,7 +23,7 @@ export class EquipeService {
     // qualquer equipe pra poder abrir chamado pra ela (T.I. atende todos os
     // deptos, Fiscal pode demandar pra Controladoria, etc.). Filtro
     // departamental movido pra create/update/delete (escrita por depto-dono).
-    return this.prisma.equipeTI.findMany({
+    return this.prisma.equipe.findMany({
       where: status ? { status } : {},
       include: {
         membros: {
@@ -36,7 +36,7 @@ export class EquipeService {
   }
 
   async findOne(id: string) {
-    const equipe = await this.prisma.equipeTI.findUnique({
+    const equipe = await this.prisma.equipe.findUnique({
       where: { id },
       include: {
         membros: {
@@ -54,7 +54,7 @@ export class EquipeService {
   }
 
   async create(dto: CreateEquipeDto, user?: JwtPayload) {
-    const existing = await this.prisma.equipeTI.findFirst({
+    const existing = await this.prisma.equipe.findFirst({
       where: {
         OR: [{ nome: dto.nome }, { sigla: dto.sigla }],
       },
@@ -76,7 +76,7 @@ export class EquipeService {
       dto.departamentoId,
     );
 
-    return this.prisma.equipeTI.create({
+    return this.prisma.equipe.create({
       data: {
         nome: dto.nome,
         sigla: dto.sigla.toUpperCase(),
@@ -95,7 +95,7 @@ export class EquipeService {
     await this.findOne(id);
 
     if (dto.nome || dto.sigla) {
-      const existing = await this.prisma.equipeTI.findFirst({
+      const existing = await this.prisma.equipe.findFirst({
         where: {
           id: { not: id },
           OR: [
@@ -114,7 +114,7 @@ export class EquipeService {
       }
     }
 
-    return this.prisma.equipeTI.update({
+    return this.prisma.equipe.update({
       where: { id },
       data: {
         ...dto,
@@ -126,7 +126,7 @@ export class EquipeService {
   async updateStatus(id: string, status: StatusGeral) {
     await this.findOne(id);
 
-    return this.prisma.equipeTI.update({
+    return this.prisma.equipe.update({
       where: { id },
       data: { status },
     });
@@ -185,11 +185,11 @@ export class EquipeService {
   }
 
   async remove(id: string) {
-    const equipe = await this.prisma.equipeTI.findUnique({ where: { id } });
+    const equipe = await this.prisma.equipe.findUnique({ where: { id } });
     if (!equipe) throw new NotFoundException('Equipe nao encontrada');
 
     try {
-      await this.prisma.equipeTI.delete({ where: { id } });
+      await this.prisma.equipe.delete({ where: { id } });
       return { success: true, message: 'Equipe excluida com sucesso' };
     } catch {
       throw new NotFoundException('Equipe possui vinculos (chamados, catalogo, SLA, etc). Inative-a em vez de excluir.');
@@ -219,7 +219,7 @@ export class EquipeService {
    */
   async findEquipesParaContratos(usuarioId: string, role: string) {
     if (role === 'ADMIN' || role === 'GESTOR') {
-      return this.prisma.equipeTI.findMany({
+      return this.prisma.equipe.findMany({
         where: { status: 'ATIVO' },
         orderBy: { ordem: 'asc' },
       });

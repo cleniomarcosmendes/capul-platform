@@ -146,7 +146,7 @@ export class CompraNotaFiscalService {
    */
   async findEquipesParaCompras(usuarioId: string, role: string) {
     if (role === 'ADMIN' || role === 'GESTOR') {
-      return this.prisma.equipeTI.findMany({
+      return this.prisma.equipe.findMany({
         where: { status: 'ATIVO' },
         select: { id: true, nome: true, sigla: true, cor: true },
         orderBy: { nome: 'asc' },

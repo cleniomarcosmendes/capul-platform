@@ -6,7 +6,7 @@ import { paradaService } from '../../services/parada.service';
 import { chamadoService } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
 import { Activity, ArrowLeft, Clock, AlertTriangle, Building2, User, Wrench, Unlink, Plus, Ticket, X, Filter, CheckSquare, Users, Trash2, Search, Pencil, Paperclip, Download } from 'lucide-react';
-import type { RegistroParada, Chamado, EquipeTI, ParadaHistorico, TipoEventoParada } from '../../types';
+import type { RegistroParada, Chamado, Equipe, ParadaHistorico, TipoEventoParada } from '../../types';
 import { useToast } from '../../components/Toast';
 import { abrirAnexoOuBaixar } from '../../utils/anexo';
 
@@ -739,7 +739,7 @@ function TabChamados({ parada, canManage, onUpdate }: { parada: RegistroParada; 
 function ModalVincularChamados({ parada, onUpdate, onClose }: { parada: RegistroParada; onUpdate: (p: RegistroParada) => void; onClose: () => void }) {
   const { toast } = useToast();
   const [chamados, setChamados] = useState<Chamado[]>([]);
-  const [equipes, setEquipes] = useState<EquipeTI[]>([]);
+  const [equipes, setEquipes] = useState<Equipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [vinculando, setVinculando] = useState(false);

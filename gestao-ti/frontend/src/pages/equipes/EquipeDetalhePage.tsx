@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
 import { ArrowLeft, Pencil, UserPlus, Trash2, Star, StarOff, FileText, ShoppingCart } from 'lucide-react';
-import type { EquipeTI, UsuarioCore } from '../../types';
+import type { Equipe, UsuarioCore } from '../../types';
 import { useToast } from '../../components/Toast';
 
 export function EquipeDetalhePage() {
@@ -16,7 +16,7 @@ export function EquipeDetalhePage() {
   const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
   const { toast, confirm } = useToast();
 
-  const [equipe, setEquipe] = useState<EquipeTI | null>(null);
+  const [equipe, setEquipe] = useState<Equipe | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddMembro, setShowAddMembro] = useState(false);
   const [usuarios, setUsuarios] = useState<UsuarioCore[]>([]);

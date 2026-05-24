@@ -4,7 +4,7 @@ import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { equipeService } from '../../services/equipe.service';
 import { Plus, Pencil, Users, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
-import type { EquipeTI } from '../../types';
+import type { Equipe } from '../../types';
 import { useToast } from '../../components/Toast';
 
 type SortKey = 'nome' | 'sigla' | 'membros' | 'status';
@@ -13,7 +13,7 @@ type SortDir = 'asc' | 'desc';
 export function EquipesListPage() {
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
-  const [equipes, setEquipes] = useState<EquipeTI[]>([]);
+  const [equipes, setEquipes] = useState<Equipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState<string>('');
 
@@ -60,7 +60,7 @@ export function EquipesListPage() {
     }
   }
 
-  async function toggleStatus(equipe: EquipeTI) {
+  async function toggleStatus(equipe: Equipe) {
     const novoStatus = equipe.status === 'ATIVO' ? 'INATIVO' : 'ATIVO';
     try {
       await equipeService.atualizarStatus(equipe.id, novoStatus);

@@ -20,7 +20,7 @@ export function createPrismaMock(): Record<string, any> {
   return {
     chamado: modelMock(),
     historicoChamado: modelMock(),
-    equipeTI: modelMock(),
+    equipe: modelMock(),
     membroEquipe: modelMock(),
     slaDefinicao: modelMock(),
     notificacao: modelMock(),

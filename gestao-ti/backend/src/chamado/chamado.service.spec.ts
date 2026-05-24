@@ -57,7 +57,7 @@ describe('ChamadoService', () => {
   describe('create', () => {
     it('cria chamado basico com campos corretos', async () => {
       const equipe = { id: 'eq-1', aceitaChamadoExterno: true };
-      prisma.equipeTI.findUnique.mockResolvedValue(equipe);
+      prisma.equipe.findUnique.mockResolvedValue(equipe);
       prisma.slaDefinicao.findUnique.mockResolvedValue(null);
       prisma.chamado.create.mockResolvedValue(baseChamado());
       prisma.historicoChamado.create.mockResolvedValue({});
@@ -81,7 +81,7 @@ describe('ChamadoService', () => {
     it('calcula data limite SLA quando existe definicao', async () => {
       const equipe = { id: 'eq-1', aceitaChamadoExterno: true };
       const sla = { id: 'sla-1', horasResolucao: 24 };
-      prisma.equipeTI.findUnique.mockResolvedValue(equipe);
+      prisma.equipe.findUnique.mockResolvedValue(equipe);
       prisma.slaDefinicao.findUnique.mockResolvedValue(sla);
       prisma.chamado.create.mockResolvedValue(baseChamado());
       prisma.historicoChamado.create.mockResolvedValue({});
@@ -96,7 +96,7 @@ describe('ChamadoService', () => {
 
     it('lanca ForbiddenException se equipe nao aceita chamado externo', async () => {
       const equipe = { id: 'eq-1', aceitaChamadoExterno: false };
-      prisma.equipeTI.findUnique.mockResolvedValue(equipe);
+      prisma.equipe.findUnique.mockResolvedValue(equipe);
 
       const dto = { titulo: 'Teste', descricao: 'Desc', equipeAtualId: 'eq-1' };
       await expect(service.create(dto as any, mockUser as any, 'USUARIO_FINAL')).rejects.toThrow(
@@ -133,7 +133,7 @@ describe('ChamadoService', () => {
     it('transfere para outra equipe com sucesso', async () => {
       const chamado = baseChamado({ status: 'EM_ATENDIMENTO' });
       prisma.chamado.findUnique.mockResolvedValue(chamado);
-      prisma.equipeTI.findUnique.mockResolvedValue({ id: 'eq-2' });
+      prisma.equipe.findUnique.mockResolvedValue({ id: 'eq-2' });
       prisma.chamado.update.mockResolvedValue({ ...chamado, equipeAtualId: 'eq-2', tecnicoId: null, status: 'ABERTO' });
       prisma.historicoChamado.create.mockResolvedValue({});
       prisma.membroEquipe.findMany.mockResolvedValue([]);

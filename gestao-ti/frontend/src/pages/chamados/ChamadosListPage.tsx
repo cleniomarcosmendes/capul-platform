@@ -8,7 +8,7 @@ import { coreService } from '../../services/core.service';
 import { Plus, Eye, Download, Star, Search, ArrowUp, ArrowDown, ArrowUpDown, MessageSquare } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import { Paginator } from '../../components/Paginator';
-import type { Chamado, EquipeTI, Departamento, StatusChamado, Visibilidade, UsuarioCore } from '../../types';
+import type { Chamado, Equipe, Departamento, StatusChamado, Visibilidade, UsuarioCore } from '../../types';
 import { isWorkspaceModulo } from '../../lib/workspace-modulo';
 
 /** Destaca todas as ocorrências de `termo` (case-insensitive) dentro de
@@ -96,7 +96,7 @@ export function ChamadosListPage() {
   const [totalChamados, setTotalChamados] = useState<number>(0);
   // Debounce do termo de busca — evita request a cada tecla digitada.
   const [buscaDebounced, setBuscaDebounced] = useState<string>('');
-  const [equipes, setEquipes] = useState<EquipeTI[]>([]);
+  const [equipes, setEquipes] = useState<Equipe[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [filiais, setFiliais] = useState<FilialOption[]>([]);
   const [tecnicos, setTecnicos] = useState<UsuarioCore[]>([]);

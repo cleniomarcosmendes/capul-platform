@@ -48,7 +48,7 @@ interface CreateChamadoPayload {
   ativoId?: string;
   matriculaColaborador?: string;
   nomeColaborador?: string;
-  /** IDs de usuarios a colocar em copia. Backend rejeita membros de EquipeTI. */
+  /** IDs de usuarios a colocar em copia. Backend rejeita membros de Equipe. */
   copiasUsuariosIds?: string[];
 }
 

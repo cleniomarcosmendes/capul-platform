@@ -416,7 +416,7 @@ export class DashboardAcompanhamentoService {
   // ========== ACOMPANHAMENTO POR CHAMADO ==========
 
   async listarEquipes() {
-    return this.prisma.equipeTI.findMany({
+    return this.prisma.equipe.findMany({
       where: { status: 'ATIVO' },
       select: { id: true, nome: true, sigla: true },
       orderBy: { nome: 'asc' },

@@ -234,7 +234,7 @@ export class DashboardFinanceiroService {
     // Buscar nomes de equipes
     const equipeIds = avaliadosComEquipe.map((e) => e.equipeAtualId);
     const equipes = equipeIds.length > 0
-      ? await this.prisma.equipeTI.findMany({ where: { id: { in: equipeIds } }, select: { id: true, nome: true, sigla: true } })
+      ? await this.prisma.equipe.findMany({ where: { id: { in: equipeIds } }, select: { id: true, nome: true, sigla: true } })
       : [];
     const equipeMap = Object.fromEntries(equipes.map((e) => [e.id, e]));
 

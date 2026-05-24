@@ -131,7 +131,7 @@ model Departamento {
 
   // Workspace Multi-Departamento (Onda 1 Sub-fase 1.1 — D31/D32)
   // 9 reversas novas para as entidades operacionais multi-depto.
-  equipes          EquipeTI[]
+  equipes          Equipe[]
   projetos         Projeto[]
   ordensServico    OrdemServico[]
   contratos        Contrato[]
@@ -159,7 +159,7 @@ enum StatusGeral {
   @@schema("gestao_ti")
 }
 
-model EquipeTI {
+model Equipe {
   id                   String      @id @default(uuid())
   nome                 String      @unique
   sigla                String      @unique
@@ -207,7 +207,7 @@ model MembroEquipe {
   usuarioId String   @map("usuario_id")
   usuario   Usuario  @relation(fields: [usuarioId], references: [id])
   equipeId  String   @map("equipe_id")
-  equipe    EquipeTI @relation(fields: [equipeId], references: [id])
+  equipe    Equipe @relation(fields: [equipeId], references: [id])
 
   @@unique([usuarioId, equipeId])
   @@map("membros_equipe")
@@ -306,7 +306,7 @@ model CatalogoServico {
   updatedAt        DateTime    @updatedAt @map("updated_at")
 
   equipeId String   @map("equipe_id")
-  equipe   EquipeTI @relation(fields: [equipeId], references: [id])
+  equipe   Equipe @relation(fields: [equipeId], references: [id])
 
   chamados Chamado[]
 
@@ -326,7 +326,7 @@ model SlaDefinicao {
   updatedAt      DateTime    @updatedAt @map("updated_at")
 
   equipeId String   @map("equipe_id")
-  equipe   EquipeTI @relation(fields: [equipeId], references: [id])
+  equipe   Equipe @relation(fields: [equipeId], references: [id])
 
   chamados Chamado[]
 
@@ -363,7 +363,7 @@ model Chamado {
   tecnico   Usuario? @relation("ChamadoTecnico", fields: [tecnicoId], references: [id])
 
   equipeAtualId String   @map("equipe_atual_id")
-  equipeAtual   EquipeTI @relation(fields: [equipeAtualId], references: [id])
+  equipeAtual   Equipe @relation(fields: [equipeAtualId], references: [id])
 
   filialId String @map("filial_id")
   filial   Filial @relation(fields: [filialId], references: [id])
@@ -437,10 +437,10 @@ model HistoricoChamado {
   usuario   Usuario @relation(fields: [usuarioId], references: [id])
 
   equipeOrigemId  String?   @map("equipe_origem_id")
-  equipeOrigem    EquipeTI? @relation("HistoricoEquipeOrigem", fields: [equipeOrigemId], references: [id])
+  equipeOrigem    Equipe? @relation("HistoricoEquipeOrigem", fields: [equipeOrigemId], references: [id])
 
   equipeDestinoId String?   @map("equipe_destino_id")
-  equipeDestino   EquipeTI? @relation("HistoricoEquipeDestino", fields: [equipeDestinoId], references: [id])
+  equipeDestino   Equipe? @relation("HistoricoEquipeDestino", fields: [equipeDestinoId], references: [id])
 
   @@index([chamadoId])
   @@map("historicos_chamado")
@@ -505,7 +505,7 @@ model ChamadoColaborador {
 /// Usuarios "em copia" no chamado: tem papel de solicitante (ve detalhes,
 /// recebe notificacoes, pode comentar). Conceito separado de
 /// ChamadoColaborador (T.I.-only, participa ativamente da solucao).
-/// Restricao: nao pode adicionar membro de EquipeTI ativo (impede contornar
+/// Restricao: nao pode adicionar membro de Equipe ativo (impede contornar
 /// designacao de tecnico via inclusao em copia). Decidido em 13/05/2026.
 model ChamadoCopia {
   id        String   @id @default(uuid())
@@ -1103,7 +1103,7 @@ model Software {
   updatedAt           DateTime        @updatedAt @map("updated_at")
 
   equipeResponsavelId String?  @map("equipe_responsavel_id")
-  equipeResponsavel   EquipeTI? @relation(fields: [equipeResponsavelId], references: [id])
+  equipeResponsavel   Equipe? @relation(fields: [equipeResponsavelId], references: [id])
 
   // Workspace Multi-Departamento (Onda 1 Sub-fase 1.1 — D31/D32)
   // D31 (v1.1, 20/05): software vira multi-depto NOT NULL (era nullable no v1.0).
@@ -1248,7 +1248,7 @@ model SoftwareLicenca {
   departamento        Departamento @relation(fields: [departamentoId], references: [id])
 
   equipeResponsavelId String?      @map("equipe_responsavel_id")
-  equipeResponsavel   EquipeTI?    @relation("EquipeResponsavelLicenca", fields: [equipeResponsavelId], references: [id])
+  equipeResponsavel   Equipe?    @relation("EquipeResponsavelLicenca", fields: [equipeResponsavelId], references: [id])
 
   usuarios LicencaUsuario[]
 
@@ -1321,7 +1321,7 @@ model Contrato {
   software   Software? @relation(fields: [softwareId], references: [id])
 
   equipeId String?   @map("equipe_id")
-  equipe   EquipeTI? @relation(fields: [equipeId], references: [id])
+  equipe   Equipe? @relation(fields: [equipeId], references: [id])
 
   contratoOriginalId String?   @map("contrato_original_id")
   contratoOriginal   Contrato? @relation("ContratoRenovacao", fields: [contratoOriginalId], references: [id])
@@ -2113,7 +2113,7 @@ model ArtigoConhecimento {
   software   Software? @relation(fields: [softwareId], references: [id])
 
   equipeTiId String?   @map("equipe_ti_id")
-  equipeTi   EquipeTI? @relation(fields: [equipeTiId], references: [id])
+  equipeTi   Equipe? @relation(fields: [equipeTiId], references: [id])
 
   publica Boolean @default(false)
 
@@ -2358,7 +2358,7 @@ model NotaFiscal {
   criadoPor   Usuario @relation("NotaFiscalCriadaPor", fields: [criadoPorId], references: [id])
 
   equipeId String?   @map("equipe_id")
-  equipe   EquipeTI? @relation(fields: [equipeId], references: [id])
+  equipe   Equipe? @relation(fields: [equipeId], references: [id])
 
   // Workspace Multi-Departamento (Onda 1 Sub-fase 1.1 — D31/D32/D38)
   // filialId continua NOT NULL (D38/Q2 — Workspace NÃO é escrituração fiscal;

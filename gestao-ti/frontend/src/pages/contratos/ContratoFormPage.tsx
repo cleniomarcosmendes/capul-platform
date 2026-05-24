@@ -8,7 +8,7 @@ import { softwareService } from '../../services/software.service';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
 import { ArrowLeft } from 'lucide-react';
-import type { Software, TipoContratoConfig, EquipeTI, FornecedorConfig, ProdutoConfig } from '../../types';
+import type { Software, TipoContratoConfig, Equipe, FornecedorConfig, ProdutoConfig } from '../../types';
 
 export function ContratoFormPage() {
   const { id } = useParams();
@@ -19,7 +19,7 @@ export function ContratoFormPage() {
   const isManager = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
 
   const [softwares, setSoftwares] = useState<Software[]>([]);
-  const [equipes, setEquipes] = useState<EquipeTI[]>([]);
+  const [equipes, setEquipes] = useState<Equipe[]>([]);
   const [filiais, setFiliais] = useState<{ id: string; codigo: string; nomeFantasia: string }[]>([]);
   const [tiposContrato, setTiposContrato] = useState<TipoContratoConfig[]>([]);
   const [fornecedores, setFornecedores] = useState<FornecedorConfig[]>([]);

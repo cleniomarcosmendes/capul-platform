@@ -7,7 +7,7 @@ import { equipeService } from '../../services/equipe.service';
 import { Plus, Search, AppWindow, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { exportService } from '../../services/export.service';
 import { Paginator } from '../../components/Paginator';
-import type { Software, EquipeTI, TipoSoftware, Criticidade, StatusSoftware } from '../../types';
+import type { Software, Equipe, TipoSoftware, Criticidade, StatusSoftware } from '../../types';
 
 const statusCores: Record<string, string> = {
   ATIVO: 'bg-green-100 text-green-700',
@@ -56,7 +56,7 @@ export function SoftwaresListPage() {
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(50);
   const [totalSoftwares, setTotalSoftwares] = useState<number>(0);
-  const [equipes, setEquipes] = useState<EquipeTI[]>([]);
+  const [equipes, setEquipes] = useState<Equipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
 

@@ -6,7 +6,7 @@ import { conhecimentoService } from '../../services/conhecimento.service';
 import { softwareService } from '../../services/software.service';
 import { equipeService } from '../../services/equipe.service';
 import { Plus, Search, BookMarked, Globe, Lock } from 'lucide-react';
-import type { ArtigoConhecimento, CategoriaArtigo, StatusArtigo, Software, EquipeTI } from '../../types';
+import type { ArtigoConhecimento, CategoriaArtigo, StatusArtigo, Software, Equipe } from '../../types';
 import { Paginator } from '../../components/Paginator';
 
 const categoriaLabel: Record<CategoriaArtigo, string> = {
@@ -33,7 +33,7 @@ export function ConhecimentoListPage() {
   const [pageSize, setPageSize] = useState<number>(50);
   const [totalArtigos, setTotalArtigos] = useState<number>(0);
   const [softwares, setSoftwares] = useState<Software[]>([]);
-  const [equipes, setEquipes] = useState<EquipeTI[]>([]);
+  const [equipes, setEquipes] = useState<Equipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
   const [buscaDebounced, setBuscaDebounced] = useState('');

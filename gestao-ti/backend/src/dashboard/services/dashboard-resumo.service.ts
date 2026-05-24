@@ -69,7 +69,7 @@ export class DashboardResumoService {
         where: { status: { notIn: ['CANCELADO'] }, createdAt: periodoFilter, ...deptoFilter },
         _count: true,
       }),
-      this.prisma.equipeTI.findMany({
+      this.prisma.equipe.findMany({
         where: { status: 'ATIVO' },
         select: { id: true, nome: true, sigla: true, cor: true },
       }),

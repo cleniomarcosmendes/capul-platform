@@ -13,7 +13,7 @@ import { ordemServicoService } from '../../services/ordem-servico.service';
 import { ativoService } from '../../services/ativo.service';
 import { coreService } from '../../services/core.service';
 import { ArrowLeft, FolderKanban, Paperclip, X, CheckCircle, Users2 } from 'lucide-react';
-import type { EquipeTI, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento, Ativo, UsuarioCore } from '../../types';
+import type { Equipe, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento, Ativo, UsuarioCore } from '../../types';
 import { isWorkspaceModulo } from '../../lib/workspace-modulo';
 
 const ROLES_TI_SET = new Set(['ADMIN', 'GESTOR', 'SUPORTE']);
@@ -38,7 +38,7 @@ export function ChamadoCreatePage() {
   const podeEscolherVisibilidade = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole ?? '');
   const [projetoVinculado, setProjetoVinculado] = useState<Projeto | null>(null);
 
-  const [equipes, setEquipes] = useState<EquipeTI[]>([]);
+  const [equipes, setEquipes] = useState<Equipe[]>([]);
   const [catalogos, setCatalogos] = useState<CatalogoServico[]>([]);
   const [softwaresList, setSoftwaresList] = useState<Software[]>([]);
   const [modulosList, setModulosList] = useState<SoftwareModulo[]>([]);

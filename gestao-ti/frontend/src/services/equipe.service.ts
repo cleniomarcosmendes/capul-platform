@@ -1,29 +1,29 @@
 import { gestaoApi } from './api';
-import type { EquipeTI, MembroEquipe } from '../types';
+import type { Equipe, MembroEquipe } from '../types';
 
 export const equipeService = {
-  async listar(status?: string): Promise<EquipeTI[]> {
+  async listar(status?: string): Promise<Equipe[]> {
     const params = status ? { status } : {};
     const { data } = await gestaoApi.get('/equipes', { params });
     return data;
   },
 
-  async buscar(id: string): Promise<EquipeTI> {
+  async buscar(id: string): Promise<Equipe> {
     const { data } = await gestaoApi.get(`/equipes/${id}`);
     return data;
   },
 
-  async criar(equipe: Partial<EquipeTI>): Promise<EquipeTI> {
+  async criar(equipe: Partial<Equipe>): Promise<Equipe> {
     const { data } = await gestaoApi.post('/equipes', equipe);
     return data;
   },
 
-  async atualizar(id: string, equipe: Partial<EquipeTI>): Promise<EquipeTI> {
+  async atualizar(id: string, equipe: Partial<Equipe>): Promise<Equipe> {
     const { data } = await gestaoApi.patch(`/equipes/${id}`, equipe);
     return data;
   },
 
-  async atualizarStatus(id: string, status: string): Promise<EquipeTI> {
+  async atualizarStatus(id: string, status: string): Promise<Equipe> {
     const { data } = await gestaoApi.patch(`/equipes/${id}/status`, { status });
     return data;
   },
@@ -50,7 +50,7 @@ export const equipeService = {
    * Lista equipes disponiveis para vincular a contratos.
    * Para ADMIN/GESTOR_TI retorna todas. Para SUPORTE_TI, apenas as autorizadas.
    */
-  async listarParaContratos(): Promise<EquipeTI[]> {
+  async listarParaContratos(): Promise<Equipe[]> {
     const { data } = await gestaoApi.get('/equipes/para-contratos');
     return data;
   },

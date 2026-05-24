@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { coreService } from '../../services/core.service';
 import { useToast } from '../../components/Toast';
-import type { Chamado, EquipeTI, AnexoChamado, StatusChamado, ChamadoColaborador, ChamadoCopiaResumo, RegistroTempoChamado, UsuarioCore } from '../../types';
+import type { Chamado, Equipe, AnexoChamado, StatusChamado, ChamadoColaborador, ChamadoCopiaResumo, RegistroTempoChamado, UsuarioCore } from '../../types';
 
 const ROLES_TI_SET = new Set(['ADMIN', 'GESTOR', 'SUPORTE']);
 function isUsuarioTI(u: UsuarioCore): boolean {
@@ -91,10 +91,10 @@ export function ChamadoDetalhePage() {
   const comentarioFileInputRef = useRef<HTMLInputElement>(null);
 
   const [showTransferir, setShowTransferir] = useState(false);
-  const [equipes, setEquipes] = useState<EquipeTI[]>([]);
+  const [equipes, setEquipes] = useState<Equipe[]>([]);
   const [equipeDestinoId, setEquipeDestinoId] = useState('');
   const [transferMotivo, setTransferMotivo] = useState('');
-  const [membrosEquipe, setMembrosEquipe] = useState<EquipeTI | null>(null);
+  const [membrosEquipe, setMembrosEquipe] = useState<Equipe | null>(null);
 
   const [showResolver, setShowResolver] = useState(false);
   const [resolverDescricao, setResolverDescricao] = useState('');
@@ -193,7 +193,7 @@ export function ChamadoDetalhePage() {
     }).catch(() => {});
   }, [id, usuario?.id]);
 
-  const [membrosEquipeDestino, setMembrosEquipeDestino] = useState<EquipeTI | null>(null);
+  const [membrosEquipeDestino, setMembrosEquipeDestino] = useState<Equipe | null>(null);
   const [tecnicoEquipeDestinoId, setTecnicoEquipeDestinoId] = useState('');
 
   useEffect(() => {

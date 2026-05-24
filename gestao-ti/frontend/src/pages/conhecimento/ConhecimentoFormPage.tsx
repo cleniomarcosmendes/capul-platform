@@ -6,7 +6,7 @@ import { conhecimentoService } from '../../services/conhecimento.service';
 import { softwareService } from '../../services/software.service';
 import { equipeService } from '../../services/equipe.service';
 import { ArrowLeft } from 'lucide-react';
-import type { ArtigoConhecimento, CategoriaArtigo, Software, EquipeTI } from '../../types';
+import type { ArtigoConhecimento, CategoriaArtigo, Software, Equipe } from '../../types';
 
 const categoriaOptions: { value: CategoriaArtigo; label: string }[] = [
   { value: 'PROCEDIMENTO', label: 'Procedimento' },
@@ -22,7 +22,7 @@ export function ConhecimentoFormPage() {
   const isEdit = !!id;
 
   const [softwares, setSoftwares] = useState<Software[]>([]);
-  const [equipes, setEquipes] = useState<EquipeTI[]>([]);
+  const [equipes, setEquipes] = useState<Equipe[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [erro, setErro] = useState('');

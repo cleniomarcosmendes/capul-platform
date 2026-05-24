@@ -458,7 +458,7 @@ export class ChamadoCoreService {
   }
 
   async create(dto: CreateChamadoDto, user: JwtPayload, role: string) {
-    const equipe = await this.prisma.equipeTI.findUnique({
+    const equipe = await this.prisma.equipe.findUnique({
       where: { id: dto.equipeAtualId },
     });
     if (!equipe) throw new BadRequestException('Equipe nao encontrada');
@@ -755,7 +755,7 @@ export class ChamadoCoreService {
       throw new BadRequestException('Chamado finalizado nao pode ser transferido. Reabra o chamado primeiro.');
     }
 
-    const equipeDestino = await this.prisma.equipeTI.findUnique({
+    const equipeDestino = await this.prisma.equipe.findUnique({
       where: { id: dto.equipeDestinoId },
     });
     if (!equipeDestino) throw new BadRequestException('Equipe destino nao encontrada');

@@ -79,7 +79,7 @@ export class CreateChamadoDto {
 
   /**
    * IDs dos usuarios a adicionar em copia no chamado.
-   * Validacao no service: nao pode incluir membro ativo de EquipeTI
+   * Validacao no service: nao pode incluir membro ativo de equipe
    * (impede contornar designacao de tecnico via "em copia").
    * Limite de 20 por chamado evita abuso/erro.
    */
