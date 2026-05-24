@@ -54,8 +54,11 @@ export class ParadaController {
   // === Motivos de Parada ===
 
   @Get('motivos')
-  findAllMotivos() {
-    return this.service.findAllMotivos();
+  findAllMotivos(
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
+  ) {
+    return this.service.findAllMotivos(user, role);
   }
 
   @Post('motivos')

@@ -414,8 +414,11 @@ export class ParadaService {
 
   // === Motivos de Parada ===
 
-  async findAllMotivos() {
+  async findAllMotivos(user?: JwtPayload, role?: string) {
+    // Workspace Onda 2 C2.7 — motivos por depto-dono. ADMIN escapa.
+    const where = applyDepartamentoFilter({}, user ?? null, role ?? null);
     return this.prisma.motivoParada.findMany({
+      where,
       orderBy: { nome: 'asc' },
     });
   }
