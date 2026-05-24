@@ -141,6 +141,9 @@ model Departamento {
   registrosParada  RegistroParada[]
   motivosParada    MotivoParada[]
 
+  // Workspace Onda 2 C2.7 refino — chamados externos por depto-dono
+  chamadosExternosMensal ChamadoExternoMensal[]
+
   @@map("departamentos")
   @@schema("core")
 }
@@ -1146,9 +1149,17 @@ model ChamadoExternoMensal {
   registradoPorId String?  @map("registrado_por_id")
   registradoPor   Usuario? @relation("ChamadoExternoRegistradoPor", fields: [registradoPorId], references: [id])
 
-  @@unique([mes, ano, softwareId])
+  // Workspace Multi-Departamento (Onda 2 C2.7 refino 23/05) — depto-dono.
+  // Cada workspace pode lançar seus próprios chamados externos (Fiscal
+  // pode lançar Totvs, Controladoria também, separadamente). Opcional
+  // pra retrocompat com registros pré-migration (todos migrados pra T.I.).
+  departamentoId String?       @map("departamento_id")
+  departamento   Departamento? @relation(fields: [departamentoId], references: [id])
+
+  @@unique([mes, ano, softwareId, departamentoId])
   @@index([ano, mes])
   @@index([softwareId])
+  @@index([departamentoId])
   @@map("chamados_externos_mensal")
   @@schema("gestao_ti")
 }

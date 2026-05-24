@@ -2,6 +2,9 @@ import { Injectable, BadRequestException, NotFoundException, ConflictException }
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateChamadoExternoDto, UpdateChamadoExternoDto } from './dto/create-chamado-externo.dto.js';
+import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
+import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 const SOFTWARE_SELECT = {
   id: true,
@@ -13,14 +16,21 @@ const SOFTWARE_SELECT = {
 export class ChamadoExternoService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(filters: { ano?: number; mes?: number; softwareId?: string }) {
+  async list(
+    filters: { ano?: number; mes?: number; softwareId?: string },
+    user?: JwtPayload,
+    role?: string,
+  ) {
     const where: Prisma.ChamadoExternoMensalWhereInput = {};
     if (filters.ano) where.ano = filters.ano;
     if (filters.mes) where.mes = filters.mes;
     if (filters.softwareId) where.softwareId = filters.softwareId;
 
+    // Workspace Onda 2 C2.7 refino — depto-dono (ADMIN escapa).
+    const whereFiltrado = applyDepartamentoFilter(where, user ?? null, role ?? null);
+
     return this.prisma.chamadoExternoMensal.findMany({
-      where,
+      where: whereFiltrado,
       include: {
         software: { select: SOFTWARE_SELECT },
         registradoPor: { select: { id: true, nome: true, username: true } },
@@ -41,8 +51,17 @@ export class ChamadoExternoService {
     return reg;
   }
 
-  async create(dto: CreateChamadoExternoDto, registradoPorId: string) {
+  async create(dto: CreateChamadoExternoDto, registradoPorId: string, user?: JwtPayload) {
     await this.assertSoftwareExiste(dto.softwareId);
+
+    // Workspace Onda 2 C2.7 refino — depto-dono via cascade
+    // (dto.departamentoId → JWT → fallback T.I.).
+    const departamentoId = await resolveDepartamento(
+      this.prisma,
+      user ?? null,
+      'WORKSPACE',
+      dto.departamentoId,
+    );
 
     try {
       return await this.prisma.chamadoExternoMensal.create({
@@ -53,6 +72,7 @@ export class ChamadoExternoService {
           qtdChamados: dto.qtdChamados,
           observacoes: dto.observacoes,
           registradoPorId,
+          departamentoId,
         },
         include: {
           software: { select: SOFTWARE_SELECT },
@@ -61,7 +81,7 @@ export class ChamadoExternoService {
       });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new ConflictException('Ja existe lancamento para este Software/Mes/Ano. Edite o existente.');
+        throw new ConflictException('Ja existe lancamento para este Software/Mes/Ano/Depto. Edite o existente.');
       }
       throw err;
     }
@@ -105,18 +125,22 @@ export class ChamadoExternoService {
    * Retorna total + breakdown por software, e a tendencia dos ultimos
    * 12 meses (para grafico de evolucao).
    */
-  async getKpiPeriodo(mes: number, ano: number) {
+  async getKpiPeriodo(mes: number, ano: number, user?: JwtPayload, role?: string) {
     const inicioJanela = somarMeses({ mes, ano }, -11);
+
+    // Workspace Onda 2 C2.7 refino — escopa por depto-dono (ADMIN escapa).
+    const deptoWhere = applyDepartamentoFilter({}, user ?? null, role ?? null);
 
     const [registrosMes, registrosTendencia] = await Promise.all([
       this.prisma.chamadoExternoMensal.findMany({
-        where: { mes, ano },
+        where: { mes, ano, ...deptoWhere },
         include: { software: { select: SOFTWARE_SELECT } },
         orderBy: { qtdChamados: 'desc' },
       }),
       this.prisma.chamadoExternoMensal.findMany({
         where: {
           OR: gerarFiltroJanela(inicioJanela, { mes, ano }),
+          ...deptoWhere,
         },
         select: { mes: true, ano: true, qtdChamados: true },
       }),

@@ -6,6 +6,7 @@ import { GestaoTiGuard } from '../common/guards/gestao-ti.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { ROLES_GESTORES, ROLES_TI } from '../common/constants/roles.constant.js';
 import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
@@ -26,12 +27,14 @@ export class ChamadoExternoController {
     @Query('ano') ano?: string,
     @Query('mes') mes?: string,
     @Query('softwareId') softwareId?: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
   ) {
     return this.service.list({
       ano: ano ? parseInt(ano, 10) : undefined,
       mes: mes ? parseInt(mes, 10) : undefined,
       softwareId,
-    });
+    }, user, role);
   }
 
   @Get(':id')
@@ -43,7 +46,7 @@ export class ChamadoExternoController {
   @Post()
   @Roles(...WRITERS)
   create(@Body() dto: CreateChamadoExternoDto, @CurrentUser() user: JwtPayload) {
-    return this.service.create(dto, user.sub);
+    return this.service.create(dto, user.sub, user);
   }
 
   @Patch(':id')

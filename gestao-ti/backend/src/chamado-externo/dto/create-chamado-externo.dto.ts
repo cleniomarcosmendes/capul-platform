@@ -22,6 +22,12 @@ export class CreateChamadoExternoDto {
   @IsString()
   @MaxLength(500)
   observacoes?: string;
+
+  // Workspace Onda 2 C2.7 refino — depto-dono opcional. Se omitido,
+  // resolveDepartamento cascata pega do JWT do user → fallback T.I.
+  @IsOptional()
+  @IsUUID()
+  departamentoId?: string;
 }
 
 export class UpdateChamadoExternoDto {

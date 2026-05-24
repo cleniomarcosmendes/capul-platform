@@ -24,7 +24,7 @@ export class DashboardIndicadoresService {
       this.getDisponibilidade(dataInicio, dataFim, horasTotais, tiposParada, user, role),
       this.getChamados(dataInicio, dataFim, user, role),
       this.getHorasDesenvolvimento(dataInicio, dataFim),
-      this.chamadoExternoService.getKpiPeriodo(mes, ano),
+      this.chamadoExternoService.getKpiPeriodo(mes, ano, user, role),
     ]);
 
     return {
