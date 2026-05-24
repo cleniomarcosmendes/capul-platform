@@ -111,4 +111,101 @@ export const dashboardService = {
     const { data } = await gestaoApi.get('/dashboard/minhas-pendencias');
     return data;
   },
+
+  // ─── Painel de Gestão (25/05) ─────────────────────────────────
+
+  async getPainelChamados(equipeId?: string): Promise<PainelChamadosData> {
+    const { data } = await gestaoApi.get('/dashboard/painel-chamados', {
+      params: equipeId ? { equipeId } : {},
+    });
+    return data;
+  },
+
+  async getPainelProjetos(): Promise<PainelProjetosData> {
+    const { data } = await gestaoApi.get('/dashboard/painel-projetos');
+    return data;
+  },
 };
+
+// ─── Tipos Painel Chamados ────────────────────────────────────
+
+interface ChamadoPainelItem {
+  id: string;
+  numero: number;
+  titulo: string;
+  status: string;
+  prioridade: string;
+  dataLimiteSla: string | null;
+  createdAt: string;
+  updatedAt: string;
+  equipeAtual: { id: string; nome: string; sigla: string; cor: string | null } | null;
+  solicitante: { id: string; nome: string; username: string } | null;
+  tecnico: { id: string; nome: string; username: string } | null;
+}
+
+export interface PainelChamadosData {
+  equipesDoUser: { id: string; nome: string; sigla: string; cor: string | null }[];
+  equipeIdFiltro: string | null;
+  slaCritico: ChamadoPainelItem[];
+  atribuidosAMim: ChamadoPainelItem[];
+  aguardandoResposta: ChamadoPainelItem[];
+  resumoPorEquipe: {
+    equipe: { id: string; nome: string; sigla: string; cor: string | null };
+    vencidos: number;
+    hoje: number;
+    prox24h: number;
+    total: number;
+  }[];
+  resumo: { slaCriticoTotal: number; atribuidosTotal: number; aguardandoTotal: number };
+}
+
+// ─── Tipos Painel Projetos ────────────────────────────────────
+
+export interface PainelProjetosData {
+  atividades: {
+    id: string;
+    titulo: string;
+    status: string;
+    dataFimPrevista: string | null;
+    projeto: { id: string; numero: number; nome: string };
+    fase: { id: string; nome: string } | null;
+    usuario: { id: string; nome: string } | null;
+  }[];
+  pendencias: {
+    id: string;
+    numero: number;
+    titulo: string;
+    status: string;
+    prioridade: string;
+    dataLimite: string | null;
+    projeto: { id: string; numero: number; nome: string };
+    fase: { id: string; nome: string } | null;
+    responsavel: { id: string; nome: string } | null;
+    criador: { id: string; nome: string };
+  }[];
+  projetosAtrasados: {
+    id: string;
+    numero: number;
+    nome: string;
+    status: string;
+    dataFimPrevista: string | null;
+    responsavel: { id: string; nome: string } | null;
+    departamento: { id: string; nome: string } | null;
+  }[];
+  marcosProximos: {
+    id: string;
+    nome: string;
+    dataFimPrevista: string | null;
+    projeto: { id: string; numero: number; nome: string };
+  }[];
+  resumo: {
+    atividadesTotal: number;
+    atividadesVencidas: number;
+    atividadesHoje: number;
+    pendenciasTotal: number;
+    pendenciasVencidas: number;
+    pendenciasUrgentes: number;
+    projetosAtrasadosTotal: number;
+    marcosProximosTotal: number;
+  };
+}

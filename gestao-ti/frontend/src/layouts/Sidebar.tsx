@@ -34,6 +34,7 @@ import {
   Receipt,
   BarChart3,
   Globe2,
+  Flame,
   X,
 } from 'lucide-react';
 
@@ -64,6 +65,7 @@ const menuItems: MenuItem[] = [
   { label: 'Relatorio de OS', icon: FileText, path: '/gestao-ti/relatorio-os', roles: STAFF, funcionalidade: 'OS' },
   { section: 'SUPORTE' },
   { label: 'Chamados', icon: Ticket, path: '/gestao-ti/chamados', funcionalidade: 'CHAMADO' },
+  { label: 'Painel de Gestão de Chamado', icon: Flame, path: '/gestao-ti/painel-chamados', funcionalidade: 'CHAMADO' },
   { label: 'Ordens de Servico', icon: ClipboardList, path: '/gestao-ti/ordens-servico', roles: STAFF, funcionalidade: 'OS' },
   { label: 'Base de Conhecimento', icon: BookMarked, path: '/gestao-ti/conhecimento', funcionalidade: 'CHAMADO' },
   { section: 'PORTFOLIO', roles: STAFF },
