@@ -88,7 +88,11 @@ export class UsuarioService {
         departamento: true,
         filiais: { include: { filial: true } },
         permissoes: {
-          include: { modulo: true, roleModulo: true },
+          // Workspace Onda 2 C2.2 (fix 24/05) — `departamento` faltava no
+          // include, então o UsuarioFormPage filtrava todas as permissões
+          // fora (filter exige p.departamentoId existir) e mostrava
+          // "0 perfis" mesmo quando o DB tinha 2.
+          include: { modulo: true, roleModulo: true, departamento: true },
         },
       },
     });
