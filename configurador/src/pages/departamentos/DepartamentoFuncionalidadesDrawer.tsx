@@ -203,16 +203,21 @@ export function DepartamentoFuncionalidadesDrawer({
                         {secao.rotulo}
                       </h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {itens.map((f) => {
+                        {itens.map((f, idx) => {
                           const ativo = !!funcs[f.codigo];
                           const modificado = funcs[f.codigo] !== original[f.codigo];
                           const Icone = ICONES[f.icone];
+                          // Evita "buraco" na grade: último item de seção
+                          // com nº ímpar de itens ocupa as 2 colunas.
+                          const spanFull = itens.length % 2 === 1 && idx === itens.length - 1;
                           return (
                             <button
                               key={f.codigo}
                               type="button"
                               onClick={() => toggle(f.codigo)}
                               className={`relative group text-left rounded-lg border p-3 transition-all ${
+                                spanFull ? 'sm:col-span-2' : ''
+                              } ${
                                 ativo
                                   ? 'border-emerald-300 bg-emerald-50/60 hover:bg-emerald-50'
                                   : 'border-slate-200 bg-white hover:bg-slate-50'
