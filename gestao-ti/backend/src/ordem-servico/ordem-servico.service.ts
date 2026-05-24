@@ -7,7 +7,7 @@ import { StatusOS } from '@prisma/client';
 import { isGestor } from '../common/constants/roles.constant.js';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
-import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
+import { getDeptoIdsDoUser } from '../common/helpers/departamento-filter.helper.js';
 
 const osListInclude = {
   filial: { select: { id: true, codigo: true, nomeFantasia: true } },
@@ -43,8 +43,24 @@ export class OrdemServicoService {
       ...(status ? { status } : {}),
       ...(filialId ? { filialId } : {}),
     };
-    // Workspace Onda 2 C2.4 — filtro departamental. ADMIN escapa (D36).
-    const whereFiltrado = applyDepartamentoFilter(where, user ?? null, role ?? null);
+    // Workspace Onda 2 C2.7 — mesmo modelo de chamado: user vê SE for
+    // solicitante OU SE a OS pertencer ao seu depto (workspace dono).
+    // ADMIN escapa (D36).
+    const deptoIds = getDeptoIdsDoUser(user, role);
+    const whereFiltrado: Record<string, unknown> =
+      deptoIds === null
+        ? where
+        : {
+            AND: [
+              where,
+              {
+                OR: [
+                  { solicitanteId: user?.sub ?? '' },
+                  { departamentoId: { in: deptoIds } },
+                ],
+              },
+            ],
+          };
     return paginate(this.prisma, this.prisma.ordemServico, {
       where: whereFiltrado,
       include: osListInclude,
