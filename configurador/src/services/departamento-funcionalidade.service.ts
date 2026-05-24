@@ -14,19 +14,55 @@ export type FuncionalidadeWorkspace =
   | 'INDICADOR_OPERACIONAL'
   | 'INDICADOR_ESTRATEGICO';
 
-export const TODAS_FUNCIONALIDADES: { codigo: FuncionalidadeWorkspace; rotulo: string }[] = [
-  { codigo: 'CHAMADO', rotulo: 'Chamados' },
-  { codigo: 'PROJETO', rotulo: 'Projetos' },
-  { codigo: 'OS', rotulo: 'Ordens de Serviço' },
-  { codigo: 'EQUIPE', rotulo: 'Equipes' },
-  { codigo: 'CONTRATO', rotulo: 'Contratos' },
-  { codigo: 'NOTA_FISCAL', rotulo: 'Notas Fiscais' },
-  { codigo: 'SOFTWARE', rotulo: 'Softwares' },
-  { codigo: 'LICENCA', rotulo: 'Licenças' },
-  { codigo: 'ATIVO', rotulo: 'Ativos' },
-  { codigo: 'PARADA', rotulo: 'Paradas' },
-  { codigo: 'INDICADOR_OPERACIONAL', rotulo: 'Indicadores Operacionais' },
-  { codigo: 'INDICADOR_ESTRATEGICO', rotulo: 'Indicadores Estratégicos' },
+export type FuncionalidadeSecao = 'OPERACAO' | 'EQUIPE' | 'PORTFOLIO' | 'SUSTENTACAO' | 'INDICADORES';
+
+export interface FuncionalidadeMeta {
+  codigo: FuncionalidadeWorkspace;
+  rotulo: string;
+  descricao: string;
+  secao: FuncionalidadeSecao;
+  /** Nome do ícone lucide-react (componente importado pelo consumidor). */
+  icone:
+    | 'Ticket'
+    | 'FolderKanban'
+    | 'ClipboardList'
+    | 'Users'
+    | 'FileText'
+    | 'Receipt'
+    | 'AppWindow'
+    | 'KeyRound'
+    | 'Server'
+    | 'Activity'
+    | 'BarChart3'
+    | 'TrendingUp';
+}
+
+export const SECOES: { id: FuncionalidadeSecao; rotulo: string }[] = [
+  { id: 'OPERACAO', rotulo: 'Operação' },
+  { id: 'EQUIPE', rotulo: 'Equipe' },
+  { id: 'PORTFOLIO', rotulo: 'Portfólio' },
+  { id: 'SUSTENTACAO', rotulo: 'Sustentação' },
+  { id: 'INDICADORES', rotulo: 'Indicadores' },
+];
+
+export const TODAS_FUNCIONALIDADES: FuncionalidadeMeta[] = [
+  // Operação
+  { codigo: 'CHAMADO', rotulo: 'Chamados', descricao: 'Abertura e atendimento de tickets', secao: 'OPERACAO', icone: 'Ticket' },
+  { codigo: 'PROJETO', rotulo: 'Projetos', descricao: 'Gestão de projetos com atividades e pendências', secao: 'OPERACAO', icone: 'FolderKanban' },
+  { codigo: 'OS', rotulo: 'Ordens de Serviço', descricao: 'OS técnicas com agendamento', secao: 'OPERACAO', icone: 'ClipboardList' },
+  // Equipe
+  { codigo: 'EQUIPE', rotulo: 'Equipes', descricao: 'Cadastro e gestão de equipes que atendem chamados', secao: 'EQUIPE', icone: 'Users' },
+  // Portfólio
+  { codigo: 'CONTRATO', rotulo: 'Contratos', descricao: 'Contratos com fornecedores e parcelas', secao: 'PORTFOLIO', icone: 'FileText' },
+  { codigo: 'NOTA_FISCAL', rotulo: 'Notas Fiscais', descricao: 'Alocação de despesa via NF', secao: 'PORTFOLIO', icone: 'Receipt' },
+  { codigo: 'SOFTWARE', rotulo: 'Softwares', descricao: 'Catálogo de softwares do depto', secao: 'PORTFOLIO', icone: 'AppWindow' },
+  { codigo: 'LICENCA', rotulo: 'Licenças', descricao: 'Licenças de software e renovações', secao: 'PORTFOLIO', icone: 'KeyRound' },
+  // Sustentação
+  { codigo: 'ATIVO', rotulo: 'Ativos', descricao: 'Inventário de ativos (hardware/dispositivos)', secao: 'SUSTENTACAO', icone: 'Server' },
+  { codigo: 'PARADA', rotulo: 'Paradas', descricao: 'Registro de paradas operacionais', secao: 'SUSTENTACAO', icone: 'Activity' },
+  // Indicadores
+  { codigo: 'INDICADOR_OPERACIONAL', rotulo: 'Indicadores Operacionais', descricao: 'KPIs do dia a dia (SLA, CSAT, etc.)', secao: 'INDICADORES', icone: 'BarChart3' },
+  { codigo: 'INDICADOR_ESTRATEGICO', rotulo: 'Indicadores Estratégicos', descricao: 'KPIs de planejamento (investimentos, disponibilidade)', secao: 'INDICADORES', icone: 'TrendingUp' },
 ];
 
 export interface FuncionalidadeStatus {
