@@ -76,3 +76,39 @@ export function getDeptoIdsDoUser(
       ?.departamentos?.map((d) => d.id) ?? []
   );
 }
+
+/**
+ * Workspace Onda 2 C2.7 — fragmento de `where` pra agregações de dashboard.
+ * Combina o escopo automático do user (deptos onde tem perfil) com o filtro
+ * opcional de UI (dropdown "Departamento").
+ *
+ * - ADMIN sem filtro UI       → `{}` (todo o universo)
+ * - ADMIN com filtro UI X     → `{ departamentoId: X }`
+ * - não-ADMIN sem filtro UI   → `{ departamentoId: { in: deptos_user } }`
+ * - não-ADMIN com filtro UI X → `{ departamentoId: X }` SE X ∈ deptos_user,
+ *   senão fragmento impossível `{ in: [] }` (zera resultado por segurança)
+ *
+ * Spread no `where`:
+ *   const f = buildDashboardDeptoFilter(user, role, filters.departamentoId);
+ *   prisma.chamado.count({ where: { ...periodo, ...f } });
+ */
+export function buildDashboardDeptoFilter(
+  user: JwtPayload | null | undefined,
+  role: string | null | undefined,
+  filtroUI: string | null | undefined,
+  moduloCodigo: string = 'WORKSPACE',
+): { departamentoId?: string | { in: string[] } } {
+  const deptoIds = getDeptoIdsDoUser(user, role, moduloCodigo);
+  // ADMIN: respeita filtro UI ou abre tudo
+  if (deptoIds === null) {
+    return filtroUI ? { departamentoId: filtroUI } : {};
+  }
+  // Não-ADMIN com filtro UI: precisa que o depto escolhido seja dele
+  if (filtroUI) {
+    return deptoIds.includes(filtroUI)
+      ? { departamentoId: filtroUI }
+      : { departamentoId: { in: [] } };
+  }
+  // Não-ADMIN sem filtro UI: limita aos seus deptos
+  return { departamentoId: { in: deptoIds } };
+}

@@ -1,17 +1,25 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { resolvePeriodo } from './dashboard-utils.js';
+import { buildDashboardDeptoFilter } from '../../common/helpers/departamento-filter.helper.js';
+import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class DashboardResumoService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getResumo(filters?: { dataInicio?: string; dataFim?: string; departamentoId?: string }) {
+  async getResumo(
+    filters?: { dataInicio?: string; dataFim?: string; departamentoId?: string },
+    user?: JwtPayload,
+    role?: string,
+  ) {
     const { inicio, fim } = resolvePeriodo(filters);
     const limitVencendo30d = new Date();
     limitVencendo30d.setDate(limitVencendo30d.getDate() + 30);
     const periodoFilter = { gte: inicio, lte: fim };
-    const deptoFilter = filters?.departamentoId ? { departamentoId: filters.departamentoId } : {};
+    // Workspace Onda 2 C2.7 — escopa cards por deptos do user (ADMIN
+    // escapa); respeita filtro UI quando user é dono do depto escolhido.
+    const deptoFilter = buildDashboardDeptoFilter(user, role, filters?.departamentoId);
 
     const [
       totalAbertos,

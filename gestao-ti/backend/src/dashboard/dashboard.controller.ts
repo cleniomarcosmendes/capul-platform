@@ -5,6 +5,7 @@ import { GestaoTiGuard } from '../common/guards/gestao-ti.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { ROLES_GESTORES, ROLES_TI } from '../common/constants/roles.constant.js';
 
@@ -22,8 +23,10 @@ export class DashboardController {
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
     @Query('departamentoId') departamentoId?: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
   ) {
-    return this.service.getResumo({ dataInicio, dataFim, departamentoId });
+    return this.service.getResumo({ dataInicio, dataFim, departamentoId }, user, role);
   }
 
   @Get('executivo')
@@ -119,8 +122,10 @@ export class DashboardController {
     @Query('tecnicoId') tecnicoId?: string,
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
   ) {
-    return this.service.buscarChamados({ q, status, prioridade, equipeId, tecnicoId, dataInicio, dataFim });
+    return this.service.buscarChamados({ q, status, prioridade, equipeId, tecnicoId, dataInicio, dataFim }, user, role);
   }
 
   @Get('acompanhamento-atividade')
@@ -208,10 +213,12 @@ export class DashboardController {
     @Query('mes') mes: string,
     @Query('ano') ano: string,
     @Query('tiposParada') tiposParada?: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
   ) {
     const m = parseInt(mes, 10) || new Date().getMonth() + 1;
     const a = parseInt(ano, 10) || new Date().getFullYear();
     const tipos = tiposParada ? tiposParada.split(',') : undefined;
-    return this.service.getIndicadores(m, a, tipos);
+    return this.service.getIndicadores(m, a, tipos, user, role);
   }
 }

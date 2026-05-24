@@ -5,6 +5,7 @@ import { DashboardFinanceiroService } from './services/dashboard-financeiro.serv
 import { DashboardAcompanhamentoService } from './services/dashboard-acompanhamento.service.js';
 import { DashboardRelatorioService } from './services/dashboard-relatorio.service.js';
 import { DashboardIndicadoresService } from './services/dashboard-indicadores.service.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class DashboardService {
@@ -17,8 +18,12 @@ export class DashboardService {
     private readonly indicadores: DashboardIndicadoresService,
   ) {}
 
-  async getResumo(filters?: { dataInicio?: string; dataFim?: string; departamentoId?: string }) {
-    return this.resumo.getResumo(filters);
+  async getResumo(
+    filters?: { dataInicio?: string; dataFim?: string; departamentoId?: string },
+    user?: JwtPayload,
+    role?: string,
+  ) {
+    return this.resumo.getResumo(filters, user, role);
   }
 
   async getExecutivo(filters?: { dataInicio?: string; dataFim?: string }) {
@@ -67,8 +72,12 @@ export class DashboardService {
     return this.acompanhamento.listarEquipes();
   }
 
-  async buscarChamados(filters: { q?: string; status?: string; prioridade?: string; equipeId?: string; tecnicoId?: string; dataInicio?: string; dataFim?: string }) {
-    return this.acompanhamento.buscarChamados(filters);
+  async buscarChamados(
+    filters: { q?: string; status?: string; prioridade?: string; equipeId?: string; tecnicoId?: string; dataInicio?: string; dataFim?: string },
+    user?: JwtPayload,
+    role?: string,
+  ) {
+    return this.acompanhamento.buscarChamados(filters, user, role);
   }
 
   async getAcompanhamentoChamado(chamadoId: string) {
@@ -107,7 +116,7 @@ export class DashboardService {
     return this.relatorio.getRelatorioProjeto(projetoId);
   }
 
-  getIndicadores(mes: number, ano: number, tiposParada?: string[]) {
-    return this.indicadores.getIndicadores(mes, ano, tiposParada);
+  getIndicadores(mes: number, ano: number, tiposParada?: string[], user?: JwtPayload, role?: string) {
+    return this.indicadores.getIndicadores(mes, ano, tiposParada, user, role);
   }
 }

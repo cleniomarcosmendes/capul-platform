@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Header } from '../../layouts/Header';
 import { gestaoApi } from '../../services/api';
 import { formatDateBR } from '../../utils/date';
+import { useAuth } from '../../contexts/AuthContext';
+import { isWorkspaceModulo } from '../../lib/workspace-modulo';
 import { DollarSign, KeyRound, Activity, Ticket, Clock, ChevronLeft, ChevronRight, Globe2 } from 'lucide-react';
 
 interface LicencaDetalhe {
@@ -107,10 +109,24 @@ function fmtCurrency(v: number): string {
 }
 
 export function IndicadoresPage() {
+  const { usuario } = useAuth();
   const now = new Date();
   const [mes, setMes] = useState(now.getMonth() + 1);
   const [ano, setAno] = useState(now.getFullYear());
   const [tiposParada, setTiposParada] = useState<string[]>(['PARADA_NAO_PROGRAMADA']);
+
+  // Workspace Onda 2 C2.7 — rótulo do depto vem dos perfis ativos no JWT
+  // (antes era hardcoded "Depto. T.I.").
+  const deptosUser =
+    usuario?.modulos
+      .find((m) => isWorkspaceModulo(m.codigo))
+      ?.departamentos?.map((d) => d.nome) ?? [];
+  const rotuloDepto =
+    deptosUser.length === 0
+      ? 'Workspace'
+      : deptosUser.length === 1
+        ? `Depto. ${deptosUser[0]}`
+        : `Deptos: ${deptosUser.join(', ')}`;
   const [data, setData] = useState<IndicadoresData | null>(null);
   const [loading, setLoading] = useState(true);
   const [detalhe, setDetalhe] = useState<Detalhe>(null);
@@ -159,7 +175,7 @@ export function IndicadoresPage() {
             </button>
             <div className="text-center min-w-[180px]">
               <p className="text-lg font-bold text-slate-800">{meses[mes - 1]} {ano}</p>
-              <p className="text-xs text-slate-500">Planejamento Estrategico - Depto. T.I.</p>
+              <p className="text-xs text-slate-500">Planejamento Estrategico - {rotuloDepto}</p>
             </div>
             <button onClick={nextMes} className="p-1.5 rounded-lg border border-slate-300 hover:bg-slate-50">
               <ChevronRight className="w-4 h-4" />

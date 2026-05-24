@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ChamadoExternoService } from '../../chamado-externo/chamado-externo.service.js';
+import { getDeptoIdsDoUser } from '../../common/helpers/departamento-filter.helper.js';
+import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class DashboardIndicadoresService {
@@ -9,7 +11,7 @@ export class DashboardIndicadoresService {
     private readonly chamadoExternoService: ChamadoExternoService,
   ) {}
 
-  async getIndicadores(mes: number, ano: number, tiposParada?: string[]) {
+  async getIndicadores(mes: number, ano: number, tiposParada?: string[], user?: JwtPayload, role?: string) {
     // Calcular periodo
     const dataInicio = new Date(ano, mes - 1, 1);
     const dataFim = new Date(ano, mes, 0, 23, 59, 59, 999); // ultimo dia do mes
@@ -20,7 +22,7 @@ export class DashboardIndicadoresService {
       this.getInvestimentos(dataInicio, dataFim),
       this.getLicencas(),
       this.getDisponibilidade(dataInicio, dataFim, horasTotais, tiposParada),
-      this.getChamados(dataInicio, dataFim),
+      this.getChamados(dataInicio, dataFim, user, role),
       this.getHorasDesenvolvimento(dataInicio, dataFim),
       this.chamadoExternoService.getKpiPeriodo(mes, ano),
     ]);
@@ -249,7 +251,7 @@ export class DashboardIndicadoresService {
     };
   }
 
-  private async getChamados(dataInicio: Date, dataFim: Date) {
+  private async getChamados(dataInicio: Date, dataFim: Date, user?: JwtPayload, role?: string) {
     const chamadoSelect = {
       id: true, numero: true, titulo: true, status: true, prioridade: true,
       createdAt: true, updatedAt: true,
@@ -258,22 +260,39 @@ export class DashboardIndicadoresService {
       equipeAtual: { select: { id: true, sigla: true } },
     };
 
+    // Workspace Onda 2 C2.7 — escopo workspace (solicitante OU depto-dono).
+    const deptoIds = getDeptoIdsDoUser(user, role);
+    const wsFilter = (extra: Record<string, unknown>): Record<string, unknown> =>
+      deptoIds === null
+        ? extra
+        : {
+            AND: [
+              extra,
+              {
+                OR: [
+                  { solicitanteId: user?.sub ?? '' },
+                  { departamentoId: { in: deptoIds } },
+                ],
+              },
+            ],
+          };
+
     const [abertosList, resolvidosList, emAbertoList] = await Promise.all([
       this.prisma.chamado.findMany({
-        where: { createdAt: { gte: dataInicio, lte: dataFim } },
+        where: wsFilter({ createdAt: { gte: dataInicio, lte: dataFim } }),
         select: chamadoSelect,
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.chamado.findMany({
-        where: {
+        where: wsFilter({
           status: { in: ['RESOLVIDO', 'FECHADO'] },
           updatedAt: { gte: dataInicio, lte: dataFim },
-        },
+        }),
         select: chamadoSelect,
         orderBy: { updatedAt: 'desc' },
       }),
       this.prisma.chamado.findMany({
-        where: { status: { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE', 'REABERTO'] } },
+        where: wsFilter({ status: { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE', 'REABERTO'] } }),
         select: chamadoSelect,
         orderBy: { createdAt: 'desc' },
       }),

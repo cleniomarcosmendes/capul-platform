@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { HorarioService } from '../../horario/horario.service.js';
+import { getDeptoIdsDoUser } from '../../common/helpers/departamento-filter.helper.js';
+import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class DashboardAcompanhamentoService {
@@ -421,7 +423,11 @@ export class DashboardAcompanhamentoService {
     });
   }
 
-  async buscarChamados(filters: { q?: string; status?: string; prioridade?: string; equipeId?: string; tecnicoId?: string; dataInicio?: string; dataFim?: string }) {
+  async buscarChamados(
+    filters: { q?: string; status?: string; prioridade?: string; equipeId?: string; tecnicoId?: string; dataInicio?: string; dataFim?: string },
+    user?: JwtPayload,
+    role?: string,
+  ) {
     const where: Record<string, unknown> = {};
     if (filters.q) {
       const num = parseInt(filters.q, 10);
@@ -441,8 +447,24 @@ export class DashboardAcompanhamentoService {
       if (filters.dataFim) createdAt.lte = new Date(filters.dataFim + 'T23:59:59');
       where.createdAt = createdAt;
     }
+    // Workspace Onda 2 C2.7 — escopo workspace (solicitante OU depto do user).
+    const deptoIds = getDeptoIdsDoUser(user, role);
+    const whereFinal: Record<string, unknown> =
+      deptoIds === null
+        ? where
+        : {
+            AND: [
+              where,
+              {
+                OR: [
+                  { solicitanteId: user?.sub ?? '' },
+                  { departamentoId: { in: deptoIds } },
+                ],
+              },
+            ],
+          };
     const chamados = await this.prisma.chamado.findMany({
-      where,
+      where: whereFinal,
       select: {
         id: true, numero: true, titulo: true, status: true, prioridade: true,
         createdAt: true,
