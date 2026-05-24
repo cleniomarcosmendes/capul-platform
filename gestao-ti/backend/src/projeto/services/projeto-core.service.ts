@@ -14,7 +14,7 @@ import { isGestor, isTI } from '../../common/constants/roles.constant.js';
 import { ROLES_EXTERNOS } from '../../common/constants/roles.constant.js';
 import { paginate } from '../../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../../common/helpers/resolve-departamento.helper.js';
-import { applyDepartamentoFilter } from '../../common/helpers/departamento-filter.helper.js';
+import { getDeptoIdsDoUser } from '../../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 import { Prisma } from '@prisma/client';
 
@@ -130,9 +130,34 @@ export class ProjetoCoreService {
       }
     }
 
-    // Workspace Onda 2 C2.4 — filtro departamental.
-    // ADMIN escapa (D36). Demais roles: somente projetos dos seus deptos.
-    const whereFiltrado = applyDepartamentoFilter(where, filters.user ?? null, filters.role ?? null);
+    // Workspace Onda 2 C2.10 (25/05) — análogo ao C2.9 dos chamados.
+    // User vê projeto SE: depto-dono nos seus deptos OR é responsável
+    // OR é membro OR é usuário-chave ativo. ADMIN escapa (D36).
+    // USUARIO_CHAVE/TERCEIRIZADO NÃO entra aqui — já tem regra
+    // restritiva acima (where.usuariosChave = some) que NÃO deve ser
+    // relaxada (eles só veem os vinculados explicitamente).
+    const deptoIds = getDeptoIdsDoUser(filters.user, filters.role);
+    const isUCouTerc = filters.role === 'USUARIO_CHAVE' || filters.role === 'TERCEIRIZADO';
+    let whereFiltrado: Record<string, unknown> = where;
+    if (deptoIds !== null && !isUCouTerc) {
+      const userId = filters.usuarioId ?? '';
+      whereFiltrado = {
+        AND: [
+          where,
+          {
+            OR: [
+              { departamentoId: { in: deptoIds } },
+              { responsavelId: userId },
+              { membros: { some: { usuarioId: userId } } },
+              { usuariosChave: { some: { usuarioId: userId, ativo: true } } },
+            ],
+          },
+        ],
+      };
+    } else if (deptoIds !== null && isUCouTerc) {
+      // Mantém o filtro de depto pra USUARIO_CHAVE/TERC (escopa workspace).
+      whereFiltrado = { AND: [where, { departamentoId: { in: deptoIds } }] };
+    }
 
     const resultado = await paginate(this.prisma, this.prisma.projeto, {
       where: whereFiltrado,
