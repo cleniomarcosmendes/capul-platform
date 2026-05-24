@@ -34,6 +34,12 @@ export interface UsuarioLogado {
   filialAtual: FilialUsuario | null;
   filiais: (FilialUsuario & { isDefault: boolean })[];
   modulos: ModuloUsuario[];
+  /**
+   * Onda 3 S3 (24/05) — capabilities ativas do user (ex: OVERSIGHT_PLATAFORMA).
+   * Usado pelo <DepartamentoField> pra decidir se mostra todos os deptos da
+   * plataforma (OVERSIGHT) ou só os do user.
+   */
+  capabilities?: string[];
 }
 
 export interface Equipe {

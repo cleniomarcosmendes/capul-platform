@@ -425,6 +425,9 @@ export class AuthService {
       })),
       // Onda 1 Sub-fase 1.6.2 — response inclui departamentos[]+funcionalidades[].
       modulos: await buildModulosResponse(this.prisma, usuario.id),
+      // Onda 3 S3 (24/05) — frontend precisa pra renderizar UI condicional
+      // (ex: <DepartamentoField> em modo OVERSIGHT mostra todos os deptos).
+      capabilities: await buildCapabilitiesPayload(this.prisma, usuario.id),
     };
   }
 
