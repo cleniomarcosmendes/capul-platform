@@ -79,8 +79,8 @@ export class CompraService {
     return this.notaFiscalService.create(dto, userId, filialId, role, jwt, user);
   }
 
-  updateNotaFiscal(id: string, dto: UpdateNotaFiscalDto, usuarioId: string, role: string, jwt?: string) {
-    return this.notaFiscalService.update(id, dto, usuarioId, role, jwt);
+  updateNotaFiscal(id: string, dto: UpdateNotaFiscalDto, usuarioId: string, role: string, jwt?: string, user?: JwtPayload) {
+    return this.notaFiscalService.update(id, dto, usuarioId, role, jwt, user);
   }
 
   /**

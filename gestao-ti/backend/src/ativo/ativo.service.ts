@@ -9,7 +9,7 @@ import { StatusAtivo } from '@prisma/client';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
 import { resolveDepartamentoLancamento } from '../common/helpers/resolve-departamento-lancamento.helper.js';
-import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
+import { applyDepartamentoFilterCadastroOp, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 const ativoListInclude = {
@@ -63,7 +63,7 @@ export class AtivoService {
     }
 
     // Workspace Onda 2 C2.4 — filtro departamental. ADMIN escapa (D36).
-    const whereFiltrado = applyDepartamentoFilter(where, user ?? null, role ?? null);
+    const whereFiltrado = applyDepartamentoFilterCadastroOp(where, user ?? null, role ?? null);
 
     return paginate(this.prisma, this.prisma.ativo, {
       where: whereFiltrado,
@@ -95,6 +95,9 @@ export class AtivoService {
       dto.departamentoId,
     );
 
+    // Onda 3 S10 — gate de escrita (OVERSIGHT bypass).
+    if (user) assertDepartamentoDoUser(user, null, departamentoId);
+
     return this.prisma.ativo.create({
       data: {
         tag: dto.tag,
@@ -124,14 +127,22 @@ export class AtivoService {
     });
   }
 
-  async update(id: string, dto: UpdateAtivoDto) {
-    await this.getOrFail(id);
+  async update(id: string, dto: UpdateAtivoDto, user?: JwtPayload) {
+    const existing = await this.getOrFail(id);
 
     if (dto.tag) {
       const exists = await this.prisma.ativo.findFirst({
         where: { tag: dto.tag, id: { not: id } },
       });
       if (exists) throw new BadRequestException('Tag ja existe');
+    }
+
+    // Onda 3 S10 — gate de escrita (OVERSIGHT bypass).
+    if (user) {
+      assertDepartamentoDoUser(user, null, existing.departamentoId);
+      if (dto.departamentoId && dto.departamentoId !== existing.departamentoId) {
+        assertDepartamentoDoUser(user, null, dto.departamentoId);
+      }
     }
 
     const data: Record<string, unknown> = { ...dto };

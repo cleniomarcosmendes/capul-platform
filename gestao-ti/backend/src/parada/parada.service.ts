@@ -13,7 +13,7 @@ import { UpdateMotivoParadaDto } from './dto/update-motivo-parada.dto';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
 import { resolveDepartamentoLancamento } from '../common/helpers/resolve-departamento-lancamento.helper.js';
-import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
+import { applyDepartamentoFilter, applyDepartamentoFilterCadastroOp, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 
 const paradaListInclude = {
@@ -83,7 +83,7 @@ export class ParadaService {
     }
 
     // Workspace Onda 2 C2.4 — filtro departamental. ADMIN escapa (D36).
-    const whereFiltrado = applyDepartamentoFilter(where, user ?? null, role ?? null);
+    const whereFiltrado = applyDepartamentoFilterCadastroOp(where, user ?? null, role ?? null);
 
     return paginate(this.prisma, this.prisma.registroParada, {
       where: whereFiltrado,
@@ -133,6 +133,9 @@ export class ParadaService {
       'WORKSPACE',
       dto.departamentoId,
     );
+
+    // Onda 3 S10 — gate de escrita (OVERSIGHT bypass).
+    if (user) assertDepartamentoDoUser(user, null, departamentoId);
 
     const criada = await this.prisma.registroParada.create({
       data: {
@@ -225,13 +228,21 @@ export class ParadaService {
     });
   }
 
-  async update(id: string, dto: UpdateParadaDto, userId?: string) {
+  async update(id: string, dto: UpdateParadaDto, userId?: string, user?: JwtPayload) {
     const parada = await this.prisma.registroParada.findUnique({ where: { id } });
     if (!parada) throw new NotFoundException('Parada nao encontrada');
     // Antes só bloqueava CANCELADA — agora bloqueia FINALIZADA também (reabrir antes).
     // Exceção: se o caller está APENAS preenchendo `fim` em parada EM_ANDAMENTO
     // (fluxo legítimo de "concluir editando"), o assert não é aplicado.
     this.assertParadaEditavel(parada, 'editar');
+
+    // Onda 3 S10 — gate de escrita (OVERSIGHT bypass).
+    if (user) {
+      assertDepartamentoDoUser(user, null, parada.departamentoId);
+      if (dto.departamentoId && dto.departamentoId !== parada.departamentoId) {
+        assertDepartamentoDoUser(user, null, dto.departamentoId);
+      }
+    }
 
     if (dto.softwareId) {
       const software = await this.prisma.software.findUnique({ where: { id: dto.softwareId } });

@@ -7,11 +7,11 @@ import { GestaoTiGuard } from '../common/guards/gestao-ti.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { CreateLicencaDto } from './dto/create-licenca.dto.js';
 import { UpdateLicencaDto } from './dto/update-licenca.dto.js';
 import { AtribuirUsuarioDto } from './dto/atribuir-usuario.dto.js';
-import { CurrentUser } from '../common/decorators/current-user.decorator.js';
-import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { CreateCategoriaLicencaDto, UpdateCategoriaLicencaDto } from './dto/create-categoria-licenca.dto.js';
 import { StatusLicenca } from '@prisma/client';
 import { ROLES_TI } from '../common/constants/roles.constant.js';
@@ -91,8 +91,8 @@ export class LicencaController {
 
   @Patch(':id')
   @Roles(...ROLES_TI)
-  update(@Param('id') id: string, @Body() dto: UpdateLicencaDto) {
-    return this.service.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateLicencaDto, @CurrentUser() user: JwtPayload) {
+    return this.service.update(id, dto, user);
   }
 
   @Post(':id/renovar')

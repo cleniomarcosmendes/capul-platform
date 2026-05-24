@@ -1,4 +1,6 @@
+import { ForbiddenException } from '@nestjs/common';
 import { JwtPayload } from '../interfaces/jwt-payload.interface.js';
+import { hasCapability } from './capability.helper.js';
 
 /**
  * Aplica filtro departamental em queries do módulo Workspace.
@@ -111,4 +113,69 @@ export function buildDashboardDeptoFilter(
   }
   // Não-ADMIN sem filtro UI: limita aos seus deptos
   return { departamentoId: { in: deptoIds } };
+}
+
+// ─── Onda 3 S10 (24/05) — bypass via OVERSIGHT, não via role ────────
+//
+// D36 (ADMIN escapa filtros) foi REVOGADO nos 6 cadastros operacionais
+// (Software/Licença/Contrato/NF/Ativo/Parada) — decisão E1. ADMIN sem
+// OVERSIGHT_PLATAFORMA opera como user normal: vê + escreve só nos deptos
+// onde tem perfil.
+//
+// Usos:
+//   findAll → applyDepartamentoFilterCadastroOp(where, user, role)
+//   create/update → assertDepartamentoDoUser(user, role, dto.departamentoId)
+//
+// Outros módulos (Chamado/Projeto/Indicador/Dashboard) continuam usando
+// applyDepartamentoFilter/buildDashboardDeptoFilter — D36 mantido lá.
+
+/**
+ * Variante de `applyDepartamentoFilter` que usa OVERSIGHT pra bypass em
+ * vez do role ADMIN. Pra ler cadastros operacionais.
+ */
+export function applyDepartamentoFilterCadastroOp<T extends Record<string, unknown>>(
+  where: T,
+  user: JwtPayload | null | undefined,
+  role: string | null | undefined,
+  moduloCodigo: string = 'WORKSPACE',
+): T {
+  if (user && hasCapability(user, 'OVERSIGHT_PLATAFORMA')) return where;
+
+  const deptoIds = user?.modulos
+    ?.find((m) => m.codigo === moduloCodigo)
+    ?.departamentos?.map((d) => d.id) ?? [];
+
+  return {
+    ...where,
+    departamentoId: { in: deptoIds },
+  } as T;
+}
+
+/**
+ * Valida que o user pode escrever pra `departamentoId` informado.
+ *
+ * Lança `ForbiddenException` se:
+ *  - User não tem OVERSIGHT_PLATAFORMA E
+ *  - `departamentoId` não está entre os deptos do perfil do user no módulo
+ *
+ * Bypass via OVERSIGHT (admin opera cross-depto), não via role ADMIN.
+ * Pra criação/edição de Software/Licença/Contrato/NF/Ativo/Parada.
+ */
+export function assertDepartamentoDoUser(
+  user: JwtPayload | null | undefined,
+  role: string | null | undefined,
+  departamentoId: string,
+  moduloCodigo: string = 'WORKSPACE',
+): void {
+  if (user && hasCapability(user, 'OVERSIGHT_PLATAFORMA')) return;
+
+  const deptoIds = user?.modulos
+    ?.find((m) => m.codigo === moduloCodigo)
+    ?.departamentos?.map((d) => d.id) ?? [];
+
+  if (!deptoIds.includes(departamentoId)) {
+    throw new ForbiddenException(
+      'Você não tem permissão pra cadastrar/editar neste departamento. Solicite acesso ao ADMIN.',
+    );
+  }
 }

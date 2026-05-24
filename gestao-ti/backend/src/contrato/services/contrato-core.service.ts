@@ -13,7 +13,7 @@ import { contratoListInclude, contratoDetailInclude, TRANSICOES_VALIDAS } from '
 import { paginate } from '../../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../../common/helpers/resolve-departamento.helper.js';
 import { resolveDepartamentoLancamento } from '../../common/helpers/resolve-departamento-lancamento.helper.js';
-import { applyDepartamentoFilter } from '../../common/helpers/departamento-filter.helper.js';
+import { applyDepartamentoFilterCadastroOp, assertDepartamentoDoUser } from '../../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
@@ -118,7 +118,7 @@ export class ContratoCoreService {
 
     // Workspace Onda 2 C2.4 — filtro departamental.
     // ADMIN escapa (D36). Demais roles: somente contratos dos seus deptos.
-    const whereFiltrado = applyDepartamentoFilter(where, user ?? null, role ?? null);
+    const whereFiltrado = applyDepartamentoFilterCadastroOp(where, user ?? null, role ?? null);
 
     return paginate(this.prisma, this.prisma.contrato, {
       where: whereFiltrado,
@@ -164,6 +164,9 @@ export class ContratoCoreService {
       dto.departamentoId,
     );
 
+    // Onda 3 S10 — gate de escrita (OVERSIGHT bypass).
+    if (user) assertDepartamentoDoUser(user, null, departamentoId);
+
     const contrato = await this.prisma.contrato.create({
       data: {
         titulo: dto.titulo,
@@ -205,12 +208,20 @@ export class ContratoCoreService {
     return contrato;
   }
 
-  async update(id: string, dto: UpdateContratoDto, usuarioId: string, role: string = 'ADMIN') {
+  async update(id: string, dto: UpdateContratoDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
     const contrato = await this.findOne(id);
     await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
 
     if (['RENOVADO', 'CANCELADO', 'ENCERRADO'].includes(contrato.status)) {
       throw new BadRequestException('Contrato finalizado nao pode ser alterado');
+    }
+
+    // Onda 3 S10 — gate de escrita (OVERSIGHT bypass).
+    if (user) {
+      assertDepartamentoDoUser(user, null, contrato.departamentoId);
+      if (dto.departamentoId && dto.departamentoId !== contrato.departamentoId) {
+        assertDepartamentoDoUser(user, null, dto.departamentoId);
+      }
     }
 
     if (dto.softwareId) {

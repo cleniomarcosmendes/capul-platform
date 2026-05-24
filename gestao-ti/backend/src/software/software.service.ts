@@ -13,7 +13,7 @@ import { TipoSoftware, Criticidade, StatusSoftware, StatusModulo } from '@prisma
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
 import { resolveDepartamentoLancamento } from '../common/helpers/resolve-departamento-lancamento.helper.js';
-import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
+import { applyDepartamentoFilterCadastroOp, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 const softwareListInclude = {
@@ -60,7 +60,7 @@ export class SoftwareService {
     if (filters.equipeId) where.equipeResponsavelId = filters.equipeId;
 
     // Workspace Onda 2 C2.4 — filtro departamental. ADMIN escapa (D36).
-    const whereFiltrado = applyDepartamentoFilter(where, user ?? null, role ?? null);
+    const whereFiltrado = applyDepartamentoFilterCadastroOp(where, user ?? null, role ?? null);
 
     return paginate(this.prisma, this.prisma.software, {
       where: whereFiltrado,
@@ -92,6 +92,9 @@ export class SoftwareService {
       dto.departamentoId,
     );
 
+    // Onda 3 S10 — valida que user pode escrever nesse depto (OVERSIGHT bypass).
+    if (user) assertDepartamentoDoUser(user, null, departamentoId);
+
     const departamentoLancamentoId = resolveDepartamentoLancamento(user, departamentoId);
 
     return this.prisma.software.create({
@@ -100,11 +103,19 @@ export class SoftwareService {
     });
   }
 
-  async update(id: string, dto: UpdateSoftwareDto) {
-    await this.getSoftwareOrFail(id);
+  async update(id: string, dto: UpdateSoftwareDto, user?: JwtPayload) {
+    const existing = await this.getSoftwareOrFail(id);
     if (dto.nome) {
-      const existing = await this.prisma.software.findFirst({ where: { nome: dto.nome, NOT: { id } } });
-      if (existing) throw new ConflictException('Ja existe um software com este nome');
+      const conflict = await this.prisma.software.findFirst({ where: { nome: dto.nome, NOT: { id } } });
+      if (conflict) throw new ConflictException('Ja existe um software com este nome');
+    }
+    // Onda 3 S10 — valida deptos: o atual (proteção de leitura) E o novo
+    // se está sendo alterado (proteção da realocação).
+    if (user) {
+      assertDepartamentoDoUser(user, null, existing.departamentoId);
+      if (dto.departamentoId && dto.departamentoId !== existing.departamentoId) {
+        assertDepartamentoDoUser(user, null, dto.departamentoId);
+      }
     }
     return this.prisma.software.update({
       where: { id },

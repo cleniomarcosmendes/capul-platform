@@ -10,8 +10,8 @@ import { CreateAtivoDto } from './dto/create-ativo.dto.js';
 import { UpdateAtivoDto, UpdateStatusAtivoDto } from './dto/update-ativo.dto.js';
 import { AddAtivoSoftwareDto } from './dto/add-ativo-software.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
-import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
+import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
 import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
 
@@ -55,8 +55,8 @@ export class AtivoController {
 
   @Patch(':id')
   @Roles('ADMIN', 'GESTOR')
-  update(@Param('id') id: string, @Body() dto: UpdateAtivoDto) {
-    return this.service.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateAtivoDto, @CurrentUser() user: JwtPayload) {
+    return this.service.update(id, dto, user);
   }
 
   @Patch(':id/status')

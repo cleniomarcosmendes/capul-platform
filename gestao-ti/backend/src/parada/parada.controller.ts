@@ -126,7 +126,7 @@ export class ParadaController {
   @Patch(':id')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   update(@Param('id') id: string, @Body() dto: UpdateParadaDto, @CurrentUser() user: JwtPayload) {
-    return this.service.update(id, dto, user.sub);
+    return this.service.update(id, dto, user.sub, user);
   }
 
   @Post(':id/finalizar')

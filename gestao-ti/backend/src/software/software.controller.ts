@@ -59,8 +59,8 @@ export class SoftwareController {
 
   @Patch(':id')
   @Roles('ADMIN', 'GESTOR')
-  update(@Param('id') id: string, @Body() dto: UpdateSoftwareDto) {
-    return this.service.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateSoftwareDto, @CurrentUser() user: JwtPayload) {
+    return this.service.update(id, dto, user);
   }
 
   @Patch(':id/status')

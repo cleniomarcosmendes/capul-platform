@@ -9,7 +9,7 @@ import { CreateNotaFiscalDto, UpdateNotaFiscalDto } from '../dto/create-nota-fis
 import { FiscalNfeClient, FiscalConsultaRetorno } from './fiscal-nfe.client.js';
 import { resolveDepartamento } from '../../common/helpers/resolve-departamento.helper.js';
 import { resolveDepartamentoLancamento } from '../../common/helpers/resolve-departamento-lancamento.helper.js';
-import { applyDepartamentoFilter } from '../../common/helpers/departamento-filter.helper.js';
+import { applyDepartamentoFilterCadastroOp, assertDepartamentoDoUser } from '../../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -203,7 +203,7 @@ export class CompraNotaFiscalService {
     }
 
     // Workspace Onda 2 C2.4 — filtro departamental. ADMIN escapa (D36).
-    const whereFiltrado = applyDepartamentoFilter(where, user ?? null, role ?? null);
+    const whereFiltrado = applyDepartamentoFilterCadastroOp(where, user ?? null, role ?? null);
 
     return this.prisma.notaFiscal.findMany({
       where: whereFiltrado,
@@ -289,6 +289,9 @@ export class CompraNotaFiscalService {
       dto.departamentoId,
     );
 
+    // Onda 3 S10 — gate de escrita (OVERSIGHT bypass).
+    if (user) assertDepartamentoDoUser(user, null, departamentoId);
+
     return this.prisma.$transaction(async (tx) => {
       const nf = await tx.notaFiscal.create({
         data: {
@@ -335,6 +338,7 @@ export class CompraNotaFiscalService {
     usuarioId: string = '',
     role: string = 'ADMIN',
     jwt?: string,
+    user?: JwtPayload,
   ) {
     const existing = await this.prisma.notaFiscal.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Nota fiscal nao encontrada');
@@ -344,6 +348,14 @@ export class CompraNotaFiscalService {
 
     // Verificar permissao na equipe da NF existente
     await this.ensureNFPermission(existing.equipeId, usuarioId, role);
+
+    // Onda 3 S10 — gate de escrita (OVERSIGHT bypass).
+    if (user) {
+      assertDepartamentoDoUser(user, null, existing.departamentoId);
+      if (dto.departamentoId && dto.departamentoId !== existing.departamentoId) {
+        assertDepartamentoDoUser(user, null, dto.departamentoId);
+      }
+    }
 
     // ─── Regras de alteração da chave NF-e (14/05/2026) ───
     // Compara dto.chaveNfe com existing.chaveNfe normalizado. `undefined` =

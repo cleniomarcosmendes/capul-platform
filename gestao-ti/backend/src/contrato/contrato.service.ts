@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { StatusContrato } from '@prisma/client';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { ContratoCoreService } from './services/contrato-core.service.js';
 import { ContratoParcelaService } from './services/contrato-parcela.service.js';
 import { ContratoRateioService } from './services/contrato-rateio.service.js';
 import { ContratoConfigService } from './services/contrato-config.service.js';
 import { ContratoAnexoService } from './services/contrato-anexo.service.js';
-import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { CreateContratoDto } from './dto/create-contrato.dto';
 import { UpdateContratoDto } from './dto/update-contrato.dto';
 import { CreateParcelaDto } from './dto/create-parcela.dto';
@@ -58,8 +58,8 @@ export class ContratoService {
     return this.core.create(dto, usuarioId, role, user);
   }
 
-  async update(id: string, dto: UpdateContratoDto, usuarioId: string, role: string = 'ADMIN') {
-    return this.core.update(id, dto, usuarioId, role);
+  async update(id: string, dto: UpdateContratoDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+    return this.core.update(id, dto, usuarioId, role, user);
   }
 
   async alterarStatus(id: string, novoStatus: StatusContrato, usuarioId: string, role: string = 'ADMIN') {

@@ -197,7 +197,7 @@ export class ContratoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.update(id, dto, user.sub, role);
+    return this.service.update(id, dto, user.sub, role, user);
   }
 
   @Patch(':id/status')

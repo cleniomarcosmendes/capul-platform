@@ -183,7 +183,7 @@ export class CompraController {
     @Req() req: express.Request,
   ) {
     const jwt = dto.chaveNfe !== undefined ? extrairJwt(req) : undefined;
-    return this.service.updateNotaFiscal(id, dto, user.sub, role, jwt);
+    return this.service.updateNotaFiscal(id, dto, user.sub, role, jwt, user);
   }
 
   @Delete('notas-fiscais/:id')

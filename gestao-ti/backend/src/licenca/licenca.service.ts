@@ -12,7 +12,7 @@ import { isGestor } from '../common/constants/roles.constant.js';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
 import { resolveDepartamentoLancamento } from '../common/helpers/resolve-departamento-lancamento.helper.js';
-import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
+import { applyDepartamentoFilterCadastroOp, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 const MODELOS_POR_USUARIO: ModeloLicenca[] = ['POR_USUARIO', 'SUBSCRICAO', 'SAAS'];
@@ -62,7 +62,7 @@ export class LicencaService {
     }
 
     // Workspace Onda 2 C2.4 — filtro departamental. ADMIN escapa (D36).
-    const whereFiltrado = applyDepartamentoFilter(where, user ?? null, role);
+    const whereFiltrado = applyDepartamentoFilterCadastroOp(where, user ?? null, role);
 
     const resultado = await paginate(this.prisma, this.prisma.softwareLicenca, {
       where: whereFiltrado,
@@ -111,6 +111,9 @@ export class LicencaService {
       dto.departamentoId,
     );
 
+    // Onda 3 S10 — gate de escrita (OVERSIGHT bypass).
+    if (user) assertDepartamentoDoUser(user, null, departamentoId);
+
     const departamentoLancamentoId = resolveDepartamentoLancamento(user, departamentoId);
 
     return this.prisma.softwareLicenca.create({
@@ -134,8 +137,15 @@ export class LicencaService {
     });
   }
 
-  async update(id: string, dto: UpdateLicencaDto) {
-    await this.getLicencaOrFail(id);
+  async update(id: string, dto: UpdateLicencaDto, user?: JwtPayload) {
+    const existing = await this.getLicencaOrFail(id);
+    // Onda 3 S10 — gate de escrita (OVERSIGHT bypass).
+    if (user) {
+      assertDepartamentoDoUser(user, null, existing.departamentoId);
+      if (dto.departamentoId && dto.departamentoId !== existing.departamentoId) {
+        assertDepartamentoDoUser(user, null, dto.departamentoId);
+      }
+    }
     return this.prisma.softwareLicenca.update({
       where: { id },
       data: {
