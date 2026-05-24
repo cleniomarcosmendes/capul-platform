@@ -173,14 +173,15 @@ export class UsuarioService {
                 dto.permissoes.map(async (p) => ({
                   moduloId: p.moduloId,
                   roleModuloId: p.roleModuloId,
-                  // Onda 1 Sub-fase 1.6.1 — resolveDepartamento cascata.
-                  // Permissão criada herda do dto.departamentoId (depto
-                  // organizacional do user); senão fallback T.I.
+                  // Onda 1 Sub-fase 1.6.1 + C2.7 refino — cascata:
+                  // (1) p.departamentoId (UI multi-perfil envia explícito),
+                  // (2) senão dto.departamentoId (depto organizacional),
+                  // (3) senão fallback T.I.
                   departamentoId: await resolveDepartamento(
                     this.prisma,
                     null,
                     '',
-                    dto.departamentoId,
+                    p.departamentoId ?? dto.departamentoId,
                   ),
                 })),
               ),

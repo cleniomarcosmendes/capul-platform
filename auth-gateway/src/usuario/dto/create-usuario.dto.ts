@@ -19,6 +19,15 @@ export class PermissaoDto {
   @IsNotEmpty()
   @IsUUID()
   roleModuloId: string;
+
+  // Workspace Multi-Departamento (C2.7 refino) — depto operacional do
+  // perfil. Opcional pra retrocompat: se omitido, o service usa
+  // resolveDepartamento (dto.departamentoId do user → JWT do caller →
+  // fallback T.I.). Necessário pra multi-perfil real (mesmo user,
+  // múltiplos perfis em deptos diferentes no mesmo módulo).
+  @IsOptional()
+  @IsUUID()
+  departamentoId?: string;
 }
 
 export class CreateUsuarioDto {
