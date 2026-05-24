@@ -8,6 +8,8 @@ import { StatusArtigo } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
 import { paginate } from '../common/prisma/paginate.helper.js';
+import { getDeptoIdsDoUser } from '../common/helpers/departamento-filter.helper.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads', 'conhecimento');
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -41,6 +43,7 @@ export class ConhecimentoService {
     role?: string;
     page?: number;
     pageSize?: number;
+    user?: JwtPayload;
   }) {
     const where: Record<string, unknown> = {};
     if (filters.categoria) where.categoria = filters.categoria;
@@ -59,6 +62,27 @@ export class ConhecimentoService {
     if (filters.role === 'USUARIO_FINAL' || filters.role === 'USUARIO_CHAVE') {
       where.publica = true;
       where.status = 'PUBLICADO';
+    }
+
+    // Workspace Onda 2 C2.4.5 — modelo HÍBRIDO. Artigo visível se:
+    //   - sem equipe (equipeTiId IS NULL) — biblioteca global
+    //   - OU equipe pertence a depto onde o user tem perfil
+    // ADMIN escapa (D36). filtros explícitos (`equipeTiId`) bypassam.
+    const deptoIds = getDeptoIdsDoUser(filters.user, filters.role);
+    if (deptoIds !== null && !filters.equipeTiId) {
+      const visibilidadeDepto = {
+        OR: [
+          { equipeTiId: null },
+          { equipeTi: { departamentoId: { in: deptoIds } } },
+        ],
+      };
+      // Compor com OR já existente (search) via AND.
+      if (where.OR) {
+        where.AND = [{ OR: where.OR }, visibilidadeDepto];
+        delete where.OR;
+      } else {
+        Object.assign(where, visibilidadeDepto);
+      }
     }
 
     return paginate(this.prisma, this.prisma.artigoConhecimento, {

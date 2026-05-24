@@ -9,6 +9,9 @@ import { RequiresFuncionalidade } from '../common/decorators/requires-funcionali
 import { CreateSlaDto } from './dto/create-sla.dto.js';
 import { UpdateSlaDto } from './dto/update-sla.dto.js';
 import { UpdateStatusDto } from '../equipe/dto/update-status.dto.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Controller('sla')
 @UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard, FuncionalidadeGuard)
@@ -17,8 +20,12 @@ export class SlaController {
   constructor(private readonly service: SlaService) {}
 
   @Get()
-  findAll(@Query('equipeId') equipeId?: string) {
-    return this.service.findAll(equipeId);
+  findAll(
+    @Query('equipeId') equipeId?: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
+  ) {
+    return this.service.findAll(equipeId, user, role);
   }
 
   @Get(':id')

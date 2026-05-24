@@ -45,6 +45,7 @@ export class ConhecimentoController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @GestaoTiRole() role?: string,
+    @CurrentUser() user?: JwtPayload,
   ) {
     return this.service.findAll({
       categoria,
@@ -55,6 +56,7 @@ export class ConhecimentoController {
       role,
       page: page ? parseInt(page, 10) : undefined,
       pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+      user,
     });
   }
 

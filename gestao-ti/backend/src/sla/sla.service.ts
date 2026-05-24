@@ -3,14 +3,28 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateSlaDto } from './dto/create-sla.dto.js';
 import { UpdateSlaDto } from './dto/update-sla.dto.js';
 import { StatusGeral } from '@prisma/client';
+import { getDeptoIdsDoUser } from '../common/helpers/departamento-filter.helper.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class SlaService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(equipeId?: string) {
+  async findAll(equipeId?: string, user?: JwtPayload, role?: string) {
+    // Workspace Onda 2 C2.4.5 — escopo via equipe.departamentoId.
+    // `equipeId` explícito (UI criação de chamado) bypassa filtro.
+    const deptoIds = getDeptoIdsDoUser(user, role);
+    const equipeDeptoWhere =
+      deptoIds === null || equipeId
+        ? {}
+        : { equipe: { departamentoId: { in: deptoIds } } };
+
     return this.prisma.slaDefinicao.findMany({
-      where: equipeId ? { equipeId, status: 'ATIVO' } : { status: 'ATIVO' },
+      where: {
+        ...(equipeId ? { equipeId } : {}),
+        status: 'ATIVO',
+        ...equipeDeptoWhere,
+      },
       include: { equipe: { select: { id: true, nome: true, sigla: true } } },
       orderBy: { prioridade: 'asc' },
     });

@@ -10,6 +10,9 @@ import { CreateCatalogoDto } from './dto/create-catalogo.dto.js';
 import { UpdateCatalogoDto } from './dto/update-catalogo.dto.js';
 import { UpdateStatusDto } from '../equipe/dto/update-status.dto.js';
 import { StatusGeral } from '@prisma/client';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Controller('catalogo-servicos')
 @UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard, FuncionalidadeGuard)
@@ -18,8 +21,13 @@ export class CatalogoServicoController {
   constructor(private readonly service: CatalogoServicoService) {}
 
   @Get()
-  findAll(@Query('equipeId') equipeId?: string, @Query('status') status?: StatusGeral) {
-    return this.service.findAll(equipeId, status);
+  findAll(
+    @Query('equipeId') equipeId?: string,
+    @Query('status') status?: StatusGeral,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
+  ) {
+    return this.service.findAll(equipeId, status, user, role);
   }
 
   @Get(':id')
