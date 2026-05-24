@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { licencaService } from '../../services/licenca.service';
 import { softwareService } from '../../services/software.service';
 import { KeyRound, AlertTriangle, Download, Plus, X, Search } from 'lucide-react';
+import { DepartamentoField } from '../../components/DepartamentoField';
 import { exportService } from '../../services/export.service';
 import type { SoftwareLicenca, Software, StatusLicenca, CategoriaLicenca } from '../../types';
 
@@ -71,6 +72,8 @@ export function LicencasPage() {
   const [formDataVencimento, setFormDataVencimento] = useState('');
   const [formChaveSerial, setFormChaveSerial] = useState('');
   const [formObservacoes, setFormObservacoes] = useState('');
+  // Workspace Onda 3 S5 — depto de alocação da licença.
+  const [formDepartamentoId, setFormDepartamentoId] = useState('');
 
   // Edit state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -211,6 +214,7 @@ export function LicencasPage() {
     setFormDataVencimento('');
     setFormChaveSerial('');
     setFormObservacoes('');
+    setFormDepartamentoId('');
     setFormError('');
   }
 
@@ -240,6 +244,7 @@ export function LicencasPage() {
         dataVencimento: formDataVencimento || undefined,
         chaveSerial: formChaveSerial || undefined,
         observacoes: formObservacoes || undefined,
+        departamentoId: formDepartamentoId || undefined,
       });
       setShowForm(false);
       resetForm();
@@ -310,6 +315,15 @@ export function LicencasPage() {
                 <input type="radio" checked={formTipo === 'software'} onChange={() => setFormTipo('software')} className="accent-capul-600" />
                 Vinculada a Software
               </label>
+            </div>
+
+            <div className="mb-4">
+              <DepartamentoField
+                value={formDepartamentoId}
+                onChange={setFormDepartamentoId}
+                funcionalidade="LICENCA"
+                help="Departamento ONDE a licença está alocada (visibilidade)."
+              />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">

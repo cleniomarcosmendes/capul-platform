@@ -525,6 +525,9 @@ export interface SoftwareLicenca {
   status: StatusLicenca;
   createdAt: string;
   updatedAt: string;
+  // Workspace Onda 3 S5 (24/05) — alocação + lançamento.
+  departamentoId: string;
+  departamentoLancamentoId?: string;
   usuarios?: LicencaUsuario[];
   _count?: { usuarios: number };
 }

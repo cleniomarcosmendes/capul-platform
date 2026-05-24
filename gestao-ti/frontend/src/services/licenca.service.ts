@@ -25,6 +25,8 @@ interface CreateLicencaPayload {
   chaveSerial?: string;
   fornecedor?: string;
   observacoes?: string;
+  // Workspace Onda 3 S5 (24/05) — alocação editável via <DepartamentoField>.
+  departamentoId?: string;
 }
 
 export const licencaService = {
