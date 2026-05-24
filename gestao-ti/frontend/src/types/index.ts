@@ -738,6 +738,9 @@ export interface RegistroParada {
   _count: { filiaisAfetadas: number; chamados: number; colaboradores: number };
   createdAt: string;
   updatedAt: string;
+  // Workspace Onda 3 S8 (24/05) — alocação + lançamento.
+  departamentoId: string;
+  departamentoLancamentoId?: string;
 }
 
 export interface DashboardDisponibilidade {

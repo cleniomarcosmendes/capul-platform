@@ -6,6 +6,7 @@ import { paradaService } from '../../services/parada.service';
 import { softwareService } from '../../services/software.service';
 import { coreApi } from '../../services/api';
 import { ArrowLeft, Paperclip, Download, Trash2 } from 'lucide-react';
+import { DepartamentoField } from '../../components/DepartamentoField';
 import { useToast } from '../../components/Toast';
 import { abrirAnexoOuBaixar } from '../../utils/anexo';
 import type { Software, SoftwareModulo, MotivoParada, TipoParada, ImpactoParada } from '../../types';
@@ -70,6 +71,8 @@ export function ParadaFormPage() {
   const [motivoParadaId, setMotivoParadaId] = useState('');
   const [descricao, setDescricao] = useState('');
   const [observacoes, setObservacoes] = useState('');
+  // Workspace Onda 3 S8 — depto de alocação da parada.
+  const [departamentoId, setDepartamentoId] = useState('');
 
   useEffect(() => {
     softwareService.listar({ status: 'ATIVO' }).then(setSoftwares).catch(() => {});
@@ -90,6 +93,7 @@ export function ParadaFormPage() {
         setFilialIds(p.filiaisAfetadas.map((f) => f.filialId));
         setDescricao(p.descricao || '');
         setObservacoes(p.observacoes || '');
+        setDepartamentoId(p.departamentoId || '');
       }).catch(() => setError('Erro ao carregar parada'))
         .finally(() => setLoadingData(false));
       paradaService.listarAnexos(id).then(setAnexos).catch(() => {});
@@ -135,6 +139,7 @@ export function ParadaFormPage() {
         filialIds,
         descricao: descricao || undefined,
         observacoes: observacoes || undefined,
+        departamentoId: departamentoId || undefined,
       };
 
       if (isEdit && id) {
@@ -177,6 +182,13 @@ export function ParadaFormPage() {
         )}
 
         <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-slate-200 p-6 space-y-5">
+          <DepartamentoField
+            value={departamentoId}
+            onChange={setDepartamentoId}
+            funcionalidade="PARADA"
+            help="Departamento ONDE a parada é registrada (visibilidade)."
+          />
+
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Titulo *</label>
             <input

@@ -29,6 +29,8 @@ interface CreateParadaPayload {
   filialIds: string[];
   descricao?: string;
   observacoes?: string;
+  // Workspace Onda 3 S8 (24/05) — alocação editável via <DepartamentoField>.
+  departamentoId?: string;
 }
 
 interface UpdateParadaPayload {
@@ -42,6 +44,8 @@ interface UpdateParadaPayload {
   filialIds?: string[];
   descricao?: string;
   observacoes?: string;
+  // Workspace Onda 3 S8 (24/05) — realocação editável.
+  departamentoId?: string;
 }
 
 export const paradaService = {
