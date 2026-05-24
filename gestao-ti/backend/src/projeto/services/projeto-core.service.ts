@@ -436,6 +436,21 @@ export class ProjetoCoreService {
       }).catch(() => {}); // ignora se ja existe
     }
 
+    // Workspace Onda 2 (25/05) — garante consistência responsável ↔ usuarios-chave.
+    // Antes desta data, projetos criados por staff (não-externo) deixavam
+    // a aba Usuários-Chave vazia mesmo com responsavel_id definido. Agora
+    // SEMPRE que tem responsável definido, garante entrada ativa com
+    // função "Responsavel". Idempotente via upsert (PK composta).
+    if (responsavelId && !isExterno) {
+      await this.prisma.usuarioChaveProjeto
+        .upsert({
+          where: { projetoId_usuarioId: { projetoId: projeto.id, usuarioId: responsavelId } },
+          create: { projetoId: projeto.id, usuarioId: responsavelId, funcao: 'Responsavel', ativo: true },
+          update: { ativo: true },
+        })
+        .catch(() => {}); // não bloqueia o create — só tenta espelhar.
+    }
+
     return projeto;
   }
 
@@ -715,11 +730,32 @@ export class ProjetoCoreService {
       }
     }
 
-    return this.prisma.projeto.update({
+    const atualizado = await this.prisma.projeto.update({
       where: { id },
       data,
       include: projetoDetailInclude,
     });
+
+    // Workspace Onda 2 (25/05) — sincroniza responsavel ↔ usuarios-chave.
+    // Quando o responsavelId muda (ou é definido pela primeira vez),
+    // garante entrada ativa em `usuarios_chave_projeto`. NÃO desativa o
+    // responsável anterior — ele pode continuar como stakeholder se quiser
+    // (admin decide manualmente via aba Usuários-Chave).
+    if (
+      dto.responsavelId !== undefined &&
+      dto.responsavelId &&
+      dto.responsavelId !== projeto.responsavelId
+    ) {
+      await this.prisma.usuarioChaveProjeto
+        .upsert({
+          where: { projetoId_usuarioId: { projetoId: id, usuarioId: dto.responsavelId } },
+          create: { projetoId: id, usuarioId: dto.responsavelId, funcao: 'Responsavel', ativo: true },
+          update: { ativo: true },
+        })
+        .catch(() => {});
+    }
+
+    return atualizado;
   }
 
   async remove(id: string) {
