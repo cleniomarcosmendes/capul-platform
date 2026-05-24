@@ -16,6 +16,7 @@ import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { buildModulosPayload } from './helpers/build-modulos-payload';
+import { buildCapabilitiesPayload } from './helpers/build-capabilities-payload';
 import { buildModulosResponse } from './helpers/build-modulos-response';
 
 @Injectable()
@@ -84,6 +85,8 @@ export class AuthService {
       departamentoNome: usuario.departamento.nome,
       // Onda 1 Sub-fase 1.4 — payload agora inclui departamentos[] + funcionalidades[].
       modulos: await buildModulosPayload(this.prisma, usuario.id),
+      // Onda 3 S0 (24/05) — capabilities ativas (ex: OVERSIGHT_PLATAFORMA).
+      capabilities: await buildCapabilitiesPayload(this.prisma, usuario.id),
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -182,6 +185,8 @@ export class AuthService {
       departamentoNome: usuario.departamento.nome,
       // Onda 1 Sub-fase 1.4 — payload agora inclui departamentos[] + funcionalidades[].
       modulos: await buildModulosPayload(this.prisma, usuario.id),
+      // Onda 3 S0 (24/05) — capabilities ativas (ex: OVERSIGHT_PLATAFORMA).
+      capabilities: await buildCapabilitiesPayload(this.prisma, usuario.id),
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -327,6 +332,8 @@ export class AuthService {
       departamentoNome: usuario.departamento?.nome,
       // Onda 1 Sub-fase 1.4 — payload agora inclui departamentos[] + funcionalidades[].
       modulos: await buildModulosPayload(this.prisma, usuario.id),
+      // Onda 3 S0 (24/05) — capabilities ativas (ex: OVERSIGHT_PLATAFORMA).
+      capabilities: await buildCapabilitiesPayload(this.prisma, usuario.id),
     };
 
     const accessToken = this.jwtService.sign(jwtPayload, {
@@ -477,6 +484,8 @@ export class AuthService {
       departamentoNome: usuario.departamento.nome,
       // Onda 1 Sub-fase 1.4 — payload agora inclui departamentos[] + funcionalidades[].
       modulos: await buildModulosPayload(this.prisma, usuario.id),
+      // Onda 3 S0 (24/05) — capabilities ativas (ex: OVERSIGHT_PLATAFORMA).
+      capabilities: await buildCapabilitiesPayload(this.prisma, usuario.id),
     };
 
     const accessToken = this.jwtService.sign(payload, {

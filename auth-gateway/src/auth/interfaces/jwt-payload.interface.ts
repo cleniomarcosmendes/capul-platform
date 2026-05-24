@@ -8,6 +8,14 @@ export interface JwtPayload {
   departamentoId: string;
   departamentoNome: string;
   modulos: ModuloPayload[];
+  /**
+   * Capabilities ativas do user (Onda 3 S0).
+   * Exemplos: 'OVERSIGHT_PLATAFORMA' (bypass em cadastros operacionais).
+   * Capabilities sensíveis LGPD (FISCAL_CONSULTA_SOCIOS) seguem validadas
+   * on-demand contra o DB (defesa em profundidade); o JWT carrega apenas
+   * pra cache de performance em capabilities operacionais.
+   */
+  capabilities: string[];
 }
 
 export interface ModuloDepartamentoPayload {

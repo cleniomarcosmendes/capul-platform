@@ -23,4 +23,10 @@ export class JwtPayload {
   departamentoId: string;
   departamentoNome: string;
   modulos: ModuloPayload[];
+  /**
+   * Onda 3 S0 (24/05). Capabilities ativas do user (ex: OVERSIGHT_PLATAFORMA).
+   * Opcional pra retrocompat com tokens emitidos antes da S0 (helpers leem
+   * como [] via `??` em capability.helper.ts).
+   */
+  capabilities?: string[];
 }
