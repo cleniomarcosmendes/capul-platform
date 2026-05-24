@@ -1210,8 +1210,10 @@ export interface Ativo {
   filial: FilialResumo;
   responsavelId: string | null;
   responsavel: { id: string; nome: string; username: string } | null;
-  departamentoId: string | null;
+  // Workspace Onda 3 (24/05) — alocação NOT NULL (S1 migration) + lançamento (S9).
+  departamentoId: string;
   departamento: { id: string; nome: string } | null;
+  departamentoLancamentoId?: string;
   ativoPaiId: string | null;
   ativoPai: { id: string; tag: string; nome: string; tipo: TipoAtivo } | null;
   softwares?: AtivoSoftwareItem[];

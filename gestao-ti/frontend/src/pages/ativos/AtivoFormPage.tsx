@@ -6,7 +6,8 @@ import { ativoService } from '../../services/ativo.service';
 import { coreService } from '../../services/core.service';
 import { coreApi } from '../../services/api';
 import { ArrowLeft } from 'lucide-react';
-import type { Ativo, TipoAtivo, FilialResumo, Departamento, UsuarioCore } from '../../types';
+import type { Ativo, TipoAtivo, FilialResumo, UsuarioCore } from '../../types';
+import { DepartamentoField } from '../../components/DepartamentoField';
 
 interface AtivoResumo { id: string; tag: string; nome: string; tipo: TipoAtivo }
 
@@ -28,7 +29,6 @@ export function AtivoFormPage() {
 
   const [filiais, setFiliais] = useState<FilialResumo[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioCore[]>([]);
-  const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [ativosPai, setAtivosPai] = useState<AtivoResumo[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -63,7 +63,6 @@ export function AtivoFormPage() {
   useEffect(() => {
     coreApi.get('/filiais').then(({ data }) => setFiliais(data)).catch(() => {});
     coreService.listarUsuarios().then(setUsuarios).catch(() => {});
-    coreService.listarDepartamentos().then(setDepartamentos).catch(() => {});
     ativoService.listar({}).then((list) => setAtivosPai(list.map((a: Ativo) => ({ id: a.id, tag: a.tag, nome: a.nome, tipo: a.tipo })))).catch(() => {});
   }, []);
 
@@ -230,11 +229,12 @@ export function AtivoFormPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Departamento</label>
-                <select name="departamentoId" value={form.departamentoId} onChange={handleChange} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
-                  <option value="">Nenhum</option>
-                  {departamentos.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
-                </select>
+                <DepartamentoField
+                  value={form.departamentoId}
+                  onChange={(v) => setForm({ ...form, departamentoId: v })}
+                  funcionalidade="ATIVO"
+                  help="Departamento ONDE o ativo está alocado (visibilidade)."
+                />
               </div>
             </div>
             <div className="grid grid-cols-3 gap-4">
