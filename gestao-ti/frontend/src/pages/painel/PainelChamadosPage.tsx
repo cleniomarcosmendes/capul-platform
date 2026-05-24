@@ -90,7 +90,7 @@ export function PainelChamadosPage() {
               expandido={expandido.sla}
               onToggle={() => toggle('sla')}
             >
-              <ListaChamados items={data.slaCritico} mostrarSla mostrarTecnico />
+              <ListaChamados items={data.slaCritico} />
             </CardPainel>
 
             {/* Atribuídos a mim */}
@@ -103,7 +103,7 @@ export function PainelChamadosPage() {
               expandido={expandido.atribuidos}
               onToggle={() => toggle('atribuidos')}
             >
-              <ListaChamados items={data.atribuidosAMim} mostrarSla mostrarSolicitante />
+              <ListaChamados items={data.atribuidosAMim} />
             </CardPainel>
 
             {/* Aguardando minha resposta */}
@@ -116,7 +116,7 @@ export function PainelChamadosPage() {
               expandido={expandido.aguardando}
               onToggle={() => toggle('aguardando')}
             >
-              <ListaChamados items={data.aguardandoResposta} mostrarTecnico />
+              <ListaChamados items={data.aguardandoResposta} />
             </CardPainel>
           </div>
         )}
@@ -259,17 +259,7 @@ const prioridadeCores: Record<string, string> = {
   BAIXA: 'bg-green-100 text-green-700',
 };
 
-function ListaChamados({
-  items,
-  mostrarSla = false,
-  mostrarTecnico = false,
-  mostrarSolicitante = false,
-}: {
-  items: ChamadoItem[];
-  mostrarSla?: boolean;
-  mostrarTecnico?: boolean;
-  mostrarSolicitante?: boolean;
-}) {
+function ListaChamados({ items }: { items: ChamadoItem[] }) {
   if (items.length === 0) {
     return (
       <div className="px-4 py-6 text-center text-sm text-slate-400">
@@ -278,18 +268,30 @@ function ListaChamados({
     );
   }
   const agora = new Date();
+  // Larguras fixas pra alinhar as 3 tabelas dos cards (todos com mesmas
+  // colunas: #, Título, Equipe, Prioridade, SLA, Solicitante, Técnico, Ação).
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full text-sm table-fixed">
+        <colgroup>
+          <col className="w-[68px]" />       {/* # */}
+          <col />                             {/* Título — flex */}
+          <col className="w-[110px]" />      {/* Equipe */}
+          <col className="w-[100px]" />      {/* Prioridade */}
+          <col className="w-[120px]" />      {/* SLA */}
+          <col className="w-[160px]" />      {/* Solicitante */}
+          <col className="w-[160px]" />      {/* Técnico */}
+          <col className="w-[50px]" />       {/* Ação */}
+        </colgroup>
         <thead>
           <tr className="bg-slate-50 border-b border-slate-200 text-xs text-slate-500">
             <th className="text-left px-4 py-2 font-medium">#</th>
             <th className="text-left px-4 py-2 font-medium">Título</th>
             <th className="text-left px-4 py-2 font-medium">Equipe</th>
             <th className="text-center px-4 py-2 font-medium">Prioridade</th>
-            {mostrarSla && <th className="text-left px-4 py-2 font-medium">SLA</th>}
-            {mostrarSolicitante && <th className="text-left px-4 py-2 font-medium">Solicitante</th>}
-            {mostrarTecnico && <th className="text-left px-4 py-2 font-medium">Técnico</th>}
+            <th className="text-left px-4 py-2 font-medium">SLA</th>
+            <th className="text-left px-4 py-2 font-medium">Solicitante</th>
+            <th className="text-left px-4 py-2 font-medium">Técnico</th>
             <th className="px-4 py-2"></th>
           </tr>
         </thead>
@@ -299,11 +301,11 @@ function ListaChamados({
             return (
               <tr key={c.id} className="hover:bg-slate-50">
                 <td className="px-4 py-2 text-slate-400 font-mono text-xs">#{c.numero}</td>
-                <td className="px-4 py-2 text-slate-800 max-w-[280px] truncate">{c.titulo}</td>
+                <td className="px-4 py-2 text-slate-800 truncate" title={c.titulo}>{c.titulo}</td>
                 <td className="px-4 py-2 text-xs">
                   {c.equipeAtual ? (
                     <span className="inline-flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c.equipeAtual.cor || '#94a3b8' }} />
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: c.equipeAtual.cor || '#94a3b8' }} />
                       {c.equipeAtual.sigla}
                     </span>
                   ) : '—'}
@@ -311,22 +313,16 @@ function ListaChamados({
                 <td className="px-4 py-2 text-center">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${prioridadeCores[c.prioridade] || ''}`}>{c.prioridade}</span>
                 </td>
-                {mostrarSla && (
-                  <td className="px-4 py-2 text-xs">
-                    {c.dataLimiteSla ? (
-                      <span className={slaVencido ? 'text-red-600 font-semibold inline-flex items-center gap-1' : 'text-slate-500'}>
-                        {slaVencido && <AlertCircle className="w-3 h-3" />}
-                        {formatDateBR(c.dataLimiteSla)}
-                      </span>
-                    ) : '—'}
-                  </td>
-                )}
-                {mostrarSolicitante && (
-                  <td className="px-4 py-2 text-xs text-slate-600 max-w-[140px] truncate">{c.solicitante?.nome || '—'}</td>
-                )}
-                {mostrarTecnico && (
-                  <td className="px-4 py-2 text-xs text-slate-600 max-w-[140px] truncate">{c.tecnico?.nome || '—'}</td>
-                )}
+                <td className="px-4 py-2 text-xs">
+                  {c.dataLimiteSla ? (
+                    <span className={slaVencido ? 'text-red-600 font-semibold inline-flex items-center gap-1' : 'text-slate-500'}>
+                      {slaVencido && <AlertCircle className="w-3 h-3 flex-shrink-0" />}
+                      {formatDateBR(c.dataLimiteSla)}
+                    </span>
+                  ) : <span className="text-slate-400">—</span>}
+                </td>
+                <td className="px-4 py-2 text-xs text-slate-600 truncate" title={c.solicitante?.nome ?? ''}>{c.solicitante?.nome || '—'}</td>
+                <td className="px-4 py-2 text-xs text-slate-600 truncate" title={c.tecnico?.nome ?? ''}>{c.tecnico?.nome || '—'}</td>
                 <td className="px-4 py-2">
                   <Link
                     to={`/gestao-ti/chamados/${c.id}`}
