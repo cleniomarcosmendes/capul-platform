@@ -78,7 +78,7 @@ const menuItems: MenuItem[] = [
   { label: 'Motivos de Parada', icon: AlertTriangle, path: '/gestao-ti/motivos-parada', roles: STAFF, funcionalidade: 'PARADA' },
   { section: 'PROJETOS', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'] },
   { label: 'Projetos', icon: FolderKanban, path: '/gestao-ti/projetos', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'], funcionalidade: 'PROJETO' },
-  { label: 'Minhas Pendencias', icon: ListChecks, path: '/gestao-ti/minhas-pendencias', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'], funcionalidade: 'PROJETO' },
+  { label: 'Painel de Gestão de Projeto', icon: ListChecks, path: '/gestao-ti/painel-projetos', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'], funcionalidade: 'PROJETO' },
   { section: 'INFRAESTRUTURA', roles: STAFF },
   { label: 'Ativos', icon: Server, path: '/gestao-ti/ativos', roles: STAFF, funcionalidade: 'ATIVO' },
   { section: 'CONFIGURACOES', roles: MANAGERS },

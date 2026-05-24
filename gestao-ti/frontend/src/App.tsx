@@ -31,6 +31,7 @@ import { ProjetoDetalhePage } from './pages/projetos/ProjetoDetalhePage';
 import { MinhasPendenciasPage } from './pages/projetos/MinhasPendenciasPage';
 import { PendenciaDetalhePage } from './pages/projetos/PendenciaDetalhePage';
 import { PainelChamadosPage } from './pages/painel/PainelChamadosPage';
+import { PainelProjetosPage } from './pages/painel/PainelProjetosPage';
 import { AtivosListPage } from './pages/ativos/AtivosListPage';
 import { AtivoFormPage } from './pages/ativos/AtivoFormPage';
 import { AtivoDetalhePage } from './pages/ativos/AtivoDetalhePage';
@@ -144,6 +145,7 @@ function AppRoutes() {
         <Route path="projetos/:projetoId/pendencias/:pendenciaId" element={<PendenciaDetalhePage />} />
         <Route path="minhas-pendencias" element={<MinhasPendenciasPage />} />
         <Route path="painel-chamados" element={<PainelChamadosPage />} />
+        <Route path="painel-projetos" element={<PainelProjetosPage />} />
         <Route path="ativos" element={<AtivosListPage />} />
         <Route path="ativos/novo" element={<AtivoFormPage />} />
         <Route path="ativos/:id" element={<AtivoDetalhePage />} />
