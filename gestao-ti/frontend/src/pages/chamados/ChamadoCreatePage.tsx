@@ -50,6 +50,10 @@ export function ChamadoCreatePage() {
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [equipeAtualId, setEquipeAtualId] = useState('');
+  // C2.7 UX 24/05 — select encadeado: user escolhe primeiro o depto destino
+  // (workspace que vai resolver), depois a equipe daquele depto. Filtra
+  // client-side a partir de `equipes` (já vem com `departamento` do backend).
+  const [deptoDestinoId, setDeptoDestinoId] = useState('');
   const [visibilidade, setVisibilidade] = useState<Visibilidade>('PUBLICO');
   const [prioridade, setPrioridade] = useState<Prioridade>('MEDIA');
   const [softwareId, setSoftwareId] = useState('');
@@ -169,6 +173,8 @@ export function ChamadoCreatePage() {
       setTitulo(c.titulo);
       setDescricao(c.descricao || '');
       setEquipeAtualId(c.equipeAtualId);
+      // Pré-popula depto destino quando edita/duplica chamado existente
+      setDeptoDestinoId(c.departamento?.id ?? '');
       setPrioridade(c.prioridade as Prioridade);
       setVisibilidade(c.visibilidade as Visibilidade);
       if (c.softwareId) setSoftwareId(c.softwareId);
@@ -428,31 +434,71 @@ export function ChamadoCreatePage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Equipe Destino *</label>
-              <select
-                value={equipeAtualId}
-                onChange={(e) => setEquipeAtualId(e.target.value)}
-                required
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
-              >
-                <option value="">Selecione a equipe</option>
-                {equipes.map((e) => (
-                  <option key={e.id} value={e.id}>{e.sigla} - {e.nome}</option>
-                ))}
-              </select>
-              {(() => {
-                const equipeSel = equipes.find((e) => e.id === equipeAtualId);
-                if (!equipeSel?.descricao) return null;
-                return (
-                  <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-xs font-semibold text-blue-700 mb-1">{equipeSel.sigla} — {equipeSel.nome}</p>
-                    <p className="text-xs text-blue-600 whitespace-pre-wrap">{equipeSel.descricao}</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {(() => {
+              // Lista única de deptos a partir das equipes ativas (workspace
+              // que atende). Equipes sem depto cadastrado caem em "(Outros)".
+              const deptosMap = new Map<string, string>();
+              for (const eq of equipes) {
+                const id = eq.departamento?.id ?? '__sem__';
+                const nome = eq.departamento?.nome ?? '(Sem departamento)';
+                if (!deptosMap.has(id)) deptosMap.set(id, nome);
+              }
+              const deptosOpcoes = Array.from(deptosMap.entries())
+                .sort((a, b) => a[1].localeCompare(b[1]));
+              const equipesFiltradas = deptoDestinoId
+                ? equipes.filter((e) => (e.departamento?.id ?? '__sem__') === deptoDestinoId)
+                : [];
+              return (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Departamento Destino *</label>
+                    <select
+                      value={deptoDestinoId}
+                      onChange={(e) => {
+                        setDeptoDestinoId(e.target.value);
+                        // ao trocar de depto, limpa equipe pra obrigar nova escolha
+                        setEquipeAtualId('');
+                      }}
+                      required
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                    >
+                      <option value="">Selecione o departamento</option>
+                      {deptosOpcoes.map(([id, nome]) => (
+                        <option key={id} value={id}>{nome}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-slate-500 mt-1">Workspace que vai atender o chamado</p>
                   </div>
-                );
-              })()}
-            </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Equipe Destino *</label>
+                    <select
+                      value={equipeAtualId}
+                      onChange={(e) => setEquipeAtualId(e.target.value)}
+                      required
+                      disabled={!deptoDestinoId}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white disabled:bg-slate-50 disabled:text-slate-400"
+                    >
+                      <option value="">{deptoDestinoId ? 'Selecione a equipe' : 'Escolha o departamento antes'}</option>
+                      {equipesFiltradas.map((e) => (
+                        <option key={e.id} value={e.id}>{e.sigla} - {e.nome}</option>
+                      ))}
+                    </select>
+                    {(() => {
+                      const equipeSel = equipes.find((e) => e.id === equipeAtualId);
+                      if (!equipeSel?.descricao) return null;
+                      return (
+                        <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-xs font-semibold text-blue-700 mb-1">{equipeSel.sigla} — {equipeSel.nome}</p>
+                          <p className="text-xs text-blue-600 whitespace-pre-wrap">{equipeSel.descricao}</p>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </>
+              );
+            })()}
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Prioridade</label>

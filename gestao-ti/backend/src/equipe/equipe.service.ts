@@ -23,6 +23,8 @@ export class EquipeService {
     // qualquer equipe pra poder abrir chamado pra ela (T.I. atende todos os
     // deptos, Fiscal pode demandar pra Controladoria, etc.). Filtro
     // departamental movido pra create/update/delete (escrita por depto-dono).
+    // C2.7 UX 24/05 — inclui `departamento` pra UI montar select encadeado
+    // (escolhe depto destino, equipes filtram pelo depto).
     return this.prisma.equipe.findMany({
       where: status ? { status } : {},
       include: {
@@ -30,6 +32,7 @@ export class EquipeService {
           include: { usuario: true },
           where: { status: 'ATIVO' },
         },
+        departamento: { select: { id: true, nome: true } },
       },
       orderBy: { ordem: 'asc' },
     });

@@ -50,6 +50,9 @@ export interface Equipe {
   createdAt: string;
   updatedAt: string;
   membros: MembroEquipe[];
+  /** Workspace Multi-Departamento (Onda 1 + C2.7) — depto-dono. */
+  departamentoId?: string | null;
+  departamento?: { id: string; nome: string } | null;
 }
 
 export interface MembroEquipe {
