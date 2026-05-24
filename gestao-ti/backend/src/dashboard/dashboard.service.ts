@@ -30,17 +30,25 @@ export class DashboardService {
     return this.resumo.getExecutivo(filters);
   }
 
-  async getDisponibilidade(filters: {
-    dataInicio?: string;
-    dataFim?: string;
-    softwareId?: string;
-    filialId?: string;
-  }) {
-    return this.operacional.getDisponibilidade(filters);
+  async getDisponibilidade(
+    filters: {
+      dataInicio?: string;
+      dataFim?: string;
+      softwareId?: string;
+      filialId?: string;
+    },
+    user?: JwtPayload,
+    role?: string,
+  ) {
+    return this.operacional.getDisponibilidade(filters, user, role);
   }
 
-  async getOrdensServico(filters?: { dataInicio?: string; dataFim?: string; filialId?: string }) {
-    return this.operacional.getOrdensServico(filters);
+  async getOrdensServico(
+    filters?: { dataInicio?: string; dataFim?: string; filialId?: string },
+    user?: JwtPayload,
+    role?: string,
+  ) {
+    return this.operacional.getOrdensServico(filters, user, role);
   }
 
   async getTecnicosAtivos() {
@@ -51,12 +59,20 @@ export class DashboardService {
     return this.operacional.getTecnicosDaEquipe(userId);
   }
 
-  async getFinanceiro(filters?: { dataInicio?: string; dataFim?: string }) {
-    return this.financeiro.getFinanceiro(filters);
+  async getFinanceiro(
+    filters?: { dataInicio?: string; dataFim?: string },
+    user?: JwtPayload,
+    role?: string,
+  ) {
+    return this.financeiro.getFinanceiro(filters, user, role);
   }
 
-  async getCsat(filters?: { dataInicio?: string; dataFim?: string; departamentoId?: string }) {
-    return this.financeiro.getCsat(filters);
+  async getCsat(
+    filters?: { dataInicio?: string; dataFim?: string; departamentoId?: string },
+    user?: JwtPayload,
+    role?: string,
+  ) {
+    return this.financeiro.getCsat(filters, user, role);
   }
 
   async getAcompanhamento(filters: {

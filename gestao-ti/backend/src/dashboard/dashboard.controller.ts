@@ -45,8 +45,10 @@ export class DashboardController {
     @Query('dataFim') dataFim?: string,
     @Query('softwareId') softwareId?: string,
     @Query('filialId') filialId?: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
   ) {
-    return this.service.getDisponibilidade({ dataInicio, dataFim, softwareId, filialId });
+    return this.service.getDisponibilidade({ dataInicio, dataFim, softwareId, filialId }, user, role);
   }
 
   @Get('financeiro')
@@ -54,8 +56,10 @@ export class DashboardController {
   getFinanceiro(
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
   ) {
-    return this.service.getFinanceiro({ dataInicio, dataFim });
+    return this.service.getFinanceiro({ dataInicio, dataFim }, user, role);
   }
 
   @Get('ordens-servico')
@@ -64,8 +68,10 @@ export class DashboardController {
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
     @Query('filialId') filialId?: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
   ) {
-    return this.service.getOrdensServico({ dataInicio, dataFim, filialId });
+    return this.service.getOrdensServico({ dataInicio, dataFim, filialId }, user, role);
   }
 
   @Get('csat')
@@ -74,8 +80,10 @@ export class DashboardController {
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
     @Query('departamentoId') departamentoId?: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
   ) {
-    return this.service.getCsat({ dataInicio, dataFim, departamentoId });
+    return this.service.getCsat({ dataInicio, dataFim, departamentoId }, user, role);
   }
 
   @Get('acompanhamento')

@@ -1,17 +1,23 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { resolvePeriodo } from './dashboard-utils.js';
+import { applyDepartamentoFilter } from '../../common/helpers/departamento-filter.helper.js';
+import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class DashboardOperacionalService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getDisponibilidade(filters: {
-    dataInicio?: string;
-    dataFim?: string;
-    softwareId?: string;
-    filialId?: string;
-  }) {
+  async getDisponibilidade(
+    filters: {
+      dataInicio?: string;
+      dataFim?: string;
+      softwareId?: string;
+      filialId?: string;
+    },
+    user?: JwtPayload,
+    role?: string,
+  ) {
     const fim = filters.dataFim ? new Date(filters.dataFim) : new Date();
     const inicio = filters.dataInicio
       ? new Date(filters.dataInicio)
@@ -31,9 +37,11 @@ export class DashboardOperacionalService {
     if (filters.filialId) {
       where.filiaisAfetadas = { some: { filialId: filters.filialId } };
     }
+    // Workspace Onda 2 C2.7 refino — paradas escopadas por depto-dono.
+    const whereFiltrado = applyDepartamentoFilter(where, user ?? null, role ?? null);
 
     const paradas = await this.prisma.registroParada.findMany({
-      where,
+      where: whereFiltrado,
       include: {
         software: { select: { id: true, nome: true, tipo: true, criticidade: true } },
         softwareModulo: { select: { id: true, nome: true } },
@@ -131,10 +139,17 @@ export class DashboardOperacionalService {
     };
   }
 
-  async getOrdensServico(filters?: { dataInicio?: string; dataFim?: string; filialId?: string }) {
+  async getOrdensServico(
+    filters?: { dataInicio?: string; dataFim?: string; filialId?: string },
+    user?: JwtPayload,
+    role?: string,
+  ) {
     const { inicio, fim } = resolvePeriodo(filters);
     const periodoFilter = { gte: inicio, lte: fim };
     const filialFilter = filters?.filialId ? { filialId: filters.filialId } : {};
+    // Workspace Onda 2 C2.7 refino — OS escopada por depto-dono.
+    const deptoFilter = applyDepartamentoFilter({}, user ?? null, role ?? null);
+    const baseFilter = { ...filialFilter, ...deptoFilter };
 
     // Periodo anterior (mesmo intervalo antes)
     const diffMs = fim.getTime() - inicio.getTime();
@@ -148,36 +163,37 @@ export class DashboardOperacionalService {
       concluidas, todasOs,
     ] = await Promise.all([
       // Total OS no periodo
-      this.prisma.ordemServico.count({ where: { createdAt: periodoFilter, ...filialFilter } }),
+      this.prisma.ordemServico.count({ where: { createdAt: periodoFilter, ...baseFilter } }),
       // Total OS no periodo anterior
-      this.prisma.ordemServico.count({ where: { createdAt: { gte: inicioAnterior, lte: fimAnterior }, ...filialFilter } }),
+      this.prisma.ordemServico.count({ where: { createdAt: { gte: inicioAnterior, lte: fimAnterior }, ...baseFilter } }),
       // Por status
       this.prisma.ordemServico.groupBy({
         by: ['status'], _count: true,
-        where: { createdAt: periodoFilter, ...filialFilter },
+        where: { createdAt: periodoFilter, ...baseFilter },
       }),
-      // Por filial (ranking)
+      // Por filial (ranking) — note: porFilial ignora filtro de filial
+      // do user (faz ranking entre TODAS as filiais), mas respeita depto.
       this.prisma.ordemServico.groupBy({
         by: ['filialId'], _count: true,
-        where: { createdAt: periodoFilter },
+        where: { createdAt: periodoFilter, ...deptoFilter },
         orderBy: { filialId: 'asc' },
       }),
       // Por tecnico (via join table)
       this.prisma.osTecnico.groupBy({
         by: ['tecnicoId'], _count: true,
-        where: { os: { createdAt: periodoFilter, ...filialFilter } },
+        where: { os: { createdAt: periodoFilter, ...baseFilter } },
         orderBy: { tecnicoId: 'asc' },
       }),
       // Total chamados vinculados
-      this.prisma.osChamado.count({ where: { os: { createdAt: periodoFilter, ...filialFilter } } }),
+      this.prisma.osChamado.count({ where: { os: { createdAt: periodoFilter, ...baseFilter } } }),
       // Concluidas (para calculo de tempo)
       this.prisma.ordemServico.findMany({
-        where: { status: 'CONCLUIDA', dataInicio: { not: null }, dataFim: { not: null }, createdAt: periodoFilter, ...filialFilter },
+        where: { status: 'CONCLUIDA', dataInicio: { not: null }, dataFim: { not: null }, createdAt: periodoFilter, ...baseFilter },
         select: { dataInicio: true, dataFim: true },
       }),
       // Todas OS do periodo para media de chamados
       this.prisma.ordemServico.findMany({
-        where: { createdAt: periodoFilter, ...filialFilter },
+        where: { createdAt: periodoFilter, ...baseFilter },
         select: { id: true, _count: { select: { chamados: true } } },
       }),
     ]);
@@ -219,9 +235,9 @@ export class DashboardOperacionalService {
       const mesInicio = new Date(d.getFullYear(), d.getMonth(), 1);
       const mesFim = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
       const [total, conc, cham] = await Promise.all([
-        this.prisma.ordemServico.count({ where: { createdAt: { gte: mesInicio, lte: mesFim }, ...filialFilter } }),
-        this.prisma.ordemServico.count({ where: { status: 'CONCLUIDA', createdAt: { gte: mesInicio, lte: mesFim }, ...filialFilter } }),
-        this.prisma.osChamado.count({ where: { os: { createdAt: { gte: mesInicio, lte: mesFim }, ...filialFilter } } }),
+        this.prisma.ordemServico.count({ where: { createdAt: { gte: mesInicio, lte: mesFim }, ...baseFilter } }),
+        this.prisma.ordemServico.count({ where: { status: 'CONCLUIDA', createdAt: { gte: mesInicio, lte: mesFim }, ...baseFilter } }),
+        this.prisma.osChamado.count({ where: { os: { createdAt: { gte: mesInicio, lte: mesFim }, ...baseFilter } } }),
       ]);
       evolucao.push({
         mes: mesInicio.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),

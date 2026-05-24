@@ -1,12 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { resolvePeriodo } from './dashboard-utils.js';
+import {
+  applyDepartamentoFilter,
+  buildDashboardDeptoFilter,
+  getDeptoIdsDoUser,
+} from '../../common/helpers/departamento-filter.helper.js';
+import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class DashboardFinanceiroService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getFinanceiro(filters?: { dataInicio?: string; dataFim?: string }) {
+  async getFinanceiro(
+    filters?: { dataInicio?: string; dataFim?: string },
+    user?: JwtPayload,
+    role?: string,
+  ) {
     const hasPeriod = !!filters?.dataInicio || !!filters?.dataFim;
 
     let contratosVencendoWhere: Record<string, unknown>;
@@ -25,6 +35,14 @@ export class DashboardFinanceiroService {
       parcelasWhere = { status: 'PENDENTE', dataVencimento: { lte: limit30d } };
     }
 
+    // Workspace Onda 2 C2.7 refino — financeiro escopado ao depto-dono dos
+    // contratos. Parcelas e rateios filtram via `contrato.departamentoId`.
+    const contratoDeptoWhere = applyDepartamentoFilter({}, user ?? null, role ?? null);
+    const parcelaContratoDeptoWhere =
+      getDeptoIdsDoUser(user, role) === null
+        ? {}
+        : { contrato: contratoDeptoWhere };
+
     const [
       contratosPorTipo,
       contratosPorStatus,
@@ -34,16 +52,17 @@ export class DashboardFinanceiroService {
     ] = await Promise.all([
       this.prisma.contrato.groupBy({
         by: ['tipoContratoId'],
-        where: { status: { in: ['ATIVO', 'SUSPENSO'] } },
+        where: { status: { in: ['ATIVO', 'SUSPENSO'] }, ...contratoDeptoWhere },
         _count: true,
         _sum: { valorTotal: true },
       }),
       this.prisma.contrato.groupBy({
         by: ['status'],
+        where: contratoDeptoWhere,
         _count: true,
       }),
       this.prisma.contrato.findMany({
-        where: contratosVencendoWhere,
+        where: { ...contratosVencendoWhere, ...contratoDeptoWhere },
         select: {
           id: true,
           numero: true,
@@ -56,7 +75,7 @@ export class DashboardFinanceiroService {
         orderBy: { dataFim: 'asc' },
       }),
       this.prisma.parcelaContrato.findMany({
-        where: parcelasWhere,
+        where: { ...parcelasWhere, ...parcelaContratoDeptoWhere },
         include: {
           contrato: { select: { id: true, numero: true, titulo: true, fornecedor: true } },
         },
@@ -64,7 +83,9 @@ export class DashboardFinanceiroService {
       }),
       this.prisma.parcelaRateioItem.findMany({
         where: {
-          parcela: { contrato: { status: { in: ['ATIVO', 'SUSPENSO'] } } },
+          parcela: {
+            contrato: { status: { in: ['ATIVO', 'SUSPENSO'] }, ...contratoDeptoWhere },
+          },
         },
         include: {
           centroCusto: { select: { id: true, codigo: true, nome: true } },
@@ -125,10 +146,15 @@ export class DashboardFinanceiroService {
     };
   }
 
-  async getCsat(filters?: { dataInicio?: string; dataFim?: string; departamentoId?: string }) {
+  async getCsat(
+    filters?: { dataInicio?: string; dataFim?: string; departamentoId?: string },
+    user?: JwtPayload,
+    role?: string,
+  ) {
     const { inicio, fim } = resolvePeriodo(filters);
     const periodoFilter = { gte: inicio, lte: fim };
-    const deptoFilter = filters?.departamentoId ? { departamentoId: filters.departamentoId } : {};
+    // Workspace Onda 2 C2.7 refino — escopo automático por depto + UI.
+    const deptoFilter = buildDashboardDeptoFilter(user, role, filters?.departamentoId);
 
     // Ultimos 6 meses para evolucao
     const seisAtras = new Date();
