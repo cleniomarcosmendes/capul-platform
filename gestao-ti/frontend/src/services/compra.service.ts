@@ -26,6 +26,8 @@ interface CreateNotaFiscalPayload {
   itens: NotaFiscalItemPayload[];
   /** Chave NF-e opcional (44 dígitos). Backend valida via módulo Fiscal. */
   chaveNfe?: string;
+  // Workspace Onda 3 S7 (24/05) — alocação editável via <DepartamentoField>.
+  departamentoId?: string;
 }
 
 interface UpdateNotaFiscalPayload {
@@ -41,6 +43,8 @@ interface UpdateNotaFiscalPayload {
   chaveNfe?: string | null;
   /** Motivo obrigatório quando alterar/remover chave preexistente. */
   motivoAlteracaoChave?: string;
+  // Workspace Onda 3 S7 (24/05) — realocação editável.
+  departamentoId?: string;
 }
 
 /**

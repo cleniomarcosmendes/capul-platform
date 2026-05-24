@@ -392,6 +392,9 @@ export class CompraNotaFiscalService {
     if (dto.observacao !== undefined) data.observacao = dto.observacao;
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.equipeId !== undefined) data.equipeId = dto.equipeId || null;
+    // Workspace Onda 3 S7 — permite realocar NF pra outro depto.
+    // Backend hardening em S10 valida que departamentoId ∈ deptos_user.
+    if (dto.departamentoId !== undefined) data.departamentoId = dto.departamentoId;
     if (chaveMudou) data.chaveNfe = novaChavePersistir;
 
     const itensData = dto.itens?.map((item) => {

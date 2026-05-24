@@ -1603,6 +1603,9 @@ export interface NotaFiscal {
   equipeId: string | null;
   equipe: { id: string; nome: string; sigla: string; cor: string | null } | null;
   itens: NotaFiscalItem[];
+  // Workspace Onda 3 S7 (24/05) — alocação + lançamento.
+  departamentoId: string;
+  departamentoLancamentoId?: string;
   /** Audit de alterações da chave NF-e (mais recente primeiro). */
   chaveHistorico?: NotaFiscalChaveHistorico[];
 }

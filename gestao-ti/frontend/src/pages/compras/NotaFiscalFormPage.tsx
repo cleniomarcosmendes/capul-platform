@@ -10,6 +10,7 @@ import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { useToast } from '../../components/Toast';
 import { SearchSelect } from '../../components/SearchSelect';
 import type { SearchSelectOption } from '../../components/SearchSelect';
+import { DepartamentoField } from '../../components/DepartamentoField';
 import { ArrowLeft, Plus, Trash2, Search, Check, X, Loader2, Lock } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import type { FornecedorConfig, ProdutoConfig } from '../../types';
@@ -78,6 +79,8 @@ export function NotaFiscalFormPage() {
   // Chave NF-e (14/05/2026) ─────────────────────────────────────────
   // `chaveOriginal` é a chave carregada do servidor no modo edição —
   // serve pra detectar alteração e exigir motivo de auditoria.
+  // Workspace Onda 3 S7 — depto de alocação da NF.
+  const [departamentoId, setDepartamentoId] = useState('');
   const [chaveNfe, setChaveNfe] = useState('');
   const [chaveOriginal, setChaveOriginal] = useState<string | null>(null);
   const [chaveValidada, setChaveValidada] = useState<ValidarChaveNfeResult | null>(null);
@@ -126,6 +129,7 @@ export function NotaFiscalFormPage() {
         setStatusNFCarregada(nf.status);
         setChaveNfe(nf.chaveNfe ?? '');
         setChaveOriginal(nf.chaveNfe ?? null);
+        setDepartamentoId(nf.departamentoId || '');
         setItens(nf.itens.map((i) => ({
           key: ++keyCounter,
           produtoId: i.produtoId,
@@ -263,6 +267,7 @@ export function NotaFiscalFormPage() {
           equipeId: equipeId || undefined,
           observacao: observacao || undefined,
           itens: itensPayload,
+          departamentoId: departamentoId || undefined,
         };
         // Envia chave SOMENTE se alterada — backend interpreta `undefined`
         // como "não mexer". Para desvincular, envia `null` explícito.
@@ -282,6 +287,7 @@ export function NotaFiscalFormPage() {
           observacao: observacao || undefined,
           itens: itensPayload,
           chaveNfe: chaveNfe || undefined,
+          departamentoId: departamentoId || undefined,
         });
         toast('success', 'Nota fiscal criada');
         setDirty(false);
@@ -320,6 +326,14 @@ export function NotaFiscalFormPage() {
           {/* Cabecalho da NF */}
           <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
             <h3 className="text-sm font-semibold text-slate-700 uppercase mb-4">Dados da Nota Fiscal</h3>
+            <div className="mb-4">
+              <DepartamentoField
+                value={departamentoId}
+                onChange={(v) => { setDepartamentoId(v); setDirty(true); }}
+                funcionalidade="NOTA_FISCAL"
+                help="Departamento ONDE a NF é alocada (visibilidade)."
+              />
+            </div>
             <div className="grid grid-cols-5 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Numero NF *</label>
