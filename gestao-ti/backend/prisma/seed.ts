@@ -20,24 +20,24 @@ async function main() {
 
   // ── 2. Equipes TI ────────────────────────────────────────────────
 
-  let equipeSup = await prisma.equipeTI.findFirst({ where: { nome: 'Suporte N1' } });
+  let equipeSup = await prisma.equipe.findFirst({ where: { nome: 'Suporte N1' } });
   if (!equipeSup) {
-    equipeSup = await prisma.equipeTI.create({
-      data: { nome: 'Suporte N1', sigla: 'SUP', cor: '#3B82F6', descricao: 'Atendimento de primeiro nivel a usuarios', aceitaChamadoExterno: true, ordem: 1 },
+    equipeSup = await prisma.equipe.create({
+      data: { nome: 'Suporte N1', sigla: 'SUP', cor: '#3B82F6', descricao: 'Atendimento de primeiro nivel a usuarios', aceitaChamadoExterno: true, ordem: 1, departamentoId },
     });
   }
 
-  let equipeInf = await prisma.equipeTI.findFirst({ where: { nome: 'Infraestrutura' } });
+  let equipeInf = await prisma.equipe.findFirst({ where: { nome: 'Infraestrutura' } });
   if (!equipeInf) {
-    equipeInf = await prisma.equipeTI.create({
-      data: { nome: 'Infraestrutura', sigla: 'INF', cor: '#10B981', descricao: 'Redes, servidores e infraestrutura de TI', aceitaChamadoExterno: false, ordem: 2 },
+    equipeInf = await prisma.equipe.create({
+      data: { nome: 'Infraestrutura', sigla: 'INF', cor: '#10B981', descricao: 'Redes, servidores e infraestrutura de TI', aceitaChamadoExterno: false, ordem: 2, departamentoId },
     });
   }
 
-  let equipeDev = await prisma.equipeTI.findFirst({ where: { nome: 'Desenvolvimento' } });
+  let equipeDev = await prisma.equipe.findFirst({ where: { nome: 'Desenvolvimento' } });
   if (!equipeDev) {
-    equipeDev = await prisma.equipeTI.create({
-      data: { nome: 'Desenvolvimento', sigla: 'DEV', cor: '#8B5CF6', descricao: 'Desenvolvimento e manutencao de sistemas', aceitaChamadoExterno: false, ordem: 3 },
+    equipeDev = await prisma.equipe.create({
+      data: { nome: 'Desenvolvimento', sigla: 'DEV', cor: '#8B5CF6', descricao: 'Desenvolvimento e manutencao de sistemas', aceitaChamadoExterno: false, ordem: 3, departamentoId },
     });
   }
 
@@ -113,6 +113,7 @@ async function main() {
       versaoAtual: '10.0 FP2312',
       ambiente: 'ON_PREMISE',
       equipeResponsavelId: equipeDev.id,
+      departamentoId,
     },
   });
 
@@ -127,6 +128,7 @@ async function main() {
       ambiente: 'CLOUD',
       urlAcesso: 'https://capul.my.salesforce.com',
       equipeResponsavelId: equipeDev.id,
+      departamentoId,
     },
   });
 
@@ -141,6 +143,7 @@ async function main() {
       versaoAtual: '12.6',
       ambiente: 'ON_PREMISE',
       equipeResponsavelId: equipeInf.id,
+      departamentoId,
     },
   });
 
@@ -155,6 +158,7 @@ async function main() {
       ambiente: 'CLOUD',
       urlAcesso: 'https://portal.office.com',
       equipeResponsavelId: equipeInf.id,
+      departamentoId,
     },
   });
 
@@ -170,6 +174,7 @@ async function main() {
       ambiente: 'CLOUD',
       urlAcesso: 'https://gitlab.capul.com',
       equipeResponsavelId: equipeDev.id,
+      departamentoId,
     },
   });
 
@@ -215,6 +220,7 @@ async function main() {
       dataVencimento: new Date(now.getFullYear() + 1, 0, 1),
       chaveSerial: 'SAP-2025-PERP-XXXXX',
       fornecedor: 'SAP Brasil Ltda',
+      departamentoId,
     },
   });
 
@@ -228,6 +234,7 @@ async function main() {
       dataInicio: new Date(now.getFullYear(), 0, 1),
       dataVencimento: new Date(now.getFullYear(), 6, 1),
       fornecedor: 'Kaspersky Brasil',
+      departamentoId,
     },
   });
 
@@ -241,6 +248,7 @@ async function main() {
       dataInicio: new Date(now.getFullYear(), 0, 1),
       dataVencimento: new Date(now.getFullYear(), 11, 1),
       fornecedor: 'Microsoft',
+      departamentoId,
     },
   });
 
@@ -314,6 +322,7 @@ async function main() {
       softwareId: sap.id,
       tipoContratoId: tipoSuporte.id,
       filialId,
+      departamentoId,
     },
   });
 
@@ -334,6 +343,7 @@ async function main() {
       softwareId: m365.id,
       tipoContratoId: tipoLicenc.id,
       filialId,
+      departamentoId,
     },
   });
 
@@ -568,6 +578,7 @@ async function main() {
       solicitanteId: adminId,
       dataAgendamento: new Date(now.getTime() + 3 * 86400000),
       tecnicos: { create: { tecnicoId: adminId } },
+      departamentoId,
     },
   });
 
@@ -583,6 +594,7 @@ async function main() {
       dataFim: new Date(now.getTime() - 6 * 86400000),
       observacoes: 'HD substituido, RAID reconstruido com sucesso.',
       tecnicos: { create: { tecnicoId: adminId } },
+      departamentoId,
     },
   });
 
@@ -604,6 +616,7 @@ async function main() {
       registradoPorId: adminId,
       finalizadoPorId: adminId,
       observacoes: 'Atualizacao concluida sem problemas. Todos os modulos verificados.',
+      departamentoId,
     },
   });
 
@@ -621,6 +634,7 @@ async function main() {
       inicio: new Date(now.getTime() - 2 * 3600000),
       softwareId: kaspersky.id,
       registradoPorId: adminId,
+      departamentoId,
     },
   });
 
@@ -646,6 +660,7 @@ async function main() {
       custoRealizado: 32000,
       softwareId: salesforce.id,
       responsavelId: adminId,
+      departamentoId,
     },
   });
 
@@ -662,6 +677,7 @@ async function main() {
       custoPrevisto: 25000,
       softwareId: sap.id,
       responsavelId: adminId,
+      departamentoId,
     },
   });
 
@@ -677,6 +693,7 @@ async function main() {
       projetoPaiId: projetoSalesforce.id,
       softwareId: salesforce.id,
       responsavelId: adminId,
+      departamentoId,
     },
   });
 
@@ -794,6 +811,7 @@ async function main() {
         filialId,
         responsavelId: adminId,
         dataAquisicao: new Date(now.getFullYear() - 1, 6, 1),
+        departamentoId,
       },
     });
     ativos.push(ativo);
