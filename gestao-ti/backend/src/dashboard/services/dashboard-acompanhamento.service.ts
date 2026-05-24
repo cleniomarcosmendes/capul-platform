@@ -447,22 +447,28 @@ export class DashboardAcompanhamentoService {
       if (filters.dataFim) createdAt.lte = new Date(filters.dataFim + 'T23:59:59');
       where.createdAt = createdAt;
     }
-    // Workspace Onda 2 C2.7 — escopo workspace (solicitante OU depto do user).
+    // Workspace Onda 2 C2.7 + C2.9 — solicitante OU depto OU equipe que sou membro.
     const deptoIds = getDeptoIdsDoUser(user, role);
-    const whereFinal: Record<string, unknown> =
-      deptoIds === null
-        ? where
-        : {
-            AND: [
-              where,
-              {
-                OR: [
-                  { solicitanteId: user?.sub ?? '' },
-                  { departamentoId: { in: deptoIds } },
-                ],
-              },
+    let whereFinal: Record<string, unknown> = where;
+    if (deptoIds !== null) {
+      const equipesAtivasUser = await this.prisma.membroEquipe.findMany({
+        where: { usuarioId: user?.sub ?? '', status: 'ATIVO' },
+        select: { equipeId: true },
+      });
+      const equipeIds = equipesAtivasUser.map((m) => m.equipeId);
+      whereFinal = {
+        AND: [
+          where,
+          {
+            OR: [
+              { solicitanteId: user?.sub ?? '' },
+              { departamentoId: { in: deptoIds } },
+              ...(equipeIds.length > 0 ? [{ equipeAtualId: { in: equipeIds } }] : []),
             ],
-          };
+          },
+        ],
+      };
+    }
     const chamados = await this.prisma.chamado.findMany({
       where: whereFinal,
       select: {

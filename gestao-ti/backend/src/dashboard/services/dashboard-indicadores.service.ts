@@ -279,8 +279,16 @@ export class DashboardIndicadoresService {
       equipeAtual: { select: { id: true, sigla: true } },
     };
 
-    // Workspace Onda 2 C2.7 — escopo workspace (solicitante OU depto-dono).
+    // Workspace Onda 2 C2.7 + C2.9 — solicitante OU depto OU equipe que sou membro.
     const deptoIds = getDeptoIdsDoUser(user, role);
+    let equipeIds: string[] = [];
+    if (deptoIds !== null && user?.sub) {
+      const equipesAtivas = await this.prisma.membroEquipe.findMany({
+        where: { usuarioId: user.sub, status: 'ATIVO' },
+        select: { equipeId: true },
+      });
+      equipeIds = equipesAtivas.map((m) => m.equipeId);
+    }
     const wsFilter = (extra: Record<string, unknown>): Record<string, unknown> =>
       deptoIds === null
         ? extra
@@ -291,6 +299,7 @@ export class DashboardIndicadoresService {
                 OR: [
                   { solicitanteId: user?.sub ?? '' },
                   { departamentoId: { in: deptoIds } },
+                  ...(equipeIds.length > 0 ? [{ equipeAtualId: { in: equipeIds } }] : []),
                 ],
               },
             ],

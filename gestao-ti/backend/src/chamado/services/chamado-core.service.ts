@@ -196,10 +196,22 @@ export class ChamadoCoreService {
         where.solicitanteId = user.sub;
         where.visibilidade = 'PUBLICO';
       } else if (['USUARIO_CHAVE', 'TERCEIRIZADO'].includes(role)) {
+        // Workspace Onda 2 C2.9 (24/05) — adicionado `equipeAtualId IN
+        // equipes_membro`: USUARIO_CHAVE/TERCEIRIZADO que é membro ativo
+        // de uma equipe vê os chamados que essa equipe atende, mesmo sem
+        // ter perfil naquele depto-workspace. Exemplo: Juliana Marques é
+        // USUARIO_CHAVE/T.I. mas membro da equipe CTL (Controladoria);
+        // antes só via #170 (que abriu), agora vê também #181/#182 (CTL).
+        const equipesMembroUC = await this.prisma.membroEquipe.findMany({
+          where: { usuarioId: user.sub, status: 'ATIVO' },
+          select: { equipeId: true },
+        });
+        const equipeIdsUC = equipesMembroUC.map((m) => m.equipeId);
         where.OR = [
           { solicitanteId: user.sub },
           { tecnicoId: user.sub },
           { colaboradores: { some: { usuarioId: user.sub } } },
+          ...(equipeIdsUC.length > 0 ? [{ equipeAtualId: { in: equipeIdsUC } }] : []),
         ];
         // Cinto-e-suspensório (14/05/2026): chamado PRIVADO é staff-only.
         // Mesmo que TI vincule um USUARIO_CHAVE/TERCEIRIZADO por engano,
@@ -303,27 +315,31 @@ export class ChamadoCoreService {
       ? SORT_MAP[filters.sortBy]
       : { updatedAt: 'desc' as const };
 
-    // Workspace Onda 2 C2.7 — visibilidade departamental do chamado.
+    // Workspace Onda 2 C2.7 + C2.9 (24/05) — visibilidade do chamado.
     // Regra: user vê chamado SE for solicitante OU SE o chamado pertencer
-    // a depto onde ele tem perfil no Workspace. ADMIN escapa (D36).
-    // O `departamentoId` do chamado agora é o depto da equipe atual (=
-    // workspace que ATENDE), não do solicitante — ver migration
-    // 20260524000000 e fix em create/transferirEquipe.
+    // a depto onde ele tem perfil no Workspace OU SE for membro ativo da
+    // equipe atual (C2.9 — "minhas equipes atendem isso"). ADMIN escapa (D36).
     const deptoIds = getDeptoIdsDoUser(user, role);
-    const whereFiltrado: Record<string, unknown> =
-      deptoIds === null
-        ? where
-        : {
-            AND: [
-              where,
-              {
-                OR: [
-                  { solicitanteId: user.sub },
-                  { departamentoId: { in: deptoIds } },
-                ],
-              },
+    let whereFiltrado: Record<string, unknown> = where;
+    if (deptoIds !== null) {
+      const equipesAtivasUser = await this.prisma.membroEquipe.findMany({
+        where: { usuarioId: user.sub, status: 'ATIVO' },
+        select: { equipeId: true },
+      });
+      const equipeIds = equipesAtivasUser.map((m) => m.equipeId);
+      whereFiltrado = {
+        AND: [
+          where,
+          {
+            OR: [
+              { solicitanteId: user.sub },
+              { departamentoId: { in: deptoIds } },
+              ...(equipeIds.length > 0 ? [{ equipeAtualId: { in: equipeIds } }] : []),
             ],
-          };
+          },
+        ],
+      };
+    }
 
     const [total, items] = await this.prisma.$transaction([
       this.prisma.chamado.count({ where: whereFiltrado }),
