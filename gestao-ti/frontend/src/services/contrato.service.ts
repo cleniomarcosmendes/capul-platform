@@ -54,6 +54,8 @@ interface CreateContratoPayload {
   gerarParcelas?: boolean;
   quantidadeParcelas?: number;
   primeiroVencimento?: string;
+  // Workspace Onda 3 S6 (24/05) — alocação editável via <DepartamentoField>.
+  departamentoId?: string;
 }
 
 interface RateioItemPayload {

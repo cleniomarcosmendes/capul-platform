@@ -7,6 +7,7 @@ import { contratoService } from '../../services/contrato.service';
 import { softwareService } from '../../services/software.service';
 import { equipeService } from '../../services/equipe.service';
 import { coreService } from '../../services/core.service';
+import { DepartamentoField } from '../../components/DepartamentoField';
 import { ArrowLeft } from 'lucide-react';
 import type { Software, TipoContratoConfig, Equipe, FornecedorConfig, ProdutoConfig } from '../../types';
 
@@ -56,6 +57,8 @@ export function ContratoFormPage() {
   const [gerarParcelas, setGerarParcelas] = useState(false);
   const [quantidadeParcelas, setQuantidadeParcelas] = useState('12');
   const [primeiroVencimento, setPrimeiroVencimento] = useState('');
+  // Workspace Onda 3 S6 — depto de alocação do contrato.
+  const [departamentoId, setDepartamentoId] = useState('');
 
   useEffect(() => {
     Promise.all([
@@ -96,6 +99,7 @@ export function ContratoFormPage() {
         setSoftwareId(c.softwareId || '');
         setEquipeId(c.equipeId || '');
         setObservacoes(c.observacoes || '');
+        setDepartamentoId(c.departamentoId || '');
       }).catch(() => setError('Erro ao carregar contrato'))
         .finally(() => setLoadingData(false));
     }
@@ -133,6 +137,7 @@ export function ContratoFormPage() {
       gerarParcelas: !isEdit ? gerarParcelas : undefined,
       quantidadeParcelas: !isEdit && gerarParcelas ? parseInt(quantidadeParcelas, 10) : undefined,
       primeiroVencimento: !isEdit && gerarParcelas && primeiroVencimento ? primeiroVencimento : undefined,
+      departamentoId: departamentoId || undefined,
     };
 
     try {
@@ -182,6 +187,13 @@ export function ContratoFormPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          <DepartamentoField
+            value={departamentoId}
+            onChange={setDepartamentoId}
+            funcionalidade="CONTRATO"
+            help="Departamento ONDE o contrato está alocado (visibilidade). NFs derivadas vão herdar este depto como default."
+          />
+
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Titulo *</label>
             <input value={titulo} onChange={(e) => setTitulo(e.target.value)} required maxLength={200}

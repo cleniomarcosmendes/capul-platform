@@ -242,6 +242,9 @@ export class ContratoCoreService {
     if (dto.softwareId !== undefined) data.softwareId = dto.softwareId || null;
     if (dto.equipeId !== undefined) data.equipeId = dto.equipeId || null;
     if (dto.observacoes !== undefined) data.observacoes = dto.observacoes;
+    // Workspace Onda 3 S6 — permite realocar contrato pra outro depto.
+    // Backend hardening em S10 valida que departamentoId ∈ deptos_user.
+    if (dto.departamentoId !== undefined) data.departamentoId = dto.departamentoId;
 
     const updated = await this.prisma.contrato.update({
       where: { id },

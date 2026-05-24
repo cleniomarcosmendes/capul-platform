@@ -573,6 +573,9 @@ export interface Contrato {
   observacoes: string | null;
   createdAt: string;
   updatedAt: string;
+  // Workspace Onda 3 S6 (24/05) — alocação + lançamento.
+  departamentoId: string;
+  departamentoLancamentoId?: string;
   _count: { parcelas: number; licencas: number; anexos: number };
   parcelas?: ParcelaContrato[];
   rateioTemplate?: RateioTemplate | null;
