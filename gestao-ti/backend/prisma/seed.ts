@@ -114,6 +114,7 @@ async function main() {
       ambiente: 'ON_PREMISE',
       equipeResponsavelId: equipeDev.id,
       departamentoId,
+      departamentoLancamentoId: departamentoId,
     },
   });
 
@@ -129,6 +130,7 @@ async function main() {
       urlAcesso: 'https://capul.my.salesforce.com',
       equipeResponsavelId: equipeDev.id,
       departamentoId,
+      departamentoLancamentoId: departamentoId,
     },
   });
 
@@ -144,6 +146,7 @@ async function main() {
       ambiente: 'ON_PREMISE',
       equipeResponsavelId: equipeInf.id,
       departamentoId,
+      departamentoLancamentoId: departamentoId,
     },
   });
 
@@ -159,6 +162,7 @@ async function main() {
       urlAcesso: 'https://portal.office.com',
       equipeResponsavelId: equipeInf.id,
       departamentoId,
+      departamentoLancamentoId: departamentoId,
     },
   });
 
@@ -175,6 +179,7 @@ async function main() {
       urlAcesso: 'https://gitlab.capul.com',
       equipeResponsavelId: equipeDev.id,
       departamentoId,
+      departamentoLancamentoId: departamentoId,
     },
   });
 
@@ -221,6 +226,7 @@ async function main() {
       chaveSerial: 'SAP-2025-PERP-XXXXX',
       fornecedor: 'SAP Brasil Ltda',
       departamentoId,
+      departamentoLancamentoId: departamentoId,
     },
   });
 
@@ -235,6 +241,7 @@ async function main() {
       dataVencimento: new Date(now.getFullYear(), 6, 1),
       fornecedor: 'Kaspersky Brasil',
       departamentoId,
+      departamentoLancamentoId: departamentoId,
     },
   });
 
@@ -249,6 +256,7 @@ async function main() {
       dataVencimento: new Date(now.getFullYear(), 11, 1),
       fornecedor: 'Microsoft',
       departamentoId,
+      departamentoLancamentoId: departamentoId,
     },
   });
 
@@ -323,6 +331,7 @@ async function main() {
       tipoContratoId: tipoSuporte.id,
       filialId,
       departamentoId,
+      departamentoLancamentoId: departamentoId,
     },
   });
 
@@ -344,6 +353,7 @@ async function main() {
       tipoContratoId: tipoLicenc.id,
       filialId,
       departamentoId,
+      departamentoLancamentoId: departamentoId,
     },
   });
 
@@ -617,6 +627,7 @@ async function main() {
       finalizadoPorId: adminId,
       observacoes: 'Atualizacao concluida sem problemas. Todos os modulos verificados.',
       departamentoId,
+      departamentoLancamentoId: departamentoId,
     },
   });
 
@@ -635,6 +646,7 @@ async function main() {
       softwareId: kaspersky.id,
       registradoPorId: adminId,
       departamentoId,
+      departamentoLancamentoId: departamentoId,
     },
   });
 
@@ -812,6 +824,7 @@ async function main() {
         responsavelId: adminId,
         dataAquisicao: new Date(now.getFullYear() - 1, 6, 1),
         departamentoId,
+        departamentoLancamentoId: departamentoId,
       },
     });
     ativos.push(ativo);
