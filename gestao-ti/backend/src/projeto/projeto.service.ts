@@ -62,6 +62,7 @@ export class ProjetoService {
     page?: number;
     pageSize?: number;
     user?: JwtPayload;
+    workspaceAtivoId?: string | null;
   }) {
     return this.core.findAll(filters);
   }

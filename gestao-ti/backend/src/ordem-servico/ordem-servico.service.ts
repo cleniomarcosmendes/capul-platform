@@ -39,6 +39,7 @@ export class OrdemServicoService {
     pageSize?: number,
     user?: JwtPayload,
     role?: string,
+    workspaceAtivoId?: string | null,
   ) {
     const where: Record<string, unknown> = {
       ...(status ? { status } : {}),
@@ -66,8 +67,13 @@ export class OrdemServicoService {
               },
             ],
           };
+    // S15.2 — Intersect com workspace ATIVO (sem ativo: fallback S14.2).
+    const whereFinal = workspaceAtivoId
+      ? { AND: [whereFiltrado, { departamentoId: workspaceAtivoId }] }
+      : whereFiltrado;
+
     return paginate(this.prisma, this.prisma.ordemServico, {
-      where: whereFiltrado,
+      where: whereFinal,
       include: osListInclude,
       orderBy: { createdAt: 'desc' },
       page,

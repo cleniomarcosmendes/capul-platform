@@ -10,16 +10,18 @@ import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 export class CatalogoServicoService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(equipeId?: string, status?: StatusGeral, user?: JwtPayload, role?: string) {
+  async findAll(equipeId?: string, status?: StatusGeral, user?: JwtPayload, role?: string, workspaceAtivoId?: string | null) {
     // Workspace Onda 2 C2.4.5 — escopo workspace via equipe.departamentoId.
     // Quando o caller passa `equipeId` (UI de criação de chamado), ignora o
     // filtro de depto — Tatiane abre chamado pra equipe T.I. e precisa ver
     // o catálogo daquela equipe, não dos deptos dela. ADMIN escapa (D36).
+    // S15.2 (25/05) — se workspaceAtivoId set, restringe a essa equipe.depto.
     const deptoIds = getDeptoIdsDoUser(user, role);
-    const equipeDeptoWhere =
-      deptoIds === null || equipeId
-        ? {}
-        : { equipe: { departamentoId: { in: deptoIds } } };
+    const equipeDeptoWhere = workspaceAtivoId
+      ? { equipe: { departamentoId: workspaceAtivoId } }
+      : (deptoIds === null || equipeId
+          ? {}
+          : { equipe: { departamentoId: { in: deptoIds } } });
 
     return this.prisma.catalogoServico.findMany({
       where: {

@@ -46,6 +46,8 @@ export class ConhecimentoService {
     page?: number;
     pageSize?: number;
     user?: JwtPayload;
+    // S15.2 (25/05) — workspace ATIVO (header X-Workspace-Id).
+    workspaceAtivoId?: string | null;
   }) {
     const where: Record<string, unknown> = {};
     if (filters.categoria) where.categoria = filters.categoria;
@@ -87,8 +89,14 @@ export class ConhecimentoService {
       }
     }
 
+    // S15.2 — Intersect com workspace ATIVO. Quando set: vê só artigos
+    // dessa equipe-depto (e globais permanecem porque global = todos veem).
+    const whereFinal = filters.workspaceAtivoId
+      ? { AND: [where, { OR: [{ equipeTiId: null }, { equipeTi: { departamentoId: filters.workspaceAtivoId } }] }] }
+      : where;
+
     return paginate(this.prisma, this.prisma.artigoConhecimento, {
-      where,
+      where: whereFinal,
       include: artigoListInclude,
       orderBy: { updatedAt: 'desc' },
       page: filters.page,

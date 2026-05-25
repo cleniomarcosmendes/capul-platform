@@ -26,6 +26,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator';
+import { WorkspaceAtivo } from '../common/decorators/workspace-ativo.decorator';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 import { CreateProjetoDto } from './dto/create-projeto.dto';
 import { UpdateProjetoDto } from './dto/update-projeto.dto';
@@ -87,6 +88,7 @@ export class ProjetoController {
     @Query('pageSize') pageSize?: string,
     @CurrentUser() user?: JwtPayload,
     @GestaoTiRole() role?: string,
+    @WorkspaceAtivo() workspaceAtivoId?: string | null,
   ) {
     return this.service.findAll({
       status,
@@ -102,6 +104,7 @@ export class ProjetoController {
       page: page ? parseInt(page, 10) : undefined,
       pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
       user,
+      workspaceAtivoId,
     });
   }
 

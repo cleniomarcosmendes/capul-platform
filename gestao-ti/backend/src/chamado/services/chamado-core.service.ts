@@ -114,6 +114,12 @@ export class ChamadoCoreService {
      * Decidido em 13/05/2026.
      */
     incluirAgrupados?: boolean;
+    /**
+     * S15.2 (25/05) — Workspace ATIVO da sessão (header X-Workspace-Id).
+     * Null/undefined → fallback S13/S14 (user vê união de todos os perfis).
+     * String → intersect final `departamentoId = workspaceAtivoId`.
+     */
+    workspaceAtivoId?: string | null;
   }) {
     const where: Record<string, unknown> = {};
     // Termo de busca — no escopo do metodo: o filtro "Meus Chamados" e o
@@ -370,10 +376,18 @@ export class ChamadoCoreService {
       whereFiltrado = { AND: andClauses };
     }
 
+    // S15.2 — Intersect com workspace ATIVO no final (sem mexer nos Layer
+    // 1/2 existentes — eles continuam funcionando como fallback). Pra
+    // Juliana com ativo=TI: vê só seus chamados em TI (#170). Sem ativo:
+    // vê os 3 do fallback S13.
+    const whereFinal = filters.workspaceAtivoId
+      ? { AND: [whereFiltrado, { departamentoId: filters.workspaceAtivoId }] }
+      : whereFiltrado;
+
     const [total, items] = await this.prisma.$transaction([
-      this.prisma.chamado.count({ where: whereFiltrado }),
+      this.prisma.chamado.count({ where: whereFinal }),
       this.prisma.chamado.findMany({
-        where: whereFiltrado,
+        where: whereFinal,
         include: chamadoInclude,
         orderBy,
         skip: (page - 1) * pageSize,

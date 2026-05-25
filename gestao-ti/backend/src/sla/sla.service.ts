@@ -10,14 +10,16 @@ import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 export class SlaService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(equipeId?: string, user?: JwtPayload, role?: string) {
+  async findAll(equipeId?: string, user?: JwtPayload, role?: string, workspaceAtivoId?: string | null) {
     // Workspace Onda 2 C2.4.5 — escopo via equipe.departamentoId.
     // `equipeId` explícito (UI criação de chamado) bypassa filtro.
+    // S15.2 (25/05) — workspaceAtivoId restringe à equipe daquele depto.
     const deptoIds = getDeptoIdsDoUser(user, role);
-    const equipeDeptoWhere =
-      deptoIds === null || equipeId
-        ? {}
-        : { equipe: { departamentoId: { in: deptoIds } } };
+    const equipeDeptoWhere = workspaceAtivoId
+      ? { equipe: { departamentoId: workspaceAtivoId } }
+      : (deptoIds === null || equipeId
+          ? {}
+          : { equipe: { departamentoId: { in: deptoIds } } });
 
     return this.prisma.slaDefinicao.findMany({
       where: {

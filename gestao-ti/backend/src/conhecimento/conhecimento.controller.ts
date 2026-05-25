@@ -16,6 +16,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { CreateArtigoDto } from './dto/create-artigo.dto.js';
 import { UpdateArtigoDto, UpdateStatusArtigoDto } from './dto/update-artigo.dto.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
+import { WorkspaceAtivo } from '../common/decorators/workspace-ativo.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads', 'conhecimento');
@@ -46,6 +47,7 @@ export class ConhecimentoController {
     @Query('pageSize') pageSize?: string,
     @GestaoTiRole() role?: string,
     @CurrentUser() user?: JwtPayload,
+    @WorkspaceAtivo() workspaceAtivoId?: string | null,
   ) {
     return this.service.findAll({
       categoria,
@@ -57,6 +59,7 @@ export class ConhecimentoController {
       page: page ? parseInt(page, 10) : undefined,
       pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
       user,
+      workspaceAtivoId,
     });
   }
 

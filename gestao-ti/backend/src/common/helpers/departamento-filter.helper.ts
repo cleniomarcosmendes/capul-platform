@@ -182,6 +182,42 @@ export function assertDepartamentoDoUser(
 }
 
 /**
+ * S15.2 (25/05) — Workspace Ativo: dado o where atual e o workspaceAtivoId
+ * (lido do header X-Workspace-Id), restringe o filtro pra aquele depto.
+ *
+ * Comportamento:
+ *  - workspaceAtivoId NULL → where intacto (fallback S13/S14, user vê união
+ *    de todos os perfis).
+ *  - workspaceAtivoId set → adiciona `departamentoId = workspaceAtivoId` no
+ *    where via AND, restringindo a visão àquele depto especificamente.
+ *
+ * Para usos onde o where já tem clauses complexas (OR/AND), o caller deve
+ * decidir o melhor ponto de composição — esta função só fornece o "fragment".
+ */
+export function workspaceAtivoFilter(
+  workspaceAtivoId: string | null | undefined,
+): { departamentoId?: string } {
+  return workspaceAtivoId ? { departamentoId: workspaceAtivoId } : {};
+}
+
+/**
+ * S15.2 (25/05) — retorna a role do user no workspace ATIVO (não a
+ * denormalizada do JWT). Pra Juliana (GESTOR/CTL + USUARIO_FINAL/T.I.):
+ * se workspaceAtivoId=CTL → 'GESTOR'; se =T.I. → 'USUARIO_FINAL'; se null
+ * → null (caller usa role denormalizado do JWT como fallback).
+ */
+export function roleNoWorkspaceAtivo(
+  user: JwtPayload | null | undefined,
+  workspaceAtivoId: string | null | undefined,
+): string | null {
+  if (!user || !workspaceAtivoId) return null;
+  const workspace = user.modulos?.find((m) => m.codigo === 'WORKSPACE');
+  if (!workspace) return null;
+  const depto = workspace.departamentos?.find((d) => d.id === workspaceAtivoId);
+  return depto?.role ?? null;
+}
+
+/**
  * S13c (25/05) — valida que o user tem perfil STAFF (ADMIN/GESTOR/SUPORTE)
  * no depto informado, antes de criar/editar/deletar recursos linkados a uma
  * equipe (catalogo-servico, conhecimento, sla).

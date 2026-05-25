@@ -6,6 +6,7 @@ import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
+import { WorkspaceAtivo } from '../common/decorators/workspace-ativo.decorator.js';
 import { CreateOsDto } from './dto/create-os.dto.js';
 import { UpdateOsDto } from './dto/update-os.dto.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
@@ -27,6 +28,7 @@ export class OrdemServicoController {
     @Query('pageSize') pageSize?: string,
     @CurrentUser() user?: JwtPayload,
     @GestaoTiRole() role?: string,
+    @WorkspaceAtivo() workspaceAtivoId?: string | null,
   ) {
     return this.service.findAll(
       status,
@@ -35,6 +37,7 @@ export class OrdemServicoController {
       pageSize ? parseInt(pageSize, 10) : undefined,
       user,
       role,
+      workspaceAtivoId,
     );
   }
 

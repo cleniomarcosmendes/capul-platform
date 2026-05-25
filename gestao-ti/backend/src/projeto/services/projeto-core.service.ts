@@ -68,6 +68,8 @@ export class ProjetoCoreService {
     page?: number;
     pageSize?: number;
     user?: JwtPayload;
+    // S15.2 (25/05) — workspace ATIVO da sessão (header X-Workspace-Id).
+    workspaceAtivoId?: string | null;
   }) {
     const where: Record<string, unknown> = {};
     // Termo de busca — no escopo do metodo: o filtro "Meus Projetos" e o
@@ -162,8 +164,13 @@ export class ProjetoCoreService {
       whereFiltrado = { AND: [where, { departamentoId: { in: deptoIds } }] };
     }
 
+    // S15.2 — Intersect com workspace ATIVO (sem ativo: fallback S13a).
+    const whereFinal = filters.workspaceAtivoId
+      ? { AND: [whereFiltrado, { departamentoId: filters.workspaceAtivoId }] }
+      : whereFiltrado;
+
     const resultado = await paginate(this.prisma, this.prisma.projeto, {
-      where: whereFiltrado,
+      where: whereFinal,
       include: projetoListInclude,
       orderBy: { numero: 'desc' },
       page: filters.page,

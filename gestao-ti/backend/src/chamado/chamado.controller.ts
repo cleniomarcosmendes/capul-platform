@@ -14,6 +14,7 @@ import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
+import { WorkspaceAtivo } from '../common/decorators/workspace-ativo.decorator.js';
 import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
 import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
 import { CreateChamadoDto, AddChamadoCopiasDto } from './dto/create-chamado.dto.js';
@@ -86,6 +87,7 @@ export class ChamadoController {
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: string,
     @Query('incluirAgrupados') incluirAgrupados?: string,
+    @WorkspaceAtivo() workspaceAtivoId?: string | null,
   ) {
     return this.service.findAll(user, role, {
       status,
@@ -105,6 +107,7 @@ export class ChamadoController {
       sortBy,
       sortOrder: sortOrder === 'asc' ? 'asc' : sortOrder === 'desc' ? 'desc' : undefined,
       incluirAgrupados: incluirAgrupados === 'true',
+      workspaceAtivoId,
     });
   }
 

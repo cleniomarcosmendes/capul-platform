@@ -12,6 +12,7 @@ import { UpdateStatusDto } from '../equipe/dto/update-status.dto.js';
 import { StatusGeral } from '@prisma/client';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
+import { WorkspaceAtivo } from '../common/decorators/workspace-ativo.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Controller('catalogo-servicos')
@@ -26,8 +27,9 @@ export class CatalogoServicoController {
     @Query('status') status?: StatusGeral,
     @CurrentUser() user?: JwtPayload,
     @GestaoTiRole() role?: string,
+    @WorkspaceAtivo() workspaceAtivoId?: string | null,
   ) {
-    return this.service.findAll(equipeId, status, user, role);
+    return this.service.findAll(equipeId, status, user, role, workspaceAtivoId);
   }
 
   @Get(':id')

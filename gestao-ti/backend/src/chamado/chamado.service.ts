@@ -43,6 +43,7 @@ export class ChamadoService {
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
     incluirAgrupados?: boolean;
+    workspaceAtivoId?: string | null;
   }) {
     return this.core.findAll(user, role, filters);
   }

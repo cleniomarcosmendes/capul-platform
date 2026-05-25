@@ -11,6 +11,7 @@ import { UpdateSlaDto } from './dto/update-sla.dto.js';
 import { UpdateStatusDto } from '../equipe/dto/update-status.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
+import { WorkspaceAtivo } from '../common/decorators/workspace-ativo.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Controller('sla')
@@ -24,8 +25,9 @@ export class SlaController {
     @Query('equipeId') equipeId?: string,
     @CurrentUser() user?: JwtPayload,
     @GestaoTiRole() role?: string,
+    @WorkspaceAtivo() workspaceAtivoId?: string | null,
   ) {
-    return this.service.findAll(equipeId, user, role);
+    return this.service.findAll(equipeId, user, role, workspaceAtivoId);
   }
 
   @Get(':id')
