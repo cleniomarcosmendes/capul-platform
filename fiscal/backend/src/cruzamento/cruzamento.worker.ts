@@ -10,6 +10,7 @@ import IORedis from 'ioredis';
 import { REDIS_CONNECTION } from '../bullmq/bullmq.module.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { onlyDigits } from '../common/helpers/cnpj.helper.js';
+import { parseDateSafe } from '../common/helpers/date.helper.js';
 import { CccClient } from '../sefaz/ccc-client.service.js';
 import { AmbienteService } from '../ambiente/ambiente.service.js';
 import { CircuitBreakerService, CircuitBreakerOpenError } from './circuit-breaker.service.js';
@@ -152,8 +153,10 @@ export class CruzamentoWorker implements OnApplicationBootstrap, OnApplicationSh
         cnae: c.cnae,
         regimeTributario: c.regimeApuracao,
         situacao,
-        dataInicioAtividade: c.inicioAtividade ? new Date(c.inicioAtividade) : null,
-        dataUltimaAtualizacaoCcc: c.dataSituacao ? new Date(c.dataSituacao) : null,
+        // Fix 25/05/2026 — parseDateSafe (mesmo bug visto em cadastro.service:
+        // SEFAZ PR retornou data não-parseável → Prisma rejeitava Invalid Date).
+        dataInicioAtividade: parseDateSafe(c.inicioAtividade),
+        dataUltimaAtualizacaoCcc: parseDateSafe(c.dataSituacao),
         enderecoLogradouro: c.endereco?.logradouro,
         enderecoBairro: c.endereco?.bairro,
         enderecoMunicipio: c.endereco?.municipio,
@@ -168,7 +171,8 @@ export class CruzamentoWorker implements OnApplicationBootstrap, OnApplicationSh
         nomeFantasia: c.nomeFantasia ?? undefined,
         cnae: c.cnae ?? undefined,
         situacao,
-        dataUltimaAtualizacaoCcc: c.dataSituacao ? new Date(c.dataSituacao) : undefined,
+        // Fix 25/05 — parseDateSafe; ?? undefined preserva valor antigo no update.
+        dataUltimaAtualizacaoCcc: parseDateSafe(c.dataSituacao) ?? undefined,
         enderecoLogradouro: c.endereco?.logradouro ?? undefined,
         enderecoBairro: c.endereco?.bairro ?? undefined,
         enderecoMunicipio: c.endereco?.municipio ?? undefined,

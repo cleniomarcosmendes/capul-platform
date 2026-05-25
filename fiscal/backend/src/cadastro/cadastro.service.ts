@@ -16,6 +16,7 @@ import { SocioCapabilityService } from '../rfb/socio-capability.service.js';
 import type { FiscalAuthenticatedUser } from '../common/interfaces/jwt-payload.interface.js';
 import { DivergenciaService } from './divergencia.service.js';
 import { onlyDigits } from '../common/helpers/cnpj.helper.js';
+import { parseDateSafe } from '../common/helpers/date.helper.js';
 import type {
   CadastroContribuinte,
   SituacaoCadastral,
@@ -542,8 +543,11 @@ export class CadastroService {
             cnae: c.cnae,
             regimeTributario: c.regimeApuracao,
             situacao: situacaoGrupo,
-            dataInicioAtividade: c.inicioAtividade ? new Date(c.inicioAtividade) : null,
-            dataUltimaAtualizacaoCcc: c.dataSituacao ? new Date(c.dataSituacao) : null,
+            // Fix 25/05/2026: parseDateSafe protege contra string não-vazia
+            // mas em formato inválido (SEFAZ PR retornou data não-parseável
+            // pro CNPJ 18.631.739/0058 — Prisma rejeitava Invalid Date).
+            dataInicioAtividade: parseDateSafe(c.inicioAtividade),
+            dataUltimaAtualizacaoCcc: parseDateSafe(c.dataSituacao),
             enderecoLogradouro: c.endereco?.logradouro ?? null,
             enderecoNumero: c.endereco?.numero ?? null,
             enderecoBairro: c.endereco?.bairro ?? null,
@@ -559,7 +563,9 @@ export class CadastroService {
             cnae: c.cnae ?? undefined,
             regimeTributario: c.regimeApuracao ?? undefined,
             situacao: situacaoGrupo,
-            dataUltimaAtualizacaoCcc: c.dataSituacao ? new Date(c.dataSituacao) : undefined,
+            // Fix 25/05 — parseDateSafe; `?? undefined` mantém semântica
+            // do update (não sobrescreve com null o que estiver no banco).
+            dataUltimaAtualizacaoCcc: parseDateSafe(c.dataSituacao) ?? undefined,
             enderecoLogradouro: c.endereco?.logradouro ?? undefined,
             enderecoNumero: c.endereco?.numero ?? undefined,
             enderecoBairro: c.endereco?.bairro ?? undefined,
