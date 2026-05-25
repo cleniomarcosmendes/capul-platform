@@ -48,6 +48,7 @@ export class LicencaService {
     vencendoEm?: number; // dias
     categoriaId?: string;
     avulsas?: boolean;
+    departamentoId?: string;
     page?: number;
     pageSize?: number;
   }, role: string, user?: JwtPayload) {
@@ -57,6 +58,9 @@ export class LicencaService {
     if (filters.status) where.status = filters.status;
     if (filters.categoriaId) where.categoriaId = filters.categoriaId;
     if (filters.avulsas) where.softwareId = null;
+    // S11 — filtro explícito por depto (útil p/ OVERSIGHT;
+    // applyDepartamentoFilter abaixo já restringe non-OVERSIGHT).
+    if (filters.departamentoId) where.departamentoId = filters.departamentoId;
 
     if (filters.vencendoEm) {
       const limite = new Date();

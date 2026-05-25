@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { softwareService } from '../../services/software.service';
 import { licencaService } from '../../services/licenca.service';
+import { contratoService } from '../../services/contrato.service';
 import { coreApi } from '../../services/api';
 import {
   ArrowLeft, Pencil, Plus, Trash2, X, Building2, KeyRound, Layers,
@@ -11,12 +12,14 @@ import {
 } from 'lucide-react';
 import { paradaService } from '../../services/parada.service';
 import { useToast } from '../../components/Toast';
+import { SearchSelect } from '../../components/SearchSelect';
+import type { SearchSelectOption } from '../../components/SearchSelect';
 import { formatDateBR } from '../../utils/date';
 import { coreService } from '../../services/core.service';
 import type {
   Software, SoftwareModulo, SoftwareLicenca, SoftwareFilialItem,
   StatusSoftware, StatusModulo, ModeloLicenca, RegistroParada,
-  UsuarioCore, LicencaUsuario,
+  UsuarioCore, LicencaUsuario, FornecedorConfig,
 } from '../../types';
 
 const statusCores: Record<string, string> = {
@@ -572,8 +575,19 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
   const [dataVencimento, setDataVencimento] = useState('');
   const [chaveSerial, setChaveSerial] = useState('');
   const [fornecedor, setFornecedor] = useState('');
+  // S11 (25/05) — FK p/ FornecedorConfig (cadastro centralizado).
+  const [fornecedorId, setFornecedorId] = useState('');
+  const [fornecedores, setFornecedores] = useState<FornecedorConfig[]>([]);
   const [observacoes, setObservacoes] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // S11 — options p/ SearchSelect (mesma forma da LicencasPage).
+  const fornecedorOptions: SearchSelectOption[] = useMemo(() =>
+    fornecedores.filter(f => f.status === 'ATIVO').map((f) => ({
+      value: f.id,
+      label: f.nome,
+      sublabel: `${f.codigo}${f.loja ? '/' + f.loja : ''}`,
+    })), [fornecedores]);
 
   function loadLicencas() {
     licencaService
@@ -585,6 +599,11 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
 
   useEffect(() => { loadLicencas(); }, [software.id]);
 
+  // S11 — carregar fornecedores cadastrados uma vez.
+  useEffect(() => {
+    contratoService.listarFornecedores().then(setFornecedores).catch(() => {});
+  }, []);
+
   function resetForm() {
     setShowForm(false);
     setModeloLicenca('');
@@ -595,6 +614,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
     setDataVencimento('');
     setChaveSerial('');
     setFornecedor('');
+    setFornecedorId('');
     setObservacoes('');
   }
 
@@ -611,6 +631,8 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
         dataVencimento: dataVencimento || undefined,
         chaveSerial: chaveSerial || undefined,
         fornecedor: fornecedor || undefined,
+        // S11 — preferir FK; texto livre vira complemento.
+        fornecedorId: fornecedorId || undefined,
         observacoes: observacoes || undefined,
       });
       resetForm();
@@ -722,11 +744,21 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
               min="1"
               className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
             />
+            {/* S11 — Fornecedor cadastrado (preferencial). Texto livre fica abaixo. */}
+            <SearchSelect
+              options={fornecedorOptions}
+              value={fornecedorId}
+              onChange={setFornecedorId}
+              placeholder="Fornecedor (cadastro)..."
+            />
+          </div>
+          {/* S11 — Texto livre p/ fornecedor sem cadastro. */}
+          <div className="mb-3">
             <input
               value={fornecedor}
               onChange={(e) => setFornecedor(e.target.value)}
-              placeholder="Fornecedor"
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              placeholder="Fornecedor — descrição livre (opcional, p/ fornecedor sem cadastro)"
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full"
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
@@ -836,7 +868,17 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                           ? `R$ ${Number(lic.valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
                           : '-'}
                       </td>
-                      <td className="px-4 py-3 text-slate-600">{lic.fornecedor || '-'}</td>
+                      {/* S11 — preferir nome do cadastro; texto livre vira sublinha. */}
+                      <td className="px-4 py-3 text-slate-600">
+                        {lic.fornecedorRef ? (
+                          <div>
+                            <span className="font-medium">{lic.fornecedorRef.nome}</span>
+                            <p className="text-xs text-slate-400">{lic.fornecedorRef.codigo}{lic.fornecedorRef.loja ? '/' + lic.fornecedorRef.loja : ''}</p>
+                          </div>
+                        ) : (
+                          lic.fornecedor || '-'
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         {lic.dataVencimento ? (
                           <span className="flex items-center gap-1">

@@ -1,12 +1,16 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { licencaService } from '../../services/licenca.service';
 import { softwareService } from '../../services/software.service';
+import { contratoService } from '../../services/contrato.service';
+import { coreService } from '../../services/core.service';
 import { KeyRound, AlertTriangle, Download, Plus, X, Search } from 'lucide-react';
 import { DepartamentoField } from '../../components/DepartamentoField';
+import { SearchSelect } from '../../components/SearchSelect';
+import type { SearchSelectOption } from '../../components/SearchSelect';
 import { exportService } from '../../services/export.service';
-import type { SoftwareLicenca, Software, StatusLicenca, CategoriaLicenca } from '../../types';
+import type { SoftwareLicenca, Software, StatusLicenca, CategoriaLicenca, FornecedorConfig, Departamento } from '../../types';
 
 import { formatDateBR } from '../../utils/date';
 import { useToast } from '../../components/Toast';
@@ -47,6 +51,9 @@ export function LicencasPage() {
   const [totalLicencas, setTotalLicencas] = useState<number>(0);
   const [categorias, setCategorias] = useState<CategoriaLicenca[]>([]);
   const [softwares, setSoftwares] = useState<Software[]>([]);
+  // S11 (25/05) — fornecedores cadastrados + deptos p/ filtro UI.
+  const [fornecedores, setFornecedores] = useState<FornecedorConfig[]>([]);
+  const [departamentosFiltro, setDepartamentosFiltro] = useState<Departamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -57,6 +64,8 @@ export function LicencasPage() {
   const [filtroSoftware, setFiltroSoftware] = useState('');
   const [filtroVencendo, setFiltroVencendo] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('');
+  // S11 — filtro por depto de alocação (não-OVERSIGHT já restringido no backend).
+  const [filtroDepartamento, setFiltroDepartamento] = useState('');
 
   // Form fields
   const [formTipo, setFormTipo] = useState<'software' | 'avulsa'>('avulsa');
@@ -74,6 +83,8 @@ export function LicencasPage() {
   const [formObservacoes, setFormObservacoes] = useState('');
   // Workspace Onda 3 S5 — depto de alocação da licença.
   const [formDepartamentoId, setFormDepartamentoId] = useState('');
+  // S11 (25/05) — FK p/ FornecedorConfig (preferencial; coexiste com texto livre).
+  const [formFornecedorId, setFormFornecedorId] = useState('');
 
   // Edit state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -88,11 +99,25 @@ export function LicencasPage() {
   const [editObservacoes, setEditObservacoes] = useState('');
   const [editNome, setEditNome] = useState('');
   const [editCategoriaId, setEditCategoriaId] = useState('');
+  // S11 — fornecedor (FK) na edição.
+  const [editFornecedorId, setEditFornecedorId] = useState('');
 
   useEffect(() => {
     softwareService.listar().then(setSoftwares).catch(() => {});
     licencaService.listarCategorias().then(setCategorias).catch(() => {});
+    // S11 — fornecedores cadastrados (centralizado em gestao_ti.fornecedores)
+    // e deptos com funcionalidade LICENCA ativa (p/ filtro UI).
+    contratoService.listarFornecedores().then(setFornecedores).catch(() => {});
+    coreService.listarDepartamentos({ funcionalidade: 'LICENCA' }).then(setDepartamentosFiltro).catch(() => {});
   }, []);
+
+  // S11 — options p/ SearchSelect de fornecedor (memo p/ não re-renderizar).
+  const fornecedorOptions: SearchSelectOption[] = useMemo(() =>
+    fornecedores.filter(f => f.status === 'ATIVO').map((f) => ({
+      value: f.id,
+      label: f.nome,
+      sublabel: `${f.codigo}${f.loja ? '/' + f.loja : ''}`,
+    })), [fornecedores]);
 
   const carregarLicencas = useCallback(() => {
     setLoading(true);
@@ -102,6 +127,7 @@ export function LicencasPage() {
         softwareId: filtroSoftware || undefined,
         vencendoEm: filtroVencendo ? parseInt(filtroVencendo) : undefined,
         categoriaId: filtroCategoria || undefined,
+        departamentoId: filtroDepartamento || undefined,
         page,
         pageSize,
       })
@@ -111,10 +137,10 @@ export function LicencasPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [filtroStatus, filtroSoftware, filtroVencendo, filtroCategoria, page, pageSize]);
+  }, [filtroStatus, filtroSoftware, filtroVencendo, filtroCategoria, filtroDepartamento, page, pageSize]);
 
   // Volta pra página 1 ao mudar filtro.
-  useEffect(() => { setPage(1); }, [filtroStatus, filtroSoftware, filtroVencendo, filtroCategoria, pageSize]);
+  useEffect(() => { setPage(1); }, [filtroStatus, filtroSoftware, filtroVencendo, filtroCategoria, filtroDepartamento, pageSize]);
 
   useEffect(() => {
     carregarLicencas();
@@ -142,6 +168,7 @@ export function LicencasPage() {
     setEditModelo(lic.modeloLicenca || '');
     setEditQtd(lic.quantidade != null ? String(lic.quantidade) : '');
     setEditFornecedor(lic.fornecedor || '');
+    setEditFornecedorId(lic.fornecedorId || '');
     setEditValorTotal(lic.valorTotal != null ? String(lic.valorTotal) : '');
     setEditValorUnitario(lic.valorUnitario != null ? String(lic.valorUnitario) : '');
     setEditDataInicio(lic.dataInicio ? lic.dataInicio.slice(0, 10) : '');
@@ -162,6 +189,9 @@ export function LicencasPage() {
         modeloLicenca: editModelo || undefined,
         quantidade: editQtd ? parseInt(editQtd) : undefined,
         fornecedor: editFornecedor || undefined,
+        // S11 — '' explicitamente limpa a FK; UUID atualiza; undefined preserva.
+        // Aqui mandamos sempre o estado atual (incluindo '' p/ desvincular).
+        fornecedorId: editFornecedorId,
         valorTotal: editValorTotal ? parseFloat(editValorTotal) : undefined,
         valorUnitario: editValorUnitario ? parseFloat(editValorUnitario) : undefined,
         dataInicio: editDataInicio || undefined,
@@ -208,6 +238,7 @@ export function LicencasPage() {
     setFormModelo('');
     setFormQtd('');
     setFormFornecedor('');
+    setFormFornecedorId('');
     setFormValorTotal('');
     setFormValorUnitario('');
     setFormDataInicio('');
@@ -238,6 +269,8 @@ export function LicencasPage() {
         modeloLicenca: formModelo || undefined,
         quantidade: formQtd ? parseInt(formQtd) : undefined,
         fornecedor: formFornecedor || undefined,
+        // S11 — preferir FK; texto livre vira complemento.
+        fornecedorId: formFornecedorId || undefined,
         valorTotal: formValorTotal ? parseFloat(formValorTotal) : undefined,
         valorUnitario: formValorUnitario ? parseFloat(formValorUnitario) : undefined,
         dataInicio: formDataInicio || undefined,
@@ -349,9 +382,28 @@ export function LicencasPage() {
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
               <input type="number" min="1" placeholder="Quantidade" value={formQtd} onChange={(e) => setFormQtd(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-              <input type="text" placeholder="Fornecedor" value={formFornecedor} onChange={(e) => setFormFornecedor(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              {/* S11 — Fornecedor cadastrado (preferencial). Texto livre fica abaixo. */}
+              <div>
+                <SearchSelect
+                  options={fornecedorOptions}
+                  value={formFornecedorId}
+                  onChange={setFormFornecedorId}
+                  placeholder="Fornecedor (cadastro)..."
+                />
+              </div>
               <input type="number" step="0.01" min="0" placeholder="Valor Total" value={formValorTotal} onChange={(e) => setFormValorTotal(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
               <input type="number" step="0.01" min="0" placeholder="Valor Unitario" value={formValorUnitario} onChange={(e) => setFormValorUnitario(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+
+            {/* S11 — Texto livre opcional p/ casos sem cadastro (legado/eventual). */}
+            <div className="mb-3">
+              <input
+                type="text"
+                placeholder="Fornecedor — descrição livre (opcional, p/ fornecedor sem cadastro)"
+                value={formFornecedor}
+                onChange={(e) => setFormFornecedor(e.target.value)}
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full"
+              />
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
@@ -451,6 +503,17 @@ export function LicencasPage() {
             <option value="60">Vencendo em 60 dias</option>
             <option value="90">Vencendo em 90 dias</option>
           </select>
+          {/* S11 — filtro por depto de alocação (lista vem da funcionalidade LICENCA). */}
+          <select
+            value={filtroDepartamento}
+            onChange={(e) => setFiltroDepartamento(e.target.value)}
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+          >
+            <option value="">Todos os departamentos</option>
+            {departamentosFiltro.map((d) => (
+              <option key={d.id} value={d.id}>{d.nome}</option>
+            ))}
+          </select>
         </div>
 
         {loading ? (
@@ -467,6 +530,8 @@ export function LicencasPage() {
                 <thead>
                   <tr className="bg-slate-50 text-left">
                     <th className="px-4 py-3 font-medium text-slate-600">Licenca</th>
+                    {/* S11 — coluna Departamento (alocação, gap visível antes). */}
+                    <th className="px-4 py-3 font-medium text-slate-600">Departamento</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Modelo</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Qtd</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Usuarios</th>
@@ -499,6 +564,10 @@ export function LicencasPage() {
                           <p className="text-xs text-slate-400">{getSubtitle(lic)}</p>
                         )}
                       </td>
+                      {/* S11 — depto de alocação (fallback '-' se include falhar). */}
+                      <td className="px-4 py-3 text-slate-600">
+                        {lic.departamento?.nome ?? '-'}
+                      </td>
                       <td className="px-4 py-3 text-slate-600">
                         {lic.modeloLicenca ? modeloLabel[lic.modeloLicenca] || lic.modeloLicenca : '-'}
                       </td>
@@ -513,7 +582,17 @@ export function LicencasPage() {
                           ? `R$ ${Number(lic.valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
                           : '-'}
                       </td>
-                      <td className="px-4 py-3 text-slate-600">{lic.fornecedor || '-'}</td>
+                      {/* S11 — preferir nome do cadastro; texto livre vira sublinha. */}
+                      <td className="px-4 py-3 text-slate-600">
+                        {lic.fornecedorRef ? (
+                          <div>
+                            <span className="font-medium">{lic.fornecedorRef.nome}</span>
+                            <p className="text-xs text-slate-400">{lic.fornecedorRef.codigo}{lic.fornecedorRef.loja ? '/' + lic.fornecedorRef.loja : ''}</p>
+                          </div>
+                        ) : (
+                          lic.fornecedor || '-'
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-slate-500 text-xs">
                         {lic.dataInicio ? formatDateBR(lic.dataInicio) : '-'}
                       </td>
@@ -556,7 +635,8 @@ export function LicencasPage() {
                     </tr>
                     {editingId === lic.id && (
                       <tr className="bg-amber-50">
-                        <td colSpan={isAdmin ? 11 : 10} className="px-4 py-4">
+                        {/* S11 — colSpan +1 pela nova coluna Departamento. */}
+                        <td colSpan={isAdmin ? 12 : 11} className="px-4 py-4">
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                             {!lic.software && (
                               <>
@@ -574,10 +654,28 @@ export function LicencasPage() {
                             <input type="number" min="1" placeholder="Quantidade" value={editQtd} onChange={(e) => setEditQtd(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
                           </div>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                            <input type="text" placeholder="Fornecedor" value={editFornecedor} onChange={(e) => setEditFornecedor(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                            {/* S11 — Fornecedor cadastrado (FK). Vazio = limpar vínculo. */}
+                            <div>
+                              <SearchSelect
+                                options={fornecedorOptions}
+                                value={editFornecedorId}
+                                onChange={setEditFornecedorId}
+                                placeholder="Fornecedor (cadastro)..."
+                              />
+                            </div>
                             <input type="number" step="0.01" min="0" placeholder="Valor Total" value={editValorTotal} onChange={(e) => setEditValorTotal(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
                             <input type="number" step="0.01" min="0" placeholder="Valor Unitario" value={editValorUnitario} onChange={(e) => setEditValorUnitario(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
                             <input type="text" placeholder="Chave Serial" value={editChaveSerial} onChange={(e) => setEditChaveSerial(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                          </div>
+                          {/* S11 — texto livre p/ fornecedor sem cadastro. */}
+                          <div className="mb-3">
+                            <input
+                              type="text"
+                              placeholder="Fornecedor — descrição livre (opcional)"
+                              value={editFornecedor}
+                              onChange={(e) => setEditFornecedor(e.target.value)}
+                              className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full"
+                            />
                           </div>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                             <div>
