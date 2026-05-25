@@ -23,6 +23,13 @@ export interface ModuloDepartamentoPayload {
   nome: string;
   role: string;
   funcionalidades: string[];
+  /**
+   * S12 (25/05) — true se este depto é do tipo "Tecnologia". Consumido por
+   * `hasStaffPerfilEmTI(user)` no gestao-ti pra resolver multi-perfil sem
+   * confiar no `role` denormalizado. Tokens antigos sem este campo são
+   * tratados como isTI=false (conservador — não vaza visibilidade).
+   */
+  isTI: boolean;
 }
 
 export interface ModuloPayload {

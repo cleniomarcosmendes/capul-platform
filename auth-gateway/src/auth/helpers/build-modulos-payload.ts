@@ -5,6 +5,15 @@ export interface ModuloDepartamentoPayload {
   nome: string;
   role: string;
   funcionalidades: string[];
+  /**
+   * S12 (25/05) — true se este depto é do tipo "Tecnologia" (canônico p/
+   * staff TI). Consumido por `hasStaffPerfilEmTI(user)` no gestao-ti pra
+   * resolver multi-perfil corretamente (Juliana é GESTOR/CTL +
+   * USUARIO_FINAL/T.I. → NÃO é staff TI, embora `role` denormalizada
+   * pareça GESTOR). Tokens antigos sem este campo são tratados como
+   * isTI=false (conservador — não vaza).
+   */
+  isTI: boolean;
 }
 
 export interface ModuloPayload {
@@ -47,7 +56,14 @@ export async function buildModulosPayload(
     include: {
       modulo: { select: { codigo: true } },
       roleModulo: { select: { codigo: true } },
-      departamento: { select: { id: true, nome: true } },
+      departamento: {
+        select: {
+          id: true,
+          nome: true,
+          // S12 — tipo do depto p/ marcar isTI no payload.
+          tipoDepartamento: { select: { nome: true } },
+        },
+      },
     },
   });
 
@@ -68,11 +84,21 @@ export async function buildModulosPayload(
 
   const moduloMap = new Map<string, ModuloPayload>();
   for (const p of permissoes) {
+    // S12 — depto é "TI" se nome OU tipo_departamento começa com "Tecnologia".
+    // Match por nome do depto (canônico: "Tecnologia da Informação") É a
+    // fonte primária — o seed atual marca todos os deptos como tipo
+    // "Administrativo" e migrá-los seria escopo separado. Match por tipo é
+    // ponte futura quando Configurador permitir tipar deptos corretamente
+    // ("Tecnologia"). Sem hardcode de UUID.
+    const deptoNome = (p.departamento.nome ?? '').toLowerCase();
+    const tipoNome = (p.departamento.tipoDepartamento?.nome ?? '').toLowerCase();
+    const isTI = deptoNome.startsWith('tecnologia') || tipoNome.startsWith('tecnologia');
     const deptoPayload: ModuloDepartamentoPayload = {
       id: p.departamento.id,
       nome: p.departamento.nome,
       role: p.roleModulo.codigo,
       funcionalidades: funcByDepto.get(p.departamentoId) ?? [],
+      isTI,
     };
 
     const existing = moduloMap.get(p.modulo.codigo);

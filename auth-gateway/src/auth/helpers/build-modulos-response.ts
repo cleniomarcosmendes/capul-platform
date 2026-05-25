@@ -6,6 +6,8 @@ export interface ModuloDepartamentoResponse {
   role: string;
   roleNome: string;
   funcionalidades: string[];
+  /** S12 — espelha JWT: true se depto é tipo "Tecnologia". */
+  isTI: boolean;
 }
 
 export interface ModuloResponse {
@@ -41,7 +43,15 @@ export async function buildModulosResponse(
     include: {
       modulo: { select: { codigo: true, nome: true, icone: true, cor: true, urlFrontend: true } },
       roleModulo: { select: { codigo: true, nome: true } },
-      departamento: { select: { id: true, nome: true } },
+      departamento: {
+        select: {
+          id: true,
+          nome: true,
+          // S12 — espelha build-modulos-payload (resposta HTTP do login
+          // tem que carregar o mesmo isTI que o JWT).
+          tipoDepartamento: { select: { nome: true } },
+        },
+      },
     },
   });
 
@@ -62,12 +72,19 @@ export async function buildModulosResponse(
 
   const moduloMap = new Map<string, ModuloResponse>();
   for (const p of permissoes) {
+    // S12 — espelha build-modulos-payload: depto é "TI" se nome OU tipo
+    // começa com "Tecnologia" (nome é canônico "Tecnologia da Informação";
+    // tipo é ponte futura quando Configurador migrar tipagem).
+    const deptoNome = (p.departamento.nome ?? '').toLowerCase();
+    const tipoNome = (p.departamento.tipoDepartamento?.nome ?? '').toLowerCase();
+    const isTI = deptoNome.startsWith('tecnologia') || tipoNome.startsWith('tecnologia');
     const deptoEntry: ModuloDepartamentoResponse = {
       id: p.departamento.id,
       nome: p.departamento.nome,
       role: p.roleModulo.codigo,
       roleNome: p.roleModulo.nome,
       funcionalidades: funcByDepto.get(p.departamentoId) ?? [],
+      isTI,
     };
 
     const existing = moduloMap.get(p.modulo.codigo);
