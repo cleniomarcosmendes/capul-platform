@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { notificacaoService } from '../services/notificacao.service';
 import { coreApi } from '../services/api';
 import { User, Bell, Radio } from 'lucide-react';
+import { WorkspaceSwitcher } from '../components/WorkspaceSwitcher';
 
 export function Header({ title }: { title: string }) {
   const { usuario, gestaoTiRole } = useAuth();
@@ -52,6 +53,8 @@ export function Header({ title }: { title: string }) {
             </span>
           )}
         </Link>
+        {/* S15.4 (25/05) — WorkspaceSwitcher (single-perfil = badge fixa; multi = dropdown). */}
+        <WorkspaceSwitcher />
         <span className="text-xs px-2 py-1 rounded-full bg-capul-100 text-capul-700 font-medium">
           {gestaoTiRole}
         </span>

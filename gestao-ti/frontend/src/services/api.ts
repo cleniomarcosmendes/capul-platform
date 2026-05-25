@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getWorkspaceAtivoFromStorage } from '../contexts/WorkspaceContext';
 
 const AUTH_BASE = '/api/v1/auth';
 const CORE_BASE = '/api/v1/core';
@@ -29,6 +30,10 @@ function processQueue(error: unknown, token: string | null) {
   api.interceptors.request.use((config) => {
     const token = localStorage.getItem('accessToken');
     if (token) config.headers.Authorization = `Bearer ${token}`;
+    // S15.3 (25/05) — header X-Workspace-Id quando user multi-perfil
+    // escolheu workspace. Backend (S15.1) valida e ignora se inválido.
+    const wsId = getWorkspaceAtivoFromStorage();
+    if (wsId) config.headers['X-Workspace-Id'] = wsId;
     return config;
   });
 
