@@ -758,8 +758,9 @@ model FornecedorConfig {
   createdAt DateTime    @default(now()) @map("created_at")
   updatedAt DateTime    @updatedAt @map("updated_at")
 
-  contratos     Contrato[]
-  notasFiscais  NotaFiscal[]
+  contratos        Contrato[]
+  notasFiscais     NotaFiscal[]
+  softwareLicencas SoftwareLicenca[]
 
   @@unique([codigo, loja])
   @@map("fornecedores")
@@ -1238,6 +1239,12 @@ model SoftwareLicenca {
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
 
+  // Workspace S11 (25/05) — FK opcional p/ FornecedorConfig (cadastro centralizado).
+  // Mantém `fornecedor` (string) p/ retrocompat e leitura legado.
+  // Mesmo padrão do Contrato (campo texto + FK nullable convivem).
+  fornecedorId  String?           @map("fornecedor_id")
+  fornecedorRef FornecedorConfig? @relation(fields: [fornecedorId], references: [id])
+
   softwareId String?   @map("software_id")
   software   Software? @relation(fields: [softwareId], references: [id])
 
@@ -1265,6 +1272,7 @@ model SoftwareLicenca {
   @@index([softwareId, status])
   @@index([departamentoId])
   @@index([equipeResponsavelId])
+  @@index([fornecedorId])
   @@map("software_licencas")
   @@schema("gestao_ti")
 }

@@ -52,6 +52,11 @@ export class CreateLicencaDto {
   @MaxLength(200)
   fornecedor?: string;
 
+  // S11 (25/05) — FK p/ FornecedorConfig. Coexiste com `fornecedor` texto.
+  @IsOptional()
+  @IsString()
+  fornecedorId?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(2000)

@@ -21,6 +21,10 @@ const licencaInclude = {
   software: { select: { id: true, nome: true, fabricante: true, tipo: true } },
   contrato: { select: { id: true, titulo: true, numero: true } },
   categoria: { select: { id: true, codigo: true, nome: true } },
+  // S11 (25/05) — expor depto de alocação na listagem (gap visível) +
+  // fornecedor cadastrado (FornecedorConfig).
+  departamento: { select: { id: true, nome: true } },
+  fornecedorRef: { select: { id: true, codigo: true, loja: true, nome: true } },
 };
 
 const licencaIncludeComUsuarios = {
@@ -116,6 +120,13 @@ export class LicencaService {
 
     const departamentoLancamentoId = resolveDepartamentoLancamento(user, departamentoId);
 
+    // S11 — se veio fornecedorId, valida existência (FK ON DELETE SET NULL,
+    // mas pegamos um BadRequest amigável aqui).
+    if (dto.fornecedorId) {
+      const f = await this.prisma.fornecedorConfig.findUnique({ where: { id: dto.fornecedorId } });
+      if (!f) throw new BadRequestException('Fornecedor nao encontrado');
+    }
+
     return this.prisma.softwareLicenca.create({
       data: {
         softwareId: dto.softwareId || null,
@@ -129,6 +140,7 @@ export class LicencaService {
         dataVencimento: dto.dataVencimento ? new Date(dto.dataVencimento) : null,
         chaveSerial: dto.chaveSerial,
         fornecedor: dto.fornecedor,
+        fornecedorId: dto.fornecedorId || null,
         observacoes: dto.observacoes,
         departamentoId,
         departamentoLancamentoId,
@@ -146,10 +158,23 @@ export class LicencaService {
         assertDepartamentoDoUser(user, null, dto.departamentoId);
       }
     }
+    // S11 — validar FK fornecedor se vier no payload (BadRequest amigável).
+    // String vazia = "limpar vínculo" → vira null. UUID → valida existência.
+    let fornecedorIdNorm: string | null | undefined = undefined;
+    if (dto.fornecedorId !== undefined) {
+      if (dto.fornecedorId === '') {
+        fornecedorIdNorm = null;
+      } else {
+        const f = await this.prisma.fornecedorConfig.findUnique({ where: { id: dto.fornecedorId } });
+        if (!f) throw new BadRequestException('Fornecedor nao encontrado');
+        fornecedorIdNorm = dto.fornecedorId;
+      }
+    }
     return this.prisma.softwareLicenca.update({
       where: { id },
       data: {
         ...dto,
+        fornecedorId: fornecedorIdNorm,
         dataInicio: dto.dataInicio ? new Date(dto.dataInicio) : undefined,
         dataVencimento: dto.dataVencimento ? new Date(dto.dataVencimento) : undefined,
       },
@@ -183,6 +208,7 @@ export class LicencaService {
         departamentoId,
         departamentoLancamentoId: anterior.departamentoLancamentoId,
         fornecedor: anterior.fornecedor,
+        fornecedorId: anterior.fornecedorId,
         chaveSerial: anterior.chaveSerial,
         observacoes: `Renovacao da licenca anterior (${anterior.id})`,
       },
