@@ -8,8 +8,10 @@ import { StatusArtigo } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
 import { paginate } from '../common/prisma/paginate.helper.js';
-import { getDeptoIdsDoUser } from '../common/helpers/departamento-filter.helper.js';
+import { getDeptoIdsDoUser, assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
+import { hasStaffPerfilEmTI } from '../common/constants/roles.constant.js';
+import { ForbiddenException } from '@nestjs/common';
 
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads', 'conhecimento');
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -103,7 +105,28 @@ export class ConhecimentoService {
     return artigo;
   }
 
-  async create(dto: CreateArtigoDto, autorId: string) {
+  /**
+   * S13c (25/05) — valida que o user tem perfil staff no depto da equipe
+   * (artigo com equipe) OU staff TI em qualquer depto (artigo global).
+   * Conforme regra C2.4.5 "Conhecimento híbrido" da Onda 2.
+   */
+  private async assertPodeEscrever(user: JwtPayload | undefined, equipeTiId: string | null | undefined) {
+    if (!user) return; // smoke/tests sem user
+    if (equipeTiId) {
+      const equipe = await this.prisma.equipe.findUnique({
+        where: { id: equipeTiId }, select: { departamentoId: true },
+      });
+      assertStaffEmDepto(user, equipe?.departamentoId);
+    } else {
+      // Artigo global — só staff TI (qualquer depto TI) edita.
+      if (!hasStaffPerfilEmTI(user)) {
+        throw new ForbiddenException('Artigo global — só staff de T.I. pode criar/editar.');
+      }
+    }
+  }
+
+  async create(dto: CreateArtigoDto, autorId: string, user?: JwtPayload) {
+    await this.assertPodeEscrever(user, dto.equipeTiId);
     return this.prisma.artigoConhecimento.create({
       data: {
         titulo: dto.titulo,
@@ -120,8 +143,13 @@ export class ConhecimentoService {
     });
   }
 
-  async update(id: string, dto: UpdateArtigoDto) {
-    await this.getOrFail(id);
+  async update(id: string, dto: UpdateArtigoDto, user?: JwtPayload) {
+    const existing = await this.getOrFail(id);
+    // S13c — valida depto atual e (se trocar equipe) o novo também.
+    await this.assertPodeEscrever(user, existing.equipeTiId);
+    if (dto.equipeTiId !== undefined && dto.equipeTiId !== existing.equipeTiId) {
+      await this.assertPodeEscrever(user, dto.equipeTiId);
+    }
     return this.prisma.artigoConhecimento.update({
       where: { id },
       data: { ...dto },
@@ -129,8 +157,9 @@ export class ConhecimentoService {
     });
   }
 
-  async updateStatus(id: string, status: StatusArtigo) {
+  async updateStatus(id: string, status: StatusArtigo, user?: JwtPayload) {
     const artigo = await this.getOrFail(id);
+    await this.assertPodeEscrever(user, artigo.equipeTiId);
 
     const data: Record<string, unknown> = { status };
     if (status === 'PUBLICADO' && !artigo.publicadoEm) {
@@ -144,8 +173,9 @@ export class ConhecimentoService {
     });
   }
 
-  async delete(id: string) {
-    await this.getOrFail(id);
+  async delete(id: string, user?: JwtPayload) {
+    const artigo = await this.getOrFail(id);
+    await this.assertPodeEscrever(user, artigo.equipeTiId);
     // Remover arquivos de anexos do disco
     const anexos = await this.prisma.anexoConhecimento.findMany({ where: { artigoId: id } });
     for (const anexo of anexos) {

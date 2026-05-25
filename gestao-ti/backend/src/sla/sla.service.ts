@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateSlaDto } from './dto/create-sla.dto.js';
 import { UpdateSlaDto } from './dto/update-sla.dto.js';
 import { StatusGeral } from '@prisma/client';
-import { getDeptoIdsDoUser } from '../common/helpers/departamento-filter.helper.js';
+import { getDeptoIdsDoUser, assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
@@ -39,7 +39,14 @@ export class SlaService {
     return sla;
   }
 
-  async create(dto: CreateSlaDto) {
+  async create(dto: CreateSlaDto, user?: JwtPayload) {
+    // S13c — só staff do depto da equipe pode criar SLA.
+    if (user) {
+      const equipe = await this.prisma.equipe.findUnique({
+        where: { id: dto.equipeId }, select: { departamentoId: true },
+      });
+      assertStaffEmDepto(user, equipe?.departamentoId);
+    }
     const existing = await this.prisma.slaDefinicao.findUnique({
       where: { equipeId_prioridade: { equipeId: dto.equipeId, prioridade: dto.prioridade } },
     });
@@ -51,8 +58,20 @@ export class SlaService {
     });
   }
 
-  async update(id: string, dto: UpdateSlaDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateSlaDto, user?: JwtPayload) {
+    const existing = await this.findOne(id);
+    if (user) {
+      const equipe = await this.prisma.equipe.findUnique({
+        where: { id: existing.equipeId }, select: { departamentoId: true },
+      });
+      assertStaffEmDepto(user, equipe?.departamentoId);
+      if (dto.equipeId && dto.equipeId !== existing.equipeId) {
+        const equipeNova = await this.prisma.equipe.findUnique({
+          where: { id: dto.equipeId }, select: { departamentoId: true },
+        });
+        assertStaffEmDepto(user, equipeNova?.departamentoId);
+      }
+    }
     return this.prisma.slaDefinicao.update({
       where: { id },
       data: dto,
@@ -60,14 +79,26 @@ export class SlaService {
     });
   }
 
-  async updateStatus(id: string, status: StatusGeral) {
-    await this.findOne(id);
+  async updateStatus(id: string, status: StatusGeral, user?: JwtPayload) {
+    const existing = await this.findOne(id);
+    if (user) {
+      const equipe = await this.prisma.equipe.findUnique({
+        where: { id: existing.equipeId }, select: { departamentoId: true },
+      });
+      assertStaffEmDepto(user, equipe?.departamentoId);
+    }
     return this.prisma.slaDefinicao.update({ where: { id }, data: { status } });
   }
 
-  async remove(id: string) {
+  async remove(id: string, user?: JwtPayload) {
     const existing = await this.prisma.slaDefinicao.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('SLA nao encontrado');
+    if (user) {
+      const equipe = await this.prisma.equipe.findUnique({
+        where: { id: existing.equipeId }, select: { departamentoId: true },
+      });
+      assertStaffEmDepto(user, equipe?.departamentoId);
+    }
     const vinculos = await this.prisma.chamado.count({ where: { slaDefinicaoId: id } });
     if (vinculos > 0) throw new BadRequestException(`SLA possui ${vinculos} chamado(s) vinculado(s). Inative-o em vez de excluir.`);
     await this.prisma.slaDefinicao.delete({ where: { id } });

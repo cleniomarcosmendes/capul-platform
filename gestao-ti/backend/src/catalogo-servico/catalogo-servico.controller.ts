@@ -37,25 +37,25 @@ export class CatalogoServicoController {
 
   @Post()
   @Roles('ADMIN', 'GESTOR')
-  create(@Body() dto: CreateCatalogoDto) {
-    return this.service.create(dto);
+  create(@Body() dto: CreateCatalogoDto, @CurrentUser() user: JwtPayload) {
+    return this.service.create(dto, user);
   }
 
   @Patch(':id')
   @Roles('ADMIN', 'GESTOR')
-  update(@Param('id') id: string, @Body() dto: UpdateCatalogoDto) {
-    return this.service.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateCatalogoDto, @CurrentUser() user: JwtPayload) {
+    return this.service.update(id, dto, user);
   }
 
   @Patch(':id/status')
   @Roles('ADMIN', 'GESTOR')
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto) {
-    return this.service.updateStatus(id, dto.status);
+  updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto, @CurrentUser() user: JwtPayload) {
+    return this.service.updateStatus(id, dto.status, user);
   }
 
   @Delete(':id')
   @Roles('ADMIN', 'GESTOR')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.service.remove(id, user);
   }
 }

@@ -1,6 +1,7 @@
 import { ForbiddenException } from '@nestjs/common';
 import { JwtPayload } from '../interfaces/jwt-payload.interface.js';
 import { hasCapability } from './capability.helper.js';
+import { getDeptosOndeStaff } from '../constants/roles.constant.js';
 
 /**
  * Aplica filtro departamental em queries do módulo Workspace.
@@ -176,6 +177,34 @@ export function assertDepartamentoDoUser(
   if (!deptoIds.includes(departamentoId)) {
     throw new ForbiddenException(
       'Você não tem permissão pra cadastrar/editar neste departamento. Solicite acesso ao ADMIN.',
+    );
+  }
+}
+
+/**
+ * S13c (25/05) — valida que o user tem perfil STAFF (ADMIN/GESTOR/SUPORTE)
+ * no depto informado, antes de criar/editar/deletar recursos linkados a uma
+ * equipe (catalogo-servico, conhecimento, sla).
+ *
+ * Diferença pro `assertDepartamentoDoUser`: aqui exige STAFF, não qualquer
+ * perfil. Pra que USUARIO_FINAL/T.I. (Juliana) não consiga editar catálogo
+ * de TI mesmo tendo perfil naquele depto — só GESTOR/T.I. real consegue.
+ *
+ * Bypass via OVERSIGHT_PLATAFORMA (admin global). Não usa ADMIN (D36 revogado
+ * em S10 pros cadastros operacionais; mesma lógica aqui).
+ */
+export function assertStaffEmDepto(
+  user: JwtPayload | null | undefined,
+  departamentoId: string | null | undefined,
+): void {
+  if (user && hasCapability(user, 'OVERSIGHT_PLATAFORMA')) return;
+  if (!departamentoId) {
+    throw new ForbiddenException('Departamento da equipe não identificado.');
+  }
+  const deptosStaff = getDeptosOndeStaff(user);
+  if (!deptosStaff.includes(departamentoId)) {
+    throw new ForbiddenException(
+      'Você precisa ser ADMIN/GESTOR/SUPORTE deste departamento pra executar esta operação.',
     );
   }
 }

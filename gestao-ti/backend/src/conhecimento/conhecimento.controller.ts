@@ -67,26 +67,26 @@ export class ConhecimentoController {
 
   @Post()
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
-  create(@Body() dto: CreateArtigoDto, @CurrentUser('sub') autorId: string) {
-    return this.service.create(dto, autorId);
+  create(@Body() dto: CreateArtigoDto, @CurrentUser() user: JwtPayload) {
+    return this.service.create(dto, user.sub, user);
   }
 
   @Patch(':id')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
-  update(@Param('id') id: string, @Body() dto: UpdateArtigoDto) {
-    return this.service.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateArtigoDto, @CurrentUser() user: JwtPayload) {
+    return this.service.update(id, dto, user);
   }
 
   @Patch(':id/status')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusArtigoDto) {
-    return this.service.updateStatus(id, dto.status);
+  updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusArtigoDto, @CurrentUser() user: JwtPayload) {
+    return this.service.updateStatus(id, dto.status, user);
   }
 
   @Delete(':id')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
-  delete(@Param('id') id: string) {
-    return this.service.delete(id);
+  delete(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.service.delete(id, user);
   }
 
   // === Anexos ===

@@ -35,25 +35,25 @@ export class SlaController {
 
   @Post()
   @Roles('ADMIN', 'GESTOR')
-  create(@Body() dto: CreateSlaDto) {
-    return this.service.create(dto);
+  create(@Body() dto: CreateSlaDto, @CurrentUser() user: JwtPayload) {
+    return this.service.create(dto, user);
   }
 
   @Patch(':id')
   @Roles('ADMIN', 'GESTOR')
-  update(@Param('id') id: string, @Body() dto: UpdateSlaDto) {
-    return this.service.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateSlaDto, @CurrentUser() user: JwtPayload) {
+    return this.service.update(id, dto, user);
   }
 
   @Patch(':id/status')
   @Roles('ADMIN', 'GESTOR')
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto) {
-    return this.service.updateStatus(id, dto.status);
+  updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto, @CurrentUser() user: JwtPayload) {
+    return this.service.updateStatus(id, dto.status, user);
   }
 
   @Delete(':id')
   @Roles('ADMIN', 'GESTOR')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.service.remove(id, user);
   }
 }

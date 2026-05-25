@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateCatalogoDto } from './dto/create-catalogo.dto.js';
 import { UpdateCatalogoDto } from './dto/update-catalogo.dto.js';
 import { StatusGeral } from '@prisma/client';
-import { getDeptoIdsDoUser } from '../common/helpers/departamento-filter.helper.js';
+import { getDeptoIdsDoUser, assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
@@ -41,7 +41,14 @@ export class CatalogoServicoService {
     return item;
   }
 
-  async create(dto: CreateCatalogoDto) {
+  async create(dto: CreateCatalogoDto, user?: JwtPayload) {
+    // S13c (25/05) — só staff do depto da equipe pode criar.
+    if (user) {
+      const equipe = await this.prisma.equipe.findUnique({
+        where: { id: dto.equipeId }, select: { departamentoId: true },
+      });
+      assertStaffEmDepto(user, equipe?.departamentoId);
+    }
     const existing = await this.prisma.catalogoServico.findUnique({
       where: { equipeId_nome: { equipeId: dto.equipeId, nome: dto.nome } },
     });
@@ -53,8 +60,21 @@ export class CatalogoServicoService {
     });
   }
 
-  async update(id: string, dto: UpdateCatalogoDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateCatalogoDto, user?: JwtPayload) {
+    const existing = await this.findOne(id);
+    // S13c — valida no depto da equipe ATUAL (e da nova se for trocar).
+    if (user) {
+      const equipeAtual = await this.prisma.equipe.findUnique({
+        where: { id: existing.equipeId }, select: { departamentoId: true },
+      });
+      assertStaffEmDepto(user, equipeAtual?.departamentoId);
+      if (dto.equipeId && dto.equipeId !== existing.equipeId) {
+        const equipeNova = await this.prisma.equipe.findUnique({
+          where: { id: dto.equipeId }, select: { departamentoId: true },
+        });
+        assertStaffEmDepto(user, equipeNova?.departamentoId);
+      }
+    }
     return this.prisma.catalogoServico.update({
       where: { id },
       data: dto,
@@ -62,14 +82,28 @@ export class CatalogoServicoService {
     });
   }
 
-  async updateStatus(id: string, status: StatusGeral) {
-    await this.findOne(id);
+  async updateStatus(id: string, status: StatusGeral, user?: JwtPayload) {
+    const existing = await this.findOne(id);
+    // S13c — só staff do depto da equipe pode mudar status.
+    if (user) {
+      const equipe = await this.prisma.equipe.findUnique({
+        where: { id: existing.equipeId }, select: { departamentoId: true },
+      });
+      assertStaffEmDepto(user, equipe?.departamentoId);
+    }
     return this.prisma.catalogoServico.update({ where: { id }, data: { status } });
   }
 
-  async remove(id: string) {
+  async remove(id: string, user?: JwtPayload) {
     const existing = await this.prisma.catalogoServico.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Servico nao encontrado no catalogo');
+    // S13c — só staff do depto da equipe pode excluir.
+    if (user) {
+      const equipe = await this.prisma.equipe.findUnique({
+        where: { id: existing.equipeId }, select: { departamentoId: true },
+      });
+      assertStaffEmDepto(user, equipe?.departamentoId);
+    }
     const vinculos = await this.prisma.chamado.count({ where: { catalogoServicoId: id } });
     if (vinculos > 0) throw new BadRequestException(`Servico possui ${vinculos} chamado(s) vinculado(s). Inative-o em vez de excluir.`);
     await this.prisma.catalogoServico.delete({ where: { id } });
