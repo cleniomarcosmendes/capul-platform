@@ -196,8 +196,11 @@ export class ConhecimentoService {
     });
   }
 
-  async addAnexo(artigoId: string, file: Express.Multer.File, userId: string, descricao?: string) {
-    await this.getOrFail(artigoId);
+  async addAnexo(artigoId: string, file: Express.Multer.File, userId: string, descricao?: string, user?: JwtPayload) {
+    const artigo = await this.getOrFail(artigoId);
+    // S14.1 (25/05) — reusa regra híbrida do artigo (assertPodeEscrever):
+    // só staff do depto da equipe (ou staff TI se global) pode anexar.
+    await this.assertPodeEscrever(user, artigo.equipeTiId);
     return this.prisma.anexoConhecimento.create({
       data: {
         nomeOriginal: file.originalname,
@@ -225,11 +228,14 @@ export class ConhecimentoService {
     return { filePath, anexo };
   }
 
-  async removeAnexo(artigoId: string, anexoId: string) {
+  async removeAnexo(artigoId: string, anexoId: string, user?: JwtPayload) {
+    const artigo = await this.getOrFail(artigoId);
     const anexo = await this.prisma.anexoConhecimento.findFirst({
       where: { id: anexoId, artigoId },
     });
     if (!anexo) throw new NotFoundException('Anexo nao encontrado neste artigo');
+    // S14.1 (25/05) — mesmo gate do addAnexo (regra híbrida do artigo).
+    await this.assertPodeEscrever(user, artigo.equipeTiId);
 
     const filePath = path.join(UPLOADS_DIR, anexo.nomeArquivo);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);

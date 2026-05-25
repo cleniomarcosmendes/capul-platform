@@ -110,7 +110,7 @@ export class ConhecimentoController {
     @Body('descricao') descricao?: string,
   ) {
     if (!file) throw new BadRequestException('Arquivo obrigatorio');
-    return this.service.addAnexo(id, file, user.sub, descricao);
+    return this.service.addAnexo(id, file, user.sub, descricao, user);
   }
 
   @Get(':id/anexos/:anexoId/download')
@@ -137,7 +137,7 @@ export class ConhecimentoController {
 
   @Delete(':id/anexos/:anexoId')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
-  removeAnexo(@Param('id') id: string, @Param('anexoId') anexoId: string) {
-    return this.service.removeAnexo(id, anexoId);
+  removeAnexo(@Param('id') id: string, @Param('anexoId') anexoId: string, @CurrentUser() user: JwtPayload) {
+    return this.service.removeAnexo(id, anexoId, user);
   }
 }

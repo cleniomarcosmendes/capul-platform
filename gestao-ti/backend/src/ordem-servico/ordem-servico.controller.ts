@@ -52,32 +52,32 @@ export class OrdemServicoController {
   @Patch(':id')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   update(@Param('id') id: string, @Body() dto: UpdateOsDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    return this.service.update(id, dto, user.sub, role);
+    return this.service.update(id, dto, user.sub, role, user);
   }
 
   // Workflow
   @Post(':id/iniciar')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   iniciar(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    return this.service.iniciar(id, user.sub, role);
+    return this.service.iniciar(id, user.sub, role, user);
   }
 
   @Post(':id/encerrar')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   encerrar(@Param('id') id: string, @Body() body: { observacoes?: string }, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    return this.service.encerrar(id, body.observacoes, user.sub, role);
+    return this.service.encerrar(id, body.observacoes, user.sub, role, user);
   }
 
   @Post(':id/cancelar')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   cancelar(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    return this.service.cancelar(id, user.sub, role);
+    return this.service.cancelar(id, user.sub, role, user);
   }
 
   // Comentarios
   @Post(':id/comentar')
   comentar(@Param('id') id: string, @Body() body: { descricao: string }, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    return this.service.comentar(id, body.descricao, user.sub, role);
+    return this.service.comentar(id, body.descricao, user.sub, role, user);
   }
 
   @Patch(':id/comentarios/:historicoId')
@@ -88,20 +88,20 @@ export class OrdemServicoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.editarComentario(id, historicoId, body.descricao, user.sub, role);
+    return this.service.editarComentario(id, historicoId, body.descricao, user.sub, role, user);
   }
 
   // Chamados N:N
   @Post(':id/chamados')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   vincularChamado(@Param('id') id: string, @Body() body: { chamadoId: string }, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    return this.service.vincularChamado(id, body.chamadoId, user.sub, role);
+    return this.service.vincularChamado(id, body.chamadoId, user.sub, role, user);
   }
 
   @Delete(':id/chamados/:chamadoId')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   desvincularChamado(@Param('id') id: string, @Param('chamadoId') chamadoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    return this.service.desvincularChamado(id, chamadoId, user.sub, role);
+    return this.service.desvincularChamado(id, chamadoId, user.sub, role, user);
   }
 
   // Tecnicos N:N
