@@ -7,7 +7,7 @@ import { StatusOS } from '@prisma/client';
 import { isGestor } from '../common/constants/roles.constant.js';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
-import { getDeptoIdsDoUser } from '../common/helpers/departamento-filter.helper.js';
+import { getDeptoIdsDoUser, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
 
 const osListInclude = {
   filial: { select: { id: true, codigo: true, nomeFantasia: true } },
@@ -87,6 +87,9 @@ export class OrdemServicoService {
       'WORKSPACE',
       dto.departamentoId,
     );
+
+    // Onda 3 S10 fix (ultrareview bug_011) — gate IDOR cross-depto.
+    assertDepartamentoDoUser(user, null, departamentoId);
 
     const os = await this.prisma.ordemServico.create({
       data: {

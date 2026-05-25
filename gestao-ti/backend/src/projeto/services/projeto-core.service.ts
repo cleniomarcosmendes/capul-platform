@@ -14,7 +14,7 @@ import { isGestor, isTI } from '../../common/constants/roles.constant.js';
 import { ROLES_EXTERNOS } from '../../common/constants/roles.constant.js';
 import { paginate } from '../../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../../common/helpers/resolve-departamento.helper.js';
-import { getDeptoIdsDoUser } from '../../common/helpers/departamento-filter.helper.js';
+import { getDeptoIdsDoUser, assertDepartamentoDoUser } from '../../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 import { Prisma } from '@prisma/client';
 
@@ -404,6 +404,9 @@ export class ProjetoCoreService {
         'WORKSPACE',
         dto.departamentoId,
       );
+      // Onda 3 S10 fix (ultrareview bug_011) — gate IDOR cross-depto pra
+      // projetos NOVOS (sem pai). Subprojetos herdam do pai (branch acima).
+      if (user) assertDepartamentoDoUser(user, null, departamentoId);
     }
 
     const projeto = await this.prisma.projeto.create({

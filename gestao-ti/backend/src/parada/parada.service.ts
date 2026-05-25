@@ -444,6 +444,8 @@ export class ParadaService {
       'WORKSPACE',
       (dto as { departamentoId?: string }).departamentoId,
     );
+    // Onda 3 S10 fix (ultrareview bug_011) — gate IDOR cross-depto.
+    if (user) assertDepartamentoDoUser(user, null, departamentoId);
     return this.prisma.motivoParada.create({ data: { ...dto, departamentoId } });
   }
 

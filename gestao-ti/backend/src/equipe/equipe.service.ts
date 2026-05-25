@@ -11,7 +11,7 @@ import { AddMembroDto } from './dto/add-membro.dto.js';
 import { UpdateMembroDto } from './dto/update-membro.dto.js';
 import { StatusGeral } from '@prisma/client';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
-import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
+import { applyDepartamentoFilter, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
@@ -78,6 +78,13 @@ export class EquipeService {
       'WORKSPACE',
       dto.departamentoId,
     );
+
+    // Onda 3 S10 fix (ultrareview bug_011, MAIS GRAVE) — gate IDOR
+    // cross-depto. Equipe sem assert cascateia: chamado-core.service.ts:540
+    // deriva chamado.departamentoId = equipe.departamentoId, então uma
+    // equipe plantada por GESTOR de outro depto envenenaria a visibilidade
+    // do depto-alvo silenciosamente.
+    if (user) assertDepartamentoDoUser(user, null, departamentoId);
 
     return this.prisma.equipe.create({
       data: {
