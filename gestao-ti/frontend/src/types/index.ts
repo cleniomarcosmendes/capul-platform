@@ -521,6 +521,9 @@ export interface SoftwareLicenca {
   dataVencimento: string | null;
   chaveSerial: string | null;
   fornecedor: string | null;
+  // S11 (25/05) — FK p/ FornecedorConfig (coexiste com `fornecedor` texto).
+  fornecedorId: string | null;
+  fornecedorRef: { id: string; codigo: string; loja: string; nome: string } | null;
   observacoes: string | null;
   status: StatusLicenca;
   createdAt: string;
@@ -528,6 +531,8 @@ export interface SoftwareLicenca {
   // Workspace Onda 3 S5 (24/05) — alocação + lançamento.
   departamentoId: string;
   departamentoLancamentoId?: string;
+  // S11 (25/05) — nome do depto exposto via include p/ coluna na listagem.
+  departamento?: { id: string; nome: string };
   usuarios?: LicencaUsuario[];
   _count?: { usuarios: number };
 }

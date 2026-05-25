@@ -8,6 +8,9 @@ interface LicencaFilters {
   vencendoEm?: number;
   categoriaId?: string;
   avulsas?: boolean;
+  // S11 (25/05) — filtro por depto de alocação (útil p/ OVERSIGHT
+  // alternar entre workspaces; non-OVERSIGHT já é restringido no backend).
+  departamentoId?: string;
   page?: number;
   pageSize?: number;
 }
@@ -24,6 +27,9 @@ interface CreateLicencaPayload {
   dataVencimento?: string;
   chaveSerial?: string;
   fornecedor?: string;
+  // S11 (25/05) — FK p/ FornecedorConfig. Coexiste com `fornecedor` texto.
+  // String vazia limpa o vínculo, undefined preserva.
+  fornecedorId?: string;
   observacoes?: string;
   // Workspace Onda 3 S5 (24/05) — alocação editável via <DepartamentoField>.
   departamentoId?: string;
@@ -38,6 +44,7 @@ export const licencaService = {
     if (filters.vencendoEm) params.vencendoEm = String(filters.vencendoEm);
     if (filters.categoriaId) params.categoriaId = filters.categoriaId;
     if (filters.avulsas) params.avulsas = 'true';
+    if (filters.departamentoId) params.departamentoId = filters.departamentoId;
     params.page = String(filters.page ?? 1);
     params.pageSize = String(filters.pageSize ?? 50);
     const { data } = await gestaoApi.get<PaginatedResponse<SoftwareLicenca>>('/licencas', { params });

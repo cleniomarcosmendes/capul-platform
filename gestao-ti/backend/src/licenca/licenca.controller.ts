@@ -60,6 +60,7 @@ export class LicencaController {
     @Query('vencendoEm') vencendoEm?: string,
     @Query('categoriaId') categoriaId?: string,
     @Query('avulsas') avulsas?: string,
+    @Query('departamentoId') departamentoId?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ) {
@@ -70,6 +71,7 @@ export class LicencaController {
         vencendoEm: vencendoEm ? parseInt(vencendoEm) : undefined,
         categoriaId,
         avulsas: avulsas === 'true',
+        departamentoId,
         page: page ? parseInt(page, 10) : undefined,
         pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
       },
