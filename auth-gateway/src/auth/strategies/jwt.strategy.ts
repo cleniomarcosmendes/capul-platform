@@ -22,6 +22,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       filialId: payload.filialId,
       filialCodigo: payload.filialCodigo,
       modulos: payload.modulos,
+      // Onda 3 S0 (24/05) — propaga capabilities pra consumidores
+      // (controllers/guards do auth-gateway que dependem de OVERSIGHT etc.).
+      // Default [] pra retrocompat com JWTs antigos sem o campo.
+      capabilities: payload.capabilities ?? [],
     };
   }
 }
