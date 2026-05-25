@@ -8,7 +8,7 @@ import { StatusChamado } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { NotificacaoService } from '../../notificacao/notificacao.service.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
-import { isTI } from '../../common/constants/roles.constant.js';
+import { hasStaffPerfilEmTI } from '../../common/constants/roles.constant.js';
 
 /**
  * Servico de agrupamento de chamados (decidido em 13/05/2026).
@@ -35,7 +35,10 @@ export class ChamadoAgrupamentoService {
   ) {}
 
   async agrupar(chamadoFilhoId: string, agrupadorId: string, user: JwtPayload, role: string) {
-    if (!isTI(role)) {
+    // S13a (25/05) — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
+    // Multi-perfil (Juliana GESTOR/CTL + USUARIO_FINAL/TI) precisa ser
+    // detectado pelo JWT.departamentos[isTI], não pela role denormalizada.
+    if (!hasStaffPerfilEmTI(user)) {
       throw new ForbiddenException('Apenas equipe T.I. pode agrupar chamados');
     }
     if (chamadoFilhoId === agrupadorId) {
@@ -145,7 +148,10 @@ export class ChamadoAgrupamentoService {
    * que ja esta atendendo.
    */
   async agruparMultiplos(agrupadorId: string, filhosIds: string[], user: JwtPayload, role: string) {
-    if (!isTI(role)) {
+    // S13a (25/05) — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
+    // Multi-perfil (Juliana GESTOR/CTL + USUARIO_FINAL/TI) precisa ser
+    // detectado pelo JWT.departamentos[isTI], não pela role denormalizada.
+    if (!hasStaffPerfilEmTI(user)) {
       throw new ForbiddenException('Apenas equipe T.I. pode agrupar chamados');
     }
     if (!filhosIds || filhosIds.length === 0) {
@@ -176,7 +182,10 @@ export class ChamadoAgrupamentoService {
   }
 
   async desagrupar(chamadoFilhoId: string, user: JwtPayload, role: string) {
-    if (!isTI(role)) {
+    // S13a (25/05) — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
+    // Multi-perfil (Juliana GESTOR/CTL + USUARIO_FINAL/TI) precisa ser
+    // detectado pelo JWT.departamentos[isTI], não pela role denormalizada.
+    if (!hasStaffPerfilEmTI(user)) {
       throw new ForbiddenException('Apenas equipe T.I. pode desagrupar chamados');
     }
 

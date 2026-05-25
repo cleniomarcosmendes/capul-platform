@@ -8,7 +8,8 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { NotificacaoService } from '../../notificacao/notificacao.service.js';
 import { ProjetoHelpersService } from './projeto-helpers.service.js';
 import { ProjetoAtividadeHistoricoService } from './projeto-atividade-historico.service.js';
-import { isGestor, isTI } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI, hasStaffPerfilEmTI } from '../../common/constants/roles.constant.js';
+import type { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class ProjetoAtividadeService {
@@ -19,11 +20,12 @@ export class ProjetoAtividadeService {
     private readonly historico: ProjetoAtividadeHistoricoService,
   ) {}
 
-  async listAtividades(projetoId: string, role?: string) {
+  async listAtividades(projetoId: string, user?: JwtPayload, role?: string) {
     await this.helpers.ensureProjetoExists(projetoId);
+    // S13a (25/05) — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
     // Badge de notas na linha não conta internas p/ non-staff (senão vaza a
     // quantidade de notas internas). Espelha o filtro de listComentarios.
-    const comentariosCount = isTI(role || '') ? true : { where: { publica: true } };
+    const comentariosCount = hasStaffPerfilEmTI(user) ? true : { where: { publica: true } };
     return this.prisma.atividadeProjeto.findMany({
       where: { projetoId },
       include: {
@@ -363,7 +365,7 @@ export class ProjetoAtividadeService {
 
   // --- Comentarios de Tarefa ---
 
-  async listComentarios(projetoId: string, atividadeId: string, role?: string) {
+  async listComentarios(projetoId: string, atividadeId: string, user?: JwtPayload, role?: string) {
     await this.helpers.ensureProjetoExists(projetoId);
     const atividade = await this.prisma.atividadeProjeto.findFirst({
       where: { id: atividadeId, projetoId },
@@ -378,11 +380,13 @@ export class ProjetoAtividadeService {
     // Regra única 14/05: nota interna (publica=false) só p/ staff TI (isTI:
     // ADMIN/GESTOR_TI/SUPORTE_TI). USUARIO_CHAVE/TERCEIRIZADO/non-staff só veem
     // públicas. Filtro no backend — frontend pode ser bypassado via API.
-    if (!isTI(role || '')) return comentarios.filter((c) => c.publica);
+    // S13a — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
+    if (!hasStaffPerfilEmTI(user)) return comentarios.filter((c) => c.publica);
     return comentarios;
   }
 
-  async addComentario(projetoId: string, atividadeId: string, texto: string, userId: string, visivelPendencia?: boolean, publica?: boolean, role?: string) {
+  async addComentario(projetoId: string, atividadeId: string, texto: string, user: JwtPayload, visivelPendencia?: boolean, publica?: boolean, role?: string) {
+    const userId = user.sub;
     await this.helpers.ensureProjetoExists(projetoId);
     const atividade = await this.prisma.atividadeProjeto.findFirst({
       where: { id: atividadeId, projetoId },
@@ -391,7 +395,8 @@ export class ProjetoAtividadeService {
 
     // Defesa em profundidade: non-staff sempre grava publica=true (não pode
     // criar nota interna mesmo forjando o body). Só isTI decide.
-    const publicaEfetiva = !isTI(role || '') ? true : (publica ?? true);
+    // S13a — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
+    const publicaEfetiva = !hasStaffPerfilEmTI(user) ? true : (publica ?? true);
 
     const comentario = await this.prisma.comentarioTarefa.create({
       data: {
@@ -459,7 +464,8 @@ export class ProjetoAtividadeService {
     return { deleted: true };
   }
 
-  async updateComentario(projetoId: string, comentarioId: string, texto: string, userId: string, role?: string, visivelPendencia?: boolean, publica?: boolean) {
+  async updateComentario(projetoId: string, comentarioId: string, texto: string, user: JwtPayload, role?: string, visivelPendencia?: boolean, publica?: boolean) {
+    const userId = user.sub;
     await this.helpers.ensureProjetoExists(projetoId);
     const comentario = await this.prisma.comentarioTarefa.findFirst({
       where: { id: comentarioId, atividade: { projetoId } },
@@ -476,7 +482,8 @@ export class ProjetoAtividadeService {
     }
     // Só staff TI altera o flag interno (defesa em profundidade — non-staff
     // não muda publica nem editando a própria nota via API).
-    if (publica !== undefined && isTI(role || '')) {
+    // S13a — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
+    if (publica !== undefined && hasStaffPerfilEmTI(user)) {
       data.publica = publica;
     }
     return this.prisma.comentarioTarefa.update({
@@ -486,7 +493,7 @@ export class ProjetoAtividadeService {
     });
   }
 
-  async buscarComentarios(query: string, role?: string) {
+  async buscarComentarios(query: string, user?: JwtPayload, role?: string) {
     if (!query || query.trim().length < 2) return [];
 
     const termo = query.trim();
@@ -494,7 +501,8 @@ export class ProjetoAtividadeService {
       where: {
         texto: { contains: termo, mode: 'insensitive' },
         // Busca global não vaza nota interna p/ non-staff (Regra única 14/05).
-        ...(isTI(role || '') ? {} : { publica: true }),
+        // S13a — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
+        ...(hasStaffPerfilEmTI(user) ? {} : { publica: true }),
       },
       include: {
         usuario: { select: { id: true, nome: true } },

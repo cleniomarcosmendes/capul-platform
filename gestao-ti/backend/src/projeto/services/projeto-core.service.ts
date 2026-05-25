@@ -10,7 +10,7 @@ import { UpdateProjetoDto } from '../dto/update-projeto.dto.js';
 import { ProjetoHelpersService } from './projeto-helpers.service.js';
 import { NotificacaoService } from '../../notificacao/notificacao.service.js';
 import { projetoListInclude, projetoDetailInclude } from './projeto.constants.js';
-import { isGestor, isTI } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI, hasStaffPerfilEmTI, getDeptosOndeStaff } from '../../common/constants/roles.constant.js';
 import { ROLES_EXTERNOS } from '../../common/constants/roles.constant.js';
 import { paginate } from '../../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../../common/helpers/resolve-departamento.helper.js';
@@ -106,7 +106,9 @@ export class ProjetoCoreService {
     // reusado no enriquecimento pos-query (anexarMatchProjeto).
     // Visibilidade D29: comentario de tarefa interno (publica=false) so casa
     // p/ staff TI — sem isto a busca varreria nota interna (vazamento).
-    const comentVisib: Prisma.ComentarioTarefaWhereInput = isTI(filters.role ?? '')
+    // S13a (25/05) — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
+    // Multi-perfil (Juliana) precisa ser detectado pelo JWT.departamentos[].
+    const comentVisib: Prisma.ComentarioTarefaWhereInput = hasStaffPerfilEmTI(filters.user)
       ? {}
       : { publica: true };
 
@@ -131,12 +133,13 @@ export class ProjetoCoreService {
     }
 
     // Workspace Onda 2 C2.10 (25/05) — análogo ao C2.9 dos chamados.
-    // User vê projeto SE: depto-dono nos seus deptos OR é responsável
-    // OR é membro OR é usuário-chave ativo. ADMIN escapa (D36).
-    // USUARIO_CHAVE/TERCEIRIZADO NÃO entra aqui — já tem regra
-    // restritiva acima (where.usuariosChave = some) que NÃO deve ser
-    // relaxada (eles só veem os vinculados explicitamente).
+    // S13a (25/05) refino — depto-dono restrito a deptos onde user é staff
+    // (não todos deptos do perfil). Antes Juliana (USUARIO_FINAL/T.I.) via
+    // todos os projetos de T.I. via departamentoId IN [T.I., CTL]; agora só
+    // vê via responsavel/membro/usuárioChave pra T.I. (mas vê todos de CTL
+    // onde é GESTOR).
     const deptoIds = getDeptoIdsDoUser(filters.user, filters.role);
+    const deptosStaff = getDeptosOndeStaff(filters.user);
     const isUCouTerc = filters.role === 'USUARIO_CHAVE' || filters.role === 'TERCEIRIZADO';
     let whereFiltrado: Record<string, unknown> = where;
     if (deptoIds !== null && !isUCouTerc) {
@@ -146,7 +149,7 @@ export class ProjetoCoreService {
           where,
           {
             OR: [
-              { departamentoId: { in: deptoIds } },
+              ...(deptosStaff.length > 0 ? [{ departamentoId: { in: deptosStaff } }] : []),
               { responsavelId: userId },
               { membros: { some: { usuarioId: userId } } },
               { usuariosChave: { some: { usuarioId: userId, ativo: true } } },
@@ -239,7 +242,9 @@ export class ProjetoCoreService {
     });
   }
 
-  async findOne(id: string, userId?: string, role?: string) {
+  async findOne(id: string, user?: JwtPayload, role?: string) {
+    // S13a — `user` substitui `userId` p/ propagar hasStaffPerfilEmTI ao helper.
+    const userId = user?.sub;
     const projeto = await this.prisma.projeto.findUnique({
       where: { id },
       include: projetoDetailInclude,
@@ -247,14 +252,14 @@ export class ProjetoCoreService {
     if (!projeto) throw new NotFoundException('Projeto nao encontrado');
 
     // Validar acesso para USUARIO_CHAVE e TERCEIRIZADO
-    if (userId && role) {
-      await this.helpers.checkProjetoAccessChave(id, userId, role);
+    if (user && role) {
+      await this.helpers.checkProjetoAccessChave(id, user, role);
 
       // Filtrar subProjetos pelos quais o usuario esta vinculado
       if (role === 'USUARIO_CHAVE' || role === 'TERCEIRIZADO') {
         const subProjetosVinculados = await this.getSubProjetosVinculados(
           projeto.subProjetos.map((s) => s.id),
-          userId,
+          userId!,  // user existe (guard `if(user && role)` acima)
           role,
         );
         projeto.subProjetos = projeto.subProjetos.filter((s) =>
@@ -336,8 +341,8 @@ export class ProjetoCoreService {
       if (!dto.projetoPaiId) {
         throw new ForbiddenException('Usuarios externos so podem criar sub-projetos');
       }
-      // Validar que o usuario esta vinculado ao projeto pai
-      await this.helpers.checkProjetoAccessChave(dto.projetoPaiId, userId!, role);
+      // S13a — usar `user` (mais completo) ao invés de userId.
+      await this.helpers.checkProjetoAccessChave(dto.projetoPaiId, user!, role);
     }
 
     let nivel = 1;

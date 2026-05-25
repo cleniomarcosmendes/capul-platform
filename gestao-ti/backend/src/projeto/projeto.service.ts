@@ -66,8 +66,8 @@ export class ProjetoService {
     return this.core.findAll(filters);
   }
 
-  findOne(id: string, userId?: string, role?: string) {
-    return this.core.findOne(id, userId, role);
+  findOne(id: string, user?: JwtPayload, role?: string) {
+    return this.core.findOne(id, user, role);
   }
 
   create(dto: CreateProjetoDto, userId?: string, role?: string, user?: import('../common/interfaces/jwt-payload.interface').JwtPayload) {
@@ -164,8 +164,8 @@ export class ProjetoService {
   // ATIVIDADES
   // ============================================================
 
-  listAtividades(projetoId: string, role?: string) {
-    return this.atividadeService.listAtividades(projetoId, role);
+  listAtividades(projetoId: string, user?: JwtPayload, role?: string) {
+    return this.atividadeService.listAtividades(projetoId, user, role);
   }
 
   addAtividade(
@@ -197,24 +197,24 @@ export class ProjetoService {
   // COMENTARIOS DE TAREFA
   // ============================================================
 
-  listComentarios(projetoId: string, atividadeId: string, role?: string) {
-    return this.atividadeService.listComentarios(projetoId, atividadeId, role);
+  listComentarios(projetoId: string, atividadeId: string, user?: JwtPayload, role?: string) {
+    return this.atividadeService.listComentarios(projetoId, atividadeId, user, role);
   }
 
-  addComentario(projetoId: string, atividadeId: string, texto: string, userId: string, visivelPendencia?: boolean, publica?: boolean, role?: string) {
-    return this.atividadeService.addComentario(projetoId, atividadeId, texto, userId, visivelPendencia, publica, role);
+  addComentario(projetoId: string, atividadeId: string, texto: string, user: JwtPayload, visivelPendencia?: boolean, publica?: boolean, role?: string) {
+    return this.atividadeService.addComentario(projetoId, atividadeId, texto, user, visivelPendencia, publica, role);
   }
 
   removeComentario(projetoId: string, comentarioId: string, userId: string, role?: string) {
     return this.atividadeService.removeComentario(projetoId, comentarioId, userId, role);
   }
 
-  updateComentario(projetoId: string, comentarioId: string, texto: string, userId: string, role?: string, visivelPendencia?: boolean, publica?: boolean) {
-    return this.atividadeService.updateComentario(projetoId, comentarioId, texto, userId, role, visivelPendencia, publica);
+  updateComentario(projetoId: string, comentarioId: string, texto: string, user: JwtPayload, role?: string, visivelPendencia?: boolean, publica?: boolean) {
+    return this.atividadeService.updateComentario(projetoId, comentarioId, texto, user, role, visivelPendencia, publica);
   }
 
-  buscarComentarios(query: string, role?: string) {
-    return this.atividadeService.buscarComentarios(query, role);
+  buscarComentarios(query: string, user?: JwtPayload, role?: string) {
+    return this.atividadeService.buscarComentarios(query, user, role);
   }
 
   // ============================================================
@@ -395,20 +395,20 @@ export class ProjetoService {
 
   listPendencias(projetoId: string, filters: {
     status?: string; prioridade?: string; responsavelId?: string; search?: string; incluirSubProjetos?: boolean;
-  }, userId: string, role: string) {
-    return this.pendenciaService.listPendencias(projetoId, filters, userId, role);
+  }, user: JwtPayload, role: string) {
+    return this.pendenciaService.listPendencias(projetoId, filters, user, role);
   }
 
-  getPendencia(projetoId: string, pendenciaId: string, userId: string, role: string) {
-    return this.pendenciaService.getPendencia(projetoId, pendenciaId, userId, role);
+  getPendencia(projetoId: string, pendenciaId: string, user: JwtPayload, role: string) {
+    return this.pendenciaService.getPendencia(projetoId, pendenciaId, user, role);
   }
 
-  createPendencia(projetoId: string, dto: CreatePendenciaDto, criadorId: string, role: string) {
-    return this.pendenciaService.createPendencia(projetoId, dto, criadorId, role);
+  createPendencia(projetoId: string, dto: CreatePendenciaDto, user: JwtPayload, role: string) {
+    return this.pendenciaService.createPendencia(projetoId, dto, user, role);
   }
 
-  updatePendencia(projetoId: string, pendenciaId: string, dto: UpdatePendenciaDto, userId: string, role: string) {
-    return this.pendenciaService.updatePendencia(projetoId, pendenciaId, dto, userId, role);
+  updatePendencia(projetoId: string, pendenciaId: string, dto: UpdatePendenciaDto, user: JwtPayload, role: string) {
+    return this.pendenciaService.updatePendencia(projetoId, pendenciaId, dto, user, role);
   }
 
   gerarAtividadeFromPendencia(
@@ -424,24 +424,24 @@ export class ProjetoService {
   // INTERACOES PENDENCIA
   // ============================================================
 
-  addInteracaoPendencia(projetoId: string, pendenciaId: string, dto: CreateInteracaoPendenciaDto, userId: string, role: string) {
-    return this.pendenciaService.addInteracaoPendencia(projetoId, pendenciaId, dto, userId, role);
+  addInteracaoPendencia(projetoId: string, pendenciaId: string, dto: CreateInteracaoPendenciaDto, user: JwtPayload, role: string) {
+    return this.pendenciaService.addInteracaoPendencia(projetoId, pendenciaId, dto, user, role);
   }
 
-  editarInteracaoPendencia(projetoId: string, pendenciaId: string, interacaoId: string, descricao: string, userId: string, role: string) {
-    return this.pendenciaService.editarInteracaoPendencia(projetoId, pendenciaId, interacaoId, descricao, userId, role);
+  editarInteracaoPendencia(projetoId: string, pendenciaId: string, interacaoId: string, descricao: string, user: JwtPayload, role: string) {
+    return this.pendenciaService.editarInteracaoPendencia(projetoId, pendenciaId, interacaoId, descricao, user, role);
   }
 
   // ============================================================
   // ANEXOS PENDENCIA
   // ============================================================
 
-  addAnexoPendencia(projetoId: string, pendenciaId: string, file: Express.Multer.File, userId: string, role: string) {
-    return this.pendenciaService.addAnexoPendencia(projetoId, pendenciaId, file, userId, role);
+  addAnexoPendencia(projetoId: string, pendenciaId: string, file: Express.Multer.File, user: JwtPayload, role: string) {
+    return this.pendenciaService.addAnexoPendencia(projetoId, pendenciaId, file, user, role);
   }
 
-  downloadAnexoPendencia(projetoId: string, pendenciaId: string, anexoId: string, userId: string, role: string) {
-    return this.pendenciaService.downloadAnexoPendencia(projetoId, pendenciaId, anexoId, userId, role);
+  downloadAnexoPendencia(projetoId: string, pendenciaId: string, anexoId: string, user: JwtPayload, role: string) {
+    return this.pendenciaService.downloadAnexoPendencia(projetoId, pendenciaId, anexoId, user, role);
   }
 
   removeAnexoPendencia(projetoId: string, pendenciaId: string, anexoId: string) {
@@ -452,12 +452,15 @@ export class ProjetoService {
   // HELPERS (exposed for controller usage)
   // ============================================================
 
-  assertMembroOuGestor(projetoId: string, userId: string, role: string) {
-    return this.helpers.assertMembroOuGestor(projetoId, userId, role);
+  // S13a (25/05) — wrappers recebem `user: JwtPayload` (era `userId: string`).
+  // Helpers passaram a usar hasStaffPerfilEmTI(user) — fix multi-perfil
+  // (incidente Juliana). Callers internos foram migrados em cascata.
+  assertMembroOuGestor(projetoId: string, user: JwtPayload, role: string) {
+    return this.helpers.assertMembroOuGestor(projetoId, user, role);
   }
 
-  checkProjetoAccessChave(projetoId: string, userId: string, role: string) {
-    return this.helpers.checkProjetoAccessChave(projetoId, userId, role);
+  checkProjetoAccessChave(projetoId: string, user: JwtPayload, role: string) {
+    return this.helpers.checkProjetoAccessChave(projetoId, user, role);
   }
 
   // ============================================================

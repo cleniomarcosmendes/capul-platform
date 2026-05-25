@@ -6,7 +6,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { NotificacaoService } from '../../notificacao/notificacao.service.js';
-import { isGestor, isTI } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI, hasStaffPerfilEmTI } from '../../common/constants/roles.constant.js';
+import type { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class ProjetoHelpersService {
@@ -92,10 +93,15 @@ export class ProjetoHelpersService {
   /**
    * Verifica se o usuario e membro do projeto, responsavel ou ADMIN/GESTOR_TI.
    * SUPORTE_TI precisa ser membro do projeto para editar.
+   *
+   * S13a (25/05) — `user` substitui `userId`. Bypass de TI agora é
+   * `hasStaffPerfilEmTI(user)` (multi-perfil seguro). Pré-S13a: Juliana
+   * (role denormalizada GESTOR) escapava esta validação e podia editar
+   * projetos de TI sem ser membro.
    */
-  async assertMembroOuGestor(projetoId: string, userId: string, role: string) {
-    // ADMIN, GESTOR_TI e SUPORTE_TI podem editar qualquer projeto
-    if (isTI(role)) return;
+  async assertMembroOuGestor(projetoId: string, user: JwtPayload, role: string) {
+    // Staff TI (ADMIN/GESTOR/SUPORTE em depto TI) edita qualquer projeto
+    if (hasStaffPerfilEmTI(user)) return;
 
     const projeto = await this.prisma.projeto.findUnique({
       where: { id: projetoId },
@@ -104,11 +110,11 @@ export class ProjetoHelpersService {
     if (!projeto) throw new NotFoundException('Projeto nao encontrado');
 
     // Responsavel pelo projeto
-    if (projeto.responsavelId === userId) return;
+    if (projeto.responsavelId === user.sub) return;
 
     // Membro do projeto
     const membro = await this.prisma.membroProjeto.findUnique({
-      where: { projetoId_usuarioId: { projetoId, usuarioId: userId } },
+      where: { projetoId_usuarioId: { projetoId, usuarioId: user.sub } },
     });
     if (membro) return;
 
@@ -129,9 +135,10 @@ export class ProjetoHelpersService {
    * podia EDITAR nao conseguia VER). Esta uniao corrige o over-block e da
    * consistencia aos 13 call-sites que herdam esta regra.
    */
-  async checkProjetoAccessChave(projetoId: string, userId: string, role: string) {
-    // TI acessa qualquer projeto
-    if (isTI(role)) return;
+  async checkProjetoAccessChave(projetoId: string, user: JwtPayload, role: string) {
+    // S13a (25/05) — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
+    // Multi-perfil seguro (incidente Juliana 25/05).
+    if (hasStaffPerfilEmTI(user)) return;
 
     const projeto = await this.prisma.projeto.findUnique({
       where: { id: projetoId },
@@ -140,18 +147,18 @@ export class ProjetoHelpersService {
     if (!projeto) throw new NotFoundException('Projeto nao encontrado');
 
     // Responsavel pelo projeto
-    if (projeto.responsavelId === userId) return;
+    if (projeto.responsavelId === user.sub) return;
 
     // Membro da equipe do projeto
     const membro = await this.prisma.membroProjeto.findUnique({
-      where: { projetoId_usuarioId: { projetoId, usuarioId: userId } },
+      where: { projetoId_usuarioId: { projetoId, usuarioId: user.sub } },
     });
     if (membro) return;
 
     // USUARIO_CHAVE / TERCEIRIZADO vinculados (compartilham usuario_chave_projeto)
     if (role === 'USUARIO_CHAVE' || role === 'TERCEIRIZADO') {
       const uc = await this.prisma.usuarioChaveProjeto.findUnique({
-        where: { projetoId_usuarioId: { projetoId, usuarioId: userId } },
+        where: { projetoId_usuarioId: { projetoId, usuarioId: user.sub } },
       });
       if (uc && uc.ativo) return;
     }

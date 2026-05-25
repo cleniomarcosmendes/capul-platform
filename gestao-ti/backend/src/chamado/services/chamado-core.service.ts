@@ -17,7 +17,7 @@ import { ChamadoHelpersService } from './chamado-helpers.service.js';
 import { ChamadoAgrupamentoService } from './chamado-agrupamento.service.js';
 import { ChamadoTempoService } from './chamado-tempo.service.js';
 import { chamadoInclude } from './chamado.constants.js';
-import { isGestor, isTI, hasStaffPerfilEmTI } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI, hasStaffPerfilEmTI, getDeptosOndeStaff } from '../../common/constants/roles.constant.js';
 import { Prisma, StatusChamado, Visibilidade } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -346,23 +346,21 @@ export class ChamadoCoreService {
         select: { equipeId: true },
       });
       const equipeIds = equipesAtivasUser.map((m) => m.equipeId);
-      // S12 (25/05) — defesa em profundidade: se o user NÃO tem perfil staff
-      // em algum depto T.I., remove `{ departamentoId: { in: deptoIds } }` do
-      // OR. Razão: incidente Juliana — ela tem perfil USUARIO_FINAL/T.I., que
-      // colocava T.I. nos deptoIds e abria visão sobre TODOS chamados de T.I.
-      // (não só os abertos por ela). Visão "abre por estar no depto" só faz
-      // sentido pra staff (gestores/suporte TI), não pra USUARIO_FINAL.
-      // Layer 1 já garante visibilidade própria pra USUARIO_FINAL/USUARIO_CHAVE.
+      // S12 (25/05) + refino S13a (25/05) — visão "abre por estar no depto"
+      // só faz sentido pra deptos onde o user é STAFF (ADMIN/GESTOR/SUPORTE).
+      // Pra Juliana (GESTOR/CTL + USUARIO_FINAL/TI): deptosStaff=[CTL], então
+      // ela vê todos chamados de CTL via depto + seus chamados em TI. Antes
+      // o S12 zerava o filtro inteiro pra não-staffTI — agora restringe pelos
+      // deptos onde ela é staff (mais correto: gestor CTL vê CTL completo).
       const ehStaffTI = hasStaffPerfilEmTI(user);
+      const deptosStaff = getDeptosOndeStaff(user);
       const orVisibilidade: Record<string, unknown>[] = [
         { solicitanteId: user.sub },
         { tecnicoId: user.sub },
         { colaboradores: { some: { usuarioId: user.sub } } },
         ...(equipeIds.length > 0 ? [{ equipeAtualId: { in: equipeIds } }] : []),
+        ...(deptosStaff.length > 0 ? [{ departamentoId: { in: deptosStaff } }] : []),
       ];
-      if (ehStaffTI) {
-        orVisibilidade.push({ departamentoId: { in: deptoIds } });
-      }
       const andClauses: Record<string, unknown>[] = [where, { OR: orVisibilidade }];
       // S12 — força visibilidade=PUBLICO se não-staff TI (defesa em
       // profundidade contra qualquer caminho Layer 1 que pule o filtro).

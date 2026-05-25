@@ -106,8 +106,8 @@ export class ProjetoController {
   }
 
   @Get('busca-comentarios')
-  buscarComentarios(@Query('q') q: string, @GestaoTiRole() role?: string) {
-    return this.service.buscarComentarios(q, role);
+  buscarComentarios(@Query('q') q: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role?: string) {
+    return this.service.buscarComentarios(q, user, role);
   }
 
   // USUARIO_CHAVE e TERCEIRIZADO compartilham `usuario_chave_projeto` desde 13/05/2026.
@@ -125,7 +125,7 @@ export class ProjetoController {
     @CurrentUser() user?: JwtPayload,
     @GestaoTiRole() role?: string,
   ) {
-    return this.service.findOne(id, user?.sub, role);
+    return this.service.findOne(id, user, role);
   }
 
   @Post()
@@ -137,7 +137,7 @@ export class ProjetoController {
   @Patch(':id')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async update(@Param('id') id: string, @Body() dto: UpdateProjetoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.update(id, dto);
   }
 
@@ -148,21 +148,21 @@ export class ProjetoController {
   @Patch(':id/liberar-homologacao')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async liberarHomologacao(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.liberarHomologacao(id, user.sub);
   }
 
   @Patch(':id/liberar-producao')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async liberarProducao(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.liberarProducao(id, user.sub);
   }
 
   @Patch(':id/concluir-producao')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async concluirProducao(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.concluirProducao(id, user.sub);
   }
 
@@ -174,7 +174,7 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.voltarParaAndamento(id, user.sub, motivo);
   }
 
@@ -208,14 +208,14 @@ export class ProjetoController {
   @Post(':id/membros')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async addMembro(@Param('id') id: string, @Body() dto: CreateMembroDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.addMembro(id, dto);
   }
 
   @Delete(':id/membros/:membroId')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async removeMembro(@Param('id') id: string, @Param('membroId') membroId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.removeMembro(id, membroId);
   }
 
@@ -225,14 +225,14 @@ export class ProjetoController {
   async listFases(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role?: string) {
     // Mesma classe do gap #2 — a aba Atividades carrega fases; sem ACL
     // vazava estrutura de qualquer projeto por id.
-    await this.service.checkProjetoAccessChave(id, user.sub, role || '');
+    await this.service.checkProjetoAccessChave(id, user, role || '');
     return this.service.listFases(id);
   }
 
   @Post(':id/fases')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async addFase(@Param('id') id: string, @Body() dto: CreateFaseDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.addFase(id, dto);
   }
 
@@ -245,14 +245,14 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.updateFase(id, faseId, dto);
   }
 
   @Delete(':id/fases/:faseId')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async removeFase(@Param('id') id: string, @Param('faseId') faseId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.removeFase(id, faseId);
   }
 
@@ -263,8 +263,8 @@ export class ProjetoController {
     // Gap #2 (16/05): GET de atividades não tinha ACL por projeto — qualquer
     // usuário do módulo lia tarefas/notas de qualquer projeto por id. Mesmo
     // gate canônico do findOne: TI early-return; chave só se vinculado.
-    await this.service.checkProjetoAccessChave(id, user.sub, role || '');
-    return this.service.listAtividades(id, role);
+    await this.service.checkProjetoAccessChave(id, user, role || '');
+    return this.service.listAtividades(id, user, role);
   }
 
   @Post(':id/atividades')
@@ -275,7 +275,7 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.addAtividade(id, dto, user.sub);
   }
 
@@ -288,7 +288,7 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.gerarAtividadeFromPendencia(id, pendenciaId, dto, user.sub);
   }
 
@@ -301,20 +301,20 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.updateAtividade(id, atividadeId, dto, user.sub);
   }
 
   @Delete(':id/atividades/:atividadeId')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async removeAtividade(@Param('id') id: string, @Param('atividadeId') atividadeId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.removeAtividade(id, atividadeId);
   }
 
   @Get(':id/atividades/:atividadeId/historico')
   async listHistoricoAtividade(@Param('id') id: string, @Param('atividadeId') atividadeId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role?: string) {
-    await this.service.checkProjetoAccessChave(id, user.sub, role || '');
+    await this.service.checkProjetoAccessChave(id, user, role || '');
     return this.service.listarHistoricoAtividade(id, atividadeId);
   }
 
@@ -327,8 +327,8 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role?: string,
   ) {
-    await this.service.checkProjetoAccessChave(id, user.sub, role || '');
-    return this.service.listComentarios(id, atividadeId, role);
+    await this.service.checkProjetoAccessChave(id, user, role || '');
+    return this.service.listComentarios(id, atividadeId, user, role);
   }
 
   @Post(':id/atividades/:atividadeId/comentarios')
@@ -344,8 +344,8 @@ export class ProjetoController {
     // usuário-chave/terceirizado VINCULADO comentar nas tarefas do projeto-pai
     // (16/05 — colaboração estilo chat). Conteúdo interno segue filtrado;
     // non-staff só grava/vê pública (defesa em profundidade no service).
-    await this.service.checkProjetoAccessChave(id, user.sub, role);
-    return this.service.addComentario(id, atividadeId, body.texto, user.sub, body.visivelPendencia, body.publica, role);
+    await this.service.checkProjetoAccessChave(id, user, role);
+    return this.service.addComentario(id, atividadeId, body.texto, user, body.visivelPendencia, body.publica, role);
   }
 
   @Delete(':id/comentarios/:comentarioId')
@@ -355,7 +355,7 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.checkProjetoAccessChave(id, user.sub, role);
+    await this.service.checkProjetoAccessChave(id, user, role);
     return this.service.removeComentario(id, comentarioId, user.sub, role);
   }
 
@@ -368,8 +368,8 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.checkProjetoAccessChave(id, user.sub, role);
-    return this.service.updateComentario(id, comentarioId, body.texto, user.sub, role, body.visivelPendencia, body.publica);
+    await this.service.checkProjetoAccessChave(id, user, role);
+    return this.service.updateComentario(id, comentarioId, body.texto, user, role, body.visivelPendencia, body.publica);
   }
 
   // --- Registro de Tempo ---
@@ -381,13 +381,13 @@ export class ProjetoController {
 
   @Post(':id/atividades/:atividadeId/iniciar')
   async iniciarTempo(@Param('id') id: string, @Param('atividadeId') atividadeId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.iniciarRegistroTempo(id, atividadeId, user.sub);
   }
 
   @Post(':id/atividades/:atividadeId/encerrar')
   async encerrarTempo(@Param('id') id: string, @Param('atividadeId') atividadeId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.encerrarRegistroTempo(id, atividadeId, user.sub);
   }
 
@@ -404,7 +404,7 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.ajustarRegistroTempo(id, registroId, dto, user.sub, role);
   }
 
@@ -415,7 +415,7 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.removerRegistroTempo(id, registroId, user.sub, role);
   }
 
@@ -424,14 +424,14 @@ export class ProjetoController {
   @Post(':id/chamados/:chamadoId')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async vincularChamado(@Param('id') id: string, @Param('chamadoId') chamadoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.vincularChamado(id, chamadoId);
   }
 
   @Delete(':id/chamados/:chamadoId')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async desvincularChamado(@Param('id') id: string, @Param('chamadoId') chamadoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.desvincularChamado(id, chamadoId);
   }
 
@@ -445,7 +445,7 @@ export class ProjetoController {
   @Post(':id/cotacoes')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async addCotacao(@Param('id') id: string, @Body() dto: CreateCotacaoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.addCotacao(id, dto);
   }
 
@@ -458,14 +458,14 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.updateCotacao(id, cotacaoId, dto);
   }
 
   @Delete(':id/cotacoes/:cotacaoId')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async removeCotacao(@Param('id') id: string, @Param('cotacaoId') cotacaoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.removeCotacao(id, cotacaoId);
   }
 
@@ -479,7 +479,7 @@ export class ProjetoController {
   @Post(':id/custos-detalhados')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async addCusto(@Param('id') id: string, @Body() dto: CreateCustoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.addCusto(id, dto);
   }
 
@@ -492,14 +492,14 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.updateCusto(id, custoId, dto);
   }
 
   @Delete(':id/custos-detalhados/:custoId')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async removeCusto(@Param('id') id: string, @Param('custoId') custoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.removeCusto(id, custoId);
   }
 
@@ -513,7 +513,7 @@ export class ProjetoController {
   @Post(':id/riscos')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async addRisco(@Param('id') id: string, @Body() dto: CreateRiscoDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.addRisco(id, dto);
   }
 
@@ -526,14 +526,14 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.updateRisco(id, riscoId, dto);
   }
 
   @Delete(':id/riscos/:riscoId')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async removeRisco(@Param('id') id: string, @Param('riscoId') riscoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.removeRisco(id, riscoId);
   }
 
@@ -547,14 +547,14 @@ export class ProjetoController {
   @Post(':id/dependencias')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async addDependencia(@Param('id') id: string, @Body() dto: CreateDependenciaDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.addDependencia(id, dto);
   }
 
   @Delete(':id/dependencias/:depId')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async removeDependencia(@Param('id') id: string, @Param('depId') depId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.removeDependencia(id, depId);
   }
 
@@ -574,7 +574,7 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.addAnexo(id, dto, user.sub);
   }
 
@@ -594,7 +594,7 @@ export class ProjetoController {
     @Body('descricao') descricao?: string,
   ) {
     if (!file) throw new BadRequestException('Arquivo obrigatorio');
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.uploadAnexo(id, file, user.sub, descricao);
   }
 
@@ -623,7 +623,7 @@ export class ProjetoController {
   @Delete(':id/anexos/:anexoId')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
   async removeAnexo(@Param('id') id: string, @Param('anexoId') anexoId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.removeAnexo(id, anexoId);
   }
 
@@ -642,7 +642,7 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.addApontamento(id, dto, user.sub);
   }
 
@@ -654,7 +654,7 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.removeApontamento(id, apontamentoId);
   }
 
@@ -697,14 +697,14 @@ export class ProjetoController {
   @Post(':id/usuarios-chave')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async addUsuarioChave(@Param('id') id: string, @Body() dto: CreateUsuarioChaveDto, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.addUsuarioChave(id, dto);
   }
 
   @Delete(':id/usuarios-chave/:ucId')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   async removeUsuarioChave(@Param('id') id: string, @Param('ucId') ucId: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    await this.service.assertMembroOuGestor(id, user.sub, role);
+    await this.service.assertMembroOuGestor(id, user, role);
     return this.service.removeUsuarioChave(id, ucId);
   }
 
@@ -722,7 +722,7 @@ export class ProjetoController {
     @CurrentUser() user?: JwtPayload,
     @GestaoTiRole() role?: string,
   ) {
-    return this.service.listPendencias(id, { status, prioridade, responsavelId, search, incluirSubProjetos: incluirSubProjetos === 'true' }, user!.sub, role!);
+    return this.service.listPendencias(id, { status, prioridade, responsavelId, search, incluirSubProjetos: incluirSubProjetos === 'true' }, user!, role!);
   }
 
   @Post(':id/pendencias')
@@ -733,7 +733,7 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.createPendencia(id, dto, user.sub, role);
+    return this.service.createPendencia(id, dto, user, role);
   }
 
   @Get(':id/pendencias/:pid')
@@ -744,7 +744,7 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.getPendencia(id, pid, user.sub, role);
+    return this.service.getPendencia(id, pid, user, role);
   }
 
   @Patch(':id/pendencias/:pid')
@@ -756,7 +756,7 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.updatePendencia(id, pid, dto, user.sub, role);
+    return this.service.updatePendencia(id, pid, dto, user, role);
   }
 
   // --- Interacoes Pendencia ---
@@ -770,7 +770,7 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.addInteracaoPendencia(id, pid, dto, user.sub, role);
+    return this.service.addInteracaoPendencia(id, pid, dto, user, role);
   }
 
   @Patch(':id/pendencias/:pid/interacoes/:iid')
@@ -783,7 +783,7 @@ export class ProjetoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.editarInteracaoPendencia(id, pid, iid, body.descricao, user.sub, role);
+    return this.service.editarInteracaoPendencia(id, pid, iid, body.descricao, user, role);
   }
 
   // --- Anexos Pendencia ---
@@ -808,7 +808,7 @@ export class ProjetoController {
     @GestaoTiRole() role: string,
   ) {
     if (!file) throw new BadRequestException('Arquivo obrigatorio');
-    return this.service.addAnexoPendencia(id, pid, file, user.sub, role);
+    return this.service.addAnexoPendencia(id, pid, file, user, role);
   }
 
   @Get(':id/pendencias/:pid/anexos/:anexoId/download')
@@ -822,7 +822,7 @@ export class ProjetoController {
     @GestaoTiRole() role: string,
     @Res() res: express.Response,
   ) {
-    const { anexo, filePath } = await this.service.downloadAnexoPendencia(id, pid, anexoId, user.sub, role);
+    const { anexo, filePath } = await this.service.downloadAnexoPendencia(id, pid, anexoId, user, role);
     const normalizedPath = path.resolve(filePath);
     if (!normalizedPath.startsWith(path.resolve(PENDENCIA_UPLOADS_DIR))) {
       throw new BadRequestException('Caminho de arquivo invalido');

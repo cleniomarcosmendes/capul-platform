@@ -13,7 +13,8 @@ import { UpdatePendenciaDto } from '../dto/update-pendencia.dto.js';
 import { CreateInteracaoPendenciaDto } from '../dto/create-interacao-pendencia.dto.js';
 import { ProjetoHelpersService } from './projeto-helpers.service.js';
 import { PENDENCIA_UPLOADS_DIR } from './projeto.constants.js';
-import { isGestor, isTI } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI, hasStaffPerfilEmTI } from '../../common/constants/roles.constant.js';
+import type { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class ProjetoPendenciaService {
@@ -25,8 +26,11 @@ export class ProjetoPendenciaService {
 
   async listPendencias(projetoId: string, filters: {
     status?: string; prioridade?: string; responsavelId?: string; search?: string; incluirSubProjetos?: boolean;
-  }, userId: string, role: string) {
-    await this.helpers.checkProjetoAccessChave(projetoId, userId, role);
+  }, user: JwtPayload, role: string) {
+    // S13a — `user` substitui `userId` p/ propagar hasStaffPerfilEmTI(user)
+    // ao helper. Mantém alias `userId` p/ o body já existente.
+    const userId = user.sub;
+    await this.helpers.checkProjetoAccessChave(projetoId, user, role);
 
     // Se incluirSubProjetos, busca IDs do projeto e todos seus sub-projetos
     let projetoIds = [projetoId];
@@ -62,8 +66,9 @@ export class ProjetoPendenciaService {
     });
   }
 
-  async getPendencia(projetoId: string, pendenciaId: string, userId: string, role: string) {
-    await this.helpers.checkProjetoAccessChave(projetoId, userId, role);
+  async getPendencia(projetoId: string, pendenciaId: string, user: JwtPayload, role: string) {
+    const userId = user.sub;
+    await this.helpers.checkProjetoAccessChave(projetoId, user, role);
 
     const pendencia = await this.prisma.pendenciaProjeto.findFirst({
       where: { id: pendenciaId, projetoId },
@@ -103,15 +108,17 @@ export class ProjetoPendenciaService {
     // GESTOR_TI/SUPORTE_TI (isTI). Antes filtrava apenas USUARIO_CHAVE e
     // TERCEIRIZADO; USUARIO_FINAL hipotético (ou roles legadas como
     // DESENVOLVEDOR/MANUTENCAO/INFRAESTRUTURA) viam internos.
-    if (!isTI(role)) {
+    // S13a — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
+    if (!hasStaffPerfilEmTI(user)) {
       pendencia.interacoes = pendencia.interacoes.filter((i) => i.publica);
     }
 
     return pendencia;
   }
 
-  async createPendencia(projetoId: string, dto: CreatePendenciaDto, criadorId: string, role: string) {
-    await this.helpers.checkProjetoAccessChave(projetoId, criadorId, role);
+  async createPendencia(projetoId: string, dto: CreatePendenciaDto, user: JwtPayload, role: string) {
+    const criadorId = user.sub;
+    await this.helpers.checkProjetoAccessChave(projetoId, user, role);
     const projeto = await this.prisma.projeto.findUnique({
       where: { id: projetoId },
       select: { id: true, status: true, responsavelId: true, nome: true, numero: true },
@@ -182,8 +189,9 @@ export class ProjetoPendenciaService {
     return pendencia;
   }
 
-  async updatePendencia(projetoId: string, pendenciaId: string, dto: UpdatePendenciaDto, userId: string, role: string) {
-    await this.helpers.checkProjetoAccessChave(projetoId, userId, role);
+  async updatePendencia(projetoId: string, pendenciaId: string, dto: UpdatePendenciaDto, user: JwtPayload, role: string) {
+    const userId = user.sub;
+    await this.helpers.checkProjetoAccessChave(projetoId, user, role);
 
     const pendencia = await this.prisma.pendenciaProjeto.findFirst({
       where: { id: pendenciaId, projetoId },
@@ -348,8 +356,9 @@ export class ProjetoPendenciaService {
 
   // --- Interacoes Pendencia ---
 
-  async addInteracaoPendencia(projetoId: string, pendenciaId: string, dto: CreateInteracaoPendenciaDto, userId: string, role: string) {
-    await this.helpers.checkProjetoAccessChave(projetoId, userId, role);
+  async addInteracaoPendencia(projetoId: string, pendenciaId: string, dto: CreateInteracaoPendenciaDto, user: JwtPayload, role: string) {
+    const userId = user.sub;
+    await this.helpers.checkProjetoAccessChave(projetoId, user, role);
 
     const pendencia = await this.prisma.pendenciaProjeto.findFirst({
       where: { id: pendenciaId, projetoId },
@@ -363,7 +372,8 @@ export class ProjetoPendenciaService {
     // não mostra o checkbox pra eles, mas evita bypass por API direto).
     // Staff = ADMIN/GESTOR_TI/SUPORTE_TI (isTI). 14/05/2026 — alinhamento com
     // Chamado e com a regra explicitada pelo Clenio (todo non-staff é restrito).
-    const publica = !isTI(role) ? true : (dto.publica ?? true);
+    // S13a — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
+    const publica = !hasStaffPerfilEmTI(user) ? true : (dto.publica ?? true);
 
     const interacao = await this.prisma.interacaoPendencia.create({
       data: {
@@ -453,8 +463,9 @@ export class ProjetoPendenciaService {
     return interacao;
   }
 
-  async editarInteracaoPendencia(projetoId: string, pendenciaId: string, interacaoId: string, descricao: string, userId: string, role: string) {
-    await this.helpers.checkProjetoAccessChave(projetoId, userId, role);
+  async editarInteracaoPendencia(projetoId: string, pendenciaId: string, interacaoId: string, descricao: string, user: JwtPayload, role: string) {
+    const userId = user.sub;
+    await this.helpers.checkProjetoAccessChave(projetoId, user, role);
 
     const interacao = await this.prisma.interacaoPendencia.findFirst({
       where: { id: interacaoId, pendenciaId, tipo: 'COMENTARIO' },
@@ -474,8 +485,9 @@ export class ProjetoPendenciaService {
 
   // --- Anexos Pendencia ---
 
-  async addAnexoPendencia(projetoId: string, pendenciaId: string, file: Express.Multer.File, userId: string, role: string) {
-    await this.helpers.checkProjetoAccessChave(projetoId, userId, role);
+  async addAnexoPendencia(projetoId: string, pendenciaId: string, file: Express.Multer.File, user: JwtPayload, role: string) {
+    const userId = user.sub;
+    await this.helpers.checkProjetoAccessChave(projetoId, user, role);
 
     const pendencia = await this.prisma.pendenciaProjeto.findFirst({
       where: { id: pendenciaId, projetoId },
@@ -506,8 +518,9 @@ export class ProjetoPendenciaService {
     });
   }
 
-  async downloadAnexoPendencia(projetoId: string, pendenciaId: string, anexoId: string, userId: string, role: string) {
-    await this.helpers.checkProjetoAccessChave(projetoId, userId, role);
+  async downloadAnexoPendencia(projetoId: string, pendenciaId: string, anexoId: string, user: JwtPayload, role: string) {
+    const userId = user.sub;
+    await this.helpers.checkProjetoAccessChave(projetoId, user, role);
 
     const anexo = await this.prisma.anexoPendencia.findFirst({
       where: { id: anexoId, pendenciaId },
