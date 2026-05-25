@@ -82,7 +82,7 @@ const menuItems: MenuItem[] = [
   { section: 'INFRAESTRUTURA', roles: STAFF },
   { label: 'Ativos', icon: Server, path: '/gestao-ti/ativos', roles: STAFF, funcionalidade: 'ATIVO' },
   { section: 'CONFIGURACOES', roles: MANAGERS },
-  { label: 'Equipes de T.I.', icon: Users, path: '/gestao-ti/equipes', roles: MANAGERS, funcionalidade: 'EQUIPE' },
+  { label: 'Conf. Equipes', icon: Users, path: '/gestao-ti/equipes', roles: MANAGERS, funcionalidade: 'EQUIPE' },
   { label: 'Catalogo de Servicos', icon: BookOpen, path: '/gestao-ti/catalogo', roles: MANAGERS, funcionalidade: 'CHAMADO' },
   { label: 'SLA', icon: Clock, path: '/gestao-ti/sla', roles: MANAGERS, funcionalidade: 'CHAMADO' },
   { label: 'Horarios de Trabalho', icon: Timer, path: '/gestao-ti/horarios-trabalho', roles: MANAGERS, funcionalidade: 'CHAMADO' },

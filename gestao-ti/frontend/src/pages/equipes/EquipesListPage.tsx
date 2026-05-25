@@ -72,7 +72,7 @@ export function EquipesListPage() {
 
   return (
     <>
-      <Header title="Equipes de T.I." />
+      <Header title="Conf. Equipes" />
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
