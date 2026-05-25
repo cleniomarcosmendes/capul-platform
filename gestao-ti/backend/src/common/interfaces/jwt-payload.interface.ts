@@ -3,6 +3,13 @@ export class ModuloDepartamentoPayload {
   nome: string;
   role: string;
   funcionalidades: string[];
+  /**
+   * S12 (25/05) — true se este depto é do tipo "Tecnologia". Lido por
+   * `hasStaffPerfilEmTI(user)` (roles.constant) p/ classificar staff TI
+   * real em users multi-perfil. Opcional pra retrocompat com tokens
+   * pré-S12 (tratado como false → conservador, não vaza).
+   */
+  isTI?: boolean;
 }
 
 export class ModuloPayload {

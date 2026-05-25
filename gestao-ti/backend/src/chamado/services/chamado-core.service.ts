@@ -17,7 +17,7 @@ import { ChamadoHelpersService } from './chamado-helpers.service.js';
 import { ChamadoAgrupamentoService } from './chamado-agrupamento.service.js';
 import { ChamadoTempoService } from './chamado-tempo.service.js';
 import { chamadoInclude } from './chamado.constants.js';
-import { isGestor, isTI } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI, hasStaffPerfilEmTI } from '../../common/constants/roles.constant.js';
 import { Prisma, StatusChamado, Visibilidade } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -177,8 +177,11 @@ export class ChamadoCoreService {
         }
       }
 
-      // Para roles nao-staff, restringir as filiais vinculadas ao usuario
-      const isStaff = isGestor(role) || isTI(role);
+      // Para roles nao-staff, restringir as filiais vinculadas ao usuario.
+      // S12 (25/05): `hasStaffPerfilEmTI(user)` substitui o check baseado em
+      // role denormalizado — multi-perfil (Juliana = GESTOR/CTL +
+      // USUARIO_FINAL/T.I.) precisa ser tratado como NÃO-staff pra filiais.
+      const isStaff = isGestor(role) || hasStaffPerfilEmTI(user);
       if (!isStaff && !filters.filialId) {
         const userFiliais = await this.prisma.$queryRaw<{ filial_id: string }[]>`
           SELECT filial_id FROM core.usuario_filiais WHERE usuario_id = ${user.sub}
@@ -227,21 +230,28 @@ export class ChamadoCoreService {
           { tecnicoId: user.sub },
           { colaboradores: { some: { usuarioId: user.sub } } },
         ];
-      } else if (!filters.equipeId && !isTI(role)) {
-        // Staff sem filtro "meus chamados" e sem equipe selecionada:
-        // mostrar chamados das equipes que o tecnico faz parte + seus proprios
+      } else if (!filters.equipeId && !hasStaffPerfilEmTI(user)) {
+        // S12 (25/05) — substituído `isTI(role)` por `hasStaffPerfilEmTI(user)`.
+        // Incidente Juliana: role denormalizada vinha 'GESTOR' (do perfil CTL),
+        // isTI('GESTOR')=true → este else-if era pulado → Layer 2 sozinho deixava
+        // todos os chamados de T.I. passarem (T.I. ∈ deptos dela por causa do
+        // perfil USUARIO_FINAL/T.I.). Agora classifica corretamente como
+        // não-staff TI → restringe ao escopo "equipes-membro + pessoal".
+        //
+        // `solicitanteId` somado ao OR (S12) — antes o caminho assumia que
+        // staff TI não abre chamados, mas agora pode entrar usuário multi-perfil
+        // que TAMBÉM é solicitante (Juliana abriu #170 e precisa vê-lo).
         const minhasEquipes = await this.prisma.membroEquipe.findMany({
           where: { usuarioId: user.sub, status: 'ATIVO' },
           select: { equipeId: true },
         });
         const equipeIds = minhasEquipes.map((e) => e.equipeId);
-        if (equipeIds.length > 0) {
-          where.OR = [
-            { equipeAtualId: { in: equipeIds } },
-            { tecnicoId: user.sub },
-            { colaboradores: { some: { usuarioId: user.sub } } },
-          ];
-        }
+        where.OR = [
+          { solicitanteId: user.sub },
+          { tecnicoId: user.sub },
+          { colaboradores: { some: { usuarioId: user.sub } } },
+          ...(equipeIds.length > 0 ? [{ equipeAtualId: { in: equipeIds } }] : []),
+        ];
       }
     }
 
@@ -250,7 +260,10 @@ export class ChamadoCoreService {
     // (PR2 — pg_trgm). `histVisibilidade` reusado no enriquecimento pos-query.
     // Visibilidade D29: nao-staff TI so casa historico publico — sem isto a
     // busca profunda varreria nota interna e viraria vazamento.
-    const histVisibilidade: Prisma.HistoricoChamadoWhereInput = isTI(role)
+    // S12 — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`. Multi-perfil
+    // não-staff TI (Juliana) precisa ter histórico privado escondido da busca
+    // profunda (era vazamento pré-S12).
+    const histVisibilidade: Prisma.HistoricoChamadoWhereInput = hasStaffPerfilEmTI(user)
       ? {}
       : { publico: true };
 
@@ -333,20 +346,30 @@ export class ChamadoCoreService {
         select: { equipeId: true },
       });
       const equipeIds = equipesAtivasUser.map((m) => m.equipeId);
-      whereFiltrado = {
-        AND: [
-          where,
-          {
-            OR: [
-              { solicitanteId: user.sub },
-              { tecnicoId: user.sub },
-              { colaboradores: { some: { usuarioId: user.sub } } },
-              { departamentoId: { in: deptoIds } },
-              ...(equipeIds.length > 0 ? [{ equipeAtualId: { in: equipeIds } }] : []),
-            ],
-          },
-        ],
-      };
+      // S12 (25/05) — defesa em profundidade: se o user NÃO tem perfil staff
+      // em algum depto T.I., remove `{ departamentoId: { in: deptoIds } }` do
+      // OR. Razão: incidente Juliana — ela tem perfil USUARIO_FINAL/T.I., que
+      // colocava T.I. nos deptoIds e abria visão sobre TODOS chamados de T.I.
+      // (não só os abertos por ela). Visão "abre por estar no depto" só faz
+      // sentido pra staff (gestores/suporte TI), não pra USUARIO_FINAL.
+      // Layer 1 já garante visibilidade própria pra USUARIO_FINAL/USUARIO_CHAVE.
+      const ehStaffTI = hasStaffPerfilEmTI(user);
+      const orVisibilidade: Record<string, unknown>[] = [
+        { solicitanteId: user.sub },
+        { tecnicoId: user.sub },
+        { colaboradores: { some: { usuarioId: user.sub } } },
+        ...(equipeIds.length > 0 ? [{ equipeAtualId: { in: equipeIds } }] : []),
+      ];
+      if (ehStaffTI) {
+        orVisibilidade.push({ departamentoId: { in: deptoIds } });
+      }
+      const andClauses: Record<string, unknown>[] = [where, { OR: orVisibilidade }];
+      // S12 — força visibilidade=PUBLICO se não-staff TI (defesa em
+      // profundidade contra qualquer caminho Layer 1 que pule o filtro).
+      if (!ehStaffTI) {
+        andClauses.push({ visibilidade: 'PUBLICO' });
+      }
+      whereFiltrado = { AND: andClauses };
     }
 
     const [total, items] = await this.prisma.$transaction([
@@ -465,7 +488,10 @@ export class ChamadoCoreService {
     // Cinto-e-suspensório (14/05/2026): PRIVADO é staff-only no detalhe
     // também. Criação já é restrita a ROLES_PODE_PRIVADO; aqui bloqueia
     // acesso via link direto caso TI vincule non-staff por engano.
-    if (chamado.visibilidade === 'PRIVADO' && !isTI(role)) {
+    // S12 — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`. Multi-perfil
+    // GESTOR de outro depto (Juliana/CTL) NÃO é staff TI → não pode ver
+    // PRIVADO mesmo via link direto.
+    if (chamado.visibilidade === 'PRIVADO' && !hasStaffPerfilEmTI(user)) {
       throw new ForbiddenException('Chamado privado — acesso restrito a equipe de TI');
     }
 
@@ -473,8 +499,10 @@ export class ChamadoCoreService {
     // NÃO-staff só vê comentários públicos. Antes só filtrava USUARIO_FINAL
     // — USUARIO_CHAVE e TERCEIRIZADO podiam virar solicitante/em-cópia/
     // colaborador e enxergavam comentários internos da equipe T.I.
-    // (vazamento). Regra única: staff = ADMIN/GESTOR_TI/SUPORTE_TI (isTI).
-    if (!isTI(role)) {
+    // (vazamento). Regra única S12 (25/05): staff = `hasStaffPerfilEmTI(user)`
+    // — multi-perfil precisa ser detectado pelo JWT.departamentos[], não pela
+    // role denormalizada (incidente Juliana).
+    if (!hasStaffPerfilEmTI(user)) {
       chamado.historicos = chamado.historicos.filter((h) => h.publico);
     }
 
@@ -994,7 +1022,10 @@ export class ChamadoCoreService {
         // publico=true (mesmo se enviar publico=false no DTO). Frontend não
         // mostra checkbox pra não-staff, mas evita bypass por API direto.
         // "Solicitar info" também força publico=true (solicitante PRECISA ver).
-        publico: !isTI(role) || isSolicitarInfo ? true : (dto.publico ?? true),
+        // S12 — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`. Caso
+        // multi-perfil precisa ser detectado pelo JWT.departamentos[], senão
+        // GESTOR de outro depto poderia gravar comentário interno (privado).
+        publico: !hasStaffPerfilEmTI(user) || isSolicitarInfo ? true : (dto.publico ?? true),
         chamadoId: id,
         usuarioId: user.sub,
       },
