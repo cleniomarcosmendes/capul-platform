@@ -316,9 +316,15 @@ export class ChamadoCoreService {
       : { updatedAt: 'desc' as const };
 
     // Workspace Onda 2 C2.7 + C2.9 (24/05) — visibilidade do chamado.
-    // Regra: user vê chamado SE for solicitante OU SE o chamado pertencer
-    // a depto onde ele tem perfil no Workspace OU SE for membro ativo da
-    // equipe atual (C2.9 — "minhas equipes atendem isso"). ADMIN escapa (D36).
+    // Regra: user vê chamado SE for solicitante OU técnico OU colaborador
+    // OU SE o chamado pertencer a depto onde ele tem perfil no Workspace
+    // OU SE for membro ativo da equipe atual (C2.9). ADMIN escapa (D36).
+    //
+    // Ultrareview bug_001 fix (24/05): `tecnicoId` e `colaboradores` foram
+    // adicionados ao OR pra preservar visibilidade de UC/TERC adicionados
+    // como colab cross-depto (Layer 1 acima já mantém esses casos; sem
+    // espelhar aqui, o AND filtrava chamados que `adicionarColaborador`
+    // havia autorizado explicitamente — regressão pós-C2.9).
     const deptoIds = getDeptoIdsDoUser(user, role);
     let whereFiltrado: Record<string, unknown> = where;
     if (deptoIds !== null) {
@@ -333,6 +339,8 @@ export class ChamadoCoreService {
           {
             OR: [
               { solicitanteId: user.sub },
+              { tecnicoId: user.sub },
+              { colaboradores: { some: { usuarioId: user.sub } } },
               { departamentoId: { in: deptoIds } },
               ...(equipeIds.length > 0 ? [{ equipeAtualId: { in: equipeIds } }] : []),
             ],
