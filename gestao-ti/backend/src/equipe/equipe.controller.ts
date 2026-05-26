@@ -86,8 +86,12 @@ export class EquipeController {
 
   @Post(':id/membros')
   @Roles('ADMIN', 'GESTOR')
-  addMembro(@Param('id') id: string, @Body() dto: AddMembroDto) {
-    return this.equipeService.addMembro(id, dto);
+  addMembro(
+    @Param('id') id: string,
+    @Body() dto: AddMembroDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.equipeService.addMembro(id, dto, user);
   }
 
   @Patch(':id/membros/:membroId')
@@ -96,8 +100,9 @@ export class EquipeController {
     @Param('id') id: string,
     @Param('membroId') membroId: string,
     @Body() dto: UpdateMembroDto,
+    @CurrentUser() user: JwtPayload,
   ) {
-    return this.equipeService.updateMembro(id, membroId, dto);
+    return this.equipeService.updateMembro(id, membroId, dto, user);
   }
 
   @Delete(':id')
@@ -111,7 +116,8 @@ export class EquipeController {
   removeMembro(
     @Param('id') id: string,
     @Param('membroId') membroId: string,
+    @CurrentUser() user: JwtPayload,
   ) {
-    return this.equipeService.removeMembro(id, membroId);
+    return this.equipeService.removeMembro(id, membroId, user);
   }
 }

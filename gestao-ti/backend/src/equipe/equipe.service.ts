@@ -156,8 +156,12 @@ export class EquipeService {
 
   // ---- Membros ----
 
-  async addMembro(equipeId: string, dto: AddMembroDto) {
-    await this.findOne(equipeId);
+  async addMembro(equipeId: string, dto: AddMembroDto, user?: JwtPayload) {
+    const equipe = await this.findOne(equipeId);
+    // Onda 3 S10 sweep #2 (26/05, security-review #2) — fecha membership.
+    // Mesmo vetor do equipe.update: GESTOR cross-depto entrava na equipe
+    // de outro workspace pra capturar chamados rotados via ela.
+    if (user) assertDepartamentoDoUser(user, null, equipe.departamentoId);
 
     const usuario = await this.prisma.usuario.findUnique({
       where: { id: dto.usuarioId },
@@ -190,7 +194,10 @@ export class EquipeService {
     });
   }
 
-  async updateMembro(equipeId: string, membroId: string, dto: UpdateMembroDto) {
+  async updateMembro(equipeId: string, membroId: string, dto: UpdateMembroDto, user?: JwtPayload) {
+    const equipe = await this.findOne(equipeId);
+    if (user) assertDepartamentoDoUser(user, null, equipe.departamentoId);
+
     const membro = await this.prisma.membroEquipe.findFirst({
       where: { id: membroId, equipeId },
     });
@@ -219,7 +226,10 @@ export class EquipeService {
     }
   }
 
-  async removeMembro(equipeId: string, membroId: string) {
+  async removeMembro(equipeId: string, membroId: string, user?: JwtPayload) {
+    const equipe = await this.findOne(equipeId);
+    if (user) assertDepartamentoDoUser(user, null, equipe.departamentoId);
+
     const membro = await this.prisma.membroEquipe.findFirst({
       where: { id: membroId, equipeId },
     });
