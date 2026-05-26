@@ -13,6 +13,8 @@ import { ResolverChamadoDto, ReabrirChamadoDto, CsatDto } from '../dto/resolver-
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 import { getDeptoIdsDoUser } from '../../common/helpers/departamento-filter.helper.js';
 import { NotificacaoService } from '../../notificacao/notificacao.service.js';
+import { EmailEnvolvidosService } from '../../email/email-envolvidos.service.js';
+import * as emailTpl from '../../email/email-templates.js';
 import { ChamadoHelpersService } from './chamado-helpers.service.js';
 import { ChamadoAgrupamentoService } from './chamado-agrupamento.service.js';
 import { ChamadoTempoService } from './chamado-tempo.service.js';
@@ -48,6 +50,7 @@ export class ChamadoCoreService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificacaoService: NotificacaoService,
+    private readonly emailEnvolvidos: EmailEnvolvidosService,
     private readonly helpers: ChamadoHelpersService,
     private readonly tempo: ChamadoTempoService,
     private readonly agrupamento: ChamadoAgrupamentoService,
@@ -1151,6 +1154,50 @@ export class ChamadoCoreService {
         `Novo comentario no chamado "${chamado.titulo}".`,
         { chamadoId: id },
       ).catch((err) => console.error('Notificacao error:', err.message));
+    }
+
+    // ----- E-mail opcional aos envolvidos (Sub-fase 3 do plano e-mail) -----
+    // Emissor explicitamente solicitou (checkbox "Notificar por e-mail").
+    // Filtros: interno nunca envia; PRIVADO suprime cópias (não-TI); pref
+    // do destinatário pode opt-out (default true).
+    if (dto.emailEnvolvidos === true && historico.publico) {
+      // Reusa toda a união de envolvidos notificados in-app (não dependemos do
+      // tipo de notificação — quem é avisado in-app também recebe e-mail).
+      const todosNotificados = new Set<string>([
+        ...destinatarios,
+        ...mencionadoIds,
+      ]);
+      if (isSolicitarInfo && chamado.solicitanteId) todosNotificados.add(chamado.solicitanteId);
+      if (isRespostaSolicitante && chamado.tecnicoId) todosNotificados.add(chamado.tecnicoId);
+
+      // Chamado PRIVADO: cópias (não-TI por design) não recebem nada.
+      let alvoIds = Array.from(todosNotificados);
+      if (chamado.visibilidade === 'PRIVADO') {
+        const copias = await this.prisma.chamadoCopia.findMany({
+          where: { chamadoId: id },
+          select: { usuarioId: true },
+        });
+        if (copias.length > 0) {
+          const copiasIds = new Set(copias.map((c) => c.usuarioId));
+          alvoIds = alvoIds.filter((uid) => !copiasIds.has(uid));
+        }
+      }
+
+      this.emailEnvolvidos
+        .enviar({
+          canal: 'chamados',
+          emissorId: user.sub,
+          destinatarioIds: alvoIds,
+          subject: `[Chamado #${chamado.numero}] ${chamado.titulo}`,
+          html: emailTpl.chamadoComentario({
+            numero: chamado.numero,
+            titulo: chamado.titulo,
+            autor: historico.usuario?.nome ?? 'Sistema',
+            comentario: dto.descricao,
+            chamadoId: id,
+          }),
+        })
+        .catch((err) => console.error('Email envolvidos (comentario) error:', (err as Error).message));
     }
 
     // Propagar para filhos (se este chamado for agrupador).

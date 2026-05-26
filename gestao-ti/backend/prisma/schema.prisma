@@ -42,6 +42,11 @@ model Usuario {
   nome     String
   email    String?
 
+  // Espelhado de core.usuarios — gestao_ti acessa read-only. Não tem
+  // migration neste schema; a coluna é criada pelo Auth Gateway
+  // (auth-gateway/prisma/migrations/20260515170000_add_preferencias_usuarios).
+  preferencias Json @default("{}") @map("preferencias")
+
   membrosEquipe        MembroEquipe[]
   chamadosSolicitados  Chamado[]        @relation("ChamadoSolicitante")
   chamadosTecnico      Chamado[]        @relation("ChamadoTecnico")

@@ -85,6 +85,11 @@ export function ChamadoDetalhePage() {
   const [showComentario, setShowComentario] = useState(false);
   const [comentarioTexto, setComentarioTexto] = useState('');
   const [comentarioPublico, setComentarioPublico] = useState(true);
+  // Toggle "Notificar por e-mail": default OFF (evita spam acidental), mas
+  // lembra a última escolha do usuário pra não ter que marcar toda vez.
+  const [emailEnvolvidos, setEmailEnvolvidos] = useState<boolean>(() => {
+    try { return localStorage.getItem('chamado.emailEnvolvidos') === 'true'; } catch { return false; }
+  });
   // Anexos no input do comentario (chat-style 13/05/2026) — pre-upload em
   // memoria, sobe quando o usuario clica em Enviar.
   const [comentarioArquivos, setComentarioArquivos] = useState<File[]>([]);
@@ -305,7 +310,7 @@ export function ChamadoDetalhePage() {
         );
         anexosIds = uploaded.map((a) => a.id);
       }
-      await chamadoService.comentar(chamado.id, comentarioTexto, visivel, solicitarInfo, anexosIds);
+      await chamadoService.comentar(chamado.id, comentarioTexto, visivel, solicitarInfo, anexosIds, emailEnvolvidos);
       setComentarioArquivos([]);
       return chamadoService.buscar(chamado.id);
     });
@@ -631,6 +636,28 @@ export function ChamadoDetalhePage() {
                       Visível p/ solicitante
                     </label>
                   )}
+                  <label
+                    className={`flex items-center gap-1.5 text-xs cursor-pointer select-none ${
+                      comentarioPublico ? 'text-slate-600' : 'text-slate-400'
+                    }`}
+                    title={
+                      comentarioPublico
+                        ? 'Quando marcado, dispara e-mail aos envolvidos (solicitante, técnico, colaboradores, em cópia) — respeitando a preferência de cada um. Comentário interno nunca envia.'
+                        : 'Comentários internos nunca disparam e-mail. Marque "Visível p/ solicitante" pra habilitar.'
+                    }
+                  >
+                    <input
+                      type="checkbox"
+                      checked={emailEnvolvidos && comentarioPublico}
+                      disabled={!comentarioPublico}
+                      onChange={(e) => {
+                        setEmailEnvolvidos(e.target.checked);
+                        try { localStorage.setItem('chamado.emailEnvolvidos', String(e.target.checked)); } catch { /* ignore */ }
+                      }}
+                      className="rounded border-slate-300 w-3.5 h-3.5"
+                    />
+                    📧 Notificar por e-mail
+                  </label>
                   <div className="flex-1" />
                   {isTecnico && ['EM_ATENDIMENTO', 'PENDENTE_USUARIO'].includes(chamado.status) && (
                     <button

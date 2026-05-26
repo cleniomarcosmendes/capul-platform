@@ -142,12 +142,14 @@ export const chamadoService = {
     publico = true,
     solicitarInfoUsuario = false,
     anexosIds?: string[],
+    emailEnvolvidos = false,
   ): Promise<HistoricoChamado> {
     const { data } = await gestaoApi.post(`/chamados/${id}/comentar`, {
       descricao,
       publico,
       solicitarInfoUsuario,
       anexosIds: anexosIds && anexosIds.length > 0 ? anexosIds : undefined,
+      emailEnvolvidos,
     });
     return data;
   },

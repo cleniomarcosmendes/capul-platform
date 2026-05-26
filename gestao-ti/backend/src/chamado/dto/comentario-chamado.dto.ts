@@ -30,4 +30,14 @@ export class ComentarioChamadoDto {
   @ArrayMaxSize(10)
   @IsUUID(undefined, { each: true })
   anexosIds?: string[];
+
+  /**
+   * Quando true (default false), além da notificação in-app, dispara também
+   * e-mail aos envolvidos. Filtros: comentário interno (publico=false) nunca
+   * envia; chamado PRIVADO suprime e-mail para cópias (não-TI); preferência
+   * `email.chamados` do destinatário pode opt-out.
+   */
+  @IsOptional()
+  @IsBoolean()
+  emailEnvolvidos?: boolean;
 }

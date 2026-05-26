@@ -8,9 +8,10 @@ import { ChamadoColaboradorService } from './services/chamado-colaborador.servic
 import { ChamadoAnexoService } from './services/chamado-anexo.service.js';
 import { ChamadoAgrupamentoService } from './services/chamado-agrupamento.service.js';
 import { NotificacaoModule } from '../notificacao/notificacao.module.js';
+import { EmailEnvolvidosModule } from '../email/email-envolvidos.module.js';
 
 @Module({
-  imports: [NotificacaoModule],
+  imports: [NotificacaoModule, EmailEnvolvidosModule],
   controllers: [ChamadoController],
   providers: [
     ChamadoHelpersService,
