@@ -1,8 +1,8 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { authService } from '../services/auth.service';
-import { ArrowLeft, User, Mail, Phone, Building2, Shield, Smartphone, Eye, EyeOff } from 'lucide-react';
+import { authService, type PreferenciasEmail } from '../services/auth.service';
+import { ArrowLeft, User, Mail, Phone, Building2, Shield, Smartphone, Eye, EyeOff, Bell } from 'lucide-react';
 
 export default function PerfilPage() {
   const { usuario } = useAuth();
@@ -25,6 +25,47 @@ export default function PerfilPage() {
   const [mfaLoading, setMfaLoading] = useState(false);
   const [mfaEnabled, setMfaEnabled] = useState(usuario?.mfaEnabled ?? false);
   const [disableCode, setDisableCode] = useState('');
+
+  // Preferências de e-mail (default opt-in = receber tudo)
+  const [emailPref, setEmailPref] = useState<PreferenciasEmail>({
+    chamados: true,
+    pendencias: true,
+    atividades: true,
+  });
+  const [emailPrefLoaded, setEmailPrefLoaded] = useState(false);
+  const [emailPrefSaving, setEmailPrefSaving] = useState(false);
+  const [emailPrefMsg, setEmailPrefMsg] = useState('');
+
+  useEffect(() => {
+    authService
+      .getPreferencias()
+      .then((p) => {
+        if (p.email) {
+          setEmailPref((cur) => ({ ...cur, ...p.email }));
+        }
+      })
+      .catch(() => {
+        // mantém defaults (opt-in)
+      })
+      .finally(() => setEmailPrefLoaded(true));
+  }, []);
+
+  async function toggleEmailPref(tipo: keyof PreferenciasEmail) {
+    const next = { ...emailPref, [tipo]: !emailPref[tipo] };
+    setEmailPref(next);
+    setEmailPrefMsg('');
+    setEmailPrefSaving(true);
+    try {
+      await authService.updatePreferencias({ email: next });
+      setEmailPrefMsg('Preferências salvas');
+      setTimeout(() => setEmailPrefMsg(''), 2000);
+    } catch {
+      setEmailPref(emailPref);
+      setEmailPrefMsg('Erro ao salvar');
+    } finally {
+      setEmailPrefSaving(false);
+    }
+  }
 
   if (!usuario) return null;
 
@@ -283,8 +324,94 @@ export default function PerfilPage() {
           {mfaErro && <div className="mt-3 bg-red-50 text-red-700 text-sm px-4 py-3 rounded-lg border border-red-200">{mfaErro}</div>}
           {mfaMsg && <div className="mt-3 bg-green-50 text-green-700 text-sm px-4 py-3 rounded-lg border border-green-200">{mfaMsg}</div>}
         </div>
+
+        {/* Notificações por E-mail */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Bell size={18} className="text-slate-500" />
+            <h2 className="font-semibold text-slate-800">Notificações por E-mail</h2>
+          </div>
+          <p className="text-sm text-slate-500 mb-4">
+            Receba e-mails quando houver interações nos itens em que você está envolvido.
+            Comentários internos / privados nunca são enviados por e-mail.
+          </p>
+
+          <div className="space-y-3">
+            <EmailToggle
+              label="Chamados"
+              hint="Novo comentário, mudança de status, atribuição"
+              checked={!!emailPref.chamados}
+              disabled={!emailPrefLoaded || emailPrefSaving}
+              onChange={() => toggleEmailPref('chamados')}
+            />
+            <EmailToggle
+              label="Pendências de Projeto"
+              hint="Nova pendência, resposta, resolução"
+              checked={!!emailPref.pendencias}
+              disabled={!emailPrefLoaded || emailPrefSaving}
+              onChange={() => toggleEmailPref('pendencias')}
+            />
+            <EmailToggle
+              label="Atividades de Projeto"
+              hint="Criação, mudança de status, conclusão"
+              checked={!!emailPref.atividades}
+              disabled={!emailPrefLoaded || emailPrefSaving}
+              onChange={() => toggleEmailPref('atividades')}
+            />
+          </div>
+
+          {emailPrefMsg && (
+            <div className="mt-3 text-xs text-slate-500">{emailPrefMsg}</div>
+          )}
+        </div>
       </main>
     </div>
+  );
+}
+
+function EmailToggle({
+  label,
+  hint,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <label
+      className={`flex items-center justify-between gap-4 p-3 rounded-lg border border-slate-200 ${
+        disabled ? 'opacity-60 cursor-wait' : 'cursor-pointer hover:bg-slate-50'
+      }`}
+    >
+      <div>
+        <p className="text-sm font-medium text-slate-800">{label}</p>
+        <p className="text-xs text-slate-500">{hint}</p>
+      </div>
+      <span className="relative inline-flex">
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={onChange}
+          className="sr-only peer"
+        />
+        <span
+          className="w-11 h-6 bg-slate-300 rounded-full peer-checked:bg-capul-600 transition-colors"
+          aria-hidden="true"
+        />
+        <span
+          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+            checked ? 'translate-x-5' : ''
+          }`}
+          aria-hidden="true"
+        />
+      </span>
+    </label>
   );
 }
 

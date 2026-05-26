@@ -41,6 +41,14 @@ export class UsuarioController {
     return this.usuarioService.getPreferencias(userId);
   }
 
+  @Patch('me/preferencias')
+  updateMyPreferencias(
+    @CurrentUser('id') userId: string,
+    @Body() patch: Record<string, any>,
+  ) {
+    return this.usuarioService.updatePreferencias(userId, patch);
+  }
+
   @Get(':id/preferencias')
   getPreferencias(@Param('id') id: string) {
     return this.usuarioService.getPreferencias(id);

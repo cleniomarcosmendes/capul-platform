@@ -1,9 +1,21 @@
-import { authApi } from './api';
+import { authApi, coreApi } from './api';
 import type {
   LoginResponse,
   SwitchFilialResponse,
   UsuarioLogado,
 } from '../types';
+
+export interface PreferenciasEmail {
+  chamados?: boolean;
+  pendencias?: boolean;
+  atividades?: boolean;
+}
+
+export interface PreferenciasUsuario {
+  email?: PreferenciasEmail;
+  inactivityTimeoutMin?: number | 'never';
+  [k: string]: unknown;
+}
 
 export const authService = {
   async login(login: string, senha: string): Promise<LoginResponse> {
@@ -77,6 +89,16 @@ export const authService = {
 
   async changePassword(senhaAtual: string, novaSenha: string): Promise<void> {
     await authApi.patch('/change-password', { senhaAtual, novaSenha });
+  },
+
+  async getPreferencias(): Promise<PreferenciasUsuario> {
+    const { data } = await coreApi.get<PreferenciasUsuario>('/usuarios/me/preferencias');
+    return data;
+  },
+
+  async updatePreferencias(patch: Partial<PreferenciasUsuario>): Promise<PreferenciasUsuario> {
+    const { data } = await coreApi.patch<PreferenciasUsuario>('/usuarios/me/preferencias', patch);
+    return data;
   },
 
   getUsuarioLocal(): UsuarioLogado | null {

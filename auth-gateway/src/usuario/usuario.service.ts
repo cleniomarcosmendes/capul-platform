@@ -123,6 +123,22 @@ export class UsuarioService {
       }
     }
 
+    if ('email' in merged) {
+      const email = merged.email;
+      if (typeof email !== 'object' || email === null || Array.isArray(email)) {
+        throw new BadRequestException('preferencias.email deve ser objeto');
+      }
+      const chaves = ['chamados', 'pendencias', 'atividades'] as const;
+      for (const k of Object.keys(email)) {
+        if (!chaves.includes(k as any)) {
+          throw new BadRequestException(`preferencias.email.${k} não é uma chave conhecida`);
+        }
+        if (typeof email[k] !== 'boolean') {
+          throw new BadRequestException(`preferencias.email.${k} deve ser boolean`);
+        }
+      }
+    }
+
     await this.prisma.usuario.update({
       where: { id },
       data: { preferencias: merged },
