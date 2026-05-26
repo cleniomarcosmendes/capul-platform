@@ -82,7 +82,6 @@ export function ChamadoDetalhePage() {
   const [error, setError] = useState('');
 
   // Action states
-  const [showComentario, setShowComentario] = useState(false);
   const [comentarioTexto, setComentarioTexto] = useState('');
   const [comentarioPublico, setComentarioPublico] = useState(true);
   // Toggle "Notificar por e-mail": default OFF (evita spam acidental), mas
@@ -173,9 +172,14 @@ export function ChamadoDetalhePage() {
   const [editRegFim, setEditRegFim] = useState('');
   const [editRegObs, setEditRegObs] = useState('');
 
-  // Unsaved changes protection
+  // Unsaved changes protection — bug 26/05: (a) showComentario nunca era setado
+  // pra true (dead code), então comentário digitado e não enviado se perdia
+  // silenciosamente ao sair; (b) editingReg vazava por closeAllPanels não
+  // resetá-lo, então após resolver/transferir/etc. o aviso "alterações não
+  // salvas" aparecia mesmo com tudo salvo. Fix: detectar texto/anexo pendente
+  // direto + sempre resetar editingReg em closeAllPanels (abaixo).
   const isEditing = Boolean(
-    (showComentario && comentarioTexto.trim()) ||
+    comentarioTexto.trim() || comentarioArquivos.length > 0 ||
     showTransferir || showResolver || showReabrir || showAvaliar ||
     editingReg || showAddColab
   );
@@ -287,11 +291,12 @@ export function ChamadoDetalhePage() {
   }
 
   function closeAllPanels() {
-    setShowComentario(false);
     setShowTransferir(false);
     setShowResolver(false);
     setShowReabrir(false);
     setShowAvaliar(false);
+    setShowAddColab(false);
+    setEditingReg(null);
     setComentarioTexto('');
     setTransferMotivo('');
     setTecnicoEquipeDestinoId('');
