@@ -19,6 +19,7 @@ import { IntegracaoModule } from './integracao/integracao.module';
 import { HealthModule } from './health/health.module';
 import { BackupExecucaoModule } from './backup-execucao/backup-execucao.module';
 import { AlertNotifierModule } from './alert-notifier/alert-notifier.module';
+import { EmailModule } from './email/email.module';
 import { AuditLogRetentionModule } from './audit-log-retention/audit-log-retention.module';
 import { RedisModule } from './redis/redis.module';
 import { PresencaModule } from './presenca/presenca.module';
@@ -105,6 +106,7 @@ class ProxyAwareThrottlerGuard extends ThrottlerGuard {
     HealthModule,
     BackupExecucaoModule,
     AlertNotifierModule,
+    EmailModule,
     AuditLogRetentionModule,
     RedisModule,
     PresencaModule,

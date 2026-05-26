@@ -144,6 +144,13 @@ services:
       NODE_ENV: production
       # Auditoria 10/05/2026 #B3 — CORS_ORIGINS obrigatório (fallback localhost removido)
       CORS_ORIGINS: "${CORS_ORIGINS:?CORS_ORIGINS obrigatoria no .env (lista separada por virgula, ex.: https://platform.capul.com.br,https://localhost)}"
+      # SMTP — usado pelo AlertNotifierService e EmailService (envio transacional
+      # centralizado /api/v1/internal/email/send, consumido por Gestão TI/Fiscal).
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-plataforma@capul.com.br}
     # Porta NAO exposta — acesso via Nginx reverse proxy
     depends_on:
       postgres:
