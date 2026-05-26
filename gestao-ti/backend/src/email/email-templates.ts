@@ -14,7 +14,22 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function layout(titulo: string, conteudo: string, linkUrl: string, linkLabel: string): string {
+type ItemTipo = 'chamado' | 'pendência' | 'atividade';
+
+const ITEM_ARTIGO: Record<ItemTipo, string> = {
+  chamado: 'do chamado',
+  pendência: 'da pendência',
+  atividade: 'da atividade',
+};
+
+function layout(
+  titulo: string,
+  conteudo: string,
+  linkUrl: string,
+  linkLabel: string,
+  itemTipo: ItemTipo,
+): string {
+  const aviso = `Este e-mail mostra apenas esta interação. Para acompanhar o histórico completo ${ITEM_ARTIGO[itemTipo]}, abra o item.`;
   return `<!DOCTYPE html>
 <html><body style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #f8fafc; margin: 0; padding: 24px;">
   <div style="max-width: 560px; margin: 0 auto; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
@@ -24,7 +39,8 @@ function layout(titulo: string, conteudo: string, linkUrl: string, linkLabel: st
     <div style="padding: 24px;">
       <h2 style="margin: 0 0 16px; font-size: 18px; color: #0f172a;">${escapeHtml(titulo)}</h2>
       ${conteudo}
-      <div style="margin-top: 24px;">
+      <p style="margin: 20px 0 0; color: #64748b; font-size: 12px; font-style: italic;">${escapeHtml(aviso)}</p>
+      <div style="margin-top: 12px;">
         <a href="${linkUrl}" style="display: inline-block; background: #0e7490; color: #fff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 500;">${escapeHtml(linkLabel)}</a>
       </div>
     </div>
@@ -51,6 +67,7 @@ export function chamadoComentario(args: {
      <div style="background: #f1f5f9; border-left: 3px solid #0e7490; padding: 12px 16px; border-radius: 4px; color: #1e293b; white-space: pre-wrap;">${escapeHtml(snippet)}</div>`,
     `${BASE_URL}/gestao-ti/chamados/${args.chamadoId}`,
     'Abrir chamado',
+    'chamado',
   );
 }
 
@@ -73,6 +90,7 @@ export function chamadoStatus(args: {
      </p>`,
     `${BASE_URL}/gestao-ti/chamados/${args.chamadoId}`,
     'Abrir chamado',
+    'chamado',
   );
 }
 
@@ -90,6 +108,7 @@ export function chamadoAtribuicao(args: {
      <p style="margin: 0; color: #1e293b;">Técnico responsável: <strong>${escapeHtml(args.tecnico)}</strong></p>`,
     `${BASE_URL}/gestao-ti/chamados/${args.chamadoId}`,
     'Abrir chamado',
+    'chamado',
   );
 }
 
@@ -114,6 +133,7 @@ export function pendenciaCriada(args: {
      ${desc}`,
     `${BASE_URL}/gestao-ti/projetos/${args.projetoId}?tab=pendencias&pendenciaId=${args.pendenciaId}`,
     'Abrir pendência',
+    'pendência',
   );
 }
 
@@ -135,6 +155,7 @@ export function pendenciaComentario(args: {
      <div style="background: #f1f5f9; border-left: 3px solid #0e7490; padding: 12px 16px; border-radius: 4px; color: #1e293b; white-space: pre-wrap;">${escapeHtml(snippet)}</div>`,
     `${BASE_URL}/gestao-ti/projetos/${args.projetoId}?tab=pendencias&pendenciaId=${args.pendenciaId}`,
     'Abrir pendência',
+    'pendência',
   );
 }
 
@@ -158,6 +179,7 @@ export function atividadeCriada(args: {
      ${desc}`,
     `${BASE_URL}/gestao-ti/projetos/${args.projetoId}?tab=atividades&atividadeId=${args.atividadeId}`,
     'Abrir atividade',
+    'atividade',
   );
 }
 
@@ -178,6 +200,7 @@ export function atividadeComentario(args: {
      <div style="background: #f1f5f9; border-left: 3px solid #0e7490; padding: 12px 16px; border-radius: 4px; color: #1e293b; white-space: pre-wrap;">${escapeHtml(snippet)}</div>`,
     `${BASE_URL}/gestao-ti/projetos/${args.projetoId}?tab=atividades&atividadeId=${args.atividadeId}`,
     'Abrir atividade',
+    'atividade',
   );
 }
 
@@ -202,6 +225,7 @@ export function atividadeStatus(args: {
      </p>`,
     `${BASE_URL}/gestao-ti/projetos/${args.projetoId}?tab=atividades&atividadeId=${args.atividadeId}`,
     'Abrir atividade',
+    'atividade',
   );
 }
 
@@ -227,5 +251,6 @@ export function pendenciaStatus(args: {
      </p>`,
     `${BASE_URL}/gestao-ti/projetos/${args.projetoId}?tab=pendencias&pendenciaId=${args.pendenciaId}`,
     'Abrir pendência',
+    'pendência',
   );
 }
