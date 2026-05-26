@@ -431,7 +431,7 @@ export class ProjetoAtividadeService {
     return comentarios;
   }
 
-  async addComentario(projetoId: string, atividadeId: string, texto: string, user: JwtPayload, visivelPendencia?: boolean, publica?: boolean, role?: string) {
+  async addComentario(projetoId: string, atividadeId: string, texto: string, user: JwtPayload, visivelPendencia?: boolean, publica?: boolean, role?: string, emailEnvolvidos?: boolean) {
     const userId = user.sub;
     await this.helpers.ensureProjetoExists(projetoId);
     const atividade = await this.prisma.atividadeProjeto.findFirst({
@@ -486,6 +486,25 @@ export class ProjetoAtividadeService {
         `Nova nota na atividade "${atividade.titulo}" do projeto "${proj?.nome}".`,
         { projetoId, atividadeId },
       ).catch((err) => console.error('Notificacao error:', err.message));
+
+      // E-mail só se emissor pediu E a nota é pública. Interna nunca envia
+      // (filtro já removeu UC/TERC acima — mas defesa em profundidade aqui).
+      if (emailEnvolvidos === true && publicaEfetiva) {
+        this.emailEnvolvidos.enviar({
+          canal: 'atividades',
+          emissorId: userId,
+          destinatarioIds: idsNotificar,
+          subject: `[Atividade] ${atividade.titulo}`,
+          html: emailTpl.atividadeComentario({
+            titulo: atividade.titulo,
+            projetoNome: proj?.nome ?? '—',
+            projetoId,
+            atividadeId,
+            autor: comentario.usuario?.nome ?? 'Sistema',
+            comentario: texto,
+          }),
+        }).catch((err) => console.error('Email envolvidos (atividade comentario) error:', (err as Error).message));
+      }
     }
 
     this.historico.registrar(atividadeId, 'COMENTARIO_ADICIONADO', {

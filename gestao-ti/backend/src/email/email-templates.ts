@@ -161,6 +161,26 @@ export function atividadeCriada(args: {
   );
 }
 
+export function atividadeComentario(args: {
+  titulo: string;
+  projetoNome: string;
+  projetoId: string;
+  atividadeId: string;
+  autor: string;
+  comentario: string;
+}): string {
+  const snippet = args.comentario.length > 400 ? args.comentario.slice(0, 400) + '…' : args.comentario;
+  return layout(
+    `Nova nota: ${args.titulo}`,
+    `<p style="margin: 0 0 8px; color: #475569;"><strong>${escapeHtml(args.titulo)}</strong></p>
+     <p style="margin: 0 0 4px; color: #64748b; font-size: 13px;">Projeto: ${escapeHtml(args.projetoNome)}</p>
+     <p style="margin: 0 0 16px; color: #64748b; font-size: 13px;">por ${escapeHtml(args.autor)}</p>
+     <div style="background: #f1f5f9; border-left: 3px solid #0e7490; padding: 12px 16px; border-radius: 4px; color: #1e293b; white-space: pre-wrap;">${escapeHtml(snippet)}</div>`,
+    `${BASE_URL}/gestao-ti/projetos/${args.projetoId}?tab=atividades&atividadeId=${args.atividadeId}`,
+    'Abrir atividade',
+  );
+}
+
 export function atividadeStatus(args: {
   titulo: string;
   projetoNome: string;

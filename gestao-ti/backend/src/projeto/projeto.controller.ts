@@ -339,7 +339,7 @@ export class ProjetoController {
   async addComentario(
     @Param('id') id: string,
     @Param('atividadeId') atividadeId: string,
-    @Body() body: { texto: string; visivelPendencia?: boolean; publica?: boolean },
+    @Body() body: { texto: string; visivelPendencia?: boolean; publica?: boolean; emailEnvolvidos?: boolean },
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
@@ -348,7 +348,7 @@ export class ProjetoController {
     // (16/05 — colaboração estilo chat). Conteúdo interno segue filtrado;
     // non-staff só grava/vê pública (defesa em profundidade no service).
     await this.service.checkProjetoAccessChave(id, user, role);
-    return this.service.addComentario(id, atividadeId, body.texto, user, body.visivelPendencia, body.publica, role);
+    return this.service.addComentario(id, atividadeId, body.texto, user, body.visivelPendencia, body.publica, role, body.emailEnvolvidos);
   }
 
   @Delete(':id/comentarios/:comentarioId')

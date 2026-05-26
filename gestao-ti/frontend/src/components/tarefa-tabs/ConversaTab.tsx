@@ -25,7 +25,7 @@ interface ConversaTabProps {
   isStaffTI: boolean;
   membros: Membro[];
   pendenciaNumero?: number;
-  onEnviar: (texto: string, visivelPendencia: boolean, publica: boolean) => Promise<void>;
+  onEnviar: (texto: string, visivelPendencia: boolean, publica: boolean, emailEnvolvidos: boolean) => Promise<void>;
   onEditar: (id: string, texto: string, visivelPendencia: boolean, publica: boolean) => Promise<void>;
   onRemover: (id: string) => Promise<void>;
 }
@@ -51,6 +51,10 @@ export function ConversaTab({
   // staff TI; o autor marca explicitamente p/ liberar ao usuário-chave.
   // (Decisão Clenio 16/05.) Só staff TI vê/altera este checkbox.
   const [novoPublico, setNovoPublico] = useState(false);
+  // E-mail: default OFF, lembra última escolha por usuário.
+  const [novoEmailEnvolvidos, setNovoEmailEnvolvidos] = useState<boolean>(() => {
+    try { return localStorage.getItem('atividade.emailEnvolvidos') === 'true'; } catch { return false; }
+  });
   const [enviando, setEnviando] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editTexto, setEditTexto] = useState('');
@@ -69,10 +73,11 @@ export function ConversaTab({
     if (!novo.trim() || enviando) return;
     setEnviando(true);
     try {
-      await onEnviar(novo.trim(), novoVisivel, novoPublico);
+      await onEnviar(novo.trim(), novoVisivel, novoPublico, novoEmailEnvolvidos && novoPublico);
       setNovo('');
       setNovoVisivel(false);
       setNovoPublico(false);
+      // não reseta novoEmailEnvolvidos — pref persiste por sessão
     } finally {
       setEnviando(false);
     }
@@ -231,6 +236,28 @@ export function ConversaTab({
                 Visivel na Pendencia #{pendenciaNumero}
               </label>
             )}
+            <label
+              className={`flex items-center gap-1.5 text-[11px] cursor-pointer select-none ${
+                novoPublico ? 'text-slate-500' : 'text-slate-300'
+              }`}
+              title={
+                novoPublico
+                  ? 'Quando marcado, dispara e-mail aos responsáveis (exceto quem já é UC/TERC em nota interna). Nota interna nunca envia.'
+                  : 'Notas internas nunca disparam e-mail. Marque "Visível p/ Usuário Chave / Terceirizado" pra habilitar.'
+              }
+            >
+              <input
+                type="checkbox"
+                checked={novoEmailEnvolvidos && novoPublico}
+                disabled={!novoPublico}
+                onChange={(e) => {
+                  setNovoEmailEnvolvidos(e.target.checked);
+                  try { localStorage.setItem('atividade.emailEnvolvidos', String(e.target.checked)); } catch { /* ignore */ }
+                }}
+                className="rounded border-slate-300 w-3.5 h-3.5"
+              />
+              📧 E-mail
+            </label>
             <CharCount value={novo} />
           </div>
           <button onClick={enviar} disabled={!novo.trim() || enviando} className="bg-capul-600 text-white px-4 py-1.5 rounded-lg text-xs hover:bg-capul-700 disabled:opacity-50">

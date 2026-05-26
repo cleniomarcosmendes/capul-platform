@@ -1252,10 +1252,10 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     setSavingAtividade(false);
   }
 
-  async function handleEnviarComentario(texto: string, visivelPendencia: boolean, publica: boolean) {
+  async function handleEnviarComentario(texto: string, visivelPendencia: boolean, publica: boolean, emailEnvolvidos: boolean) {
     if (!expandedId) return;
     try {
-      await projetoService.adicionarComentario(projetoId, expandedId, texto, visivelPendencia || undefined, publica);
+      await projetoService.adicionarComentario(projetoId, expandedId, texto, visivelPendencia || undefined, publica, emailEnvolvidos);
       loadComentarios(expandedId, true);
       loadAll();
     } catch { /* empty */ }

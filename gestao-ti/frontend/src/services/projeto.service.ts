@@ -393,8 +393,8 @@ export const projetoService = {
     return data;
   },
 
-  async adicionarComentario(id: string, atividadeId: string, texto: string, visivelPendencia?: boolean, publica?: boolean): Promise<ComentarioTarefa> {
-    const { data } = await gestaoApi.post(`/projetos/${id}/atividades/${atividadeId}/comentarios`, { texto, visivelPendencia, publica });
+  async adicionarComentario(id: string, atividadeId: string, texto: string, visivelPendencia?: boolean, publica?: boolean, emailEnvolvidos?: boolean): Promise<ComentarioTarefa> {
+    const { data } = await gestaoApi.post(`/projetos/${id}/atividades/${atividadeId}/comentarios`, { texto, visivelPendencia, publica, emailEnvolvidos });
     return data;
   },
 

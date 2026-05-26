@@ -202,8 +202,8 @@ export class ProjetoService {
     return this.atividadeService.listComentarios(projetoId, atividadeId, user, role);
   }
 
-  addComentario(projetoId: string, atividadeId: string, texto: string, user: JwtPayload, visivelPendencia?: boolean, publica?: boolean, role?: string) {
-    return this.atividadeService.addComentario(projetoId, atividadeId, texto, user, visivelPendencia, publica, role);
+  addComentario(projetoId: string, atividadeId: string, texto: string, user: JwtPayload, visivelPendencia?: boolean, publica?: boolean, role?: string, emailEnvolvidos?: boolean) {
+    return this.atividadeService.addComentario(projetoId, atividadeId, texto, user, visivelPendencia, publica, role, emailEnvolvidos);
   }
 
   removeComentario(projetoId: string, comentarioId: string, userId: string, role?: string) {
