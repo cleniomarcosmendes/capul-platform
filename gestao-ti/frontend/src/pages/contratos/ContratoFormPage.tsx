@@ -190,8 +190,7 @@ export function ContratoFormPage() {
           <DepartamentoField
             value={departamentoId}
             onChange={setDepartamentoId}
-            funcionalidade="CONTRATO"
-            help="Departamento ONDE o contrato está alocado (visibilidade). NFs derivadas vão herdar este depto como default."
+            help="Departamento ONDE o contrato está alocado (livre — qualquer depto da empresa). NFs derivadas vão herdar este depto como default."
           />
 
           <div>

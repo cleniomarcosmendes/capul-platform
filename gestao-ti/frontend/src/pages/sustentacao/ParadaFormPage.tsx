@@ -185,8 +185,7 @@ export function ParadaFormPage() {
           <DepartamentoField
             value={departamentoId}
             onChange={setDepartamentoId}
-            funcionalidade="PARADA"
-            help="Departamento ONDE a parada é registrada (visibilidade)."
+            help="Departamento ONDE a parada é registrada (livre — qualquer depto da empresa). Quem lançou é registrado separadamente para auditoria."
           />
 
           <div>

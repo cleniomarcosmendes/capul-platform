@@ -330,8 +330,7 @@ export function NotaFiscalFormPage() {
               <DepartamentoField
                 value={departamentoId}
                 onChange={(v) => { setDepartamentoId(v); setDirty(true); }}
-                funcionalidade="NOTA_FISCAL"
-                help="Departamento ONDE a NF é alocada (visibilidade)."
+                help="Departamento ONDE a NF é alocada (livre — qualquer depto da empresa). Quem lançou é registrado separadamente para auditoria."
               />
             </div>
             <div className="grid grid-cols-5 gap-4">

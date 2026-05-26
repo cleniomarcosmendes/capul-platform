@@ -232,8 +232,7 @@ export function AtivoFormPage() {
                 <DepartamentoField
                   value={form.departamentoId}
                   onChange={(v) => setForm({ ...form, departamentoId: v })}
-                  funcionalidade="ATIVO"
-                  help="Departamento ONDE o ativo está alocado (visibilidade)."
+                  help="Departamento ONDE o ativo está alocado (livre — qualquer depto da empresa). Quem lançou é registrado separadamente para auditoria."
                 />
               </div>
             </div>

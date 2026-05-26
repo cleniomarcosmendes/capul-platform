@@ -354,8 +354,7 @@ export function LicencasPage() {
               <DepartamentoField
                 value={formDepartamentoId}
                 onChange={setFormDepartamentoId}
-                funcionalidade="LICENCA"
-                help="Departamento ONDE a licença está alocada (visibilidade)."
+                help="Departamento ONDE a licença está alocada (livre — qualquer depto da empresa). O workspace que controla a licença é gravado automaticamente."
               />
             </div>
 

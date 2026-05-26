@@ -125,8 +125,7 @@ export function SoftwareFormPage() {
           <DepartamentoField
             value={departamentoId}
             onChange={setDepartamentoId}
-            funcionalidade="SOFTWARE"
-            help="Departamento ONDE o software está alocado (visibilidade). Quem cadastrou é registrado separadamente para auditoria."
+            help="Departamento ONDE o software está alocado (livre — qualquer depto da empresa). Quem cadastrou é registrado separadamente para auditoria."
           />
 
           <div>
