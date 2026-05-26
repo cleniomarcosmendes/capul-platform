@@ -151,6 +151,9 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-plataforma@capul.com.br}
+      # Opt-in p/ aceitar certificado TLS quando hostname não bate com CN/SAN
+      # (ex.: smtp.capul.com.br aponta pra inbox1.vertip.net). Default seguro: true.
+      SMTP_TLS_REJECT_UNAUTHORIZED: ${SMTP_TLS_REJECT_UNAUTHORIZED:-true}
     # Porta NAO exposta — acesso via Nginx reverse proxy
     depends_on:
       postgres:

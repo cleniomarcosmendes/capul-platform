@@ -81,6 +81,10 @@ export class EmailService {
   private getTransporter(): nodemailer.Transporter {
     if (this.transporter) return this.transporter;
     const port = Number(process.env.SMTP_PORT || 587);
+    // Opt-in: aceitar certificado TLS mesmo se o CN/SAN não bate com SMTP_HOST.
+    // Necessário quando o domínio aponta pra um provedor de e-mail com cert
+    // próprio (ex.: smtp.capul.com.br → inbox1.vertip.net). Default seguro: true.
+    const rejectUnauthorized = process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== 'false';
     this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port,
@@ -90,6 +94,7 @@ export class EmailService {
           ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD }
           : undefined,
       connectionTimeout: 10_000,
+      tls: { rejectUnauthorized },
     });
     return this.transporter;
   }
