@@ -451,7 +451,16 @@ export class CteDocumentoService {
     if (filtros.papel) where.papelCapul = filtros.papel;
     if (filtros.schema) where.schema = filtros.schema;
     if (filtros.ambiente === 1 || filtros.ambiente === 2) where.ambiente = filtros.ambiente;
-    if (filtros.cnpjConsulente) where.cnpjConsulente = filtros.cnpjConsulente.replace(/\D/g, '');
+    if (filtros.cnpjConsulente) {
+      // 26/05 — passou a aceitar CSV (múltiplas filiais do user). String
+      // simples continua funcionando como antes (1 CNPJ, igualdade).
+      const cnpjs = filtros.cnpjConsulente
+        .split(',')
+        .map((c) => c.trim().replace(/\D/g, ''))
+        .filter((c) => c.length === 14);
+      if (cnpjs.length === 1) where.cnpjConsulente = cnpjs[0];
+      else if (cnpjs.length > 1) where.cnpjConsulente = { in: cnpjs };
+    }
     // 'PENDENTE' = sem status (ainda não tentou gravar). Outros valores filtram literalmente.
     if (filtros.protheusStatus === 'PENDENTE') {
       where.protheusStatus = null;

@@ -65,6 +65,13 @@ interface ListResp {
   totalPages: number;
 }
 
+interface FilialResumo {
+  codigo: string;
+  nomeFantasia: string;
+  cnpj: string | null;
+  isDefault?: boolean;
+}
+
 interface CteEvento {
   id: number;
   chave: string;
@@ -126,6 +133,13 @@ export function CteRecebidosPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
 
+  // Filial filter (26/05) — abre com a filial principal do user; pode
+  // ampliar pra outras filiais permitidas ou ver todas as do user.
+  const [filiais, setFiliais] = useState<FilialResumo[]>([]);
+  const [filialCodigo, setFilialCodigo] = useState<string>(
+    () => usuario?.filialCodigo ?? '',
+  );
+
   // Filtros
   const [search, setSearch] = useState('');
   // Default 'TOMA' — único papel que gera pré-nota no Protheus (regra 11/05/2026).
@@ -165,6 +179,37 @@ export function CteRecebidosPage() {
   const [detalhe, setDetalhe] = useState<DetalheResp | null>(null);
   const [carregandoDetalhe, setCarregandoDetalhe] = useState(false);
 
+  // Carrega filiais permitidas ao user no mount. Mesmo endpoint que
+  // NfeConsultaPage/CteConsultaPage usam.
+  useEffect(() => {
+    fiscalApi
+      .get<FilialResumo[]>('/filiais')
+      .then((r) => {
+        setFiliais(r.data);
+        // Se o user não tem filial principal setada mas o backend retornou
+        // uma filial isDefault, usa ela.
+        if (!filialCodigo) {
+          const def = r.data.find((f) => f.isDefault) || r.data[0];
+          if (def) setFilialCodigo(def.codigo);
+        }
+      })
+      .catch(() => {
+        /* fallback: dropdown fica vazio + filtro ignorado */
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // CNPJs a enviar como filtro. Vazio = "Todas as minhas filiais" (CSV
+  // de todos os CNPJs do user). Senão, só o CNPJ da filial selecionada.
+  const cnpjsFiltro = useMemo(() => {
+    if (filiais.length === 0) return '';
+    if (filialCodigo === '__ALL__') {
+      return filiais.map((f) => f.cnpj ?? '').filter(Boolean).join(',');
+    }
+    const f = filiais.find((x) => x.codigo === filialCodigo);
+    return f?.cnpj ?? '';
+  }, [filiais, filialCodigo]);
+
   // Validacao YYYY-MM-DD — input type=date em alguns browsers mobile
   // aceita formatos livres (ex: "+052025-05-07") que viram dates malformadas
   // no toISOString. Sem essa guarda, useEffect disparava request a cada
@@ -199,6 +244,7 @@ export function CteRecebidosPage() {
       if (schema) params.schema = schema;
       if (ambiente) params.ambiente = ambiente;
       if (protheusStatus) params.protheusStatus = protheusStatus;
+      if (cnpjsFiltro) params.cnpjConsulente = cnpjsFiltro;
       if (dataInicio) params.dataInicio = new Date(dataInicio + 'T00:00:00').toISOString();
       if (dataFim) {
         const fim = new Date(dataFim + 'T23:59:59.999');
@@ -230,7 +276,7 @@ export function CteRecebidosPage() {
     // memoiza value), e mesmo se variasse, queremos evitar re-fetch quando
     // a unica coisa mudada e um toast ter sido exibido.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, search, papel, schema, ambiente, protheusStatus, dataInicio, dataFim, recebimentoInicio, recebimentoFim, sortBy, sortOrder, inconsistenciaFiltro]);
+  }, [page, search, papel, schema, ambiente, protheusStatus, cnpjsFiltro, dataInicio, dataFim, recebimentoInicio, recebimentoFim, sortBy, sortOrder, inconsistenciaFiltro]);
 
   // Click no header da coluna: nenhum → desc → asc → nenhum
   const toggleSort = (column: string) => {
@@ -544,6 +590,26 @@ export function CteRecebidosPage() {
             Filtros
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">
+                Filial Capul {filiais.length > 1 && <span className="text-gray-400">({filiais.length} permitidas)</span>}
+              </label>
+              <select
+                value={filialCodigo}
+                onChange={(e) => setFilialCodigo(e.target.value)}
+                disabled={filiais.length === 0}
+                className="w-full px-3 py-1.5 border rounded text-sm disabled:bg-gray-50"
+                title="Lista CT-es só da filial selecionada. Padrão: filial principal do seu cadastro."
+              >
+                {filiais.length > 1 && <option value="__ALL__">Todas as minhas filiais</option>}
+                {filiais.map((f) => (
+                  <option key={f.codigo} value={f.codigo}>
+                    {f.codigo} — {f.nomeFantasia}
+                    {f.isDefault ? ' (padrão)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="block text-xs text-gray-600 mb-1">Chave (parcial)</label>
               <input
