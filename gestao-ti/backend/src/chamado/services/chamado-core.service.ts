@@ -84,6 +84,81 @@ export class ChamadoCoreService {
     return Array.from(ids);
   }
 
+  // ─── Helpers de e-mail (Sub-fase 3 do plano e-mail aos envolvidos) ───
+  // Os 2 abaixo encapsulam: lista de envolvidos → filtro PRIVADO (sem cópias) →
+  // template HTML → chamada ao EmailEnvolvidosService. A pref do destinatário
+  // (default opt-in) é aplicada lá dentro.
+  private async dispararEmailStatusChamado(
+    chamadoId: string,
+    chamado: { numero: number; titulo: string; visibilidade: Visibilidade },
+    user: JwtPayload,
+    statusAnterior: string,
+    statusNovo: string,
+  ): Promise<void> {
+    const ids = await this.colherEnvolvidosParaEmail(chamadoId, chamado.visibilidade, [user.sub]);
+    if (ids.length === 0) return;
+    const autor = await this.nomeDoEmissor(user.sub);
+    await this.emailEnvolvidos.enviar({
+      canal: 'chamados',
+      emissorId: user.sub,
+      destinatarioIds: ids,
+      subject: `[Chamado #${chamado.numero}] ${chamado.titulo}`,
+      html: emailTpl.chamadoStatus({
+        numero: chamado.numero,
+        titulo: chamado.titulo,
+        autor,
+        statusAnterior,
+        statusNovo,
+        chamadoId,
+      }),
+    });
+  }
+
+  private async dispararEmailAtribuicao(
+    chamadoId: string,
+    chamado: { numero: number; titulo: string; visibilidade: Visibilidade },
+    user: JwtPayload,
+    tecnicoNome: string,
+  ): Promise<void> {
+    const ids = await this.colherEnvolvidosParaEmail(chamadoId, chamado.visibilidade, [user.sub]);
+    if (ids.length === 0) return;
+    const autor = await this.nomeDoEmissor(user.sub);
+    await this.emailEnvolvidos.enviar({
+      canal: 'chamados',
+      emissorId: user.sub,
+      destinatarioIds: ids,
+      subject: `[Chamado #${chamado.numero}] ${chamado.titulo}`,
+      html: emailTpl.chamadoAtribuicao({
+        numero: chamado.numero,
+        titulo: chamado.titulo,
+        autor,
+        tecnico: tecnicoNome,
+        chamadoId,
+      }),
+    });
+  }
+
+  private async colherEnvolvidosParaEmail(
+    chamadoId: string,
+    visibilidade: Visibilidade,
+    excluirIds: string[],
+  ): Promise<string[]> {
+    const ids = await this.getDestinatariosChamado(chamadoId, excluirIds);
+    if (visibilidade !== 'PRIVADO') return ids;
+    const copias = await this.prisma.chamadoCopia.findMany({
+      where: { chamadoId },
+      select: { usuarioId: true },
+    });
+    if (copias.length === 0) return ids;
+    const copiasIds = new Set(copias.map((c) => c.usuarioId));
+    return ids.filter((uid) => !copiasIds.has(uid));
+  }
+
+  private async nomeDoEmissor(userId: string): Promise<string> {
+    const u = await this.prisma.usuario.findUnique({ where: { id: userId }, select: { nome: true } });
+    return u?.nome ?? 'Sistema';
+  }
+
   async findAll(user: JwtPayload, role: string, filters: {
     status?: StatusChamado | string;
     equipeId?: string;
@@ -949,6 +1024,11 @@ export class ChamadoCoreService {
       }
     }).catch((err) => console.error('Notificacao error:', err.message));
 
+    if (dto.emailEnvolvidos === true) {
+      this.dispararEmailAtribuicao(id, chamado, user, tecnico.nome)
+        .catch((err) => console.error('Email envolvidos (transferirTecnico) error:', (err as Error).message));
+    }
+
     // Propaga para filhos agrupados (13/05/2026)
     this.agrupamento.propagarEventoNoFilho(id, `Transferido para o tecnico ${tecnico.nome}`, user.sub)
       .catch((err) => console.error('Propagacao transferir tecnico error:', err.message));
@@ -1295,6 +1375,11 @@ export class ChamadoCoreService {
       }
     }).catch((err) => console.error('Notificacao error:', err.message));
 
+    if (dto.emailEnvolvidos === true) {
+      this.dispararEmailStatusChamado(id, chamado, user, 'Em atendimento', 'Resolvido')
+        .catch((err) => console.error('Email envolvidos (resolver) error:', (err as Error).message));
+    }
+
     // Cascata para filhos agrupados (decidido em 13/05/2026)
     this.agrupamento.cascataResolverFechar(id, 'RESOLVIDO', dataResolucao, user)
       .catch((err) => console.error('Cascata resolver error:', err.message));
@@ -1418,6 +1503,13 @@ export class ChamadoCoreService {
         ).catch((err) => console.error('Notificacao error:', err.message));
       }
     }).catch((err) => console.error('Notificacao error:', err.message));
+
+    if (dto.emailEnvolvidos === true) {
+      const statusAnterior = chamado.status === 'RESOLVIDO' ? 'Resolvido' : 'Fechado';
+      const statusNovo = isTecnicoTI ? 'Em atendimento' : 'Reaberto';
+      this.dispararEmailStatusChamado(id, chamado, user, statusAnterior, statusNovo)
+        .catch((err) => console.error('Email envolvidos (reabrir) error:', (err as Error).message));
+    }
 
     return updated;
   }

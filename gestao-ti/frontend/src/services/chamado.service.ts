@@ -131,8 +131,8 @@ export const chamadoService = {
     return data;
   },
 
-  async transferirTecnico(id: string, tecnicoId: string, motivo?: string): Promise<Chamado> {
-    const { data } = await gestaoApi.post(`/chamados/${id}/transferir-tecnico`, { tecnicoId, motivo });
+  async transferirTecnico(id: string, tecnicoId: string, motivo?: string, emailEnvolvidos = false): Promise<Chamado> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/transferir-tecnico`, { tecnicoId, motivo, emailEnvolvidos });
     return data;
   },
 
@@ -159,8 +159,8 @@ export const chamadoService = {
     return data;
   },
 
-  async resolver(id: string, descricao?: string): Promise<Chamado> {
-    const { data } = await gestaoApi.patch(`/chamados/${id}/resolver`, { descricao });
+  async resolver(id: string, descricao?: string, emailEnvolvidos = false): Promise<Chamado> {
+    const { data } = await gestaoApi.patch(`/chamados/${id}/resolver`, { descricao, emailEnvolvidos });
     return data;
   },
 
@@ -169,8 +169,8 @@ export const chamadoService = {
     return data;
   },
 
-  async reabrir(id: string, motivo?: string): Promise<Chamado> {
-    const { data } = await gestaoApi.post(`/chamados/${id}/reabrir`, { motivo });
+  async reabrir(id: string, motivo?: string, emailEnvolvidos = false): Promise<Chamado> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/reabrir`, { motivo, emailEnvolvidos });
     return data;
   },
 

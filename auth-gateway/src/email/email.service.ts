@@ -59,6 +59,9 @@ export class EmailService {
         html: payload.html,
         text: payload.text ?? this.htmlToText(payload.html ?? ''),
         replyTo: payload.replyTo,
+        // Força UTF-8 — sem isso quoted-printable corrompe glyphs Unicode
+        // como → ↩ • no fallback text/plain (auditado via MailHog).
+        encoding: 'base64',
       });
       this.logger.log(
         `E-mail enviado: "${payload.subject}" → ${recipients.length} destinatário(s) (accepted=${info.accepted?.length ?? 0})`,

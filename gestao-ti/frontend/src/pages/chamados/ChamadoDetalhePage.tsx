@@ -90,6 +90,23 @@ export function ChamadoDetalhePage() {
   const [emailEnvolvidos, setEmailEnvolvidos] = useState<boolean>(() => {
     try { return localStorage.getItem('chamado.emailEnvolvidos') === 'true'; } catch { return false; }
   });
+  // Helper local: checkbox "📧 Notificar por e-mail" reusado em modais de
+  // resolver, reabrir e transferir-técnico. Mesmo state que o comentário.
+  const renderEmailCheckbox = (id: string) => (
+    <label htmlFor={id} className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
+      <input
+        id={id}
+        type="checkbox"
+        checked={emailEnvolvidos}
+        onChange={(e) => {
+          setEmailEnvolvidos(e.target.checked);
+          try { localStorage.setItem('chamado.emailEnvolvidos', String(e.target.checked)); } catch { /* ignore */ }
+        }}
+        className="rounded border-slate-300 w-3.5 h-3.5"
+      />
+      📧 Notificar envolvidos por e-mail
+    </label>
+  );
   // Anexos no input do comentario (chat-style 13/05/2026) — pre-upload em
   // memoria, sobe quando o usuario clica em Enviar.
   const [comentarioArquivos, setComentarioArquivos] = useState<File[]>([]);
@@ -1722,11 +1739,12 @@ export function ChamadoDetalhePage() {
                   <input value={transferMotivo} onChange={(e) => setTransferMotivo(e.target.value)}
                     maxLength={1000}
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Motivo da transferencia (opcional)" />
+                  {equipeDestinoId === chamado.equipeAtualId && renderEmailCheckbox('email-transferir-tecnico')}
                   <div className="flex gap-2">
                     <button onClick={() => {
                       if (equipeDestinoId === chamado.equipeAtualId) {
                         // Transferir para tecnico da mesma equipe
-                        runAction(() => chamadoService.transferirTecnico(chamado.id, tecnicoEquipeDestinoId, transferMotivo || undefined));
+                        runAction(() => chamadoService.transferirTecnico(chamado.id, tecnicoEquipeDestinoId, transferMotivo || undefined, emailEnvolvidos));
                       } else {
                         // Transferir para outra equipe
                         runAction(() => chamadoService.transferirEquipe(chamado.id, equipeDestinoId, transferMotivo || undefined, tecnicoEquipeDestinoId || undefined));
@@ -1763,8 +1781,9 @@ export function ChamadoDetalhePage() {
                     {resolverDescricao.length.toLocaleString('pt-BR')} / 5.000
                   </span>
                 </div>
+                {renderEmailCheckbox('email-resolver')}
                 <div className="flex gap-2">
-                  <button onClick={() => runAction(() => chamadoService.resolver(chamado.id, resolverDescricao))}
+                  <button onClick={() => runAction(() => chamadoService.resolver(chamado.id, resolverDescricao, emailEnvolvidos))}
                     disabled={actionLoading || !resolverDescricao.trim()}
                     className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700 disabled:opacity-50">
                     Confirmar Finalizacao
@@ -1782,8 +1801,9 @@ export function ChamadoDetalhePage() {
                 <input value={reabrirMotivo} onChange={(e) => setReabrirMotivo(e.target.value)}
                   maxLength={1000}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Motivo da reabertura (opcional)" />
+                {renderEmailCheckbox('email-reabrir')}
                 <div className="flex gap-2">
-                  <button onClick={() => runAction(() => chamadoService.reabrir(chamado.id, reabrirMotivo || undefined))}
+                  <button onClick={() => runAction(() => chamadoService.reabrir(chamado.id, reabrirMotivo || undefined, emailEnvolvidos))}
                     disabled={actionLoading}
                     className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
                     Confirmar Reabertura
