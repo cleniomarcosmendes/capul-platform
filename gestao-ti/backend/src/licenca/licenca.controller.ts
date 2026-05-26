@@ -99,20 +99,20 @@ export class LicencaController {
 
   @Post(':id/renovar')
   @Roles(...ROLES_TI)
-  renovar(@Param('id') id: string) {
-    return this.service.renovar(id);
+  renovar(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.service.renovar(id, user);
   }
 
   @Post(':id/inativar')
   @Roles(...ROLES_TI)
-  inativar(@Param('id') id: string) {
-    return this.service.inativar(id);
+  inativar(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.service.inativar(id, user);
   }
 
   @Delete(':id')
   @Roles(...ROLES_TI)
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.service.remove(id, user);
   }
 
   // ─── Usuarios da Licenca ────────────────────────────────

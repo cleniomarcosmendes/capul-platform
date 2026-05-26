@@ -156,8 +156,9 @@ export class AtivoService {
     });
   }
 
-  async updateStatus(id: string, status: StatusAtivo) {
-    await this.getOrFail(id);
+  async updateStatus(id: string, status: StatusAtivo, user?: JwtPayload) {
+    const ativo = await this.getOrFail(id);
+    if (user) assertDepartamentoDoUser(user, null, ativo.departamentoId);
     return this.prisma.ativo.update({
       where: { id },
       data: { status },
@@ -165,8 +166,9 @@ export class AtivoService {
     });
   }
 
-  async delete(id: string) {
-    await this.getOrFail(id);
+  async delete(id: string, user?: JwtPayload) {
+    const ativo = await this.getOrFail(id);
+    if (user) assertDepartamentoDoUser(user, null, ativo.departamentoId);
     await this.prisma.ativo.delete({ where: { id } });
   }
 

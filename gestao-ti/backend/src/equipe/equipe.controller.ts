@@ -64,14 +64,22 @@ export class EquipeController {
 
   @Patch(':id')
   @Roles('ADMIN', 'GESTOR')
-  update(@Param('id') id: string, @Body() dto: UpdateEquipeDto) {
-    return this.equipeService.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateEquipeDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.equipeService.update(id, dto, user);
   }
 
   @Patch(':id/status')
   @Roles('ADMIN', 'GESTOR')
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto) {
-    return this.equipeService.updateStatus(id, dto.status);
+  updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateStatusDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.equipeService.updateStatus(id, dto.status, user);
   }
 
   // ---- Membros ----
@@ -94,8 +102,8 @@ export class EquipeController {
 
   @Delete(':id')
   @Roles('ADMIN', 'GESTOR')
-  remove(@Param('id') id: string) {
-    return this.equipeService.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.equipeService.remove(id, user);
   }
 
   @Delete(':id/membros/:membroId')

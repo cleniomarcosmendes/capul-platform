@@ -51,13 +51,17 @@ export class ChamadoExternoController {
 
   @Patch(':id')
   @Roles(...WRITERS)
-  update(@Param('id') id: string, @Body() dto: UpdateChamadoExternoDto) {
-    return this.service.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateChamadoExternoDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.service.update(id, dto, user);
   }
 
   @Delete(':id')
   @Roles(...WRITERS)
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.service.remove(id, user);
   }
 }

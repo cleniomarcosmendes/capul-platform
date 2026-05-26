@@ -101,8 +101,19 @@ export class EquipeService {
     });
   }
 
-  async update(id: string, dto: UpdateEquipeDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateEquipeDto, user?: JwtPayload) {
+    const equipe = await this.findOne(id);
+
+    // Onda 3 S10 sweep (26/05) — fecha IDOR cross-depto na edição (bug_011
+    // completou-se só no create; security-review #1 sinalizou).
+    if (user) {
+      assertDepartamentoDoUser(user, null, equipe.departamentoId);
+      // Se o caller está MOVENDO a equipe pra outro depto, exige permissão
+      // também no destino (mesma regra de licenca.update/contrato.update).
+      if (dto.departamentoId && dto.departamentoId !== equipe.departamentoId) {
+        assertDepartamentoDoUser(user, null, dto.departamentoId);
+      }
+    }
 
     if (dto.nome || dto.sigla) {
       const existing = await this.prisma.equipe.findFirst({
@@ -133,8 +144,9 @@ export class EquipeService {
     });
   }
 
-  async updateStatus(id: string, status: StatusGeral) {
-    await this.findOne(id);
+  async updateStatus(id: string, status: StatusGeral, user?: JwtPayload) {
+    const equipe = await this.findOne(id);
+    if (user) assertDepartamentoDoUser(user, null, equipe.departamentoId);
 
     return this.prisma.equipe.update({
       where: { id },
@@ -194,9 +206,10 @@ export class EquipeService {
     });
   }
 
-  async remove(id: string) {
+  async remove(id: string, user?: JwtPayload) {
     const equipe = await this.prisma.equipe.findUnique({ where: { id } });
     if (!equipe) throw new NotFoundException('Equipe nao encontrada');
+    if (user) assertDepartamentoDoUser(user, null, equipe.departamentoId);
 
     try {
       await this.prisma.equipe.delete({ where: { id } });

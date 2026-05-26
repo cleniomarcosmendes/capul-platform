@@ -186,8 +186,9 @@ export class LicencaService {
     });
   }
 
-  async renovar(id: string) {
+  async renovar(id: string, user?: JwtPayload) {
     const anterior = await this.getLicencaOrFail(id);
+    if (user) assertDepartamentoDoUser(user, null, anterior.departamentoId);
 
     // Inativar a licenca anterior
     await this.prisma.softwareLicenca.update({
@@ -222,8 +223,9 @@ export class LicencaService {
     return nova;
   }
 
-  async inativar(id: string) {
-    await this.getLicencaOrFail(id);
+  async inativar(id: string, user?: JwtPayload) {
+    const licenca = await this.getLicencaOrFail(id);
+    if (user) assertDepartamentoDoUser(user, null, licenca.departamentoId);
     return this.prisma.softwareLicenca.update({
       where: { id },
       data: { status: 'INATIVA' },
@@ -231,8 +233,9 @@ export class LicencaService {
     });
   }
 
-  async remove(id: string) {
+  async remove(id: string, user?: JwtPayload) {
     const licenca = await this.getLicencaOrFail(id);
+    if (user) assertDepartamentoDoUser(user, null, licenca.departamentoId);
     const usuarios = await this.prisma.licencaUsuario.count({ where: { licencaId: id } });
     if (usuarios > 0) {
       throw new BadRequestException(`Licenca possui ${usuarios} usuario(s) vinculado(s). Remova os usuarios antes de excluir.`);

@@ -65,14 +65,18 @@ export class SoftwareController {
 
   @Patch(':id/status')
   @Roles('ADMIN', 'GESTOR')
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusSoftwareDto) {
-    return this.service.updateStatus(id, dto.status);
+  updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateStatusSoftwareDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.service.updateStatus(id, dto.status, user);
   }
 
   @Delete(':id')
   @Roles('ADMIN', 'GESTOR')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.service.remove(id, user);
   }
 
   // ─── Software ↔ Filial ────────────────────────────────────

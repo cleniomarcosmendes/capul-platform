@@ -124,13 +124,15 @@ export class SoftwareService {
     });
   }
 
-  async updateStatus(id: string, status: StatusSoftware) {
-    await this.getSoftwareOrFail(id);
+  async updateStatus(id: string, status: StatusSoftware, user?: JwtPayload) {
+    const software = await this.getSoftwareOrFail(id);
+    if (user) assertDepartamentoDoUser(user, null, software.departamentoId);
     return this.prisma.software.update({ where: { id }, data: { status } });
   }
 
-  async remove(id: string) {
-    await this.getSoftwareOrFail(id);
+  async remove(id: string, user?: JwtPayload) {
+    const software = await this.getSoftwareOrFail(id);
+    if (user) assertDepartamentoDoUser(user, null, software.departamentoId);
     const chamados = await this.prisma.chamado.count({ where: { softwareId: id } });
     const licencas = await this.prisma.softwareLicenca.count({ where: { softwareId: id } });
     const contratos = await this.prisma.contrato.count({ where: { softwareId: id } });

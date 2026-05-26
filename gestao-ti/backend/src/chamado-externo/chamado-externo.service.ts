@@ -2,7 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, ConflictException }
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateChamadoExternoDto, UpdateChamadoExternoDto } from './dto/create-chamado-externo.dto.js';
-import { applyDepartamentoFilter } from '../common/helpers/departamento-filter.helper.js';
+import { applyDepartamentoFilter, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
@@ -62,6 +62,8 @@ export class ChamadoExternoService {
       'WORKSPACE',
       dto.departamentoId,
     );
+    // Onda 3 S10 sweep (26/05, security-review #1) — gate cross-depto.
+    if (user) assertDepartamentoDoUser(user, null, departamentoId);
 
     try {
       return await this.prisma.chamadoExternoMensal.create({
@@ -87,8 +89,11 @@ export class ChamadoExternoService {
     }
   }
 
-  async update(id: string, dto: UpdateChamadoExternoDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateChamadoExternoDto, user?: JwtPayload) {
+    const existing = await this.findOne(id);
+    // departamentoId é NULL em registros legados (pré-Onda 1) — pula assert
+    // se já está vazio (já é "sem dono" e qualquer staff pode ajustar).
+    if (user && existing.departamentoId) assertDepartamentoDoUser(user, null, existing.departamentoId);
     if (dto.softwareId) await this.assertSoftwareExiste(dto.softwareId);
 
     try {
@@ -114,8 +119,11 @@ export class ChamadoExternoService {
     }
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, user?: JwtPayload) {
+    const existing = await this.findOne(id);
+    // departamentoId é NULL em registros legados (pré-Onda 1) — pula assert
+    // se já está vazio (já é "sem dono" e qualquer staff pode ajustar).
+    if (user && existing.departamentoId) assertDepartamentoDoUser(user, null, existing.departamentoId);
     await this.prisma.chamadoExternoMensal.delete({ where: { id } });
     return { deleted: true };
   }

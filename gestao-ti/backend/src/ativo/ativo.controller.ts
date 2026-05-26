@@ -61,14 +61,18 @@ export class AtivoController {
 
   @Patch(':id/status')
   @Roles('ADMIN', 'GESTOR')
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusAtivoDto) {
-    return this.service.updateStatus(id, dto.status);
+  updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateStatusAtivoDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.service.updateStatus(id, dto.status, user);
   }
 
   @Delete(':id')
   @Roles('ADMIN', 'GESTOR')
-  delete(@Param('id') id: string) {
-    return this.service.delete(id);
+  delete(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.service.delete(id, user);
   }
 
   @Get(':id/softwares')
