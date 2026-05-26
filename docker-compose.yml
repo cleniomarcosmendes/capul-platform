@@ -464,6 +464,21 @@ services:
       retries: 3
       start_period: 60s
 
+  # =======================================
+  # MAILHOG — SMTP de captura para DEV
+  # =======================================
+  # Só sobe com profile `mail`: `docker compose --profile mail up -d mailhog`.
+  # Em HOM/PROD o profile não é usado e este serviço fica fora do compose.
+  # UI: http://localhost:8025 — SMTP: mailhog:1025 (rede docker interna).
+  mailhog:
+    image: mailhog/mailhog
+    container_name: capul-mailhog
+    profiles: ["mail"]
+    ports:
+      - "127.0.0.1:8025:8025"  # UI web só localhost
+    logging: *default-logging
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
