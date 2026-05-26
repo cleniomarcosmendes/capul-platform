@@ -439,7 +439,7 @@ export const projetoService = {
     return data;
   },
 
-  async criarPendencia(id: string, payload: { titulo: string; descricao?: string; prioridade?: PrioridadePendencia; faseId?: string; responsavelId: string; dataLimite?: string }): Promise<PendenciaProjeto> {
+  async criarPendencia(id: string, payload: { titulo: string; descricao?: string; prioridade?: PrioridadePendencia; faseId?: string; responsavelId: string; dataLimite?: string; emailEnvolvidos?: boolean }): Promise<PendenciaProjeto> {
     const { data } = await gestaoApi.post(`/projetos/${id}/pendencias`, payload);
     return data;
   },
@@ -449,7 +449,7 @@ export const projetoService = {
     return data;
   },
 
-  async atualizarPendencia(id: string, pid: string, payload: { titulo?: string; descricao?: string; status?: StatusPendencia; prioridade?: PrioridadePendencia; faseId?: string; responsavelId?: string; dataLimite?: string }): Promise<PendenciaProjeto> {
+  async atualizarPendencia(id: string, pid: string, payload: { titulo?: string; descricao?: string; status?: StatusPendencia; prioridade?: PrioridadePendencia; faseId?: string; responsavelId?: string; dataLimite?: string; emailEnvolvidos?: boolean }): Promise<PendenciaProjeto> {
     const { data } = await gestaoApi.patch(`/projetos/${id}/pendencias/${pid}`, payload);
     return data;
   },
@@ -459,7 +459,7 @@ export const projetoService = {
     return data;
   },
 
-  async adicionarInteracaoPendencia(id: string, pid: string, payload: { descricao: string; publica?: boolean; anexosIds?: string[] }): Promise<InteracaoPendencia> {
+  async adicionarInteracaoPendencia(id: string, pid: string, payload: { descricao: string; publica?: boolean; anexosIds?: string[]; emailEnvolvidos?: boolean }): Promise<InteracaoPendencia> {
     const { data } = await gestaoApi.post(`/projetos/${id}/pendencias/${pid}/interacoes`, payload);
     return data;
   },

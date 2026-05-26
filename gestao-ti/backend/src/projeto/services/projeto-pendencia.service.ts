@@ -8,6 +8,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { NotificacaoService } from '../../notificacao/notificacao.service.js';
+import { EmailEnvolvidosService } from '../../email/email-envolvidos.service.js';
+import * as emailTpl from '../../email/email-templates.js';
 import { CreatePendenciaDto } from '../dto/create-pendencia.dto.js';
 import { UpdatePendenciaDto } from '../dto/update-pendencia.dto.js';
 import { CreateInteracaoPendenciaDto } from '../dto/create-interacao-pendencia.dto.js';
@@ -21,6 +23,7 @@ export class ProjetoPendenciaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificacaoService: NotificacaoService,
+    private readonly emailEnvolvidos: EmailEnvolvidosService,
     private readonly helpers: ProjetoHelpersService,
   ) {}
 
@@ -186,6 +189,25 @@ export class ProjetoPendenciaService {
       ).catch((err) => console.error('Notificacao error:', err.message));
     }
 
+    if (dto.emailEnvolvidos === true && dto.responsavelId !== criadorId) {
+      this.emailEnvolvidos.enviar({
+        canal: 'pendencias',
+        emissorId: criadorId,
+        destinatarioIds: [dto.responsavelId],
+        subject: `[Pendência #${pendencia.numero}] ${pendencia.titulo}`,
+        html: emailTpl.pendenciaCriada({
+          numero: pendencia.numero,
+          titulo: pendencia.titulo,
+          projetoNome: projeto.nome,
+          projetoId,
+          pendenciaId: pendencia.id,
+          criador: pendencia.criador?.nome ?? 'Sistema',
+          responsavel: pendencia.responsavel?.nome ?? '—',
+          descricao: pendencia.descricao ?? undefined,
+        }),
+      }).catch((err) => console.error('Email envolvidos (pendencia criada) error:', (err as Error).message));
+    }
+
     return pendencia;
   }
 
@@ -272,6 +294,26 @@ export class ProjetoPendenciaService {
           `A pendencia "${pendencia.titulo}" do projeto "${proj?.nome}" teve o status alterado para ${statusLabels[dto.status] || dto.status}.`,
           { projetoId, pendenciaId },
         ).catch((err) => console.error('Notificacao error:', err.message));
+
+        if (dto.emailEnvolvidos === true) {
+          const autor = await this.prisma.usuario.findUnique({ where: { id: userId }, select: { nome: true } });
+          this.emailEnvolvidos.enviar({
+            canal: 'pendencias',
+            emissorId: userId,
+            destinatarioIds: Array.from(idsNotificar),
+            subject: `[Pendência #${pendencia.numero}] ${pendencia.titulo}`,
+            html: emailTpl.pendenciaStatus({
+              numero: pendencia.numero,
+              titulo: pendencia.titulo,
+              projetoNome: proj?.nome ?? '—',
+              projetoId,
+              pendenciaId,
+              autor: autor?.nome ?? 'Sistema',
+              statusAnterior: statusLabels[pendencia.status] || pendencia.status,
+              statusNovo: statusLabels[dto.status] || dto.status,
+            }),
+          }).catch((err) => console.error('Email envolvidos (pendencia status) error:', (err as Error).message));
+        }
       }
     }
 
@@ -458,6 +500,26 @@ export class ProjetoPendenciaService {
         `Novo comentario na pendencia "${pendencia.titulo}" do projeto "${proj?.nome}".`,
         { projetoId, pendenciaId },
       ).catch((err) => console.error('Notificacao error:', err.message));
+
+      // E-mail só se: emissor pediu, interação é pública (não-interna) e há
+      // destinatários após o filtro UC/TERC em interno (já aplicado acima).
+      if (dto.emailEnvolvidos === true && publica) {
+        this.emailEnvolvidos.enviar({
+          canal: 'pendencias',
+          emissorId: userId,
+          destinatarioIds: Array.from(idsNotificar),
+          subject: `[Pendência #${pendencia.numero}] ${pendencia.titulo}`,
+          html: emailTpl.pendenciaComentario({
+            numero: pendencia.numero,
+            titulo: pendencia.titulo,
+            projetoNome: proj?.nome ?? '—',
+            projetoId,
+            pendenciaId,
+            autor: interacao.usuario?.nome ?? 'Sistema',
+            comentario: dto.descricao,
+          }),
+        }).catch((err) => console.error('Email envolvidos (pendencia comentario) error:', (err as Error).message));
+      }
     }
 
     return interacao;

@@ -3087,6 +3087,9 @@ function TabPendencias({ projetoId, projetoNumero, isSubProjeto, onEditingChange
   const [formPrioridade, setFormPrioridade] = useState<PrioridadePendencia>('MEDIA');
   const [formResponsavelId, setFormResponsavelId] = useState('');
   const [formDataLimite, setFormDataLimite] = useState('');
+  const [formEmailEnvolvidos, setFormEmailEnvolvidos] = useState<boolean>(() => {
+    try { return localStorage.getItem('pendencia.emailEnvolvidos') === 'true'; } catch { return false; }
+  });
   const [salvando, setSalvando] = useState(false);
   // Protecao de edicao delegada ao pai via onEditingChange
 
@@ -3157,6 +3160,7 @@ function TabPendencias({ projetoId, projetoNumero, isSubProjeto, onEditingChange
         prioridade: formPrioridade,
         responsavelId: formResponsavelId,
         dataLimite: formDataLimite || undefined,
+        emailEnvolvidos: formEmailEnvolvidos,
       });
       toast('success', 'Pendencia criada');
       setShowForm(false);
@@ -3249,6 +3253,18 @@ function TabPendencias({ projetoId, projetoNumero, isSubProjeto, onEditingChange
                 <input type="date" value={formDataLimite} onChange={(e) => setFormDataLimite(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
               </div>
             </div>
+            <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={formEmailEnvolvidos}
+                onChange={(e) => {
+                  setFormEmailEnvolvidos(e.target.checked);
+                  try { localStorage.setItem('pendencia.emailEnvolvidos', String(e.target.checked)); } catch { /* ignore */ }
+                }}
+                className="rounded border-slate-300 w-3.5 h-3.5"
+              />
+              📧 Notificar responsável por e-mail
+            </label>
             <div className="flex gap-2">
               <button onClick={handleCreate} disabled={salvando} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50">
                 {salvando ? 'Criando...' : 'Criar Pendencia'}

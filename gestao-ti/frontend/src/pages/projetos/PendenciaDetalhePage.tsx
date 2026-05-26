@@ -61,6 +61,14 @@ export function PendenciaDetalhePage() {
   // Conversa da Atividade (decisão Clenio 16/05): nota de pendência é
   // trabalho interno de equipe; só staff TI marca p/ liberar a UC/Terc.
   const [comentarioPublico, setComentarioPublico] = useState(false);
+  // Toggle "Notificar por e-mail" (default OFF, persistido por usuário).
+  const [emailEnvolvidos, setEmailEnvolvidos] = useState<boolean>(() => {
+    try { return localStorage.getItem('pendencia.emailEnvolvidos') === 'true'; } catch { return false; }
+  });
+  function setEmailEnvolvidosPersistido(v: boolean) {
+    setEmailEnvolvidos(v);
+    try { localStorage.setItem('pendencia.emailEnvolvidos', String(v)); } catch { /* ignore */ }
+  }
   // Anexos no input do comentário (chat-style 13/05/2026)
   const [comentarioArquivos, setComentarioArquivos] = useState<File[]>([]);
   const comentarioFileInputRef = useRef<HTMLInputElement>(null);
@@ -147,7 +155,7 @@ export function PendenciaDetalhePage() {
   async function handleStatusChange(newStatus: StatusPendencia) {
     if (!pendencia) return;
     try {
-      await projetoService.atualizarPendencia(projetoId!, pendencia.id, { status: newStatus });
+      await projetoService.atualizarPendencia(projetoId!, pendencia.id, { status: newStatus, emailEnvolvidos });
       toast('success', 'Status atualizado');
       loadData();
     } catch (err: any) {
@@ -172,6 +180,7 @@ export function PendenciaDetalhePage() {
         descricao: comentario.trim() || '(anexo)',
         publica: comentarioPublico,
         anexosIds: anexosIds.length > 0 ? anexosIds : undefined,
+        emailEnvolvidos,
       });
       setComentario('');
       setComentarioArquivos([]);
@@ -528,6 +537,25 @@ export function PendenciaDetalhePage() {
                     Visível p/ Usuário Chave / Terceirizado
                   </label>
                 )}
+                <label
+                  className={`flex items-center gap-1.5 text-xs cursor-pointer select-none ${
+                    comentarioPublico ? 'text-slate-600' : 'text-slate-400'
+                  }`}
+                  title={
+                    comentarioPublico
+                      ? 'Quando marcado, dispara e-mail ao responsável e criador da pendência. Comentário interno nunca envia.'
+                      : 'Comentários internos nunca disparam e-mail. Marque "Visível p/ Usuário Chave / Terceirizado" pra habilitar.'
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={emailEnvolvidos && comentarioPublico}
+                    disabled={!comentarioPublico}
+                    onChange={(e) => setEmailEnvolvidosPersistido(e.target.checked)}
+                    className="rounded border-slate-300 w-3.5 h-3.5"
+                  />
+                  📧 E-mail
+                </label>
                 <div className="flex-1" />
                 <button
                   onClick={handleAddComentario}
@@ -683,6 +711,15 @@ export function PendenciaDetalhePage() {
                     Cancelar
                   </button>
                 </div>
+                <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={emailEnvolvidos}
+                    onChange={(e) => setEmailEnvolvidosPersistido(e.target.checked)}
+                    className="rounded border-slate-300 w-3.5 h-3.5"
+                  />
+                  📧 Notificar responsável e criador por e-mail ao mudar status
+                </label>
               </div>
             )}
 

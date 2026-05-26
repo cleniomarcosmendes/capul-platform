@@ -92,3 +92,73 @@ export function chamadoAtribuicao(args: {
     'Abrir chamado',
   );
 }
+
+export function pendenciaCriada(args: {
+  numero: number;
+  titulo: string;
+  projetoNome: string;
+  projetoId: string;
+  pendenciaId: string;
+  criador: string;
+  responsavel: string;
+  descricao?: string;
+}): string {
+  const desc = args.descricao && args.descricao.trim()
+    ? `<div style="background: #f1f5f9; border-left: 3px solid #0e7490; padding: 12px 16px; border-radius: 4px; color: #1e293b; margin-top: 12px; white-space: pre-wrap;">${escapeHtml(args.descricao.slice(0, 400))}${args.descricao.length > 400 ? '…' : ''}</div>`
+    : '';
+  return layout(
+    `Nova pendência #${args.numero}: ${args.titulo}`,
+    `<p style="margin: 0 0 8px; color: #475569;">Projeto: <strong>${escapeHtml(args.projetoNome)}</strong></p>
+     <p style="margin: 0 0 4px; color: #64748b; font-size: 13px;">criada por ${escapeHtml(args.criador)}</p>
+     <p style="margin: 0; color: #64748b; font-size: 13px;">responsável: <strong style="color: #0e7490;">${escapeHtml(args.responsavel)}</strong></p>
+     ${desc}`,
+    `${BASE_URL}/gestao-ti/projetos/${args.projetoId}?tab=pendencias&pendenciaId=${args.pendenciaId}`,
+    'Abrir pendência',
+  );
+}
+
+export function pendenciaComentario(args: {
+  numero: number;
+  titulo: string;
+  projetoNome: string;
+  projetoId: string;
+  pendenciaId: string;
+  autor: string;
+  comentario: string;
+}): string {
+  const snippet = args.comentario.length > 400 ? args.comentario.slice(0, 400) + '…' : args.comentario;
+  return layout(
+    `Novo comentário na pendência #${args.numero}`,
+    `<p style="margin: 0 0 8px; color: #475569;"><strong>${escapeHtml(args.titulo)}</strong></p>
+     <p style="margin: 0 0 4px; color: #64748b; font-size: 13px;">Projeto: ${escapeHtml(args.projetoNome)}</p>
+     <p style="margin: 0 0 16px; color: #64748b; font-size: 13px;">por ${escapeHtml(args.autor)}</p>
+     <div style="background: #f1f5f9; border-left: 3px solid #0e7490; padding: 12px 16px; border-radius: 4px; color: #1e293b; white-space: pre-wrap;">${escapeHtml(snippet)}</div>`,
+    `${BASE_URL}/gestao-ti/projetos/${args.projetoId}?tab=pendencias&pendenciaId=${args.pendenciaId}`,
+    'Abrir pendência',
+  );
+}
+
+export function pendenciaStatus(args: {
+  numero: number;
+  titulo: string;
+  projetoNome: string;
+  projetoId: string;
+  pendenciaId: string;
+  autor: string;
+  statusAnterior: string;
+  statusNovo: string;
+}): string {
+  return layout(
+    `Pendência #${args.numero} — ${args.statusNovo}`,
+    `<p style="margin: 0 0 8px; color: #475569;"><strong>${escapeHtml(args.titulo)}</strong></p>
+     <p style="margin: 0 0 4px; color: #64748b; font-size: 13px;">Projeto: ${escapeHtml(args.projetoNome)}</p>
+     <p style="margin: 0 0 16px; color: #64748b; font-size: 13px;">alterado por ${escapeHtml(args.autor)}</p>
+     <p style="margin: 0; color: #1e293b;">
+       <span style="background: #e2e8f0; padding: 4px 10px; border-radius: 6px; font-size: 13px;">${escapeHtml(args.statusAnterior)}</span>
+       <span style="color: #64748b; margin: 0 8px;">→</span>
+       <span style="background: #cffafe; color: #0e7490; padding: 4px 10px; border-radius: 6px; font-size: 13px; font-weight: 600;">${escapeHtml(args.statusNovo)}</span>
+     </p>`,
+    `${BASE_URL}/gestao-ti/projetos/${args.projetoId}?tab=pendencias&pendenciaId=${args.pendenciaId}`,
+    'Abrir pendência',
+  );
+}

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsUUID, IsEnum, IsDateString, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsUUID, IsEnum, IsDateString, IsBoolean, MaxLength } from 'class-validator';
 import { PrioridadePendencia } from '@prisma/client';
 
 export class CreatePendenciaDto {
@@ -25,4 +25,8 @@ export class CreatePendenciaDto {
   @IsOptional()
   @IsDateString()
   dataLimite?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  emailEnvolvidos?: boolean;
 }

@@ -21,4 +21,8 @@ export class CreateInteracaoPendenciaDto {
   @ArrayMaxSize(10)
   @IsUUID(undefined, { each: true })
   anexosIds?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  emailEnvolvidos?: boolean;
 }
