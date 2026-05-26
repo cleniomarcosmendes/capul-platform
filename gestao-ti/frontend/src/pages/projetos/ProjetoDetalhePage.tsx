@@ -1176,7 +1176,10 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
   }
   async function handleChangeStatus(atividadeId: string, status: string) {
     try {
-      const result = await projetoService.atualizarAtividade(projetoId, atividadeId, { status });
+      const emailEnvolvidos = (() => {
+        try { return localStorage.getItem('atividade.emailEnvolvidos') === 'true'; } catch { return false; }
+      })();
+      const result = await projetoService.atualizarAtividade(projetoId, atividadeId, { status, emailEnvolvidos });
       loadAll();
       if ((result as unknown as Record<string, unknown>).faseResumo) {
         setFaseResumoModal((result as unknown as Record<string, unknown>).faseResumo as typeof faseResumoModal);
@@ -1231,6 +1234,9 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
     if (!editingAtividade || !editAtivTitulo.trim() || savingAtividade) return;
     setSavingAtividade(true);
     try {
+      const emailEnvolvidos = (() => {
+        try { return localStorage.getItem('atividade.emailEnvolvidos') === 'true'; } catch { return false; }
+      })();
       await projetoService.atualizarAtividade(projetoId, editingAtividade.id, {
         titulo: editAtivTitulo.trim(),
         descricao: editAtivDescricao.trim() || undefined,
@@ -1238,6 +1244,7 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
         dataFimPrevista: editAtivDataFimPrevista || undefined,
         faseId: editAtivFaseId || undefined,
         responsavelIds: editAtivResponsavelIds,
+        emailEnvolvidos,
       });
       closeEditAtividade();
       loadAll();
@@ -1347,6 +1354,17 @@ function TabCronograma({ projetoId, isCompleto, canManage, canAdd, userId, isGes
             <label className="block text-xs text-slate-500 mb-1">Descricao</label>
             <textarea placeholder="Descricao da tarefa (opcional) - detalhe o que precisa ser feito, parametros, configuracoes..." value={editAtivDescricao} onChange={(e) => setEditAtivDescricao(e.target.value)} rows={10} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
           </div>
+          <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none pt-1">
+            <input
+              type="checkbox"
+              defaultChecked={(() => { try { return localStorage.getItem('atividade.emailEnvolvidos') === 'true'; } catch { return false; } })()}
+              onChange={(e) => {
+                try { localStorage.setItem('atividade.emailEnvolvidos', String(e.target.checked)); } catch { /* ignore */ }
+              }}
+              className="rounded border-slate-300 w-3.5 h-3.5"
+            />
+            📧 Notificar responsáveis por e-mail nas alterações
+          </label>
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={closeEditAtividade} className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2">Cancelar</button>
             <button onClick={handleSaveAtividade} disabled={savingAtividade || !editAtivTitulo.trim()} className="bg-capul-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">

@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { NotificacaoService } from '../../notificacao/notificacao.service.js';
+import { EmailEnvolvidosService } from '../../email/email-envolvidos.service.js';
+import * as emailTpl from '../../email/email-templates.js';
 import { ProjetoHelpersService } from './projeto-helpers.service.js';
 import { ProjetoAtividadeHistoricoService } from './projeto-atividade-historico.service.js';
 import { isGestor, isTI, hasStaffPerfilEmTI } from '../../common/constants/roles.constant.js';
@@ -16,6 +18,7 @@ export class ProjetoAtividadeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificacaoService: NotificacaoService,
+    private readonly emailEnvolvidos: EmailEnvolvidosService,
     private readonly helpers: ProjetoHelpersService,
     private readonly historico: ProjetoAtividadeHistoricoService,
   ) {}
@@ -48,7 +51,7 @@ export class ProjetoAtividadeService {
 
   async addAtividade(
     projetoId: string,
-    dto: { titulo: string; descricao?: string; faseId?: string; pendenciaId?: string; dataInicio?: string; dataFimPrevista?: string; responsavelIds?: string[] },
+    dto: { titulo: string; descricao?: string; faseId?: string; pendenciaId?: string; dataInicio?: string; dataFimPrevista?: string; responsavelIds?: string[]; emailEnvolvidos?: boolean },
     userId: string,
   ) {
     await this.helpers.ensureProjetoExists(projetoId);
@@ -109,6 +112,28 @@ export class ProjetoAtividadeService {
         `Voce foi atribuido a atividade "${dto.titulo}" no projeto "${atividade.projeto.nome}".`,
         { projetoId, atividadeId: atividade.id },
       ).catch((err) => console.error('Notificacao error:', err.message));
+
+      if (dto.emailEnvolvidos === true) {
+        const nomes = await this.prisma.usuario.findMany({
+          where: { id: { in: responsavelIds } },
+          select: { nome: true },
+        });
+        this.emailEnvolvidos.enviar({
+          canal: 'atividades',
+          emissorId: userId,
+          destinatarioIds: notificarIds,
+          subject: `[Atividade] ${atividade.titulo}`,
+          html: emailTpl.atividadeCriada({
+            titulo: atividade.titulo,
+            projetoNome: atividade.projeto.nome,
+            projetoId,
+            atividadeId: atividade.id,
+            criador: atividade.usuario?.nome ?? 'Sistema',
+            responsaveis: nomes.map((n) => n.nome),
+            descricao: atividade.descricao ?? undefined,
+          }),
+        }).catch((err) => console.error('Email envolvidos (atividade criada) error:', (err as Error).message));
+      }
     }
 
     this.historico.registrar(atividade.id, 'CRIADA', {
@@ -122,7 +147,7 @@ export class ProjetoAtividadeService {
   async updateAtividade(
     projetoId: string,
     atividadeId: string,
-    dto: { titulo?: string; descricao?: string; faseId?: string; status?: string; dataInicio?: string; dataFimPrevista?: string; responsavelIds?: string[] },
+    dto: { titulo?: string; descricao?: string; faseId?: string; status?: string; dataInicio?: string; dataFimPrevista?: string; responsavelIds?: string[]; emailEnvolvidos?: boolean },
     actorId?: string,
   ) {
     const atividade = await this.prisma.atividadeProjeto.findFirst({
@@ -233,6 +258,27 @@ export class ProjetoAtividadeService {
           `A atividade "${updated.titulo}" do projeto "${proj?.nome}" teve o status alterado para ${statusLabelsNotif[dto.status] || dto.status}.`,
           { projetoId, atividadeId },
         ).catch((err) => console.error('Notificacao error:', err.message));
+
+        if (dto.emailEnvolvidos === true) {
+          const autor = actorId
+            ? await this.prisma.usuario.findUnique({ where: { id: actorId }, select: { nome: true } })
+            : null;
+          this.emailEnvolvidos.enviar({
+            canal: 'atividades',
+            emissorId: actorId ?? atividade.usuarioId,
+            destinatarioIds: idsResponsaveis,
+            subject: `[Atividade] ${updated.titulo}`,
+            html: emailTpl.atividadeStatus({
+              titulo: updated.titulo,
+              projetoNome: proj?.nome ?? '—',
+              projetoId,
+              atividadeId,
+              autor: autor?.nome ?? 'Sistema',
+              statusAnterior: statusLabelsNotif[atividade.status] || atividade.status,
+              statusNovo: statusLabelsNotif[dto.status] || dto.status,
+            }),
+          }).catch((err) => console.error('Email envolvidos (atividade status) error:', (err as Error).message));
+        }
       }
     }
 

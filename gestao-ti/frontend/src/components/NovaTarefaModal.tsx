@@ -27,6 +27,9 @@ export function NovaTarefaModal({ open, onClose, onCreated, projetoId, fases, me
   const [dataInicio, setDataInicio] = useState('');
   const [dataFimPrevista, setDataFimPrevista] = useState('');
   const [responsavelIds, setResponsavelIds] = useState<string[]>([]);
+  const [emailEnvolvidos, setEmailEnvolvidos] = useState<boolean>(() => {
+    try { return localStorage.getItem('atividade.emailEnvolvidos') === 'true'; } catch { return false; }
+  });
   const [saving, setSaving] = useState(false);
   const [mounted, setMounted] = useState(false);
   const tituloRef = useRef<HTMLInputElement>(null);
@@ -59,6 +62,7 @@ export function NovaTarefaModal({ open, onClose, onCreated, projetoId, fases, me
         responsavelIds: responsavelIds.length > 0 ? responsavelIds : undefined,
         dataInicio: dataInicio ? new Date(dataInicio).toISOString() : undefined,
         dataFimPrevista: dataFimPrevista ? new Date(dataFimPrevista).toISOString() : undefined,
+        emailEnvolvidos,
       });
       onCreated();
       onClose();
@@ -153,6 +157,19 @@ export function NovaTarefaModal({ open, onClose, onCreated, projetoId, fases, me
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-y"
             />
           </div>
+
+          <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={emailEnvolvidos}
+              onChange={(e) => {
+                setEmailEnvolvidos(e.target.checked);
+                try { localStorage.setItem('atividade.emailEnvolvidos', String(e.target.checked)); } catch { /* ignore */ }
+              }}
+              className="rounded border-slate-300 w-3.5 h-3.5"
+            />
+            📧 Notificar responsáveis por e-mail
+          </label>
         </div>
 
         {/* Footer */}

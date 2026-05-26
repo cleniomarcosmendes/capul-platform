@@ -183,12 +183,12 @@ export const projetoService = {
     return data;
   },
 
-  async adicionarAtividade(id: string, payload: { titulo: string; descricao?: string; faseId?: string; responsavelIds?: string[]; dataInicio?: string; dataFimPrevista?: string }): Promise<AtividadeProjeto> {
+  async adicionarAtividade(id: string, payload: { titulo: string; descricao?: string; faseId?: string; responsavelIds?: string[]; dataInicio?: string; dataFimPrevista?: string; emailEnvolvidos?: boolean }): Promise<AtividadeProjeto> {
     const { data } = await gestaoApi.post(`/projetos/${id}/atividades`, payload);
     return data;
   },
 
-  async atualizarAtividade(id: string, atividadeId: string, payload: { titulo?: string; descricao?: string; faseId?: string; status?: string; dataInicio?: string; dataFimPrevista?: string; responsavelIds?: string[] }): Promise<AtividadeProjeto> {
+  async atualizarAtividade(id: string, atividadeId: string, payload: { titulo?: string; descricao?: string; faseId?: string; status?: string; dataInicio?: string; dataFimPrevista?: string; responsavelIds?: string[]; emailEnvolvidos?: boolean }): Promise<AtividadeProjeto> {
     const { data } = await gestaoApi.patch(`/projetos/${id}/atividades/${atividadeId}`, payload);
     return data;
   },
