@@ -6,6 +6,7 @@ import { authService } from '../services/auth.service';
 export default function LoginPage() {
   const [login, setLogin] = useState('');
   const [senha, setSenha] = useState('');
+  const [showSenha, setShowSenha] = useState(false);
   const [erro, setErro] = useState('');
   const { login: doLogin, loading } = useAuth();
   const navigate = useNavigate();
@@ -110,18 +111,43 @@ export default function LoginPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
                     Senha
                   </label>
-                  <input
-                    type="password"
-                    value={senha}
-                    onChange={(e) => setSenha(e.target.value)}
-                    placeholder="Sua senha"
-                    autoComplete="current-password"
-                    required
-                    minLength={6}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm
-                      focus:outline-none focus:ring-2 focus:ring-capul-600 focus:border-transparent
-                      placeholder:text-slate-400 transition-all"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showSenha ? 'text' : 'password'}
+                      value={senha}
+                      onChange={(e) => setSenha(e.target.value)}
+                      placeholder="Sua senha"
+                      autoComplete="current-password"
+                      required
+                      minLength={6}
+                      className="w-full px-4 py-2.5 pr-11 border border-slate-300 rounded-lg text-sm
+                        focus:outline-none focus:ring-2 focus:ring-capul-600 focus:border-transparent
+                        placeholder:text-slate-400 transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSenha((v) => !v)}
+                      aria-label={showSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                      aria-pressed={showSenha}
+                      tabIndex={-1}
+                      className="absolute inset-y-0 right-0 flex items-center justify-center w-10 text-slate-400
+                        hover:text-slate-600 focus:outline-none focus-visible:text-capul-600 transition-colors"
+                    >
+                      {showSenha ? (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M3 3l18 18M10.584 10.587a2 2 0 002.828 2.83M9.363 5.365A9.466 9.466 0 0112 5c4.478 0 8.268 2.943 9.542 7a9.97 9.97 0 01-1.563 2.93M6.1 6.1A9.969 9.969 0 002.458 12C3.732 16.057 7.522 19 12 19a9.46 9.46 0 005.169-1.521" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M2.458 12C3.732 7.943 7.522 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.478 0-8.268-2.943-9.542-7z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 {erro && (

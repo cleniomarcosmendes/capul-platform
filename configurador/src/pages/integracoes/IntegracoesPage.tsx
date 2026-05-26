@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { extractApiError } from '../../utils/errors';
+import PasswordInput from '../../components/PasswordInput';
 import {
   integracaoService,
   MODULOS_CONSUMIDORES,
@@ -624,8 +625,8 @@ export function IntegracoesPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   {formTipoAuth === 'BASIC' ? 'Credenciais (Base64)' : formTipoAuth === 'BEARER' ? 'Token' : formTipoAuth === 'API_KEY' ? 'API Key' : 'N/A'}
                 </label>
-                <input type="password" value={formAuthConfig} onChange={(e) => setFormAuthConfig(e.target.value)} disabled={formTipoAuth === 'NONE'}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:bg-slate-100" placeholder={formTipoAuth === 'NONE' ? '' : 'Credenciais'} />
+                <PasswordInput value={formAuthConfig} onChange={(e) => setFormAuthConfig(e.target.value)} disabled={formTipoAuth === 'NONE'}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:bg-slate-100" placeholder={formTipoAuth === 'NONE' ? '' : 'Credenciais'} autoComplete="off" />
               </div>
             </div>
             <div className="flex gap-3">

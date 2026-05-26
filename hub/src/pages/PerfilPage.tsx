@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services/auth.service';
-import { ArrowLeft, User, Mail, Phone, Building2, Shield, Smartphone } from 'lucide-react';
+import { ArrowLeft, User, Mail, Phone, Building2, Shield, Smartphone, Eye, EyeOff } from 'lucide-react';
 
 export default function PerfilPage() {
   const { usuario } = useAuth();
@@ -10,6 +10,9 @@ export default function PerfilPage() {
   const [senhaAtual, setSenhaAtual] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmSenha, setConfirmSenha] = useState('');
+  const [showSenhaAtual, setShowSenhaAtual] = useState(false);
+  const [showNovaSenha, setShowNovaSenha] = useState(false);
+  const [showConfirmSenha, setShowConfirmSenha] = useState(false);
   const [msg, setMsg] = useState('');
   const [erro, setErro] = useState('');
   const [loading, setLoading] = useState(false);
@@ -112,48 +115,30 @@ export default function PerfilPage() {
             Alterar Senha
           </h2>
           <form onSubmit={handleChangePassword} className="space-y-4 max-w-sm">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Senha Atual
-              </label>
-              <input
-                type="password"
-                value={senhaAtual}
-                onChange={(e) => setSenhaAtual(e.target.value)}
-                required
-                minLength={6}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm
-                  focus:outline-none focus:ring-2 focus:ring-capul-600 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Nova Senha
-              </label>
-              <input
-                type="password"
-                value={novaSenha}
-                onChange={(e) => setNovaSenha(e.target.value)}
-                required
-                minLength={6}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm
-                  focus:outline-none focus:ring-2 focus:ring-capul-600 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Confirmar Nova Senha
-              </label>
-              <input
-                type="password"
-                value={confirmSenha}
-                onChange={(e) => setConfirmSenha(e.target.value)}
-                required
-                minLength={6}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm
-                  focus:outline-none focus:ring-2 focus:ring-capul-600 focus:border-transparent"
-              />
-            </div>
+            <PasswordField
+              label="Senha Atual"
+              value={senhaAtual}
+              onChange={setSenhaAtual}
+              show={showSenhaAtual}
+              onToggleShow={() => setShowSenhaAtual((v) => !v)}
+              autoComplete="current-password"
+            />
+            <PasswordField
+              label="Nova Senha"
+              value={novaSenha}
+              onChange={setNovaSenha}
+              show={showNovaSenha}
+              onToggleShow={() => setShowNovaSenha((v) => !v)}
+              autoComplete="new-password"
+            />
+            <PasswordField
+              label="Confirmar Nova Senha"
+              value={confirmSenha}
+              onChange={setConfirmSenha}
+              show={showConfirmSenha}
+              onToggleShow={() => setShowConfirmSenha((v) => !v)}
+              autoComplete="new-password"
+            />
 
             {erro && (
               <div className="bg-red-50 text-red-700 text-sm px-4 py-3 rounded-lg border border-red-200">
@@ -318,6 +303,51 @@ function InfoItem({
       <div>
         <p className="text-xs text-slate-500">{label}</p>
         <p className="text-sm text-slate-800">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+  show,
+  onToggleShow,
+  autoComplete,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  show: boolean;
+  onToggleShow: () => void;
+  autoComplete?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+      <div className="relative">
+        <input
+          type={show ? 'text' : 'password'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          required
+          minLength={6}
+          autoComplete={autoComplete}
+          className="w-full px-4 py-2.5 pr-11 border border-slate-300 rounded-lg text-sm
+            focus:outline-none focus:ring-2 focus:ring-capul-600 focus:border-transparent"
+        />
+        <button
+          type="button"
+          onClick={onToggleShow}
+          aria-label={show ? 'Ocultar senha' : 'Mostrar senha'}
+          aria-pressed={show}
+          tabIndex={-1}
+          className="absolute inset-y-0 right-0 flex items-center justify-center w-10 text-slate-400
+            hover:text-slate-600 focus:outline-none focus-visible:text-capul-600 transition-colors"
+        >
+          {show ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
       </div>
     </div>
   );

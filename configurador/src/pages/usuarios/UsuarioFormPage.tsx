@@ -7,6 +7,7 @@ import { departamentoFuncionalidadeService } from '../../services/departamento-f
 import { ArrowLeft, Save, Shield, KeyRound, Clock, AlertTriangle, Lock, Plus, Trash2, Eye, Check, X } from 'lucide-react';
 import type { UsuarioDetalhe, ModuloSistema, FilialOption, Departamento, UsuarioCapability } from '../../types';
 import { useConfirm } from '../../components/ConfirmDialog';
+import PasswordInput from '../../components/PasswordInput';
 import { useAuth } from '../../contexts/AuthContext';
 import { WORKSPACE_MENUS, perfilEnxerga } from '../../lib/workspace-menus';
 
@@ -485,7 +486,7 @@ export function UsuarioFormPage() {
               {!isEdicao && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Senha *</label>
-                  <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required minLength={8} className={inputClass} />
+                  <PasswordInput value={senha} onChange={(e) => setSenha(e.target.value)} required minLength={8} className={inputClass} autoComplete="new-password" />
                   <p className="text-xs text-slate-400 mt-1">Min. 8 caracteres, 1 maiuscula, 1 minuscula, 1 numero</p>
                 </div>
               )}
@@ -503,13 +504,13 @@ export function UsuarioFormPage() {
                     </button>
                   ) : (
                     <div className="space-y-2">
-                      <input
-                        type="password"
+                      <PasswordInput
                         value={novaSenha}
                         onChange={(e) => setNovaSenha(e.target.value)}
                         placeholder="Nova senha (min. 8 caracteres)"
                         minLength={8}
                         className={inputClass}
+                        autoComplete="new-password"
                       />
                       <p className="text-xs text-slate-400">Min. 8 caracteres, 1 maiuscula, 1 minuscula, 1 numero</p>
                       {resetMsg && <p className={`text-xs ${resetMsg.includes('sucesso') ? 'text-green-600' : 'text-red-600'}`}>{resetMsg}</p>}

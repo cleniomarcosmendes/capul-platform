@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { extractApiError } from '../../utils/errors';
+import PasswordInput from '../../components/PasswordInput';
 
 interface CertificadoPublico {
   id: string;
@@ -403,12 +404,12 @@ function UploadModal({
 
         <label className="mb-3 block">
           <span className="mb-1 block text-xs font-medium text-slate-700">Senha do .pfx</span>
-          <input
-            type="password"
+          <PasswordInput
             value={senha}
             onChange={(e) => setSenha(e.target.value)}
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500"
             required
+            autoComplete="off"
           />
         </label>
 
