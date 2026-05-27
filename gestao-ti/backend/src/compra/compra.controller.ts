@@ -28,6 +28,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
+import { assertStaffEmDepto } from '../common/helpers/departamento-filter.helper';
 import { isAnexoPermitido } from '../common/constants/anexo-mime.constant';
 import { createUploadConfig } from '../common/helpers/multer-upload.helper.js';
 import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
@@ -147,8 +148,11 @@ export class CompraController {
   }
 
   @Get('notas-fiscais/:id')
-  findOneNotaFiscal(@Param('id') id: string) {
-    return this.service.findOneNotaFiscal(id);
+  async findOneNotaFiscal(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    const nf = await this.service.findOneNotaFiscal(id);
+    // S15.7 (27/05) — gate STAFF do depto (bypass OVERSIGHT).
+    assertStaffEmDepto(user, nf.departamentoId);
+    return nf;
   }
 
   @Post('notas-fiscais/validar-chave')

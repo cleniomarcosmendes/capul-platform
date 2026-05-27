@@ -31,6 +31,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
+import { assertStaffEmDepto } from '../common/helpers/departamento-filter.helper';
 import { CreateParadaDto } from './dto/create-parada.dto';
 import { UpdateParadaDto } from './dto/update-parada.dto';
 import { FinalizarParadaDto } from './dto/finalizar-parada.dto';
@@ -113,8 +114,11 @@ export class ParadaController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+  async findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    const parada = await this.service.findOne(id);
+    // S15.7 (27/05) — gate STAFF do depto (bypass OVERSIGHT).
+    assertStaffEmDepto(user, parada.departamentoId);
+    return parada;
   }
 
   @Post()

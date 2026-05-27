@@ -8,6 +8,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
+import { assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
 import { ROLES_GESTORES, ROLES_TI } from '../common/constants/roles.constant.js';
 import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
 import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
@@ -39,8 +40,13 @@ export class ChamadoExternoController {
 
   @Get(':id')
   @Roles(...READERS)
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+  async findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    const reg = await this.service.findOne(id);
+    // S15.7 (27/05) — gate STAFF do depto (bypass OVERSIGHT). departamentoId
+    // pode ser NULL em registros legados pré-Onda 1 — nesse caso, libera (não
+    // havia dono atribuível).
+    if (reg.departamentoId) assertStaffEmDepto(user, reg.departamentoId);
+    return reg;
   }
 
   @Post()

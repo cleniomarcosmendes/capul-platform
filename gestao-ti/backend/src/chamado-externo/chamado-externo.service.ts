@@ -2,7 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, ConflictException }
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateChamadoExternoDto, UpdateChamadoExternoDto } from './dto/create-chamado-externo.dto.js';
-import { applyDepartamentoFilter, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
+import { applyDepartamentoFilter, applyDepartamentoFilterCadastroOpStaff, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
@@ -19,15 +19,17 @@ export class ChamadoExternoService {
   async list(
     filters: { ano?: number; mes?: number; softwareId?: string },
     user?: JwtPayload,
-    role?: string,
+    _role?: string,
   ) {
     const where: Prisma.ChamadoExternoMensalWhereInput = {};
     if (filters.ano) where.ano = filters.ano;
     if (filters.mes) where.mes = filters.mes;
     if (filters.softwareId) where.softwareId = filters.softwareId;
 
-    // Workspace Onda 2 C2.7 refino — depto-dono (ADMIN escapa).
-    const whereFiltrado = applyDepartamentoFilter(where, user ?? null, role ?? null);
+    // S15.5 (27/05) — Visão restrita a STAFF do depto (ADMIN/GESTOR/SUPORTE),
+    // espelhando S15.3 (6 cadastros operacionais). Chamados externos são
+    // lançamento operacional gerido pelo depto. Bypass OVERSIGHT_PLATAFORMA.
+    const whereFiltrado = applyDepartamentoFilterCadastroOpStaff(where, user ?? null);
 
     return this.prisma.chamadoExternoMensal.findMany({
       where: whereFiltrado,

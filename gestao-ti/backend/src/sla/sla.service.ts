@@ -3,23 +3,29 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateSlaDto } from './dto/create-sla.dto.js';
 import { UpdateSlaDto } from './dto/update-sla.dto.js';
 import { StatusGeral } from '@prisma/client';
-import { getDeptoIdsDoUser, assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
+import { assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
+import { hasCapability } from '../common/helpers/capability.helper.js';
+import { getDeptosOndeStaff } from '../common/constants/roles.constant.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class SlaService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(equipeId?: string, user?: JwtPayload, role?: string, workspaceAtivoId?: string | null) {
+  async findAll(equipeId?: string, user?: JwtPayload, _role?: string, workspaceAtivoId?: string | null) {
     // Workspace Onda 2 C2.4.5 — escopo via equipe.departamentoId.
     // `equipeId` explícito (UI criação de chamado) bypassa filtro.
     // S15.2 (25/05) — workspaceAtivoId restringe à equipe daquele depto.
-    const deptoIds = getDeptoIdsDoUser(user, role);
+    // S15.5 (27/05) — restrição passa a exigir STAFF (espelha S15.3/S15.4):
+    // USUARIO_FINAL com perfil no workspace não vê SLAs na tela admin.
+    // Bypass via OVERSIGHT_PLATAFORMA.
+    const isOversight = user ? hasCapability(user, 'OVERSIGHT_PLATAFORMA') : false;
+    const deptosStaff = getDeptosOndeStaff(user);
     const equipeDeptoWhere = workspaceAtivoId
       ? { equipe: { departamentoId: workspaceAtivoId } }
-      : (deptoIds === null || equipeId
+      : (isOversight || equipeId
           ? {}
-          : { equipe: { departamentoId: { in: deptoIds } } });
+          : { equipe: { departamentoId: { in: deptosStaff } } });
 
     return this.prisma.slaDefinicao.findMany({
       where: {
@@ -35,7 +41,8 @@ export class SlaService {
   async findOne(id: string) {
     const sla = await this.prisma.slaDefinicao.findUnique({
       where: { id },
-      include: { equipe: { select: { id: true, nome: true, sigla: true } } },
+      // S15.7 — departamentoId expõe pro controller validar STAFF do depto.
+      include: { equipe: { select: { id: true, nome: true, sigla: true, departamentoId: true } } },
     });
     if (!sla) throw new NotFoundException('SLA nao encontrado');
     return sla;

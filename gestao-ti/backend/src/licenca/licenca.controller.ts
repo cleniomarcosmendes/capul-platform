@@ -9,6 +9,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
+import { assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
 import { CreateLicencaDto } from './dto/create-licenca.dto.js';
 import { UpdateLicencaDto } from './dto/update-licenca.dto.js';
 import { AtribuirUsuarioDto } from './dto/atribuir-usuario.dto.js';
@@ -81,8 +82,15 @@ export class LicencaController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @GestaoTiRole() role: string) {
-    return this.service.findOne(id, role);
+  async findOne(
+    @Param('id') id: string,
+    @GestaoTiRole() role: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    const licenca = (await this.service.findOne(id, role)) as { departamentoId: string | null };
+    // S15.7 (27/05) — gate STAFF do depto (bypass OVERSIGHT).
+    assertStaffEmDepto(user, licenca.departamentoId);
+    return licenca;
   }
 
   @Post()

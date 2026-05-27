@@ -3,25 +3,31 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateCatalogoDto } from './dto/create-catalogo.dto.js';
 import { UpdateCatalogoDto } from './dto/update-catalogo.dto.js';
 import { StatusGeral } from '@prisma/client';
-import { getDeptoIdsDoUser, assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
+import { assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
+import { hasCapability } from '../common/helpers/capability.helper.js';
+import { getDeptosOndeStaff } from '../common/constants/roles.constant.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class CatalogoServicoService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(equipeId?: string, status?: StatusGeral, user?: JwtPayload, role?: string, workspaceAtivoId?: string | null) {
+  async findAll(equipeId?: string, status?: StatusGeral, user?: JwtPayload, _role?: string, workspaceAtivoId?: string | null) {
     // Workspace Onda 2 C2.4.5 — escopo workspace via equipe.departamentoId.
     // Quando o caller passa `equipeId` (UI de criação de chamado), ignora o
     // filtro de depto — Tatiane abre chamado pra equipe T.I. e precisa ver
-    // o catálogo daquela equipe, não dos deptos dela. ADMIN escapa (D36).
+    // o catálogo daquela equipe, não dos deptos dela.
     // S15.2 (25/05) — se workspaceAtivoId set, restringe a essa equipe.depto.
-    const deptoIds = getDeptoIdsDoUser(user, role);
+    // S15.5 (27/05) — restrição passa a exigir STAFF (espelha S15.3/S15.4):
+    // USUARIO_FINAL com perfil no workspace não vê catálogo na tela admin.
+    // Bypass via OVERSIGHT_PLATAFORMA, não mais via role ADMIN.
+    const isOversight = user ? hasCapability(user, 'OVERSIGHT_PLATAFORMA') : false;
+    const deptosStaff = getDeptosOndeStaff(user);
     const equipeDeptoWhere = workspaceAtivoId
       ? { equipe: { departamentoId: workspaceAtivoId } }
-      : (deptoIds === null || equipeId
+      : (isOversight || equipeId
           ? {}
-          : { equipe: { departamentoId: { in: deptoIds } } });
+          : { equipe: { departamentoId: { in: deptosStaff } } });
 
     return this.prisma.catalogoServico.findMany({
       where: {
@@ -37,7 +43,8 @@ export class CatalogoServicoService {
   async findOne(id: string) {
     const item = await this.prisma.catalogoServico.findUnique({
       where: { id },
-      include: { equipe: { select: { id: true, nome: true, sigla: true, cor: true } } },
+      // S15.7 — departamentoId expõe pro controller validar STAFF do depto.
+      include: { equipe: { select: { id: true, nome: true, sigla: true, cor: true, departamentoId: true } } },
     });
     if (!item) throw new NotFoundException('Servico nao encontrado no catalogo');
     return item;

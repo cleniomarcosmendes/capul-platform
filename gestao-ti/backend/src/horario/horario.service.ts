@@ -1,10 +1,30 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { UpsertHorarioDto } from './dto/horario.dto.js';
+import { assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
+import { hasCapability } from '../common/helpers/capability.helper.js';
+import { getDeptosOndeStaff } from '../common/constants/roles.constant.js';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class HorarioService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * S15.6 (27/05) — Resolve o depto do usuário-alvo pra gate de STAFF.
+   * Usado nos write paths (upsert/remove) e no getByUsuario público.
+   */
+  private async assertCallerPodeMexerHorarioDe(
+    targetUsuarioId: string,
+    caller: JwtPayload,
+  ) {
+    if (hasCapability(caller, 'OVERSIGHT_PLATAFORMA')) return;
+    const target = await this.prisma.usuario.findUnique({
+      where: { id: targetUsuarioId },
+      select: { departamentoId: true },
+    });
+    assertStaffEmDepto(caller, target?.departamentoId);
+  }
 
   async getDefault() {
     let def = await this.prisma.horarioTrabalho.findFirst({
@@ -50,9 +70,23 @@ export class HorarioService {
     });
   }
 
-  async findAll() {
+  /**
+   * S15.6 (27/05) — Restringe lista de horários a usuários dos deptos onde o
+   * caller é STAFF. Bypass via OVERSIGHT_PLATAFORMA. Tela "Horários de
+   * Trabalho" é MANAGERS-only (sidebar), mas antes vazava horários de
+   * usuários de todos os departamentos.
+   */
+  async findAll(caller?: JwtPayload) {
+    const isOversight = caller ? hasCapability(caller, 'OVERSIGHT_PLATAFORMA') : false;
+    const deptosStaff = getDeptosOndeStaff(caller);
+
     return this.prisma.horarioTrabalho.findMany({
-      where: { isDefault: false },
+      where: {
+        isDefault: false,
+        ...(caller && !isOversight
+          ? { usuario: { departamentoId: { in: deptosStaff } } }
+          : {}),
+      },
       include: {
         usuario: { select: { id: true, nome: true, username: true } },
       },
@@ -60,7 +94,11 @@ export class HorarioService {
     });
   }
 
-  async getByUsuario(usuarioId: string) {
+  async getByUsuario(usuarioId: string, caller?: JwtPayload) {
+    // S15.6 — Gate STAFF-no-depto-do-alvo (bypass OVERSIGHT). Endpoint público
+    // só. Callers internos (dashboard.getHorarioParaUsuario) seguem outro caminho.
+    if (caller) await this.assertCallerPodeMexerHorarioDe(usuarioId, caller);
+
     const horario = await this.prisma.horarioTrabalho.findUnique({
       where: { usuarioId },
     });
@@ -68,10 +106,13 @@ export class HorarioService {
     return this.getDefault();
   }
 
-  async upsertByUsuario(dto: UpsertHorarioDto) {
+  async upsertByUsuario(dto: UpsertHorarioDto, caller?: JwtPayload) {
     if (!dto.usuarioId) {
       return this.updateDefault(dto);
     }
+    // S15.6 — Gate STAFF do depto do usuário-alvo.
+    if (caller) await this.assertCallerPodeMexerHorarioDe(dto.usuarioId, caller);
+
     return this.prisma.horarioTrabalho.upsert({
       where: { usuarioId: dto.usuarioId },
       create: {
@@ -90,7 +131,9 @@ export class HorarioService {
     });
   }
 
-  async remove(usuarioId: string) {
+  async remove(usuarioId: string, caller?: JwtPayload) {
+    // S15.6 — Gate STAFF do depto do usuário-alvo.
+    if (caller) await this.assertCallerPodeMexerHorarioDe(usuarioId, caller);
     const horario = await this.prisma.horarioTrabalho.findUnique({
       where: { usuarioId },
     });

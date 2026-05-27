@@ -11,6 +11,7 @@ import { UpdateAtivoDto, UpdateStatusAtivoDto } from './dto/update-ativo.dto.js'
 import { AddAtivoSoftwareDto } from './dto/add-ativo-software.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
+import { assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
 import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
@@ -43,8 +44,12 @@ export class AtivoController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+  async findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    const ativo = await this.service.findOne(id);
+    // S15.7 (27/05) — gate STAFF do depto (bypass OVERSIGHT). Sem isso o
+    // detalhe vazava cross-depto via URL direta.
+    assertStaffEmDepto(user, ativo.departamentoId);
+    return ativo;
   }
 
   @Post()

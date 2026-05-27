@@ -13,6 +13,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { WorkspaceAtivo } from '../common/decorators/workspace-ativo.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
+import { assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
 
 @Controller('sla')
 @UseGuards(JwtAuthGuard, GestaoTiGuard, RolesGuard, FuncionalidadeGuard)
@@ -31,8 +32,11 @@ export class SlaController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+  async findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    const sla = await this.service.findOne(id);
+    // S15.7 (27/05) — gate STAFF do depto da equipe (bypass OVERSIGHT).
+    assertStaffEmDepto(user, sla.equipe?.departamentoId ?? null);
+    return sla;
   }
 
   @Post()

@@ -26,6 +26,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
+import { assertStaffEmDepto } from '../common/helpers/departamento-filter.helper';
 import { CreateContratoDto } from './dto/create-contrato.dto';
 import { UpdateContratoDto, UpdateStatusContratoDto } from './dto/update-contrato.dto';
 import { CreateParcelaDto } from './dto/create-parcela.dto';
@@ -179,8 +180,11 @@ export class ContratoController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    return this.service.findOneWithPermission(id, user.sub, role);
+  async findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
+    const contrato = await this.service.findOneWithPermission(id, user.sub, role);
+    // S15.7 (27/05) — gate STAFF do depto (bypass OVERSIGHT).
+    assertStaffEmDepto(user, contrato.departamentoId);
+    return contrato;
   }
 
   @Post()

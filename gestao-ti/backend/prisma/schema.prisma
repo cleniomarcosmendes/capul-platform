@@ -47,6 +47,11 @@ model Usuario {
   // (auth-gateway/prisma/migrations/20260515170000_add_preferencias_usuarios).
   preferencias Json @default("{}") @map("preferencias")
 
+  // S15.6 (27/05) — Espelha core.usuarios.departamento_id (depto principal).
+  // Usado por horario.service pra gate STAFF-no-depto-do-alvo. Read-only via
+  // middleware (prisma-read-only.middleware.ts). Migration está no Auth Gateway.
+  departamentoId String @map("departamento_id")
+
   membrosEquipe        MembroEquipe[]
   chamadosSolicitados  Chamado[]        @relation("ChamadoSolicitante")
   chamadosTecnico      Chamado[]        @relation("ChamadoTecnico")

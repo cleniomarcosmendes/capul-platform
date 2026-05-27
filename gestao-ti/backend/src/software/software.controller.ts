@@ -10,6 +10,7 @@ import { CreateSoftwareDto } from './dto/create-software.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
+import { assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
 import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
 import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
 import { UpdateSoftwareDto, UpdateStatusSoftwareDto } from './dto/update-software.dto.js';
@@ -47,8 +48,11 @@ export class SoftwareController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+  async findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    const software = await this.service.findOne(id);
+    // S15.7 (27/05) — gate STAFF do depto (bypass OVERSIGHT).
+    assertStaffEmDepto(user, software.departamentoId);
+    return software;
   }
 
   @Post()
