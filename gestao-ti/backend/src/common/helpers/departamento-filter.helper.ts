@@ -116,39 +116,40 @@ export function buildDashboardDeptoFilter(
   return { departamentoId: { in: deptoIds } };
 }
 
-// ─── Onda 3 S10 (24/05) — bypass via OVERSIGHT, não via role ────────
+// ─── Onda 3 S10 (24/05) + S15.3 (27/05) — cadastros operacionais ────────
 //
 // D36 (ADMIN escapa filtros) foi REVOGADO nos 6 cadastros operacionais
-// (Software/Licença/Contrato/NF/Ativo/Parada) — decisão E1. ADMIN sem
-// OVERSIGHT_PLATAFORMA opera como user normal: vê + escreve só nos deptos
-// onde tem perfil.
+// (Software/Licença/Contrato/NF/Ativo/Parada) — decisão E1. Bypass agora
+// vem da capability OVERSIGHT_PLATAFORMA.
+//
+// S15.3 (27/05) — A visão passou a exigir perfil STAFF (ADMIN/GESTOR/SUPORTE)
+// no depto, espelhando S13a (chamado/projeto). USUARIO_FINAL/USUARIO_CHAVE/
+// TERCEIRIZADO não vê cadastros mesmo tendo perfil no workspace daquele depto.
+// Incidente: Juliana (GESTOR/CTL + USUARIO_FINAL/T.I.) via paradas e contratos
+// de T.I.
 //
 // Usos:
-//   findAll → applyDepartamentoFilterCadastroOp(where, user, role)
+//   findAll → applyDepartamentoFilterCadastroOpStaff(where, user)
 //   create/update → assertDepartamentoDoUser(user, role, dto.departamentoId)
 //
 // Outros módulos (Chamado/Projeto/Indicador/Dashboard) continuam usando
 // applyDepartamentoFilter/buildDashboardDeptoFilter — D36 mantido lá.
 
 /**
- * Variante de `applyDepartamentoFilter` que usa OVERSIGHT pra bypass em
- * vez do role ADMIN. Pra ler cadastros operacionais.
+ * Filtra `findAll` de cadastros operacionais (Software/Licença/Contrato/NF/
+ * Ativo/Parada) restringindo a visão a deptos onde o user tem perfil STAFF
+ * (ADMIN/GESTOR/SUPORTE). Bypass via OVERSIGHT_PLATAFORMA.
  */
-export function applyDepartamentoFilterCadastroOp<T extends Record<string, unknown>>(
-  where: T,
-  user: JwtPayload | null | undefined,
-  role: string | null | undefined,
-  moduloCodigo: string = 'WORKSPACE',
-): T {
+export function applyDepartamentoFilterCadastroOpStaff<
+  T extends Record<string, unknown>,
+>(where: T, user: JwtPayload | null | undefined): T {
   if (user && hasCapability(user, 'OVERSIGHT_PLATAFORMA')) return where;
 
-  const deptoIds = user?.modulos
-    ?.find((m) => m.codigo === moduloCodigo)
-    ?.departamentos?.map((d) => d.id) ?? [];
+  const deptosStaff = getDeptosOndeStaff(user);
 
   return {
     ...where,
-    departamentoId: { in: deptoIds },
+    departamentoId: { in: deptosStaff },
   } as T;
 }
 

@@ -9,7 +9,7 @@ import { CreateNotaFiscalDto, UpdateNotaFiscalDto } from '../dto/create-nota-fis
 import { FiscalNfeClient, FiscalConsultaRetorno } from './fiscal-nfe.client.js';
 import { resolveDepartamento } from '../../common/helpers/resolve-departamento.helper.js';
 import { resolveDepartamentoLancamento } from '../../common/helpers/resolve-departamento-lancamento.helper.js';
-import { applyDepartamentoFilterCadastroOp, assertDepartamentoDoUser } from '../../common/helpers/departamento-filter.helper.js';
+import { applyDepartamentoFilterCadastroOpStaff, assertDepartamentoDoUser } from '../../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -202,8 +202,10 @@ export class CompraNotaFiscalService {
       where.equipeId = { in: equipeIds };
     }
 
-    // Workspace Onda 2 C2.4 — filtro departamental. ADMIN escapa (D36).
-    const whereFiltrado = applyDepartamentoFilterCadastroOp(where, user ?? null, role ?? null);
+    // S15.3 (27/05) — Visão restrita a STAFF do depto (ADMIN/GESTOR/SUPORTE).
+    // USUARIO_FINAL/USUARIO_CHAVE/TERCEIRIZADO não vê cadastros mesmo com perfil
+    // no workspace. Espelha S13a (chamado/projeto). Incidente Juliana.
+    const whereFiltrado = applyDepartamentoFilterCadastroOpStaff(where, user ?? null);
 
     return this.prisma.notaFiscal.findMany({
       where: whereFiltrado,

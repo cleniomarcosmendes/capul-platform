@@ -9,7 +9,7 @@ import { StatusAtivo } from '@prisma/client';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
 import { resolveDepartamentoLancamento } from '../common/helpers/resolve-departamento-lancamento.helper.js';
-import { applyDepartamentoFilterCadastroOp, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
+import { applyDepartamentoFilterCadastroOpStaff, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 const ativoListInclude = {
@@ -62,8 +62,10 @@ export class AtivoService {
       ];
     }
 
-    // Workspace Onda 2 C2.4 — filtro departamental. ADMIN escapa (D36).
-    const whereFiltrado = applyDepartamentoFilterCadastroOp(where, user ?? null, role ?? null);
+    // S15.3 (27/05) — Visão restrita a STAFF do depto (ADMIN/GESTOR/SUPORTE).
+    // USUARIO_FINAL/USUARIO_CHAVE/TERCEIRIZADO não vê cadastros mesmo com perfil
+    // no workspace. Espelha S13a (chamado/projeto). Incidente Juliana.
+    const whereFiltrado = applyDepartamentoFilterCadastroOpStaff(where, user ?? null);
 
     return paginate(this.prisma, this.prisma.ativo, {
       where: whereFiltrado,
