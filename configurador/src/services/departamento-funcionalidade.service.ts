@@ -133,7 +133,6 @@ export const TODAS_FUNCIONALIDADES: FuncionalidadeMeta[] = [
   { codigo: 'SLA', rotulo: 'SLA', descricao: 'Definição de SLA por equipe e prioridade', secao: 'CONFIGURACAO', icone: 'Clock' },
   { codigo: 'HORARIO_TRABALHO', rotulo: 'Horários de Trabalho', descricao: 'Horários por usuário usados no cálculo de SLA', secao: 'CONFIGURACAO', icone: 'Timer' },
   { codigo: 'IMPORTAR_DADOS', rotulo: 'Importar Dados', descricao: 'Importação em massa via CSV/Excel', secao: 'CONFIGURACAO', icone: 'Upload' },
-  { codigo: 'CHAMADO_EXTERNO', rotulo: 'Chamados Externos', descricao: 'Lançamentos mensais de chamados por software (KPI externo)', secao: 'CONFIGURACAO', icone: 'Globe2' },
   // Cadastros (S16.4 — taxonomias shared, menu per-depto)
   { codigo: 'CADASTRO_DEPARTAMENTO', rotulo: 'Departamentos', descricao: 'Cadastro de departamentos da plataforma (admin)', secao: 'CADASTROS', icone: 'Building2' },
   { codigo: 'CADASTRO_CENTRO_CUSTO', rotulo: 'Centros de Custo', descricao: 'Cadastro de centros de custo financeiros', secao: 'CADASTROS', icone: 'Wallet' },
@@ -144,6 +143,8 @@ export const TODAS_FUNCIONALIDADES: FuncionalidadeMeta[] = [
   { codigo: 'CADASTRO_TIPO_PRODUTO', rotulo: 'Tipos de Produto', descricao: 'Tipologia de produtos', secao: 'CADASTROS', icone: 'Tag' },
   { codigo: 'CADASTRO_TIPO_PROJETO', rotulo: 'Tipos de Projeto', descricao: 'Tipologia de projetos', secao: 'CADASTROS', icone: 'FolderKanban' },
   { codigo: 'CADASTRO_CATEGORIA_LICENCA', rotulo: 'Categorias de Licença', descricao: 'Classificação de licenças de software', secao: 'CADASTROS', icone: 'Tag' },
+  // S16.5 fix: Chamados Externos está em CADASTROS no menu, drawer espelha
+  { codigo: 'CHAMADO_EXTERNO', rotulo: 'Chamados Externos', descricao: 'Lançamentos mensais de chamados por software (KPI externo)', secao: 'CADASTROS', icone: 'Globe2' },
 ];
 
 export interface FuncionalidadeStatus {
