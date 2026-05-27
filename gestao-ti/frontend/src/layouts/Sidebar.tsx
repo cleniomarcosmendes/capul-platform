@@ -65,7 +65,7 @@ const menuItems: MenuItem[] = [
   { label: 'Relatorio de OS', icon: FileText, path: '/gestao-ti/relatorio-os', roles: STAFF, funcionalidade: 'OS' },
   { section: 'SUPORTE' },
   { label: 'Chamados', icon: Ticket, path: '/gestao-ti/chamados', funcionalidade: 'CHAMADO' },
-  { label: 'Painel de Gestão', icon: Flame, path: '/gestao-ti/painel-chamados', funcionalidade: 'PAINEL_GESTAO_CHAMADO' },
+  { label: 'Painel de Gestão', icon: Flame, path: '/gestao-ti/painel-chamados', roles: MANAGERS, funcionalidade: 'PAINEL_GESTAO_CHAMADO' },
   { label: 'Ordens de Servico', icon: ClipboardList, path: '/gestao-ti/ordens-servico', roles: STAFF, funcionalidade: 'OS' },
   { label: 'Base de Conhecimento', icon: BookMarked, path: '/gestao-ti/conhecimento', funcionalidade: 'CHAMADO' },
   { section: 'PORTFOLIO', roles: STAFF },
@@ -101,24 +101,51 @@ const menuItems: MenuItem[] = [
 ];
 
 /**
- * Workspace Onda 2 C2.5 — filtra menu por (1) role e (2) funcionalidade
- * ativa em pelo menos um depto do user no módulo WORKSPACE/GESTAO_TI.
+ * Workspace S16.1 (27/05) — filtra menu correlacionando role+funcionalidade
+ * no MESMO depto. Antes, agregava união de funcionalidades de todos os deptos
+ * e o role denormalizado vinha do depto "mais alto" — combinação inconsistente
+ * vazava menus de T.I. pra GESTOR de outro depto (incidente Juliana 27/05).
+ *
+ * Regra agora:
+ *   Pra cada item com `funcionalidade` e/ou `roles`, existe MATCH se houver
+ *   ALGUM depto do user onde role+funcionalidade ambos batem.
+ *   - Item sem `roles` (qualquer perfil aceito): só funcionalidade no depto
+ *   - Item sem `funcionalidade` (sem gate de feature): só role no depto
+ *   - Item com ambos: role do user NESSE depto deve estar em `roles` E
+ *     a funcionalidade deve estar ativa NESSE depto
+ *
+ * Seções (`section`) seguem o role denormalizado (visual apenas).
  */
+type DeptoMenuContext = {
+  role: string;
+  funcionalidades: ReadonlySet<string>;
+};
+
+function itemTemMatchEmAlgumDepto(
+  item: { roles?: string[]; funcionalidade?: string },
+  deptos: DeptoMenuContext[],
+): boolean {
+  if (!item.roles && !item.funcionalidade) return true;
+  for (const d of deptos) {
+    const roleMatch = !item.roles || item.roles.includes(d.role);
+    const funcMatch = !item.funcionalidade || d.funcionalidades.has(item.funcionalidade);
+    if (roleMatch && funcMatch) return true;
+  }
+  return false;
+}
+
 function filterMenu(
   items: MenuItem[],
-  role: string | null,
-  funcionalidadesAtivas: Set<string>,
+  roleDenormalizado: string | null,
+  deptos: DeptoMenuContext[],
 ): MenuItem[] {
   const filtered = items.filter((item) => {
     if ('section' in item) {
+      // Sections seguem o role denormalizado — só visual
       if (!item.roles) return true;
-      return role ? item.roles.includes(role) : false;
+      return roleDenormalizado ? item.roles.includes(roleDenormalizado) : false;
     }
-    // Filtro de role (legado)
-    if (item.roles && (!role || !item.roles.includes(role))) return false;
-    // Filtro de funcionalidade (Workspace Onda 2)
-    if (item.funcionalidade && !funcionalidadesAtivas.has(item.funcionalidade)) return false;
-    return true;
+    return itemTemMatchEmAlgumDepto(item, deptos);
   });
 
   // Remove section headers órfãos (sem itens em seguida)
@@ -155,15 +182,15 @@ export function Sidebar({ open = false, onClose }: SidebarProps = {}) {
     return item;
   });
 
-  // Workspace Onda 2 C2.5 — funcionalidades ativas agregadas de todos os
-  // deptos do user no módulo (WORKSPACE ou GESTAO_TI legacy).
-  const funcionalidadesAtivas = new Set<string>();
+  // Workspace S16.1 (27/05) — contexto per-depto (role + funcionalidades).
+  // Antes agregava união → vazava menus de T.I. pra GESTOR de outro depto.
   const moduloWS = usuario?.modulos.find((m) => m.codigo === 'WORKSPACE' || m.codigo === 'GESTAO_TI');
-  for (const d of moduloWS?.departamentos ?? []) {
-    for (const f of d.funcionalidades ?? []) funcionalidadesAtivas.add(f);
-  }
+  const deptos: DeptoMenuContext[] = (moduloWS?.departamentos ?? []).map((d) => ({
+    role: d.role ?? '',
+    funcionalidades: new Set(d.funcionalidades ?? []),
+  }));
 
-  const visibleItems = filterMenu(effectiveItems, gestaoTiRole, funcionalidadesAtivas);
+  const visibleItems = filterMenu(effectiveItems, gestaoTiRole, deptos);
 
   return (
     <>

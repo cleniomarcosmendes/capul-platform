@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { StatusChamado } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
-import { getDeptoIdsDoUser } from '../../common/helpers/departamento-filter.helper.js';
+import { getDeptosOndeStaff } from '../../common/constants/roles.constant.js';
+import { hasCapability } from '../../common/helpers/capability.helper.js';
 
 /**
  * Painel de Gestão — endpoints de "o que está no meu radar".
@@ -23,7 +24,8 @@ export class DashboardPainelService {
 
   async getPainelChamados(user: JwtPayload, role: string, equipeIdFiltro?: string) {
     const userId = user.sub;
-    const isAdmin = role === 'ADMIN';
+    const isOversight = hasCapability(user, 'OVERSIGHT_PLATAFORMA');
+    const isAdmin = isOversight; // S16.3 — alinha com OVERSIGHT (ADMIN bypass legado removido)
 
     // Equipes onde o user é membro ativo (visibilidade C2.9 + filtro UI)
     const equipesMembro = await this.prisma.membroEquipe.findMany({
@@ -33,15 +35,17 @@ export class DashboardPainelService {
     const equipeIdsMembro = equipesMembro.map((m) => m.equipeId);
     const equipesDoUser = equipesMembro.map((m) => m.equipe);
 
-    // Visibilidade base (não-ADMIN): solicitante OR colaborador OR
-    // equipe-membro OR depto-workspace. Mesma regra do C2.9 + colaborador.
-    const deptoIds = getDeptoIdsDoUser(user, role);
+    // S16.3 (27/05) — Painel de Gestão = tela de management. Filtro de depto
+    // exige STAFF do depto, não qualquer perfil. USUARIO_FINAL continua vendo
+    // chamados onde é solicitante/colaborador (sempre visível por design),
+    // mas não vaza a visão ampla do workspace.
+    const deptosStaff = getDeptosOndeStaff(user);
     function visibilityOr(): Record<string, unknown>[] {
       const arr: Record<string, unknown>[] = [
         { solicitanteId: userId },
         { colaboradores: { some: { usuarioId: userId } } },
       ];
-      if (deptoIds && deptoIds.length > 0) arr.push({ departamentoId: { in: deptoIds } });
+      if (deptosStaff.length > 0) arr.push({ departamentoId: { in: deptosStaff } });
       if (equipeIdsMembro.length > 0) arr.push({ equipeAtualId: { in: equipeIdsMembro } });
       return arr;
     }
@@ -149,15 +153,17 @@ export class DashboardPainelService {
 
   async getPainelProjetos(user: JwtPayload, role: string) {
     const userId = user.sub;
-    const isAdmin = role === 'ADMIN';
+    const isOversight = hasCapability(user, 'OVERSIGHT_PLATAFORMA');
+    const isAdmin = isOversight; // S16.3
     const isUCouTerc = role === 'USUARIO_CHAVE' || role === 'TERCEIRIZADO';
 
-    const deptoIds = getDeptoIdsDoUser(user, role);
+    // S16.3 (27/05) — visão ampla por depto exige STAFF.
+    const deptosStaff = getDeptosOndeStaff(user);
 
-    // Visibilidade de projeto (C2.10):
-    // - ADMIN escapa
+    // Visibilidade de projeto (C2.10 + S16.3):
+    // - OVERSIGHT escapa
     // - UC/TERC: só vinculados (usuariosChave)
-    // - STAFF: depto-dono OR responsável OR membro OR usuariosChave
+    // - STAFF: depto-dono (onde é staff) OR responsável OR membro OR usuariosChave
     function projetoVisibilityOr(): Record<string, unknown>[] {
       if (isUCouTerc) {
         return [{ usuariosChave: { some: { usuarioId: userId, ativo: true } } }];
@@ -167,7 +173,7 @@ export class DashboardPainelService {
         { membros: { some: { usuarioId: userId } } },
         { usuariosChave: { some: { usuarioId: userId, ativo: true } } },
       ];
-      if (deptoIds && deptoIds.length > 0) arr.push({ departamentoId: { in: deptoIds } });
+      if (deptosStaff.length > 0) arr.push({ departamentoId: { in: deptosStaff } });
       return arr;
     }
 

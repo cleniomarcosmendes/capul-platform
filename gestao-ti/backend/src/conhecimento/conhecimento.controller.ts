@@ -64,8 +64,13 @@ export class ConhecimentoController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+  findOne(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    // S16.2 (27/05) — gate de visibilidade per-artigo aplicado no service.
+    return this.service.findOne(id, user, role);
   }
 
   @Post()

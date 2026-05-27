@@ -10,7 +10,8 @@ import * as fs from 'fs';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { getDeptoIdsDoUser, assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
-import { hasStaffPerfilEmTI } from '../common/constants/roles.constant.js';
+import { hasStaffPerfilEmTI, getDeptosOndeStaff } from '../common/constants/roles.constant.js';
+import { hasCapability } from '../common/helpers/capability.helper.js';
 import { ForbiddenException } from '@nestjs/common';
 
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads', 'conhecimento');
@@ -21,7 +22,8 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 const artigoListInclude = {
   autor: { select: { id: true, nome: true, username: true } },
   software: { select: { id: true, nome: true } },
-  equipeTi: { select: { id: true, nome: true, sigla: true } },
+  // S16.2 — departamentoId expõe pro gate de visibilidade per-artigo.
+  equipeTi: { select: { id: true, nome: true, sigla: true, departamentoId: true } },
 };
 
 const artigoDetalheInclude = {
@@ -62,30 +64,59 @@ export class ConhecimentoService {
       ];
     }
 
-    // USUARIO_FINAL e USUARIO_CHAVE so veem artigos publicos e publicados
-    if (filters.role === 'USUARIO_FINAL' || filters.role === 'USUARIO_CHAVE') {
-      where.publica = true;
-      where.status = 'PUBLICADO';
-    }
+    // S16.2 (27/05) — Visibilidade per-artigo, não mais role-denormalizado.
+    //
+    // Regra final (incidente Juliana 27/05):
+    //   - Artigo GLOBAL (equipeTiId IS NULL):
+    //       * publica + PUBLICADO → todos veem
+    //       * privado/rascunho    → só STAFF de T.I.
+    //   - Artigo COM equipe (equipeTi.departamentoId = X):
+    //       * STAFF de X         → vê tudo (publica/privado/rascunho)
+    //       * Perfil não-STAFF X → vê só publica + PUBLICADO
+    //       * Sem perfil em X    → não vê
+    //   - OVERSIGHT_PLATAFORMA bypassa tudo (vê qualquer artigo).
+    //   - filtros explícitos (`equipeTiId`) preservados como AND adicional;
+    //     visibilidade ainda aplica.
+    //
+    // Antes: `role === USUARIO_FINAL/CHAVE` aplicava publica+PUBLICADO
+    // globalmente. Juliana (GESTOR/CTL + USUARIO_FINAL/T.I.) tinha role
+    // denormalizado = GESTOR → bypassava o gate e via PRIVADOS de T.I.
+    const isOversight = filters.user
+      ? hasCapability(filters.user, 'OVERSIGHT_PLATAFORMA')
+      : false;
 
-    // Workspace Onda 2 C2.4.5 — modelo HÍBRIDO. Artigo visível se:
-    //   - sem equipe (equipeTiId IS NULL) — biblioteca global
-    //   - OU equipe pertence a depto onde o user tem perfil
-    // ADMIN escapa (D36). filtros explícitos (`equipeTiId`) bypassam.
-    const deptoIds = getDeptoIdsDoUser(filters.user, filters.role);
-    if (deptoIds !== null && !filters.equipeTiId) {
-      const visibilidadeDepto = {
-        OR: [
-          { equipeTiId: null },
-          { equipeTi: { departamentoId: { in: deptoIds } } },
-        ],
-      };
-      // Compor com OR já existente (search) via AND.
+    if (!isOversight) {
+      const deptosStaff = getDeptosOndeStaff(filters.user);
+      const deptosOndeTemPerfil = getDeptoIdsDoUser(filters.user, filters.role) ?? [];
+      const ehStaffTI = hasStaffPerfilEmTI(filters.user);
+
+      const visibilityOr: Array<Record<string, unknown>> = [
+        // Globais publicados — todos veem
+        { equipeTiId: null, publica: true, status: 'PUBLICADO' },
+        // Per-depto onde é STAFF — vê tudo
+        ...(deptosStaff.length > 0
+          ? [{ equipeTi: { departamentoId: { in: deptosStaff } } }]
+          : []),
+        // Per-depto onde tem perfil mas não staff — só publica + PUBLICADO
+        ...(deptosOndeTemPerfil.length > 0
+          ? [
+              {
+                equipeTi: { departamentoId: { in: deptosOndeTemPerfil } },
+                publica: true,
+                status: 'PUBLICADO',
+              },
+            ]
+          : []),
+        // Globais não-publicados — só staff TI vê
+        ...(ehStaffTI ? [{ equipeTiId: null }] : []),
+      ];
+
+      // Compor com search (where.OR pré-existente) via AND
       if (where.OR) {
-        where.AND = [{ OR: where.OR }, visibilidadeDepto];
+        where.AND = [{ OR: where.OR }, { OR: visibilityOr }];
         delete where.OR;
       } else {
-        Object.assign(where, visibilidadeDepto);
+        where.OR = visibilityOr;
       }
     }
 
@@ -104,13 +135,35 @@ export class ConhecimentoService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user?: JwtPayload, role?: string) {
     const artigo = await this.prisma.artigoConhecimento.findUnique({
       where: { id },
       include: artigoDetalheInclude,
     });
     if (!artigo) throw new NotFoundException('Artigo nao encontrado');
-    return artigo;
+
+    // S16.2 (27/05) — gate de visibilidade espelha findAll.
+    // Sem user (smoke/tests internos) — passa.
+    if (!user) return artigo;
+    if (hasCapability(user, 'OVERSIGHT_PLATAFORMA')) return artigo;
+
+    const equipeDeptoId = artigo.equipeTi?.departamentoId ?? null;
+    const isPublicado = artigo.publica && artigo.status === 'PUBLICADO';
+
+    // Global
+    if (equipeDeptoId === null) {
+      if (isPublicado) return artigo;
+      if (hasStaffPerfilEmTI(user)) return artigo;
+      throw new NotFoundException('Artigo nao encontrado');
+    }
+
+    // Com equipe
+    const deptosStaff = getDeptosOndeStaff(user);
+    const deptosOndeTemPerfil = getDeptoIdsDoUser(user, role) ?? [];
+    if (deptosStaff.includes(equipeDeptoId)) return artigo;
+    if (isPublicado && deptosOndeTemPerfil.includes(equipeDeptoId)) return artigo;
+
+    throw new NotFoundException('Artigo nao encontrado');
   }
 
   /**
