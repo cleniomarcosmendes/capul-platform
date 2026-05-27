@@ -36,6 +36,17 @@ export class DepartamentoFuncionalidadeService {
     'CADASTRO_TIPO_PRODUTO',
     'CADASTRO_TIPO_PROJETO',
     'CADASTRO_CATEGORIA_LICENCA',
+    // S16.5 (27/05) — Sweep total
+    'CONHECIMENTO',
+    'CATALOGO_SERVICO',
+    'DASHBOARD',
+    'MONITOR',
+    'ACOMPANHAMENTO',
+    'ACOMPANHAMENTO_ITEM',
+    'SLA',
+    'HORARIO_TRABALHO',
+    'IMPORTAR_DADOS',
+    'CHAMADO_EXTERNO',
   ];
 
   /**

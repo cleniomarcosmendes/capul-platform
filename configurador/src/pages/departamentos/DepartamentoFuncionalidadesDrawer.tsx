@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  X, Save, Loader2, Check, Sparkles,
+  X, Save, Loader2, Check, Sparkles, ChevronDown, ChevronRight,
   Ticket, FolderKanban, ClipboardList, Users, FileText, Receipt,
   AppWindow, KeyRound, Server, Activity, BarChart3, TrendingUp,
   Flame, ListChecks,
   // S16.4 — ícones dos cadastros
   Building2, Wallet, Tag, Layers, Truck, Package,
+  // S16.5 — ícones do sweep total
+  LayoutDashboard, Gauge, Timer, Search, BookMarked, BookOpen,
+  Clock, Upload, Globe2,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -33,6 +36,9 @@ const ICONES: Record<FuncionalidadeMeta['icone'], LucideIcon> = {
   Flame, ListChecks,
   // S16.4 — cadastros
   Building2, Wallet, Tag, Layers, Truck, Package,
+  // S16.5 — sweep total
+  LayoutDashboard, Gauge, Timer, Search, BookMarked, BookOpen,
+  Clock, Upload, Globe2,
 };
 
 /**
@@ -58,6 +64,15 @@ export function DepartamentoFuncionalidadesDrawer({
   );
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // S16.5 — Estado de collapse por seção (default: só "Operação" expandida).
+  // Persiste durante a sessão; reseta ao fechar/abrir drawer.
+  const [secoesAbertas, setSecoesAbertas] = useState<Record<string, boolean>>({
+    OPERACAO: true,
+  });
+  function toggleSecao(id: string) {
+    setSecoesAbertas((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
 
   useEffect(() => {
     if (!open || !departamentoId) return;
@@ -199,68 +214,89 @@ export function DepartamentoFuncionalidadesDrawer({
                 o acesso dentro de cada funcionalidade.
               </p>
 
-              <div className="space-y-5">
+              <div className="space-y-2">
                 {SECOES.map((secao) => {
                   const itens = TODAS_FUNCIONALIDADES.filter((f) => f.secao === secao.id);
                   if (itens.length === 0) return null;
+                  const aberta = !!secoesAbertas[secao.id];
+                  const ativasSecao = itens.filter((f) => !!funcs[f.codigo]).length;
+                  const alteracoesSecao = itens.filter((f) => funcs[f.codigo] !== original[f.codigo]).length;
                   return (
-                    <div key={secao.id}>
-                      <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                        {secao.rotulo}
-                      </h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {itens.map((f, idx) => {
-                          const ativo = !!funcs[f.codigo];
-                          const modificado = funcs[f.codigo] !== original[f.codigo];
-                          const Icone = ICONES[f.icone];
-                          // Evita "buraco" na grade: último item de seção
-                          // com nº ímpar de itens ocupa as 2 colunas.
-                          const spanFull = itens.length % 2 === 1 && idx === itens.length - 1;
-                          return (
-                            <button
-                              key={f.codigo}
-                              type="button"
-                              onClick={() => toggle(f.codigo)}
-                              className={`relative group text-left rounded-lg border p-3 transition-all ${
-                                spanFull ? 'sm:col-span-2' : ''
-                              } ${
-                                ativo
-                                  ? 'border-emerald-300 bg-emerald-50/60 hover:bg-emerald-50'
-                                  : 'border-slate-200 bg-white hover:bg-slate-50'
-                              }`}
-                            >
-                              {modificado && (
-                                <span
-                                  className="absolute top-2 right-2 w-2 h-2 rounded-full bg-amber-500"
-                                  title="Alteração pendente"
-                                />
-                              )}
-                              <div className="flex items-start gap-2.5">
-                                <div className={`flex-shrink-0 w-9 h-9 rounded-md flex items-center justify-center ${
-                                  ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                                }`}>
-                                  <Icone className="w-5 h-5" />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className={`text-sm font-medium truncate ${
-                                      ativo ? 'text-slate-800' : 'text-slate-600'
-                                    }`}>
-                                      {f.rotulo}
-                                    </span>
-                                    {ativo && (
-                                      <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                                    )}
+                    <div key={secao.id} className="border border-slate-200 rounded-lg overflow-hidden">
+                      {/* Header clicável da seção (S16.5 — collapse por seção) */}
+                      <button
+                        type="button"
+                        onClick={() => toggleSecao(secao.id)}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+                      >
+                        {aberta
+                          ? <ChevronDown size={16} className="text-slate-500 flex-shrink-0" />
+                          : <ChevronRight size={16} className="text-slate-500 flex-shrink-0" />}
+                        <h3 className="flex-1 text-xs font-bold text-slate-600 uppercase tracking-wider">
+                          {secao.rotulo}
+                        </h3>
+                        <span className="text-[11px] text-slate-500 bg-white border border-slate-200 rounded-full px-2 py-0.5">
+                          {ativasSecao}/{itens.length}
+                        </span>
+                        {alteracoesSecao > 0 && (
+                          <span className="w-2 h-2 rounded-full bg-amber-500" title={`${alteracoesSecao} alteração(ões) pendente(s) nesta seção`} />
+                        )}
+                      </button>
+                      {aberta && (
+                        <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white">
+                          {itens.map((f, idx) => {
+                            const ativo = !!funcs[f.codigo];
+                            const modificado = funcs[f.codigo] !== original[f.codigo];
+                            const Icone = ICONES[f.icone];
+                            // Evita "buraco" na grade: último item de seção
+                            // com nº ímpar de itens ocupa as 2 colunas.
+                            const spanFull = itens.length % 2 === 1 && idx === itens.length - 1;
+                            return (
+                              <button
+                                key={f.codigo}
+                                type="button"
+                                onClick={() => toggle(f.codigo)}
+                                className={`relative group text-left rounded-lg border p-3 transition-all ${
+                                  spanFull ? 'sm:col-span-2' : ''
+                                } ${
+                                  ativo
+                                    ? 'border-emerald-300 bg-emerald-50/60 hover:bg-emerald-50'
+                                    : 'border-slate-200 bg-white hover:bg-slate-50'
+                                }`}
+                              >
+                                {modificado && (
+                                  <span
+                                    className="absolute top-2 right-2 w-2 h-2 rounded-full bg-amber-500"
+                                    title="Alteração pendente"
+                                  />
+                                )}
+                                <div className="flex items-start gap-2.5">
+                                  <div className={`flex-shrink-0 w-9 h-9 rounded-md flex items-center justify-center ${
+                                    ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                                  }`}>
+                                    <Icone className="w-5 h-5" />
                                   </div>
-                                  <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
-                                    {f.descricao}
-                                  </p>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={`text-sm font-medium truncate ${
+                                        ativo ? 'text-slate-800' : 'text-slate-600'
+                                      }`}>
+                                        {f.rotulo}
+                                      </span>
+                                      {ativo && (
+                                        <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                                      {f.descricao}
+                                    </p>
+                                  </div>
                                 </div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

@@ -24,9 +24,30 @@ export type FuncionalidadeWorkspace =
   | 'CADASTRO_PRODUTO'
   | 'CADASTRO_TIPO_PRODUTO'
   | 'CADASTRO_TIPO_PROJETO'
-  | 'CADASTRO_CATEGORIA_LICENCA';
+  | 'CADASTRO_CATEGORIA_LICENCA'
+  // S16.5 (27/05) — Sweep total
+  | 'CONHECIMENTO'
+  | 'CATALOGO_SERVICO'
+  | 'DASHBOARD'
+  | 'MONITOR'
+  | 'ACOMPANHAMENTO'
+  | 'ACOMPANHAMENTO_ITEM'
+  | 'SLA'
+  | 'HORARIO_TRABALHO'
+  | 'IMPORTAR_DADOS'
+  | 'CHAMADO_EXTERNO';
 
-export type FuncionalidadeSecao = 'OPERACAO' | 'EQUIPE' | 'PORTFOLIO' | 'SUSTENTACAO' | 'INDICADORES' | 'PAINEIS' | 'CADASTROS';
+export type FuncionalidadeSecao =
+  | 'OPERACAO'
+  | 'EQUIPE'
+  | 'PORTFOLIO'
+  | 'SUSTENTACAO'
+  | 'INDICADORES'
+  | 'PAINEIS'
+  | 'CADASTROS'
+  // S16.5 — Novas seções
+  | 'ANALISE'
+  | 'CONFIGURACAO';
 
 export interface FuncionalidadeMeta {
   codigo: FuncionalidadeWorkspace;
@@ -55,16 +76,28 @@ export interface FuncionalidadeMeta {
     | 'Tag'
     | 'Layers'
     | 'Truck'
-    | 'Package';
+    | 'Package'
+    // S16.5 — ícones do sweep total
+    | 'LayoutDashboard'
+    | 'Gauge'
+    | 'Timer'
+    | 'Search'
+    | 'BookMarked'
+    | 'BookOpen'
+    | 'Clock'
+    | 'Upload'
+    | 'Globe2';
 }
 
 export const SECOES: { id: FuncionalidadeSecao; rotulo: string }[] = [
   { id: 'OPERACAO', rotulo: 'Operação' },
   { id: 'PAINEIS', rotulo: 'Painéis de Gestão' },
+  { id: 'ANALISE', rotulo: 'Análise' },
+  { id: 'INDICADORES', rotulo: 'Indicadores' },
   { id: 'EQUIPE', rotulo: 'Equipe' },
   { id: 'PORTFOLIO', rotulo: 'Portfólio' },
   { id: 'SUSTENTACAO', rotulo: 'Sustentação' },
-  { id: 'INDICADORES', rotulo: 'Indicadores' },
+  { id: 'CONFIGURACAO', rotulo: 'Configuração' },
   { id: 'CADASTROS', rotulo: 'Cadastros' },
 ];
 
@@ -73,6 +106,19 @@ export const TODAS_FUNCIONALIDADES: FuncionalidadeMeta[] = [
   { codigo: 'CHAMADO', rotulo: 'Chamados', descricao: 'Abertura e atendimento de tickets', secao: 'OPERACAO', icone: 'Ticket' },
   { codigo: 'PROJETO', rotulo: 'Projetos', descricao: 'Gestão de projetos com atividades e pendências', secao: 'OPERACAO', icone: 'FolderKanban' },
   { codigo: 'OS', rotulo: 'Ordens de Serviço', descricao: 'OS técnicas com agendamento', secao: 'OPERACAO', icone: 'ClipboardList' },
+  { codigo: 'CONHECIMENTO', rotulo: 'Base de Conhecimento', descricao: 'Artigos e documentação técnica do depto', secao: 'OPERACAO', icone: 'BookMarked' },
+  { codigo: 'CATALOGO_SERVICO', rotulo: 'Catálogo de Serviços', descricao: 'Serviços ofertados pelo depto (vincula chamados)', secao: 'OPERACAO', icone: 'BookOpen' },
+  // Painéis de Gestão (foco em "o que devo entregar" — SLA crítico, atribuídos, atrasos, marcos)
+  { codigo: 'PAINEL_GESTAO_CHAMADO', rotulo: 'Painel de Gestão (Chamado)', descricao: 'Visão pessoal de SLA crítico, atribuídos a mim e aguardando resposta. Requer Chamados.', secao: 'PAINEIS', icone: 'Flame' },
+  { codigo: 'PAINEL_GESTAO_PROJETO', rotulo: 'Painel de Gestão (Projeto)', descricao: 'Visão pessoal de atividades, pendências, projetos atrasados e marcos próximos. Requer Projetos.', secao: 'PAINEIS', icone: 'ListChecks' },
+  // Análise (S16.5)
+  { codigo: 'DASHBOARD', rotulo: 'Dashboard', descricao: 'Página inicial com resumo do workspace', secao: 'ANALISE', icone: 'LayoutDashboard' },
+  { codigo: 'MONITOR', rotulo: 'Monitor', descricao: 'Monitoramento em tempo real de chamados/SLA', secao: 'ANALISE', icone: 'Gauge' },
+  { codigo: 'ACOMPANHAMENTO', rotulo: 'Acompanhamento', descricao: 'Produtividade individual por técnico', secao: 'ANALISE', icone: 'Timer' },
+  { codigo: 'ACOMPANHAMENTO_ITEM', rotulo: 'Acomp. por Item', descricao: 'Acompanhamento detalhado por item de OS/chamado', secao: 'ANALISE', icone: 'Search' },
+  // Indicadores
+  { codigo: 'INDICADOR_OPERACIONAL', rotulo: 'Indicadores Operacionais', descricao: 'KPIs do dia a dia (SLA, CSAT, etc.). Gateia o menu "Indicadores".', secao: 'INDICADORES', icone: 'BarChart3' },
+  { codigo: 'INDICADOR_ESTRATEGICO', rotulo: 'Indicadores Estratégicos', descricao: 'KPIs de planejamento (investimentos, disponibilidade)', secao: 'INDICADORES', icone: 'TrendingUp' },
   // Equipe
   { codigo: 'EQUIPE', rotulo: 'Equipes', descricao: 'Cadastro e gestão de equipes que atendem chamados', secao: 'EQUIPE', icone: 'Users' },
   // Portfólio
@@ -83,12 +129,11 @@ export const TODAS_FUNCIONALIDADES: FuncionalidadeMeta[] = [
   // Sustentação
   { codigo: 'ATIVO', rotulo: 'Ativos', descricao: 'Inventário de ativos (hardware/dispositivos)', secao: 'SUSTENTACAO', icone: 'Server' },
   { codigo: 'PARADA', rotulo: 'Paradas', descricao: 'Registro de paradas operacionais', secao: 'SUSTENTACAO', icone: 'Activity' },
-  // Painéis de Gestão (foco em "o que devo entregar" — SLA crítico, atribuídos, atrasos, marcos)
-  { codigo: 'PAINEL_GESTAO_CHAMADO', rotulo: 'Painel de Gestão (Chamado)', descricao: 'Visão pessoal de SLA crítico, atribuídos a mim e aguardando resposta. Requer Chamados.', secao: 'PAINEIS', icone: 'Flame' },
-  { codigo: 'PAINEL_GESTAO_PROJETO', rotulo: 'Painel de Gestão (Projeto)', descricao: 'Visão pessoal de atividades, pendências, projetos atrasados e marcos próximos. Requer Projetos.', secao: 'PAINEIS', icone: 'ListChecks' },
-  // Indicadores
-  { codigo: 'INDICADOR_OPERACIONAL', rotulo: 'Indicadores Operacionais', descricao: 'KPIs do dia a dia (SLA, CSAT, etc.)', secao: 'INDICADORES', icone: 'BarChart3' },
-  { codigo: 'INDICADOR_ESTRATEGICO', rotulo: 'Indicadores Estratégicos', descricao: 'KPIs de planejamento (investimentos, disponibilidade)', secao: 'INDICADORES', icone: 'TrendingUp' },
+  // Configuração (S16.5)
+  { codigo: 'SLA', rotulo: 'SLA', descricao: 'Definição de SLA por equipe e prioridade', secao: 'CONFIGURACAO', icone: 'Clock' },
+  { codigo: 'HORARIO_TRABALHO', rotulo: 'Horários de Trabalho', descricao: 'Horários por usuário usados no cálculo de SLA', secao: 'CONFIGURACAO', icone: 'Timer' },
+  { codigo: 'IMPORTAR_DADOS', rotulo: 'Importar Dados', descricao: 'Importação em massa via CSV/Excel', secao: 'CONFIGURACAO', icone: 'Upload' },
+  { codigo: 'CHAMADO_EXTERNO', rotulo: 'Chamados Externos', descricao: 'Lançamentos mensais de chamados por software (KPI externo)', secao: 'CONFIGURACAO', icone: 'Globe2' },
   // Cadastros (S16.4 — taxonomias shared, menu per-depto)
   { codigo: 'CADASTRO_DEPARTAMENTO', rotulo: 'Departamentos', descricao: 'Cadastro de departamentos da plataforma (admin)', secao: 'CADASTROS', icone: 'Building2' },
   { codigo: 'CADASTRO_CENTRO_CUSTO', rotulo: 'Centros de Custo', descricao: 'Cadastro de centros de custo financeiros', secao: 'CADASTROS', icone: 'Wallet' },

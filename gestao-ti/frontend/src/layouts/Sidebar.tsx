@@ -57,17 +57,17 @@ const CONTRATO_ROLES_STATIC = ['ADMIN', 'GESTOR'];
 const CONTRATO_ROLES_DYNAMIC = ['ADMIN', 'GESTOR', 'SUPORTE'];
 
 const menuItems: MenuItem[] = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/gestao-ti/' },
-  { label: 'Indicadores', icon: BarChart3, path: '/gestao-ti/indicadores', roles: MANAGERS },
-  { label: 'Monitor', icon: Gauge, path: '/gestao-ti/monitor', roles: STAFF },
-  { label: 'Acompanhamento', icon: Timer, path: '/gestao-ti/acompanhamento', roles: STAFF },
-  { label: 'Acomp. por Item', icon: Search, path: '/gestao-ti/acompanhamento-item', roles: STAFF },
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/gestao-ti/', funcionalidade: 'DASHBOARD' },
+  { label: 'Indicadores', icon: BarChart3, path: '/gestao-ti/indicadores', roles: MANAGERS, funcionalidade: 'INDICADOR_OPERACIONAL' },
+  { label: 'Monitor', icon: Gauge, path: '/gestao-ti/monitor', roles: STAFF, funcionalidade: 'MONITOR' },
+  { label: 'Acompanhamento', icon: Timer, path: '/gestao-ti/acompanhamento', roles: STAFF, funcionalidade: 'ACOMPANHAMENTO' },
+  { label: 'Acomp. por Item', icon: Search, path: '/gestao-ti/acompanhamento-item', roles: STAFF, funcionalidade: 'ACOMPANHAMENTO_ITEM' },
   { label: 'Relatorio de OS', icon: FileText, path: '/gestao-ti/relatorio-os', roles: STAFF, funcionalidade: 'OS' },
   { section: 'SUPORTE' },
   { label: 'Chamados', icon: Ticket, path: '/gestao-ti/chamados', funcionalidade: 'CHAMADO' },
   { label: 'Painel de Gestão', icon: Flame, path: '/gestao-ti/painel-chamados', roles: MANAGERS, funcionalidade: 'PAINEL_GESTAO_CHAMADO' },
   { label: 'Ordens de Servico', icon: ClipboardList, path: '/gestao-ti/ordens-servico', roles: STAFF, funcionalidade: 'OS' },
-  { label: 'Base de Conhecimento', icon: BookMarked, path: '/gestao-ti/conhecimento', funcionalidade: 'CHAMADO' },
+  { label: 'Base de Conhecimento', icon: BookMarked, path: '/gestao-ti/conhecimento', funcionalidade: 'CONHECIMENTO' },
   { section: 'PORTFOLIO', roles: STAFF },
   { label: 'Softwares', icon: AppWindow, path: '/gestao-ti/softwares', roles: STAFF, funcionalidade: 'SOFTWARE' },
   { label: 'Licencas', icon: KeyRound, path: '/gestao-ti/licencas', roles: STAFF, funcionalidade: 'LICENCA' },
@@ -83,10 +83,10 @@ const menuItems: MenuItem[] = [
   { label: 'Ativos', icon: Server, path: '/gestao-ti/ativos', roles: STAFF, funcionalidade: 'ATIVO' },
   { section: 'CONFIGURACOES', roles: MANAGERS },
   { label: 'Conf. Equipes', icon: Users, path: '/gestao-ti/equipes', roles: MANAGERS, funcionalidade: 'EQUIPE' },
-  { label: 'Catalogo de Servicos', icon: BookOpen, path: '/gestao-ti/catalogo', roles: MANAGERS, funcionalidade: 'CHAMADO' },
-  { label: 'SLA', icon: Clock, path: '/gestao-ti/sla', roles: MANAGERS, funcionalidade: 'CHAMADO' },
-  { label: 'Horarios de Trabalho', icon: Timer, path: '/gestao-ti/horarios-trabalho', roles: MANAGERS, funcionalidade: 'CHAMADO' },
-  { label: 'Importar Dados', icon: Upload, path: '/gestao-ti/importar', roles: MANAGERS },
+  { label: 'Catalogo de Servicos', icon: BookOpen, path: '/gestao-ti/catalogo', roles: MANAGERS, funcionalidade: 'CATALOGO_SERVICO' },
+  { label: 'SLA', icon: Clock, path: '/gestao-ti/sla', roles: MANAGERS, funcionalidade: 'SLA' },
+  { label: 'Horarios de Trabalho', icon: Timer, path: '/gestao-ti/horarios-trabalho', roles: MANAGERS, funcionalidade: 'HORARIO_TRABALHO' },
+  { label: 'Importar Dados', icon: Upload, path: '/gestao-ti/importar', roles: MANAGERS, funcionalidade: 'IMPORTAR_DADOS' },
   { section: 'CADASTROS', roles: MANAGERS },
   { label: 'Departamentos', icon: Building2, path: '/gestao-ti/departamentos', roles: MANAGERS, funcionalidade: 'CADASTRO_DEPARTAMENTO' },
   { label: 'Centros de Custo', icon: Wallet, path: '/gestao-ti/centros-custo', roles: MANAGERS, funcionalidade: 'CADASTRO_CENTRO_CUSTO' },
@@ -97,7 +97,7 @@ const menuItems: MenuItem[] = [
   { label: 'Tipos de Produto', icon: Tag, path: '/gestao-ti/tipos-produto', roles: MANAGERS, funcionalidade: 'CADASTRO_TIPO_PRODUTO' },
   { label: 'Tipos de Projeto', icon: FolderKanban, path: '/gestao-ti/tipos-projeto', roles: MANAGERS, funcionalidade: 'CADASTRO_TIPO_PROJETO' },
   { label: 'Cat. Licencas', icon: Tag, path: '/gestao-ti/categorias-licenca', roles: MANAGERS, funcionalidade: 'CADASTRO_CATEGORIA_LICENCA' },
-  { label: 'Chamados Externos', icon: Globe2, path: '/gestao-ti/chamados-externos', roles: MANAGERS, funcionalidade: 'INDICADOR_ESTRATEGICO' },
+  { label: 'Chamados Externos', icon: Globe2, path: '/gestao-ti/chamados-externos', roles: MANAGERS, funcionalidade: 'CHAMADO_EXTERNO' },
 ];
 
 /**
