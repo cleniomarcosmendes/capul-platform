@@ -64,6 +64,7 @@ export function NfeConsultaPage() {
   const [errorMeta, setErrorMeta] = useState<{
     podeTentarOutrasFiliais: boolean;
     totalFiliaisDisponiveis?: number;
+    subcaso641?: 'EMITENTE_EXATO' | 'MESMA_RAIZ' | 'SEM_INTERESSE';
   } | null>(null);
   const [tentandoOutras, setTentandoOutras] = useState(false);
   const [result, setResult] = useState<NfeConsultaResult | null>(null);
@@ -174,13 +175,27 @@ export function NfeConsultaPage() {
       setTab('nfe');
     } catch (err) {
       setError(extractApiError(err, 'Falha ao consultar NF-e.'));
-      // Captura `podeTentarOutrasFiliais` e `totalFiliaisDisponiveis` do erro
-      // estruturado do backend pra exibir botao no ErrorCard.
-      const errAny = err as { response?: { data?: { podeTentarOutrasFiliais?: boolean; totalFiliaisDisponiveis?: number } } };
+      // Captura `podeTentarOutrasFiliais`, `totalFiliaisDisponiveis` e
+      // `subcaso` (variante de cStat=641) do erro estruturado do backend pra
+      // ajustar visual do ErrorCard.
+      const errAny = err as {
+        response?: {
+          data?: {
+            podeTentarOutrasFiliais?: boolean;
+            totalFiliaisDisponiveis?: number;
+            subcaso?: 'EMITENTE_EXATO' | 'MESMA_RAIZ' | 'SEM_INTERESSE';
+          };
+        };
+      };
       const podeTentar = errAny.response?.data?.podeTentarOutrasFiliais === true;
       const totalDisponiveis = errAny.response?.data?.totalFiliaisDisponiveis;
-      if (podeTentar) {
-        setErrorMeta({ podeTentarOutrasFiliais: true, totalFiliaisDisponiveis: totalDisponiveis });
+      const subcaso641 = errAny.response?.data?.subcaso;
+      if (podeTentar || subcaso641) {
+        setErrorMeta({
+          podeTentarOutrasFiliais: podeTentar,
+          totalFiliaisDisponiveis: totalDisponiveis,
+          subcaso641,
+        });
       }
     } finally {
       setLoading(false);
@@ -483,6 +498,7 @@ export function NfeConsultaPage() {
           context="nfe"
           podeTentarOutrasFiliais={errorMeta?.podeTentarOutrasFiliais}
           totalFiliaisDisponiveis={errorMeta?.totalFiliaisDisponiveis}
+          subcaso641={errorMeta?.subcaso641}
           onTentarOutrasFiliais={() => handleConsultar(null, { tentarTodasFiliais: true })}
           tentandoOutrasFiliais={tentandoOutras}
         />

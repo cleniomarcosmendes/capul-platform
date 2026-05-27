@@ -11,6 +11,15 @@ interface ErrorCardProps {
    */
   podeTentarOutrasFiliais?: boolean;
   totalFiliaisDisponiveis?: number;
+  /**
+   * Sub-classificacao do cStat=641 entregue pelo backend — define titulo/subtitulo
+   * do card. Quando ausente, cai no titulo legado "NF-e emitida pela propria empresa".
+   *  - EMITENTE_EXATO: consulente == emitente (CNPJ 14 digitos).
+   *  - MESMA_RAIZ: consulente e emitente compartilham raiz CNPJ (8 digitos) mas
+   *    filial difere — caso CAPUL-pra-CAPUL.
+   *  - SEM_INTERESSE: consulente sem ligacao com a chave.
+   */
+  subcaso641?: 'EMITENTE_EXATO' | 'MESMA_RAIZ' | 'SEM_INTERESSE';
   onTentarOutrasFiliais?: () => void;
   tentandoOutrasFiliais?: boolean;
 }
@@ -24,6 +33,7 @@ export function ErrorCard({
   context = 'generico',
   podeTentarOutrasFiliais = false,
   totalFiliaisDisponiveis,
+  subcaso641,
   onTentarOutrasFiliais,
   tentandoOutrasFiliais = false,
 }: ErrorCardProps) {
@@ -118,6 +128,25 @@ export function ErrorCard({
   }
 
   if (isEmitidaPeloConsulente) {
+    // Titulo/subtitulo variam conforme `subcaso641` enviado pelo backend.
+    // Fallback (subcaso641 ausente) mantem texto legado.
+    const titulo =
+      subcaso641 === 'MESMA_RAIZ'
+        ? 'NF-e do mesmo grupo CNPJ (filial diferente)'
+        : subcaso641 === 'SEM_INTERESSE'
+          ? 'Filial consulente sem interesse declarado nesta NF-e'
+          : 'NF-e emitida pela própria empresa';
+    const subtitulo =
+      subcaso641 === 'MESMA_RAIZ'
+        ? 'SEFAZ recusa entrega entre filiais do mesmo grupo sem interesse declarado.'
+        : subcaso641 === 'SEM_INTERESSE'
+          ? 'Esta filial não é destinatária nem transportadora da NF-e.'
+          : 'O serviço SEFAZ de distribuição só entrega XML para destinatários.';
+    const rodape =
+      subcaso641 === 'EMITENTE_EXATO'
+        ? 'Para baixar o XML de notas emitidas pela própria filial, a origem correta é o Protheus (SZR010) ou o próprio ERP fiscal.'
+        : 'Outra filial CAPUL pode ter sido destinatária (transferência interna) — tente abaixo. Se nenhuma for, o XML existe apenas no Protheus do emitente.';
+
     return (
       <div className="mb-6 rounded-lg border border-blue-200 bg-white shadow-sm overflow-hidden">
         <div className="bg-blue-50 border-b border-blue-200 px-6 py-4">
@@ -126,22 +155,14 @@ export function ErrorCard({
               <Info className="w-5 h-5 text-blue-600" />
             </div>
             <div className="flex-1">
-              <h3 className="text-sm font-semibold text-blue-900">
-                NF-e emitida pela própria empresa
-              </h3>
-              <p className="text-xs text-blue-700 mt-0.5">
-                O serviço SEFAZ de distribuição só entrega XML para destinatários.
-              </p>
+              <h3 className="text-sm font-semibold text-blue-900">{titulo}</h3>
+              <p className="text-xs text-blue-700 mt-0.5">{subtitulo}</p>
             </div>
           </div>
         </div>
         <div className="px-6 py-4 text-sm text-slate-700 space-y-3">
           <p>{error}</p>
-          <p className="text-xs text-slate-500">
-            Para baixar o XML de notas emitidas pela empresa, a origem correta é o
-            <strong> Protheus (SZR010)</strong> ou o próprio ERP fiscal. A consulta
-            via SEFAZ continua disponível para notas em que a empresa é destinatária.
-          </p>
+          <p className="text-xs text-slate-500">{rodape}</p>
           {tentarOutrasBtn}
         </div>
       </div>

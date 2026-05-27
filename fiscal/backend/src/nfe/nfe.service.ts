@@ -1089,10 +1089,15 @@ export class NfeService {
     let ultimoErroSefaz: SefazConsultaError | null = null;
     let ultimoErroTecnico: Error | null = null;
     let primeiroErroFoi641 = false; // marcador pra mensagem final mais clara
+    // Consulente da ultima tentativa — usado no mapeamento de cStat=641 pra
+    // distinguir "emitente exato" / "mesma raiz CNPJ" / "sem interesse" e
+    // gerar mensagem precisa em vez do label "(a propria empresa)" hard-coded.
+    let ultimoConsulenteTentado: string | null = null;
 
     try {
       for (let i = 0; i < tentativas.length; i++) {
         const tent = tentativas[i];
+        ultimoConsulenteTentado = tent.cnpj;
         try {
           const baixado = await this.sefazDistribuicao.consultarPorChave(
             chave,
@@ -1198,22 +1203,57 @@ export class NfeService {
 
       // Erro semântico tipado da SEFAZ (cStat ≠ 138 ou 138 sem procNFe)
       if (err instanceof SefazConsultaError) {
-        // cStat=641: "NF-e indisponível para o emitente" — a chave foi emitida
-        // pelo próprio CNPJ consulente. NFeDistribuicaoDFe é só para destinatários;
-        // para o próprio emitente o XML vem do Protheus (SZR010) ou do ERP.
-        // Em modo padrao: terminal direto com botao "tentar outras filiais".
-        // Em modo "tentar todas" (ja acionado pelo usuario): tudo foi tentado,
-        // ninguem na CAPUL e destinataria — caso de NF emitida pra cliente
-        // externo, origem real e Protheus.
+        // cStat=641: SEFAZ NFeDistribuicaoDFe recusou a entrega. Tres cenarios
+        // distintos exigem mensagens diferentes:
+        //  - EMITENTE_EXATO: consulente == emitente (CNPJ completo). Caso classico
+        //    "NF da propria filial" — origem correta e Protheus (SZR010).
+        //  - MESMA_RAIZ: consulente e do mesmo grupo CNPJ (raiz 8 digitos) do
+        //    emitente, mas filial diferente. SEFAZ recusa porque considera grupo
+        //    empresarial sem interesse declarado. Fallback pra outras filiais
+        //    CAPUL faz sentido (transferencia interna pode ter outra como
+        //    destinataria).
+        //  - SEM_INTERESSE: consulente sem qualquer ligacao com a chave. Raro,
+        //    mas pode aparecer em chave de outra empresa digitada por engano.
+        // Em modo padrao 641 e terminal — devolve erro estruturado.
         if (err.cStat === '641') {
           const cnpjChave = chave.slice(6, 20);
+          const cnpjConsulente = ultimoConsulenteTentado;
+          const mesmoCnpjCompleto =
+            !!cnpjConsulente && cnpjChave === cnpjConsulente;
+          const mesmaRaiz =
+            !!cnpjConsulente &&
+            cnpjChave.slice(0, 8) === cnpjConsulente.slice(0, 8);
+
+          let subcaso: 'EMITENTE_EXATO' | 'MESMA_RAIZ' | 'SEM_INTERESSE';
+          let motivo: string;
+          if (mesmoCnpjCompleto) {
+            subcaso = 'EMITENTE_EXATO';
+            motivo =
+              `a filial consulente (${this.formatCnpj(cnpjConsulente!)}) ` +
+              `é o próprio emitente da NF-e`;
+          } else if (mesmaRaiz) {
+            subcaso = 'MESMA_RAIZ';
+            motivo =
+              `a filial consulente (${this.formatCnpj(cnpjConsulente!)}) ` +
+              `é do mesmo grupo CNPJ do emitente (mesma raiz, filial diferente) — ` +
+              `SEFAZ não entrega XML entre filiais sem interesse declarado nessa NF`;
+          } else {
+            subcaso = 'SEM_INTERESSE';
+            motivo =
+              `a filial consulente${cnpjConsulente ? ` (${this.formatCnpj(cnpjConsulente)})` : ''} ` +
+              `não tem interesse declarado nessa NF no SEFAZ (não é destinatária nem transportadora)`;
+          }
+
           throw new NotFoundException({
             erro: 'NFE_EMITIDA_PELO_CONSULENTE',
+            subcaso,
             mensagem:
-              `Esta NF-e foi emitida pelo CNPJ ${this.formatCnpj(cnpjChave)} ` +
-              `(a própria empresa). O serviço NFeDistribuicaoDFe da SEFAZ só permite ` +
-              `download para destinatários — use o Protheus (módulo Fiscal / SZR010) ` +
-              `para obter o XML de notas emitidas pela empresa.`,
+              `Esta NF-e foi emitida pelo CNPJ ${this.formatCnpj(cnpjChave)} — ${motivo}. ` +
+              `O serviço NFeDistribuicaoDFe da SEFAZ só entrega XML para partes com interesse ` +
+              `declarado (destinatário, transportador). ` +
+              (subcaso === 'EMITENTE_EXATO'
+                ? `Para obter o XML, use o Protheus (módulo Fiscal / SZR010) ou o próprio ERP.`
+                : `Tente outra filial CAPUL como consulente, ou busque o XML no Protheus (SZR010).`),
             // Botao no frontend so quando ainda nao tentamos tudo
             podeTentarOutrasFiliais: !tentarTodasFiliais && totalFallbacksDisponiveis > 0,
             totalFiliaisDisponiveis: totalFallbacksDisponiveis,
