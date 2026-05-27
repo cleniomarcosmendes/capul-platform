@@ -65,13 +65,19 @@ export function DepartamentoFuncionalidadesDrawer({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // S16.5 — Estado de collapse por seção (default: só "Operação" expandida).
-  // Persiste durante a sessão; reseta ao fechar/abrir drawer.
-  const [secoesAbertas, setSecoesAbertas] = useState<Record<string, boolean>>({
-    OPERACAO: true,
-  });
+  // S16.5 — Estado de collapse por seção. Default: TODAS expandidas (user
+  // colapsa o que quiser pra focar). Persiste só durante a sessão.
+  const [secoesAbertas, setSecoesAbertas] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(SECOES.map((s) => [s.id, true])),
+  );
   function toggleSecao(id: string) {
     setSecoesAbertas((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+  function expandirTodas() {
+    setSecoesAbertas(Object.fromEntries(SECOES.map((s) => [s.id, true])));
+  }
+  function colapsarTodas() {
+    setSecoesAbertas(Object.fromEntries(SECOES.map((s) => [s.id, false])));
   }
 
   useEffect(() => {
@@ -179,20 +185,37 @@ export function DepartamentoFuncionalidadesDrawer({
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   type="button"
                   onClick={marcarTodas}
                   className="text-[11px] px-2.5 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50"
                 >
-                  Todas
+                  Marcar todas
                 </button>
                 <button
                   type="button"
                   onClick={desmarcarTodas}
                   className="text-[11px] px-2.5 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50"
                 >
-                  Nenhuma
+                  Desmarcar todas
+                </button>
+                <span className="text-slate-300 select-none">|</span>
+                <button
+                  type="button"
+                  onClick={expandirTodas}
+                  className="text-[11px] px-2.5 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50"
+                  title="Expandir todas as seções"
+                >
+                  Expandir
+                </button>
+                <button
+                  type="button"
+                  onClick={colapsarTodas}
+                  className="text-[11px] px-2.5 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50"
+                  title="Colapsar todas as seções"
+                >
+                  Colapsar
                 </button>
               </div>
             </div>
