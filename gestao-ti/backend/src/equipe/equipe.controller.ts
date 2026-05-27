@@ -51,6 +51,31 @@ export class EquipeController {
     return this.equipeService.findEquipesParaContratos(user.sub, role);
   }
 
+  /**
+   * S15.4 (27/05) — Lista equipes pra TELA DE CONFIGURAÇÃO (`/equipes`).
+   * Restrita a deptos onde user é STAFF, bypass via OVERSIGHT_PLATAFORMA.
+   * Endpoint separado do `GET /equipes` (global) — este é só pra UI admin.
+   */
+  @Get('config')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
+  findAllParaConfig(
+    @Query('status') status: StatusGeral | undefined,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.equipeService.findAllParaConfig(status, user);
+  }
+
+  /**
+   * S15.4 (27/05) — Detalhe de equipe pra TELA DE CONFIGURAÇÃO. Exige STAFF
+   * no depto da equipe (bypass via OVERSIGHT). Para ver membros em outras
+   * telas (ex: ChamadoDetalhePage), continuar usando `GET /equipes/:id`.
+   */
+  @Get(':id/config')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
+  findOneParaConfig(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.equipeService.findOneParaConfig(id, user);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.equipeService.findOne(id);

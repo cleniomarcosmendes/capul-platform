@@ -33,7 +33,7 @@ export function EquipeDetalhePage() {
   async function carregarEquipe() {
     setLoading(true);
     try {
-      const data = await equipeService.buscar(id!);
+      const data = await equipeService.buscarParaConfig(id!);
       setEquipe(data);
     } catch {
       navigate('/gestao-ti/equipes');

@@ -51,7 +51,7 @@ export function EquipesListPage() {
   async function carregarEquipes() {
     setLoading(true);
     try {
-      const data = await equipeService.listar(filtroStatus || undefined);
+      const data = await equipeService.listarParaConfig(filtroStatus || undefined);
       setEquipes(data);
     } catch {
       // erro tratado pelo interceptor

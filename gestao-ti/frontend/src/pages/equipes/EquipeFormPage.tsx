@@ -57,7 +57,7 @@ export function EquipeFormPage() {
     if (isEdit) {
       setLoading(true);
       equipeService
-        .buscar(id)
+        .buscarParaConfig(id)
         .then((equipe) => {
           setForm({
             nome: equipe.nome,

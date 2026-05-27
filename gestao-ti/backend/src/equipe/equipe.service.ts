@@ -11,7 +11,12 @@ import { AddMembroDto } from './dto/add-membro.dto.js';
 import { UpdateMembroDto } from './dto/update-membro.dto.js';
 import { StatusGeral } from '@prisma/client';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
-import { applyDepartamentoFilter, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
+import {
+  assertDepartamentoDoUser,
+  assertStaffEmDepto,
+} from '../common/helpers/departamento-filter.helper.js';
+import { hasCapability } from '../common/helpers/capability.helper.js';
+import { getDeptosOndeStaff } from '../common/constants/roles.constant.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
@@ -53,6 +58,50 @@ export class EquipeService {
       throw new NotFoundException('Equipe não encontrada');
     }
 
+    return equipe;
+  }
+
+  /**
+   * S15.4 (27/05) — Lista equipes pra TELA DE CONFIGURAÇÃO (`/equipes`).
+   *
+   * Diferente do `findAll` global (mantido pra dropdowns de chamado/contrato/
+   * conhecimento/etc.), aqui restringe a deptos onde o user é STAFF (ADMIN/
+   * GESTOR/SUPORTE). USUARIO_FINAL com perfil no workspace NÃO vê equipes do
+   * depto na tela admin. Bypass via OVERSIGHT_PLATAFORMA.
+   *
+   * Incidente Juliana (GESTOR/Controladoria + USUARIO_FINAL/T.I.): via
+   * equipes de T.I. na tela "Conf. Equipes" e podia tentar editá-las
+   * (write é bloqueado por assertDepartamentoDoUser, mas o leak da listagem
+   * já era informacional — e poderia confundir/induzir tentativas de bypass).
+   */
+  async findAllParaConfig(status: StatusGeral | undefined, user: JwtPayload) {
+    const whereStatus = status ? { status } : {};
+    const where = hasCapability(user, 'OVERSIGHT_PLATAFORMA')
+      ? whereStatus
+      : { ...whereStatus, departamentoId: { in: getDeptosOndeStaff(user) } };
+
+    return this.prisma.equipe.findMany({
+      where,
+      include: {
+        membros: {
+          include: { usuario: true },
+          where: { status: 'ATIVO' },
+        },
+        departamento: { select: { id: true, nome: true } },
+      },
+      orderBy: { ordem: 'asc' },
+    });
+  }
+
+  /**
+   * S15.4 (27/05) — Detalhe de equipe pra TELA DE CONFIGURAÇÃO. Exige STAFF
+   * no depto da equipe (bypass via OVERSIGHT). Usado por `EquipeDetalhePage`
+   * e `EquipeFormPage` (admin). Para mostrar membros num chamado, o frontend
+   * continua usando `findOne` (`GET /equipes/:id`) global — sem assert.
+   */
+  async findOneParaConfig(id: string, user: JwtPayload) {
+    const equipe = await this.findOne(id);
+    assertStaffEmDepto(user, equipe.departamentoId);
     return equipe;
   }
 

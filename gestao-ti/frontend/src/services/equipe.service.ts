@@ -13,6 +13,28 @@ export const equipeService = {
     return data;
   },
 
+  /**
+   * S15.4 (27/05) — Lista equipes restritas aos deptos onde o user é STAFF
+   * (ADMIN/GESTOR/SUPORTE). Pra TELA DE CONFIGURAÇÃO (`/gestao-ti/equipes`).
+   * Outras telas que usam dropdown de equipe (chamado/contrato/etc) seguem
+   * usando `listar` (global).
+   */
+  async listarParaConfig(status?: string): Promise<Equipe[]> {
+    const params = status ? { status } : {};
+    const { data } = await gestaoApi.get('/equipes/config', { params });
+    return data;
+  },
+
+  /**
+   * S15.4 (27/05) — Detalhe scoped por STAFF do depto. Pra páginas admin
+   * (`/gestao-ti/equipes/:id` e `/gestao-ti/equipes/:id/editar`). Outras
+   * telas que mostram membros (ex.: ChamadoDetalhePage) usam `buscar`.
+   */
+  async buscarParaConfig(id: string): Promise<Equipe> {
+    const { data } = await gestaoApi.get(`/equipes/${id}/config`);
+    return data;
+  },
+
   async criar(equipe: Partial<Equipe>): Promise<Equipe> {
     const { data } = await gestaoApi.post('/equipes', equipe);
     return data;
