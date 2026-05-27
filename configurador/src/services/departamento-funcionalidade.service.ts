@@ -14,9 +14,19 @@ export type FuncionalidadeWorkspace =
   | 'INDICADOR_OPERACIONAL'
   | 'INDICADOR_ESTRATEGICO'
   | 'PAINEL_GESTAO_CHAMADO'
-  | 'PAINEL_GESTAO_PROJETO';
+  | 'PAINEL_GESTAO_PROJETO'
+  // S16.4 (27/05) — Cadastros operacionais (taxonomias shared, menu per-depto)
+  | 'CADASTRO_DEPARTAMENTO'
+  | 'CADASTRO_CENTRO_CUSTO'
+  | 'CADASTRO_NATUREZA_FINANCEIRA'
+  | 'CADASTRO_TIPO_CONTRATO'
+  | 'CADASTRO_FORNECEDOR'
+  | 'CADASTRO_PRODUTO'
+  | 'CADASTRO_TIPO_PRODUTO'
+  | 'CADASTRO_TIPO_PROJETO'
+  | 'CADASTRO_CATEGORIA_LICENCA';
 
-export type FuncionalidadeSecao = 'OPERACAO' | 'EQUIPE' | 'PORTFOLIO' | 'SUSTENTACAO' | 'INDICADORES' | 'PAINEIS';
+export type FuncionalidadeSecao = 'OPERACAO' | 'EQUIPE' | 'PORTFOLIO' | 'SUSTENTACAO' | 'INDICADORES' | 'PAINEIS' | 'CADASTROS';
 
 export interface FuncionalidadeMeta {
   codigo: FuncionalidadeWorkspace;
@@ -38,7 +48,14 @@ export interface FuncionalidadeMeta {
     | 'BarChart3'
     | 'TrendingUp'
     | 'Flame'
-    | 'ListChecks';
+    | 'ListChecks'
+    // S16.4 — ícones dos cadastros
+    | 'Building2'
+    | 'Wallet'
+    | 'Tag'
+    | 'Layers'
+    | 'Truck'
+    | 'Package';
 }
 
 export const SECOES: { id: FuncionalidadeSecao; rotulo: string }[] = [
@@ -48,6 +65,7 @@ export const SECOES: { id: FuncionalidadeSecao; rotulo: string }[] = [
   { id: 'PORTFOLIO', rotulo: 'Portfólio' },
   { id: 'SUSTENTACAO', rotulo: 'Sustentação' },
   { id: 'INDICADORES', rotulo: 'Indicadores' },
+  { id: 'CADASTROS', rotulo: 'Cadastros' },
 ];
 
 export const TODAS_FUNCIONALIDADES: FuncionalidadeMeta[] = [
@@ -71,6 +89,16 @@ export const TODAS_FUNCIONALIDADES: FuncionalidadeMeta[] = [
   // Indicadores
   { codigo: 'INDICADOR_OPERACIONAL', rotulo: 'Indicadores Operacionais', descricao: 'KPIs do dia a dia (SLA, CSAT, etc.)', secao: 'INDICADORES', icone: 'BarChart3' },
   { codigo: 'INDICADOR_ESTRATEGICO', rotulo: 'Indicadores Estratégicos', descricao: 'KPIs de planejamento (investimentos, disponibilidade)', secao: 'INDICADORES', icone: 'TrendingUp' },
+  // Cadastros (S16.4 — taxonomias shared, menu per-depto)
+  { codigo: 'CADASTRO_DEPARTAMENTO', rotulo: 'Departamentos', descricao: 'Cadastro de departamentos da plataforma (admin)', secao: 'CADASTROS', icone: 'Building2' },
+  { codigo: 'CADASTRO_CENTRO_CUSTO', rotulo: 'Centros de Custo', descricao: 'Cadastro de centros de custo financeiros', secao: 'CADASTROS', icone: 'Wallet' },
+  { codigo: 'CADASTRO_NATUREZA_FINANCEIRA', rotulo: 'Naturezas Financeiras', descricao: 'Classificação de receitas/despesas', secao: 'CADASTROS', icone: 'Tag' },
+  { codigo: 'CADASTRO_TIPO_CONTRATO', rotulo: 'Tipos de Contrato', descricao: 'Tipologia de contratos com fornecedores', secao: 'CADASTROS', icone: 'Layers' },
+  { codigo: 'CADASTRO_FORNECEDOR', rotulo: 'Fornecedores', descricao: 'Cadastro de fornecedores compartilhado', secao: 'CADASTROS', icone: 'Truck' },
+  { codigo: 'CADASTRO_PRODUTO', rotulo: 'Produtos', descricao: 'Catálogo de produtos comprados', secao: 'CADASTROS', icone: 'Package' },
+  { codigo: 'CADASTRO_TIPO_PRODUTO', rotulo: 'Tipos de Produto', descricao: 'Tipologia de produtos', secao: 'CADASTROS', icone: 'Tag' },
+  { codigo: 'CADASTRO_TIPO_PROJETO', rotulo: 'Tipos de Projeto', descricao: 'Tipologia de projetos', secao: 'CADASTROS', icone: 'FolderKanban' },
+  { codigo: 'CADASTRO_CATEGORIA_LICENCA', rotulo: 'Categorias de Licença', descricao: 'Classificação de licenças de software', secao: 'CADASTROS', icone: 'Tag' },
 ];
 
 export interface FuncionalidadeStatus {

@@ -298,6 +298,20 @@ enum FuncionalidadeWorkspace {
   PAINEL_GESTAO_CHAMADO
   PAINEL_GESTAO_PROJETO
 
+  // S16.4 (27/05) — Cadastros operacionais como funcionalidades configuráveis.
+  // Dados shared entre workspaces (taxonomias); só a visibilidade do menu
+  // é per-depto. Backfill em T.I. (preserva status quo); demais deptos
+  // ativam manualmente via Configurador.
+  CADASTRO_DEPARTAMENTO
+  CADASTRO_CENTRO_CUSTO
+  CADASTRO_NATUREZA_FINANCEIRA
+  CADASTRO_TIPO_CONTRATO
+  CADASTRO_FORNECEDOR
+  CADASTRO_PRODUTO
+  CADASTRO_TIPO_PRODUTO
+  CADASTRO_TIPO_PROJETO
+  CADASTRO_CATEGORIA_LICENCA
+
   @@schema("core")
 }
 

@@ -4,6 +4,8 @@ import {
   Ticket, FolderKanban, ClipboardList, Users, FileText, Receipt,
   AppWindow, KeyRound, Server, Activity, BarChart3, TrendingUp,
   Flame, ListChecks,
+  // S16.4 — ícones dos cadastros
+  Building2, Wallet, Tag, Layers, Truck, Package,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -29,6 +31,8 @@ const ICONES: Record<FuncionalidadeMeta['icone'], LucideIcon> = {
   Ticket, FolderKanban, ClipboardList, Users, FileText, Receipt,
   AppWindow, KeyRound, Server, Activity, BarChart3, TrendingUp,
   Flame, ListChecks,
+  // S16.4 — cadastros
+  Building2, Wallet, Tag, Layers, Truck, Package,
 };
 
 /**
