@@ -864,6 +864,33 @@ export class CadastroService {
       );
     }
 
+    // Contingência SEFAZ — servidor remoto fechou a conexão TCP antes de
+    // responder. Categoria dedicada para o operador não confundir com problema
+    // da CAPUL (certificado, rede, Protheus). Sintomas Node.js:
+    //   - ECONNRESET     : SEFAZ enviou pacote TCP RST explícito
+    //   - socket hang up : SEFAZ desapareceu sem RST nem FIN ("hangup")
+    //   - EPIPE          : nosso socket tentou escrever após SEFAZ fechar
+    //   - ECONNABORTED   : conexão abortada pelo peer durante a transferência
+    // Casos típicos: SEFAZ em contingência declarada, manutenção, ou sobrecarga
+    // em horário de pico. Confirma-se via portal de disponibilidade da SEFAZ.
+    if (
+      msg.includes('ECONNRESET') ||
+      msg.includes('socket hang up') ||
+      msg.includes('EPIPE') ||
+      msg.includes('ECONNABORTED')
+    ) {
+      const detalhe = msg.match(/(socket hang up|ECONNRESET|EPIPE|ECONNABORTED)/)?.[1] ?? msg.slice(0, 60);
+      return new HttpException(
+        {
+          erro: 'SEFAZ_CONTINGENCIA',
+          mensagem:
+            `SEFAZ de ${ufUpper} fechou a conexão sem responder — provavelmente em contingência ou manutenção. ` +
+            `Use "Base local (RFB)" enquanto SEFAZ não voltar. Detalhe técnico: ${detalhe}.`,
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+
     // Timeout / rede
     if (
       msg.includes('timeout') ||

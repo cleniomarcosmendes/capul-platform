@@ -69,6 +69,11 @@ export function ErrorCard({
     /n.o encontrad|nao encontrad|404|cStat=215|cStat=217/i.test(error);
   const isCertProblem =
     /certificado|FISCAL_CNPJ_CONSULENTE|mTLS|TLS/i.test(error);
+  // SEFAZ em contingência: TCP reset pelo servidor remoto (ECONNRESET,
+  // socket hang up, etc). Card dedicado pra deixar claro que NÃO é problema
+  // da CAPUL e instruir a usar fallback local. Detectar ANTES de isUnavailable.
+  const isContingencia =
+    /ECONNRESET|socket hang up|EPIPE|ECONNABORTED|SEFAZ_CONTINGENCIA|conting.ncia/i.test(error);
   // Intencionalmente sem "indispon" — "indisponivel para o emitente" é outro caso.
   const isUnavailable =
     /503|timeout|HTTP 5\d\d|conex.o/i.test(error);
@@ -217,6 +222,65 @@ export function ErrorCard({
         <div className="px-6 py-4 text-sm text-slate-700">
           Verifique no <strong>Configurador → Certificado A1</strong> se há um certificado ativo
           e dentro da validade. Se o problema persistir, contate o ADMIN_TI.
+        </div>
+      </div>
+    );
+  }
+
+  if (isContingencia) {
+    const ufMatch = error.match(/SEFAZ de ([A-Z]{2})|SEFAZ-([A-Z]{2})/);
+    const uf = ufMatch ? (ufMatch[1] ?? ufMatch[2] ?? '') : '';
+    const detalheTecnico =
+      error.match(/(socket hang up|ECONNRESET|EPIPE|ECONNABORTED)/)?.[1] ?? 'conexão fechada pelo servidor';
+    return (
+      <div className="mb-6 rounded-lg border border-amber-200 bg-white shadow-sm overflow-hidden">
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-amber-900">
+                SEFAZ{uf ? `-${uf}` : ''} temporariamente indisponível
+              </h3>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Servidor SEFAZ fechou a conexão — costuma indicar contingência ou manutenção.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-5 space-y-4 text-sm text-slate-700">
+          <p>
+            O servidor da SEFAZ{uf ? ` de ${uf}` : ''} encerrou a conexão antes de responder.
+            Isso costuma indicar <strong>contingência ou manutenção</strong> do próprio SEFAZ —{' '}
+            <strong className="text-slate-900">NÃO é problema da CAPUL nem da plataforma</strong>.
+          </p>
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">O que fazer?</h4>
+            <ul className="text-sm text-slate-600 space-y-1.5">
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>Aguarde alguns minutos antes de tentar de novo. Em contingência, cada tentativa só adiciona carga no SEFAZ.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>
+                  Confira o status oficial no{' '}
+                  <a
+                    href="https://www.nfe.fazenda.gov.br/portal/disponibilidade.aspx"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-amber-700 underline hover:text-amber-900 font-medium"
+                  >
+                    portal de disponibilidade da SEFAZ ↗
+                  </a>
+                </span>
+              </li>
+            </ul>
+          </div>
+          <p className="text-xs text-slate-400 font-mono border-t border-slate-100 pt-3">
+            Detalhe técnico: {detalheTecnico} · Código: SEFAZ_CONTINGENCIA
+          </p>
         </div>
       </div>
     );
