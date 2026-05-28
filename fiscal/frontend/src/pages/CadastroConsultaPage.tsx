@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { AlertCircle, Check, Copy, Sparkles, AlertTriangle, Database, UserSearch, Info, Building2, GitCompareArrows, MapPin, ChevronDown, ChevronRight, FileText, Printer } from 'lucide-react';
+import { AlertCircle, Check, Copy, Sparkles, AlertTriangle, Database, UserSearch, Info, Building2, GitCompareArrows, MapPin, ChevronDown, ChevronRight, FileText, Printer, Hourglass, Network, ShieldAlert, ShieldOff } from 'lucide-react';
 import { fiscalApi } from '../services/api';
 import { PageWrapper } from '../components/PageWrapper';
 import { Button } from '../components/Button';
@@ -1576,6 +1576,16 @@ function ErrorDisplay({
   const isNotFound = error.includes('encontrado') || error.includes('404');
   const isCpf = documento.length === 11;
   const isCnpj = documento.length === 14;
+  const isLimiteAtingido =
+    errorCode === 'LIMITE_ATINGIDO' || /Limite di.rio.*SEFAZ atingido|LIMITE_ATINGIDO/i.test(error);
+  const isCircuitAberto =
+    errorCode === 'CIRCUIT_ABERTO' || /CIRCUIT_ABERTO|temporariamente bloqueada/i.test(error);
+  const isCadeiaTls =
+    errorCode === 'CADEIA_TLS_SERVIDOR_DESATUALIZADA' ||
+    /CADEIA_TLS|Cadeia TLS do SEFAZ|unable to get.*issuer|UNABLE_TO_GET_ISSUER|SELF_SIGNED_CERT_IN_CHAIN/i.test(error);
+  const isCertInvalido =
+    errorCode === 'CERT_INVALIDO' ||
+    /CERT_INVALIDO|certificate expired|CERT_HAS_EXPIRED|bad decrypt|certificado digital A1/i.test(error);
   const isContingencia =
     errorCode === 'SEFAZ_CONTINGENCIA' ||
     /ECONNRESET|socket hang up|EPIPE|ECONNABORTED|conting.ncia/i.test(error);
@@ -1723,6 +1733,260 @@ function ErrorDisplay({
               <LinkComprovanteReceita />
             </div>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  if (isLimiteAtingido) {
+    return (
+      <div className="mb-6 rounded-lg border border-amber-200 bg-white shadow-sm overflow-hidden">
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+              <Hourglass className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-amber-900">
+                Limite diário de consultas SEFAZ atingido
+              </h3>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Proteção interna da plataforma — não é bloqueio da SEFAZ.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-5 space-y-4 text-sm text-slate-700">
+          <p>
+            A plataforma limita o total de consultas SEFAZ por dia para proteger nosso
+            CNPJ contra bloqueio por uso abusivo. O limite foi atingido — novas
+            consultas SEFAZ ao vivo voltam ao normal <strong>após 00:00</strong>.
+          </p>
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">O que fazer?</h4>
+            <ul className="text-sm text-slate-600 space-y-1.5">
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>Use <strong>"Base local (RFB)"</strong> — não consome cota.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>
+                  Em emergência, ADMIN_TI pode liberar em <strong>Operação → Limites</strong>.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>O contador zera automaticamente à meia-noite.</span>
+              </li>
+            </ul>
+          </div>
+          {isCnpj && (
+            <div className="border-t border-slate-100 pt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+              <span>Precisa do comprovante oficial agora? Acesse direto na Receita Federal:</span>
+              <LinkComprovanteReceita />
+            </div>
+          )}
+          <p className="text-xs text-slate-400 font-mono border-t border-slate-100 pt-3">
+            Código: LIMITE_ATINGIDO · HTTP 429
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isCircuitAberto) {
+    const ufMatch = error.match(/UF ([A-Z]{2})/);
+    const uf = ufMatch ? ufMatch[1] : '';
+    return (
+      <div className="mb-6 rounded-lg border border-amber-200 bg-white shadow-sm overflow-hidden">
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+              <ShieldOff className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-amber-900">
+                Consultas{uf ? ` à UF ${uf}` : ''} temporariamente bloqueadas pela plataforma
+              </h3>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Circuit breaker — proteção interna após várias falhas consecutivas no SEFAZ.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-5 space-y-4 text-sm text-slate-700">
+          <p>
+            Detectamos várias falhas consecutivas no SEFAZ{uf ? ` de ${uf}` : ''} recentemente.
+            Para não sobrecarregar mais um servidor instável (e proteger nossa cota), a
+            plataforma fechou temporariamente o acesso a essa UF. O bloqueio reabre
+            sozinho assim que o SEFAZ voltar.
+          </p>
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">O que fazer?</h4>
+            <ul className="text-sm text-slate-600 space-y-1.5">
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span><strong>Aguarde alguns minutos</strong> — reabre automaticamente.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>Outras UFs continuam funcionando — bloqueio é por UF.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>
+                  Status oficial no{' '}
+                  <a
+                    href="https://www.nfe.fazenda.gov.br/portal/disponibilidade.aspx"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-amber-700 underline hover:text-amber-900 font-medium"
+                  >
+                    portal SEFAZ ↗
+                  </a>
+                </span>
+              </li>
+            </ul>
+          </div>
+          {isCnpj && (
+            <div className="border-t border-slate-100 pt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+              <span>Enquanto isso, consulte direto na Receita Federal:</span>
+              <LinkComprovanteReceita />
+            </div>
+          )}
+          <p className="text-xs text-slate-400 font-mono border-t border-slate-100 pt-3">
+            Código: CIRCUIT_ABERTO · HTTP 503
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isCadeiaTls) {
+    const ufMatch = error.match(/SEFAZ de ([A-Z]{2})|SEFAZ-([A-Z]{2})/);
+    const uf = ufMatch ? (ufMatch[1] ?? ufMatch[2] ?? '') : '';
+    return (
+      <div className="mb-6 rounded-lg border border-orange-200 bg-white shadow-sm overflow-hidden">
+        <div className="bg-orange-50 border-b border-orange-200 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+              <Network className="w-5 h-5 text-orange-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-orange-900">
+                Cadeia TLS do servidor SEFAZ{uf ? ` de ${uf}` : ''} desatualizada
+              </h3>
+              <p className="text-xs text-orange-700 mt-0.5">
+                Requer ação do ADMIN_TI — NÃO é problema do A1 da CAPUL.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-5 space-y-4 text-sm text-slate-700">
+          <p>
+            O servidor SEFAZ{uf ? ` de ${uf}` : ''} usa uma <strong>AC intermediária</strong>{' '}
+            que a plataforma ainda não conhece. Costuma ocorrer quando o estado troca
+            o emissor do cert do servidor.
+          </p>
+          <div className="rounded-md border border-orange-200 bg-orange-50 p-3">
+            <p className="text-xs text-orange-900">
+              <strong>Importante:</strong> esse erro é sobre o cert do <em>servidor SEFAZ</em>,
+              não do A1 da CAPUL. Não precisa revisar o A1 — ele continua válido.
+            </p>
+          </div>
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">O que fazer?</h4>
+            <ul className="text-sm text-slate-600 space-y-1.5">
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>
+                  Peça ao <strong>ADMIN_TI</strong> abrir <strong>Operação → Diagnóstico → Cadeia TLS</strong>{' '}
+                  e clicar em <strong>"Atualizar cadeia"</strong>.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>Depois da atualização, repita a consulta — deve voltar a funcionar.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>Enquanto isso, "Base local (RFB)" continua disponível.</span>
+              </li>
+            </ul>
+          </div>
+          {isCnpj && (
+            <div className="border-t border-slate-100 pt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+              <span>Comprovante oficial agora? Acesse direto na Receita Federal:</span>
+              <LinkComprovanteReceita />
+            </div>
+          )}
+          <p className="text-xs text-slate-400 font-mono border-t border-slate-100 pt-3">
+            Código: CADEIA_TLS_SERVIDOR_DESATUALIZADA · HTTP 503
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isCertInvalido) {
+    return (
+      <div className="mb-6 rounded-lg border border-red-200 bg-white shadow-sm overflow-hidden">
+        <div className="bg-red-50 border-b border-red-200 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+              <ShieldAlert className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-red-900">
+                Certificado A1 da CAPUL com problema
+              </h3>
+              <p className="text-xs text-red-700 mt-0.5">
+                Consulta SEFAZ exige A1 válido — verificar configuração.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-5 space-y-4 text-sm text-slate-700">
+          <p>
+            A consulta foi rejeitada porque o <strong>certificado A1 da CAPUL</strong>{' '}
+            está inválido. Causas comuns:
+          </p>
+          <ul className="text-sm text-slate-600 space-y-1.5">
+            <li className="flex items-start gap-2">
+              <span className="text-red-400 mt-0.5">•</span>
+              <span><strong>Certificado expirado</strong> (validade vencida).</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-red-400 mt-0.5">•</span>
+              <span><strong>Senha incorreta</strong> ao decifrar o PFX.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-red-400 mt-0.5">•</span>
+              <span>Arquivo PFX corrompido ou substituído.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-red-400 mt-0.5">•</span>
+              <span>Nenhum certificado marcado como ativo.</span>
+            </li>
+          </ul>
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">O que fazer?</h4>
+            <p>
+              Abra <strong>Configurador → Certificado Fiscal</strong> e confira: certificado
+              ativo, dentro da validade, senha correta. Se precisar reimportar, peça ao ADMIN_TI.
+              "Base local (RFB)" não depende do A1 e continua funcionando.
+            </p>
+          </div>
+          {isCnpj && (
+            <div className="border-t border-slate-100 pt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+              <span>Comprovante oficial agora? Acesse direto na Receita Federal:</span>
+              <LinkComprovanteReceita />
+            </div>
+          )}
+          <p className="text-xs text-slate-400 font-mono border-t border-slate-100 pt-3">
+            Código: CERT_INVALIDO · HTTP 503
+          </p>
         </div>
       </div>
     );
