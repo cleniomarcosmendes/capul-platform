@@ -64,7 +64,7 @@ export class ComprovanteIeGeneratorService {
     this.linhaHr(doc);
 
     // === DADOS DO CONTRIBUINTE (Receita Federal) ===
-    this.tituloSecao(doc, 'DADOS DO CONTRIBUINTE (Receita Federal)');
+    this.tituloSecao(doc, '🇧🇷 DADOS DO CONTRIBUINTE — FONTE: RECEITA FEDERAL (BrasilAPI/ReceitaWS)');
     if (dadosReceita) {
       this.campo(doc, 'Razão Social', dadosReceita.razaoSocial);
       this.campo(doc, 'Nome Fantasia', dadosReceita.nomeFantasia);
@@ -139,8 +139,8 @@ export class ComprovanteIeGeneratorService {
 
     doc.moveDown(0.8);
 
-    // === DADOS DA INSCRIÇÃO ESTADUAL ===
-    this.tituloSecao(doc, `DADOS DA INSCRIÇÃO ESTADUAL (SEFAZ-${ie.uf})`);
+    // === DADOS DA INSCRIÇÃO ESTADUAL (SEFAZ via CCC) ===
+    this.tituloSecao(doc, `🏛 DADOS DA INSCRIÇÃO ESTADUAL — FONTE: SEFAZ-${ie.uf} (CCC oficial)`);
     this.campo(doc, 'Número da IE', ie.inscricaoEstadual);
     this.campo(doc, 'UF', ie.uf);
     this.campo(doc, 'Razão Social', ie.razaoSocial);
@@ -149,12 +149,16 @@ export class ComprovanteIeGeneratorService {
     // (com `fantasia` populado), usamos como fallback marcando a fonte.
     // Operador fiscal identifica empresa pelo nome conhecido ("FAZENDA SÃO JORGE").
     const fantasiaProtheus = cruzamento?.vinculosProtheus.find((v) => v.nomeFantasia)?.nomeFantasia ?? null;
-    const fantasiaParaExibir = ie.nomeFantasia
-      ? ie.nomeFantasia
-      : fantasiaProtheus
-        ? `${fantasiaProtheus} (Protheus — não retornado pelo CCC SEFAZ)`
-        : null;
-    this.campo(doc, 'Nome Fantasia', fantasiaParaExibir);
+    if (ie.nomeFantasia) {
+      this.campo(doc, 'Nome Fantasia', ie.nomeFantasia);
+    } else if (fantasiaProtheus) {
+      // Marca em laranja + texto explícito pra deixar claro a fonte diferente.
+      doc.fillColor('#000').fontSize(10);
+      doc.font('Helvetica-Bold').text('Nome Fantasia: ', { continued: true });
+      doc.font('Helvetica').fillColor('#000').text(fantasiaProtheus, { continued: true });
+      doc.font('Helvetica-Oblique').fillColor('#b45309').text('  ← fonte: PROTHEUS (CCC SEFAZ não retornou este campo)');
+      doc.fillColor('#000');
+    }
     this.campo(doc, 'Situação na SEFAZ', this.fmtSituacao(ie.situacaoRaw, ie.situacao));
     this.campo(doc, 'cSit (código)', this.fmtCSitComDescricao(ie.cSit));
     this.campo(doc, 'Data da Situação', ie.dataSituacao);
@@ -208,7 +212,7 @@ export class ComprovanteIeGeneratorService {
       (x) => x.inscricaoEstadual !== ie.inscricaoEstadual,
     );
     if (outrasIes.length > 0) {
-      this.tituloSecao(doc, `OUTRAS IE(s) DESTE CONTRIBUINTE (${outrasIes.length})`);
+      this.tituloSecao(doc, `🏛 OUTRAS IE(s) DESTE CONTRIBUINTE NO SEFAZ-${ie.uf} (${outrasIes.length})`);
       outrasIes.forEach((o, i) => {
         if (i > 0) doc.moveDown(0.2);
         doc.font('Helvetica-Bold').fontSize(10).fillColor('#000');
@@ -234,9 +238,20 @@ export class ComprovanteIeGeneratorService {
       doc.moveDown(0.8);
     }
 
-    // === CRUZAMENTO COM PROTHEUS ===
+    // === DADOS COMPLEMENTARES — CADASTRO PROTHEUS (ERP CAPUL) ===
     if (cruzamento && cruzamento.vinculosProtheus.length > 0) {
-      this.tituloSecao(doc, 'CRUZAMENTO COM PROTHEUS');
+      this.tituloSecao(doc, '📦 DADOS COMPLEMENTARES — CADASTRO PROTHEUS (ERP CAPUL)');
+      // Aviso explícito sobre a fonte — operador fiscal precisa saber que NÃO
+      // é dado oficial SEFAZ. É o que a equipe Compras/Cadastro registrou no
+      // ERP interno. Pode divergir do oficial quando o cadastro está stale.
+      doc.fillColor('#92400e').font('Helvetica-Oblique').fontSize(9);
+      doc.text(
+        'ATENÇÃO: tudo abaixo é do CADASTRO PROTHEUS (SA1010 Clientes / SA2010 Fornecedores), NÃO da SEFAZ. ' +
+          'Reflete o que a CAPUL registrou internamente. Confirme com o cadastro oficial em caso de divergência.',
+        { width: 515, align: 'justify' },
+      );
+      doc.fillColor('#000').font('Helvetica').fontSize(10);
+      doc.moveDown(0.3);
       const statusTexto =
         cruzamento.status === 'AMBOS'
           ? 'AMBOS — IE existe no SEFAZ e no Protheus'
@@ -246,43 +261,46 @@ export class ComprovanteIeGeneratorService {
       this.campo(doc, 'Status do Cruzamento', statusTexto);
 
       cruzamento.vinculosProtheus.forEach((v, i) => {
+        doc.moveDown(0.4);
+        // Header do vínculo com fundo amarelo claro pra reforçar visualmente
+        // que tudo abaixo é Protheus (não SEFAZ).
+        doc.fillColor('#fef3c7'); // bg amber-100
+        doc.rect(40, doc.y - 2, 515, 16).fill();
+        doc.fillColor('#92400e').font('Helvetica-Bold').fontSize(10);
+        const tipo = v.origem === 'SA1010' ? 'Cliente (SA1010)' : 'Fornecedor (SA2010)';
+        doc.text(`  Vínculo ${i + 1} — Protheus ${tipo}  |  ${v.codigo ?? '-'}/${v.loja ?? '-'}${v.filial ? '  |  Filial ' + v.filial : ''}`);
+        doc.fillColor('#000').font('Helvetica').fontSize(10);
         doc.moveDown(0.3);
-        doc.font('Helvetica-Bold').fontSize(10).fillColor('#000');
-        doc.text(`Vínculo ${i + 1}:`);
-        this.campo(
-          doc,
-          '  Origem',
-          v.origem === 'SA1010' ? 'Cliente (SA1010)' : 'Fornecedor (SA2010)',
-        );
-        this.campo(doc, '  Código/Loja', `${v.codigo ?? '-'}/${v.loja ?? '-'}`);
-        if (v.filial) this.campo(doc, '  Filial Protheus', v.filial);
-        this.campo(doc, '  Razão (Protheus)', v.razaoSocial);
-        this.campo(doc, '  Nome Fantasia', v.nomeFantasia);
-        this.campo(doc, '  Pessoa', v.pessoa === 'F' ? 'Física' : v.pessoa === 'J' ? 'Jurídica' : null);
-        this.campo(doc, '  Bloqueado', v.bloqueado ? 'SIM (bloqueado no Protheus)' : 'Não');
-        this.campo(doc, '  Inscrição Estadual', v.inscricaoEstadual);
-        this.campo(doc, '  Inscrição Municipal', v.inscricaoMunicipal);
-        this.campo(doc, '  Regime Tributário', v.regimeTributario);
-        this.campo(doc, '  CNAE (Protheus)', v.cnae);
-        this.campo(doc, '  Telefone', v.telefone);
-        this.campo(doc, '  E-mail', v.email);
+
+        // Os campos abaixo são TODOS do Protheus. Prefixo "[Protheus]" deixa
+        // claro mesmo se alguém ler 1 linha fora de contexto (ex.: search/print).
+        this.campo(doc, '  [Protheus] Razão Social', v.razaoSocial);
+        this.campo(doc, '  [Protheus] Nome Fantasia', v.nomeFantasia);
+        this.campo(doc, '  [Protheus] Pessoa', v.pessoa === 'F' ? 'Física' : v.pessoa === 'J' ? 'Jurídica' : null);
+        this.campo(doc, '  [Protheus] Bloqueado no ERP', v.bloqueado ? 'SIM' : 'Não');
+        this.campo(doc, '  [Protheus] Inscrição Estadual', v.inscricaoEstadual);
+        this.campo(doc, '  [Protheus] Inscrição Municipal', v.inscricaoMunicipal);
+        this.campo(doc, '  [Protheus] Regime Tributário', v.regimeTributario);
+        this.campo(doc, '  [Protheus] CNAE', v.cnae);
+        this.campo(doc, '  [Protheus] Telefone', v.telefone);
+        this.campo(doc, '  [Protheus] E-mail', v.email);
         if (v.endereco) {
           const enderecoTxt = [
             v.endereco.logradouro ?? '',
             v.endereco.complemento ? ` — ${v.endereco.complemento}` : '',
           ].join('').trim() || null;
-          this.campo(doc, '  Endereço (Protheus)', enderecoTxt);
-          this.campo(doc, '  Bairro', v.endereco.bairro);
+          this.campo(doc, '  [Protheus] Endereço', enderecoTxt);
+          this.campo(doc, '  [Protheus] Bairro', v.endereco.bairro);
           const muni = v.endereco.municipio
             ? v.endereco.municipioIbge
               ? `${v.endereco.municipio} (cód. IBGE ${v.endereco.municipioIbge})`
               : v.endereco.municipio
             : null;
-          this.campo(doc, '  Município/UF', muni && v.endereco.uf ? `${muni} / ${v.endereco.uf}` : muni);
-          this.campo(doc, '  CEP', v.endereco.cep);
+          this.campo(doc, '  [Protheus] Município/UF', muni && v.endereco.uf ? `${muni} / ${v.endereco.uf}` : muni);
+          this.campo(doc, '  [Protheus] CEP', v.endereco.cep);
         }
-        this.campo(doc, '  Data Cadastro', v.dataCadastro);
-        this.campo(doc, '  Último Movimento', v.dataUltimoMovimento);
+        this.campo(doc, '  [Protheus] Data Cadastro', v.dataCadastro);
+        this.campo(doc, '  [Protheus] Último Movimento', v.dataUltimoMovimento);
       });
 
       doc.moveDown(0.5);
