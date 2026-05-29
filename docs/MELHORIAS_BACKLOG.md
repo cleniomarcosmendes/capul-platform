@@ -191,6 +191,42 @@ não resolver, considerar automatizar parte do checklist (script que lê
 
 ## Gestão TI — UX
 
+### ⏳ 2026-05-29 — Chamados: filtro inline de workspace na lista (opt-in)
+
+**Contexto:** Hoje o filtro por workspace funciona via **`WorkspaceSwitcher`
+global** no header (S15.1 / 25/05): user escolhe o workspace ativo, Axios
+manda header `X-Workspace-Id` em todas as requests, backend filtra. Cobre
+"Padrão" (auto pra single-perfil), "Específico" (escolha no Switcher) e
+"Todos" (sem header). Backend já aceita `?departamentoId=` também
+(`chamado.controller.ts:79`).
+
+**Proposta (sugerida por Clenio 29/05):** Adicionar dropdown **inline** na
+tela de Chamados (junto com filtros status/prioridade/equipe) pra **override
+LOCAL** do workspace, sem mexer no Switcher global. Útil quando user
+multi-perfil quer "dar uma olhada" em chamados de outro workspace sem mudar
+o contexto global da sessão.
+
+Opções no dropdown:
+- "Padrão (workspace ativo)" — segue o Switcher do header (default)
+- "Todos os workspaces" — força sem filtro mesmo com Switcher setado
+- Lista de workspaces onde o user é STAFF/CHAVE — escolha pontual
+
+**Adiada porque:** Switcher global pode bastar na prática. Aguardar feedback
+de uso real dos multi-perfis (Juliana, Tatiane, outros) após deploy v7. Se
+em algumas semanas eles reclamarem de ficar trocando o workspace toda hora,
+implementar. Caso contrário, vira código morto duplicando funcionalidade.
+
+**Escopo se for implementar:**
+- Frontend: state local no `ChamadosListPage` (não persistir) + override do
+  `?departamentoId=` no fetch. Coexistir com o `X-Workspace-Id` do header
+  (override local prevalece).
+- Backend: nenhuma mudança (`?departamentoId=` já existe).
+- UX: indicador visual quando override local difere do workspace global.
+
+**Como puxar:** memory `[[feedback_backlog_ler_ao_iniciar]]` garante revisão
+periódica. Se aparecer pedido similar de USUARIO_FINAL/outros, virar
+prioridade.
+
 ### ⏳ 2026-05-05 — CT-e Distribuição: validar comportamento com dados reais SEFAZ
 
 **Contexto:** Módulo CT-e Distribuição entregou 10 commits hoje (Fases 1-4 +
