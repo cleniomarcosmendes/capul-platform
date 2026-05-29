@@ -195,10 +195,22 @@ export function ProjetoDetalhePage() {
   const { gestaoTiRole, usuario } = useAuth();
 
   const [projeto, setProjeto] = useState<Projeto | null>(null);
-  // canManage: usuario deve ser membro/responsavel do projeto (ou ADMIN/GESTOR_TI)
+  // 29/05 — Workspace Multi-Depto: roleEfetiva = role do user NO DEPTO do
+  // projeto (não a role principal do JWT). Caso reportado em HOM: Tatiane
+  // GESTOR/Fiscal + USUARIO_CHAVE/T.I. acessando projeto T.I. tinha tabs
+  // completas e botões de gestor porque gestaoTiRole=GESTOR (principal).
+  // Memory feedback_workspace_role_por_depto.
+  const projetoDeptoId = (projeto as unknown as Record<string, unknown>)?.departamentoId as string | undefined;
+  const roleNoDeptoProjeto = projetoDeptoId
+    ? usuario?.modulos
+        ?.find((m) => m.codigo === 'WORKSPACE')
+        ?.departamentos?.find((d) => d.id === projetoDeptoId)?.role
+    : undefined;
+  const roleEfetiva = roleNoDeptoProjeto ?? gestaoTiRole;
+  // canManage: usuario deve ser membro/responsavel do projeto (ou ADMIN/GESTOR no DEPTO)
   const isMembro = (projeto as unknown as Record<string, unknown>)?.isMembro === true;
-  const isGestorOrAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
-  const canManage = (isGestorOrAdmin || isMembro) && Boolean(gestaoTiRole);
+  const isGestorOrAdmin = roleEfetiva === 'ADMIN' || roleEfetiva === 'GESTOR';
+  const canManage = (isGestorOrAdmin || isMembro) && Boolean(roleEfetiva);
   const canAddAtividade = canManage;
 
   const { toast, confirm, prompt } = useToast();
@@ -393,7 +405,10 @@ export function ProjetoDetalhePage() {
 
   const showEquipeTab = true;
   const isCompleto = true; // Modo SIMPLES removido - todos projetos são COMPLETO
-  const isRestrictedRole = gestaoTiRole === 'USUARIO_CHAVE' || gestaoTiRole === 'TERCEIRIZADO';
+  // 29/05 — roleEfetiva (role no depto do projeto). Multi-perfil GESTOR/Fiscal
+  // + UC/T.I. acessando projeto T.I. deve cair em "restrictedTabs", não nas
+  // tabs completas. Sem isso a UI vazava todas as tabs do TI pra ela.
+  const isRestrictedRole = roleEfetiva === 'USUARIO_CHAVE' || roleEfetiva === 'TERCEIRIZADO';
   // Subprojeto proprio: usuario externo e responsavel do subprojeto
   const isSubprojetoProprio = isRestrictedRole && projeto.projetoPaiId && projeto.responsavelId === usuario?.id;
   // Cor das tabs: azul para subprojeto de usuario externo, verde normal para TI
@@ -685,7 +700,7 @@ export function ProjetoDetalhePage() {
           <TabEquipe projetoId={projeto.id} canManage={canManage} onEditingChange={setChildEditing} />
         )}
         {tab === 'atividades' && (
-          <TabCronograma projetoId={projeto.id} isCompleto={isCompleto} canManage={canManage} canAdd={canAddAtividade} userId={usuario?.id || ''} isGestor={gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR'} onEditingChange={setChildEditing} />
+          <TabCronograma projetoId={projeto.id} isCompleto={isCompleto} canManage={canManage} canAdd={canAddAtividade} userId={usuario?.id || ''} isGestor={isGestorOrAdmin} onEditingChange={setChildEditing} />
         )}
         {tab === 'financeiro' && (
           <TabFinanceiro projetoId={projeto.id} projeto={projeto} canManage={canManage} onEditingChange={setChildEditing} />
