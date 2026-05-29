@@ -59,3 +59,8 @@ coverage/
 # Convenção 05/05/2026: gravar mensagens de commit em tmp/commit_msg_*.txt
 # e usar `git commit -F tmp/commit_msg_*.txt` (workaround PS 5.1 sem HEREDOC bash).
 tmp/
+
+# Backups locais (dumps pg_dump custom + arquivos auxiliares) — gerados pelo
+# scripts/backup.sh e pelo ciclo restore_from_prod. Podem chegar a centenas
+# de MB; ficam fora do git por design (versionar dump não faz sentido).
+backups/
