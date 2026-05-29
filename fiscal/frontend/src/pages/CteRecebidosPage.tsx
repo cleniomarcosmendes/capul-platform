@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   ChevronLeft,
   ChevronRight,
@@ -122,6 +122,9 @@ export function CteRecebidosPage() {
   const toast = useToast();
   const { usuario } = useAuth();
   const confirm = useConfirm();
+  // 29/05 — deep-link via ?detalheId=N. Permite abrir o modal de detalhe
+  // direto a partir de outras telas (ex.: aba "CT-es Vinculados" na NF-e).
+  const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin = useMemo(
     () => usuario?.modulos?.some((m) => m.codigo === 'FISCAL' && m.role === 'ADMIN_TI'),
     [usuario],
@@ -366,6 +369,22 @@ export function CteRecebidosPage() {
       setCarregandoDetalhe(false);
     }
   };
+
+  // Deep-link via ?detalheId=N — abre o modal de detalhe ao montar/quando o
+  // query param mudar. Remove o param da URL após acionar pra não reabrir
+  // se o usuário fechar o modal e navegar dentro da página.
+  useEffect(() => {
+    const idStr = searchParams.get('detalheId');
+    if (!idStr) return;
+    const idNum = Number(idStr);
+    if (!isNaN(idNum)) {
+      abrirDetalhe(idNum);
+      const next = new URLSearchParams(searchParams);
+      next.delete('detalheId');
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const [regravandoId, setRegravandoId] = useState<number | null>(null);
   const [regravandoBatch, setRegravandoBatch] = useState(false);
