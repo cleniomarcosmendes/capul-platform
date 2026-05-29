@@ -262,12 +262,21 @@ export class ProjetoCoreService {
     if (user && role) {
       await this.helpers.checkProjetoAccessChave(id, user, role);
 
+      // 29/05 — avaliar role no DEPTO DO PROJETO (não a role principal).
+      // Multi-perfil GESTOR/Fiscal + USUARIO_CHAVE/T.I. acessando projeto T.I.:
+      // role principal = GESTOR; role no depto do projeto = USUARIO_CHAVE.
+      // Sem isso, o filtro de subprojetos abaixo não dispara → vazamento.
+      const roleNoDeptoProjeto = user.modulos
+        ?.find((m) => m.codigo === 'WORKSPACE')
+        ?.departamentos?.find((d) => d.id === projeto.departamentoId)?.role;
+      const roleEfetiva = roleNoDeptoProjeto ?? role;
+
       // Filtrar subProjetos pelos quais o usuario esta vinculado
-      if (role === 'USUARIO_CHAVE' || role === 'TERCEIRIZADO') {
+      if (roleEfetiva === 'USUARIO_CHAVE' || roleEfetiva === 'TERCEIRIZADO') {
         const subProjetosVinculados = await this.getSubProjetosVinculados(
           projeto.subProjetos.map((s) => s.id),
           userId!,  // user existe (guard `if(user && role)` acima)
-          role,
+          roleEfetiva,
         );
         projeto.subProjetos = projeto.subProjetos.filter((s) =>
           subProjetosVinculados.includes(s.id),

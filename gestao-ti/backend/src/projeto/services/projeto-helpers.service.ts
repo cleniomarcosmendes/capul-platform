@@ -142,7 +142,7 @@ export class ProjetoHelpersService {
 
     const projeto = await this.prisma.projeto.findUnique({
       where: { id: projetoId },
-      select: { responsavelId: true },
+      select: { responsavelId: true, departamentoId: true },
     });
     if (!projeto) throw new NotFoundException('Projeto nao encontrado');
 
@@ -155,8 +155,18 @@ export class ProjetoHelpersService {
     });
     if (membro) return;
 
-    // USUARIO_CHAVE / TERCEIRIZADO vinculados (compartilham usuario_chave_projeto)
-    if (role === 'USUARIO_CHAVE' || role === 'TERCEIRIZADO') {
+    // USUARIO_CHAVE / TERCEIRIZADO vinculados (compartilham usuario_chave_projeto).
+    // 29/05 — multi-perfil: a role precisa ser avaliada NO DEPTO DO PROJETO,
+    // não a role principal do JWT. Caso reportado em HOM: Tatiane GESTOR/Fiscal
+    // + USUARIO_CHAVE/T.I. tomava 403 em projeto T.I. onde era chave, porque
+    // `role` (principal) vinha como GESTOR ou GESTOR_FISCAL e não batia em
+    // `USUARIO_CHAVE || TERCEIRIZADO`. Memory feedback_workspace_role_por_depto.
+    const roleNoDeptoProjeto = user.modulos
+      ?.find((m) => m.codigo === 'WORKSPACE')
+      ?.departamentos?.find((d) => d.id === projeto.departamentoId)?.role;
+    const roleEfetiva = roleNoDeptoProjeto ?? role;
+
+    if (roleEfetiva === 'USUARIO_CHAVE' || roleEfetiva === 'TERCEIRIZADO') {
       const uc = await this.prisma.usuarioChaveProjeto.findUnique({
         where: { projetoId_usuarioId: { projetoId, usuarioId: user.sub } },
       });
