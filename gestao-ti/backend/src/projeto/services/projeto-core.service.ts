@@ -341,7 +341,32 @@ export class ProjetoCoreService {
   }
 
   async create(dto: CreateProjetoDto, userId?: string, role?: string, user?: JwtPayload) {
-    const isExterno = role && (ROLES_EXTERNOS as readonly string[]).includes(role);
+    // === Workspace Multi-Depto (fix bug 29/05 — Tatiane GESTOR/Fiscal) ===
+    // A role do user VARIA por depto (ex.: GESTOR no Fiscal + USUARIO_CHAVE em T.I.).
+    // Antes da Onda 1, T.I. era o único workspace e a `role` (principal do JWT)
+    // bastava. Agora precisamos avaliar a role NO DEPTO DA OPERAÇÃO antes de
+    // decidir se ela conta como "externa". Caso contrário, GESTOR num workspace
+    // não-T.I. seria bloqueado por causa do papel USUARIO_CHAVE em outro workspace.
+    let deptoAlvo: string | null = null;
+    let paiCache: { departamentoId: string; nivel: number; contratoId: string | null } | null = null;
+    if (dto.projetoPaiId) {
+      const pai = await this.prisma.projeto.findUnique({
+        where: { id: dto.projetoPaiId },
+        select: { departamentoId: true, nivel: true, contratoId: true },
+      });
+      if (!pai) throw new NotFoundException('Projeto pai nao encontrado');
+      paiCache = pai;
+      deptoAlvo = pai.departamentoId;
+    } else if (user) {
+      deptoAlvo = await resolveDepartamento(this.prisma, user, 'WORKSPACE', dto.departamentoId);
+    }
+    const roleNoDepto = deptoAlvo
+      ? user?.modulos?.find((m) => m.codigo === 'WORKSPACE')
+          ?.departamentos?.find((d) => d.id === deptoAlvo)?.role
+      : undefined;
+    // Fallback p/ role principal preserva compat com JWT pré-Onda 1.4 (sem departamentos[]).
+    const roleEfetiva = roleNoDepto ?? role;
+    const isExterno = roleEfetiva && (ROLES_EXTERNOS as readonly string[]).includes(roleEfetiva);
 
     // Roles externos so podem criar subprojetos (exigem projetoPaiId)
     if (isExterno) {
@@ -349,17 +374,16 @@ export class ProjetoCoreService {
         throw new ForbiddenException('Usuarios externos so podem criar sub-projetos');
       }
       // S13a — usar `user` (mais completo) ao invés de userId.
-      await this.helpers.checkProjetoAccessChave(dto.projetoPaiId, user!, role);
+      // roleEfetiva aqui é a role no depto-alvo (que = pai.departamentoId pra subprojeto)
+      await this.helpers.checkProjetoAccessChave(dto.projetoPaiId, user!, roleEfetiva!);
     }
 
     let nivel = 1;
     let contratoId = dto.contratoId;
 
     if (dto.projetoPaiId) {
-      const pai = await this.prisma.projeto.findUnique({
-        where: { id: dto.projetoPaiId },
-      });
-      if (!pai) throw new NotFoundException('Projeto pai nao encontrado');
+      // Reusa paiCache resolvido acima (poupa 1 query).
+      const pai = paiCache!;
       // Hierarquia limitada a 2 niveis (PROJETO + SUBPROJETO) — decisao 26/04/2026.
       // Razao: simplifica indicadores, navegacao e modelo mental. Casos N3 existentes
       // continuam funcionais (apenas novas criacoes sao bloqueadas).
@@ -402,23 +426,14 @@ export class ProjetoCoreService {
 
     // Onda 1 Sub-fase 1.6.1 — D14 subprojeto herda do pai;
     // se projeto novo (sem pai), resolveDepartamento em cascata.
-    let departamentoId: string;
-    if (dto.projetoPaiId) {
-      const pai = await this.prisma.projeto.findUniqueOrThrow({
-        where: { id: dto.projetoPaiId },
-        select: { departamentoId: true },
-      });
-      departamentoId = pai.departamentoId;
-    } else {
-      departamentoId = await resolveDepartamento(
-        this.prisma,
-        user ?? null,
-        'WORKSPACE',
-        dto.departamentoId,
-      );
-      // Onda 3 S10 fix (ultrareview bug_011) — gate IDOR cross-depto pra
-      // projetos NOVOS (sem pai). Subprojetos herdam do pai (branch acima).
-      if (user) assertDepartamentoDoUser(user, null, departamentoId);
+    // Já calculado em `deptoAlvo` no topo da função (fix 29/05 evita query dupla
+    // do pai e garante mesmo depto pra checagem de role e pra persistência).
+    const departamentoId: string = deptoAlvo!;
+    // Onda 3 S10 fix (ultrareview bug_011) — gate IDOR cross-depto pra
+    // projetos NOVOS (sem pai). Subprojetos herdam do pai (resolveDepartamento
+    // não foi chamado, mas o depto vem do pai — caminho seguro por construção).
+    if (!dto.projetoPaiId && user) {
+      assertDepartamentoDoUser(user, null, departamentoId);
     }
 
     const projeto = await this.prisma.projeto.create({
