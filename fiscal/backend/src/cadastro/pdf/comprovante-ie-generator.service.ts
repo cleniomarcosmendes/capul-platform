@@ -176,11 +176,53 @@ export class ComprovanteIeGeneratorService {
           .trim() || null;
       this.campo(doc, 'Endereço (SEFAZ)', logradouro);
       this.campo(doc, 'Bairro', e?.bairro);
-      this.campo(doc, 'Município', e?.municipio);
+      // Mostrar código IBGE quando vier (vem como `cMun` no CCC). Sintegra
+      // exibe ambos — operador usa o código pra integrações Protheus/SAFx.
+      const municipio = e?.municipio
+        ? e.codigoMunicipio
+          ? `${e.municipio} (cód. IBGE ${e.codigoMunicipio})`
+          : e.municipio
+        : null;
+      this.campo(doc, 'Município', municipio);
       this.campo(doc, 'CEP', e?.cep);
     }
 
     doc.moveDown(0.8);
+
+    // === OUTRAS IEs DESTE CONTRIBUINTE ===
+    // CCC pode retornar várias IEs do mesmo CNPJ/CPF na mesma UF (cStat=112).
+    // Sintegra mostra como tabela acima da identificação. O nosso comprovante
+    // foca a IE específica que o operador selecionou — mas listamos as outras
+    // pra dar contexto (ex.: produtor rural com 3 fazendas/IEs no mesmo CPF).
+    const outrasIes = consultaResult.inscricoesSefaz.filter(
+      (x) => x.inscricaoEstadual !== ie.inscricaoEstadual,
+    );
+    if (outrasIes.length > 0) {
+      this.tituloSecao(doc, `OUTRAS IE(s) DESTE CONTRIBUINTE (${outrasIes.length})`);
+      outrasIes.forEach((o, i) => {
+        if (i > 0) doc.moveDown(0.2);
+        doc.font('Helvetica-Bold').fontSize(10).fillColor('#000');
+        doc.text(`IE ${o.inscricaoEstadual} — UF ${o.uf}`);
+        doc.font('Helvetica').fontSize(9).fillColor('#000');
+        const linha1 = [
+          `Situação: ${this.fmtSituacao(o.situacaoRaw, o.situacao)}`,
+          o.cnae ? `CNAE: ${o.cnae}` : null,
+          o.inicioAtividade ? `Início: ${o.inicioAtividade}` : null,
+        ].filter(Boolean).join('  ·  ');
+        doc.text(linha1);
+        if (o.endereco?.logradouro) {
+          const ender = [
+            o.endereco.logradouro,
+            o.endereco.numero ? `, ${o.endereco.numero}` : '',
+            o.endereco.bairro ? ` — ${o.endereco.bairro}` : '',
+            o.endereco.municipio ? ` / ${o.endereco.municipio}` : '',
+          ].join('').trim();
+          doc.text(`Endereço: ${ender}`);
+        }
+        doc.fillColor('#000').fontSize(10);
+      });
+      doc.moveDown(0.8);
+    }
 
     // === CRUZAMENTO COM PROTHEUS ===
     if (cruzamento && cruzamento.vinculosProtheus.length > 0) {
@@ -230,6 +272,16 @@ export class ComprovanteIeGeneratorService {
       .stroke();
     doc.moveDown(0.3);
     doc.font('Helvetica-Oblique').fontSize(8).fillColor('#666');
+    // Nota sobre campos que o portal Sintegra mostra mas o web service CCC
+    // não retorna no XML (Nome Fantasia, Tipo IE, Situação CPF, Porte,
+    // Tipo Produtor, Crédito Presumido, Histórico de IEs antigas). Pedido
+    // setor Fiscal 29/05 — operador costuma comparar com Sintegra e
+    // estranhar a ausência. Deixa claro que NÃO é falha da plataforma.
+    doc.text(
+      'Nota: alguns campos visíveis no portal Sintegra (Nome Fantasia, Tipo IE, Situação CPF como Destinatário, Porte, Crédito Presumido, Tipo Produtor) NÃO são retornados pelo web service oficial de Consulta Cadastral (CCC) da SEFAZ. Para esses casos específicos, consultar diretamente no Sintegra da UF.',
+      { width: 515, align: 'justify' },
+    );
+    doc.moveDown(0.3);
     doc.text(
       `Comprovante gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} | Plataforma Capul | Filial ${filialConsulente} | Dados oficiais constam no portal SEFAZ-${ie.uf} e no portal da Receita Federal (solucoes.receita.fazenda.gov.br).`,
     );
