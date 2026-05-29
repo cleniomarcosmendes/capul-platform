@@ -359,7 +359,7 @@ export class ProjetoController {
     @GestaoTiRole() role: string,
   ) {
     await this.service.checkProjetoAccessChave(id, user, role);
-    return this.service.removeComentario(id, comentarioId, user.sub, role);
+    return this.service.removeComentario(id, comentarioId, user.sub, role, user);
   }
 
   @Patch(':id/comentarios/:comentarioId')
@@ -408,7 +408,7 @@ export class ProjetoController {
     @GestaoTiRole() role: string,
   ) {
     await this.service.assertMembroOuGestor(id, user, role);
-    return this.service.ajustarRegistroTempo(id, registroId, dto, user.sub, role);
+    return this.service.ajustarRegistroTempo(id, registroId, dto, user.sub, role, user);
   }
 
   @Delete(':id/registros-tempo/:registroId')
@@ -419,7 +419,7 @@ export class ProjetoController {
     @GestaoTiRole() role: string,
   ) {
     await this.service.assertMembroOuGestor(id, user, role);
-    return this.service.removerRegistroTempo(id, registroId, user.sub, role);
+    return this.service.removerRegistroTempo(id, registroId, user.sub, role, user);
   }
 
   // --- Chamados (vincular/desvincular) ---

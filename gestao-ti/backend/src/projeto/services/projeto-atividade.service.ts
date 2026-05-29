@@ -515,13 +515,17 @@ export class ProjetoAtividadeService {
     return comentario;
   }
 
-  async removeComentario(projetoId: string, comentarioId: string, userId: string, role?: string) {
+  async removeComentario(projetoId: string, comentarioId: string, userId: string, role?: string, user?: JwtPayload) {
     await this.helpers.ensureProjetoExists(projetoId);
     const comentario = await this.prisma.comentarioTarefa.findFirst({
       where: { id: comentarioId, atividade: { projetoId } },
     });
     if (!comentario) throw new NotFoundException('Comentario nao encontrado');
-    const isAdmin = isGestor(role || '');
+    // 29/05 — role NO DEPTO do projeto (não principal do JWT) em multi-perfil.
+    const roleEfetiva = user
+      ? await this.helpers.getRoleNoDeptoProjeto(projetoId, user, role || '')
+      : role || '';
+    const isAdmin = isGestor(roleEfetiva);
     if (comentario.usuarioId !== userId && !isAdmin) {
       throw new ForbiddenException('Somente o autor pode remover esta nota');
     }
@@ -537,7 +541,9 @@ export class ProjetoAtividadeService {
       include: { atividade: { select: { pendenciaId: true } } },
     });
     if (!comentario) throw new NotFoundException('Comentario nao encontrado');
-    const isAdmin = isGestor(role || '');
+    // 29/05 — role NO DEPTO do projeto (não principal do JWT) em multi-perfil.
+    const roleEfetiva = await this.helpers.getRoleNoDeptoProjeto(projetoId, user, role || '');
+    const isAdmin = isGestor(roleEfetiva);
     if (comentario.usuarioId !== userId && !isAdmin) {
       throw new ForbiddenException('Somente o autor pode editar esta nota');
     }

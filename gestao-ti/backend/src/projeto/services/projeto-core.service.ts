@@ -284,10 +284,21 @@ export class ProjetoCoreService {
       }
     }
 
-    // Calcular se usuario e membro/responsavel do projeto
+    // Calcular se usuario e membro/responsavel do projeto.
+    // 29/05 — roleEfetiva (role NO DEPTO DO PROJETO) substitui role principal.
+    // Multi-perfil GESTOR/Fiscal + UC/T.I. NÃO deve receber isMembro=true em
+    // projeto T.I. só porque a role principal é GESTOR (ela é UC nesse depto).
+    // Memory feedback_workspace_role_por_depto. Já computamos `roleEfetiva`
+    // alguns blocos acima (no filtro de subprojetos) — vamos recomputar aqui
+    // por clareza local; fallback p/ `role` se sem user/projeto.
     let isMembro = false;
     if (userId) {
-      if (isGestor(role || '')) {
+      const roleEfetivaParaIsMembro = user?.modulos
+        ?.find((m) => m.codigo === 'WORKSPACE')
+        ?.departamentos?.find((d) => d.id === projeto.departamentoId)?.role
+        ?? role
+        ?? '';
+      if (isGestor(roleEfetivaParaIsMembro)) {
         isMembro = true;
       } else if (projeto.responsavel?.id === userId) {
         isMembro = true;

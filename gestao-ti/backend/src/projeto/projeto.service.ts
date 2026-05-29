@@ -206,8 +206,8 @@ export class ProjetoService {
     return this.atividadeService.addComentario(projetoId, atividadeId, texto, user, visivelPendencia, publica, role, emailEnvolvidos);
   }
 
-  removeComentario(projetoId: string, comentarioId: string, userId: string, role?: string) {
-    return this.atividadeService.removeComentario(projetoId, comentarioId, userId, role);
+  removeComentario(projetoId: string, comentarioId: string, userId: string, role?: string, user?: JwtPayload) {
+    return this.atividadeService.removeComentario(projetoId, comentarioId, userId, role, user);
   }
 
   updateComentario(projetoId: string, comentarioId: string, texto: string, user: JwtPayload, role?: string, visivelPendencia?: boolean, publica?: boolean) {
@@ -234,12 +234,12 @@ export class ProjetoService {
     return this.tempoService.encerrarRegistroTempo(projetoId, atividadeId, userId);
   }
 
-  ajustarRegistroTempo(projetoId: string, registroId: string, dto: UpdateRegistroTempoDto, userId?: string, role?: string) {
-    return this.tempoService.ajustarRegistroTempo(projetoId, registroId, dto, userId, role);
+  ajustarRegistroTempo(projetoId: string, registroId: string, dto: UpdateRegistroTempoDto, userId?: string, role?: string, user?: JwtPayload) {
+    return this.tempoService.ajustarRegistroTempo(projetoId, registroId, dto, userId, role, user);
   }
 
-  removerRegistroTempo(projetoId: string, registroId: string, userId?: string, role?: string) {
-    return this.tempoService.removerRegistroTempo(projetoId, registroId, userId, role);
+  removerRegistroTempo(projetoId: string, registroId: string, userId?: string, role?: string, user?: JwtPayload) {
+    return this.tempoService.removerRegistroTempo(projetoId, registroId, userId, role, user);
   }
 
   obterRegistroAtivo(projetoId: string, userId: string) {

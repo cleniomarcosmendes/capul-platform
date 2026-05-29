@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { UpdateRegistroTempoDto } from '../dto/update-registro-tempo.dto.js';
 import { CreateApontamentoDto } from '../dto/create-apontamento.dto.js';
 import { ProjetoHelpersService } from './projeto-helpers.service.js';
+import type { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 import { ProjetoAtividadeHistoricoService } from './projeto-atividade-historico.service.js';
 
 @Injectable()
@@ -101,7 +102,7 @@ export class ProjetoTempoService {
     return encerrado;
   }
 
-  async ajustarRegistroTempo(projetoId: string, registroId: string, dto: UpdateRegistroTempoDto, userId?: string, role?: string) {
+  async ajustarRegistroTempo(projetoId: string, registroId: string, dto: UpdateRegistroTempoDto, userId?: string, role?: string, user?: JwtPayload) {
     await this.helpers.ensureProjetoExists(projetoId);
     const registro = await this.prisma.registroTempo.findFirst({
       where: { id: registroId, atividade: { projetoId } },
@@ -109,7 +110,11 @@ export class ProjetoTempoService {
     if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
 
     if (userId && role) {
-      this.helpers.validarEdicaoRegistro(registro, userId, role);
+      // 29/05 — role NO DEPTO do projeto (não principal do JWT) em multi-perfil.
+      const roleEfetiva = user
+        ? await this.helpers.getRoleNoDeptoProjeto(projetoId, user, role)
+        : role;
+      this.helpers.validarEdicaoRegistro(registro, userId, roleEfetiva);
       // Audit log: gestor editando registro de outro usuario
       if (registro.usuarioId !== userId) {
         this.prisma.$queryRaw`
@@ -138,14 +143,18 @@ export class ProjetoTempoService {
     });
   }
 
-  async removerRegistroTempo(projetoId: string, registroId: string, userId?: string, role?: string) {
+  async removerRegistroTempo(projetoId: string, registroId: string, userId?: string, role?: string, user?: JwtPayload) {
     await this.helpers.ensureProjetoExists(projetoId);
     const registro = await this.prisma.registroTempo.findFirst({
       where: { id: registroId, atividade: { projetoId } },
     });
     if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
     if (userId && role) {
-      this.helpers.validarEdicaoRegistro(registro, userId, role);
+      // 29/05 — role NO DEPTO do projeto (não principal do JWT) em multi-perfil.
+      const roleEfetiva = user
+        ? await this.helpers.getRoleNoDeptoProjeto(projetoId, user, role)
+        : role;
+      this.helpers.validarEdicaoRegistro(registro, userId, roleEfetiva);
       if (registro.usuarioId !== userId) {
         this.prisma.$queryRaw`
           INSERT INTO core.system_logs (id, level, message, module, action, usuario_id, metadata, created_at)

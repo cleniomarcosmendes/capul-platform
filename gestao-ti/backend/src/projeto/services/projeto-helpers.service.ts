@@ -195,4 +195,26 @@ export class ProjetoHelpersService {
       throw new BadRequestException('Nao e possivel editar registros com mais de 2 dias. Solicite ao gestor.');
     }
   }
+
+  /**
+   * Resolve a role efetiva do user NO DEPARTAMENTO do projeto. Em users
+   * multi-perfil (GESTOR em depto A + USUARIO_CHAVE em depto B), a role
+   * principal do JWT pode mascarar o papel real no contexto. Este helper
+   * faz lookup em `user.modulos[WORKSPACE].departamentos[]` pelo depto do
+   * projeto. Fallback pra role principal preserva compat com JWT pré-Onda 1.4.
+   *
+   * 29/05 — criado pós-incidente HOM "Tatiane GESTOR/Fiscal + USUARIO_CHAVE/T.I.
+   * tinha privilégios de GESTOR em projeto T.I." (memory feedback_workspace_role_por_depto).
+   */
+  async getRoleNoDeptoProjeto(projetoId: string, user: JwtPayload, fallbackRole: string): Promise<string> {
+    const projeto = await this.prisma.projeto.findUnique({
+      where: { id: projetoId },
+      select: { departamentoId: true },
+    });
+    if (!projeto) return fallbackRole;
+    const roleNoDepto = user.modulos
+      ?.find((m) => m.codigo === 'WORKSPACE')
+      ?.departamentos?.find((d) => d.id === projeto.departamentoId)?.role;
+    return roleNoDepto ?? fallbackRole;
+  }
 }
