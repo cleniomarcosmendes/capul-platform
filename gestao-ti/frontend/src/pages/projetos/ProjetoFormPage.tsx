@@ -12,6 +12,7 @@ import { coreService } from '../../services/core.service';
 import { ArrowLeft } from 'lucide-react';
 import type { Software, Contrato, UsuarioCore, Projeto, TipoProjetoConfig } from '../../types';
 import { isWorkspaceModulo } from '../../lib/workspace-modulo';
+import { DepartamentoField } from '../../components/DepartamentoField';
 
 export function ProjetoFormPage() {
   const { id } = useParams();
@@ -19,7 +20,16 @@ export function ProjetoFormPage() {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const { gestaoTiRole, usuario } = useAuth();
-  const isExternoRole = gestaoTiRole === 'USUARIO_CHAVE' || gestaoTiRole === 'TERCEIRIZADO';
+  // departamentoId é o workspace ATIVO da operação. Quando subprojeto, o backend
+  // herda do pai. Edit não permite mudar depto (preserva tracking).
+  const [departamentoId, setDepartamentoId] = useState('');
+  // Role efetiva = role da pessoa NO depto selecionado (não a role principal do JWT).
+  // Fix 29/05: Tatiane GESTOR/Fiscal + USUARIO_CHAVE/T.I. — sem isso, criar projeto
+  // no Fiscal era bloqueado porque gestaoTiRole vinha de T.I.
+  const workspaceMod = usuario?.modulos.find((m) => isWorkspaceModulo(m.codigo));
+  const roleNoDepto = workspaceMod?.departamentos?.find((d) => d.id === departamentoId)?.role;
+  const roleEfetiva = roleNoDepto ?? gestaoTiRole;
+  const isExternoRole = roleEfetiva === 'USUARIO_CHAVE' || roleEfetiva === 'TERCEIRIZADO';
 
   const [softwares, setSoftwares] = useState<Software[]>([]);
   const [contratos, setContratos] = useState<Contrato[]>([]);
@@ -113,6 +123,9 @@ export function ProjetoFormPage() {
       tipoProjetoId: tipoProjetoId || undefined,
       modo: 'COMPLETO' as const,
       projetoPaiId: projetoPaiId || undefined,
+      // Subprojeto herda depto do pai no backend — não enviar.
+      // Projeto raiz: enviar depto selecionado (fix Workspace Multi-Depto 29/05).
+      departamentoId: projetoPaiId ? undefined : (departamentoId || undefined),
       softwareId: isExternoRole ? undefined : (softwareId || undefined),
       contratoId: isExternoRole ? undefined : (contratoId || undefined),
       responsavelId: isExternoRole ? (usuario?.id || '') : responsavelId,
@@ -204,6 +217,20 @@ export function ProjetoFormPage() {
 
         <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-slate-200 p-6 max-w-3xl">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Workspace (departamento) — só pra projeto RAIZ. Subprojeto herda do pai.
+                Em edição, depto fica fixo (preserva tracking + evita migrar dados cross-depto). */}
+            {!projetoPaiId && !isEdit && (
+              <div className="md:col-span-2">
+                <DepartamentoField
+                  value={departamentoId}
+                  onChange={(d) => { setDepartamentoId(d); setDirty(true); }}
+                  funcionalidade="PROJETO"
+                  label="Workspace (Departamento) *"
+                  help="Onde o projeto vai morar. Se você tem perfil em mais de um departamento, escolha o workspace correto antes de continuar — algumas regras (ex.: criar projeto raiz) variam por workspace."
+                />
+              </div>
+            )}
+
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-1">Nome *</label>
               <input
