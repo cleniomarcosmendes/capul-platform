@@ -1881,11 +1881,11 @@ function AbaCtesVinculados({
                   <tr key={c.id} className={divergente ? 'bg-red-50/50' : 'hover:bg-slate-50'}>
                     <td className="px-3 py-2 font-mono">
                       <a
-                        href={`/fiscal/cte?detalheId=${c.id}`}
+                        href={`/fiscal/cte?chave=${c.chaveCte ?? ''}&detalheId=${c.id}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-700 hover:underline"
-                        title="Abrir CT-e #{c.numero} na lista, com o modal de detalhe aberto"
+                        title="Abrir CT-e na lista: campo 'Chave' pré-filtrado + modal de detalhe aberto"
                       >
                         {c.numero ?? '—'}/{c.serie ?? '—'}
                       </a>

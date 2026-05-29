@@ -370,16 +370,31 @@ export function CteRecebidosPage() {
     }
   };
 
-  // Deep-link via ?detalheId=N — abre o modal de detalhe ao montar/quando o
-  // query param mudar. Remove o param da URL após acionar pra não reabrir
-  // se o usuário fechar o modal e navegar dentro da página.
+  // Deep-link via query params — chave + detalheId. Aciona ao montar/quando
+  // os params mudarem.
+  //  - ?chave=<chaveCte> : pré-preenche o campo "Chave (parcial)" e filtra
+  //  - ?detalheId=N      : abre o modal de detalhe do CT-e N
+  // Cobre o fluxo "vem da aba CT-es Vinculados na NF-e": usuário pousa na
+  // lista com a linha já isolada (contexto visível) + modal aberto.
+  // Remove os params da URL após acionar pra navegação não reabrir o modal.
   useEffect(() => {
+    const chaveParam = searchParams.get('chave');
     const idStr = searchParams.get('detalheId');
-    if (!idStr) return;
-    const idNum = Number(idStr);
-    if (!isNaN(idNum)) {
-      abrirDetalhe(idNum);
+    let mudou = false;
+    if (chaveParam && chaveParam.replace(/\D/g, '').length === 44 && !search) {
+      setSearch(chaveParam.replace(/\D/g, ''));
+      mudou = true;
+    }
+    if (idStr) {
+      const idNum = Number(idStr);
+      if (!isNaN(idNum)) {
+        abrirDetalhe(idNum);
+        mudou = true;
+      }
+    }
+    if (mudou) {
       const next = new URLSearchParams(searchParams);
+      next.delete('chave');
       next.delete('detalheId');
       setSearchParams(next, { replace: true });
     }
