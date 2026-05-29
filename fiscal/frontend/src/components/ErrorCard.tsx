@@ -138,7 +138,7 @@ export function ErrorCard({
   // da CAPUL e instruir a usar fallback local. Detectar ANTES de isUnavailable.
   const isContingencia =
     errorCode === 'SEFAZ_CONTINGENCIA' ||
-    /ECONNRESET|socket hang up|EPIPE|ECONNABORTED|SEFAZ_CONTINGENCIA|conting.ncia/i.test(error);
+    /ECONNRESET|socket hang up|EPIPE|ECONNABORTED|SEFAZ_CONTINGENCIA|conting.ncia|socket disconnected before|Client network socket/i.test(error);
   // Intencionalmente sem "indispon" — "indisponivel para o emitente" é outro caso.
   const isUnavailable =
     /503|timeout|HTTP 5\d\d|conex.o/i.test(error);

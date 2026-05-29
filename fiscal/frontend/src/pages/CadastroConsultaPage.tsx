@@ -1590,7 +1590,7 @@ function ErrorDisplay({
     /CERT_INVALIDO|certificate expired|CERT_HAS_EXPIRED|bad decrypt|certificado digital A1/i.test(error);
   const isContingencia =
     errorCode === 'SEFAZ_CONTINGENCIA' ||
-    /ECONNRESET|socket hang up|EPIPE|ECONNABORTED|conting.ncia/i.test(error);
+    /ECONNRESET|socket hang up|EPIPE|ECONNABORTED|conting.ncia|socket disconnected before|Client network socket/i.test(error);
   const isIndisponivel = error.includes('indispon') || error.includes('500') || error.includes('timeout');
   const isProtheusIndisponivel = errorCode === 'PROTHEUS_INDISPONIVEL';
 
@@ -1998,7 +1998,8 @@ function ErrorDisplay({
     const ufMatch = error.match(/SEFAZ de ([A-Z]{2})/);
     const uf = ufMatch ? ufMatch[1] : '';
     const detalheTecnico =
-      error.match(/(socket hang up|ECONNRESET|EPIPE|ECONNABORTED)/)?.[1] ?? 'conexão fechada pelo servidor';
+      error.match(/(socket hang up|ECONNRESET|EPIPE|ECONNABORTED|socket disconnected before secure TLS|Client network socket disconnected)/)?.[1]
+        ?? 'conexão fechada pelo servidor';
     return (
       <div className="mb-6 rounded-lg border border-amber-200 bg-white shadow-sm overflow-hidden">
         <div className="bg-amber-50 border-b border-amber-200 px-6 py-4">

@@ -916,15 +916,24 @@ export class CadastroService {
     //   - socket hang up : SEFAZ desapareceu sem RST nem FIN ("hangup")
     //   - EPIPE          : nosso socket tentou escrever após SEFAZ fechar
     //   - ECONNABORTED   : conexão abortada pelo peer durante a transferência
+    //   - "Client network socket disconnected before secure TLS connection
+    //     was established" : servidor fechou DURANTE handshake TLS (SEFAZ-RS
+    //     em contingência reportou isso em 29/05). Mesma família — não é o
+    //     handshake do nosso A1; SEFAZ que não respondeu ao SNI/ClientHello.
     // Casos típicos: SEFAZ em contingência declarada, manutenção, ou sobrecarga
     // em horário de pico. Confirma-se via portal de disponibilidade da SEFAZ.
     if (
       msg.includes('ECONNRESET') ||
       msg.includes('socket hang up') ||
       msg.includes('EPIPE') ||
-      msg.includes('ECONNABORTED')
+      msg.includes('ECONNABORTED') ||
+      msg.includes('socket disconnected before secure TLS') ||
+      msg.includes('socket disconnected before') ||
+      msg.includes('Client network socket disconnected')
     ) {
-      const detalhe = msg.match(/(socket hang up|ECONNRESET|EPIPE|ECONNABORTED)/)?.[1] ?? msg.slice(0, 60);
+      const detalhe =
+        msg.match(/(socket hang up|ECONNRESET|EPIPE|ECONNABORTED|socket disconnected before secure TLS|Client network socket disconnected)/)?.[1]
+          ?? msg.slice(0, 80);
       return new HttpException(
         {
           erro: 'SEFAZ_CONTINGENCIA',
