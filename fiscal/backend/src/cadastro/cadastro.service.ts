@@ -36,7 +36,32 @@ export interface VinculoProtheus {
   loja: string;
   bloqueado: boolean;
   razaoSocial?: string | null;
+  /**
+   * Nome Fantasia (A1_NOMFANT / A2_NREDUZ — `fantasia` v3). No CCC SEFAZ-TO
+   * o xFant nem sempre vem (produtor rural típico) — usamos isto como fallback
+   * pra mostrar o nome conhecido da empresa/fazenda no comprovante.
+   */
+  nomeFantasia?: string | null;
   inscricaoEstadual?: string | null;
+  /** Inscrição Municipal (A1_INSCRM / A2_INSCRM — `inscIM` v3). */
+  inscricaoMunicipal?: string | null;
+  /** Regime tributário Protheus (`regTrib` v3 — ex.: "Simples Nacional"). */
+  regimeTributario?: string | null;
+  cnae?: string | null;
+  pessoa?: 'F' | 'J' | null;
+  telefone?: string | null;
+  email?: string | null;
+  dataCadastro?: string | null;
+  dataUltimoMovimento?: string | null;
+  endereco?: {
+    logradouro?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    municipio?: string | null;
+    municipioIbge?: string | null;
+    uf?: string | null;
+    cep?: string | null;
+  } | null;
   /**
    * UF onde a IE deste vínculo foi emitida (campo `inscUF` do contrato v3
    * Protheus). Usada para decidir quais SEFAZs consultar na auditoria
@@ -740,7 +765,27 @@ export class CadastroService {
         loja: r.loja,
         bloqueado: r.bloquead,
         razaoSocial: r.razSoc,
+        nomeFantasia: r.fantasia ?? null,
         inscricaoEstadual: r.inscIE ?? null,
+        inscricaoMunicipal: r.inscIM ?? null,
+        regimeTributario: r.regTrib ?? null,
+        cnae: r.cnae ?? null,
+        pessoa: r.pessoa ?? null,
+        telefone: r.contato?.telefone ?? null,
+        email: r.contato?.email ?? null,
+        dataCadastro: r.dtCadast ?? null,
+        dataUltimoMovimento: r.dtUltMov ?? null,
+        endereco: r.endereco
+          ? {
+              logradouro: r.endereco.logrado ?? null,
+              complemento: r.endereco.complem ?? null,
+              bairro: r.endereco.bairro ?? null,
+              municipio: r.endereco.municip ?? null,
+              municipioIbge: r.endereco.munIBGE ?? null,
+              uf: r.endereco.uf ?? null,
+              cep: r.endereco.cep ?? null,
+            }
+          : null,
         // Preferência inscUF (UF de emissão da IE — é o que bate com o CCC).
         // Fallback endereco.uf para registros Protheus antigos sem inscUF.
         uf: (r.inscUF ?? r.endereco?.uf ?? null)?.toUpperCase() ?? null,

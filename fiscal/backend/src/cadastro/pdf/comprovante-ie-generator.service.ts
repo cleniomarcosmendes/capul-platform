@@ -144,7 +144,17 @@ export class ComprovanteIeGeneratorService {
     this.campo(doc, 'Número da IE', ie.inscricaoEstadual);
     this.campo(doc, 'UF', ie.uf);
     this.campo(doc, 'Razão Social', ie.razaoSocial);
-    this.campo(doc, 'Nome Fantasia', ie.nomeFantasia);
+    // Nome Fantasia: CCC de algumas UFs (notadamente TO pra produtor rural)
+    // não retorna xFant. Quando isso acontece e o Protheus tem o cadastro
+    // (com `fantasia` populado), usamos como fallback marcando a fonte.
+    // Operador fiscal identifica empresa pelo nome conhecido ("FAZENDA SÃO JORGE").
+    const fantasiaProtheus = cruzamento?.vinculosProtheus.find((v) => v.nomeFantasia)?.nomeFantasia ?? null;
+    const fantasiaParaExibir = ie.nomeFantasia
+      ? ie.nomeFantasia
+      : fantasiaProtheus
+        ? `${fantasiaProtheus} (Protheus — não retornado pelo CCC SEFAZ)`
+        : null;
+    this.campo(doc, 'Nome Fantasia', fantasiaParaExibir);
     this.campo(doc, 'Situação na SEFAZ', this.fmtSituacao(ie.situacaoRaw, ie.situacao));
     this.campo(doc, 'cSit (código)', this.fmtCSitComDescricao(ie.cSit));
     this.campo(doc, 'Data da Situação', ie.dataSituacao);
@@ -245,8 +255,34 @@ export class ComprovanteIeGeneratorService {
           v.origem === 'SA1010' ? 'Cliente (SA1010)' : 'Fornecedor (SA2010)',
         );
         this.campo(doc, '  Código/Loja', `${v.codigo ?? '-'}/${v.loja ?? '-'}`);
-        this.campo(doc, '  Razão (Protheus)', v.razaoSocial);
         if (v.filial) this.campo(doc, '  Filial Protheus', v.filial);
+        this.campo(doc, '  Razão (Protheus)', v.razaoSocial);
+        this.campo(doc, '  Nome Fantasia', v.nomeFantasia);
+        this.campo(doc, '  Pessoa', v.pessoa === 'F' ? 'Física' : v.pessoa === 'J' ? 'Jurídica' : null);
+        this.campo(doc, '  Bloqueado', v.bloqueado ? 'SIM (bloqueado no Protheus)' : 'Não');
+        this.campo(doc, '  Inscrição Estadual', v.inscricaoEstadual);
+        this.campo(doc, '  Inscrição Municipal', v.inscricaoMunicipal);
+        this.campo(doc, '  Regime Tributário', v.regimeTributario);
+        this.campo(doc, '  CNAE (Protheus)', v.cnae);
+        this.campo(doc, '  Telefone', v.telefone);
+        this.campo(doc, '  E-mail', v.email);
+        if (v.endereco) {
+          const enderecoTxt = [
+            v.endereco.logradouro ?? '',
+            v.endereco.complemento ? ` — ${v.endereco.complemento}` : '',
+          ].join('').trim() || null;
+          this.campo(doc, '  Endereço (Protheus)', enderecoTxt);
+          this.campo(doc, '  Bairro', v.endereco.bairro);
+          const muni = v.endereco.municipio
+            ? v.endereco.municipioIbge
+              ? `${v.endereco.municipio} (cód. IBGE ${v.endereco.municipioIbge})`
+              : v.endereco.municipio
+            : null;
+          this.campo(doc, '  Município/UF', muni && v.endereco.uf ? `${muni} / ${v.endereco.uf}` : muni);
+          this.campo(doc, '  CEP', v.endereco.cep);
+        }
+        this.campo(doc, '  Data Cadastro', v.dataCadastro);
+        this.campo(doc, '  Último Movimento', v.dataUltimoMovimento);
       });
 
       doc.moveDown(0.5);
@@ -278,7 +314,7 @@ export class ComprovanteIeGeneratorService {
     // setor Fiscal 29/05 — operador costuma comparar com Sintegra e
     // estranhar a ausência. Deixa claro que NÃO é falha da plataforma.
     doc.text(
-      'Nota: alguns campos visíveis no portal Sintegra (Nome Fantasia, Tipo IE, Situação CPF como Destinatário, Porte, Crédito Presumido, Tipo Produtor) NÃO são retornados pelo web service oficial de Consulta Cadastral (CCC) da SEFAZ. Para esses casos específicos, consultar diretamente no Sintegra da UF.',
+      'Nota sobre paridade com Sintegra: o portal Sintegra exibe campos que NÃO são retornados pelo web service oficial de Consulta Cadastral (CCC) da SEFAZ — por isso este comprovante complementa o CCC com dados do Protheus (Nome Fantasia, Inscrição Municipal, Regime Tributário, Contato, Endereço alternativo) quando disponíveis. Campos exclusivos do Sintegra que NÃO temos fonte hoje: "Situação CPF como Destinatário na UF", "Tipo IE" (Produtor Rural/etc.), "Tipo Produtor", "Crédito Presumido", "Porte" — para esses, consultar diretamente no Sintegra da UF.',
       { width: 515, align: 'justify' },
     );
     doc.moveDown(0.3);
