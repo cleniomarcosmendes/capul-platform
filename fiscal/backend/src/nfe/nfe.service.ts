@@ -1125,6 +1125,8 @@ export class NfeService {
             // Terminais SEMPRE — nao melhoram com troca de consulente:
             //  - 632: fora de prazo (janela ~90 dias) — propriedade da chave/NF, nao do consulente
             //  - 137: nenhum documento — SEFAZ ja confirmou inexistencia
+            //  - 215: falha de schema XML — problema do nosso request, nao do consulente
+            //  - 217: NF-e inexistente na base nacional do SEFAZ — independe da filial
             //  - 236: DV da chave invalido — chave malformada na origem
             //  - 656: consumo indevido — SEFAZ marcou nosso CNPJ como abusivo;
             //         continuar tentando AGRAVA o risco de bloqueio do CNPJ CAPUL
@@ -1132,6 +1134,8 @@ export class NfeService {
             if (
               err.cStat === '632' ||
               err.cStat === '137' ||
+              err.cStat === '215' ||
+              err.cStat === '217' ||
               err.cStat === '236' ||
               err.cStat === '656'
             ) {
@@ -1303,6 +1307,42 @@ export class NfeService {
                 `SEFAZ detectou padrão de uso abusivo do CNPJ CAPUL (cStat=656). ` +
                 `Parar consultas SEFAZ imediatamente e acionar ADMIN_TI — ` +
                 `tentar de novo agora aumenta o risco de bloqueio do CNPJ pela SEFAZ.`,
+            },
+            HttpStatus.SERVICE_UNAVAILABLE,
+          );
+        }
+        // cStat=217: "NF-e inexistente na base de dados do SEFAZ". Chave
+        // formalmente válida (DV OK), mas o documento não consta. Base nacional —
+        // independe da filial consulente. Causas: contingência off-line não
+        // transmitida, chave gerada sem autorização, NF-e cancelada e aposentada,
+        // NF-e velha demais. Frontend isNotFound já cobre cStat=217 visualmente.
+        if (err.cStat === '217') {
+          throw new NotFoundException({
+            erro: 'NFE_INEXISTENTE_SEFAZ',
+            mensagem:
+              `SEFAZ não tem essa NF-e na base nacional (cStat=217). ` +
+              `A chave está formalmente válida (dígito verificador OK), mas o documento ` +
+              `não consta. Causas comuns: NF-e emitida em contingência off-line e ainda ` +
+              `não transmitida, chave gerada mas NF-e nunca autorizada, ou NF-e cancelada ` +
+              `há muito tempo. Verifique no Protheus (SZR010) ou solicite ao emitente.`,
+          });
+        }
+        // cStat=215: "Falha de schema XML". O SEFAZ rejeitou o XML que enviamos
+        // por algum erro de formato. Independe da filial consulente — é problema
+        // do REQUEST. Raro: indica desvio entre nossa integração e o esquema
+        // SEFAZ vigente. ADMIN_TI precisa investigar.
+        if (err.cStat === '215') {
+          this.logger.error(
+            `[NFE_SCHEMA_REJEITADO] cStat=215 — SEFAZ rejeitou request por schema XML. ` +
+              `chave=${chave.slice(0, 6)}… xMotivo="${err.xMotivo}". Investigar integração.`,
+          );
+          throw new HttpException(
+            {
+              erro: 'NFE_FALHA_SCHEMA_REQUEST',
+              mensagem:
+                `O SEFAZ rejeitou nosso request por falha de schema XML (cStat=215). ` +
+                `Não é problema do operador — registrar e acionar ADMIN_TI para investigar ` +
+                `a integração da plataforma com o serviço SEFAZ.`,
             },
             HttpStatus.SERVICE_UNAVAILABLE,
           );

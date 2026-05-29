@@ -99,8 +99,14 @@ export function ErrorCard({
     /emitida pelo CNPJ|indispon.vel para o emitente|NFE_EMITIDA_PELO_CONSULENTE|cStat=641/i.test(error);
   const isForaDePrazo =
     /fora de prazo|fora da janela|NFE_FORA_DE_PRAZO_SEFAZ|cStat=632/i.test(error);
+  // Falha de schema XML (cStat=215) — problema da plataforma, ADMIN_TI fix.
+  // Detectar ANTES de isNotFound pra não cair no card amarelo "não encontrado".
+  const isFalhaSchema =
+    errorCode === 'NFE_FALHA_SCHEMA_REQUEST' ||
+    /NFE_FALHA_SCHEMA_REQUEST|cStat=?215|falha de schema/i.test(error);
   const isNotFound =
-    /n.o encontrad|nao encontrad|404|cStat=215|cStat=217/i.test(error);
+    errorCode === 'NFE_INEXISTENTE_SEFAZ' ||
+    /NFE_INEXISTENTE_SEFAZ|n.o encontrad|nao encontrad|404|cStat=217/i.test(error);
   // Chave de acesso com DV inválido — erro do cliente (digitação). Card amarelo.
   const isChaveInvalida =
     errorCode === 'CHAVE_INVALIDA' ||
@@ -136,6 +142,61 @@ export function ErrorCard({
   // Intencionalmente sem "indispon" — "indisponivel para o emitente" é outro caso.
   const isUnavailable =
     /503|timeout|HTTP 5\d\d|conex.o/i.test(error);
+
+  if (isFalhaSchema) {
+    return (
+      <div className="mb-6 rounded-lg border border-orange-200 bg-white shadow-sm overflow-hidden">
+        <div className="bg-orange-50 border-b border-orange-200 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+              <Network className="w-5 h-5 text-orange-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-orange-900">
+                Falha de integração com SEFAZ (cStat=215)
+              </h3>
+              <p className="text-xs text-orange-700 mt-0.5">
+                Problema do request da plataforma — não é erro do operador.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-5 space-y-4 text-sm text-slate-700">
+          <p>
+            O SEFAZ rejeitou o XML enviado pela plataforma por <strong>falha de schema</strong>{' '}
+            (cStat=215). Isso costuma indicar uma divergência entre o esquema XML que estamos
+            mandando e o que o serviço SEFAZ vigente espera — pode ser uma atualização do SEFAZ
+            que ainda não acomodamos.
+          </p>
+          <div className="rounded-md border border-orange-200 bg-orange-50 p-3 text-xs text-orange-900">
+            <strong>Não é problema seu.</strong> Trocar a chave, repetir a consulta ou tentar outra
+            filial não vai resolver — o erro é da nossa integração com o SEFAZ.
+          </div>
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">O que fazer?</h4>
+            <ul className="text-sm text-slate-600 space-y-1.5">
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>
+                  <strong>Acione o ADMIN_TI</strong> — informe que a tela "{context === 'nfe' ? 'NF-e' : 'documento fiscal'}"
+                  retornou cStat=215 e passe a chave que tentou.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>
+                  Enquanto isso, <AlternativaConsulta context={context} /> seguem disponíveis.
+                </span>
+              </li>
+            </ul>
+          </div>
+          <p className="text-xs text-slate-400 font-mono border-t border-slate-100 pt-3">
+            Código: NFE_FALHA_SCHEMA_REQUEST · HTTP 503 · cStat=215
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (isConsumoIndevido) {
     return (
