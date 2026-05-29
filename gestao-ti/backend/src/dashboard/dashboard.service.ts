@@ -63,8 +63,8 @@ export class DashboardService {
     return this.operacional.getOrdensServico(filters, user, role);
   }
 
-  async getTecnicosAtivos() {
-    return this.operacional.getTecnicosAtivos();
+  async getTecnicosAtivos(deptosIds?: string[] | null) {
+    return this.operacional.getTecnicosAtivos(deptosIds);
   }
 
   async getTecnicosDaEquipe(userId: string) {
@@ -96,8 +96,8 @@ export class DashboardService {
     return this.acompanhamento.getAcompanhamento(filters);
   }
 
-  async listarEquipes() {
-    return this.acompanhamento.listarEquipes();
+  async listarEquipes(deptosIds?: string[] | null) {
+    return this.acompanhamento.listarEquipes(deptosIds);
   }
 
   async buscarChamados(

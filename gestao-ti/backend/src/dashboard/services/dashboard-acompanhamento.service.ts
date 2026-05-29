@@ -415,9 +415,19 @@ export class DashboardAcompanhamentoService {
 
   // ========== ACOMPANHAMENTO POR CHAMADO ==========
 
-  async listarEquipes() {
+  /**
+   * Lista equipes ATIVAS. Quando `deptosIds` é informado, filtra apenas as
+   * equipes desses departamentos — usado pra restringir o seletor de
+   * Acompanhamento ao workspace onde o staff opera (29/05). `null`/undefined
+   * = sem filtro (caminho OVERSIGHT_PLATAFORMA ou caso legado).
+   */
+  async listarEquipes(deptosIds?: string[] | null) {
+    const where: { status: 'ATIVO'; departamentoId?: { in: string[] } } = { status: 'ATIVO' };
+    if (deptosIds && deptosIds.length > 0) {
+      where.departamentoId = { in: deptosIds };
+    }
     return this.prisma.equipe.findMany({
-      where: { status: 'ATIVO' },
+      where,
       select: { id: true, nome: true, sigla: true },
       orderBy: { nome: 'asc' },
     });

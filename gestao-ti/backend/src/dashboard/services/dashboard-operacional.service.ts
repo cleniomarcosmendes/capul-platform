@@ -275,9 +275,20 @@ export class DashboardOperacionalService {
     };
   }
 
-  async getTecnicosAtivos() {
+  /**
+   * Lista técnicos ATIVOS membros de equipes. Quando `deptosIds` é informado,
+   * filtra apenas as equipes (e seus membros) desses departamentos — usado
+   * pra restringir Acompanhamento ao workspace onde o staff opera (29/05).
+   * `null`/undefined = sem filtro (OVERSIGHT_PLATAFORMA ou legado).
+   */
+  async getTecnicosAtivos(deptosIds?: string[] | null) {
     const membros = await this.prisma.membroEquipe.findMany({
-      where: { status: 'ATIVO' },
+      where: {
+        status: 'ATIVO',
+        ...(deptosIds && deptosIds.length > 0
+          ? { equipe: { departamentoId: { in: deptosIds } } }
+          : {}),
+      },
       select: { usuarioId: true },
       distinct: ['usuarioId'],
     });

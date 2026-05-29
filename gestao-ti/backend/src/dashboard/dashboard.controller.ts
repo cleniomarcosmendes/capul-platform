@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Query, UseGuards } from '@nestjs/common';
 import { DashboardService } from './dashboard.service.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { GestaoTiGuard } from '../common/guards/gestao-ti.guard.js';
@@ -7,7 +7,8 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
-import { ROLES_GESTORES, ROLES_TI } from '../common/constants/roles.constant.js';
+import { ROLES_GESTORES, ROLES_TI, getDeptosOndeStaff } from '../common/constants/roles.constant.js';
+import { hasCapability } from '../common/helpers/capability.helper.js';
 import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
 
 const STAFF = [...ROLES_TI];
@@ -99,14 +100,34 @@ export class DashboardController {
   }
 
   @Get('acompanhamento/tecnicos')
-  @Roles(...STAFF)
+  // 29/05 — sem @Roles(...STAFF): o RolesGuard avalia a role PRINCIPAL do JWT,
+  // que pra user multi-perfil pode ser USUARIO_CHAVE em T.I. mesmo ele sendo
+  // GESTOR em outro depto. Check manual abaixo via getDeptosOndeStaff respeita
+  // Workspace Multi-Depto (memory feedback_workspace_role_por_depto).
   getTecnicos(@CurrentUser() user: JwtPayload) {
-    // SUPORTE_TI: retorna apenas tecnicos das equipes onde e lider
-    const role = user.modulos?.find((m: { codigo: string; role: string }) => m.codigo === 'WORKSPACE')?.role;
-    if (role === 'SUPORTE') {
+    const isOversight = hasCapability(user, 'OVERSIGHT_PLATAFORMA');
+    const deptosStaff = getDeptosOndeStaff(user);
+    if (!isOversight && deptosStaff.length === 0) {
+      throw new ForbiddenException(
+        'Acesso restrito a ADMIN/GESTOR/SUPORTE de algum workspace.',
+      );
+    }
+    // OVERSIGHT_PLATAFORMA: vê técnicos de toda a plataforma.
+    if (isOversight) {
+      return this.service.getTecnicosAtivos();
+    }
+    // SUPORTE em algum depto: técnicos das equipes onde é líder (mais restrito
+    // que o filtro por depto — preservado da regra anterior).
+    const isSuporte = (user.modulos ?? [])
+      .find((m) => m.codigo === 'WORKSPACE')
+      ?.departamentos?.some((d) => d.role === 'SUPORTE') ?? false;
+    if (isSuporte && !(user.modulos ?? [])
+      .find((m) => m.codigo === 'WORKSPACE')
+      ?.departamentos?.some((d) => d.role === 'ADMIN' || d.role === 'GESTOR')) {
       return this.service.getTecnicosDaEquipe(user.sub);
     }
-    return this.service.getTecnicosAtivos();
+    // ADMIN/GESTOR sem oversight: restringe aos deptos onde é STAFF.
+    return this.service.getTecnicosAtivos(deptosStaff);
   }
 
   @Get('acompanhamento-chamado')
@@ -116,9 +137,22 @@ export class DashboardController {
   }
 
   @Get('acompanhamento-chamado/equipes')
-  @Roles(...STAFF)
-  listarEquipes() {
-    return this.service.listarEquipes();
+  // 29/05 — sem @Roles(...STAFF) pelo mesmo motivo do getTecnicos: roles guard
+  // não respeita role per-depto (memory feedback_workspace_role_por_depto).
+  listarEquipes(@CurrentUser() user: JwtPayload) {
+    const isOversight = hasCapability(user, 'OVERSIGHT_PLATAFORMA');
+    const deptosStaff = getDeptosOndeStaff(user);
+    if (!isOversight && deptosStaff.length === 0) {
+      throw new ForbiddenException(
+        'Acesso restrito a ADMIN/GESTOR/SUPORTE de algum workspace.',
+      );
+    }
+    // OVERSIGHT_PLATAFORMA: vê todas as equipes da plataforma.
+    if (isOversight) {
+      return this.service.listarEquipes();
+    }
+    // STAFF sem oversight: só equipes dos deptos onde é staff.
+    return this.service.listarEquipes(deptosStaff);
   }
 
   @Get('acompanhamento-chamado/buscar')
