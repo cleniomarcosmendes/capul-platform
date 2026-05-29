@@ -184,7 +184,7 @@ export function CteConsultaPage() {
   // Deep-link via query params: /fiscal/cte/consulta-por-chave?chave=XXX&filial=YY
   // Quando o operador clica numa chave em /fiscal/cte (lista de Recebidos),
   // a tela abre ja com chave + filial preenchidas e dispara consulta automatica.
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const autoConsultadoRef = useRef(false);
 
   useEffect(() => {
@@ -243,6 +243,13 @@ export function CteConsultaPage() {
       setResult(data);
       // Se não tem XML, joga direto pro histórico (única coisa visível)
       if (!data.xmlDisponivel) setTab('historico');
+      // Persiste chave + filial na URL — operador navega pra NF-e via link
+      // de doc transportado e volta sem perder o CT-e consultado. Refresh
+      // também preserva via auto-consulta existente. replace=true não polui histórico.
+      setSearchParams(
+        { chave, filial: filialSelecionada },
+        { replace: true },
+      );
     } catch (err) {
       setError(extractApiError(err, 'Falha ao consultar CT-e.'));
     } finally {

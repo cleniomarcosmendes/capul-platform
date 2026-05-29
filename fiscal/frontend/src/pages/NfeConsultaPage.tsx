@@ -82,7 +82,7 @@ export function NfeConsultaPage() {
   // Pre-preenche chave + filial via query params (?chave=...&filial=...).
   // Usado quando navega de /fiscal/nfe/pendencias clicando numa chave —
   // operador chega na consulta com form pronto e dispara automaticamente.
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const autoConsultadoRef = useRef(false);
 
   useEffect(() => {
@@ -174,6 +174,14 @@ export function NfeConsultaPage() {
       });
       setResult(data);
       setTab('nfe');
+      // Persiste chave + filial na URL — se o operador navegar pra aba CT-es
+      // Vinculados (deep-link nova aba) e fechar / voltar nesta aba, o resultado
+      // continua visível. Refresh também preserva via auto-consulta que já
+      // existe (linhas 111+). replace=true não polui o histórico do browser.
+      setSearchParams(
+        { chave: chaveLimpa, filial: filialSelecionada },
+        { replace: true },
+      );
     } catch (err) {
       setError(extractApiError(err, 'Falha ao consultar NF-e.'));
       // Captura `podeTentarOutrasFiliais`, `totalFiliaisDisponiveis` e
