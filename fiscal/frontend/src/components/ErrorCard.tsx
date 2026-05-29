@@ -33,6 +33,31 @@ interface ErrorCardProps {
 }
 
 /**
+ * Texto da fonte alternativa por contexto. RFB só serve pra consulta CADASTRAL
+ * de CNPJ; pra NF-e/CT-e a alternativa real é Protheus (SZR010 — XMLs já
+ * baixados em cache) ou solicitar o XML ao emitente. Usado em todos os cards
+ * de erro que sugerem "use a alternativa local enquanto o SEFAZ não volta".
+ */
+function AlternativaConsulta({ context }: { context: ErrorCardProps['context'] }) {
+  if (context === 'cadastro') {
+    return (
+      <>
+        <strong>"Base local (RFB)"</strong> (não consome cota SEFAZ)
+      </>
+    );
+  }
+  if (context === 'nfe' || context === 'cte') {
+    return (
+      <>
+        <strong>Protheus (SZR010)</strong> — se a NF-e/CT-e já foi baixada antes, está em cache
+        — ou solicite o XML diretamente ao <strong>emitente</strong>
+      </>
+    );
+  }
+  return <>as alternativas locais (Protheus SZR010 para NF-e/CT-e ou Base RFB para cadastro CNPJ)</>;
+}
+
+/**
  * Card de erro padronizado, com layout amigável e contextual.
  * Detecta o tipo de erro pelo conteúdo da mensagem e adapta o visual.
  */
@@ -156,8 +181,8 @@ export function ErrorCard({
               <li className="flex items-start gap-2">
                 <span className="text-red-500 mt-0.5 font-bold">3.</span>
                 <span>
-                  Para consultas urgentes nas próximas horas, use <strong>"Base local (RFB)"</strong>{' '}
-                  (não consome cota SEFAZ) ou acesse direto o portal da Receita Federal.
+                  Para o que for urgente nas próximas horas, use{' '}
+                  <AlternativaConsulta context={context} />.
                 </span>
               </li>
               <li className="flex items-start gap-2">
@@ -390,7 +415,7 @@ export function ErrorCard({
               <li className="flex items-start gap-2">
                 <span className="text-slate-400 mt-0.5">•</span>
                 <span>
-                  Use o botão <strong>"Base local (RFB)"</strong> — não consome cota.
+                  Para o que for urgente, use <AlternativaConsulta context={context} />.
                 </span>
               </li>
               <li className="flex items-start gap-2">
@@ -530,7 +555,9 @@ export function ErrorCard({
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-slate-400 mt-0.5">•</span>
-                <span>Enquanto isso, "Base local (RFB)" continua disponível.</span>
+                <span>
+                  Enquanto isso, <AlternativaConsulta context={context} /> continua disponível.
+                </span>
               </li>
             </ul>
           </div>
@@ -588,8 +615,8 @@ export function ErrorCard({
             <p>
               Abrir <strong>Configurador → Certificado Fiscal</strong> e conferir:
               certificado ativo, dentro da validade, senha correta. Se precisar
-              reimportar, peça ao ADMIN_TI. Enquanto isso, "Base local (RFB)" não
-              depende do A1 e continua funcionando.
+              reimportar, peça ao ADMIN_TI. Enquanto isso,{' '}
+              <AlternativaConsulta context={context} /> não depende do A1 e continua funcionando.
             </p>
           </div>
           <p className="text-xs text-slate-400 font-mono border-t border-slate-100 pt-3">
