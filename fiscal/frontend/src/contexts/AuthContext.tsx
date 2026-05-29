@@ -37,17 +37,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (usuario?.modulos.find((m) => m.codigo === 'FISCAL')?.role as RoleFiscal | undefined) ?? null;
 
   // Capability de sócio (LGPD) — não vem no JWT (D3); resolve via backend
-  // (lê core cacheado). 1× por sessão/usuário. null enquanto resolve.
+  // (lê core cacheado). null enquanto resolve.
+  // Refetch (29/05): a capability é gerenciada externamente (Configurador → Operação)
+  // — se o admin concede DURANTE a sessão de outro user, ele não sabia até relogar.
+  // Re-buscar quando a aba volta a ficar visível (visibilitychange) cobre o caso
+  // sem custo significativo (1 request curto por foco). Não escolhemos refetch
+  // periódico pra não criar tráfego ocioso.
   const [socioPermitido, setSocioPermitido] = useState<boolean | null>(null);
   useEffect(() => {
     const temFiscal = !!usuario?.modulos.some((m) => m.codigo === 'FISCAL');
     if (!temFiscal) { setSocioPermitido(null); return; }
     let cancel = false;
-    fiscalApi
-      .get<{ permitido: boolean }>('/rfb/socios/capability')
-      .then((r) => { if (!cancel) setSocioPermitido(!!r.data?.permitido); })
-      .catch(() => { if (!cancel) setSocioPermitido(false); });
-    return () => { cancel = true; };
+    const fetchCap = () => {
+      fiscalApi
+        .get<{ permitido: boolean }>('/rfb/socios/capability')
+        .then((r) => { if (!cancel) setSocioPermitido(!!r.data?.permitido); })
+        .catch(() => { if (!cancel) setSocioPermitido(false); });
+    };
+    fetchCap();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') fetchCap();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      cancel = true;
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [usuario]);
 
   async function refreshUser() {
