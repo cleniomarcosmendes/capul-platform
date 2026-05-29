@@ -220,10 +220,25 @@ export class ProjetoPendenciaService {
     });
     if (!pendencia) throw new NotFoundException('Pendencia nao encontrada');
 
+    // 29/05 — multi-perfil: usar role NO DEPTO DO PROJETO pra decidir restrições
+    // de UC/TERC (não a role principal do JWT). Tatiane GESTOR/Fiscal + UC/T.I.
+    // numa pendência T.I.: era GESTOR aqui, ganhando todas as transições.
+    // Memory feedback_workspace_role_por_depto.
+    const projeto = await this.prisma.projeto.findUnique({
+      where: { id: projetoId },
+      select: { departamentoId: true },
+    });
+    const roleNoDeptoProjeto = projeto
+      ? user.modulos
+          ?.find((m) => m.codigo === 'WORKSPACE')
+          ?.departamentos?.find((d) => d.id === projeto.departamentoId)?.role
+      : undefined;
+    const roleEfetiva = roleNoDeptoProjeto ?? role;
+
     // Apenas responsavel ou gestor pode editar dados da pendencia
     const isResponsavel = pendencia.responsavelId === userId;
     const hasDadosAlterados = dto.titulo !== undefined || dto.descricao !== undefined || dto.prioridade !== undefined || dto.responsavelId !== undefined || dto.dataLimite !== undefined || dto.faseId !== undefined;
-    if (hasDadosAlterados && !isGestor(role) && !isResponsavel) {
+    if (hasDadosAlterados && !isGestor(roleEfetiva) && !isResponsavel) {
       throw new ForbiddenException('Apenas o responsavel pela pendencia ou gestores podem editar os dados');
     }
 
@@ -232,7 +247,7 @@ export class ProjetoPendenciaService {
     }
 
     // USUARIO_CHAVE e TERCEIRIZADO: restricted status transitions
-    if ((role === 'USUARIO_CHAVE' || role === 'TERCEIRIZADO') && dto.status) {
+    if ((roleEfetiva === 'USUARIO_CHAVE' || roleEfetiva === 'TERCEIRIZADO') && dto.status) {
       const permitidos = ['AGUARDANDO_VALIDACAO', 'CONCLUIDA', 'EM_ANDAMENTO'];
       if (!permitidos.includes(dto.status)) {
         throw new ForbiddenException('Usuario externo so pode alterar status para Em Andamento, Aguardando Validacao ou Concluida');
@@ -534,7 +549,19 @@ export class ProjetoPendenciaService {
     });
     if (!interacao) throw new NotFoundException('Comentario nao encontrado');
 
-    if (interacao.usuarioId !== userId && !isGestor(role)) {
+    // 29/05 — role NO DEPTO DO PROJETO (não principal do JWT) — multi-perfil.
+    const projeto = await this.prisma.projeto.findUnique({
+      where: { id: projetoId },
+      select: { departamentoId: true },
+    });
+    const roleNoDeptoProjeto = projeto
+      ? user.modulos
+          ?.find((m) => m.codigo === 'WORKSPACE')
+          ?.departamentos?.find((d) => d.id === projeto.departamentoId)?.role
+      : undefined;
+    const roleEfetiva = roleNoDeptoProjeto ?? role;
+
+    if (interacao.usuarioId !== userId && !isGestor(roleEfetiva)) {
       throw new ForbiddenException('Voce so pode editar seus proprios comentarios');
     }
 
