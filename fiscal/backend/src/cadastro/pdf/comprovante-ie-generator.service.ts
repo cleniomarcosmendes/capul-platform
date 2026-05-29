@@ -6,7 +6,7 @@ import type {
   CruzamentoIeProtheusSefaz,
 } from '../cadastro.service.js';
 import type { ReceitaFederalData } from '../receita.client.js';
-import { formatCpfCnpj } from '../../common/helpers/cnpj.helper.js';
+import { formatCpfCnpj, isValidCpfLength, isValidCnpjLength, onlyDigits } from '../../common/helpers/cnpj.helper.js';
 
 /**
  * Geração do "Comprovante CCC — Inscrição Estadual" — relatório textual
@@ -50,8 +50,16 @@ export class ComprovanteIeGeneratorService {
     doc.text('COMPROVANTE CCC — INSCRIÇÃO ESTADUAL');
     doc.font('Helvetica').fontSize(10);
     doc.moveDown(0.2);
+    // Label CPF ou CNPJ conforme o comprimento. Produtor Rural pessoa física
+    // tem 11 dígitos — mostrar "CPF" ao invés de "CNPJ" pra não confundir o
+    // operador fiscal (incidente reportado 29/05).
+    const docLabel = isValidCpfLength(consultaResult.cnpj)
+      ? 'CPF'
+      : isValidCnpjLength(consultaResult.cnpj)
+        ? 'CNPJ'
+        : 'Documento';
     doc.text(
-      `CNPJ ${this.fmtCnpj(consultaResult.cnpj)}  |  UF ${ie.uf}  |  IE ${ie.inscricaoEstadual}`,
+      `${docLabel} ${this.fmtCnpj(consultaResult.cnpj)}  |  UF ${ie.uf}  |  IE ${ie.inscricaoEstadual}`,
     );
     this.linhaHr(doc);
 
@@ -138,7 +146,7 @@ export class ComprovanteIeGeneratorService {
     this.campo(doc, 'Razão Social', ie.razaoSocial);
     this.campo(doc, 'Nome Fantasia', ie.nomeFantasia);
     this.campo(doc, 'Situação na SEFAZ', this.fmtSituacao(ie.situacaoRaw, ie.situacao));
-    this.campo(doc, 'cSit (código)', ie.cSit);
+    this.campo(doc, 'cSit (código)', this.fmtCSitComDescricao(ie.cSit));
     this.campo(doc, 'Data da Situação', ie.dataSituacao);
     this.campo(doc, 'Início de Atividade', ie.inicioAtividade);
     this.campo(doc, 'Fim de Atividade', ie.dataFimAtividade);
@@ -298,5 +306,24 @@ export class ComprovanteIeGeneratorService {
   ): string | null {
     if (!situacao) return null;
     return dataSituacao ? `${situacao} desde ${dataSituacao}` : situacao;
+  }
+
+  /**
+   * `cSit` → "1 — Habilitado" no PDF. Faz par com a descrição já mostrada em
+   * "Situação na SEFAZ" mas dá clareza pro operador que NÃO conhece o código.
+   * Pedido fiscal 29/05.
+   */
+  private fmtCSitComDescricao(cSit: string | null | undefined): string | null {
+    if (cSit == null || cSit === '') return null;
+    const map: Record<string, string> = {
+      '0': 'Não habilitado',
+      '1': 'Habilitado',
+      '2': 'Suspenso',
+      '3': 'Inapto',
+      '4': 'Baixado',
+      '5': 'Nulo',
+    };
+    const desc = map[String(cSit).trim()];
+    return desc ? `${cSit} — ${desc}` : String(cSit);
   }
 }

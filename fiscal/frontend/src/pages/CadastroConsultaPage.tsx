@@ -251,10 +251,12 @@ export function CadastroConsultaPage() {
   function handleCopyForCadastro() {
     if (!result) return;
     const e = result.endereco;
+    // Label CPF/CNPJ conforme o documento (produtor rural tem 11 dígitos).
+    const docLabel = (result.cnpj?.length ?? 0) === 11 ? 'CPF' : 'CNPJ';
     const text = [
       `Razão social: ${result.razaoSocial ?? ''}`,
       `Nome fantasia: ${result.nomeFantasia ?? ''}`,
-      `CNPJ: ${fmtCnpj(result.cnpj)}`,
+      `${docLabel}: ${fmtCnpj(result.cnpj)}`,
       `Inscrição estadual: ${result.inscricaoEstadual ?? ''}`,
       `CNAE: ${result.cnae ?? ''}`,
       `Logradouro: ${e?.logradouro ?? ''}, ${e?.numero ?? ''} ${e?.complemento ?? ''}`,
