@@ -97,9 +97,14 @@ export class ProjetoCoreService {
       // `!searchTerm`: com termo digitado a busca e GLOBAL (decisao 22/05) —
       // ignora "Meus Projetos" p/ achar o termo em qualquer projeto. A
       // restricao de seguranca de USUARIO_CHAVE/TERCEIRIZADO (acima) segue.
+      // 29/05 — multi-perfil: incluir usuariosChave aqui também. Caso real:
+      // Tatiane (GESTOR/Fiscal + USUARIO_CHAVE/T.I.) é chave em #5/#6 T.I.
+      // Sem este OR, "Meus Projetos" (default checked) escondia esses projetos
+      // dela porque ela não é membro/responsável neles — só chave.
       where.OR = [
         { responsavelId: filters.usuarioId },
         { membros: { some: { usuarioId: filters.usuarioId } } },
+        { usuariosChave: { some: { usuarioId: filters.usuarioId, ativo: true } } },
       ];
     }
 
