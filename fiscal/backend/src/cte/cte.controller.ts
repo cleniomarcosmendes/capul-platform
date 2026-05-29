@@ -250,6 +250,7 @@ export class CteController {
     @Query('schema') schema?: string,
     @Query('ambiente') ambiente?: string,
     @Query('cnpjConsulente') cnpjConsulente?: string,
+    @Query('cnpjEmitente') cnpjEmitente?: string,
     @Query('protheusStatus') protheusStatus?: string,
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
@@ -267,6 +268,7 @@ export class CteController {
       schema,
       ambiente: ambiente ? Number(ambiente) : undefined,
       cnpjConsulente,
+      cnpjEmitente,
       protheusStatus,
       dataInicio: dataInicio ? new Date(dataInicio) : undefined,
       dataFim: dataFim ? new Date(dataFim) : undefined,
@@ -309,6 +311,36 @@ export class CteController {
       ambiente: ambiente ? Number(ambiente) : undefined,
       dataInicio: dataInicio ? new Date(dataInicio) : undefined,
       dataFim: dataFim ? new Date(dataFim) : undefined,
+    });
+  }
+
+  /**
+   * Lista CT-es da nossa base que transportam a NF-e informada (pela chave).
+   * Pedido do setor Fiscal 29/05: dado uma NF-e com modFrete=destinatário,
+   * verificar quais CT-es vieram com tomador-CAPUL (esperado) ou outro tomador
+   * (potencial divergência da emissão da transportadora).
+   *
+   * Query params:
+   *  - soTomadoraCapul=true: filtra só CT-es onde tomador é CNPJ CAPUL
+   *  - cnpjsCapul=14digs,14digs: lista de CNPJs CAPUL para match do tomador
+   *    (matriz + filiais). Sem isso, `capulEhTomadora` vem sempre false.
+   *
+   * Endpoint NÃO consome SEFAZ — leitura local.
+   */
+  @SkipThrottle({ default: true, sefaz: true })
+  @Get('vinculados-nfe/:chave')
+  @RoleMinima('OPERADOR_ENTRADA')
+  async listarVinculadosNfe(
+    @Param('chave') chave: string,
+    @Query('soTomadoraCapul') soTomadoraCapul?: string,
+    @Query('cnpjsCapul') cnpjsCapul?: string,
+  ) {
+    return this.documento.listarVinculadosNfe({
+      chaveNfe: chave,
+      soTomadoraCapul: soTomadoraCapul === 'true',
+      cnpjsCapul: cnpjsCapul
+        ? cnpjsCapul.split(',').map((s) => s.trim()).filter(Boolean)
+        : undefined,
     });
   }
 

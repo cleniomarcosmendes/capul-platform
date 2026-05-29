@@ -142,6 +142,9 @@ export function CteRecebidosPage() {
 
   // Filtros
   const [search, setSearch] = useState('');
+  // 29/05 — filtro por CNPJ do emitente (transportadora). Pedido Fiscal pra
+  // triar CT-es por transportadora sem abrir cada um.
+  const [cnpjEmitente, setCnpjEmitente] = useState('');
   // Default 'TOMA' — único papel que gera pré-nota no Protheus (regra 11/05/2026).
   // Operador pode mudar pra ver outros papéis ou "Todos" se precisar.
   const [papel, setPapel] = useState<'' | PapelCapul>('TOMA');
@@ -245,6 +248,8 @@ export function CteRecebidosPage() {
       if (ambiente) params.ambiente = ambiente;
       if (protheusStatus) params.protheusStatus = protheusStatus;
       if (cnpjsFiltro) params.cnpjConsulente = cnpjsFiltro;
+      const cnpjEmitClean = cnpjEmitente.replace(/\D/g, '');
+      if (cnpjEmitClean.length === 14) params.cnpjEmitente = cnpjEmitClean;
       if (dataInicio) params.dataInicio = new Date(dataInicio + 'T00:00:00').toISOString();
       if (dataFim) {
         const fim = new Date(dataFim + 'T23:59:59.999');
@@ -276,7 +281,7 @@ export function CteRecebidosPage() {
     // memoiza value), e mesmo se variasse, queremos evitar re-fetch quando
     // a unica coisa mudada e um toast ter sido exibido.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, search, papel, schema, ambiente, protheusStatus, cnpjsFiltro, dataInicio, dataFim, recebimentoInicio, recebimentoFim, sortBy, sortOrder, inconsistenciaFiltro]);
+  }, [page, search, papel, schema, ambiente, protheusStatus, cnpjsFiltro, cnpjEmitente, dataInicio, dataFim, recebimentoInicio, recebimentoFim, sortBy, sortOrder, inconsistenciaFiltro]);
 
   // Click no header da coluna: nenhum → desc → asc → nenhum
   const toggleSort = (column: string) => {
@@ -332,6 +337,7 @@ export function CteRecebidosPage() {
 
   const limparFiltros = () => {
     setSearch('');
+    setCnpjEmitente('');
     setPapel('TOMA'); // mantém default — TOMA é a operação principal
     setSchema('');
     setAmbiente('');
@@ -618,6 +624,18 @@ export function CteRecebidosPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Ex: 31250500..."
                 className="w-full px-3 py-1.5 border rounded text-sm"
+                onKeyDown={(e) => e.key === 'Enter' && aplicarFiltros()}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">CNPJ Transportador</label>
+              <input
+                type="text"
+                value={cnpjEmitente}
+                onChange={(e) => setCnpjEmitente(e.target.value)}
+                placeholder="14 dígitos"
+                title="Filtra CT-es pelo CNPJ do emitente (transportadora). Aproximação: pega CT-es onde o CNPJ aparece em qualquer participante — useful pra triar por transportadora."
+                className="w-full px-3 py-1.5 border rounded text-sm font-mono"
                 onKeyDown={(e) => e.key === 'Enter' && aplicarFiltros()}
               />
             </div>

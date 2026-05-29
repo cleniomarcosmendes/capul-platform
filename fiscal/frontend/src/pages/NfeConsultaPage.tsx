@@ -55,7 +55,8 @@ type Tab =
   | 'totais'
   | 'transporte'
   | 'cobranca'
-  | 'infoAdicionais';
+  | 'infoAdicionais'
+  | 'ctesVinculados';
 
 export function NfeConsultaPage() {
   const [chave, setChave] = useState('');
@@ -636,6 +637,7 @@ export function NfeConsultaPage() {
                   ['transporte', 'Transporte'],
                   ['cobranca', 'Cobrança'],
                   ['infoAdicionais', 'Informações Adicionais'],
+                  ['ctesVinculados', 'CT-es Vinculados'],
                 ] as [Tab, string][]
               ).map(([k, label]) => (
                 <button
@@ -669,6 +671,14 @@ export function NfeConsultaPage() {
               {tab === 'transporte' && <AbaTransporte parsed={result.parsed} />}
               {tab === 'cobranca' && <AbaCobranca parsed={result.parsed} />}
               {tab === 'infoAdicionais' && <AbaInfoAdicionais parsed={result.parsed} />}
+              {tab === 'ctesVinculados' && (
+                <AbaCtesVinculados
+                  chaveNfe={result.parsed.dadosGerais.chave}
+                  modFrete={result.parsed.transporte?.modalidadeFrete ?? null}
+                  modFreteDescricao={result.parsed.transporte?.modalidadeFreteDescricao ?? null}
+                  filiais={filiais}
+                />
+              )}
             </div>
           </div>
 
@@ -1717,6 +1727,215 @@ function AbaTransporte({ parsed }: { parsed: NfeParsed }) {
             </div>
           ))}
         </section>
+      )}
+    </>
+  );
+}
+
+// ============================================================================
+// Aba CT-es Vinculados (29/05) — lista CT-es da nossa base que transportam
+// a NF-e atual. Pedido Fiscal: cruzar com modFrete pra detectar divergências
+// (ex.: NF-e diz "frete por destinatário" mas o CT-e veio com tomador errado).
+// ============================================================================
+
+interface CteVinculado {
+  id: number;
+  chaveCte: string | null;
+  schema: string;
+  ambiente: number;
+  dataEmissao: string | null;
+  serie: string | null;
+  numero: string | null;
+  emitente: { cnpj: string | null; razaoSocial: string | null };
+  tomador: string;
+  tomadorCnpj: string | null;
+  tomadorRazao: string | null;
+  papelCapul: string | null;
+  cnpjConsulente: string | null;
+  valorTotalPrestacao: number | null;
+  protheusStatus: string | null;
+  capulEhTomadora: boolean;
+  tipoCte: string | null;
+  tipoCteDescricao: string | null;
+}
+
+function AbaCtesVinculados({
+  chaveNfe,
+  modFrete,
+  modFreteDescricao,
+  filiais,
+}: {
+  chaveNfe: string;
+  modFrete: string | null;
+  modFreteDescricao: string | null;
+  filiais: FilialResumo[];
+}) {
+  const [items, setItems] = useState<CteVinculado[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+  const [soTomadoraCapul, setSoTomadoraCapul] = useState(false);
+
+  // CNPJs CAPUL pra match de tomador — pega das filiais carregadas na página.
+  const cnpjsCapul = filiais.map((f) => (f.cnpj ?? '').replace(/\D/g, '')).filter((c) => c.length === 14);
+  const cnpjsCapulQS = cnpjsCapul.join(',');
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setErro(null);
+    const params = new URLSearchParams();
+    if (soTomadoraCapul) params.set('soTomadoraCapul', 'true');
+    if (cnpjsCapulQS) params.set('cnpjsCapul', cnpjsCapulQS);
+    fiscalApi
+      .get(`/cte/vinculados-nfe/${chaveNfe}?${params.toString()}`)
+      .then((res) => {
+        if (cancelled) return;
+        setItems(res.data.items ?? []);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setErro(
+          (err?.response?.data?.mensagem as string) ?? 'Falha ao buscar CT-es vinculados',
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [chaveNfe, soTomadoraCapul, cnpjsCapulQS]);
+
+  // Divergência fiscal: quando o modFrete da NF-e indica que CAPUL paga
+  // (1=destinatário ou 4=remetente, dependendo do papel) mas o CT-e veio
+  // com tomador != CAPUL. Heurística simples — Fiscal valida no final.
+  const capulPagaFrete = modFrete === '1' || modFrete === '4';
+
+  return (
+    <>
+      <h2 className="mb-4 text-center text-base font-semibold text-slate-800">CT-es Vinculados</h2>
+
+      {modFreteDescricao && (
+        <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+          <strong>Frete declarado na NF-e:</strong> {modFrete} — {modFreteDescricao}.
+          {capulPagaFrete && (
+            <span className="ml-2 text-amber-800">
+              ⚠ A CAPUL deveria ser <strong>tomadora</strong> do CT-e — divergências serão destacadas abaixo.
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className="mb-3 flex items-center gap-3 text-sm">
+        <label className="inline-flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={soTomadoraCapul}
+            onChange={(e) => setSoTomadoraCapul(e.target.checked)}
+            className="rounded"
+          />
+          <span>Mostrar apenas CT-es onde CAPUL é tomadora</span>
+        </label>
+      </div>
+
+      {loading && (
+        <div className="rounded-md border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
+          Buscando CT-es vinculados…
+        </div>
+      )}
+
+      {!loading && erro && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-900">{erro}</div>
+      )}
+
+      {!loading && !erro && items && items.length === 0 && (
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600">
+          Nenhum CT-e da nossa base referencia essa NF-e
+          {soTomadoraCapul && ' (com CAPUL como tomadora)'}.
+          <div className="mt-2 text-xs text-slate-500">
+            Isso pode significar que o CT-e ainda não foi recebido via distNSU, ou que o transportador
+            ainda não o emitiu.
+          </div>
+        </div>
+      )}
+
+      {!loading && !erro && items && items.length > 0 && (
+        <div className="overflow-x-auto rounded-md border border-slate-200">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 text-left text-slate-600">
+              <tr>
+                <th className="px-3 py-2 font-medium">Nº / Série</th>
+                <th className="px-3 py-2 font-medium">Emitente (transportadora)</th>
+                <th className="px-3 py-2 font-medium">Tomador</th>
+                <th className="px-3 py-2 font-medium">Papel CAPUL</th>
+                <th className="px-3 py-2 text-right font-medium">Valor frete</th>
+                <th className="px-3 py-2 font-medium">Status Protheus</th>
+                <th className="px-3 py-2 font-medium">Divergência?</th>
+                <th className="px-3 py-2 font-medium">Chave</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {items.map((c) => {
+                const divergente = capulPagaFrete && !c.capulEhTomadora;
+                return (
+                  <tr key={c.id} className={divergente ? 'bg-red-50/50' : 'hover:bg-slate-50'}>
+                    <td className="px-3 py-2 font-mono">
+                      <a
+                        href={`/fiscal/cte/recebidos/${c.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-700 hover:underline"
+                      >
+                        {c.numero ?? '—'}/{c.serie ?? '—'}
+                      </a>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="font-medium text-slate-800">{c.emitente.razaoSocial ?? '—'}</div>
+                      <div className="font-mono text-[10px] text-slate-500">
+                        {fmtCnpj(c.emitente.cnpj) ?? '—'}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="font-medium text-slate-800">
+                        {c.tomador}
+                        {c.capulEhTomadora && (
+                          <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">
+                            CAPUL
+                          </span>
+                        )}
+                      </div>
+                      <div className="font-mono text-[10px] text-slate-500">
+                        {c.tomadorRazao} {fmtCnpj(c.tomadorCnpj) ? `· ${fmtCnpj(c.tomadorCnpj)}` : ''}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 font-mono uppercase">{c.papelCapul ?? '—'}</td>
+                    <td className="px-3 py-2 text-right font-mono">
+                      {c.valorTotalPrestacao != null
+                        ? c.valorTotalPrestacao.toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })
+                        : '—'}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-[10px]">{c.protheusStatus ?? 'PENDENTE'}</td>
+                    <td className="px-3 py-2">
+                      {divergente ? (
+                        <span className="rounded bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-900">
+                          ⚠ tomador ≠ CAPUL
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-[10px] text-slate-500">
+                      {c.chaveCte?.slice(0, 8)}…{c.chaveCte?.slice(-4)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );

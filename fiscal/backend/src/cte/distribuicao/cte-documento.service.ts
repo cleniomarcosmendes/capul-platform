@@ -4,6 +4,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { SchemaCte, CteDocumento, CteEvento, TipoEventoCte } from '@prisma/client';
 import type { CteDocZip } from '../../sefaz/cte-distribuicao.client.js';
+import { CteParserService } from '../parsers/cte-parser.service.js';
 
 export interface PersistirResultado {
   /** Tipo do registro persistido — documento ou evento (cada schema vai pra sua tabela) */
@@ -43,7 +44,10 @@ export class CteDocumentoService {
   private readonly logger = new Logger(CteDocumentoService.name);
   private readonly parser: XMLParser;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cteParser: CteParserService,
+  ) {
     this.parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: '@_',
@@ -426,6 +430,12 @@ export class CteDocumentoService {
     schema?: string;
     ambiente?: number;
     cnpjConsulente?: string;
+    /**
+     * CNPJ do emitente (=transportadora) do CT-e. Fase curta: regex no XML
+     * dentro do bloco `<emit>...</emit>`. Pedido Fiscal 29/05 pra triar CT-es
+     * por transportadora sem abrir cada um.
+     */
+    cnpjEmitente?: string;
     protheusStatus?: string;
     /** Filtro por dh_emi (data de emissao do CT-e na origem) */
     dataInicio?: Date;
@@ -460,6 +470,20 @@ export class CteDocumentoService {
         .filter((c) => c.length === 14);
       if (cnpjs.length === 1) where.cnpjConsulente = cnpjs[0];
       else if (cnpjs.length > 1) where.cnpjConsulente = { in: cnpjs };
+    }
+    if (filtros.cnpjEmitente) {
+      // 29/05 — filtro CNPJ emitente (transportadora). Regex POSIX no XML
+      // com flag (?s) (DOTALL) limita match ao bloco <emit>...</emit>.
+      // Fase média: extrair pra coluna indexada (backlog).
+      const cnpjEmit = filtros.cnpjEmitente.replace(/\D/g, '');
+      if (cnpjEmit.length === 14) {
+        // Prisma 6 não tem operador regex nativo no `where`; usar `xml: { contains }`
+        // restrito ao padrão "<emit>...<CNPJ>X</CNPJ>" via fragmento limitado.
+        // Aproximação prática: a string "<CNPJ>X</CNPJ>" pode aparecer também
+        // em rem/dest/toma3/toma4. Por isso filtramos no fluxo final via parse
+        // (mesmo critério do vinculadosNfe). Aqui restringe candidatos.
+        where.xml = { contains: `<CNPJ>${cnpjEmit}</CNPJ>` };
+      }
     }
     // 'PENDENTE' = sem status (ainda não tentou gravar). Outros valores filtram literalmente.
     if (filtros.protheusStatus === 'PENDENTE') {
@@ -554,6 +578,158 @@ export class CteDocumentoService {
     ]);
 
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  /**
+   * Lista CT-es da nossa base local que transportam uma NF-e específica
+   * (referenciada pela chave). Pedido do setor Fiscal 29/05: dado uma NF-e
+   * com modFrete=destinatário/remetente, verificar quais CT-es vieram com
+   * tomador-CAPUL (esperado) ou outro tomador (potencial divergência).
+   *
+   * Estratégia (fase curta — sem migration):
+   *  1. SELECT WHERE xml LIKE '%<chave>%' — varre 5660 docs com seq scan, OK
+   *     enquanto volume cabe. Fase média: coluna `chaves_nfe_transportadas
+   *     TEXT[]` indexada GIN + backfill (ver MELHORIAS_BACKLOG.md).
+   *  2. Pra cada candidato, parseia XML e confirma que a chave NF-e está em
+   *     documentosTransportados[].chaveNFe — elimina falso-positive do LIKE.
+   *  3. Retorna campos relevantes pro Fiscal cruzar com a NF-e original.
+   *
+   * Filtros opcionais:
+   *  - soTomadoraCapul: filtra só CT-es onde tomador.cnpj ∈ filiais CAPUL.
+   *  - cnpjsCapul: lista de CNPJs CAPUL (matriz + filiais) pra match do tomador.
+   */
+  async listarVinculadosNfe(params: {
+    chaveNfe: string;
+    soTomadoraCapul?: boolean;
+    cnpjsCapul?: string[];
+  }) {
+    const chaveNfe = (params.chaveNfe ?? '').replace(/\D/g, '');
+    if (chaveNfe.length !== 44) {
+      return { items: [], total: 0 };
+    }
+    const cnpjsCapul = (params.cnpjsCapul ?? []).map((c) => c.replace(/\D/g, '')).filter((c) => c.length === 14);
+
+    // Fase 1: candidatos via LIKE no XML — limita custo com index sequencial.
+    // O index trgm não cobre LIKE em campos > ~10KB; aceitamos seq scan
+    // (volume atual ~5600 docs). Migrar pra coluna indexada vira fase 2.
+    const candidatos = await this.prisma.client.cteDocumento.findMany({
+      where: {
+        xml: { contains: chaveNfe },
+        // não filtra ambiente aqui — frontend pode filtrar se quiser
+      },
+      select: {
+        id: true,
+        chave: true,
+        schema: true,
+        ambiente: true,
+        dhEmi: true,
+        papelCapul: true,
+        protheusStatus: true,
+        xml: true,
+        cnpjConsulente: true,
+      },
+      orderBy: { dhEmi: 'desc' },
+      take: 200, // safety cap — improvavel mas evita parse explosao
+    });
+
+    type Vinculado = {
+      id: number;
+      chaveCte: string | null;
+      schema: string;
+      ambiente: number;
+      dataEmissao: string | null;
+      serie: string | null;
+      numero: string | null;
+      emitente: { cnpj: string | null; razaoSocial: string | null };
+      tomador: string;
+      tomadorCnpj: string | null;
+      tomadorRazao: string | null;
+      papelCapul: string | null;
+      cnpjConsulente: string | null;
+      valorTotalPrestacao: number | null;
+      protheusStatus: string | null;
+      capulEhTomadora: boolean;
+      tipoCte: string | null; // 0=normal, 1=complemento, etc
+      tipoCteDescricao: string | null;
+    };
+
+    const items: Vinculado[] = [];
+    for (const c of candidatos) {
+      let parsed;
+      try {
+        parsed = this.cteParser.parse(c.xml);
+      } catch {
+        continue; // XML não parseou — ignora
+      }
+      // Confirma que a chave NF-e realmente está em documentosTransportados
+      // (proteção contra falso-positive: a substring pode estar em outro lugar
+      // do XML — referência cruzada, autXML, etc).
+      const refConfirmada = parsed.documentosTransportados.some(
+        (d) => (d.chaveNFe ?? '').replace(/\D/g, '') === chaveNfe,
+      );
+      if (!refConfirmada) continue;
+
+      const tomadorPart = this.extrairParticipanteTomador(parsed);
+      const tomadorCnpj = (tomadorPart?.cnpj ?? '').replace(/\D/g, '') || null;
+      const capulEhTomadora = !!tomadorCnpj && cnpjsCapul.includes(tomadorCnpj);
+
+      if (params.soTomadoraCapul && !capulEhTomadora) continue;
+
+      items.push({
+        id: c.id,
+        chaveCte: c.chave,
+        schema: c.schema,
+        ambiente: c.ambiente,
+        dataEmissao: parsed.dadosGerais.dataEmissao ?? (c.dhEmi ? c.dhEmi.toISOString() : null),
+        serie: parsed.dadosGerais.serie ?? null,
+        numero: parsed.dadosGerais.numero ?? null,
+        emitente: {
+          cnpj: parsed.emitente.cnpj ?? null,
+          razaoSocial: parsed.emitente.razaoSocial ?? null,
+        },
+        tomador: parsed.tomador,
+        tomadorCnpj,
+        tomadorRazao: tomadorPart?.razaoSocial ?? null,
+        papelCapul: c.papelCapul,
+        cnpjConsulente: c.cnpjConsulente,
+        valorTotalPrestacao: parsed.valores.valorTotalPrestacao ?? null,
+        protheusStatus: c.protheusStatus,
+        capulEhTomadora,
+        tipoCte: parsed.dadosGerais.tipoCte ?? null,
+        tipoCteDescricao: parsed.dadosGerais.tipoCteDescricao ?? null,
+      });
+    }
+
+    return { items, total: items.length };
+  }
+
+  /**
+   * Helper: dado um CteParsed, devolve o CteParticipante correspondente ao
+   * tomador. Se toma=4 (Outros), usa `tomadorOutros`; senão pega o
+   * participante respectivo já carregado no parsed.
+   */
+  private extrairParticipanteTomador(parsed: {
+    tomador: string;
+    tomadorOutros?: { cnpj?: string | null; razaoSocial: string } | null;
+    remetente: { cnpj?: string | null; razaoSocial: string };
+    expedidor?: { cnpj?: string | null; razaoSocial: string } | null;
+    recebedor?: { cnpj?: string | null; razaoSocial: string } | null;
+    destinatario: { cnpj?: string | null; razaoSocial: string };
+  }): { cnpj?: string | null; razaoSocial: string } | null {
+    switch (parsed.tomador) {
+      case 'Remetente':
+        return parsed.remetente;
+      case 'Expedidor':
+        return parsed.expedidor ?? null;
+      case 'Recebedor':
+        return parsed.recebedor ?? null;
+      case 'Destinatário':
+        return parsed.destinatario;
+      case 'Outros':
+        return parsed.tomadorOutros ?? null;
+      default:
+        return null;
+    }
   }
 
   /**
