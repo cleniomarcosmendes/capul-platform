@@ -1,4 +1,4 @@
-import { AlertCircle, AlertTriangle, CalendarClock, FileSearch, Hourglass, Info, Network, RefreshCw, ShieldAlert, ShieldOff } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CalendarClock, FileSearch, Hourglass, Info, KeyRound, Network, OctagonAlert, RefreshCw, ShieldAlert, ShieldOff } from 'lucide-react';
 
 interface ErrorCardProps {
   error: string;
@@ -76,6 +76,14 @@ export function ErrorCard({
     /fora de prazo|fora da janela|NFE_FORA_DE_PRAZO_SEFAZ|cStat=632/i.test(error);
   const isNotFound =
     /n.o encontrad|nao encontrad|404|cStat=215|cStat=217/i.test(error);
+  // Chave de acesso com DV inválido — erro do cliente (digitação). Card amarelo.
+  const isChaveInvalida =
+    errorCode === 'CHAVE_INVALIDA' ||
+    /CHAVE_INVALIDA|cStat=?236|d.gito verificador inv.lido/i.test(error);
+  // Consumo indevido — SEFAZ marcou o CNPJ CAPUL como abusivo. Card VERMELHO grave.
+  const isConsumoIndevido =
+    errorCode === 'SEFAZ_CONSUMO_INDEVIDO' ||
+    /SEFAZ_CONSUMO_INDEVIDO|cStat=?656|consumo indevido/i.test(error);
   // Limite diário da plataforma (proteção interna, não SEFAZ).
   const isLimiteAtingido =
     errorCode === 'LIMITE_ATINGIDO' || /Limite di.rio.*SEFAZ atingido|LIMITE_ATINGIDO/i.test(error);
@@ -103,6 +111,128 @@ export function ErrorCard({
   // Intencionalmente sem "indispon" — "indisponivel para o emitente" é outro caso.
   const isUnavailable =
     /503|timeout|HTTP 5\d\d|conex.o/i.test(error);
+
+  if (isConsumoIndevido) {
+    return (
+      <div className="mb-6 rounded-lg border border-red-300 bg-white shadow-sm overflow-hidden">
+        <div className="bg-red-50 border-b border-red-300 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+              <OctagonAlert className="w-5 h-5 text-red-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-red-900">
+                SEFAZ detectou consumo indevido — PARAR consultas
+              </h3>
+              <p className="text-xs text-red-700 mt-0.5">
+                Risco iminente de bloqueio do CNPJ CAPUL pela SEFAZ.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-5 space-y-4 text-sm text-slate-700">
+          <div className="rounded-md border border-red-300 bg-red-50 p-3">
+            <p className="text-xs text-red-900 font-semibold">
+              ⛔ Não tentar de novo agora. Cada nova consulta agrava o risco e pode levar ao bloqueio do CNPJ — o que pararia todas as operações fiscais da CAPUL (NF-e, CT-e, cadastro).
+            </p>
+          </div>
+          <p>
+            O SEFAZ retornou <strong>cStat=656 (Consumo Indevido)</strong> — uma marcação
+            que indica padrão de uso considerado abusivo do nosso CNPJ consulente. Costuma
+            ocorrer após muitas consultas seguidas em curto tempo. A SEFAZ pode bloquear
+            o CNPJ se o padrão continuar.
+          </p>
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">O que fazer AGORA?</h4>
+            <ul className="text-sm text-slate-600 space-y-1.5">
+              <li className="flex items-start gap-2">
+                <span className="text-red-500 mt-0.5 font-bold">1.</span>
+                <span><strong>Parar imediatamente</strong> todas as consultas SEFAZ ao vivo.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-red-500 mt-0.5 font-bold">2.</span>
+                <span><strong>Acionar ADMIN_TI</strong> — informar que apareceu cStat=656.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-red-500 mt-0.5 font-bold">3.</span>
+                <span>
+                  Para consultas urgentes nas próximas horas, use <strong>"Base local (RFB)"</strong>{' '}
+                  (não consome cota SEFAZ) ou acesse direto o portal da Receita Federal.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-red-500 mt-0.5 font-bold">4.</span>
+                <span>Aguardar a normalização (geralmente algumas horas) e o aval do ADMIN_TI antes de voltar.</span>
+              </li>
+            </ul>
+          </div>
+          <p className="text-xs text-slate-400 font-mono border-t border-slate-100 pt-3">
+            Código: SEFAZ_CONSUMO_INDEVIDO · HTTP 503 · cStat=656
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isChaveInvalida) {
+    return (
+      <div className="mb-6 rounded-lg border border-amber-200 bg-white shadow-sm overflow-hidden">
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+              <KeyRound className="w-5 h-5 text-amber-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-amber-900">
+                Chave de acesso inválida — confira o último dígito
+              </h3>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Erro de digitação na chave — não é problema do SEFAZ.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-5 space-y-4 text-sm text-slate-700">
+          <p>
+            A chave de acesso digitada tem o <strong>dígito verificador inválido</strong>{' '}
+            (último dos 44 dígitos). Provavelmente foi digitada errada — um dígito a mais,
+            a menos, ou trocado.
+          </p>
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Como conferir?</h4>
+            <ul className="text-sm text-slate-600 space-y-1.5">
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>
+                  Compare a chave com a do <strong>DANFE</strong> (PDF) ou XML original — a chave aparece em todas as cópias.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>
+                  Se possível, <strong>copie e cole</strong> a chave em vez de digitar — evita troca de dígitos.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 mt-0.5">•</span>
+                <span>
+                  Confirme se tem exatamente <strong>44 dígitos</strong> (sem espaços, traços ou pontos).
+                </span>
+              </li>
+            </ul>
+          </div>
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+            <strong>Curiosidade técnica:</strong> o último dígito é calculado por módulo 11
+            sobre os 43 anteriores. Quando não bate, o SEFAZ rejeita imediatamente, sem
+            nem consultar a base — por isso esse erro independe da filial consulente.
+          </div>
+          <p className="text-xs text-slate-400 font-mono border-t border-slate-100 pt-3">
+            Código: CHAVE_INVALIDA · HTTP 400 · cStat=236
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (isForaDePrazo) {
     return (

@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   NotFoundException,
@@ -1120,8 +1122,19 @@ export class NfeService {
           return baixado.xml;
         } catch (err) {
           if (err instanceof SefazConsultaError) {
-            // Terminais SEMPRE — nao melhoram com troca de consulente
-            if (err.cStat === '632' || err.cStat === '137') {
+            // Terminais SEMPRE — nao melhoram com troca de consulente:
+            //  - 632: fora de prazo (janela ~90 dias) — propriedade da chave/NF, nao do consulente
+            //  - 137: nenhum documento — SEFAZ ja confirmou inexistencia
+            //  - 236: DV da chave invalido — chave malformada na origem
+            //  - 656: consumo indevido — SEFAZ marcou nosso CNPJ como abusivo;
+            //         continuar tentando AGRAVA o risco de bloqueio do CNPJ CAPUL
+            //         (memory feedback_sefaz_nunca_em_loop)
+            if (
+              err.cStat === '632' ||
+              err.cStat === '137' ||
+              err.cStat === '236' ||
+              err.cStat === '656'
+            ) {
               throw err;
             }
             // 641 e terminal SO em modo padrao. Em modo "tentar todas" (botao
@@ -1258,6 +1271,41 @@ export class NfeService {
             podeTentarOutrasFiliais: !tentarTodasFiliais && totalFallbacksDisponiveis > 0,
             totalFiliaisDisponiveis: totalFallbacksDisponiveis,
           });
+        }
+        // cStat=236: "Chave de Acesso com dígito verificador inválido". A chave
+        // tem 44 dígitos e o último é calculado por módulo 11 sobre os 43 anteriores.
+        // Erro do CLIENTE (digitação errada), não do SEFAZ — HTTP 400. Terminal
+        // sempre: fallback de filial é desperdício de cota porque o problema é
+        // a chave em si.
+        if (err.cStat === '236') {
+          throw new BadRequestException({
+            erro: 'CHAVE_INVALIDA',
+            mensagem:
+              `A chave de acesso digitada tem dígito verificador inválido (cStat=236). ` +
+              `Confira o último dígito — provavelmente foi digitado errado. ` +
+              `A chave NF-e tem 44 dígitos; o último é calculado por módulo 11 sobre os 43 anteriores.`,
+          });
+        }
+        // cStat=656: "Consumo Indevido" — SEFAZ detectou padrão de uso abusivo
+        // do CNPJ consulente e está prestes a bloquear. CRÍTICO. Terminal
+        // sempre + log de erro pra alertar ADMIN_TI. Continuar tentando agrava
+        // o risco (memory feedback_sefaz_nunca_em_loop).
+        if (err.cStat === '656') {
+          this.logger.error(
+            `[SEFAZ_CONSUMO_INDEVIDO] cStat=656 recebido — SEFAZ marcou CNPJ como abusivo. ` +
+              `chave=${chave.slice(0, 6)}… consulente=${(ultimoConsulenteTentado ?? '').slice(0, 8)}… ` +
+              `xMotivo="${err.xMotivo}". ACIONAR ADMIN_TI — parar consultas até investigar.`,
+          );
+          throw new HttpException(
+            {
+              erro: 'SEFAZ_CONSUMO_INDEVIDO',
+              mensagem:
+                `SEFAZ detectou padrão de uso abusivo do CNPJ CAPUL (cStat=656). ` +
+                `Parar consultas SEFAZ imediatamente e acionar ADMIN_TI — ` +
+                `tentar de novo agora aumenta o risco de bloqueio do CNPJ pela SEFAZ.`,
+            },
+            HttpStatus.SERVICE_UNAVAILABLE,
+          );
         }
         // cStat=632: "Solicitação fora de prazo" — o serviço NFeDistribuicaoDFe
         // tem uma janela de aproximadamente 90 dias a contar do evento (autorização,
