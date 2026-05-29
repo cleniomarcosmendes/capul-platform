@@ -138,9 +138,18 @@ export function CteRecebidosPage() {
 
   // Filial filter (26/05) — abre com a filial principal do user; pode
   // ampliar pra outras filiais permitidas ou ver todas as do user.
+  // 29/05 — quando chegamos via deep-link (?chave/?detalheId vindos da aba
+  // "CT-es Vinculados" da NF-e), o CT-e pode ter consulente de outra filial;
+  // iniciar com '' (Todas) garante que ele apareça na lista.
+  const veioDeDeepLink = useMemo(
+    () => searchParams.has('chave') || searchParams.has('detalheId'),
+    // só importa o snapshot no mount — depois o useEffect limpa os params
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
   const [filiais, setFiliais] = useState<FilialResumo[]>([]);
   const [filialCodigo, setFilialCodigo] = useState<string>(
-    () => usuario?.filialCodigo ?? '',
+    () => (veioDeDeepLink ? '' : (usuario?.filialCodigo ?? '')),
   );
 
   // Filtros
@@ -194,7 +203,9 @@ export function CteRecebidosPage() {
         setFiliais(r.data);
         // Se o user não tem filial principal setada mas o backend retornou
         // uma filial isDefault, usa ela.
-        if (!filialCodigo) {
+        // Exceção (29/05): se veio via deep-link, mantém '' (Todas) — o user
+        // quer ver o CT-e específico, independente da filial consulente.
+        if (!filialCodigo && !veioDeDeepLink) {
           const def = r.data.find((f) => f.isDefault) || r.data[0];
           if (def) setFilialCodigo(def.codigo);
         }
@@ -393,6 +404,7 @@ export function CteRecebidosPage() {
       }
     }
     if (mudou) {
+      setPage(1); // volta pra página 1 — debounce 350ms dispara carregar() automaticamente
       const next = new URLSearchParams(searchParams);
       next.delete('chave');
       next.delete('detalheId');
