@@ -85,6 +85,24 @@ o sistema funciona com a limitação documentada no modal.
 
 ## Processo & Deploy
 
+### ⏳ 2026-05-30 — RolesGuard no auth-gateway + restringir leitura de usuários a staff
+
+**Contexto:** O fix `a56fa77` (security-review 30/05) fechou os WRITES do
+`UsuarioController` com `ConfiguradorAdminGuard`, mas `GET /usuarios`
+(`findAll`) e `GET /usuarios/:id` (`findOne`) seguem acessíveis a **qualquer
+usuário autenticado** — vazam a lista de usuários + e-mails (info disclosure
+de baixa severidade). Mantidos abertos porque alimentam dropdowns em
+hub/gestao-ti/fiscal/inventario.
+
+**Proposta:** introduzir um `RolesGuard` parametrizado no auth-gateway (hoje
+só existe o `ConfiguradorAdminGuard` pontual — ver comentário no próprio
+guard sugerindo isso) e restringir as leituras a perfis staff, OU expor um
+endpoint enxuto `/usuarios/lookup` (id+nome only) pros dropdowns e fechar o
+`findAll` completo a admin. Avaliar impacto nos dropdowns antes.
+
+**Adiada porque:** severidade baixa (info disclosure interno, exige login); o
+vetor crítico — account takeover/escalonamento via writes — já foi fechado.
+
 ### ⏳ 2026-04-21 — Revisar `PlatformCapul_Roteiro_Completo.md` (master) com novo rigor
 
 **Contexto:** Deploy de 19/04/2026 custou a Douglas o dia inteiro ajustando
@@ -543,6 +561,28 @@ infra dos PR1-3; trabalho extra é só a página de resultados unificada.
 ---
 
 ## Histórico (feitos)
+
+### ✅ 2026-05-30 — 🔴 Fix segurança: ConfiguradorAdminGuard nos endpoints privilegiados de usuário
+
+Achado do `/security-review` do delta pré-PROD (escopo 163 commits). O
+`auth-gateway` `UsuarioController` tinha só `@UseGuards(JwtAuthGuard)` na
+classe — os endpoints de capabilities (LGPD) tinham `ConfiguradorAdminGuard`
+por método, mas os de **gestão de usuário não**, e o service não valida o
+caller. Qualquer usuário autenticado (até `USUARIO_FINAL`/`TERCEIRIZADO`)
+podia, via `/api/v1/core/` (proxiado pelo nginx): **resetar a senha do admin
+(account takeover)**, **autoconceder role ADMIN** (`/permissoes`), e CRUD de
+usuários alheios. **Pré-existente — vivo em PROD (`65fd7d4`) hoje.**
+
+Fix (`a56fa77`): `ConfiguradorAdminGuard` nos 7 writes (create, update,
+updateStatus, reset-senha, permissoes POST/DELETE, `:id/preferencias` PATCH).
+`findAll`/`findOne`/`me/preferencias` mantidos abertos (dropdowns +
+self-service). Smoke: admin passa (200/404), leitura intacta. Validado que
+todos os writes a `/usuarios` vêm só do `configurador` (admin). Por decisão
+do Clenio, entra no deploy do Workspace (atualizar roteiro v6_marco).
+
+Follow-up registrado: restringir `findAll`/`findOne` de usuários a staff
+(info disclosure baixa) — exige um RolesGuard no auth-gateway (não existe;
+hoje só há `ConfiguradorAdminGuard` pontual).
 
 ### ✅ 2026-05-30 — Worker do cruzamento grava `vinculosProtheus` com razão social + IE
 
