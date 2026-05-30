@@ -42,36 +42,6 @@ da base RFB local + da tela de Inteligência Cadastral existirem primeiro
 comercial/compliance recorrente (não consulta pontual) — é a "abertura de
 oportunidade" que o Clenio citou.
 
-### ⏳ 2026-04-21 — Corrigir worker do cruzamento para gravar `vinculos_protheus` completos
-
-**Contexto:** O campo `fiscal.cadastro_contribuinte.vinculos_protheus` (JSON)
-chega inconsistente — às vezes com TODOS os campos
-(`loja`, `codigo`, `filial`, `origem`, `origemDescricao`, `bloqueado`,
-`razaoSocial`, `inscricaoEstadual`), às vezes só com 4
-(`loja`, `codigo`, `filial`, `origem`) faltando os demais.
-
-**Exemplo real (21/04):** CNPJs como `44700997672` (ARNALDO JOSE PEREIRA),
-`04154414000126` (ROSELY), `21175203000431` (EMBRAURB) vieram com vínculo
-incompleto. Outros CNPJs (ex: CLENIO `82652970682`) vieram completos.
-
-**Impacto:** a coluna "Razão social no Protheus" e "IE no Protheus" na UI
-de Divergências ficou vazia para esses registros, mesmo o dado existindo
-em `divergencia.valorProtheus` quando há divergência do campo.
-
-**Paliativo aplicado hoje (UI-side):** `DivergenciasListPage` faz merge
-best-effort — se o vínculo não tem `razaoSocial`, pega de
-`divergencia.valorProtheus` (campo=razao_social); idem para IE.
-O backlog do worker continua — outras telas que leem `vinculosProtheus`
-diretamente (sem ter as divergências à mão) ainda verão os dados parciais.
-
-**Onde consertar:** `fiscal/backend/src/cruzamento/cruzamento.worker.ts`
-(provável) — ao persistir o contribuinte, garantir que `vinculosProtheus`
-armazene todos os campos vindos do `cadastroFiscal` do Protheus, não
-apenas os 4 identificadores.
-
-**Re-executar** uma corrida de cruzamento após o fix repopula os dados
-corretamente (o worker sobrescreve o JSON). Não requer migration.
-
 
 ## Integração Protheus
 
@@ -573,6 +543,31 @@ infra dos PR1-3; trabalho extra é só a página de resultados unificada.
 ---
 
 ## Histórico (feitos)
+
+### ✅ 2026-05-30 — Worker do cruzamento grava `vinculosProtheus` com razão social + IE
+
+Fix do item 21/04. O worker agendado (`cruzamento.worker.ts`) gravava o
+vínculo Protheus com só 4 campos (`origem/filial/codigo/loja`) em 3 pontos
+— as colunas "Razão social no Protheus" e "IE no Protheus" ficavam vazias
+pros CNPJs sincronizados pelo cron 2×/dia. O dado já chegava no
+`jobData.protheusSnapshot` (usado logo abaixo pra detectar divergências),
+só não era copiado pro JSON.
+
+- Novo helper `vinculoDoJob(jobData)` monta o vínculo enriquecido com
+  `razaoSocial` + `inscricaoEstadual` + `cnae` do snapshot + `origemDescricao`
+  (Cliente/Fornecedor derivado de SA1010/SA2010). Usado nos 3 pontos
+  (create, update, contribuinte-não-encontrado). Sem migration.
+- `bloqueado`/`nomeFantasia` não vêm no `protheusSnapshot` → ficam ausentes
+  (não fabricados), igual ao comportamento anterior. Quem quiser esses
+  campos completos ainda tem o caminho on-demand (`cadastro.service`).
+- Repopulação dos registros antigos vem na próxima corrida de cruzamento
+  (o worker sobrescreve o JSON) — **não disparada manualmente** (regra
+  SEFAZ: nada de cron/loop não supervisionado).
+
+Observação (fora do escopo deste item, não mexido): o worker sobrescreve
+`vinculosProtheus` com um único vínculo por job; um CNPJ que seja cliente
+E fornecedor não acumula os 2 vínculos pelo cruzamento (o on-demand
+acumula). Avaliar se virar item próprio.
 
 ### ✅ 2026-05-30 — Validação client-side da chave NF-e/CT-e (antes de tocar o SEFAZ)
 

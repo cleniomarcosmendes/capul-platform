@@ -129,6 +129,32 @@ export class CruzamentoWorker implements OnApplicationBootstrap, OnApplicationSh
     await this.talvezFinalizar(sincronizacaoId);
   }
 
+  /**
+   * Monta o vínculo Protheus pra gravar em
+   * `cadastro_contribuinte.vinculosProtheus`. Enriquece com
+   * razaoSocial/IE/cnae do `protheusSnapshot` que JÁ vem no job (e é usado
+   * logo abaixo pra detectar divergências). Antes gravava só os 4
+   * identificadores (origem/filial/codigo/loja) → as colunas "Razão social
+   * no Protheus" e "IE no Protheus" ficavam vazias nos registros vindos do
+   * cruzamento agendado (corrige backlog 21/04). `bloqueado`/`nomeFantasia`
+   * não vêm no snapshot — ficam ausentes (não fabricamos), igual a antes.
+   */
+  private vinculoDoJob(jobData: CruzamentoJobData) {
+    const snap = jobData.protheusSnapshot;
+    return [
+      {
+        origem: jobData.origem,
+        origemDescricao: jobData.origem === 'SA2010' ? 'Fornecedor' : 'Cliente',
+        filial: jobData.filial,
+        codigo: jobData.codigo,
+        loja: jobData.loja,
+        razaoSocial: snap?.razaoSocial ?? null,
+        inscricaoEstadual: snap?.inscricaoEstadual ?? null,
+        cnae: snap?.cnae ?? null,
+      },
+    ];
+  }
+
   private async persistirContribuinte(
     sincronizacaoId: string,
     c: Awaited<ReturnType<CccClient['consultarPorCnpj']>>['contribuintes'][number],
@@ -161,7 +187,7 @@ export class CruzamentoWorker implements OnApplicationBootstrap, OnApplicationSh
         enderecoBairro: c.endereco?.bairro,
         enderecoMunicipio: c.endereco?.municipio,
         enderecoCep: c.endereco?.cep,
-        vinculosProtheus: [{ origem: jobData.origem, filial: jobData.filial, codigo: jobData.codigo, loja: jobData.loja }],
+        vinculosProtheus: this.vinculoDoJob(jobData),
         ultimaConsultaCccEm: new Date(),
         ultimaSincronizacaoId: sincronizacaoId,
       },
@@ -177,7 +203,7 @@ export class CruzamentoWorker implements OnApplicationBootstrap, OnApplicationSh
         enderecoBairro: c.endereco?.bairro ?? undefined,
         enderecoMunicipio: c.endereco?.municipio ?? undefined,
         enderecoCep: c.endereco?.cep ?? undefined,
-        vinculosProtheus: [{ origem: jobData.origem, filial: jobData.filial, codigo: jobData.codigo, loja: jobData.loja }],
+        vinculosProtheus: this.vinculoDoJob(jobData),
         ultimaConsultaCccEm: new Date(),
         ultimaSincronizacaoId: sincronizacaoId,
       },
@@ -231,7 +257,7 @@ export class CruzamentoWorker implements OnApplicationBootstrap, OnApplicationSh
         cnpj,
         uf,
         situacao: 'DESCONHECIDO',
-        vinculosProtheus: [{ origem: jobData.origem, filial: jobData.filial, codigo: jobData.codigo, loja: jobData.loja }],
+        vinculosProtheus: this.vinculoDoJob(jobData),
         ultimaConsultaCccEm: new Date(),
         ultimaSincronizacaoId: sincronizacaoId,
       },
