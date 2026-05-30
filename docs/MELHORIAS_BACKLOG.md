@@ -613,6 +613,40 @@ infra dos PR1-3; trabalho extra é só a página de resultados unificada.
 
 ## Histórico (feitos)
 
+### ✅ 2026-05-29 — Navegação cruzada NF-e ↔ CT-e: mesma aba + ‹ Voltar preserva contexto
+
+Follow-up do `fca2493` (que persistia a chave na URL). O teste do user
+revelou que a *volta* não preservava o contexto: o link abria em nova aba
+(back desativado) e o filtro da lista de Recebidos se perdia. Fechado em
+3 commits:
+
+- **NF-e → CT-e Vinculado mesma aba** (`cccc01f`): troca a âncora
+  `target="_blank"` por `<Link>` client-side. ‹ Voltar retorna pra
+  `/fiscal/nfe?chave=…` e a auto-consulta recarrega a NF-e. Corrige
+  também o `<Link to="/fiscal/cte">` que com `basename="/fiscal"` virava
+  `/fiscal/fiscal/cte` → caía no Dashboard; passa a usar `/cte`.
+- **Filtros da lista de Recebidos preservados ao voltar** (`f2adf59`):
+  snapshot dos 14 filtros em `sessionStorage`, restaurado SÓ quando a
+  navegação é `POP` (back/forward) via `useNavigationType`. Navegação
+  nova (PUSH — menu lateral) começa limpa; deep-link `?chave` tem
+  precedência. Sem isso o ‹ Voltar trazia 462 resultados em vez do 1
+  filtrado.
+- **CT-e → NF-e (aba Documentos) mesma aba** (`575c606`): uniformiza a
+  volta com a ida — `<Link to="/nfe?chave=…">` client-side. O ícone ↗
+  "abrir em nova aba" (ExternalLink) permanece de propósito.
+
+Padrão de UX consolidado: navegação cruzada = **mesma aba** + ‹ Voltar
+restaura a tela de origem; ícone ↗ separado abre em nova aba quando o
+operador quer comparar lado a lado. Validado pelo user nas duas direções.
+
+**Pega-ratão documentado:** memória `feedback_react_router_link_basename_fiscal`
+— no Fiscal `<Link to>` não leva `/fiscal` (basename prefixa), mas
+`<a href>` leva o path literal.
+
+**Ainda em aberto (não-bloqueante):** o ‹ Voltar do CT-e consulta-por-chave
+pra lista de Recebidos volta sempre pra `page=1` (efeito de reset de
+página dispara na remontagem). Filtros preservam; só a paginação reseta.
+
 ### ✅ 2026-05-05 — Módulo CT-e Distribuição completo (Fases 1+2+3+4 + extras)
 
 10 commits no dia entregando o módulo end-to-end:
