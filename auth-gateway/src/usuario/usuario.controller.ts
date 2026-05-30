@@ -54,7 +54,10 @@ export class UsuarioController {
     return this.usuarioService.getPreferencias(id);
   }
 
+  // Escrita de preferências de OUTRO usuário (por :id) — só ADMIN do
+  // Configurador. O self-service é `me/preferencias` acima (sem guard).
   @Patch(':id/preferencias')
+  @UseGuards(ConfiguradorAdminGuard)
   updatePreferencias(@Param('id') id: string, @Body() patch: Record<string, any>) {
     return this.usuarioService.updatePreferencias(id, patch);
   }
@@ -64,27 +67,36 @@ export class UsuarioController {
     return this.usuarioService.findOne(id);
   }
 
+  // --- Gestão de usuários (criar/editar/status/senha/permissões) — operações
+  //     administrativas. Guard por método (a classe só exige JwtAuthGuard):
+  //     sem isto, qualquer usuário autenticado poderia resetar a senha do
+  //     admin ou se autoconceder permissões (escalonamento). Fix segurança.
   @Post()
+  @UseGuards(ConfiguradorAdminGuard)
   create(@Body() dto: CreateUsuarioDto) {
     return this.usuarioService.create(dto);
   }
 
   @Patch(':id')
+  @UseGuards(ConfiguradorAdminGuard)
   update(@Param('id') id: string, @Body() dto: UpdateUsuarioDto) {
     return this.usuarioService.update(id, dto);
   }
 
   @Patch(':id/status')
+  @UseGuards(ConfiguradorAdminGuard)
   updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto) {
     return this.usuarioService.updateStatus(id, dto.status);
   }
 
   @Patch(':id/reset-senha')
+  @UseGuards(ConfiguradorAdminGuard)
   resetSenha(@Param('id') id: string, @Body() body: { novaSenha: string }) {
     return this.usuarioService.resetSenha(id, body.novaSenha);
   }
 
   @Post(':id/permissoes')
+  @UseGuards(ConfiguradorAdminGuard)
   atribuirPermissao(
     @Param('id') id: string,
     @Body() dto: AtribuirPermissaoDto,
@@ -94,6 +106,7 @@ export class UsuarioController {
   }
 
   @Delete(':id/permissoes/:moduloId')
+  @UseGuards(ConfiguradorAdminGuard)
   revogarPermissao(
     @Param('id') id: string,
     @Param('moduloId') moduloId: string,
