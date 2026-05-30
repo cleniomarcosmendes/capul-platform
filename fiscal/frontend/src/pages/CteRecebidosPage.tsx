@@ -254,7 +254,11 @@ export function CteRecebidosPage() {
         // uma filial isDefault, usa ela.
         // Exceção (29/05): se veio via deep-link, mantém '' (Todas) — o user
         // quer ver o CT-e específico, independente da filial consulente.
-        if (!filialCodigo && !veioDeDeepLink) {
+        // Exceção (30/05): se restauramos um snapshot ao voltar (filtrosSalvos),
+        // filial '' é "Todas" INTENCIONAL — não sobrescrever pelo default. Sem
+        // isso, voltar do deep-link CT-e clobberava "Todas" pra filial 01 e o
+        // CT-e (de outra filial) sumia da lista.
+        if (!filialCodigo && !veioDeDeepLink && !filtrosSalvos) {
           const def = r.data.find((f) => f.isDefault) || r.data[0];
           if (def) setFilialCodigo(def.codigo);
         }
