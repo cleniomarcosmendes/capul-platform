@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigationType, useSearchParams } from 'react-router-dom';
 import {
   ChevronLeft,
   ChevronRight,
@@ -118,6 +118,35 @@ const SCHEMA_OPTIONS: { v: '' | SchemaCte; l: string }[] = [
 
 const PAGE_SIZE = 20;
 
+// 29/05 — snapshot de filtros persistido em sessionStorage pra preservar a
+// lista ao voltar (‹ Voltar do CT-e). Chave por-tab; some ao fechar a aba.
+const CTE_FILTROS_KEY = 'fiscal:cte-recebidos:filtros';
+interface FiltrosRecebidos {
+  filialCodigo: string;
+  search: string;
+  cnpjEmitente: string;
+  papel: '' | PapelCapul;
+  schema: '' | SchemaCte;
+  ambiente: '' | '1' | '2';
+  protheusStatus:
+    | ''
+    | 'GRAVADO'
+    | 'GRAVADO_PRENOTA_FALHOU'
+    | 'GRAVADO_AGUARDANDO_AMARRACAO'
+    | 'JA_EXISTIA'
+    | 'FALHA_TECNICA'
+    | 'PROTHEUS_DESISTIU'
+    | 'NAO_APLICAVEL'
+    | 'PENDENTE';
+  dataInicio: string;
+  dataFim: string;
+  recebimentoInicio: string;
+  recebimentoFim: string;
+  sortBy: string | null;
+  sortOrder: 'asc' | 'desc';
+  inconsistenciaFiltro: 'pendentes' | 'resolvidas' | 'todas';
+}
+
 export function CteRecebidosPage() {
   const toast = useToast();
   const { usuario } = useAuth();
@@ -147,21 +176,41 @@ export function CteRecebidosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
+
+  // 29/05 — preserva filtros ao VOLTAR. O operador filtra a lista, abre um
+  // CT-e (consulta-por-chave) e dá ‹ Voltar: o filtro deve reaparecer. Como
+  // o estado é local, a remontagem zerava tudo. Persistimos um snapshot em
+  // sessionStorage e só restauramos quando a navegação é POP (back/forward).
+  // Navegação nova (PUSH — ex.: menu lateral) começa limpa; deep-link
+  // (?chave/?detalheId) tem precedência e ignora o snapshot.
+  const navigationType = useNavigationType();
+  const filtrosSalvos = useMemo<FiltrosRecebidos | null>(() => {
+    if (veioDeDeepLink || navigationType !== 'POP') return null;
+    try {
+      const raw = sessionStorage.getItem(CTE_FILTROS_KEY);
+      return raw ? (JSON.parse(raw) as FiltrosRecebidos) : null;
+    } catch {
+      return null;
+    }
+    // snapshot só no mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [filiais, setFiliais] = useState<FilialResumo[]>([]);
   const [filialCodigo, setFilialCodigo] = useState<string>(
-    () => (veioDeDeepLink ? '' : (usuario?.filialCodigo ?? '')),
+    () => (veioDeDeepLink ? '' : (filtrosSalvos?.filialCodigo ?? usuario?.filialCodigo ?? '')),
   );
 
-  // Filtros
-  const [search, setSearch] = useState('');
+  // Filtros — inicializados do snapshot quando volta via ‹ Voltar (POP).
+  const [search, setSearch] = useState(() => filtrosSalvos?.search ?? '');
   // 29/05 — filtro por CNPJ do emitente (transportadora). Pedido Fiscal pra
   // triar CT-es por transportadora sem abrir cada um.
-  const [cnpjEmitente, setCnpjEmitente] = useState('');
+  const [cnpjEmitente, setCnpjEmitente] = useState(() => filtrosSalvos?.cnpjEmitente ?? '');
   // Default 'TOMA' — único papel que gera pré-nota no Protheus (regra 11/05/2026).
   // Operador pode mudar pra ver outros papéis ou "Todos" se precisar.
-  const [papel, setPapel] = useState<'' | PapelCapul>('TOMA');
-  const [schema, setSchema] = useState<'' | SchemaCte>('');
-  const [ambiente, setAmbiente] = useState<'' | '1' | '2'>('');
+  const [papel, setPapel] = useState<'' | PapelCapul>(() => filtrosSalvos?.papel ?? 'TOMA');
+  const [schema, setSchema] = useState<'' | SchemaCte>(() => filtrosSalvos?.schema ?? '');
+  const [ambiente, setAmbiente] = useState<'' | '1' | '2'>(() => filtrosSalvos?.ambiente ?? '');
   const [protheusStatus, setProtheusStatus] = useState<
     | ''
     | 'GRAVADO'
@@ -172,23 +221,23 @@ export function CteRecebidosPage() {
     | 'PROTHEUS_DESISTIU'
     | 'NAO_APLICAVEL'
     | 'PENDENTE'
-  >('');
-  const [dataInicio, setDataInicio] = useState('');
-  const [dataFim, setDataFim] = useState('');
+  >(() => filtrosSalvos?.protheusStatus ?? '');
+  const [dataInicio, setDataInicio] = useState(() => filtrosSalvos?.dataInicio ?? '');
+  const [dataFim, setDataFim] = useState(() => filtrosSalvos?.dataFim ?? '');
   // Recebimento (recebidoEm na base) — independente de Emissao (dhEmi).
   // Util pra "o que chegou hoje?" sem depender da data de emissao do CT-e.
-  const [recebimentoInicio, setRecebimentoInicio] = useState('');
-  const [recebimentoFim, setRecebimentoFim] = useState('');
+  const [recebimentoInicio, setRecebimentoInicio] = useState(() => filtrosSalvos?.recebimentoInicio ?? '');
+  const [recebimentoFim, setRecebimentoFim] = useState(() => filtrosSalvos?.recebimentoFim ?? '');
 
   // Ordenacao por click no header (08/05/2026). null = ordem default
   // (recebidoEm desc do backend). Click: nenhum → desc → asc → nenhum.
-  const [sortBy, setSortBy] = useState<string | null>(null);
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [sortBy, setSortBy] = useState<string | null>(() => filtrosSalvos?.sortBy ?? null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(() => filtrosSalvos?.sortOrder ?? 'desc');
 
   // Filtro de pendencias de correcao (08/05/2026)
   const [inconsistenciaFiltro, setInconsistenciaFiltro] = useState<
     'pendentes' | 'resolvidas' | 'todas'
-  >('todas');
+  >(() => filtrosSalvos?.inconsistenciaFiltro ?? 'todas');
 
   // Modal detalhe
   const [detalhe, setDetalhe] = useState<DetalheResp | null>(null);
@@ -346,6 +395,47 @@ export function CteRecebidosPage() {
     dataFim,
     recebimentoInicio,
     recebimentoFim,
+    inconsistenciaFiltro,
+  ]);
+
+  // Persiste o snapshot de filtros a cada mudança — restaura ao ‹ Voltar (POP).
+  // page fica de fora: o efeito acima reseta pra 1 na remontagem de qualquer jeito.
+  useEffect(() => {
+    const snap: FiltrosRecebidos = {
+      filialCodigo,
+      search,
+      cnpjEmitente,
+      papel,
+      schema,
+      ambiente,
+      protheusStatus,
+      dataInicio,
+      dataFim,
+      recebimentoInicio,
+      recebimentoFim,
+      sortBy,
+      sortOrder,
+      inconsistenciaFiltro,
+    };
+    try {
+      sessionStorage.setItem(CTE_FILTROS_KEY, JSON.stringify(snap));
+    } catch {
+      /* sessionStorage indisponível/cheio — filtro apenas não persiste */
+    }
+  }, [
+    filialCodigo,
+    search,
+    cnpjEmitente,
+    papel,
+    schema,
+    ambiente,
+    protheusStatus,
+    dataInicio,
+    dataFim,
+    recebimentoInicio,
+    recebimentoFim,
+    sortBy,
+    sortOrder,
     inconsistenciaFiltro,
   ]);
 
