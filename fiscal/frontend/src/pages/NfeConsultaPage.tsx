@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   ChevronDown,
   Download,
@@ -1888,15 +1888,13 @@ function AbaCtesVinculados({
                 return (
                   <tr key={c.id} className={divergente ? 'bg-red-50/50' : 'hover:bg-slate-50'}>
                     <td className="px-3 py-2 font-mono">
-                      <a
-                        href={`/fiscal/cte?chave=${c.chaveCte ?? ''}&detalheId=${c.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <Link
+                        to={`/cte?chave=${c.chaveCte ?? ''}&detalheId=${c.id}`}
                         className="text-blue-700 hover:underline"
-                        title="Abrir CT-e na lista: campo 'Chave' pré-filtrado + modal de detalhe aberto"
+                        title="Abrir CT-e na lista (mesma aba): campo 'Chave' pré-filtrado + modal de detalhe aberto. Use o ‹ Voltar do navegador pra retornar à NF-e — ela é recarregada automaticamente."
                       >
                         {c.numero ?? '—'}/{c.serie ?? '—'}
-                      </a>
+                      </Link>
                     </td>
                     <td className="px-3 py-2">
                       <div className="font-medium text-slate-800">{c.emitente.razaoSocial ?? '—'}</div>
