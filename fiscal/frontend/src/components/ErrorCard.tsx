@@ -30,6 +30,13 @@ interface ErrorCardProps {
   subcaso641?: 'EMITENTE_EXATO' | 'MESMA_RAIZ' | 'SEM_INTERESSE';
   onTentarOutrasFiliais?: () => void;
   tentandoOutrasFiliais?: boolean;
+  /**
+   * Quando true, o card de CHAVE_INVALIDA mostra que a chave foi reprovada
+   * na validação LOCAL (DV/UF/modelo/documento) — a consulta SEFAZ NÃO foi
+   * disparada (economia de cota). `chaveMensagem` traz o motivo específico.
+   */
+  validacaoLocal?: boolean;
+  chaveMensagem?: string;
 }
 
 /**
@@ -70,6 +77,8 @@ export function ErrorCard({
   subcaso641,
   onTentarOutrasFiliais,
   tentandoOutrasFiliais = false,
+  validacaoLocal = false,
+  chaveMensagem,
 }: ErrorCardProps) {
   const tentarOutrasBtn = podeTentarOutrasFiliais && onTentarOutrasFiliais ? (
     <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
@@ -270,19 +279,27 @@ export function ErrorCard({
             </div>
             <div className="flex-1">
               <h3 className="text-sm font-semibold text-amber-900">
-                Chave de acesso inválida — confira o último dígito
+                Chave de acesso inválida — confira antes de consultar
               </h3>
               <p className="text-xs text-amber-700 mt-0.5">
-                Erro de digitação na chave — não é problema do SEFAZ.
+                {validacaoLocal
+                  ? 'Detectado no navegador — a consulta SEFAZ não foi disparada.'
+                  : 'Erro de digitação na chave — não é problema do SEFAZ.'}
               </p>
             </div>
           </div>
         </div>
         <div className="px-6 py-5 space-y-4 text-sm text-slate-700">
           <p>
-            A chave de acesso digitada tem o <strong>dígito verificador inválido</strong>{' '}
-            (último dos 44 dígitos). Provavelmente foi digitada errada — um dígito a mais,
-            a menos, ou trocado.
+            {validacaoLocal && chaveMensagem ? (
+              chaveMensagem
+            ) : (
+              <>
+                A chave de acesso digitada tem o <strong>dígito verificador inválido</strong>{' '}
+                (último dos 44 dígitos). Provavelmente foi digitada errada — um dígito a mais,
+                a menos, ou trocado.
+              </>
+            )}
           </p>
           <div>
             <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Como conferir?</h4>
@@ -308,12 +325,25 @@ export function ErrorCard({
             </ul>
           </div>
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-            <strong>Curiosidade técnica:</strong> o último dígito é calculado por módulo 11
-            sobre os 43 anteriores. Quando não bate, o SEFAZ rejeita imediatamente, sem
-            nem consultar a base — por isso esse erro independe da filial consulente.
+            {validacaoLocal ? (
+              <>
+                <strong>Por que validamos aqui:</strong> a chave foi conferida no navegador
+                (dígito verificador, UF, modelo e CNPJ/CPF do emitente) antes de qualquer
+                chamada — assim uma chave digitada errada <strong>não consome cota SEFAZ</strong>
+                {' '}da plataforma nem depende do SEFAZ estar no ar.
+              </>
+            ) : (
+              <>
+                <strong>Curiosidade técnica:</strong> o último dígito é calculado por módulo 11
+                sobre os 43 anteriores. Quando não bate, o SEFAZ rejeita imediatamente, sem
+                nem consultar a base — por isso esse erro independe da filial consulente.
+              </>
+            )}
           </div>
           <p className="text-xs text-slate-400 font-mono border-t border-slate-100 pt-3">
-            Código: CHAVE_INVALIDA · HTTP 400 · cStat=236
+            {validacaoLocal
+              ? 'Código: CHAVE_INVALIDA · validado no navegador (sem chamada SEFAZ)'
+              : 'Código: CHAVE_INVALIDA · HTTP 400 · cStat=236'}
           </p>
         </div>
       </div>

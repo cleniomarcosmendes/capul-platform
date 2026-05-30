@@ -18,6 +18,7 @@ import { OrigemBadge } from '../components/OrigemBadge';
 import { EventosTimeline } from '../components/EventosTimeline';
 import { useAuth } from '../contexts/AuthContext';
 import { extractApiError } from '../utils/errors';
+import { validarChaveAcesso } from '../utils/chave';
 import { abrirBlobEmNovaAba, baixarBlob } from '../utils/blob';
 import { Row } from '../components/Row';
 import {
@@ -172,6 +173,8 @@ export function CteConsultaPage() {
   const [chave, setChave] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Validação local da chave (vide NfeConsultaPage). null = erro do backend.
+  const [chaveInvalidaMsg, setChaveInvalidaMsg] = useState<string | null>(null);
   const [result, setResult] = useState<CteConsultaResult | null>(null);
   const [tab, setTab] = useState<Tab>('cte');
   const { usuario } = useAuth();
@@ -228,10 +231,14 @@ export function CteConsultaPage() {
   async function handleConsultar(e: React.FormEvent | null) {
     if (e) e.preventDefault();
     setError(null);
+    setChaveInvalidaMsg(null);
     setResult(null);
     setTab('cte');
-    if (!/^\d{44}$/.test(chave)) {
-      setError('Chave deve ter 44 dígitos.');
+    // Validação local antes de tocar o SEFAZ — chave errada não queima cota.
+    const val = validarChaveAcesso(chave, { modeloEsperado: '57' });
+    if (!val.ok) {
+      setChaveInvalidaMsg(val.mensagem ?? 'Chave de acesso inválida.');
+      setError(val.mensagem ?? 'Chave de acesso inválida.');
       return;
     }
     try {
@@ -399,7 +406,15 @@ export function CteConsultaPage() {
         </div>
       </form>
 
-      {error && <ErrorCard error={error} context="cte" />}
+      {error && (
+        <ErrorCard
+          error={error}
+          context="cte"
+          errorCode={chaveInvalidaMsg ? 'CHAVE_INVALIDA' : undefined}
+          validacaoLocal={!!chaveInvalidaMsg}
+          chaveMensagem={chaveInvalidaMsg ?? undefined}
+        />
+      )}
 
       {result && (
         <div className="space-y-6">

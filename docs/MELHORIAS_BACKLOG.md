@@ -72,45 +72,6 @@ apenas os 4 identificadores.
 **Re-executar** uma corrida de cruzamento após o fix repopula os dados
 corretamente (o worker sobrescreve o JSON). Não requer migration.
 
-### ⏳ 2026-05-29 — Validar chave NF-e/CT-e no client antes de submeter (DV + UF + 44 dígitos)
-
-**Contexto:** Hoje a tela `/fiscal/nfe/consulta` (e `/fiscal/cte/consulta`)
-envia qualquer string de 44 dígitos pro backend, que aciona o `consChNFe`
-SEFAZ. Se a chave tem dígito verificador errado, o SEFAZ rejeita com
-`cStat=236`. O sistema já trata isso elegantemente (commit `59a9f58` +
-card `CHAVE_INVALIDA` em `ErrorCard.tsx`), mas **continua queimando 1
-chamada SEFAZ por chave digitada errada** — sem necessidade.
-
-**Proposta:** validação 100% client-side (~50 linhas TS) que verifica:
-1. **44 dígitos** (após remover separadores) → mensagem específica se tiver mais/menos
-2. **Código UF nos primeiros 2 dígitos** está na lista IBGE (11-53, salvo lacunas)
-3. **DV (último dígito)** bate com módulo 11 sobre os 43 anteriores
-4. **CNPJ embutido (posições 6-19)** tem DVs próprios válidos (módulo 11 do CNPJ)
-
-Se qualquer um falhar, mostrar o card `CHAVE_INVALIDA` **sem chamar o
-backend**. Card já existe — só passar `error` sintético gerado no client.
-
-**Por quê vale:**
-- Caso real 29/05: usuário enviou chave `21260525834847000283...` (CAPUL é MG=31, não MA=21). DV nunca bateria. Mas o SEFAZ foi consultado mesmo assim.
-- Economia de cota SEFAZ por digitação errada (limite diário 2000/dia da plataforma)
-- Latência menor pro usuário (~3s de round-trip SEFAZ vs validação local instantânea)
-- Resposta determinística — não depende de SEFAZ estar no ar
-
-**Adiada porque:** card backend já cobre o caso reportado; é otimização de
-custo, não funcionalidade nova. Operador hoje tem feedback claro do erro.
-Vale puxar quando alguém tocar nessa tela por outro motivo.
-
-**Escopo sugerido:**
-- Função pura `validarChaveNfe(chave: string): { ok: true } | { ok: false, motivo: 'TAMANHO'|'UF'|'DV_CHAVE'|'DV_CNPJ' }`
-- Hook no submit do `<form>` da `NfeConsultaPage` e `CteConsultaPage` (chave tem mesmo formato)
-- Reusar `ErrorCard` com `errorCode='CHAVE_INVALIDA'` + mensagem traduzida do `motivo`
-- Testes unitários com chaves conhecidas (válidas e cada tipo de erro)
-
-**Decisão futura:** se for fazer junto, vale também validar **MOD** (campo de
-modelo: 55=NF-e, 57=CT-e, 65=NFC-e) bater com a tela atual — se NFCe na tela
-de NF-e, alertar.
-
----
 
 ## Integração Protheus
 
@@ -612,6 +573,28 @@ infra dos PR1-3; trabalho extra é só a página de resultados unificada.
 ---
 
 ## Histórico (feitos)
+
+### ✅ 2026-05-30 — Validação client-side da chave NF-e/CT-e (antes de tocar o SEFAZ)
+
+Puxado do backlog (item 29/05) porque acabamos de mexer nas telas de
+consulta. Uma chave digitada errada agora é barrada **no navegador**, sem
+queimar cota SEFAZ (limite 2000/dia, risco de bloqueio do CNPJ da CAPUL).
+
+- `src/utils/chave.ts` (novo): função pura `validarChaveAcesso(chave, { modeloEsperado })`
+  com 5 checagens — **44 dígitos · UF (IBGE) · modelo (55/57) · CNPJ/CPF do
+  emitente · DV módulo-11**. Aceita CPF zero-preenchido (produtor rural PF)
+  pra não bloquear emitente legítimo. Princípio: na dúvida, deixa passar.
+- `ErrorCard.tsx`: modo `validacaoLocal` — rodapé honesto ("validado no
+  navegador, sem chamada SEFAZ") + mensagem específica do motivo, sem fingir
+  `cStat=236`.
+- `NfeConsultaPage`/`CteConsultaPage`: validam no submit antes do backend.
+- Lógica testada contra as chaves reais (NF-e 55, CT-e 57) + casos de erro
+  (DV trocado, UF 99, modelo errado na tela, tamanho) — zero falso-negativo.
+  Validado pelo user (NF-e com número errado → card sem consultar).
+
+Extra além do backlog original: incluída a checagem de **modelo** (55/57) —
+pega "chave de CT-e na tela de NF-e". Testes unitários formais ficaram de
+fora (frontend fiscal não tem test runner; adicionar vitest é item à parte).
 
 ### ✅ 2026-05-29 — Navegação cruzada NF-e ↔ CT-e: mesma aba + ‹ Voltar preserva contexto
 

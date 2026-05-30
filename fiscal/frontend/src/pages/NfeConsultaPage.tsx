@@ -20,6 +20,7 @@ import { InconsistenciaPanelNfe } from '../components/InconsistenciaPanelNfe';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
 import { extractApiError } from '../utils/errors';
+import { validarChaveAcesso } from '../utils/chave';
 import { abrirBlobEmNovaAba, baixarBlob } from '../utils/blob';
 import { Row } from '../components/Row';
 import {
@@ -62,6 +63,10 @@ export function NfeConsultaPage() {
   const [chave, setChave] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Mensagem da validação LOCAL da chave (DV/UF/modelo/documento). Quando
+  // setada, o ErrorCard mostra o card CHAVE_INVALIDA em modo "validado no
+  // navegador" — sem ter chamado o SEFAZ. null = erro veio do backend.
+  const [chaveInvalidaMsg, setChaveInvalidaMsg] = useState<string | null>(null);
   const [errorMeta, setErrorMeta] = useState<{
     podeTentarOutrasFiliais: boolean;
     totalFiliaisDisponiveis?: number;
@@ -155,10 +160,14 @@ export function NfeConsultaPage() {
     if (e) e.preventDefault();
     setError(null);
     setErrorMeta(null);
+    setChaveInvalidaMsg(null);
     setResult(null);
     const chaveLimpa = chave.replace(/\D/g, '');
-    if (!/^\d{44}$/.test(chaveLimpa)) {
-      setError('Chave deve ter exatamente 44 dígitos numéricos.');
+    // Validação local antes de tocar o SEFAZ — chave errada não queima cota.
+    const val = validarChaveAcesso(chaveLimpa, { modeloEsperado: '55' });
+    if (!val.ok) {
+      setChaveInvalidaMsg(val.mensagem ?? 'Chave de acesso inválida.');
+      setError(val.mensagem ?? 'Chave de acesso inválida.');
       return;
     }
     try {
@@ -505,6 +514,9 @@ export function NfeConsultaPage() {
         <ErrorCard
           error={error}
           context="nfe"
+          errorCode={chaveInvalidaMsg ? 'CHAVE_INVALIDA' : undefined}
+          validacaoLocal={!!chaveInvalidaMsg}
+          chaveMensagem={chaveInvalidaMsg ?? undefined}
           podeTentarOutrasFiliais={errorMeta?.podeTentarOutrasFiliais}
           totalFiliaisDisponiveis={errorMeta?.totalFiliaisDisponiveis}
           subcaso641={errorMeta?.subcaso641}
