@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   Download,
@@ -1292,13 +1292,13 @@ function AbaDocumentos({ parsed }: { parsed: CteParsed }) {
                   </td>
                   <td className="px-3 py-2 font-mono text-xs">
                     {d.chaveNFe ? (
-                      <a
-                        href={`/fiscal/nfe?chave=${d.chaveNFe}`}
-                        title="Consultar esta NF-e em /fiscal/nfe"
+                      <Link
+                        to={`/nfe?chave=${d.chaveNFe}`}
+                        title="Consultar esta NF-e (mesma aba). Use o ‹ Voltar do navegador pra retornar ao CT-e."
                         className="text-blue-700 hover:text-blue-900 hover:underline"
                       >
                         {fmtChave(d.chaveNFe)}
-                      </a>
+                      </Link>
                     ) : d.numeroNF ? (
                       `Nº ${d.numeroNF} Série ${valorOuVazio(d.serie)}`
                     ) : (
