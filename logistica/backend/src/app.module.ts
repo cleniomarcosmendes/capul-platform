@@ -6,6 +6,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { HealthModule } from './health/health.module.js';
+import { CadastroModule } from './cadastro/cadastro.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
 
@@ -16,6 +17,7 @@ import { RolesGuard } from './common/guards/roles.guard.js';
     PrismaModule,
     AuthModule,
     HealthModule,
+    CadastroModule,
   ],
   providers: [
     // Ordem: rate-limit → autenticação (JWT) → autorização (roles).
