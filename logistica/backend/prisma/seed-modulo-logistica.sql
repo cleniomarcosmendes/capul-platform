@@ -10,8 +10,8 @@
 INSERT INTO core.modulos_sistema
   (id, codigo, nome, descricao, icone, cor, url_frontend, url_backend, ordem, status, created_at, updated_at)
 VALUES
-  (gen_random_uuid()::text, 'LOGISTICA', 'Entregas',
-   'Gestão de entregas e frota (Logística)', 'truck', '#0ea5e9',
+  (gen_random_uuid()::text, 'LOGISTICA', 'Logística',
+   'Gestão de entregas e frota', 'truck', '#0ea5e9',
    '/entregas/', '/api/v1/logistica', 4, 'ATIVO', now(), now())
 ON CONFLICT (codigo) DO UPDATE SET
   nome = EXCLUDED.nome, descricao = EXCLUDED.descricao, icone = EXCLUDED.icone,
