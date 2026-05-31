@@ -9,6 +9,7 @@ import { HealthModule } from './health/health.module.js';
 import { CadastroModule } from './cadastro/cadastro.module.js';
 import { EntregaModule } from './entrega/entrega.module.js';
 import { VeiculoModule } from './veiculo/veiculo.module.js';
+import { ViagemModule } from './viagem/viagem.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
 
@@ -22,6 +23,7 @@ import { RolesGuard } from './common/guards/roles.guard.js';
     CadastroModule,
     EntregaModule,
     VeiculoModule,
+    ViagemModule,
   ],
   providers: [
     // Ordem: rate-limit → autenticação (JWT) → autorização (roles).

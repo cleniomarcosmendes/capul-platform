@@ -5,6 +5,7 @@ import { HomePage } from './pages/HomePage';
 import { ClientesPage } from './pages/ClientesPage';
 import { EntregaNovaPage } from './pages/EntregaNovaPage';
 import { VeiculosPage } from './pages/VeiculosPage';
+import { ViagensPage } from './pages/ViagensPage';
 
 function Protected() {
   const { loading, logisticaRole } = useAuth();
@@ -25,6 +26,7 @@ function Protected() {
         <Route path="/clientes" element={<ClientesPage />} />
         <Route path="/entregas/nova" element={<EntregaNovaPage />} />
         <Route path="/veiculos" element={<VeiculosPage />} />
+        <Route path="/viagens" element={<ViagensPage />} />
       </Routes>
     </Layout>
   );
