@@ -3,9 +3,10 @@ import axios from 'axios';
 // Mesmo padrão dos demais módulos: token JWT em localStorage('accessToken'),
 // compartilhado na mesma origem (https://localhost) pelo Hub no login.
 export const authApi = axios.create({ baseURL: '/api/v1/auth', timeout: 30_000 });
+export const coreApi = axios.create({ baseURL: '/api/v1/core', timeout: 30_000 });
 export const logisticaApi = axios.create({ baseURL: '/api/v1/logistica', timeout: 30_000 });
 
-[authApi, logisticaApi].forEach((api) => {
+[authApi, coreApi, logisticaApi].forEach((api) => {
   api.interceptors.request.use((config) => {
     const token = localStorage.getItem('accessToken');
     if (token) config.headers.Authorization = `Bearer ${token}`;

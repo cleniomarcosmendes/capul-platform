@@ -30,8 +30,17 @@ export function HomePage() {
           <div className="text-xs text-slate-500">Cadastro + fila de pendentes</div>
         </Link>
 
+        <Link
+          to="/veiculos"
+          className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+        >
+          <Truck className="h-7 w-7 text-sky-600" />
+          <div className="mt-3 font-medium text-slate-800">Frota</div>
+          <div className="text-xs text-slate-500">Cadastro de veículos</div>
+        </Link>
+
         <div className="rounded-xl border border-dashed border-slate-200 bg-white/60 p-5">
-          <Truck className="h-7 w-7 text-slate-300" />
+          <Package className="h-7 w-7 text-slate-300" />
           <div className="mt-3 font-medium text-slate-400">Viagens</div>
           <div className="text-xs text-slate-400">Em construção (PR5)</div>
         </div>
