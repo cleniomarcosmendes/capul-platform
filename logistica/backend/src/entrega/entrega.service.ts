@@ -1,0 +1,139 @@
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, StatusEntrega } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service.js';
+import { CreateEntregaDto } from './dto.js';
+
+const onlyDigits = (s?: string | null) => (s ?? '').replace(/\D/g, '');
+
+@Injectable()
+export class EntregaService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Cria a entrega. Atômico: incrementa o contador por filial (nº tipo talão),
+   * congela o snapshot do endereço (autoritativo quando vem de um
+   * EnderecoEntrega) e grava os cupons. Status inicial PENDENTE.
+   */
+  async create(dto: CreateEntregaDto, criadoPorId: string) {
+    const snap = await this.resolverSnapshotEndereco(dto);
+
+    const cupons = (dto.cupons ?? []).filter((c) => c.numeroCupom || c.valor != null);
+
+    const entrega = await this.prisma.$transaction(async (tx) => {
+      const contador = await tx.contadorSequencial.upsert({
+        where: { filialId_escopo: { filialId: dto.filialId, escopo: 'ENTREGA' } },
+        create: { filialId: dto.filialId, escopo: 'ENTREGA', ultimoNumero: 1 },
+        update: { ultimoNumero: { increment: 1 } },
+      });
+
+      return tx.entrega.create({
+        data: {
+          numero: contador.ultimoNumero,
+          filialId: dto.filialId,
+          tipoCliente: dto.tipoCliente,
+          matricula: dto.matricula?.trim() || null,
+          clienteLocalId: dto.clienteLocalId || null,
+          destinatarioNome: dto.destinatarioNome.trim(),
+          telefone: dto.telefone ? onlyDigits(dto.telefone) : null,
+          enderecoEntregaId: dto.enderecoEntregaId || null,
+          ...snap,
+          horario: dto.horario?.trim() || null,
+          observacoes: dto.observacoes?.trim() || null,
+          quantidadeVolumes: dto.quantidadeVolumes,
+          status: StatusEntrega.PENDENTE,
+          criadoPorId,
+          cupons: {
+            create: cupons.map((c) => ({
+              numeroCupom: c.numeroCupom?.trim() || null,
+              valor: c.valor != null ? new Prisma.Decimal(c.valor) : null,
+            })),
+          },
+        },
+        include: { cupons: true },
+      });
+    });
+
+    return this.comTotal(entrega);
+  }
+
+  /** Lista por filial + status (default: PENDENTE — a fila de montagem). */
+  async list(params: { filialId?: string; status?: StatusEntrega }) {
+    const entregas = await this.prisma.entrega.findMany({
+      where: {
+        ...(params.filialId ? { filialId: params.filialId } : {}),
+        status: params.status ?? StatusEntrega.PENDENTE,
+      },
+      include: { cupons: true },
+      orderBy: { criadoEm: 'asc' }, // quem comprou primeiro tende a sair primeiro
+      take: 200,
+    });
+    return entregas.map((e) => this.comTotal(e));
+  }
+
+  async findOne(id: string) {
+    const e = await this.prisma.entrega.findUnique({ where: { id }, include: { cupons: true } });
+    if (!e) throw new NotFoundException('Entrega não encontrada.');
+    return this.comTotal(e);
+  }
+
+  /**
+   * Cancelamento LOCAL — só permitido enquanto PENDENTE. Regra do negócio:
+   * nunca se cancela com o veículo na rua (entrega já EM_VIAGEM não cancela aqui).
+   */
+  async cancelar(id: string, motivo: string | undefined, canceladaPorId: string) {
+    const e = await this.prisma.entrega.findUnique({ where: { id }, select: { status: true } });
+    if (!e) throw new NotFoundException('Entrega não encontrada.');
+    if (e.status !== StatusEntrega.PENDENTE) {
+      throw new BadRequestException(
+        `Só é possível cancelar entrega PENDENTE (status atual: ${e.status}). Entrega despachada não se cancela aqui.`,
+      );
+    }
+    const atualizada = await this.prisma.entrega.update({
+      where: { id },
+      data: {
+        status: StatusEntrega.CANCELADA,
+        canceladaEm: new Date(),
+        canceladaPorId,
+        motivoCancelamento: motivo?.trim() || null,
+      },
+      include: { cupons: true },
+    });
+    return this.comTotal(atualizada);
+  }
+
+  // ---------- helpers ----------
+  private async resolverSnapshotEndereco(dto: CreateEntregaDto) {
+    if (dto.enderecoEntregaId) {
+      const end = await this.prisma.enderecoEntrega.findUnique({
+        where: { id: dto.enderecoEntregaId },
+      });
+      if (!end) throw new BadRequestException('enderecoEntregaId inválido.');
+      return {
+        endLogradouro: end.logradouro,
+        endNumero: end.numero,
+        endComplemento: end.complemento,
+        endBairro: end.bairro,
+        endCidade: end.cidade,
+        endCep: end.cep,
+        endReferencia: end.pontoReferencia,
+      };
+    }
+    if (!dto.endLogradouro?.trim()) {
+      throw new BadRequestException('Informe enderecoEntregaId ou os campos de endereço (endLogradouro).');
+    }
+    return {
+      endLogradouro: dto.endLogradouro.trim(),
+      endNumero: dto.endNumero?.trim() || null,
+      endComplemento: dto.endComplemento?.trim() || null,
+      endBairro: dto.endBairro?.trim() || null,
+      endCidade: dto.endCidade?.trim() || null,
+      endCep: dto.endCep ? onlyDigits(dto.endCep) : null,
+      endReferencia: dto.endReferencia?.trim() || null,
+    };
+  }
+
+  private comTotal<T extends { cupons: { valor: Prisma.Decimal | null }[] }>(entrega: T) {
+    const total = entrega.cupons.reduce((acc, c) => acc + (c.valor ? Number(c.valor) : 0), 0);
+    return { ...entrega, totalCupons: total };
+  }
+}

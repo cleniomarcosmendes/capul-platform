@@ -5,11 +5,18 @@ export interface ModuloUsuario {
   codigo: string;
   role: string;
 }
+export interface FilialResumo {
+  id: string;
+  codigo?: string;
+  nome?: string;
+}
 export interface UsuarioLogado {
   id: string;
   nome: string;
   email?: string;
   modulos: ModuloUsuario[];
+  filialAtual?: FilialResumo | null;
+  filiais?: FilialResumo[];
 }
 
 interface AuthContextType {

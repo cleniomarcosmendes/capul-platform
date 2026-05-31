@@ -21,11 +21,14 @@ export function HomePage() {
           <div className="text-xs text-slate-500">Cadastro local e busca unificada</div>
         </Link>
 
-        <div className="rounded-xl border border-dashed border-slate-200 bg-white/60 p-5">
-          <Package className="h-7 w-7 text-slate-300" />
-          <div className="mt-3 font-medium text-slate-400">Entregas</div>
-          <div className="text-xs text-slate-400">Em construção (PR3)</div>
-        </div>
+        <Link
+          to="/entregas/nova"
+          className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+        >
+          <Package className="h-7 w-7 text-sky-600" />
+          <div className="mt-3 font-medium text-slate-800">Nova Entrega</div>
+          <div className="text-xs text-slate-500">Cadastro + fila de pendentes</div>
+        </Link>
 
         <div className="rounded-xl border border-dashed border-slate-200 bg-white/60 p-5">
           <Truck className="h-7 w-7 text-slate-300" />

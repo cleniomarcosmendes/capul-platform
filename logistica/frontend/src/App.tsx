@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Layout } from './layouts/Layout';
 import { HomePage } from './pages/HomePage';
 import { ClientesPage } from './pages/ClientesPage';
+import { EntregaNovaPage } from './pages/EntregaNovaPage';
 
 function Protected() {
   const { loading, logisticaRole } = useAuth();
@@ -21,6 +22,7 @@ function Protected() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/clientes" element={<ClientesPage />} />
+        <Route path="/entregas/nova" element={<EntregaNovaPage />} />
       </Routes>
     </Layout>
   );

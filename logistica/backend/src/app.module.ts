@@ -7,6 +7,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { HealthModule } from './health/health.module.js';
 import { CadastroModule } from './cadastro/cadastro.module.js';
+import { EntregaModule } from './entrega/entrega.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
 
@@ -18,6 +19,7 @@ import { RolesGuard } from './common/guards/roles.guard.js';
     AuthModule,
     HealthModule,
     CadastroModule,
+    EntregaModule,
   ],
   providers: [
     // Ordem: rate-limit → autenticação (JWT) → autorização (roles).
