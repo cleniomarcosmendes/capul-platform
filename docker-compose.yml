@@ -563,6 +563,14 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
+  logistica-frontend:
+    build: ./logistica/frontend
+    container_name: capul-logistica-web
+    depends_on:
+      - logistica-backend
+    restart: unless-stopped
+    logging: *default-logging
+
 volumes:
   postgres_data:
   postgres_rfb_data:
