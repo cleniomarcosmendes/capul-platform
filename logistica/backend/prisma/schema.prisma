@@ -1,0 +1,273 @@
+// ============================================================
+// Módulo Logística (Entregas/Frota) — Plataforma Capul
+// Prisma 6 multi-schema — schema próprio `logistica`.
+// Referência: 004_Fase1a_Schema_PRs.md (v2.1).
+//
+// PR1 (scaffold): apenas o schema `logistica`. Referências a core
+// (usuarios/filiais/departamentos) são gravadas como String (id), SEM
+// relação Prisma — o mirror read-only de core entra na PR2 quando houver
+// consulta/join real. Mantém a migration inicial 100% aditiva e isolada.
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["logistica"]
+}
+
+// ---------- Enums ----------
+enum TipoClienteEntrega {
+  IDENTIFICADO
+  RECORRENTE_LOCAL
+  EVENTUAL
+  @@schema("logistica")
+}
+
+enum StatusEntrega {
+  PENDENTE
+  EM_VIAGEM
+  ENTREGUE
+  NAO_ENTREGUE
+  CANCELADA
+  @@schema("logistica")
+}
+
+enum TipoViagem {
+  ENTREGA
+  FROTA
+  @@schema("logistica")
+}
+
+enum StatusViagem {
+  RASCUNHO
+  EM_CURSO
+  CONCLUIDA
+  CANCELADA
+  @@schema("logistica")
+}
+
+enum SituacaoVeiculo {
+  DISPONIVEL
+  EM_USO
+  EM_MANUTENCAO
+  BAIXADO
+  @@schema("logistica")
+}
+
+enum TipoVeiculo {
+  CARRO
+  UTILITARIO
+  CAMINHAO
+  OUTRO
+  @@schema("logistica")
+}
+
+// ---------- Cliente / Endereço (GLOBAIS, cross-filial) ----------
+model ClienteLocal {
+  id         String            @id @default(uuid())
+  nome       String
+  telefone   String?
+  observacao String?
+  ativo      Boolean           @default(true)
+  criadoEm   DateTime          @default(now()) @map("criado_em")
+  enderecos  EnderecoEntrega[]
+  entregas   Entrega[]
+
+  @@index([telefone])
+  @@index([nome])
+  @@map("cliente_local")
+  @@schema("logistica")
+}
+
+model EnderecoEntrega {
+  id              String        @id @default(uuid())
+  matricula       String?
+  clienteLocalId  String?       @map("cliente_local_id")
+  clienteLocal    ClienteLocal? @relation(fields: [clienteLocalId], references: [id])
+  apelido         String?
+  logradouro      String
+  numero          String?
+  complemento     String?
+  bairro          String?
+  cidade          String?
+  uf              String?
+  cep             String?
+  pontoReferencia String?       @map("ponto_referencia")
+  latitude        Decimal?      @db.Decimal(10, 7)
+  longitude       Decimal?      @db.Decimal(10, 7)
+  ativo           Boolean       @default(true)
+  criadoEm        DateTime      @default(now()) @map("criado_em")
+  entregas        Entrega[]
+
+  @@index([matricula])
+  @@index([clienteLocalId])
+  @@map("endereco_entrega")
+  @@schema("logistica")
+}
+
+// ---------- Frota (cadastro central compartilhado Fase 1 + Fase 2) ----------
+model Veiculo {
+  id                    String          @id @default(uuid())
+  filialId              String          @map("filial_id")
+  placa                 String
+  renavam               String?
+  chassi                String?
+  modelo                String?
+  marca                 String?
+  ano                   Int?
+  cor                   String?
+  tipo                  TipoVeiculo     @default(CARRO)
+  kmAtual               Int             @default(0) @map("km_atual")
+  capacidadeCarga       String?         @map("capacidade_carga")
+  situacao              SituacaoVeiculo @default(DISPONIVEL)
+  departamentoLotacaoId String          @map("departamento_lotacao_id")
+  supervisorId          String          @map("supervisor_id")
+  ativo                 Boolean         @default(true)
+  criadoEm              DateTime        @default(now()) @map("criado_em")
+  viagens               Viagem[]
+  historicoSupervisor   VeiculoSupervisorHistorico[]
+
+  @@unique([filialId, placa])
+  @@index([filialId, situacao])
+  @@index([supervisorId])
+  @@index([departamentoLotacaoId])
+  @@map("veiculo")
+  @@schema("logistica")
+}
+
+model VeiculoSupervisorHistorico {
+  id                   String   @id @default(uuid())
+  veiculoId            String   @map("veiculo_id")
+  veiculo              Veiculo  @relation(fields: [veiculoId], references: [id])
+  supervisorAnteriorId String?  @map("supervisor_anterior_id")
+  supervisorNovoId     String   @map("supervisor_novo_id")
+  alteradoEm           DateTime @default(now()) @map("alterado_em")
+  alteradoPorId        String   @map("alterado_por_id")
+
+  @@index([veiculoId])
+  @@map("veiculo_supervisor_historico")
+  @@schema("logistica")
+}
+
+// ---------- Contador sequencial por filial (nº de entrega e de viagem) ----------
+model ContadorSequencial {
+  filialId     String @map("filial_id")
+  escopo       String
+  ultimoNumero Int    @default(0) @map("ultimo_numero")
+
+  @@id([filialId, escopo])
+  @@map("contador_sequencial")
+  @@schema("logistica")
+}
+
+// ---------- Entrega (pedido de entrega — por filial) ----------
+model Entrega {
+  id                String             @id @default(uuid())
+  numero            Int
+  filialId          String             @map("filial_id")
+  tipoCliente       TipoClienteEntrega @map("tipo_cliente")
+  matricula         String?
+  clienteLocalId    String?            @map("cliente_local_id")
+  clienteLocal      ClienteLocal?      @relation(fields: [clienteLocalId], references: [id])
+  destinatarioNome  String             @map("destinatario_nome")
+  telefone          String?
+  enderecoEntregaId String?            @map("endereco_entrega_id")
+  enderecoEntrega   EnderecoEntrega?   @relation(fields: [enderecoEntregaId], references: [id])
+  endLogradouro     String             @map("end_logradouro")
+  endNumero         String?            @map("end_numero")
+  endComplemento    String?            @map("end_complemento")
+  endBairro         String?            @map("end_bairro")
+  endCidade         String?            @map("end_cidade")
+  endCep            String?            @map("end_cep")
+  endReferencia     String?            @map("end_referencia")
+  horario           String?
+  observacoes       String?
+  quantidadeVolumes Int                @default(1) @map("quantidade_volumes")
+  status            StatusEntrega      @default(PENDENTE)
+  criadoEm          DateTime           @default(now()) @map("criado_em")
+  criadoPorId       String             @map("criado_por_id")
+  canceladaEm       DateTime?          @map("cancelada_em")
+  canceladaPorId    String?            @map("cancelada_por_id")
+  motivoCancelamento String?           @map("motivo_cancelamento")
+  // Referência ao COFRE de comprovante (banco isolado — Fase 1b). A evidência
+  // (baixa/foto/assinatura/hash/gps) NÃO mora aqui; mora no cofre. Cross-DB, sem FK.
+  temComprovante    Boolean            @default(false) @map("tem_comprovante")
+  comprovanteId     String?            @map("comprovante_id")
+  cupons            EntregaCupom[]
+  parada            Parada?
+
+  @@unique([filialId, numero])
+  @@index([filialId, status])
+  @@index([matricula])
+  @@index([criadoEm])
+  @@map("entrega")
+  @@schema("logistica")
+}
+
+model EntregaCupom {
+  id          String   @id @default(uuid())
+  entregaId   String   @map("entrega_id")
+  entrega     Entrega  @relation(fields: [entregaId], references: [id], onDelete: Cascade)
+  numeroCupom String?  @map("numero_cupom")
+  valor       Decimal? @db.Decimal(12, 2)
+
+  @@index([entregaId])
+  @@map("entrega_cupom")
+  @@schema("logistica")
+}
+
+// ---------- Viagem GENERALIZADA (entrega na Fase 1, frota na Fase 2) ----------
+model Viagem {
+  id                        String       @id @default(uuid())
+  numero                    Int
+  filialId                  String       @map("filial_id")
+  tipo                      TipoViagem   @default(ENTREGA)
+  veiculoId                 String       @map("veiculo_id")
+  veiculo                   Veiculo      @relation(fields: [veiculoId], references: [id])
+  motoristaId               String       @map("motorista_id")
+  departamentoSolicitanteId String?      @map("departamento_solicitante_id")
+  kmInicial                 Int?         @map("km_inicial")
+  kmFinal                   Int?         @map("km_final")
+  localSaida                String?      @map("local_saida")
+  dataHoraSaida             DateTime?    @map("data_hora_saida")
+  observacoesSaida          String?      @map("observacoes_saida")
+  dataHoraChegada           DateTime?    @map("data_hora_chegada")
+  observacoesChegada        String?      @map("observacoes_chegada")
+  situacao                  StatusViagem @default(RASCUNHO)
+  criadoEm                  DateTime     @default(now()) @map("criado_em")
+  criadoPorId               String       @map("criado_por_id")
+  paradas                   Parada[]
+
+  @@unique([filialId, numero])
+  @@index([filialId, situacao])
+  @@index([veiculoId])
+  @@index([motoristaId])
+  @@index([tipo])
+  @@map("viagem")
+  @@schema("logistica")
+}
+
+// ---------- Parada — generaliza "entrega na viagem" e "parada livre" ----------
+model Parada {
+  id           String    @id @default(uuid())
+  viagemId     String    @map("viagem_id")
+  viagem       Viagem    @relation(fields: [viagemId], references: [id], onDelete: Cascade)
+  sequencia    Int
+  entregaId    String?   @unique @map("entrega_id")
+  entrega      Entrega?  @relation(fields: [entregaId], references: [id])
+  local        String?
+  latitude     Decimal?  @db.Decimal(10, 7)
+  longitude    Decimal?  @db.Decimal(10, 7)
+  km           Int?
+  dataHora     DateTime? @map("data_hora")
+  observacao   String?
+  registradoEm DateTime  @default(now()) @map("registrado_em")
+
+  @@index([viagemId, sequencia])
+  @@map("parada")
+  @@schema("logistica")
+}

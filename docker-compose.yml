@@ -530,6 +530,39 @@ services:
     logging: *default-logging
     restart: unless-stopped
 
+  # ============================================================
+  # Módulo Logística (Entregas/Frota) — Fase 1a (scaffold).
+  # Schema próprio `logistica` (additivo, isolado). Porta 3003.
+  # ============================================================
+  logistica-migrate:
+    build: ./logistica/backend
+    container_name: capul-logistica-migrate
+    command: ["sh", "-c", "npx prisma migrate deploy"]
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public&connection_limit=10
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    logging: *default-logging
+
+  logistica-backend:
+    build: ./logistica/backend
+    container_name: capul-logistica-api
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public&connection_limit=10
+      JWT_SECRET: ${JWT_SECRET}
+      NODE_ENV: production
+      PORT: 3003
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://localhost}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      logistica-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    logging: *default-logging
+
 volumes:
   postgres_data:
   postgres_rfb_data:
