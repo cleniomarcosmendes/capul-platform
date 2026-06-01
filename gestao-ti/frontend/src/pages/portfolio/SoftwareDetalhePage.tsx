@@ -554,8 +554,6 @@ function TabFiliais({ software, isAdmin, onReload }: { software: Software; isAdm
 
 // ─── Tab Licenças ─────────────────────────────────────────────
 
-const MODELOS_POR_USUARIO: ModeloLicenca[] = ['POR_USUARIO', 'SUBSCRICAO', 'SAAS'];
-
 function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAdmin: boolean; onReload: () => void }) {
   const [licencas, setLicencas] = useState<SoftwareLicenca[]>([]);
   const [loadingLic, setLoadingLic] = useState(true);
@@ -660,8 +658,13 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
     return diff > 0 && diff < 30 * 24 * 60 * 60 * 1000;
   }
 
-  function isModeloPorUsuario(lic: SoftwareLicenca) {
-    return lic.modeloLicenca && MODELOS_POR_USUARIO.includes(lic.modeloLicenca);
+  // 01/06 — vínculo de usuário liberado p/ TODOS os modelos de licença.
+  // Antes restrito a POR_USUARIO/SUBSCRICAO/SAAS, o que escondia o lançamento
+  // de usuário em licenças PERPÉTUA/OEM (ex.: Office com chave própria — 1
+  // usuário por licença). O limite passa a ser a `quantidade` (qtd=1 → 1
+  // usuário; sem qtd → ilimitado), aplicado no botão Atribuir.
+  function podeGerenciarUsuarios(_lic: SoftwareLicenca) {
+    return true;
   }
 
   async function toggleUsuarios(licId: string) {
@@ -847,7 +850,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                       </td>
                       <td className="px-4 py-3 text-slate-600">{lic.quantidade ?? '-'}</td>
                       <td className="px-4 py-3">
-                        {isModeloPorUsuario(lic) ? (
+                        {podeGerenciarUsuarios(lic) ? (
                           <button
                             onClick={() => toggleUsuarios(lic.id)}
                             className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium transition-colors ${
@@ -916,7 +919,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                       )}
                     </tr>
                     {/* Painel expandivel de usuarios */}
-                    {expandedLicId === lic.id && isModeloPorUsuario(lic) && (
+                    {expandedLicId === lic.id && podeGerenciarUsuarios(lic) && (
                       <tr>
                         <td colSpan={isAdmin ? 8 : 7} className="px-4 py-3 bg-slate-50">
                           <div className="border border-slate-200 rounded-lg bg-white p-4">

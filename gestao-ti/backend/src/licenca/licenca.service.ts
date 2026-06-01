@@ -7,15 +7,13 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateLicencaDto } from './dto/create-licenca.dto.js';
 import { UpdateLicencaDto } from './dto/update-licenca.dto.js';
 import { CreateCategoriaLicencaDto, UpdateCategoriaLicencaDto } from './dto/create-categoria-licenca.dto.js';
-import { StatusLicenca, ModeloLicenca } from '@prisma/client';
+import { StatusLicenca } from '@prisma/client';
 import { isGestor } from '../common/constants/roles.constant.js';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
 import { resolveDepartamentoLancamento } from '../common/helpers/resolve-departamento-lancamento.helper.js';
 import { applyDepartamentoFilterCadastroOpStaff, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
-
-const MODELOS_POR_USUARIO: ModeloLicenca[] = ['POR_USUARIO', 'SUBSCRICAO', 'SAAS'];
 
 const licencaInclude = {
   software: { select: { id: true, nome: true, fabricante: true, tipo: true } },
@@ -269,9 +267,10 @@ export class LicencaService {
       throw new BadRequestException('Nao e possivel atribuir usuarios a uma licenca inativa ou vencida');
     }
 
-    if (licenca.modeloLicenca && !MODELOS_POR_USUARIO.includes(licenca.modeloLicenca)) {
-      throw new BadRequestException('Modelo de licenca nao permite atribuicao por usuario');
-    }
+    // 01/06 — vínculo liberado p/ qualquer modelo (antes só POR_USUARIO/
+    // SUBSCRICAO/SAAS). Licença PERPÉTUA/OEM também registra o usuário/estação
+    // que a utiliza (1 usuário por licença qtd=1). O limite é a `quantidade`,
+    // validado logo abaixo.
 
     const usuario = await this.prisma.usuario.findUnique({ where: { id: usuarioId } });
     if (!usuario) throw new BadRequestException('Usuario nao encontrado');

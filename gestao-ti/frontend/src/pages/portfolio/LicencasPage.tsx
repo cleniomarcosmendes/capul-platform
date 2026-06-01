@@ -5,12 +5,12 @@ import { licencaService } from '../../services/licenca.service';
 import { softwareService } from '../../services/software.service';
 import { contratoService } from '../../services/contrato.service';
 import { coreService } from '../../services/core.service';
-import { KeyRound, AlertTriangle, Download, Plus, X, Search } from 'lucide-react';
+import { KeyRound, AlertTriangle, Download, Plus, X, Search, Users, UserPlus, UserMinus } from 'lucide-react';
 import { DepartamentoField } from '../../components/DepartamentoField';
 import { SearchSelect } from '../../components/SearchSelect';
 import type { SearchSelectOption } from '../../components/SearchSelect';
 import { exportService } from '../../services/export.service';
-import type { SoftwareLicenca, Software, StatusLicenca, CategoriaLicenca, FornecedorConfig, Departamento } from '../../types';
+import type { SoftwareLicenca, Software, StatusLicenca, CategoriaLicenca, FornecedorConfig, Departamento, UsuarioCore, LicencaUsuario } from '../../types';
 
 import { formatDateBR } from '../../utils/date';
 import { useToast } from '../../components/Toast';
@@ -66,6 +66,16 @@ export function LicencasPage() {
   const [filtroCategoria, setFiltroCategoria] = useState('');
   // S11 — filtro por depto de alocação (não-OVERSIGHT já restringido no backend).
   const [filtroDepartamento, setFiltroDepartamento] = useState('');
+
+  // 01/06 — gerenciamento de usuários da licença (vínculo) direto nesta tela.
+  // Antes só existia na aba Licenças do detalhe do Software; aqui cobre também
+  // licenças avulsas (sem software). Endpoints/serviço já existiam.
+  const [expandedLicId, setExpandedLicId] = useState<string | null>(null);
+  const [licencaUsuarios, setLicencaUsuarios] = useState<LicencaUsuario[]>([]);
+  const [allUsuarios, setAllUsuarios] = useState<UsuarioCore[]>([]);
+  const [selectedUsuarioId, setSelectedUsuarioId] = useState('');
+  const [loadingUsuarios, setLoadingUsuarios] = useState(false);
+  const [savingUsuario, setSavingUsuario] = useState(false);
 
   // Form fields
   const [formTipo, setFormTipo] = useState<'software' | 'avulsa'>('avulsa');
@@ -228,6 +238,54 @@ export function LicencasPage() {
   async function handleInativar(licId: string) {
     await licencaService.inativar(licId);
     carregarLicencas();
+  }
+
+  // ─── Usuários da licença (vínculo) ───────────────────────────
+  async function toggleUsuarios(licId: string) {
+    if (expandedLicId === licId) {
+      setExpandedLicId(null);
+      return;
+    }
+    setExpandedLicId(licId);
+    setLoadingUsuarios(true);
+    setSelectedUsuarioId('');
+    try {
+      const [usuarios, todos] = await Promise.all([
+        licencaService.listarUsuarios(licId),
+        allUsuarios.length ? Promise.resolve(allUsuarios) : coreService.listarUsuarios(),
+      ]);
+      setLicencaUsuarios(usuarios);
+      if (!allUsuarios.length) setAllUsuarios(todos);
+    } catch {
+      /* erro silencioso — painel fica vazio */
+    }
+    setLoadingUsuarios(false);
+  }
+
+  async function handleAtribuir(licId: string) {
+    if (!selectedUsuarioId) return;
+    setSavingUsuario(true);
+    try {
+      await licencaService.atribuirUsuario(licId, selectedUsuarioId);
+      setLicencaUsuarios(await licencaService.listarUsuarios(licId));
+      setSelectedUsuarioId('');
+      carregarLicencas();
+    } catch (err) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast('error', msg || 'Erro ao atribuir usuario');
+    }
+    setSavingUsuario(false);
+  }
+
+  async function handleDesatribuir(licId: string, usuarioId: string) {
+    try {
+      await licencaService.desatribuirUsuario(licId, usuarioId);
+      setLicencaUsuarios(await licencaService.listarUsuarios(licId));
+      carregarLicencas();
+    } catch (err) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast('error', msg || 'Erro ao remover usuario');
+    }
   }
 
   function resetForm() {
@@ -571,10 +629,19 @@ export function LicencasPage() {
                         {lic.modeloLicenca ? modeloLabel[lic.modeloLicenca] || lic.modeloLicenca : '-'}
                       </td>
                       <td className="px-4 py-3 text-slate-600">{lic.quantidade ?? '-'}</td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {lic.modeloLicenca && ['POR_USUARIO', 'SUBSCRICAO', 'SAAS'].includes(lic.modeloLicenca)
-                          ? <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">{lic._count?.usuarios ?? 0}/{lic.quantidade ?? '\u221E'}</span>
-                          : '-'}
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => toggleUsuarios(lic.id)}
+                          title="Gerenciar usu\u00E1rios vinculados a esta licen\u00E7a"
+                          className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium transition-colors ${
+                            expandedLicId === lic.id
+                              ? 'bg-capul-100 text-capul-700'
+                              : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                          }`}
+                        >
+                          <Users className="w-3 h-3" />
+                          {lic._count?.usuarios ?? 0}/{lic.quantidade ?? '\u221E'}
+                        </button>
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         {lic.valorTotal != null
@@ -693,6 +760,106 @@ export function LicencasPage() {
                             <button onClick={handleSaveEdit} disabled={saving} className="bg-capul-600 text-white px-4 py-1.5 rounded-lg text-xs hover:bg-capul-700 disabled:opacity-50">
                               {saving ? 'Salvando...' : 'Salvar'}
                             </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {/* Painel expansível de usuários vinculados */}
+                    {expandedLicId === lic.id && (
+                      <tr>
+                        <td colSpan={isAdmin ? 12 : 11} className="px-4 py-3 bg-slate-50">
+                          <div className="border border-slate-200 rounded-lg bg-white p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <h5 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                <Users className="w-4 h-4 text-capul-600" />
+                                Usuarios Atribuidos
+                                {lic.quantidade != null && (
+                                  <span className="text-xs font-normal text-slate-500">
+                                    ({licencaUsuarios.length}/{lic.quantidade})
+                                  </span>
+                                )}
+                              </h5>
+                              {lic.quantidade != null && (
+                                <div className="w-32 bg-slate-200 rounded-full h-2">
+                                  <div
+                                    className={`h-2 rounded-full transition-all ${
+                                      licencaUsuarios.length >= lic.quantidade ? 'bg-red-500' : 'bg-capul-500'
+                                    }`}
+                                    style={{ width: `${Math.min((licencaUsuarios.length / lic.quantidade) * 100, 100)}%` }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+
+                            {loadingUsuarios ? (
+                              <p className="text-sm text-slate-400">Carregando...</p>
+                            ) : (
+                              <>
+                                {isAdmin && lic.status === 'ATIVA' && (
+                                  <div className="flex gap-2 mb-3">
+                                    <select
+                                      value={selectedUsuarioId}
+                                      onChange={(e) => setSelectedUsuarioId(e.target.value)}
+                                      className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+                                    >
+                                      <option value="">Selecione um usuario...</option>
+                                      {allUsuarios
+                                        .filter((u) => !licencaUsuarios.some((lu) => lu.usuarioId === u.id))
+                                        .map((u) => (
+                                          <option key={u.id} value={u.id}>
+                                            {u.nome} ({u.username}){u.email ? ` - ${u.email}` : ''}
+                                          </option>
+                                        ))}
+                                    </select>
+                                    <button
+                                      onClick={() => handleAtribuir(lic.id)}
+                                      disabled={!selectedUsuarioId || savingUsuario || (lic.quantidade != null && licencaUsuarios.length >= lic.quantidade)}
+                                      className="flex items-center gap-1 bg-capul-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50"
+                                    >
+                                      <UserPlus className="w-3.5 h-3.5" />
+                                      {savingUsuario ? 'Atribuindo...' : 'Atribuir'}
+                                    </button>
+                                  </div>
+                                )}
+
+                                {licencaUsuarios.length === 0 ? (
+                                  <p className="text-sm text-slate-400 text-center py-2">Nenhum usuario atribuido</p>
+                                ) : (
+                                  <div className="space-y-1">
+                                    {licencaUsuarios.map((lu) => (
+                                      <div key={lu.id} className="flex items-center justify-between py-1.5 px-3 rounded-lg hover:bg-slate-50">
+                                        <div className="flex items-center gap-3">
+                                          <div className="w-7 h-7 rounded-full bg-capul-100 text-capul-700 flex items-center justify-center text-xs font-semibold">
+                                            {lu.usuario.nome.charAt(0).toUpperCase()}
+                                          </div>
+                                          <div>
+                                            <span className="text-sm font-medium text-slate-800">{lu.usuario.nome}</span>
+                                            <span className="text-xs text-slate-400 ml-2">@{lu.usuario.username}</span>
+                                            {lu.usuario.email && (
+                                              <span className="text-xs text-slate-400 ml-2">{lu.usuario.email}</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                          <span className="text-xs text-slate-400">
+                                            {new Date(lu.createdAt).toLocaleDateString('pt-BR')}
+                                          </span>
+                                          {isAdmin && (
+                                            <button
+                                              onClick={() => handleDesatribuir(lic.id, lu.usuarioId)}
+                                              className="text-red-400 hover:text-red-600"
+                                              title="Remover usuario"
+                                            >
+                                              <UserMinus className="w-4 h-4" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
