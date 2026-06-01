@@ -68,3 +68,24 @@ export function getDeptosOndeStaff(user: JwtPayload | null | undefined): string[
     .filter((d) => ROLES_TI.includes(d.role as typeof ROLES_TI[number]))
     .map((d) => d.id);
 }
+
+/**
+ * Workspace (fix deploy 01/06) — retorna a role do user NO departamento
+ * informado, lida de `modulos[WORKSPACE].departamentos[]`. Retorna `undefined`
+ * se o user não participa daquele depto (ou token antigo sem departamentos[]).
+ *
+ * Diferente da `modulo.role` denormalizada (= role do 1º depto), que p/ users
+ * multi-perfil/multi-workspace NÃO reflete o papel no depto-alvo da operação.
+ *
+ * Uso: decisões que dependem do papel do user NO depto que ATENDE a operação.
+ * Ex: auto-assumir chamado só se o solicitante for staff/técnico do depto-dono
+ * (um user do Setor Fiscal abrindo chamado PARA a T.I. não auto-assume).
+ */
+export function getRoleNoDepto(
+  user: JwtPayload | null | undefined,
+  departamentoId: string | null | undefined,
+): string | undefined {
+  if (!user || !departamentoId) return undefined;
+  const workspace = user.modulos?.find((m) => m.codigo === 'WORKSPACE');
+  return workspace?.departamentos?.find((d) => d.id === departamentoId)?.role;
+}

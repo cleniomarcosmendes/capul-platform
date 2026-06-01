@@ -6,6 +6,8 @@ import { ChamadoTempoService } from './services/chamado-tempo.service';
 import { ChamadoCoreService } from './services/chamado-core.service';
 import { ChamadoColaboradorService } from './services/chamado-colaborador.service';
 import { ChamadoAnexoService } from './services/chamado-anexo.service';
+import { ChamadoAgrupamentoService } from './services/chamado-agrupamento.service';
+import { EmailEnvolvidosService } from '../email/email-envolvidos.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificacaoService } from '../notificacao/notificacao.service';
 import { createPrismaMock } from '../common/testing/prisma-mock';
@@ -22,6 +24,7 @@ function baseChamado(overrides = {}) {
     tecnicoId: null,
     equipeAtualId: 'eq-1',
     filialId: 'filial-1',
+    colaboradores: [],
     ...overrides,
   };
 }
@@ -37,6 +40,14 @@ describe('ChamadoService', () => {
       criarParaUsuario: jest.fn().mockResolvedValue({}),
       criarParaUsuarios: jest.fn().mockResolvedValue(undefined),
     };
+    const agrupamentoService = {
+      propagarEventoNoFilho: jest.fn().mockResolvedValue(undefined),
+      propagarComentario: jest.fn().mockResolvedValue(undefined),
+      cascataResolverFechar: jest.fn().mockResolvedValue(undefined),
+    };
+    const emailEnvolvidosService = {
+      enviar: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -48,6 +59,8 @@ describe('ChamadoService', () => {
         ChamadoService,
         { provide: PrismaService, useValue: prisma },
         { provide: NotificacaoService, useValue: notificacaoService },
+        { provide: ChamadoAgrupamentoService, useValue: agrupamentoService },
+        { provide: EmailEnvolvidosService, useValue: emailEnvolvidosService },
       ],
     }).compile();
 
@@ -103,6 +116,42 @@ describe('ChamadoService', () => {
         ForbiddenException,
       );
     });
+
+    it('auto-assume (EM_ATENDIMENTO) quando o solicitante e membro ATIVO da equipe escolhida', async () => {
+      prisma.equipe.findUnique.mockResolvedValue({ id: 'eq-1', aceitaChamadoExterno: true, departamentoId: 'dep-ti' });
+      prisma.slaDefinicao.findUnique.mockResolvedValue(null);
+      prisma.membroEquipe.findUnique.mockResolvedValue({ status: 'ATIVO' });
+      prisma.chamado.create.mockResolvedValue(baseChamado());
+      prisma.historicoChamado.create.mockResolvedValue({});
+
+      const dto = { titulo: 'Teste', descricao: 'Desc', equipeAtualId: 'eq-1' };
+      await service.create(dto as any, mockUser as any, 'SUPORTE');
+
+      expect(prisma.chamado.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'EM_ATENDIMENTO', tecnicoId: 'user-1' }),
+        }),
+      );
+    });
+
+    it('NAO auto-assume (ABERTO) quando o solicitante NAO e membro da equipe escolhida (outro workspace/equipe)', async () => {
+      // Ex: usuario do Setor Fiscal (ou de outra equipe da T.I.) abrindo p/ esta equipe.
+      prisma.equipe.findUnique.mockResolvedValue({ id: 'eq-ti', aceitaChamadoExterno: true, departamentoId: 'dep-ti' });
+      prisma.slaDefinicao.findUnique.mockResolvedValue(null);
+      prisma.membroEquipe.findUnique.mockResolvedValue(null); // nao e membro
+      prisma.chamado.create.mockResolvedValue(baseChamado());
+      prisma.historicoChamado.create.mockResolvedValue({});
+
+      const dto = { titulo: 'Teste', descricao: 'Desc', equipeAtualId: 'eq-ti' };
+      // Mesmo com role denormalizada "staff", sem pertencer a equipe nao assume.
+      await service.create(dto as any, mockUser as any, 'SUPORTE');
+
+      expect(prisma.chamado.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'ABERTO', tecnicoId: undefined }),
+        }),
+      );
+    });
   });
 
   describe('assumir', () => {
@@ -153,7 +202,7 @@ describe('ChamadoService', () => {
 
   describe('transferirTecnico', () => {
     it('transfere para tecnico com sucesso', async () => {
-      const chamado = baseChamado({ status: 'EM_ATENDIMENTO' });
+      const chamado = baseChamado({ status: 'EM_ATENDIMENTO', tecnicoId: 'tec-1' });
       prisma.chamado.findUnique.mockResolvedValue(chamado);
       prisma.usuario.findUnique.mockResolvedValue({ id: 'tec-2', nome: 'Tecnico 2' });
       prisma.chamado.update.mockResolvedValue({ ...chamado, tecnicoId: 'tec-2' });
@@ -175,8 +224,9 @@ describe('ChamadoService', () => {
 
   describe('resolver', () => {
     it('resolve chamado com sucesso', async () => {
-      const chamado = baseChamado({ status: 'EM_ATENDIMENTO' });
+      const chamado = baseChamado({ status: 'EM_ATENDIMENTO', tecnicoId: 'user-1' });
       prisma.chamado.findUnique.mockResolvedValue(chamado);
+      prisma.registroTempoChamado.count.mockResolvedValue(1);
       prisma.chamado.update.mockResolvedValue({ ...chamado, status: 'RESOLVIDO', dataResolucao: new Date() });
       prisma.historicoChamado.create.mockResolvedValue({});
 
@@ -210,20 +260,37 @@ describe('ChamadoService', () => {
   });
 
   describe('reabrir', () => {
-    it('reabre chamado resolvido com sucesso', async () => {
+    it('reabre como REABERTO (sem auto-assumir) quem nao e membro da equipe', async () => {
       const chamado = baseChamado({ status: 'RESOLVIDO', dataResolucao: new Date() });
       prisma.chamado.findUnique.mockResolvedValue(chamado);
-      prisma.chamado.update.mockResolvedValue({ ...chamado, status: 'ABERTO', dataResolucao: null, dataFechamento: null });
+      // Sem membro de equipe (membroEquipe.findUnique => null por default no mock)
+      prisma.chamado.update.mockResolvedValue({ ...chamado, status: 'REABERTO', tecnicoId: null });
       prisma.historicoChamado.create.mockResolvedValue({});
 
-      const result = await service.reabrir('ch-1', {} as any, mockUser as any, 'ADMIN');
+      await service.reabrir('ch-1', {} as any, mockUser as any, 'ADMIN');
 
       expect(prisma.chamado.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: { status: 'ABERTO', dataResolucao: null, dataFechamento: null },
+          data: { status: 'REABERTO', tecnicoId: null, dataResolucao: null, dataFechamento: null },
         }),
       );
-      expect(result.status).toBe('ABERTO');
+    });
+
+    it('auto-assume (EM_ATENDIMENTO) quem e membro ATIVO da equipe que atende', async () => {
+      // Tecnico membro da equipe que abriu o chamado p/ a propria equipe reabre → reassume.
+      const chamado = baseChamado({ status: 'RESOLVIDO', dataResolucao: new Date(), solicitanteId: 'user-1' });
+      prisma.chamado.findUnique.mockResolvedValue(chamado);
+      prisma.membroEquipe.findUnique.mockResolvedValue({ status: 'ATIVO' });
+      prisma.chamado.update.mockResolvedValue({ ...chamado, status: 'EM_ATENDIMENTO', tecnicoId: 'user-1' });
+      prisma.historicoChamado.create.mockResolvedValue({});
+
+      await service.reabrir('ch-1', {} as any, mockUser as any, 'SUPORTE');
+
+      expect(prisma.chamado.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { status: 'EM_ATENDIMENTO', tecnicoId: 'user-1', dataResolucao: null, dataFechamento: null },
+        }),
+      );
     });
   });
 

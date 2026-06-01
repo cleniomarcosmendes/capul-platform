@@ -19,7 +19,7 @@ import { ChamadoHelpersService } from './chamado-helpers.service.js';
 import { ChamadoAgrupamentoService } from './chamado-agrupamento.service.js';
 import { ChamadoTempoService } from './chamado-tempo.service.js';
 import { chamadoInclude } from './chamado.constants.js';
-import { isGestor, isTI, hasStaffPerfilEmTI, getDeptosOndeStaff } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI, hasStaffPerfilEmTI, getDeptosOndeStaff, getRoleNoDepto } from '../../common/constants/roles.constant.js';
 import { Prisma, StatusChamado, Visibilidade } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -665,10 +665,27 @@ export class ChamadoCoreService {
     // ignorado aqui — segue como info visual no form mas não define dono.
     const departamentoId = equipe.departamentoId ?? undefined;
 
-    // Se tecnico/gestor/admin, auto-assumir o chamado
-    // USUARIO_CHAVE e TERCEIRIZADO nao auto-assumem (mesmo perfil que usuario final)
+    // Auto-assumir o chamado só quando o solicitante é membro ATIVO da própria
+    // EQUIPE escolhida na abertura (equipeAtualId). USUARIO_CHAVE e TERCEIRIZADO
+    // nunca auto-assumem (não são membros de equipe; guard explícito como reforço).
+    //
+    // Workspace (fix deploy 01/06) — antes usava a `role` denormalizada do JWT,
+    // que p/ users multi-workspace reflete a role no PRIMEIRO depto. Resultado:
+    // um user do Setor Fiscal abrindo chamado PARA a T.I. nascia EM_ATENDIMENTO
+    // assumido por ele. Refino (mesma sessão): mesmo dentro da T.I. há várias
+    // equipes — um técnico de uma equipe abrindo chamado PARA OUTRA equipe não
+    // deve auto-assumir. O sinal preciso é o pertencimento à equipe-alvo (vem do
+    // banco, independe da role denormalizada): se ele não é membro da equipe
+    // selecionada, o chamado nasce ABERTO pra um membro real daquela equipe pegar.
     const rolesNaoAssumem = ['USUARIO_FINAL', 'USUARIO_CHAVE', 'TERCEIRIZADO'];
-    const autoAssumir = !rolesNaoAssumem.includes(role);
+    const membroDaEquipe = await this.prisma.membroEquipe.findUnique({
+      where: { usuarioId_equipeId: { usuarioId: user.sub, equipeId: dto.equipeAtualId } },
+      select: { status: true },
+    });
+    // Role do user no depto-dono (fallback p/ role principal em token antigo).
+    const roleNoDeptoDono = getRoleNoDepto(user, departamentoId) ?? role;
+    const autoAssumir =
+      membroDaEquipe?.status === 'ATIVO' && !rolesNaoAssumem.includes(roleNoDeptoDono);
 
     const chamado = await this.prisma.chamado.create({
       data: {
@@ -1445,10 +1462,18 @@ export class ChamadoCoreService {
       throw new BadRequestException('Apenas chamados resolvidos ou fechados podem ser reabertos');
     }
 
-    // Se quem reabre e um tecnico de TI, ele automaticamente assume o chamado
-    // USUARIO_CHAVE e TERCEIRIZADO nao auto-assumem
+    // Se quem reabre é membro ATIVO da EQUIPE que atende o chamado
+    // (chamado.equipeAtualId), assume automaticamente. Espelha o fix de
+    // `create()` — USUARIO_CHAVE/TERCEIRIZADO e qualquer um de fora da equipe
+    // (outro workspace OU outra equipe da T.I.) reabrem sem auto-assumir.
     const rolesNaoAssumem = ['USUARIO_FINAL', 'USUARIO_CHAVE', 'TERCEIRIZADO'];
-    const isTecnicoTI = !rolesNaoAssumem.includes(role);
+    const membroDaEquipe = await this.prisma.membroEquipe.findUnique({
+      where: { usuarioId_equipeId: { usuarioId: user.sub, equipeId: chamado.equipeAtualId } },
+      select: { status: true },
+    });
+    const roleNoDeptoDono = getRoleNoDepto(user, chamado.departamentoId) ?? role;
+    const isTecnicoTI =
+      membroDaEquipe?.status === 'ATIVO' && !rolesNaoAssumem.includes(roleNoDeptoDono);
     const novoTecnicoId = isTecnicoTI ? user.sub : null;
     const novoStatus = isTecnicoTI ? 'EM_ATENDIMENTO' : 'REABERTO';
 
