@@ -476,9 +476,32 @@ export class CadastroService {
       const isCpf = cnpjDigits.length === 11;
       const tipoDoc = isCpf ? 'CPF' : 'CNPJ';
       const ufsTexto = ufsParaConsultar.join(', ');
-      const dica = isCpf
-        ? ' O cadastro de contribuintes (CCC/Sintegra) contém apenas contribuintes de ICMS (empresas e produtores rurais). CPFs de pessoas físicas comuns geralmente não constam.'
-        : '';
+      // Mensagem ciente da CAUSA — não mascarar o motivo real (incidente 01/06:
+      // integração Protheus `cadastroFiscal` em HOMOLOGAÇÃO → sem vínculo → o
+      // sistema só consultou a UF digitada, que estava vazia, e o "não
+      // encontrado" genérico não dava pista de que faltava inferir a UF real).
+      let dica: string;
+      if (vinculos.length === 0) {
+        if (protheusFalhou) {
+          dica =
+            ' O serviço Protheus não respondeu, então o sistema não conseguiu inferir outras UFs e' +
+            ` consultou apenas a(s) UF(s) informada(s) (${ufsTexto}). Verifique a integração Protheus` +
+            ' ou informe outra UF.';
+        } else {
+          dica =
+            ' Nenhum vínculo Protheus foi encontrado para este documento, então o sistema consultou' +
+            ` apenas a(s) UF(s) informada(s) (${ufsTexto}). Se o contribuinte tem inscrição em outra` +
+            ' UF, informe a UF correta. Se o cadastro existe no ERP, confirme se a integração Protheus' +
+            ' "cadastroFiscal" (Configurador → Integrações API) está apontando para o ambiente correto' +
+            ' (PRODUÇÃO).';
+        }
+      } else {
+        const ufsProtheusTexto = ufsDoProtheus.join(', ') || '—';
+        dica =
+          ` Foram encontrados ${vinculos.length} vínculo(s) Protheus (UF(s): ${ufsProtheusTexto}), mas o` +
+          ' SEFAZ não retornou inscrição estadual ativa na(s) UF(s) consultada(s).' +
+          (isCpf ? ' O CCC/Sintegra lista apenas contribuintes de ICMS (empresas e produtores rurais).' : '');
+      }
       throw new NotFoundException(
         `${tipoDoc} ${cnpjDigits} não encontrado no cadastro de contribuintes da SEFAZ (UF: ${ufsTexto}).${dica}`,
       );

@@ -1685,6 +1685,13 @@ function ErrorDisplay({
           </div>
         </div>
         <div className="px-6 py-5 space-y-4">
+          {/* Motivo preciso vindo do backend (inclui UF(s) consultada(s) e a
+              situação do vínculo Protheus — ex.: integração em ambiente errado). */}
+          {error && (
+            <div className="rounded-md bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-700">
+              {error}
+            </div>
+          )}
           <div>
             <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">O que isso significa?</h4>
             {isCpf ? (
