@@ -96,15 +96,24 @@ export class LimiteDiarioService {
 
   async getStatus() {
     const cfg = await this.getOrCreate();
+    // Staleness: se o `dataContador` não é hoje (BRT), o contador é de um dia
+    // anterior e ainda não foi zerado (cron 00:05 não rodou — ex.: container
+    // desligado no horário, ou linha veio de restore de backup com consumo de
+    // outro dia). Reportar 0 p/ "hoje" — espelha o reset inline do
+    // checkAndIncrement(). Sem isso o dashboard exibe consumo obsoleto como se
+    // fosse de hoje (incidente DEV 01/06: 851 de 29/05 vindo de restore PROD).
+    const ehHoje = this.toYmd(cfg.dataContador) === this.hoje();
+    const contadorHoje = ehHoje ? cfg.contadorHoje : 0;
+    const pausadoAutomatico = ehHoje ? cfg.pausadoAutomatico : false;
     return {
-      contadorHoje: cfg.contadorHoje,
+      contadorHoje,
       limiteDiario: cfg.limiteDiario,
       alertaAmarelo: cfg.alertaAmarelo,
       alertaVermelho: cfg.alertaVermelho,
       dataContador: cfg.dataContador,
-      pausadoAutomatico: cfg.pausadoAutomatico,
-      pausadoEm: cfg.pausadoEm,
-      percentualConsumido: cfg.limiteDiario > 0 ? (cfg.contadorHoje / cfg.limiteDiario) : 0,
+      pausadoAutomatico,
+      pausadoEm: ehHoje ? cfg.pausadoEm : null,
+      percentualConsumido: cfg.limiteDiario > 0 ? (contadorHoje / cfg.limiteDiario) : 0,
     };
   }
 
