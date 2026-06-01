@@ -131,6 +131,7 @@ export class CteDocumentoService {
         chave: meta.chave,
         modelo: meta.modelo,
         dhEmi: meta.dhEmi,
+        emitenteRazaoSocial: meta.emitenteRazaoSocial,
         xmlSha256: p.xmlSha256,
         xml: p.xml,
         xmlBytes: Buffer.byteLength(p.xml, 'utf8'),
@@ -162,14 +163,20 @@ export class CteDocumentoService {
   private extrairMetadadosDocumento(
     xml: string,
     schema: SchemaCte,
-  ): { chave: string | null; modelo: number | null; dhEmi: Date | null; erro: string | null } {
+  ): {
+    chave: string | null;
+    modelo: number | null;
+    dhEmi: Date | null;
+    emitenteRazaoSocial: string | null;
+    erro: string | null;
+  } {
     try {
       const parsed = this.parser.parse(xml);
 
       if (schema === 'procCTe' || schema === 'procCTeSimp') {
         const infCte = parsed?.cteProc?.CTe?.infCte ?? parsed?.CTe?.infCte;
         if (!infCte) {
-          return { chave: null, modelo: null, dhEmi: null, erro: `Estrutura ${schema} inesperada` };
+          return { chave: null, modelo: null, dhEmi: null, emitenteRazaoSocial: null, erro: `Estrutura ${schema} inesperada` };
         }
         const idAttr = typeof infCte['@_Id'] === 'string' ? infCte['@_Id'] : '';
         const chave = idAttr.startsWith('CTe') && idAttr.length === 47 ? idAttr.substring(3) : null;
@@ -178,26 +185,37 @@ export class CteDocumentoService {
           chave,
           modelo,
           dhEmi: this.parseDateSafe(infCte.ide?.dhEmi),
+          emitenteRazaoSocial: this.normalizarRazaoSocial(infCte.emit?.xNome),
           erro: null,
         };
       }
 
       if (schema === 'resCTe') {
         // resCTe: <resCTe><chCTe>44</chCTe><CNPJ>...</CNPJ><dhEmi>...</dhEmi>...
+        // Resumo não traz <emit><xNome> — emitenteRazaoSocial fica NULL.
         const r = parsed?.resCTe;
-        if (!r) return { chave: null, modelo: null, dhEmi: null, erro: 'Estrutura resCTe inesperada' };
+        if (!r) return { chave: null, modelo: null, dhEmi: null, emitenteRazaoSocial: null, erro: 'Estrutura resCTe inesperada' };
         return {
           chave: typeof r.chCTe === 'string' ? r.chCTe : null,
           modelo: 57,
           dhEmi: this.parseDateSafe(r.dhEmi),
+          emitenteRazaoSocial: null,
           erro: null,
         };
       }
 
-      return { chave: null, modelo: null, dhEmi: null, erro: 'Schema desconhecido — XML preservado' };
+      return { chave: null, modelo: null, dhEmi: null, emitenteRazaoSocial: null, erro: 'Schema desconhecido — XML preservado' };
     } catch (err) {
-      return { chave: null, modelo: null, dhEmi: null, erro: (err as Error).message };
+      return { chave: null, modelo: null, dhEmi: null, emitenteRazaoSocial: null, erro: (err as Error).message };
     }
+  }
+
+  /** Normaliza o <xNome> do emitente p/ a coluna VARCHAR(120): string trim,
+   *  vazio→null, truncado a 120 chars (xNome do schema CT-e vai até 60). */
+  private normalizarRazaoSocial(xNome: unknown): string | null {
+    if (xNome == null) return null;
+    const s = String(xNome).trim();
+    return s.length === 0 ? null : s.slice(0, 120);
   }
 
   // ============================================================
@@ -436,6 +454,13 @@ export class CteDocumentoService {
      * por transportadora sem abrir cada um.
      */
     cnpjEmitente?: string;
+    /**
+     * Razão social do emitente (=transportadora), busca parcial. Pedido Fiscal
+     * 01/06: triar CT-es digitando parte do nome da transportadora. Coluna
+     * dedicada `emitenteRazaoSocial` (extraída do <emit><xNome> na ingestão +
+     * backfill) com índice GIN pg_trgm acelerando ILIKE. Case-insensitive.
+     */
+    razaoSocialEmitente?: string;
     protheusStatus?: string;
     /** Filtro por dh_emi (data de emissao do CT-e na origem) */
     dataInicio?: Date;
@@ -483,6 +508,15 @@ export class CteDocumentoService {
         // em rem/dest/toma3/toma4. Por isso filtramos no fluxo final via parse
         // (mesmo critério do vinculadosNfe). Aqui restringe candidatos.
         where.xml = { contains: `<CNPJ>${cnpjEmit}</CNPJ>` };
+      }
+    }
+    if (filtros.razaoSocialEmitente) {
+      // Busca parcial por nome da transportadora (coluna indexada GIN pg_trgm).
+      // `mode: insensitive` → ILIKE '%termo%', case-insensitive. Acelera mesmo
+      // com substring no meio do nome graças ao índice trigram.
+      const termo = filtros.razaoSocialEmitente.trim();
+      if (termo.length > 0) {
+        where.emitenteRazaoSocial = { contains: termo, mode: 'insensitive' };
       }
     }
     // 'PENDENTE' = sem status (ainda não tentou gravar). Outros valores filtram literalmente.
@@ -552,6 +586,7 @@ export class CteDocumentoService {
           chave: true,
           modelo: true,
           dhEmi: true,
+          emitenteRazaoSocial: true,
           papelCapul: true,
           xmlBytes: true,
           recebidoEm: true,

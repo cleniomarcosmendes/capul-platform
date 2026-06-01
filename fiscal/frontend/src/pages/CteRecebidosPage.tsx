@@ -125,6 +125,7 @@ interface FiltrosRecebidos {
   filialCodigo: string;
   search: string;
   cnpjEmitente: string;
+  razaoSocialEmitente: string;
   papel: '' | PapelCapul;
   schema: '' | SchemaCte;
   ambiente: '' | '1' | '2';
@@ -206,6 +207,12 @@ export function CteRecebidosPage() {
   // 29/05 — filtro por CNPJ do emitente (transportadora). Pedido Fiscal pra
   // triar CT-es por transportadora sem abrir cada um.
   const [cnpjEmitente, setCnpjEmitente] = useState(() => filtrosSalvos?.cnpjEmitente ?? '');
+  // 01/06 — filtro por Razão Social do emitente (transportadora), busca parcial
+  // (ILIKE no backend, coluna indexada pg_trgm). Pedido Fiscal pra triar por
+  // parte do nome da transportadora sem precisar do CNPJ.
+  const [razaoSocialEmitente, setRazaoSocialEmitente] = useState(
+    () => filtrosSalvos?.razaoSocialEmitente ?? '',
+  );
   // Default 'TOMA' — único papel que gera pré-nota no Protheus (regra 11/05/2026).
   // Operador pode mudar pra ver outros papéis ou "Todos" se precisar.
   const [papel, setPapel] = useState<'' | PapelCapul>(() => filtrosSalvos?.papel ?? 'TOMA');
@@ -317,6 +324,8 @@ export function CteRecebidosPage() {
       if (cnpjsFiltro) params.cnpjConsulente = cnpjsFiltro;
       const cnpjEmitClean = cnpjEmitente.replace(/\D/g, '');
       if (cnpjEmitClean.length === 14) params.cnpjEmitente = cnpjEmitClean;
+      const razaoTrim = razaoSocialEmitente.trim();
+      if (razaoTrim.length >= 2) params.razaoSocialEmitente = razaoTrim;
       if (dataInicio) params.dataInicio = new Date(dataInicio + 'T00:00:00').toISOString();
       if (dataFim) {
         const fim = new Date(dataFim + 'T23:59:59.999');
@@ -348,7 +357,7 @@ export function CteRecebidosPage() {
     // memoiza value), e mesmo se variasse, queremos evitar re-fetch quando
     // a unica coisa mudada e um toast ter sido exibido.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, search, papel, schema, ambiente, protheusStatus, cnpjsFiltro, cnpjEmitente, dataInicio, dataFim, recebimentoInicio, recebimentoFim, sortBy, sortOrder, inconsistenciaFiltro]);
+  }, [page, search, papel, schema, ambiente, protheusStatus, cnpjsFiltro, cnpjEmitente, razaoSocialEmitente, dataInicio, dataFim, recebimentoInicio, recebimentoFim, sortBy, sortOrder, inconsistenciaFiltro]);
 
   // Click no header da coluna: nenhum → desc → asc → nenhum
   const toggleSort = (column: string) => {
@@ -395,6 +404,8 @@ export function CteRecebidosPage() {
     schema,
     ambiente,
     protheusStatus,
+    cnpjEmitente,
+    razaoSocialEmitente,
     dataInicio,
     dataFim,
     recebimentoInicio,
@@ -409,6 +420,7 @@ export function CteRecebidosPage() {
       filialCodigo,
       search,
       cnpjEmitente,
+      razaoSocialEmitente,
       papel,
       schema,
       ambiente,
@@ -430,6 +442,7 @@ export function CteRecebidosPage() {
     filialCodigo,
     search,
     cnpjEmitente,
+    razaoSocialEmitente,
     papel,
     schema,
     ambiente,
@@ -446,6 +459,7 @@ export function CteRecebidosPage() {
   const limparFiltros = () => {
     setSearch('');
     setCnpjEmitente('');
+    setRazaoSocialEmitente('');
     setPapel('TOMA'); // mantém default — TOMA é a operação principal
     setSchema('');
     setAmbiente('');
@@ -907,7 +921,26 @@ export function CteRecebidosPage() {
               />
             </div>
           </div>
-          <div className="flex gap-2 pt-2 border-t items-center">
+          <div className="flex gap-2 pt-2 border-t items-center flex-wrap">
+            <div className="flex items-center gap-2 flex-1 max-w-md min-w-[220px]">
+              <label
+                htmlFor="razaoSocialEmitente"
+                className="text-xs font-medium text-emerald-700 whitespace-nowrap"
+                title="Razão social do EMITENTE (transportadora). A Capul é tomadora/destinatária do CT-e."
+              >
+                Razão Social
+              </label>
+              <input
+                id="razaoSocialEmitente"
+                type="text"
+                value={razaoSocialEmitente}
+                onChange={(e) => setRazaoSocialEmitente(e.target.value)}
+                placeholder="Parte do nome da transportadora…"
+                title="Busca parcial pela razão social do emitente (transportadora). Ex.: 'EXPRESSO' acha todas com esse termo. Não diferencia maiúsc/minúsc. Mín. 2 caracteres."
+                className="flex-1 min-w-0 px-3 py-1.5 border rounded text-sm"
+                onKeyDown={(e) => e.key === 'Enter' && aplicarFiltros()}
+              />
+            </div>
             <Button onClick={aplicarFiltros} disabled={loading}>
               <Search size={16} className="mr-1" />
               Aplicar

@@ -676,6 +676,11 @@ model CteDocumento {
   modelo          Int?
   // Data de emissão extraída do XML (<dhEmi>). NULL se schema sem dado.
   dhEmi           DateTime?    @map("dh_emi")
+  // Razão social do emitente (= transportadora; Capul é tomadora/destinatária).
+  // Extraída do <emit><xNome> do XML na ingestão. NULL para resCTe (resumo,
+  // sem bloco emit) ou XML sem emit. Pedido Fiscal: busca por parte do nome.
+  // Índice GIN pg_trgm criado via migration p/ acelerar ILIKE '%termo%'.
+  emitenteRazaoSocial String?  @map("emitente_razao_social") @db.VarChar(120)
   // Hash SHA-256 do XML descomprimido — chave pra dedup quando o mesmo
   // documento aparece em mais de um NSU (raro, mas pode acontecer).
   xmlSha256       String       @map("xml_sha256") @db.Char(64)
