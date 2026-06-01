@@ -64,7 +64,7 @@ export class ComprovanteIeGeneratorService {
     this.linhaHr(doc);
 
     // === DADOS DO CONTRIBUINTE (Receita Federal) ===
-    this.tituloSecao(doc, '🇧🇷 DADOS DO CONTRIBUINTE — FONTE: RECEITA FEDERAL (BrasilAPI/ReceitaWS)');
+    this.tituloSecao(doc, 'DADOS DO CONTRIBUINTE — FONTE: RECEITA FEDERAL (BrasilAPI/ReceitaWS)');
     if (dadosReceita) {
       this.campo(doc, 'Razão Social', dadosReceita.razaoSocial);
       this.campo(doc, 'Nome Fantasia', dadosReceita.nomeFantasia);
@@ -140,7 +140,7 @@ export class ComprovanteIeGeneratorService {
     doc.moveDown(0.8);
 
     // === DADOS DA INSCRIÇÃO ESTADUAL (SEFAZ via CCC) ===
-    this.tituloSecao(doc, `🏛 DADOS DA INSCRIÇÃO ESTADUAL — FONTE: SEFAZ-${ie.uf} (CCC oficial)`);
+    this.tituloSecao(doc, `DADOS DA INSCRIÇÃO ESTADUAL — FONTE: SEFAZ-${ie.uf} (CCC oficial)`);
     this.campo(doc, 'Número da IE', ie.inscricaoEstadual);
     this.campo(doc, 'UF', ie.uf);
     this.campo(doc, 'Razão Social', ie.razaoSocial);
@@ -156,7 +156,7 @@ export class ComprovanteIeGeneratorService {
       doc.fillColor('#000').fontSize(10);
       doc.font('Helvetica-Bold').text('Nome Fantasia: ', { continued: true });
       doc.font('Helvetica').fillColor('#000').text(fantasiaProtheus, { continued: true });
-      doc.font('Helvetica-Oblique').fillColor('#b45309').text('  ← fonte: PROTHEUS (CCC SEFAZ não retornou este campo)');
+      doc.font('Helvetica-Oblique').fillColor('#b45309').text('  (fonte: PROTHEUS — CCC SEFAZ não retornou este campo)');
       doc.fillColor('#000');
     }
     this.campo(doc, 'Situação na SEFAZ', this.fmtSituacao(ie.situacaoRaw, ie.situacao));
@@ -212,7 +212,7 @@ export class ComprovanteIeGeneratorService {
       (x) => x.inscricaoEstadual !== ie.inscricaoEstadual,
     );
     if (outrasIes.length > 0) {
-      this.tituloSecao(doc, `🏛 OUTRAS IE(s) DESTE CONTRIBUINTE NO SEFAZ-${ie.uf} (${outrasIes.length})`);
+      this.tituloSecao(doc, `OUTRAS IE(s) DESTE CONTRIBUINTE NO SEFAZ-${ie.uf} (${outrasIes.length})`);
       outrasIes.forEach((o, i) => {
         if (i > 0) doc.moveDown(0.2);
         doc.font('Helvetica-Bold').fontSize(10).fillColor('#000');
@@ -240,7 +240,7 @@ export class ComprovanteIeGeneratorService {
 
     // === DADOS COMPLEMENTARES — CADASTRO PROTHEUS (ERP CAPUL) ===
     if (cruzamento && cruzamento.vinculosProtheus.length > 0) {
-      this.tituloSecao(doc, '📦 DADOS COMPLEMENTARES — CADASTRO PROTHEUS (ERP CAPUL)');
+      this.tituloSecao(doc, 'DADOS COMPLEMENTARES — CADASTRO PROTHEUS (ERP CAPUL)');
       // Aviso explícito sobre a fonte — operador fiscal precisa saber que NÃO
       // é dado oficial SEFAZ. É o que a equipe Compras/Cadastro registrou no
       // ERP interno. Pode divergir do oficial quando o cadastro está stale.
