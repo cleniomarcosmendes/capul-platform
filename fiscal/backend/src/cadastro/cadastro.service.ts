@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { PrismaRfbService } from '../prisma/prisma-rfb.service.js';
 import { CccClient, type CccConsultaRaw } from '../sefaz/ccc-client.service.js';
 import { AmbienteService } from '../ambiente/ambiente.service.js';
 import { ProtheusCadastroService } from '../protheus/protheus-cadastro.service.js';
@@ -266,6 +267,7 @@ export class CadastroService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly prismaRfb: PrismaRfbService,
     private readonly ccc: CccClient,
     private readonly ambiente: AmbienteService,
     private readonly protheusCadastro: ProtheusCadastroService,
@@ -783,7 +785,7 @@ export class CadastroService {
   private async descobrirUfsPorRfb(cnpjDigits: string): Promise<string[]> {
     if (cnpjDigits.length !== 14) return [];
     try {
-      const estab = await this.prisma.rfbEstabelecimento.findUnique({
+      const estab = await this.prismaRfb.rfbEstabelecimento.findUnique({
         where: { cnpjCompleto: cnpjDigits },
         select: { uf: true },
       });

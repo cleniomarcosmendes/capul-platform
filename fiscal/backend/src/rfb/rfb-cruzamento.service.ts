@@ -1,5 +1,5 @@
 import { Injectable, Logger, ConflictException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service.js';
+import { PrismaRfbService } from '../prisma/prisma-rfb.service.js';
 import { ProtheusCadastroService } from '../protheus/protheus-cadastro.service.js';
 import type { TipoCadastroProtheus } from '../protheus/interfaces/cadastro-fiscal.interface.js';
 import { AmbienteService } from '../ambiente/ambiente.service.js';
@@ -64,7 +64,7 @@ export class RfbCruzamentoService {
   private readonly logger = new Logger(RfbCruzamentoService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma: PrismaRfbService,
     private readonly protheus: ProtheusCadastroService,
     private readonly ambiente: AmbienteService,
   ) {}

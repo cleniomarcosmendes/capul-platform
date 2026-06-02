@@ -1,0 +1,189 @@
+// ============================================================
+// Cliente Prisma DEDICADO — base RFB (Receita Federal · Dados Abertos)
+// Banco SEPARADO (capul-db-rfb / RFB_DATABASE_URL), decisão 02/06: máquina
+// exclusiva pra RFB por desempenho de consulta e liberdade total de SQL.
+// Gera um client independente em node_modules/@prisma-rfb/client.
+// Modelos = cópia fiel dos models @@schema("rfb") do schema principal.
+// NÃO há relação cruzada com fiscal/core (verificado) — split limpo.
+// ============================================================
+
+generator clientRfb {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/@prisma-rfb/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("RFB_DATABASE_URL")
+  schemas  = ["rfb"]
+}
+
+model RfbEstabelecimento {
+  cnpjCompleto      String  @id @map("cnpj_completo")
+  cnpjBasico        String  @map("cnpj_basico")
+  cnpjOrdem         String? @map("cnpj_ordem")
+  cnpjDv            String? @map("cnpj_dv")
+  matrizFilial      String? @map("matriz_filial")
+  nomeFantasia      String? @map("nome_fantasia")
+  situacaoCadastral String? @map("situacao_cadastral")
+  dataSituacao      String? @map("data_situacao")
+  cnaePrincipal     String? @map("cnae_principal")
+  logradouro        String?
+  numero            String?
+  bairro            String?
+  cep               String?
+  uf                String?
+  municipio         String?
+  ddd1              String?
+  telefone1         String?
+  correioEletronico String? @map("correio_eletronico")
+  motivoSituacao       String? @map("motivo_situacao")
+  dataInicioAtividade  String? @map("data_inicio_atividade")
+  cnaeSecundaria       String? @map("cnae_secundaria")
+  situacaoEspecial     String? @map("situacao_especial")
+  dataSituacaoEspecial String? @map("data_situacao_especial")
+  pais                 String?
+
+  @@map("estabelecimentos")
+  @@schema("rfb")
+}
+
+model RfbEmpresa {
+  cnpjBasico       String   @id @map("cnpj_basico")
+  razaoSocial      String?  @map("razao_social")
+  naturezaJuridica String?  @map("natureza_juridica")
+  porte            String?
+  capitalSocial    Decimal? @map("capital_social") @db.Decimal(18, 2)
+  qualificacaoResponsavel String? @map("qualificacao_responsavel")
+  enteFederativo          String? @map("ente_federativo")
+
+  @@map("empresas")
+  @@schema("rfb")
+}
+
+model RfbMotivo {
+  codigo    String  @id
+  descricao String?
+
+  @@map("motivos")
+  @@schema("rfb")
+}
+
+model RfbQualificacao {
+  codigo    String  @id
+  descricao String?
+
+  @@map("qualificacoes")
+  @@schema("rfb")
+}
+
+model RfbPais {
+  codigo    String  @id
+  descricao String?
+
+  @@map("paises")
+  @@schema("rfb")
+}
+
+model RfbSimples {
+  cnpjBasico          String  @id @map("cnpj_basico")
+  optanteSimples      String? @map("optante_simples")
+  dataOpcaoSimples    String? @map("data_opcao_simples")
+  optanteMei          String? @map("optante_mei")
+  dataExclusaoSimples String? @map("data_exclusao_simples")
+
+  @@map("simples")
+  @@schema("rfb")
+}
+
+model RfbCnae {
+  codigo    String  @id
+  descricao String?
+
+  @@map("cnaes")
+  @@schema("rfb")
+}
+
+model RfbMunicipio {
+  codigo    String  @id
+  descricao String?
+
+  @@map("municipios")
+  @@schema("rfb")
+}
+
+model RfbNatureza {
+  codigo    String  @id
+  descricao String?
+
+  @@map("naturezas")
+  @@schema("rfb")
+}
+
+model RfbControleImportacao {
+  id             Int       @id @default(autoincrement())
+  versaoRfb      String    @unique @map("versao_rfb")
+  status         String
+  dataDeteccao   DateTime? @map("data_deteccao")
+  dataInicio     DateTime? @map("data_inicio")
+  dataFim        DateTime? @map("data_fim")
+  totalRegistros BigInt?   @map("total_registros")
+  disparadoPor   String?   @map("disparado_por")
+  observacao     String?
+  tabelaAtual      String?   @map("tabela_atual")
+  arquivoAtual     Int?      @map("arquivo_atual")
+  arquivosTotal    Int?      @map("arquivos_total")
+  linhasAcumuladas BigInt?   @map("linhas_acumuladas")
+  atualizadoEm     DateTime? @map("atualizado_em") @db.Timestamptz
+  progresso        Json?     @db.JsonB
+
+  @@map("controle_importacao")
+  @@schema("rfb")
+}
+
+model RfbCruzamentoResultado {
+  id              Int      @id @default(autoincrement())
+  cnpj            String
+  origem          String
+  filial          String?
+  codigo          String?
+  loja            String?
+  razaoProtheus   String?  @map("razao_protheus")
+  inscricaoEstadual   String? @map("inscricao_estadual")
+  inscricaoEstadualUf String? @map("inscricao_estadual_uf")
+  bloqueado       Boolean  @default(false)
+  achadoRfb       Boolean  @map("achado_rfb")
+  situacaoRfb     String?  @map("situacao_rfb")
+  razaoRfb        String?  @map("razao_rfb")
+  ufRfb           String?  @map("uf_rfb")
+  municipioRfb    String?  @map("municipio_rfb")
+  dataSituacao    String?  @map("data_situacao")
+  cnae            String?
+  porte           String?
+  optanteSimples  String?  @map("optante_simples")
+  alerta          String
+  divergenciaRazao  Boolean @default(false) @map("divergencia_razao")
+  similaridadeRazao Int?    @map("similaridade_razao")
+  acao            String  @default("NENHUMA")
+  atualizadoEm    DateTime @default(now()) @map("atualizado_em")
+
+  @@map("cruzamento_resultado")
+  @@schema("rfb")
+}
+
+model RfbCruzamentoExec {
+  id              Int       @id @default(autoincrement())
+  status          String
+  iniciado        DateTime  @default(now())
+  fim             DateTime?
+  total           Int?
+  alertaIrregular Int?      @map("alerta_irregular")
+  alertaAtencao   Int?      @map("alerta_atencao")
+  alertaOk        Int?      @map("alerta_ok")
+  naoEncontrado   Int?      @map("nao_encontrado")
+  disparadoPor    String?   @map("disparado_por")
+  observacao      String?
+
+  @@map("cruzamento_exec")
+  @@schema("rfb")
+}

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service.js';
+import { PrismaRfbService } from '../prisma/prisma-rfb.service.js';
 import { RfbWebdavService } from './rfb-webdav.service.js';
 
 // F1.2 — Detecção de nova versão. NÃO importa (import é manual — F1.3).
@@ -9,7 +9,7 @@ export class RfbDeteccaoService {
   private readonly logger = new Logger(RfbDeteccaoService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma: PrismaRfbService,
     private readonly webdav: RfbWebdavService,
   ) {}
 

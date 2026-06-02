@@ -5,7 +5,7 @@ import { Client } from 'pg';
 import { from as copyFrom } from 'pg-copy-streams';
 import { parse as csvParse } from 'csv-parse';
 import unzipper from 'unzipper';
-import { PrismaService } from '../prisma/prisma.service.js';
+import { PrismaRfbService } from '../prisma/prisma-rfb.service.js';
 import { RfbWebdavService } from './rfb-webdav.service.js';
 
 // F1.3 — Importação supervisionada da base pública CNPJ.
@@ -150,7 +150,7 @@ export class RfbImportacaoService {
   private readonly logger = new Logger(RfbImportacaoService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma: PrismaRfbService,
     private readonly webdav: RfbWebdavService,
   ) {}
 
@@ -260,7 +260,9 @@ export class RfbImportacaoService {
     spec: TabelaSpec,
     onArquivo?: (idx: number, linhasAcum: number) => Promise<void>,
   ): Promise<number> {
-    const client = new Client({ connectionString: process.env.DATABASE_URL });
+    // Banco DEDICADO da RFB (02/06) — o COPY/staging vai pro capul-db-rfb, não
+    // pro capul-db operacional. Mesmo destino do PrismaRfbService.
+    const client = new Client({ connectionString: process.env.RFB_DATABASE_URL });
     await client.connect();
     let linhas = 0;
     try {

@@ -399,6 +399,9 @@ services:
     container_name: capul-fiscal-api
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public&connection_limit=10
+      # Base RFB em banco DEDICADO (capul-db-rfb). Em HOM/PROD real, apontar
+      # pra máquina exclusiva do Douglas. ?schema=rfb (multiSchema do client RFB).
+      RFB_DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres-rfb:5432/capul_rfb?schema=rfb&connection_limit=10
       JWT_SECRET: ${JWT_SECRET}
       DB_SCHEMA: fiscal
       CORE_SCHEMA: core
@@ -436,6 +439,8 @@ services:
       - fiscal_xmls:/app/xmls
     depends_on:
       postgres:
+        condition: service_healthy
+      postgres-rfb:
         condition: service_healthy
       redis:
         condition: service_started

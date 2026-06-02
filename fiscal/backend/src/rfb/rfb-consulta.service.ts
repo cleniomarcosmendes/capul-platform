@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service.js';
+import { PrismaRfbService } from '../prisma/prisma-rfb.service.js';
 import type { ReceitaFederalData } from '../cadastro/receita.client.js';
 
 // F2.1 — Consulta pontual por CNPJ na base RFB LOCAL. Mesma forma de dados
@@ -43,7 +43,7 @@ export type ReceitaLocalExtra = {
 
 @Injectable()
 export class RfbConsultaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaRfbService) {}
 
   async porCnpj(cnpj: string): Promise<(ReceitaFederalData & ReceitaLocalExtra) | null> {
     const c = (cnpj || '').replace(/\D/g, '');

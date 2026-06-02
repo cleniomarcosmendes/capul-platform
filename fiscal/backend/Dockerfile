@@ -20,6 +20,9 @@ COPY tsconfig*.json nest-cli.json ./
 COPY src ./src/
 
 RUN npx prisma generate
+# Cliente Prisma da base RFB dedicada (banco separado) — gerado em
+# node_modules/@prisma-rfb/client; o runtime copia node_modules do builder.
+RUN npx prisma generate --schema=prisma/rfb/schema.prisma
 RUN npm run build
 
 # ---------- Stage 2: runtime ----------

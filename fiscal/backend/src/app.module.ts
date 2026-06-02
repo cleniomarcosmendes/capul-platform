@@ -7,6 +7,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'crypto';
 
 import { PrismaModule } from './prisma/prisma.module.js';
+import { PrismaRfbModule } from './prisma/prisma-rfb.module.js';
 import { CryptoModule } from './common/crypto/crypto.module.js';
 import { BullMqModule } from './bullmq/bullmq.module.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -74,6 +75,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
     ScheduleModule.forRoot(),
 
     PrismaModule,
+    PrismaRfbModule,
     CryptoModule,
     BullMqModule,
     AuthModule,
