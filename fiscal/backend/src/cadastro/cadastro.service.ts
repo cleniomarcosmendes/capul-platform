@@ -359,14 +359,21 @@ export class CadastroService {
     const enriquecimento = await this.enrichFromProtheus(cnpjDigits);
     const { vinculos, falhou: protheusFalhou } = enriquecimento;
 
+    // 1b) RFB-discovery (01/06): para CNPJ, descobre a UF na base RFB local
+    //     (Receita Dados Abertos) — custo ZERO de SEFAZ. Complementa o Protheus:
+    //     resolve "não sei a UF" de empresas sem depender do cadastro no ERP nem
+    //     varrer estados. CPF não entra (RFB é por CNPJ; produtor rural não consta).
+    const ufsDoRfb = await this.descobrirUfsPorRfb(cnpjDigits);
+
     // 2) Conjunto de UFs candidatas. Prioridade:
-    //    a) UFs distintas dos vínculos Protheus (auditoria)
-    //    b) UF informada pelo operador (garantia — mesmo que o Protheus
-    //       não tenha vínculo naquela UF, pode haver IE no SEFAZ)
+    //    a) UFs dos vínculos Protheus (auditoria — mais relevante p/ CAPUL)
+    //    b) UF da base RFB local (descoberta sem custo SEFAZ, só CNPJ)
+    //    c) UF informada pelo operador (garantia — pode haver IE no SEFAZ
+    //       mesmo sem vínculo Protheus/registro RFB naquela UF)
     const ufsDoProtheus = [
       ...new Set(vinculos.map((v) => v.uf).filter((u): u is string => !!u)),
     ];
-    const ufsCandidatas = [...ufsDoProtheus];
+    const ufsCandidatas = [...new Set([...ufsDoProtheus, ...ufsDoRfb])];
     if (ufInformada && !ufsCandidatas.includes(ufInformada)) {
       ufsCandidatas.push(ufInformada);
     }
@@ -388,9 +395,9 @@ export class CadastroService {
           HttpStatus.SERVICE_UNAVAILABLE,
         );
       }
-      // Sem Protheus por ausência real de cadastro + sem UF — pede UF.
+      // Sem Protheus, sem RFB e sem UF — pede UF (não há como inferir o estado).
       throw new BadRequestException(
-        'Informe a UF — este CNPJ ainda não possui vínculo no Protheus, então o sistema não sabe em qual SEFAZ consultar.',
+        'Informe a UF — este documento não possui vínculo no Protheus nem registro na base RFB local, então o sistema não sabe em qual SEFAZ consultar.',
       );
     }
 
@@ -480,27 +487,22 @@ export class CadastroService {
       // integração Protheus `cadastroFiscal` em HOMOLOGAÇÃO → sem vínculo → o
       // sistema só consultou a UF digitada, que estava vazia, e o "não
       // encontrado" genérico não dava pista de que faltava inferir a UF real).
+      const temAutodescoberta = ufsDoProtheus.length > 0 || ufsDoRfb.length > 0;
       let dica: string;
-      if (vinculos.length === 0) {
-        if (protheusFalhou) {
-          dica =
-            ' O serviço Protheus não respondeu, então o sistema não conseguiu inferir outras UFs e' +
-            ` consultou apenas a(s) UF(s) informada(s) (${ufsTexto}). Verifique a integração Protheus` +
-            ' ou informe outra UF.';
-        } else {
-          dica =
-            ' Nenhum vínculo Protheus foi encontrado para este documento, então o sistema consultou' +
-            ` apenas a(s) UF(s) informada(s) (${ufsTexto}). Se o contribuinte tem inscrição em outra` +
-            ' UF, informe a UF correta. Se o cadastro existe no ERP, confirme se a integração Protheus' +
-            ' "cadastroFiscal" (Configurador → Integrações API) está apontando para o ambiente correto' +
-            ' (PRODUÇÃO).';
-        }
+      if (!temAutodescoberta) {
+        // Só a UF informada foi consultada — sem Protheus e sem RFB p/ inferir outras.
+        dica = protheusFalhou
+          ? ` O serviço Protheus não respondeu e a base RFB local não tinha este documento, então o sistema consultou apenas a UF informada (${ufsTexto}). Verifique a integração Protheus ou informe outra UF.`
+          : ` O sistema consultou apenas a UF informada (${ufsTexto}) — não há vínculo Protheus nem registro na base RFB local para inferir outras UFs. Se o contribuinte tem inscrição em outra UF, informe a UF correta. Se o cadastro deveria existir, confirme se a integração Protheus "cadastroFiscal" (Configurador → Integrações API) está no ambiente correto (PRODUÇÃO).`;
       } else {
-        const ufsProtheusTexto = ufsDoProtheus.join(', ') || '—';
+        const origens: string[] = [];
+        if (ufsDoProtheus.length) origens.push('vínculos Protheus');
+        if (ufsDoRfb.length) origens.push('base RFB local');
         dica =
-          ` Foram encontrados ${vinculos.length} vínculo(s) Protheus (UF(s): ${ufsProtheusTexto}), mas o` +
-          ' SEFAZ não retornou inscrição estadual ativa na(s) UF(s) consultada(s).' +
-          (isCpf ? ' O CCC/Sintegra lista apenas contribuintes de ICMS (empresas e produtores rurais).' : '');
+          ` A(s) UF(s) consultada(s) (${ufsTexto}) foi(ram) inferida(s) de ${origens.join(' + ')}, mas o` +
+          ' SEFAZ não retornou inscrição estadual ativa nessa(s) UF(s) — o documento pode não ser' +
+          ' contribuinte de ICMS nesse(s) estado(s).' +
+          (isCpf ? ' (O CCC/Sintegra lista apenas contribuintes de ICMS — empresas e produtores rurais.)' : '');
       }
       throw new NotFoundException(
         `${tipoDoc} ${cnpjDigits} não encontrado no cadastro de contribuintes da SEFAZ (UF: ${ufsTexto}).${dica}`,
@@ -770,6 +772,29 @@ export class CadastroService {
    *   - `{ vinculos: [...], falhou: false }` — 0, 1 ou 2 registros encontrados.
    *   - `{ vinculos: [],    falhou: true  }` — erro técnico (API fora do ar).
    */
+  /**
+   * RFB-discovery de UF (01/06): para um CNPJ, lê a UF do estabelecimento na
+   * base RFB local (`rfb.estabelecimentos`) — custo ZERO de SEFAZ. Permite
+   * descobrir o estado de uma empresa sem depender do cadastro Protheus nem
+   * varrer UFs. Retorna [] para CPF (RFB é por CNPJ; produtor rural não consta)
+   * ou se o CNPJ não estiver na base (aberto após o último snapshot RFB).
+   * Falha de leitura não quebra a consulta — apenas não infere por RFB.
+   */
+  private async descobrirUfsPorRfb(cnpjDigits: string): Promise<string[]> {
+    if (cnpjDigits.length !== 14) return [];
+    try {
+      const estab = await this.prisma.rfbEstabelecimento.findUnique({
+        where: { cnpjCompleto: cnpjDigits },
+        select: { uf: true },
+      });
+      const uf = estab?.uf?.trim().toUpperCase();
+      return uf && /^[A-Z]{2}$/.test(uf) ? [uf] : [];
+    } catch (e) {
+      this.logger.warn(`RFB-discovery de UF falhou p/ ${cnpjDigits}: ${(e as Error).message}`);
+      return [];
+    }
+  }
+
   private async enrichFromProtheus(cnpj: string): Promise<EnriquecimentoProtheus> {
     try {
       const resp = await this.protheusCadastro.porCnpj(cnpj);

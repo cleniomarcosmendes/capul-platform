@@ -278,7 +278,7 @@ export function CadastroConsultaPage() {
         Verifique a situação cadastral de um contribuinte no SEFAZ — use para validar um novo
         cliente/fornecedor antes de cadastrá-lo no Protheus, ou para auditar um cadastro existente.
         {' '}
-        <span className="text-slate-600">Para auditoria de cadastro já existente, deixe a UF em branco — o sistema descobre as UFs a partir dos vínculos Protheus (até 5).</span>
+        <span className="text-slate-600">Para auditoria de cadastro já existente, deixe a UF em branco — o sistema descobre as UFs a partir dos vínculos Protheus e da base RFB local (para CNPJ), sem custo de consulta SEFAZ (até 5 UFs).</span>
       </p>
 
       {/* Duas formas de consulta — EXPLÍCITAS */}
