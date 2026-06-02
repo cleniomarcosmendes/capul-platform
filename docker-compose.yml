@@ -81,6 +81,33 @@ services:
     mem_reservation: 256m
     cpus: 1.0
 
+  # Banco DEDICADO da base RFB (Receita Dados Abertos) — separado do capul-db
+  # por desempenho de consulta e liberdade total de SQL (decisão 02/06; descartado
+  # MinhaReceita). Representa a "máquina exclusiva" da RFB: em HOM/PROD real,
+  # RFB_DATABASE_URL aponta pra máquina dedicada do Douglas. Dados copiados do
+  # schema `rfb` do capul-db (versão 2026-05).
+  postgres-rfb:
+    image: postgres:16-alpine
+    container_name: capul-db-rfb
+    environment:
+      POSTGRES_USER: ${DB_USER:?DB_USER obrigatorio no .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD obrigatorio no .env}
+      POSTGRES_DB: capul_rfb
+    # Porta NAO exposta externamente — acesso apenas via rede Docker interna.
+    volumes:
+      - postgres_rfb_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging: *default-logging
+    # RFB tem GIN trgm sobre ~71M linhas — um pouco mais de RAM que o capul-db.
+    mem_limit: 3g
+    mem_reservation: 512m
+    cpus: 1.5
+
   redis:
     image: redis:7-alpine
     container_name: capul-redis
@@ -484,6 +511,7 @@ services:
 
 volumes:
   postgres_data:
+  postgres_rfb_data:
   redis_data:
   uploads_data:
   fiscal_xmls:
