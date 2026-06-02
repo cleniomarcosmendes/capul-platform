@@ -45,7 +45,8 @@ export class RfbController {
   async versoes() {
     const st = await this.deteccao.statusDb();
     const cfg = await this.ambiente.getOrCreate();
-    return { ...st, cronDeteccao: cfg.rfbCronDeteccao ?? null };
+    const bancoDedicado = await this.deteccao.bancoDedicadoInfo();
+    return { ...st, cronDeteccao: cfg.rfbCronDeteccao ?? null, bancoDedicado };
   }
 
   /** Configura (ou desativa) a agenda de detecção automática. Vazio/null

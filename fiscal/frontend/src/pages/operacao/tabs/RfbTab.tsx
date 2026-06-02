@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Info, RefreshCw, DownloadCloud, Clock, Save,
-  Activity, CheckCircle2, Loader2, Circle, XCircle,
+  Activity, CheckCircle2, Loader2, Circle, XCircle, Database,
 } from 'lucide-react';
 import { fiscalApi } from '../../../services/api';
 import { Button } from '../../../components/Button';
@@ -36,6 +36,8 @@ interface VersoesResp {
   novaDisponivel: boolean;
   ultimas: ControleRow[];
   cronDeteccao: string | null; // null = detecção automática desativada
+  // 02/06 — base RFB roda em banco dedicado (separado do operacional).
+  bancoDedicado?: { host: string; banco: string; conectado: boolean };
 }
 interface CruzExec {
   emAndamento: boolean;
@@ -414,6 +416,43 @@ export function RfbTab() {
             {data?.novaDisponivel ? 'SIM — importar' : 'Não'}
           </div>
         </div>
+      </div>
+
+      {/* Base de dados dedicada (orientação read-only — sem caixa-preta) */}
+      <div className="rounded-lg border border-slate-200 p-4">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <Database className="h-4 w-4 text-capul-600" /> Base de dados (dedicada)
+          </div>
+          {data?.bancoDedicado && (
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
+                data.bancoDedicado.conectado
+                  ? 'bg-green-100 text-green-700'
+                  : 'bg-red-100 text-red-700'
+              }`}
+            >
+              {data.bancoDedicado.conectado ? (
+                <><CheckCircle2 className="h-3.5 w-3.5" /> Conectado</>
+              ) : (
+                <><XCircle className="h-3.5 w-3.5" /> Indisponível</>
+              )}
+            </span>
+          )}
+        </div>
+        <div className="mb-2 text-sm text-slate-700">
+          Servidor:{' '}
+          <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">
+            {data?.bancoDedicado ? `${data.bancoDedicado.host} / ${data.bancoDedicado.banco}` : '—'}
+          </code>
+        </div>
+        <p className="text-xs text-slate-500">
+          A base RFB roda em um PostgreSQL <strong>dedicado</strong>, separado do banco operacional,
+          por desempenho de consulta. A conexão é configurada no <strong>backend</strong>{' '}
+          (variável <code>RFB_DATABASE_URL</code>). Para apontar para outro servidor: alterar a
+          variável de ambiente e reiniciar o serviço Fiscal — <strong>não editável por esta tela</strong>{' '}
+          (configuração de infraestrutura).
+        </p>
       </div>
 
       {/* Agenda de detecção automática (configurável — sem caixa-preta) */}

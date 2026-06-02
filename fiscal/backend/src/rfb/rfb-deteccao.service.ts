@@ -69,4 +69,28 @@ export class RfbDeteccaoService {
     }));
     return { ultimas };
   }
+
+  /** Orientação read-only da base RFB dedicada (02/06). Extrai host:porta/banco
+   *  da RFB_DATABASE_URL (SEM credenciais) e testa a conexão. Para a aba "Base
+   *  CNPJ (RFB)" deixar visível onde a base vive — não é editável por tela
+   *  (config de infra; ver RFB_DATABASE_URL no backend). */
+  async bancoDedicadoInfo(): Promise<{ host: string; banco: string; conectado: boolean }> {
+    let host = '—';
+    let banco = '—';
+    try {
+      const u = new URL(process.env.RFB_DATABASE_URL ?? '');
+      host = `${u.hostname}${u.port ? ':' + u.port : ''}`;
+      banco = u.pathname.replace(/^\//, '') || '—';
+    } catch {
+      /* URL ausente/inválida — mantém placeholders */
+    }
+    let conectado = false;
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
+      conectado = true;
+    } catch {
+      conectado = false;
+    }
+    return { host, banco, conectado };
+  }
 }
