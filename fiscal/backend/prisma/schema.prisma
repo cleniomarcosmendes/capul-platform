@@ -12,7 +12,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["fiscal", "core", "rfb"]
+  schemas  = ["fiscal", "core"]
 }
 
 // ============================================================
@@ -837,191 +837,12 @@ model CteLoteConsulta {
 }
 
 // ============================================================
-// SCHEMA rfb — Base Pública CNPJ (Receita Federal · Dados Abertos)
-// Importação mensal supervisionada. SEM certificado, SEM SEFAZ — zero
-// risco de bloqueio. Plano: docs/PLANO_MODULO_CNPJ_RFB_v1.md (v1.1 c/
-// addendum F0/PoC). Colunas em text (Postgres: text == varchar storage;
-// footprint medido na PoC ~250 B/linha estab, ~170 B/linha empresa).
-// Índices btree + GIN pg_trgm são criados na migration.sql (autoritativa).
+// SCHEMA rfb — MOVIDO para banco DEDICADO (02/06). Os modelos da base RFB
+// (estabelecimentos, empresas, simples, sócios, domínios, cruzamento) agora
+// vivem no cliente Prisma separado `prisma/rfb/schema.prisma` (banco
+// capul-db-rfb / RFB_DATABASE_URL). Consumido via PrismaRfbService.
+// Motivo: desempenho de consulta + liberdade de SQL (decisão 02/06).
 // ============================================================
-
-model RfbEstabelecimento {
-  cnpjCompleto      String  @id @map("cnpj_completo")
-  cnpjBasico        String  @map("cnpj_basico")
-  cnpjOrdem         String? @map("cnpj_ordem")
-  cnpjDv            String? @map("cnpj_dv")
-  matrizFilial      String? @map("matriz_filial")
-  nomeFantasia      String? @map("nome_fantasia")
-  situacaoCadastral String? @map("situacao_cadastral")
-  dataSituacao      String? @map("data_situacao")
-  cnaePrincipal     String? @map("cnae_principal")
-  logradouro        String?
-  numero            String?
-  bairro            String?
-  cep               String?
-  uf                String?
-  municipio         String?
-  ddd1              String?
-  telefone1         String?
-  correioEletronico String? @map("correio_eletronico")
-  // F1.9 Camada 2 — campos analíticos extras (já vinham no ZIP).
-  motivoSituacao       String? @map("motivo_situacao")
-  dataInicioAtividade  String? @map("data_inicio_atividade")
-  cnaeSecundaria       String? @map("cnae_secundaria")
-  situacaoEspecial     String? @map("situacao_especial")
-  dataSituacaoEspecial String? @map("data_situacao_especial")
-  pais                 String?
-
-  @@map("estabelecimentos")
-  @@schema("rfb")
-}
-
-model RfbEmpresa {
-  cnpjBasico       String   @id @map("cnpj_basico")
-  razaoSocial      String?  @map("razao_social")
-  naturezaJuridica String?  @map("natureza_juridica")
-  porte            String?
-  capitalSocial    Decimal? @map("capital_social") @db.Decimal(18, 2)
-  // F1.9 Camada 2
-  qualificacaoResponsavel String? @map("qualificacao_responsavel")
-  enteFederativo          String? @map("ente_federativo")
-
-  @@map("empresas")
-  @@schema("rfb")
-}
-
-// F1.9 — domínios de descrição (mesmo padrão de RfbCnae).
-model RfbMotivo {
-  codigo    String  @id
-  descricao String?
-
-  @@map("motivos")
-  @@schema("rfb")
-}
-
-model RfbQualificacao {
-  codigo    String  @id
-  descricao String?
-
-  @@map("qualificacoes")
-  @@schema("rfb")
-}
-
-model RfbPais {
-  codigo    String  @id
-  descricao String?
-
-  @@map("paises")
-  @@schema("rfb")
-}
-
-model RfbSimples {
-  cnpjBasico          String  @id @map("cnpj_basico")
-  optanteSimples      String? @map("optante_simples")
-  dataOpcaoSimples    String? @map("data_opcao_simples")
-  optanteMei          String? @map("optante_mei")
-  dataExclusaoSimples String? @map("data_exclusao_simples")
-
-  @@map("simples")
-  @@schema("rfb")
-}
-
-model RfbCnae {
-  codigo    String  @id
-  descricao String?
-
-  @@map("cnaes")
-  @@schema("rfb")
-}
-
-model RfbMunicipio {
-  codigo    String  @id
-  descricao String?
-
-  @@map("municipios")
-  @@schema("rfb")
-}
-
-model RfbNatureza {
-  codigo    String  @id
-  descricao String?
-
-  @@map("naturezas")
-  @@schema("rfb")
-}
-
-model RfbControleImportacao {
-  id             Int       @id @default(autoincrement())
-  versaoRfb      String    @unique @map("versao_rfb")
-  status         String // DISPONIVEL | IMPORTANDO | CONCLUIDO | ERRO
-  dataDeteccao   DateTime? @map("data_deteccao")
-  dataInicio     DateTime? @map("data_inicio")
-  dataFim        DateTime? @map("data_fim")
-  totalRegistros BigInt?   @map("total_registros")
-  disparadoPor   String?   @map("disparado_por")
-  observacao     String?
-  // F1.6 — progresso granular p/ o painel da aba "Base CNPJ (RFB)".
-  tabelaAtual      String?   @map("tabela_atual")
-  arquivoAtual     Int?      @map("arquivo_atual")
-  arquivosTotal    Int?      @map("arquivos_total")
-  linhasAcumuladas BigInt?   @map("linhas_acumuladas")
-  atualizadoEm     DateTime? @map("atualizado_em") @db.Timestamptz
-  progresso        Json?     @db.JsonB
-
-  @@map("controle_importacao")
-  @@schema("rfb")
-}
-
-model RfbCruzamentoResultado {
-  id              Int      @id @default(autoincrement())
-  cnpj            String
-  origem          String // SA1010 | SA2010
-  filial          String?
-  codigo          String?
-  loja            String?
-  razaoProtheus   String?  @map("razao_protheus")
-  // IE do Protheus (SA1/SA2) — dado bruto do ERP, NÃO validado contra
-  // SEFAZ/CCC. A base RFB Dados Abertos não tem IE (registro estadual).
-  inscricaoEstadual   String? @map("inscricao_estadual")
-  inscricaoEstadualUf String? @map("inscricao_estadual_uf")
-  bloqueado       Boolean  @default(false)
-  achadoRfb       Boolean  @map("achado_rfb")
-  situacaoRfb     String?  @map("situacao_rfb")
-  razaoRfb        String?  @map("razao_rfb")
-  ufRfb           String?  @map("uf_rfb")
-  municipioRfb    String?  @map("municipio_rfb")
-  dataSituacao    String?  @map("data_situacao")
-  cnae            String?
-  porte           String?
-  optanteSimples  String?  @map("optante_simples")
-  alerta          String // OK | ATENCAO | IRREGULAR | NAO_ENCONTRADO
-  // F1.8 — divergência de razão social (dimensão independente do alerta).
-  divergenciaRazao  Boolean @default(false) @map("divergencia_razao")
-  similaridadeRazao Int?    @map("similaridade_razao")
-  // Gap B — ação recomendada cruzando situação RFB × estado Protheus.
-  acao            String  @default("NENHUMA") // BLOQUEAR | REVISAR | NENHUMA
-  atualizadoEm    DateTime @default(now()) @map("atualizado_em")
-
-  @@map("cruzamento_resultado")
-  @@schema("rfb")
-}
-
-model RfbCruzamentoExec {
-  id              Int       @id @default(autoincrement())
-  status          String // RODANDO | CONCLUIDO | ERRO
-  iniciado        DateTime  @default(now())
-  fim             DateTime?
-  total           Int?
-  alertaIrregular Int?      @map("alerta_irregular")
-  alertaAtencao   Int?      @map("alerta_atencao")
-  alertaOk        Int?      @map("alerta_ok")
-  naoEncontrado   Int?      @map("nao_encontrado")
-  disparadoPor    String?   @map("disparado_por")
-  observacao      String?
-
-  @@map("cruzamento_exec")
-  @@schema("rfb")
-}
 
 /// Auditoria de ACESSO a PII de sócios (LGPD, D4). Append-only. Escrito
 /// pelo Fiscal a cada consulta que exponha sócio (Busca por Sócio ou QSA
