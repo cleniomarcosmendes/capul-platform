@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { GestaoTiGuard } from '../common/guards/gestao-ti.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
+import { ROLES_TI } from '../common/constants/roles.constant.js';
 import { CreateSoftwareDto } from './dto/create-software.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
@@ -56,19 +57,19 @@ export class SoftwareController {
   }
 
   @Post()
-  @Roles('ADMIN', 'GESTOR')
+  @Roles(...ROLES_TI)
   create(@Body() dto: CreateSoftwareDto, @CurrentUser() user: JwtPayload) {
     return this.service.create(dto, user);
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles(...ROLES_TI)
   update(@Param('id') id: string, @Body() dto: UpdateSoftwareDto, @CurrentUser() user: JwtPayload) {
     return this.service.update(id, dto, user);
   }
 
   @Patch(':id/status')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles(...ROLES_TI)
   updateStatus(
     @Param('id') id: string,
     @Body() dto: UpdateStatusSoftwareDto,
@@ -78,7 +79,7 @@ export class SoftwareController {
   }
 
   @Delete(':id')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles(...ROLES_TI)
   remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.service.remove(id, user);
   }
@@ -86,13 +87,13 @@ export class SoftwareController {
   // ─── Software ↔ Filial ────────────────────────────────────
 
   @Post(':id/filiais')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles(...ROLES_TI)
   addFilial(@Param('id') id: string, @Body('filialId') filialId: string) {
     return this.service.addFilial(id, filialId);
   }
 
   @Delete(':id/filiais/:filialId')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles(...ROLES_TI)
   removeFilial(@Param('id') id: string, @Param('filialId') filialId: string) {
     return this.service.removeFilial(id, filialId);
   }
@@ -105,13 +106,13 @@ export class SoftwareController {
   }
 
   @Post(':id/modulos')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles(...ROLES_TI)
   createModulo(@Param('id') id: string, @Body() dto: CreateModuloDto) {
     return this.service.createModulo(id, dto);
   }
 
   @Patch(':id/modulos/:moduloId')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles(...ROLES_TI)
   updateModulo(
     @Param('id') id: string,
     @Param('moduloId') moduloId: string,
@@ -121,7 +122,7 @@ export class SoftwareController {
   }
 
   @Patch(':id/modulos/:moduloId/status')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles(...ROLES_TI)
   updateModuloStatus(
     @Param('id') id: string,
     @Param('moduloId') moduloId: string,
@@ -133,7 +134,7 @@ export class SoftwareController {
   // ─── Módulo ↔ Filial ─────────────────────────────────────
 
   @Post(':id/modulos/:moduloId/filiais')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles(...ROLES_TI)
   addModuloFilial(
     @Param('id') id: string,
     @Param('moduloId') moduloId: string,
@@ -143,7 +144,7 @@ export class SoftwareController {
   }
 
   @Delete(':id/modulos/:moduloId/filiais/:filialId')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles(...ROLES_TI)
   removeModuloFilial(
     @Param('id') id: string,
     @Param('moduloId') moduloId: string,

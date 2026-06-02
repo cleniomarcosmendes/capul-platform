@@ -520,6 +520,7 @@ export interface SoftwareLicenca {
   dataInicio: string | null;
   dataVencimento: string | null;
   chaveSerial: string | null;
+  chaveNfe?: string | null;
   fornecedor: string | null;
   // S11 (25/05) — FK p/ FornecedorConfig (coexiste com `fornecedor` texto).
   fornecedorId: string | null;

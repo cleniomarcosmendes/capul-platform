@@ -64,6 +64,8 @@ export class LicencaController {
     @Query('departamentoId') departamentoId?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.service.findAll(
       {
@@ -75,6 +77,8 @@ export class LicencaController {
         departamentoId,
         page: page ? parseInt(page, 10) : undefined,
         pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+        sortBy,
+        sortOrder: sortOrder === 'desc' ? 'desc' : sortOrder === 'asc' ? 'asc' : undefined,
       },
       role,
       user,

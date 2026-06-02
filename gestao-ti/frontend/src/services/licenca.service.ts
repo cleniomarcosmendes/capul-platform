@@ -13,6 +13,8 @@ interface LicencaFilters {
   departamentoId?: string;
   page?: number;
   pageSize?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 interface CreateLicencaPayload {
@@ -26,6 +28,7 @@ interface CreateLicencaPayload {
   dataInicio?: string;
   dataVencimento?: string;
   chaveSerial?: string;
+  chaveNfe?: string;
   fornecedor?: string;
   // S11 (25/05) — FK p/ FornecedorConfig. Coexiste com `fornecedor` texto.
   // String vazia limpa o vínculo, undefined preserva.
@@ -45,6 +48,7 @@ export const licencaService = {
     if (filters.categoriaId) params.categoriaId = filters.categoriaId;
     if (filters.avulsas) params.avulsas = 'true';
     if (filters.departamentoId) params.departamentoId = filters.departamentoId;
+    if (filters.sortBy) { params.sortBy = filters.sortBy; params.sortOrder = filters.sortOrder ?? 'asc'; }
     params.page = String(filters.page ?? 1);
     params.pageSize = String(filters.pageSize ?? 50);
     const { data } = await gestaoApi.get<PaginatedResponse<SoftwareLicenca>>('/licencas', { params });

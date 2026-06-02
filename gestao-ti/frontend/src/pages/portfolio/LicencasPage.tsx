@@ -66,6 +66,9 @@ export function LicencasPage() {
   const [filtroCategoria, setFiltroCategoria] = useState('');
   // S11 — filtro por depto de alocação (não-OVERSIGHT já restringido no backend).
   const [filtroDepartamento, setFiltroDepartamento] = useState('');
+  // 02/06 — ordenação por clique no cabeçalho (server-side). null = ordem default.
+  const [sortBy, setSortBy] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // 01/06 — gerenciamento de usuários da licença (vínculo) direto nesta tela.
   // Antes só existia na aba Licenças do detalhe do Software; aqui cobre também
@@ -90,6 +93,7 @@ export function LicencasPage() {
   const [formDataInicio, setFormDataInicio] = useState('');
   const [formDataVencimento, setFormDataVencimento] = useState('');
   const [formChaveSerial, setFormChaveSerial] = useState('');
+  const [formChaveNfe, setFormChaveNfe] = useState('');
   const [formObservacoes, setFormObservacoes] = useState('');
   // Workspace Onda 3 S5 — depto de alocação da licença.
   const [formDepartamentoId, setFormDepartamentoId] = useState('');
@@ -106,6 +110,7 @@ export function LicencasPage() {
   const [editDataInicio, setEditDataInicio] = useState('');
   const [editDataVencimento, setEditDataVencimento] = useState('');
   const [editChaveSerial, setEditChaveSerial] = useState('');
+  const [editChaveNfe, setEditChaveNfe] = useState('');
   const [editObservacoes, setEditObservacoes] = useState('');
   const [editNome, setEditNome] = useState('');
   const [editCategoriaId, setEditCategoriaId] = useState('');
@@ -140,6 +145,8 @@ export function LicencasPage() {
         departamentoId: filtroDepartamento || undefined,
         page,
         pageSize,
+        sortBy: sortBy || undefined,
+        sortOrder,
       })
       .then((res) => {
         setLicencas(res.items);
@@ -147,7 +154,28 @@ export function LicencasPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [filtroStatus, filtroSoftware, filtroVencendo, filtroCategoria, filtroDepartamento, page, pageSize]);
+  }, [filtroStatus, filtroSoftware, filtroVencendo, filtroCategoria, filtroDepartamento, page, pageSize, sortBy, sortOrder]);
+
+  // Click no cabeçalho: nenhum → asc → desc → nenhum (default do backend).
+  const toggleSort = (col: string) => {
+    setPage(1);
+    if (sortBy !== col) { setSortBy(col); setSortOrder('asc'); return; }
+    if (sortOrder === 'asc') { setSortOrder('desc'); return; }
+    setSortBy(null); setSortOrder('asc');
+  };
+  // Cabeçalho ordenável (clique alterna asc/desc; seta indica estado).
+  const thSort = (label: string, col: string) => (
+    <th
+      className="px-4 py-3 font-medium text-slate-600 cursor-pointer select-none hover:text-slate-900"
+      onClick={() => toggleSort(col)}
+      title="Clique para ordenar"
+    >
+      {label}
+      <span className="ml-1 text-xs text-slate-400">
+        {sortBy === col ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}
+      </span>
+    </th>
+  );
 
   // Volta pra página 1 ao mudar filtro.
   useEffect(() => { setPage(1); }, [filtroStatus, filtroSoftware, filtroVencendo, filtroCategoria, filtroDepartamento, pageSize]);
@@ -184,6 +212,7 @@ export function LicencasPage() {
     setEditDataInicio(lic.dataInicio ? lic.dataInicio.slice(0, 10) : '');
     setEditDataVencimento(lic.dataVencimento ? lic.dataVencimento.slice(0, 10) : '');
     setEditChaveSerial(lic.chaveSerial || '');
+    setEditChaveNfe(lic.chaveNfe || '');
     setEditObservacoes(lic.observacoes || '');
     setEditNome(lic.nome || '');
     setEditCategoriaId(lic.categoriaId || '');
@@ -207,6 +236,7 @@ export function LicencasPage() {
         dataInicio: editDataInicio || undefined,
         dataVencimento: editDataVencimento || undefined,
         chaveSerial: editChaveSerial || undefined,
+        chaveNfe: editChaveNfe.replace(/\D/g, '') || undefined,
         observacoes: editObservacoes || undefined,
       });
       setEditingId(null);
@@ -302,6 +332,7 @@ export function LicencasPage() {
     setFormDataInicio('');
     setFormDataVencimento('');
     setFormChaveSerial('');
+    setFormChaveNfe('');
     setFormObservacoes('');
     setFormDepartamentoId('');
     setFormError('');
@@ -334,6 +365,7 @@ export function LicencasPage() {
         dataInicio: formDataInicio || undefined,
         dataVencimento: formDataVencimento || undefined,
         chaveSerial: formChaveSerial || undefined,
+        chaveNfe: formChaveNfe.replace(/\D/g, '') || undefined,
         observacoes: formObservacoes || undefined,
         departamentoId: formDepartamentoId || undefined,
       });
@@ -473,6 +505,7 @@ export function LicencasPage() {
                 <input type="date" value={formDataVencimento} onChange={(e) => setFormDataVencimento(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
               </div>
               <input type="text" placeholder="Chave Serial" value={formChaveSerial} onChange={(e) => setFormChaveSerial(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              <input type="text" inputMode="numeric" maxLength={54} placeholder="Chave NF-e (44 dígitos)" title="Chave da NF-e que originou esta licença (44 dígitos) — vincula ao módulo Fiscal." value={formChaveNfe} onChange={(e) => setFormChaveNfe(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono" />
               <input type="text" placeholder="Observacoes" value={formObservacoes} onChange={(e) => setFormObservacoes(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
             </div>
 
@@ -588,16 +621,16 @@ export function LicencasPage() {
                   <tr className="bg-slate-50 text-left">
                     <th className="px-4 py-3 font-medium text-slate-600">Licenca</th>
                     {/* S11 — coluna Departamento (alocação, gap visível antes). */}
-                    <th className="px-4 py-3 font-medium text-slate-600">Departamento</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Modelo</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Qtd</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Usuarios</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Valor Total</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Fornecedor</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Inicio</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Vencimento</th>
+                    {thSort('Departamento', 'departamento')}
+                    {thSort('Modelo', 'modelo')}
+                    {thSort('Qtd', 'quantidade')}
+                    {thSort('Usuarios', 'usuarios')}
+                    {thSort('Valor Total', 'valorTotal')}
+                    {thSort('Fornecedor', 'fornecedor')}
+                    {thSort('Inicio', 'dataInicio')}
+                    {thSort('Vencimento', 'dataVencimento')}
                     <th className="px-4 py-3 font-medium text-slate-600">Contrato</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Status</th>
+                    {thSort('Status', 'status')}
                     {isAdmin && <th className="px-4 py-3 font-medium text-slate-600">Acoes</th>}
                   </tr>
                 </thead>
@@ -619,6 +652,19 @@ export function LicencasPage() {
                         )}
                         {getSubtitle(lic) && (
                           <p className="text-xs text-slate-400">{getSubtitle(lic)}</p>
+                        )}
+                        {lic.chaveNfe && (
+                          <p className="text-xs">
+                            <a
+                              href={`/fiscal/nfe?chave=${lic.chaveNfe}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-capul-600 hover:underline font-mono"
+                              title="Abrir a NF-e desta licença no módulo Fiscal"
+                            >
+                              NF-e {lic.chaveNfe.slice(0, 6)}…{lic.chaveNfe.slice(-6)}
+                            </a>
+                          </p>
                         )}
                       </td>
                       {/* S11 — depto de alocação (fallback '-' se include falhar). */}
@@ -732,6 +778,7 @@ export function LicencasPage() {
                             <input type="number" step="0.01" min="0" placeholder="Valor Total" value={editValorTotal} onChange={(e) => setEditValorTotal(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
                             <input type="number" step="0.01" min="0" placeholder="Valor Unitario" value={editValorUnitario} onChange={(e) => setEditValorUnitario(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
                             <input type="text" placeholder="Chave Serial" value={editChaveSerial} onChange={(e) => setEditChaveSerial(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                            <input type="text" inputMode="numeric" maxLength={54} placeholder="Chave NF-e (44 dígitos)" title="Chave da NF-e que originou esta licença (44 dígitos)." value={editChaveNfe} onChange={(e) => setEditChaveNfe(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono" />
                           </div>
                           {/* S11 — texto livre p/ fornecedor sem cadastro. */}
                           <div className="mb-3">

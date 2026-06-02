@@ -71,7 +71,8 @@ export function SoftwareDetalhePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { gestaoTiRole } = useAuth();
-  const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
+  // SUPORTE também gerencia software/licença (faz o lançamento).
+  const isAdmin = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole || '');
   const { toast, confirm } = useToast();
 
   const [software, setSoftware] = useState<Software | null>(null);
@@ -572,6 +573,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
   const [dataInicio, setDataInicio] = useState('');
   const [dataVencimento, setDataVencimento] = useState('');
   const [chaveSerial, setChaveSerial] = useState('');
+  const [chaveNfe, setChaveNfe] = useState('');
   const [fornecedor, setFornecedor] = useState('');
   // S11 (25/05) — FK p/ FornecedorConfig (cadastro centralizado).
   const [fornecedorId, setFornecedorId] = useState('');
@@ -611,6 +613,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
     setDataInicio('');
     setDataVencimento('');
     setChaveSerial('');
+    setChaveNfe('');
     setFornecedor('');
     setFornecedorId('');
     setObservacoes('');
@@ -628,6 +631,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
         dataInicio: dataInicio || undefined,
         dataVencimento: dataVencimento || undefined,
         chaveSerial: chaveSerial || undefined,
+        chaveNfe: chaveNfe.replace(/\D/g, '') || undefined,
         fornecedor: fornecedor || undefined,
         // S11 — preferir FK; texto livre vira complemento.
         fornecedorId: fornecedorId || undefined,
@@ -796,12 +800,21 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
               title="Data Vencimento"
             />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
             <input
               value={chaveSerial}
               onChange={(e) => setChaveSerial(e.target.value)}
               placeholder="Chave Serial"
               className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
+            />
+            <input
+              value={chaveNfe}
+              onChange={(e) => setChaveNfe(e.target.value)}
+              placeholder="Chave NF-e (44 dígitos)"
+              title="Chave da NF-e que originou esta licença (44 dígitos) — vincula ao módulo Fiscal."
+              inputMode="numeric"
+              maxLength={54}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono"
             />
             <input
               value={observacoes}

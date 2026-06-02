@@ -49,7 +49,8 @@ const criticidadeCores: Record<string, string> = {
 
 export function SoftwaresListPage() {
   const { gestaoTiRole } = useAuth();
-  const isAdmin = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
+  // SUPORTE também gerencia software (faz o lançamento) — alinhado à Licença.
+  const isAdmin = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole || '');
 
   const [softwares, setSoftwares] = useState<Software[]>([]);
   // Paginação 23/04/2026

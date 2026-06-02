@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsInt, IsNumber, Min, IsDateString, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsInt, IsNumber, Min, IsDateString, MaxLength, Matches } from 'class-validator';
 import { ModeloLicenca } from '@prisma/client';
 
 export class CreateLicencaDto {
@@ -46,6 +46,13 @@ export class CreateLicencaDto {
   @IsString()
   @MaxLength(200)
   chaveSerial?: string;
+
+  // Chave da NF-e (44 dígitos) que originou a licença — vincula ao módulo
+  // Fiscal (rastreabilidade + consulta da NF). Opcional. Pedido 02/06.
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{44}$/, { message: 'Chave NF-e deve ter exatamente 44 dígitos numéricos' })
+  chaveNfe?: string;
 
   @IsOptional()
   @IsString()

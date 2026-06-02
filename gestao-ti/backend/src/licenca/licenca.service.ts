@@ -36,6 +36,25 @@ const licencaIncludeComUsuarios = {
   _count: { select: { usuarios: true } },
 };
 
+/** Ordenação do grid de Licenças por clique no cabeçalho. Whitelist (não aceita
+ *  coluna arbitrária do query param). Suporta colunas escalares + relações
+ *  (departamento.nome) + contagem de usuários. Default: vencimento asc. */
+function buildLicencaOrderBy(sortBy?: string, sortOrder?: 'asc' | 'desc') {
+  const dir: 'asc' | 'desc' = sortOrder === 'desc' ? 'desc' : 'asc';
+  switch (sortBy) {
+    case 'modelo': return { modeloLicenca: dir };
+    case 'quantidade': return { quantidade: dir };
+    case 'valorTotal': return { valorTotal: dir };
+    case 'fornecedor': return { fornecedor: dir };
+    case 'dataInicio': return { dataInicio: dir };
+    case 'dataVencimento': return { dataVencimento: dir };
+    case 'status': return { status: dir };
+    case 'departamento': return { departamento: { nome: dir } };
+    case 'usuarios': return { usuarios: { _count: dir } };
+    default: return { dataVencimento: 'asc' as const };
+  }
+}
+
 @Injectable()
 export class LicencaService {
   constructor(private readonly prisma: PrismaService) {}
@@ -49,6 +68,8 @@ export class LicencaService {
     departamentoId?: string;
     page?: number;
     pageSize?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
   }, role: string, user?: JwtPayload) {
     const where: Record<string, unknown> = {};
 
@@ -78,7 +99,9 @@ export class LicencaService {
         ...licencaInclude,
         _count: { select: { usuarios: true } },
       },
-      orderBy: { dataVencimento: 'asc' },
+      // Ordenação por clique no cabeçalho (whitelist — protege contra injection).
+      // Default mantém vencimento asc (comportamento anterior).
+      orderBy: buildLicencaOrderBy(filters.sortBy, filters.sortOrder),
       page: filters.page,
       pageSize: filters.pageSize,
     });
@@ -143,6 +166,7 @@ export class LicencaService {
         dataInicio: dto.dataInicio ? new Date(dto.dataInicio) : null,
         dataVencimento: dto.dataVencimento ? new Date(dto.dataVencimento) : null,
         chaveSerial: dto.chaveSerial,
+        chaveNfe: dto.chaveNfe || null,
         fornecedor: dto.fornecedor,
         fornecedorId: dto.fornecedorId || null,
         observacoes: dto.observacoes,

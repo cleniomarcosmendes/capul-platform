@@ -1243,6 +1243,10 @@ model SoftwareLicenca {
   dataInicio     DateTime?      @map("data_inicio")
   dataVencimento DateTime?      @map("data_vencimento")
   chaveSerial    String?        @map("chave_serial")
+  // Chave da NF-e (44 díg.) que originou a licença — vínculo ao módulo Fiscal
+  // (rastreabilidade + consulta da NF). NÃO @unique: uma NF pode gerar várias
+  // licenças. Opcional. Adicionado 02/06.
+  chaveNfe       String?        @map("chave_nfe") @db.Char(44)
   fornecedor     String?
   observacoes    String?
   status         StatusLicenca  @default(ATIVA)
