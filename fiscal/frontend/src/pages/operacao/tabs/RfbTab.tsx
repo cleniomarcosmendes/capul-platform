@@ -181,7 +181,35 @@ export function RfbTab() {
     }
   }
 
-  const detectar = () => acao(() => fiscalApi.post('/rfb/detectar'), 'Detecção disparada');
+  // Detecção dá feedback EXPLÍCITO do resultado — antes mostrava só "Detecção
+  // disparada" e, sem versão nova, o operador ficava no escuro achando que nada
+  // rodou. Agora distingue "nova versão disponível" de "base já atualizada".
+  const detectar = async () => {
+    setActing(true);
+    try {
+      const { data: r } = await fiscalApi.post<{
+        maisRecente: string;
+        importada: boolean;
+        novaDisponivel: boolean;
+      }>('/rfb/detectar');
+      if (r.novaDisponivel) {
+        toast.success(
+          `Nova versão ${r.maisRecente} disponível`,
+          'Pronta para importar — use "Importar base completa".',
+        );
+      } else {
+        toast.info(
+          `Base já está na versão mais recente (${r.maisRecente})`,
+          'Nenhuma versão nova encontrada no repositório da RFB.',
+        );
+      }
+      await carregar();
+    } catch (e) {
+      toast.error('Falha ao detectar versão da RFB', extractApiError(e));
+    } finally {
+      setActing(false);
+    }
+  };
   const importarTudo = async () => {
     const ok = await confirm({
       title: 'Importar base completa da RFB?',
