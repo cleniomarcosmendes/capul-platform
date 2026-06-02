@@ -13,8 +13,19 @@ export class PrismaRfbService extends PrismaClientRfb implements OnModuleInit, O
   private readonly logger = new Logger(PrismaRfbService.name);
 
   async onModuleInit() {
-    await this.$connect();
-    this.logger.log('Prisma RFB conectado (banco dedicado capul_rfb)');
+    // Boot resiliente: se a RFB estiver fora no boot (ex.: banco dedicado em
+    // outra máquina momentaneamente indisponível), NÃO derruba o módulo Fiscal
+    // — a RFB é consultiva/degradável (NF-e/CT-e/Protheus seguem). O Prisma
+    // reconecta lazy na 1ª query; consultas RFB falham graciosamente até lá.
+    try {
+      await this.$connect();
+      this.logger.log('Prisma RFB conectado (banco dedicado)');
+    } catch (e) {
+      this.logger.error(
+        `Prisma RFB NÃO conectou no boot (RFB_DATABASE_URL): ${(e as Error).message}. ` +
+          'Consultas RFB ficarão indisponíveis até o banco responder (reconexão lazy).',
+      );
+    }
   }
 
   async onModuleDestroy() {

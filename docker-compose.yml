@@ -399,9 +399,12 @@ services:
     container_name: capul-fiscal-api
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public&connection_limit=10
-      # Base RFB em banco DEDICADO (capul-db-rfb). Em HOM/PROD real, apontar
-      # pra máquina exclusiva do Douglas. ?schema=rfb (multiSchema do client RFB).
-      RFB_DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres-rfb:5432/capul_rfb?schema=rfb&connection_limit=10
+      # Base RFB em banco DEDICADO. Host/porta/banco configuráveis via .env:
+      #   default = container local `postgres-rfb` (capul-db-rfb).
+      #   p/ apontar a uma máquina externa (ex.: máquina de DEV que já tem os
+      #   41 GB carregados, ou a máquina exclusiva do Douglas), basta definir
+      #   RFB_DB_HOST / RFB_DB_PORT / RFB_DB_NAME no .env — sem editar o compose.
+      RFB_DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@${RFB_DB_HOST:-postgres-rfb}:${RFB_DB_PORT:-5432}/${RFB_DB_NAME:-capul_rfb}?schema=rfb&connection_limit=10
       JWT_SECRET: ${JWT_SECRET}
       DB_SCHEMA: fiscal
       CORE_SCHEMA: core
@@ -440,8 +443,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # RFB: dependência leve (service_started, não healthy) — o boot do fiscal
+      # é resiliente à RFB indisponível (PrismaRfbService reconecta lazy). Quando
+      # RFB_DB_HOST aponta p/ máquina externa, o container local postgres-rfb
+      # pode nem rodar; por isso não bloqueamos por health dele.
       postgres-rfb:
-        condition: service_healthy
+        condition: service_started
+        required: false
       redis:
         condition: service_started
       fiscal-migrate:
