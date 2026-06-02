@@ -462,9 +462,11 @@ export class NfeParserService {
         cofinsBase: optNum(cofins?.vBC),
         cofinsAliquota: optNum(cofins?.pCOFINS),
         cofinsValor: optNum(cofins?.vCOFINS),
-        // Imposto Devolvido (devolução de mercadoria) — det/imposto/impostoDevol.
-        impostoDevolPercentual: optNum(imposto.impostoDevol?.pDevol),
-        impostoDevolValorIpi: optNum(imposto.impostoDevol?.IPIDevol?.vIPIDevol),
+        // Imposto Devolvido (devolução de mercadoria). No XML é filho de <det>
+        // (irmão de <imposto>), e o valor fica em <impostoDevol><IPI><vIPIDevol>:
+        //   <impostoDevol><pDevol>40.00</pDevol><IPI><vIPIDevol>63.29</vIPIDevol></IPI></impostoDevol>
+        impostoDevolPercentual: optNum(d.impostoDevol?.pDevol),
+        impostoDevolValorIpi: optNum(d.impostoDevol?.IPI?.vIPIDevol),
         // campos legados (flat) mantidos por compat
         icmsCst: icmsParsed.cst,
         icmsOrig: icmsParsed.orig,
