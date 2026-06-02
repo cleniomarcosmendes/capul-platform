@@ -172,6 +172,10 @@ export interface NfeProduto {
     cofinsBase?: number | null;
     cofinsAliquota?: number | null;
     cofinsValor?: number | null;
+    // Imposto Devolvido (det/imposto/impostoDevol) — devolução de mercadoria.
+    // pDevol = % da mercadoria devolvida; IPIDevol/vIPIDevol = valor do IPI devolvido.
+    impostoDevolPercentual?: number | null;
+    impostoDevolValorIpi?: number | null;
     // campos antigos mantidos por compatibilidade com código consumidor
     icmsCst?: string | null;
     icmsOrig?: string | null;

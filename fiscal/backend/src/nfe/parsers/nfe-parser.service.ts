@@ -462,6 +462,9 @@ export class NfeParserService {
         cofinsBase: optNum(cofins?.vBC),
         cofinsAliquota: optNum(cofins?.pCOFINS),
         cofinsValor: optNum(cofins?.vCOFINS),
+        // Imposto Devolvido (devolução de mercadoria) — det/imposto/impostoDevol.
+        impostoDevolPercentual: optNum(imposto.impostoDevol?.pDevol),
+        impostoDevolValorIpi: optNum(imposto.impostoDevol?.IPIDevol?.vIPIDevol),
         // campos legados (flat) mantidos por compat
         icmsCst: icmsParsed.cst,
         icmsOrig: icmsParsed.orig,

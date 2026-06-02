@@ -1549,6 +1549,23 @@ function DetalheProduto({ produto: p }: { produto: NfeProduto }) {
         </GridRow>
       </SubSecao>
 
+      {/* Imposto Devolvido (devolução de mercadoria) — só mostra se houver dado.
+          Pedido Fiscal: faltava o grupo det/imposto/impostoDevol do item. */}
+      {(p.impostos.impostoDevolPercentual != null || p.impostos.impostoDevolValorIpi != null) && (
+        <SubSecao titulo="Imposto Devolvido">
+          <GridRow cols={2}>
+            <Row
+              label="Percentual da Mercadoria Devolvida"
+              value={fmtNum(p.impostos.impostoDevolPercentual ?? null, 2)}
+            />
+            <Row
+              label="Valor do IPI Devolvido"
+              value={fmtNum(p.impostos.impostoDevolValorIpi ?? 0)}
+            />
+          </GridRow>
+        </SubSecao>
+      )}
+
       {/* IPI — só mostra se tiver dado */}
       {(p.impostos.ipiValor ?? 0) > 0 && (
         <SubSecao titulo="IPI">

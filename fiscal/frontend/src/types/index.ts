@@ -254,6 +254,9 @@ export interface NfeProdutoImpostos {
   cofinsBase?: number | null;
   cofinsAliquota?: number | null;
   cofinsValor?: number | null;
+  // Imposto Devolvido (devolução de mercadoria) — det/imposto/impostoDevol.
+  impostoDevolPercentual?: number | null;
+  impostoDevolValorIpi?: number | null;
   // legacy — mantido por compat (vem preenchido no backend)
   icmsCst?: string | null;
   icmsOrig?: string | null;
