@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ChamadoExternoService } from '../../chamado-externo/chamado-externo.service.js';
 import { getDeptoIdsDoUser, applyDepartamentoFilter } from '../../common/helpers/departamento-filter.helper.js';
@@ -6,6 +6,8 @@ import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class DashboardIndicadoresService {
+  private readonly logger = new Logger(DashboardIndicadoresService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly chamadoExternoService: ChamadoExternoService,
@@ -112,7 +114,7 @@ export class DashboardIndicadoresService {
     const licDeptoWhere = applyDepartamentoFilter({}, user, role);
     const swDeptoWhere = applyDepartamentoFilter({}, user, role);
 
-    const [licencasAtivasList, softwaresAtivosList, licencasVencendo30List, licencasVencendo90List] = await Promise.all([
+    const [licencasAtivasList, softwaresAtivosList, licencasVencendo30List, licencasVencendo60List, licencasVencendo90List] = await Promise.all([
       this.prisma.softwareLicenca.findMany({
         where: { status: 'ATIVA', ...licDeptoWhere },
         select: licSelect,
@@ -127,6 +129,16 @@ export class DashboardIndicadoresService {
         where: {
           status: 'ATIVA',
           dataVencimento: { gte: new Date(), lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
+          ...licDeptoWhere,
+        },
+        select: licSelect,
+        orderBy: { dataVencimento: 'asc' },
+      }),
+      // 02/06 — janela de 60 dias (antes hardcoded 0 no retorno).
+      this.prisma.softwareLicenca.findMany({
+        where: {
+          status: 'ATIVA',
+          dataVencimento: { gte: new Date(), lte: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000) },
           ...licDeptoWhere,
         },
         select: licSelect,
@@ -147,11 +159,12 @@ export class DashboardIndicadoresService {
       licencasAtivas: licencasAtivasList.length,
       totalSoftwares: softwaresAtivosList.length,
       licencasVencendo30: licencasVencendo30List.length,
-      licencasVencendo60: 0,
+      licencasVencendo60: licencasVencendo60List.length,
       licencasVencendo90: licencasVencendo90List.length,
       detalheSoftwares: softwaresAtivosList,
       detalheLicencasAtivas: licencasAtivasList,
       detalheLicencasVencendo30: licencasVencendo30List,
+      detalheLicencasVencendo60: licencasVencendo60List,
       detalheLicencasVencendo90: licencasVencendo90List,
     };
   }
@@ -273,7 +286,7 @@ export class DashboardIndicadoresService {
   private async getChamados(dataInicio: Date, dataFim: Date, user?: JwtPayload, role?: string) {
     const chamadoSelect = {
       id: true, numero: true, titulo: true, status: true, prioridade: true,
-      createdAt: true, updatedAt: true,
+      createdAt: true, updatedAt: true, dataResolucao: true, dataFechamento: true,
       solicitante: { select: { id: true, nome: true } },
       tecnico: { select: { id: true, nome: true } },
       equipeAtual: { select: { id: true, sigla: true } },
@@ -312,12 +325,18 @@ export class DashboardIndicadoresService {
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.chamado.findMany({
+        // 02/06 — "resolvido no período" passa a usar data_resolucao (fallback
+        // data_fechamento), não updated_at. updated_at muda em qualquer edição
+        // pós-resolução (ex.: comentário), inflando contagem e tempo médio.
         where: wsFilter({
           status: { in: ['RESOLVIDO', 'FECHADO'] },
-          updatedAt: { gte: dataInicio, lte: dataFim },
+          OR: [
+            { dataResolucao: { gte: dataInicio, lte: dataFim } },
+            { dataResolucao: null, dataFechamento: { gte: dataInicio, lte: dataFim } },
+          ],
         }),
         select: chamadoSelect,
-        orderBy: { updatedAt: 'desc' },
+        orderBy: { dataResolucao: 'desc' },
       }),
       this.prisma.chamado.findMany({
         where: wsFilter({ status: { in: ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE', 'REABERTO'] } }),
@@ -326,10 +345,13 @@ export class DashboardIndicadoresService {
       }),
     ]);
 
+    // Tempo médio = (resolução − abertura). Usa data_resolucao (fallback
+    // data_fechamento, fallback updated_at p/ registros legados sem as datas).
     let tempoMedioHoras = 0;
     if (resolvidosList.length > 0) {
       const totalMinutos = resolvidosList.reduce((sum, c) => {
-        return sum + (c.updatedAt.getTime() - c.createdAt.getTime()) / (1000 * 60);
+        const fim = c.dataResolucao ?? c.dataFechamento ?? c.updatedAt;
+        return sum + (fim.getTime() - c.createdAt.getTime()) / (1000 * 60);
       }, 0);
       tempoMedioHoras = Number((totalMinutos / resolvidosList.length / 60).toFixed(1));
     }
@@ -351,16 +373,24 @@ export class DashboardIndicadoresService {
       where: { codigo: 'DESENVOLVIMENTO_INTERNO' },
     });
 
+    // Guard (02/06): sem o tipo DESENVOLVIMENTO_INTERNO, a query SEM o filtro
+    // contaria TODOS os apontamentos (manutenção/infra/etc.), inflando o KPI.
+    // Melhor retornar 0 + logar do que entregar número errado silenciosamente.
+    if (!tipoDesenv) {
+      this.logger.error(
+        'KPI horas-dev: tipoProjetoConfig DESENVOLVIMENTO_INTERNO não encontrado — ' +
+          'retornando 0 (evita contar apontamentos de todos os tipos). Cadastre o tipo.',
+      );
+      return { totalHoras: 0, totalApontamentos: 0, porProjeto: [], porAnalista: [] };
+    }
+
     // Buscar registros de tempo (player) das atividades de projetos do tipo Desenvolvimento Interno
     const where: Record<string, unknown> = {
       horaInicio: { gte: dataInicio, lte: dataFim },
       horaFim: { not: null },
       duracaoMinutos: { not: null, gt: 0 },
+      atividade: { projeto: { tipoProjetoId: tipoDesenv.id } },
     };
-
-    if (tipoDesenv) {
-      where.atividade = { projeto: { tipoProjetoId: tipoDesenv.id } };
-    }
 
     const registros = await this.prisma.registroTempo.findMany({
       where,
