@@ -1,16 +1,17 @@
-import { IsString, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, MaxLength } from 'class-validator';
 
 export class AtribuirFuncionarioDto {
-  // Matrícula do funcionário no Protheus (cadastro de funcionários, sem senha).
+  // Matrícula do funcionário (cadastro de funcionários da empresa).
   @IsString()
   @IsNotEmpty()
   @MaxLength(20)
   matricula: string;
 
-  // Nome resolvido pelo frontend (lookup INFOCLIENTES). O backend revalida no
-  // Protheus e prefere o nome autoritativo; este é fallback se o ERP estiver fora.
-  @IsOptional()
+  // Nome do funcionário (digitado). NÃO há endpoint Protheus que resolva o nome
+  // de funcionário por matrícula sem senha — o INFOCLIENTES é cadastro de CLIENTES,
+  // não funcionários (ver pendência Protheus / memory). Por isso é informado aqui.
   @IsString()
+  @IsNotEmpty()
   @MaxLength(200)
-  nome?: string;
+  nome: string;
 }

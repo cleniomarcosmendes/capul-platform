@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { softwareService } from '../../services/software.service';
 import { licencaService } from '../../services/licenca.service';
 import { contratoService } from '../../services/contrato.service';
-import { coreApi, gestaoApi } from '../../services/api';
+import { coreApi } from '../../services/api';
 import {
   ArrowLeft, Pencil, Plus, Trash2, X, Building2, KeyRound, Layers,
   AlertTriangle, ExternalLink, Activity, Users, UserPlus, UserMinus,
@@ -565,6 +565,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
   const [licencaFuncionarios, setLicencaFuncionarios] = useState<LicencaFuncionario[]>([]);
   const [loadingUsuarios, setLoadingUsuarios] = useState(false);
   const [matriculaInput, setMatriculaInput] = useState('');
+  const [nomeInput, setNomeInput] = useState('');
   const [savingUsuario, setSavingUsuario] = useState(false);
 
   const [modeloLicenca, setModeloLicenca] = useState<ModeloLicenca | ''>('');
@@ -736,6 +737,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
     setExpandedLicId(licId);
     setLoadingUsuarios(true);
     setMatriculaInput('');
+    setNomeInput('');
     try {
       setLicencaFuncionarios(await licencaService.listarFuncionarios(licId));
     } catch { /* ignore */ }
@@ -744,18 +746,16 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
 
   async function handleAtribuir(licId: string) {
     const mat = matriculaInput.trim();
-    if (!mat) return;
+    const nome = nomeInput.trim();
+    if (!mat || !nome) return;
     setSavingUsuario(true);
     try {
-      // Resolve o nome no cadastro de funcionários do Protheus (sem senha).
-      let nome = '';
-      try {
-        const { data } = await gestaoApi.get(`/protheus/colaborador/${encodeURIComponent(mat)}`);
-        if (data?.encontrado && data?.nome) nome = data.nome;
-      } catch { /* backend revalida */ }
-      await licencaService.atribuirFuncionario(licId, mat, nome || undefined);
+      // Matrícula + nome informados manualmente (sem lookup Protheus — INFOCLIENTES
+      // é cadastro de clientes, não funcionários; ver pendência Protheus).
+      await licencaService.atribuirFuncionario(licId, mat, nome);
       setLicencaFuncionarios(await licencaService.listarFuncionarios(licId));
       setMatriculaInput('');
+      setNomeInput('');
       loadLicencas();
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -1030,25 +1030,33 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                                 {/* Atribuir por matrícula (funcionário Protheus, sem senha) */}
                                 {isAdmin && lic.status === 'ATIVA' && (
                                   <>
-                                    <div className="flex gap-2 mb-1">
+                                    <div className="flex flex-wrap gap-2 mb-1">
                                       <input
                                         type="text"
                                         value={matriculaInput}
                                         onChange={(e) => setMatriculaInput(e.target.value)}
                                         onKeyDown={(e) => { if (e.key === 'Enter') handleAtribuir(lic.id); }}
-                                        placeholder="Matrícula do funcionário (ex.: E12345)"
-                                        className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-capul-600"
+                                        placeholder="Matrícula"
+                                        className="w-32 border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-capul-600"
+                                      />
+                                      <input
+                                        type="text"
+                                        value={nomeInput}
+                                        onChange={(e) => setNomeInput(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleAtribuir(lic.id); }}
+                                        placeholder="Nome do funcionário"
+                                        className="flex-1 min-w-[160px] border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-capul-600"
                                       />
                                       <button
                                         onClick={() => handleAtribuir(lic.id)}
-                                        disabled={!matriculaInput.trim() || savingUsuario || (lic.quantidade != null && licencaFuncionarios.length >= lic.quantidade)}
+                                        disabled={!matriculaInput.trim() || !nomeInput.trim() || savingUsuario || (lic.quantidade != null && licencaFuncionarios.length >= lic.quantidade)}
                                         className="flex items-center gap-1 bg-capul-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50"
                                       >
                                         <UserPlus className="w-3.5 h-3.5" />
-                                        {savingUsuario ? 'Buscando...' : 'Atribuir'}
+                                        {savingUsuario ? 'Atribuindo...' : 'Atribuir'}
                                       </button>
                                     </div>
-                                    <p className="text-xs text-slate-400 mb-3">Digite a matrícula — o nome é buscado no cadastro de funcionários (Protheus), sem senha.</p>
+                                    <p className="text-xs text-slate-400 mb-3">Informe a matrícula e o nome do funcionário.</p>
                                   </>
                                 )}
 

@@ -4,7 +4,6 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { ProtheusService } from '../protheus/protheus.service.js';
 import { CreateLicencaDto } from './dto/create-licenca.dto.js';
 import { UpdateLicencaDto } from './dto/update-licenca.dto.js';
 import { CreateCategoriaLicencaDto, UpdateCategoriaLicencaDto } from './dto/create-categoria-licenca.dto.js';
@@ -56,10 +55,7 @@ function buildLicencaOrderBy(sortBy?: string, sortOrder?: 'asc' | 'desc') {
 
 @Injectable()
 export class LicencaService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly protheus: ProtheusService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async findAll(filters: {
     softwareId?: string;
@@ -285,7 +281,7 @@ export class LicencaService {
     });
   }
 
-  async atribuirFuncionario(licencaId: string, matricula: string, nomeInformado?: string) {
+  async atribuirFuncionario(licencaId: string, matricula: string, nomeInformado: string) {
     const licenca = await this.getLicencaOrFail(licencaId);
 
     if (licenca.status !== 'ATIVA') {
@@ -295,14 +291,12 @@ export class LicencaService {
     const matriculaNorm = (matricula || '').trim();
     if (!matriculaNorm) throw new BadRequestException('Matrícula é obrigatória');
 
-    // Resolve o nome no cadastro de funcionários do Protheus (INFOCLIENTES,
-    // sem senha). Se o Protheus estiver indisponível, usa o nome já informado
-    // pelo frontend (que fez o mesmo lookup) como fallback.
-    const colaborador = await this.protheus.buscarColaborador(matriculaNorm).catch(() => null);
-    const nome = colaborador?.nome || (nomeInformado || '').trim();
-    if (!nome) {
-      throw new BadRequestException(`Funcionário (matrícula ${matriculaNorm}) não encontrado no Protheus.`);
-    }
+    // Nome é informado manualmente: NÃO há endpoint Protheus que resolva o nome
+    // de funcionário por matrícula sem senha (INFOCLIENTES é cadastro de CLIENTES,
+    // não funcionários). Ver pendência Protheus. Quando existir o endpoint SRA,
+    // dá pra reativar um autofill/validação aqui.
+    const nome = (nomeInformado || '').trim();
+    if (!nome) throw new BadRequestException('Nome do funcionário é obrigatório');
 
     const existente = await this.prisma.licencaFuncionario.findUnique({
       where: { licencaId_matricula: { licencaId, matricula: matriculaNorm } },
