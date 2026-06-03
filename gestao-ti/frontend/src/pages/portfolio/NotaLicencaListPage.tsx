@@ -20,6 +20,21 @@ function resumoDeptos(n: LicencaCompra): string {
   if (nomes.length === 0) return '—';
   return nomes.length > 1 ? `${nomes[0]} +${nomes.length - 1}` : nomes[0];
 }
+function resumoUsuarios(n: LicencaCompra): string {
+  const nomes = Array.from(new Set((n.itens || []).flatMap((i) => (i.funcionarios || []).map((f) => f.nome)).filter(Boolean))) as string[];
+  if (nomes.length === 0) return '—';
+  return nomes.length > 1 ? `${nomes[0]} +${nomes.length - 1}` : nomes[0];
+}
+function resumoSerial(n: LicencaCompra): string {
+  const seriais = Array.from(new Set((n.itens || []).map((i) => i.chaveSerial).filter(Boolean))) as string[];
+  if (seriais.length === 0) return '—';
+  return seriais.length > 1 ? `${seriais[0]} +${seriais.length - 1}` : seriais[0];
+}
+function resumoVenc(n: LicencaCompra): string {
+  const datas = (n.itens || []).map((i) => i.dataVencimento).filter(Boolean) as string[];
+  if (datas.length === 0) return '—';
+  return formatDateBR(datas.reduce((a, b) => (a < b ? a : b)));
+}
 
 export function NotaLicencaListPage() {
   const { gestaoTiRole } = useAuth();
@@ -80,11 +95,12 @@ export function NotaLicencaListPage() {
                 <thead>
                   <tr className="bg-slate-50 text-left">
                     <th className="px-4 py-3 font-medium text-slate-600">Software / Licença</th>
+                    <th className="px-4 py-3 font-medium text-slate-600">Usuário</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Depto Alocado</th>
+                    <th className="px-4 py-3 font-medium text-slate-600">Vencimento</th>
+                    <th className="px-4 py-3 font-medium text-slate-600">Chave Serial</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Número NF</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Fornecedor</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Lançamento</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Qtd</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Valor Total</th>
                   </tr>
                 </thead>
@@ -96,11 +112,12 @@ export function NotaLicencaListPage() {
                           {resumoLicencas(n)}
                         </Link>
                       </td>
+                      <td className="px-4 py-3 text-slate-600">{resumoUsuarios(n)}</td>
                       <td className="px-4 py-3 text-slate-600">{resumoDeptos(n)}</td>
+                      <td className="px-4 py-3 text-slate-500 text-xs">{resumoVenc(n)}</td>
+                      <td className="px-4 py-3 text-xs font-mono text-slate-500">{resumoSerial(n)}</td>
                       <td className="px-4 py-3 text-slate-600">{n.semNota ? <span className="text-slate-400">S/N</span> : n.numero}</td>
                       <td className="px-4 py-3 text-slate-600">{n.fornecedor?.nome ?? '-'}</td>
-                      <td className="px-4 py-3 text-slate-500 text-xs">{formatDateBR(n.dataLancamento)}</td>
-                      <td className="px-4 py-3 text-slate-600">{n._count?.itens ?? n.itens?.length ?? 0}</td>
                       <td className="px-4 py-3 text-slate-600">
                         R$ {Number(n.valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
