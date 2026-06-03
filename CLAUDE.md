@@ -250,4 +250,4 @@ Este arquivo serve como ponto de entrada para o Claude Code entender a estrutura
 
 ---
 
-*Ultima atualizacao: 02/06/2026*
+*Ultima atualizacao: 03/06/2026*
