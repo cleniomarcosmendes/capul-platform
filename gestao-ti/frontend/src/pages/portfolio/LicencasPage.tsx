@@ -100,22 +100,10 @@ export function LicencasPage() {
   // S11 (25/05) — FK p/ FornecedorConfig (preferencial; coexiste com texto livre).
   const [formFornecedorId, setFormFornecedorId] = useState('');
 
-  // Edit state
+  // 03/06 — criar e editar agora compartilham o MESMO modal e os mesmos `form*`.
+  // editingId null = criando; com id = editando. (Antes havia form inline de
+  // criar + linha de edição inline com estado duplicado — UX confusa.)
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editModelo, setEditModelo] = useState('');
-  const [editQtd, setEditQtd] = useState('');
-  const [editFornecedor, setEditFornecedor] = useState('');
-  const [editValorTotal, setEditValorTotal] = useState('');
-  const [editValorUnitario, setEditValorUnitario] = useState('');
-  const [editDataInicio, setEditDataInicio] = useState('');
-  const [editDataVencimento, setEditDataVencimento] = useState('');
-  const [editChaveSerial, setEditChaveSerial] = useState('');
-  const [editChaveNfe, setEditChaveNfe] = useState('');
-  const [editObservacoes, setEditObservacoes] = useState('');
-  const [editNome, setEditNome] = useState('');
-  const [editCategoriaId, setEditCategoriaId] = useState('');
-  // S11 — fornecedor (FK) na edição.
-  const [editFornecedorId, setEditFornecedorId] = useState('');
 
   useEffect(() => {
     softwareService.listar().then(setSoftwares).catch(() => {});
@@ -196,57 +184,44 @@ export function LicencasPage() {
   }
 
   function getSubtitle(lic: SoftwareLicenca) {
-    if (lic.software?.fabricante) return lic.software.fabricante;
-    if (lic.categoria) return lic.categoria.nome;
-    return null;
+    const parts: string[] = [];
+    if (lic.software?.fabricante) parts.push(lic.software.fabricante);
+    if (lic.categoria) parts.push(lic.categoria.nome);
+    return parts.length ? parts.join(' • ') : null;
   }
 
-  function startEdit(lic: SoftwareLicenca) {
+  function openCreate() {
+    resetForm();
+    setEditingId(null);
+    setShowForm(true);
+  }
+
+  function openEdit(lic: SoftwareLicenca) {
     setEditingId(lic.id);
-    setEditModelo(lic.modeloLicenca || '');
-    setEditQtd(lic.quantidade != null ? String(lic.quantidade) : '');
-    setEditFornecedor(lic.fornecedor || '');
-    setEditFornecedorId(lic.fornecedorId || '');
-    setEditValorTotal(lic.valorTotal != null ? String(lic.valorTotal) : '');
-    setEditValorUnitario(lic.valorUnitario != null ? String(lic.valorUnitario) : '');
-    setEditDataInicio(lic.dataInicio ? lic.dataInicio.slice(0, 10) : '');
-    setEditDataVencimento(lic.dataVencimento ? lic.dataVencimento.slice(0, 10) : '');
-    setEditChaveSerial(lic.chaveSerial || '');
-    setEditChaveNfe(lic.chaveNfe || '');
-    setEditObservacoes(lic.observacoes || '');
-    setEditNome(lic.nome || '');
-    setEditCategoriaId(lic.categoriaId || '');
+    setFormTipo(lic.software ? 'software' : 'avulsa');
+    setFormSoftwareId(lic.softwareId || '');
+    setFormNome(lic.nome || '');
+    setFormCategoria(lic.categoriaId || '');
+    setFormModelo(lic.modeloLicenca || '');
+    setFormQtd(lic.quantidade != null ? String(lic.quantidade) : '');
+    setFormFornecedor(lic.fornecedor || '');
+    setFormFornecedorId(lic.fornecedorId || '');
+    setFormValorTotal(lic.valorTotal != null ? String(lic.valorTotal) : '');
+    setFormValorUnitario(lic.valorUnitario != null ? String(lic.valorUnitario) : '');
+    setFormDataInicio(lic.dataInicio ? lic.dataInicio.slice(0, 10) : '');
+    setFormDataVencimento(lic.dataVencimento ? lic.dataVencimento.slice(0, 10) : '');
+    setFormChaveSerial(lic.chaveSerial || '');
+    setFormChaveNfe(lic.chaveNfe || '');
+    setFormObservacoes(lic.observacoes || '');
+    setFormDepartamentoId(lic.departamentoId || '');
+    setFormError('');
+    setShowForm(true);
   }
 
-  async function handleSaveEdit() {
-    if (!editingId) return;
-    setSaving(true);
-    try {
-      await licencaService.atualizar(editingId, {
-        nome: editNome || undefined,
-        categoriaId: editCategoriaId || undefined,
-        modeloLicenca: editModelo || undefined,
-        quantidade: editQtd ? parseInt(editQtd) : undefined,
-        fornecedor: editFornecedor || undefined,
-        // S11 — '' explicitamente limpa a FK; UUID atualiza; undefined preserva.
-        // Aqui mandamos sempre o estado atual (incluindo '' p/ desvincular).
-        fornecedorId: editFornecedorId,
-        valorTotal: editValorTotal ? parseFloat(editValorTotal) : undefined,
-        valorUnitario: editValorUnitario ? parseFloat(editValorUnitario) : undefined,
-        dataInicio: editDataInicio || undefined,
-        dataVencimento: editDataVencimento || undefined,
-        chaveSerial: editChaveSerial || undefined,
-        chaveNfe: editChaveNfe.replace(/\D/g, '') || undefined,
-        observacoes: editObservacoes || undefined,
-      });
-      setEditingId(null);
-      carregarLicencas();
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setFormError(msg || 'Erro ao salvar');
-    } finally {
-      setSaving(false);
-    }
+  function closeModal() {
+    setShowForm(false);
+    setEditingId(null);
+    resetForm();
   }
 
   async function handleExcluir(licId: string) {
@@ -261,13 +236,26 @@ export function LicencasPage() {
   }
 
   async function handleRenovar(licId: string) {
-    await licencaService.renovar(licId);
-    carregarLicencas();
+    if (!await confirm('Renovar Licença', 'Cria uma nova licença ATIVA copiando os dados desta (que será inativada). Os funcionários vinculados NÃO são transferidos. Continuar?')) return;
+    try {
+      await licencaService.renovar(licId);
+      toast('success', 'Licença renovada');
+      carregarLicencas();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast('error', msg || 'Erro ao renovar licença');
+    }
   }
 
   async function handleInativar(licId: string) {
-    await licencaService.inativar(licId);
-    carregarLicencas();
+    if (!await confirm('Inativar Licença', 'Deseja inativar esta licença?')) return;
+    try {
+      await licencaService.inativar(licId);
+      carregarLicencas();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast('error', msg || 'Erro ao inativar licença');
+    }
   }
 
   // ─── Usuários da licença (vínculo) ───────────────────────────
@@ -341,43 +329,58 @@ export function LicencasPage() {
     setFormError('');
   }
 
-  async function handleCriar() {
+  async function handleSave() {
     setFormError('');
-    if (formTipo === 'software' && !formSoftwareId) {
-      setFormError('Selecione o software');
-      return;
+    if (!editingId) {
+      if (formTipo === 'software' && !formSoftwareId) { setFormError('Selecione o software'); return; }
+      if (formTipo === 'avulsa' && !formNome.trim()) { setFormError('Informe o nome da licença'); return; }
     }
-    if (formTipo === 'avulsa' && !formNome.trim()) {
-      setFormError('Informe o nome da licenca');
-      return;
-    }
-
     setSaving(true);
     try {
-      await licencaService.criar({
-        softwareId: formTipo === 'software' ? formSoftwareId : undefined,
-        nome: formTipo === 'avulsa' ? formNome.trim() : undefined,
-        categoriaId: formTipo === 'avulsa' && formCategoria ? formCategoria : undefined,
-        modeloLicenca: formModelo || undefined,
-        quantidade: formQtd ? parseInt(formQtd) : undefined,
-        fornecedor: formFornecedor || undefined,
-        // S11 — preferir FK; texto livre vira complemento.
-        fornecedorId: formFornecedorId || undefined,
-        valorTotal: formValorTotal ? parseFloat(formValorTotal) : undefined,
-        valorUnitario: formValorUnitario ? parseFloat(formValorUnitario) : undefined,
-        dataInicio: formDataInicio || undefined,
-        dataVencimento: formDataVencimento || undefined,
-        chaveSerial: formChaveSerial || undefined,
-        chaveNfe: formChaveNfe.replace(/\D/g, '') || undefined,
-        observacoes: formObservacoes || undefined,
-        departamentoId: formDepartamentoId || undefined,
-      });
-      setShowForm(false);
-      resetForm();
+      if (editingId) {
+        await licencaService.atualizar(editingId, {
+          nome: formNome || undefined,
+          categoriaId: formCategoria || undefined,
+          modeloLicenca: formModelo || undefined,
+          quantidade: formQtd ? parseInt(formQtd) : undefined,
+          fornecedor: formFornecedor || undefined,
+          // '' limpa a FK; UUID atualiza; mandamos sempre o estado atual.
+          fornecedorId: formFornecedorId,
+          valorTotal: formValorTotal ? parseFloat(formValorTotal) : undefined,
+          valorUnitario: formValorUnitario ? parseFloat(formValorUnitario) : undefined,
+          dataInicio: formDataInicio || undefined,
+          dataVencimento: formDataVencimento || undefined,
+          chaveSerial: formChaveSerial || undefined,
+          chaveNfe: formChaveNfe.replace(/\D/g, '') || undefined,
+          observacoes: formObservacoes || undefined,
+        });
+        toast('success', 'Licença atualizada');
+      } else {
+        await licencaService.criar({
+          softwareId: formTipo === 'software' ? formSoftwareId : undefined,
+          nome: formTipo === 'avulsa' ? formNome.trim() : undefined,
+          categoriaId: formTipo === 'avulsa' && formCategoria ? formCategoria : undefined,
+          modeloLicenca: formModelo || undefined,
+          quantidade: formQtd ? parseInt(formQtd) : undefined,
+          fornecedor: formFornecedor || undefined,
+          // S11 — preferir FK; texto livre vira complemento.
+          fornecedorId: formFornecedorId || undefined,
+          valorTotal: formValorTotal ? parseFloat(formValorTotal) : undefined,
+          valorUnitario: formValorUnitario ? parseFloat(formValorUnitario) : undefined,
+          dataInicio: formDataInicio || undefined,
+          dataVencimento: formDataVencimento || undefined,
+          chaveSerial: formChaveSerial || undefined,
+          chaveNfe: formChaveNfe.replace(/\D/g, '') || undefined,
+          observacoes: formObservacoes || undefined,
+          departamentoId: formDepartamentoId || undefined,
+        });
+        toast('success', 'Licença criada');
+      }
+      closeModal();
       carregarLicencas();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setFormError(msg || 'Erro ao criar licenca');
+      setFormError(msg || 'Erro ao salvar licença');
     } finally {
       setSaving(false);
     }
@@ -406,10 +409,10 @@ export function LicencasPage() {
           <div className="flex items-center gap-2">
             {isAdmin && (
               <button
-                onClick={() => { setShowForm(!showForm); if (!showForm) resetForm(); }}
+                onClick={openCreate}
                 className="flex items-center gap-2 bg-capul-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 transition-colors"
               >
-                <Plus className="w-4 h-4" /> Nova Licenca
+                <Plus className="w-4 h-4" /> Nova Licença
               </button>
             )}
             <button
@@ -421,103 +424,135 @@ export function LicencasPage() {
           </div>
         </div>
 
-        {/* Formulario Nova Licenca */}
+        {/* Modal de criar/editar licença (consolidado — antes era form inline + linha de edição) */}
         {showForm && (
-          <div className="bg-white rounded-xl border border-capul-200 p-5 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-sm font-semibold text-slate-700">Nova Licenca</h4>
-              <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={closeModal}>
+            <div className="bg-white rounded-xl border border-capul-200 shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white z-10">
+                <h4 className="text-base font-semibold text-slate-800">{editingId ? 'Editar Licença' : 'Nova Licença'}</h4>
+                <button onClick={closeModal} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-5">
+                {/* Tipo: só na criação (não muda software↔avulsa em edição) */}
+                {!editingId && (
+                  <div className="flex gap-4 mb-4">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="radio" checked={formTipo === 'avulsa'} onChange={() => setFormTipo('avulsa')} className="accent-capul-600" />
+                      Licença Avulsa (Certificado, Domínio, etc.)
+                    </label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="radio" checked={formTipo === 'software'} onChange={() => setFormTipo('software')} className="accent-capul-600" />
+                      Vinculada a Software
+                    </label>
+                  </div>
+                )}
 
-            {/* Tipo: Software ou Avulsa */}
-            <div className="flex gap-4 mb-4">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="radio" checked={formTipo === 'avulsa'} onChange={() => setFormTipo('avulsa')} className="accent-capul-600" />
-                Licenca Avulsa (Certificado, Dominio, etc.)
-              </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="radio" checked={formTipo === 'software'} onChange={() => setFormTipo('software')} className="accent-capul-600" />
-                Vinculada a Software
-              </label>
-            </div>
+                {/* Departamento de alocação: editável na criação; read-only na edição */}
+                {!editingId ? (
+                  <div className="mb-4">
+                    <DepartamentoField
+                      value={formDepartamentoId}
+                      onChange={setFormDepartamentoId}
+                      help="Departamento ONDE a licença está alocada (livre — qualquer depto da empresa). O workspace que controla a licença é gravado automaticamente."
+                    />
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 mb-4">
+                    Departamento de alocação: <span className="font-medium text-slate-700">{departamentosFiltro.find((d) => d.id === formDepartamentoId)?.nome ?? '—'}</span>
+                    <span className="text-slate-400"> (a alocação não é alterada por aqui)</span>
+                  </p>
+                )}
 
-            <div className="mb-4">
-              <DepartamentoField
-                value={formDepartamentoId}
-                onChange={setFormDepartamentoId}
-                help="Departamento ONDE a licença está alocada (livre — qualquer depto da empresa). O workspace que controla a licença é gravado automaticamente."
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-              {formTipo === 'software' ? (
-                <select value={formSoftwareId} onChange={(e) => setFormSoftwareId(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                  <option value="">Selecione o software *</option>
-                  {softwares.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
-                </select>
-              ) : (
-                <>
-                  <input type="text" placeholder="Nome da licenca *" value={formNome} onChange={(e) => setFormNome(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-                  <select value={formCategoria} onChange={(e) => setFormCategoria(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                    <option value="">Categoria</option>
-                    {categorias.filter(c => c.status === 'ATIVO').map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                  {formTipo === 'software' ? (
+                    <select value={formSoftwareId} onChange={(e) => setFormSoftwareId(e.target.value)} disabled={!!editingId} className="border border-slate-300 rounded-lg px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500">
+                      <option value="">Selecione o software *</option>
+                      {softwares.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
+                    </select>
+                  ) : (
+                    <>
+                      <input type="text" placeholder="Nome da licença *" value={formNome} onChange={(e) => setFormNome(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                      <select value={formCategoria} onChange={(e) => setFormCategoria(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                        <option value="">Categoria</option>
+                        {categorias.filter(c => c.status === 'ATIVO').map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                      </select>
+                    </>
+                  )}
+                  <select value={formModelo} onChange={(e) => setFormModelo(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                    <option value="">Modelo</option>
+                    {Object.entries(modeloLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
-                </>
-              )}
-              <select value={formModelo} onChange={(e) => setFormModelo(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                <option value="">Modelo</option>
-                {Object.entries(modeloLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            </div>
+                </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-              <input type="number" min="1" placeholder="Quantidade" value={formQtd} onChange={(e) => setFormQtd(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-              {/* S11 — Fornecedor cadastrado (preferencial). Texto livre fica abaixo. */}
-              <div>
-                <SearchSelect
-                  options={fornecedorOptions}
-                  value={formFornecedorId}
-                  onChange={setFormFornecedorId}
-                  placeholder="Fornecedor (cadastro)..."
-                />
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Quantidade</label>
+                    <input type="number" min="1" placeholder="Quantidade" value={formQtd} onChange={(e) => setFormQtd(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Fornecedor (cadastro)</label>
+                    <SearchSelect
+                      options={fornecedorOptions}
+                      value={formFornecedorId}
+                      onChange={setFormFornecedorId}
+                      placeholder="Fornecedor (cadastro)..."
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Valor Total</label>
+                    <input type="number" step="0.01" min="0" placeholder="Valor Total" value={formValorTotal} onChange={(e) => setFormValorTotal(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Valor Unitário</label>
+                    <input type="number" step="0.01" min="0" placeholder="Valor Unitário" value={formValorUnitario} onChange={(e) => setFormValorUnitario(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
+                  </div>
+                </div>
+
+                <div className="mb-3">
+                  <input
+                    type="text"
+                    placeholder="Fornecedor — descrição livre (opcional, p/ fornecedor sem cadastro)"
+                    value={formFornecedor}
+                    onChange={(e) => setFormFornecedor(e.target.value)}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Início</label>
+                    <input type="date" value={formDataInicio} onChange={(e) => setFormDataInicio(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Vencimento</label>
+                    <input type="date" value={formDataVencimento} onChange={(e) => setFormDataVencimento(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Chave Serial</label>
+                    <input type="text" placeholder="Chave Serial" value={formChaveSerial} onChange={(e) => setFormChaveSerial(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Chave NF-e</label>
+                    <input type="text" inputMode="numeric" maxLength={44} placeholder="44 dígitos" title="Chave da NF-e que originou esta licença (44 dígitos) — vincula ao módulo Fiscal." value={formChaveNfe} onChange={(e) => setFormChaveNfe(e.target.value.replace(/\D/g, ''))} className="border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono tracking-tight focus:outline-none focus:ring-2 focus:ring-capul-600 w-full" />
+                  </div>
+                </div>
+
+                <div className="mb-3">
+                  <label className="text-xs text-slate-500 mb-1 block">Observações</label>
+                  <input type="text" placeholder="Observações" value={formObservacoes} onChange={(e) => setFormObservacoes(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
+                </div>
+
+                {formError && <p className="text-xs text-red-600 mb-2">{formError}</p>}
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button onClick={closeModal} className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100">Cancelar</button>
+                  <button onClick={handleSave} disabled={saving} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50">
+                    {saving ? 'Salvando...' : (editingId ? 'Salvar' : 'Criar Licença')}
+                  </button>
+                </div>
               </div>
-              <input type="number" step="0.01" min="0" placeholder="Valor Total" value={formValorTotal} onChange={(e) => setFormValorTotal(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-              <input type="number" step="0.01" min="0" placeholder="Valor Unitario" value={formValorUnitario} onChange={(e) => setFormValorUnitario(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-            </div>
-
-            {/* S11 — Texto livre opcional p/ casos sem cadastro (legado/eventual). */}
-            <div className="mb-3">
-              <input
-                type="text"
-                placeholder="Fornecedor — descrição livre (opcional, p/ fornecedor sem cadastro)"
-                value={formFornecedor}
-                onChange={(e) => setFormFornecedor(e.target.value)}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block">Inicio</label>
-                <input type="date" value={formDataInicio} onChange={(e) => setFormDataInicio(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block">Vencimento</label>
-                <input type="date" value={formDataVencimento} onChange={(e) => setFormDataVencimento(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
-              </div>
-              <input type="text" placeholder="Chave Serial" value={formChaveSerial} onChange={(e) => setFormChaveSerial(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-              <input type="text" inputMode="numeric" maxLength={44} placeholder="Chave NF-e — 44 dígitos" title="Chave da NF-e que originou esta licença (44 dígitos) — vincula ao módulo Fiscal." value={formChaveNfe} onChange={(e) => setFormChaveNfe(e.target.value.replace(/\D/g, ''))} className="border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono tracking-tight focus:outline-none focus:ring-2 focus:ring-capul-600 disabled:bg-slate-100 disabled:text-slate-500" />
-              <input type="text" placeholder="Observacoes" value={formObservacoes} onChange={(e) => setFormObservacoes(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-            </div>
-
-            {formError && <p className="text-xs text-red-600 mb-2">{formError}</p>}
-
-            <div className="flex justify-end">
-              <button onClick={handleCriar} disabled={saving} className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50">
-                {saving ? 'Salvando...' : 'Criar Licenca'}
-              </button>
             </div>
           </div>
         )}
@@ -656,6 +691,9 @@ export function LicencasPage() {
                         {getSubtitle(lic) && (
                           <p className="text-xs text-slate-400">{getSubtitle(lic)}</p>
                         )}
+                        {lic.chaveSerial && (
+                          <p className="text-xs text-slate-400 font-mono truncate max-w-[200px]" title={lic.chaveSerial}>SN: {lic.chaveSerial}</p>
+                        )}
                         {lic.chaveNfe && (
                           <p className="text-xs">
                             <a
@@ -736,7 +774,7 @@ export function LicencasPage() {
                       {isAdmin && (
                         <td className="px-4 py-3">
                           <div className="flex gap-2">
-                            <button onClick={() => startEdit(lic)} className="text-xs text-capul-600 hover:underline">Editar</button>
+                            <button onClick={() => openEdit(lic)} className="text-xs text-capul-600 hover:underline">Editar</button>
                             {lic.status === 'ATIVA' && (
                               <>
                                 <button onClick={() => handleRenovar(lic.id)} className="text-xs text-capul-600 hover:underline">Renovar</button>
@@ -748,72 +786,6 @@ export function LicencasPage() {
                         </td>
                       )}
                     </tr>
-                    {editingId === lic.id && (
-                      <tr className="bg-amber-50">
-                        {/* S11 — colSpan +1 pela nova coluna Departamento. */}
-                        <td colSpan={isAdmin ? 12 : 11} className="px-4 py-4">
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                            {!lic.software && (
-                              <>
-                                <input type="text" placeholder="Nome" value={editNome} onChange={(e) => setEditNome(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-                                <select value={editCategoriaId} onChange={(e) => setEditCategoriaId(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                                  <option value="">Categoria</option>
-                                  {categorias.filter(c => c.status === 'ATIVO').map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                                </select>
-                              </>
-                            )}
-                            <select value={editModelo} onChange={(e) => setEditModelo(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                              <option value="">Modelo</option>
-                              {Object.entries(modeloLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                            </select>
-                            <input type="number" min="1" placeholder="Quantidade" value={editQtd} onChange={(e) => setEditQtd(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-                          </div>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                            {/* S11 — Fornecedor cadastrado (FK). Vazio = limpar vínculo. */}
-                            <div>
-                              <SearchSelect
-                                options={fornecedorOptions}
-                                value={editFornecedorId}
-                                onChange={setEditFornecedorId}
-                                placeholder="Fornecedor (cadastro)..."
-                              />
-                            </div>
-                            <input type="number" step="0.01" min="0" placeholder="Valor Total" value={editValorTotal} onChange={(e) => setEditValorTotal(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-                            <input type="number" step="0.01" min="0" placeholder="Valor Unitario" value={editValorUnitario} onChange={(e) => setEditValorUnitario(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-                            <input type="text" placeholder="Chave Serial" value={editChaveSerial} onChange={(e) => setEditChaveSerial(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-                            <input type="text" inputMode="numeric" maxLength={44} placeholder="Chave NF-e — 44 dígitos" title="Chave da NF-e que originou esta licença (44 dígitos)." value={editChaveNfe} onChange={(e) => setEditChaveNfe(e.target.value.replace(/\D/g, ''))} className="border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono tracking-tight focus:outline-none focus:ring-2 focus:ring-capul-600 disabled:bg-slate-100 disabled:text-slate-500" />
-                          </div>
-                          {/* S11 — texto livre p/ fornecedor sem cadastro. */}
-                          <div className="mb-3">
-                            <input
-                              type="text"
-                              placeholder="Fornecedor — descrição livre (opcional)"
-                              value={editFornecedor}
-                              onChange={(e) => setEditFornecedor(e.target.value)}
-                              className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full"
-                            />
-                          </div>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                            <div>
-                              <label className="text-xs text-slate-500 mb-1 block">Inicio</label>
-                              <input type="date" value={editDataInicio} onChange={(e) => setEditDataInicio(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-slate-500 mb-1 block">Vencimento</label>
-                              <input type="date" value={editDataVencimento} onChange={(e) => setEditDataVencimento(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
-                            </div>
-                            <input type="text" placeholder="Observacoes" value={editObservacoes} onChange={(e) => setEditObservacoes(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm col-span-2" />
-                          </div>
-                          {formError && <p className="text-xs text-red-600 mb-2">{formError}</p>}
-                          <div className="flex justify-end gap-2">
-                            <button onClick={() => { setEditingId(null); setFormError(''); }} className="text-xs text-slate-500 hover:underline">Cancelar</button>
-                            <button onClick={handleSaveEdit} disabled={saving} className="bg-capul-600 text-white px-4 py-1.5 rounded-lg text-xs hover:bg-capul-700 disabled:opacity-50">
-                              {saving ? 'Salvando...' : 'Salvar'}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
                     {/* Painel expansível de usuários vinculados */}
                     {expandedLicId === lic.id && (
                       <tr>
