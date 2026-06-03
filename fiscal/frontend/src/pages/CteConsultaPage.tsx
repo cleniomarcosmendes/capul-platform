@@ -6,6 +6,7 @@ import {
   Eye,
   FileText,
   Info,
+  Printer,
   X,
   ExternalLink,
 } from 'lucide-react';
@@ -47,6 +48,7 @@ import type {
   CteIcmsUFFim,
   CteIssqn,
   CteInfTribFed,
+  CteEventoDetalheResponse,
 } from '../types';
 
 interface FilialResumo {
@@ -177,6 +179,8 @@ export function CteConsultaPage() {
   const [chaveInvalidaMsg, setChaveInvalidaMsg] = useState<string | null>(null);
   const [result, setResult] = useState<CteConsultaResult | null>(null);
   const [tab, setTab] = useState<Tab>('cte');
+  // Evento aberto no modal de detalhe (idEvento de fiscal.cte_evento).
+  const [eventoIdAberto, setEventoIdAberto] = useState<string | null>(null);
   const { usuario } = useAuth();
 
   const [filiais, setFiliais] = useState<FilialResumo[]>([]);
@@ -592,11 +596,20 @@ export function CteConsultaPage() {
                 <EventosTimeline
                   eventos={result.eventos ?? []}
                   consultaProtocoloStatus={result.consultaProtocoloStatus}
+                  onAbrirEvento={setEventoIdAberto}
                 />
               )}
             </div>
           </div>
         </div>
+      )}
+
+      {result && eventoIdAberto && (
+        <CteEventoDetalheModal
+          chave={result.chave}
+          eventoId={eventoIdAberto}
+          onClose={() => setEventoIdAberto(null)}
+        />
       )}
     </PageWrapper>
   );
@@ -648,6 +661,320 @@ function Secao({
       <dl className={`grid grid-cols-1 gap-x-8 gap-y-3 text-sm ${colClass}`}>{children}</dl>
     </section>
   );
+}
+
+// =================================================================
+// Modal de detalhe do evento de CT-e — replica a tela do portal SEFAZ
+// ("AUTOR DO EVENTO" + "Observação"). Lê o XML procEventoCTe já
+// persistido em fiscal.cte_evento (sem chamada SEFAZ).
+// =================================================================
+
+function CteEventoDetalheModal({
+  chave,
+  eventoId,
+  onClose,
+}: {
+  chave: string;
+  eventoId: string;
+  onClose: () => void;
+}) {
+  const [data, setData] = useState<CteEventoDetalheResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setErro(null);
+    fiscalApi
+      .get<CteEventoDetalheResponse>(`/cte/${chave}/eventos/${eventoId}`)
+      .then((r) => {
+        if (alive) setData(r.data);
+      })
+      .catch((err) => {
+        if (alive) setErro(extractApiError(err, 'Falha ao carregar detalhe do evento.'));
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [chave, eventoId]);
+
+  // ESC fecha o modal
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  const det = data?.detalhe;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 print:hidden"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-lg bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3">
+          <h2 className="text-base font-semibold text-slate-800">
+            {data ? data.descricao || 'Detalhe do Evento' : 'Detalhe do Evento'}
+          </h2>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => data && imprimirEventoCtePopup(data)}
+              disabled={!data || loading}
+              className="inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Imprimir este evento (abre janela com layout padrão SEFAZ)"
+            >
+              <Printer className="h-4 w-4" />
+              Imprimir
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              aria-label="Fechar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5">
+          {loading && <p className="text-sm text-slate-500">Carregando detalhes…</p>}
+          {erro && <ErrorCard error={erro} />}
+          {data && !loading && !erro && det && (
+            <>
+              <h3 className="mb-3 text-center text-sm font-semibold text-slate-700">
+                {det.tipoEventoDescricao}
+              </h3>
+              <Secao titulo="Cabeçalho do Evento" cols={3}>
+                <Row
+                  label="Órgão Recepção do Evento"
+                  value={
+                    det.orgaoRecepcao
+                      ? `${det.orgaoRecepcao}${det.orgaoRecepcaoDescricao ? ' - ' + det.orgaoRecepcaoDescricao : ''}`
+                      : '-'
+                  }
+                />
+                <Row label="Ambiente SEFAZ" value={det.ambienteDescricao} />
+                <Row label="Versão" value={valorOuVazio(det.versao)} />
+                <Row label="Chave de Acesso" value={fmtChave(det.chave)} wide />
+                <Row label="Id do Evento" value={valorOuVazio(det.idEvento)} wide />
+                <Row
+                  label="Autor Evento (CNPJ / CPF)"
+                  value={fmtCnpj(det.autorCnpj ?? det.autorCpf)}
+                />
+                <Row label="Data Evento" value={fmtDataHora(det.dataEvento)} wide />
+                <Row label="Tipo de Evento" value={det.tipoEventoDescricao} />
+                <Row
+                  label="Sequencial do Evento"
+                  value={det.sequencial != null ? String(det.sequencial) : '-'}
+                />
+              </Secao>
+
+              <Secao titulo="Detalhes do Evento">
+                <Row label="Descrição do Evento" value={valorOuVazio(det.descricaoEvento)} />
+                <Row label="Versão" value={valorOuVazio(det.versaoEvento)} />
+                {det.observacao ? (
+                  <Row label="Observação" value={det.observacao} wide />
+                ) : null}
+                {det.tipoEvento === '110110' ? (
+                  <>
+                    <Row
+                      label="Texto da Carta de Correção"
+                      value={valorOuVazio(det.correcao)}
+                      wide
+                    />
+                    {det.condicoesUso ? (
+                      <Row label="Condições de Uso" value={det.condicoesUso} wide />
+                    ) : null}
+                  </>
+                ) : det.justificativa ? (
+                  <Row label="Justificativa" value={det.justificativa} wide />
+                ) : null}
+              </Secao>
+
+              <section>
+                <h3 className="mb-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  Autorização pela SEFAZ
+                </h3>
+                <dl className="grid grid-cols-1 gap-x-8 gap-y-3 text-sm md:grid-cols-3">
+                  <Row
+                    label="Mensagem de Autorização"
+                    value={valorOuVazio(det.autorizacaoMensagem)}
+                  />
+                  <Row label="Protocolo" value={valorOuVazio(det.autorizacaoProtocolo)} />
+                  <Row
+                    label="Data/Hora Autorização"
+                    value={fmtDataHora(det.autorizacaoDataHora)}
+                  />
+                </dl>
+              </section>
+            </>
+          )}
+          {data && !loading && !erro && !det && (
+            <Secao titulo="Dados do Evento" cols={2}>
+              <Row label="Tipo de Evento" value={data.descricao} />
+              <Row label="Data/Hora" value={fmtDataHora(data.dataEvento)} />
+              <Row label="Protocolo" value={valorOuVazio(data.protocolo)} />
+              <Row label="Status (cStat)" value={valorOuVazio(data.cStat)} />
+              <Row label="Observações / Origem" value={valorOuVazio(data.xMotivo)} wide />
+            </Secao>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Abre janela standalone (about:blank) com o evento formatado para impressão,
+ * igual ao portal SEFAZ — HTML/CSS estático, A4, Ctrl+P pelo navegador.
+ * Espelha imprimirEventoPopup da NfeConsultaPage, com o campo Observação
+ * (xObs da Prestação em Desacordo) a mais.
+ */
+function imprimirEventoCtePopup(data: CteEventoDetalheResponse): void {
+  const det = data.detalhe;
+  const titulo = det?.tipoEventoDescricao ?? data.descricao ?? 'Evento';
+  const cnpjFmt = (s: string | null | undefined) => {
+    if (!s) return '-';
+    const d = s.replace(/\D/g, '');
+    if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+    if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    return s;
+  };
+  const chaveFmt = (c: string | null | undefined) =>
+    c ? c.replace(/(\d{4})(?=\d)/g, '$1 ') : '-';
+  const dataHoraFmt = (iso: string | null | undefined) => {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    return isNaN(d.getTime())
+      ? iso
+      : d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  };
+  const escape = (v: unknown) =>
+    String(v ?? '').replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string),
+    );
+
+  const campo = (label: string, valor: string) => `
+    <div class="campo">
+      <div class="label">${escape(label)}</div>
+      <div class="valor">${escape(valor || '-')}</div>
+    </div>
+  `;
+
+  const corpo = det
+    ? `
+      <h1>${escape(titulo)}</h1>
+      <section class="grid-3">
+        ${campo('Órgão Recepção do Evento', det.orgaoRecepcao ? `${det.orgaoRecepcao}${det.orgaoRecepcaoDescricao ? ' - ' + det.orgaoRecepcaoDescricao : ''}` : '-')}
+        ${campo('Ambiente SEFAZ', det.ambienteDescricao)}
+        ${campo('Versão', det.versao ?? '-')}
+      </section>
+      <section class="grid-2">
+        ${campo('Chave de Acesso', chaveFmt(det.chave))}
+        ${campo('Id do Evento', det.idEvento ?? '-')}
+      </section>
+      <section class="grid-2">
+        ${campo('Autor Evento (CNPJ / CPF)', cnpjFmt(det.autorCnpj ?? det.autorCpf))}
+        ${campo('Data Evento', dataHoraFmt(det.dataEvento))}
+      </section>
+      <section class="grid-2">
+        ${campo('Tipo de Evento', det.tipoEventoDescricao)}
+        ${campo('Sequencial do Evento', det.sequencial != null ? String(det.sequencial) : '-')}
+      </section>
+      <h2>Detalhes do Evento</h2>
+      <section class="grid-2">
+        ${campo('Descrição do Evento', det.descricaoEvento ?? '-')}
+        ${campo('Versão', det.versaoEvento ?? '-')}
+      </section>
+      ${det.observacao ? `<section class="grid-1">${campo('Observação', det.observacao)}</section>` : ''}
+      ${
+        det.tipoEvento === '110110'
+          ? `<section class="grid-1">${campo('Texto da Carta de Correção', det.correcao ?? '-')}</section>${
+              det.condicoesUso
+                ? `<section class="grid-1">${campo('Condições de Uso', det.condicoesUso)}</section>`
+                : ''
+            }`
+          : det.justificativa
+            ? `<section class="grid-1">${campo('Justificativa', det.justificativa)}</section>`
+            : ''
+      }
+      <h2>Autorização pela SEFAZ</h2>
+      <section class="grid-3">
+        ${campo('Mensagem de Autorização', det.autorizacaoMensagem ?? '-')}
+        ${campo('Protocolo', det.autorizacaoProtocolo ?? '-')}
+        ${campo('Data/Hora Autorização', dataHoraFmt(det.autorizacaoDataHora))}
+      </section>
+    `
+    : `
+      <h1>${escape(titulo)}</h1>
+      <section class="grid-2">
+        ${campo('Tipo de Evento', titulo)}
+        ${campo('Data/Hora', dataHoraFmt(data.dataEvento))}
+      </section>
+      <section class="grid-2">
+        ${campo('Protocolo', data.protocolo ?? '-')}
+        ${campo('Status (cStat)', data.cStat ?? '-')}
+      </section>
+      <section class="grid-1">
+        ${campo('Observações / Origem', data.xMotivo ?? '-')}
+      </section>
+    `;
+
+  const html = `<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Evento CT-e — ${escape(titulo)}</title>
+<style>
+  @page { size: A4; margin: 1.5cm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #000; margin: 0; padding: 0; }
+  h1 { font-size: 14px; text-align: center; color: #8b6508; margin: 0 0 12px 0; padding-bottom: 6px; }
+  h2 { font-size: 12px; color: #8b6508; margin: 16px 0 6px 0; padding-bottom: 2px; border-bottom: 1px solid #c9a15a; }
+  section { margin-bottom: 8px; display: grid; gap: 6px; }
+  .grid-1 { grid-template-columns: 1fr; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .campo { border: 1px solid #b5925a; padding: 4px 6px; background: #fffaf0; }
+  .label { font-size: 9px; color: #666; margin-bottom: 2px; }
+  .valor { font-size: 11px; color: #000; word-break: break-word; }
+  @media print { .campo { background: transparent; } body { -webkit-print-color-adjust: economy; } }
+</style>
+</head>
+<body>
+${corpo}
+<script>
+  window.addEventListener('load', function() {
+    setTimeout(function() { window.focus(); window.print(); }, 200);
+  });
+</script>
+</body>
+</html>`;
+
+  const popup = window.open('', '_blank', 'width=900,height=700,scrollbars=yes');
+  if (!popup) {
+    alert(
+      'Janela de impressão bloqueada pelo navegador. Libere popups para este site e tente novamente.',
+    );
+    return;
+  }
+  popup.document.open();
+  popup.document.write(html);
+  popup.document.close();
 }
 
 // =================================================================

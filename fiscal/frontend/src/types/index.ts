@@ -484,6 +484,52 @@ export interface TimelineEvento {
   protocolo: string | null;
   cStat: string | null;
   xMotivo: string | null;
+  /** Id do evento (cte_evento.idEvento) — presente quando há detalhe para abrir. */
+  id?: string | null;
+  /** Indica se há XML do evento persistido para abrir o detalhe/impressão. */
+  possuiDetalhe?: boolean;
+}
+
+/**
+ * Detalhe de um evento de CT-e — espelha NfeEventoDetalhe com o adicional
+ * `observacao` (xObs) da Prestação de Serviço em Desacordo (610110).
+ */
+export interface CteEventoDetalhe {
+  orgaoRecepcao?: string | null;
+  orgaoRecepcaoDescricao?: string | null;
+  ambiente: '1' | '2';
+  ambienteDescricao: string;
+  versao?: string | null;
+  chave: string;
+  idEvento: string | null;
+  autorCnpj?: string | null;
+  autorCpf?: string | null;
+  dataEvento: string;
+  tipoEvento: string;
+  tipoEventoDescricao: string;
+  sequencial: number | null;
+  versaoEvento?: string | null;
+  descricaoEvento?: string | null;
+  observacao?: string | null;
+  justificativa?: string | null;
+  correcao?: string | null;
+  condicoesUso?: string | null;
+  autorizacaoCStat?: string | null;
+  autorizacaoMotivo?: string | null;
+  autorizacaoMensagem?: string | null;
+  autorizacaoProtocolo?: string | null;
+  autorizacaoDataHora?: string | null;
+}
+
+export interface CteEventoDetalheResponse {
+  id: string;
+  tipoEvento: string;
+  descricao: string;
+  dataEvento: string;
+  protocolo: string | null;
+  cStat: string | null;
+  xMotivo: string | null;
+  detalhe: CteEventoDetalhe | null;
 }
 
 export interface ConsultaProtocoloStatus {

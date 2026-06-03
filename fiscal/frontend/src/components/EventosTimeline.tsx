@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   CheckCircle2,
+  Eye,
   FileEdit,
   FileX,
   Info,
@@ -10,11 +11,18 @@ import {
   Truck,
   XCircle,
 } from 'lucide-react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { TimelineEvento, ConsultaProtocoloStatus } from '../types';
 
 interface Props {
   eventos: TimelineEvento[];
   consultaProtocoloStatus?: ConsultaProtocoloStatus;
+  /**
+   * Quando informado, eventos com detalhe (`id` + `possuiDetalhe`) viram
+   * clicáveis e abrem o modal de detalhe/impressão. Eventos sem XML
+   * (resumo SEFAZ, autorização) permanecem estáticos.
+   */
+  onAbrirEvento?: (eventoId: string) => void;
 }
 
 /**
@@ -23,7 +31,7 @@ interface Props {
  * renderiza cada entrada com ícone + metadata. O protocolo inicial
  * (AUTORIZACAO) aparece como o primeiro marker.
  */
-export function EventosTimeline({ eventos, consultaProtocoloStatus }: Props) {
+export function EventosTimeline({ eventos, consultaProtocoloStatus, onAbrirEvento }: Props) {
   if (eventos.length === 0) {
     return (
       <div className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
@@ -67,6 +75,7 @@ export function EventosTimeline({ eventos, consultaProtocoloStatus }: Props) {
         {eventos.map((e, idx) => {
           const Icone = iconeParaTipo(e.tipoEvento);
           const cor = corParaTipo(e.tipoEvento);
+          const clicavel = Boolean(onAbrirEvento && e.possuiDetalhe && e.id);
           return (
             <li key={`${e.tipoEvento}-${e.dataEvento}-${idx}`} className="relative">
               <span
@@ -75,7 +84,27 @@ export function EventosTimeline({ eventos, consultaProtocoloStatus }: Props) {
                 <Icone className={`h-3.5 w-3.5 ${cor.text}`} />
               </span>
 
-              <div className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
+              <div
+                className={`rounded-md border border-slate-200 bg-white p-3 shadow-sm ${
+                  clicavel
+                    ? 'cursor-pointer transition hover:border-amber-300 hover:bg-amber-50/40 hover:shadow'
+                    : ''
+                }`}
+                {...(clicavel
+                  ? {
+                      role: 'button',
+                      tabIndex: 0,
+                      title: 'Ver detalhe e imprimir este evento',
+                      onClick: () => onAbrirEvento!(e.id!),
+                      onKeyDown: (ev: ReactKeyboardEvent) => {
+                        if (ev.key === 'Enter' || ev.key === ' ') {
+                          ev.preventDefault();
+                          onAbrirEvento!(e.id!);
+                        }
+                      },
+                    }
+                  : {})}
+              >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2">
@@ -85,6 +114,12 @@ export function EventosTimeline({ eventos, consultaProtocoloStatus }: Props) {
                       {e.tipoEvento !== 'AUTORIZACAO' && (
                         <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">
                           tpEvento {e.tipoEvento}
+                        </span>
+                      )}
+                      {clicavel && (
+                        <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                          <Eye className="h-3 w-3" />
+                          Ver detalhe
                         </span>
                       )}
                     </div>
