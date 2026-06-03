@@ -53,7 +53,7 @@ export class LicencaCompraService {
         itens: {
           select: {
             id: true, nome: true, modeloLicenca: true, status: true,
-            chaveSerial: true, dataVencimento: true,
+            chaveSerial: true, dataVencimento: true, softwareId: true,
             software: { select: { nome: true } },
             departamento: { select: { nome: true } },
             funcionarios: { select: { nome: true, matricula: true } },

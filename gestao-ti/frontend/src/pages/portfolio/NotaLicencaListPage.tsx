@@ -53,6 +53,13 @@ function sortValue(n: LicencaCompra, col: string): string | number {
     default: return '';
   }
 }
+// Destino ao clicar: se a nota tem 1 licença de SOFTWARE, abre a página do
+// software (cadastro + todas as licenças dele); senão, abre o detalhe da nota.
+function notaLink(n: LicencaCompra): string {
+  const its = n.itens || [];
+  if (its.length === 1 && its[0].softwareId) return `/gestao-ti/softwares/${its[0].softwareId}`;
+  return `/gestao-ti/licencas/${n.id}`;
+}
 // Busca ampla (client-side): número, chave, fornecedor, software/licença, usuário,
 // matrícula, depto alocado, serial e vencimento (data formatada).
 function matchBusca(n: LicencaCompra, termo: string): boolean {
@@ -164,7 +171,7 @@ export function NotaLicencaListPage() {
                   {visiveis.map((n) => (
                     <tr key={n.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
-                        <Link to={`/gestao-ti/licencas/${n.id}`} className="text-capul-600 hover:underline font-medium">
+                        <Link to={notaLink(n)} className="text-capul-600 hover:underline font-medium">
                           {resumoLicencas(n)}
                         </Link>
                       </td>
