@@ -15,6 +15,7 @@ import { OrdemServicoModule } from './ordem-servico/ordem-servico.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { SoftwareModule } from './software/software.module.js';
 import { LicencaModule } from './licenca/licenca.module.js';
+import { LicencaCompraModule } from './licenca-compra/licenca-compra.module.js';
 import { ContratoModule } from './contrato/contrato.module.js';
 import { ParadaModule } from './parada/parada.module.js';
 import { ProjetoModule } from './projeto/projeto.module.js';
@@ -80,6 +81,7 @@ import { IdempotencyModule } from './common/idempotency/idempotency.module.js';
     OrdemServicoModule,
     SoftwareModule,
     LicencaModule,
+    LicencaCompraModule,
     ContratoModule,
     ParadaModule,
     ProjetoModule,
