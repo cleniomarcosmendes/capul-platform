@@ -579,6 +579,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                 <tr className="bg-slate-50 text-left">
                   <th className="px-4 py-3 font-medium text-slate-600">Modelo</th>
                   <th className="px-4 py-3 font-medium text-slate-600">Qtd</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Depto Alocado</th>
                   <th className="px-4 py-3 font-medium text-slate-600">Chave Serial</th>
                   <th className="px-4 py-3 font-medium text-slate-600">Usuário(s)</th>
                   <th className="px-4 py-3 font-medium text-slate-600">Valor Total</th>
@@ -596,6 +597,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                         {lic.modeloLicenca ? modeloLicencaLabel[lic.modeloLicenca] || lic.modeloLicenca : '-'}
                       </td>
                       <td className="px-4 py-3 text-slate-600">{lic.quantidade ?? '-'}</td>
+                      <td className="px-4 py-3 text-slate-600">{lic.departamento?.nome ?? '-'}</td>
                       <td className="px-4 py-3 text-xs font-mono text-slate-500">{lic.chaveSerial || '-'}</td>
                       <td className="px-4 py-3">
                         {podeGerenciarUsuarios(lic) ? (
@@ -678,7 +680,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                     {/* Painel expandivel de usuarios */}
                     {expandedLicId === lic.id && podeGerenciarUsuarios(lic) && (
                       <tr>
-                        <td colSpan={isAdmin ? 9 : 8} className="px-4 py-3 bg-slate-50">
+                        <td colSpan={isAdmin ? 10 : 9} className="px-4 py-3 bg-slate-50">
                           <div className="border border-slate-200 rounded-lg bg-white p-4">
                             <div className="flex items-center justify-between mb-3">
                               <h5 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
