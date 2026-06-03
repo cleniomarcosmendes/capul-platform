@@ -450,12 +450,12 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
     <div>
       {isAdmin && (
         <Link
-          to="/gestao-ti/licencas/nova"
+          to={`/gestao-ti/licencas/nova?software=${software.id}`}
           className="inline-flex items-center gap-2 text-sm text-capul-600 border border-capul-300 px-3 py-1.5 rounded-lg hover:bg-capul-50 mb-4"
-          title="Licenças são cadastradas a partir de uma Nota (compra). Aqui você só consulta/edita as deste software."
+          title="Abre uma nova Nota de compra já com este software no primeiro item."
         >
           <Plus className="w-4 h-4" />
-          Nova Licença (via Nota)
+          Nova Nota com este software
         </Link>
       )}
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { Plus, Trash2, KeyRound } from 'lucide-react';
 import { softwareService } from '../../services/software.service';
@@ -39,6 +39,7 @@ function newItem(): ItemForm {
 
 export function NotaLicencaFormPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
 
   const [softwares, setSoftwares] = useState<Software[]>([]);
@@ -63,6 +64,14 @@ export function NotaLicencaFormPage() {
     softwareService.listar().then(setSoftwares).catch(() => {});
     licencaService.listarCategorias().then(setCategorias).catch(() => {});
     contratoService.listarFornecedores().then(setFornecedores).catch(() => {});
+  }, []);
+
+  // Atalho "Nova Nota com este software" (vindo do detalhe do software):
+  // pré-preenche o software do primeiro item.
+  useEffect(() => {
+    const sw = searchParams.get('software');
+    if (sw) setItens((prev) => prev.map((it, i) => (i === 0 ? { ...it, softwareId: sw } : it)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fornecedorOptions: SearchSelectOption[] = fornecedores
