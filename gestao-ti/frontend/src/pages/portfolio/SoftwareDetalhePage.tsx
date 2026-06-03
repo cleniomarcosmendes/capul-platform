@@ -555,10 +555,12 @@ function TabFiliais({ software, isAdmin, onReload }: { software: Software; isAdm
 // ─── Tab Licenças ─────────────────────────────────────────────
 
 function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAdmin: boolean; onReload: () => void }) {
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
   const [licencas, setLicencas] = useState<SoftwareLicenca[]>([]);
   const [loadingLic, setLoadingLic] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  // 03/06 — modal compartilhado criar/editar (antes só criar inline, sem edição).
+  const [editingLicId, setEditingLicId] = useState<string | null>(null);
   const [expandedLicId, setExpandedLicId] = useState<string | null>(null);
   const [licencaFuncionarios, setLicencaFuncionarios] = useState<LicencaFuncionario[]>([]);
   const [loadingUsuarios, setLoadingUsuarios] = useState(false);
@@ -605,6 +607,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
 
   function resetForm() {
     setShowForm(false);
+    setEditingLicId(null);
     setModeloLicenca('');
     setQuantidade('');
     setValorTotal('');
@@ -618,11 +621,31 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
     setObservacoes('');
   }
 
-  async function handleCreate() {
+  function openCreate() {
+    resetForm();
+    setShowForm(true);
+  }
+
+  function openEdit(lic: SoftwareLicenca) {
+    setEditingLicId(lic.id);
+    setModeloLicenca(lic.modeloLicenca || '');
+    setQuantidade(lic.quantidade != null ? String(lic.quantidade) : '');
+    setValorTotal(lic.valorTotal != null ? String(lic.valorTotal) : '');
+    setValorUnitario(lic.valorUnitario != null ? String(lic.valorUnitario) : '');
+    setDataInicio(lic.dataInicio ? lic.dataInicio.slice(0, 10) : '');
+    setDataVencimento(lic.dataVencimento ? lic.dataVencimento.slice(0, 10) : '');
+    setChaveSerial(lic.chaveSerial || '');
+    setChaveNfe(lic.chaveNfe || '');
+    setFornecedor(lic.fornecedor || '');
+    setFornecedorId(lic.fornecedorId || '');
+    setObservacoes(lic.observacoes || '');
+    setShowForm(true);
+  }
+
+  async function handleSave() {
     setSaving(true);
     try {
-      await licencaService.criar({
-        softwareId: software.id,
+      const payload = {
         modeloLicenca: modeloLicenca || undefined,
         quantidade: quantidade ? parseInt(quantidade) : undefined,
         valorTotal: valorTotal ? parseFloat(valorTotal) : undefined,
@@ -632,10 +655,16 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
         chaveSerial: chaveSerial || undefined,
         chaveNfe: chaveNfe.replace(/\D/g, '') || undefined,
         fornecedor: fornecedor || undefined,
-        // S11 — preferir FK; texto livre vira complemento.
-        fornecedorId: fornecedorId || undefined,
         observacoes: observacoes || undefined,
-      });
+      };
+      if (editingLicId) {
+        // '' limpa a FK; UUID atualiza — manda sempre o estado atual.
+        await licencaService.atualizar(editingLicId, { ...payload, fornecedorId });
+        toast('success', 'Licença atualizada');
+      } else {
+        await licencaService.criar({ softwareId: software.id, ...payload, fornecedorId: fornecedorId || undefined });
+        toast('success', 'Licença criada');
+      }
       resetForm();
       loadLicencas();
       onReload();
@@ -647,15 +676,41 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
   }
 
   async function handleRenovar(licId: string) {
-    await licencaService.renovar(licId);
-    loadLicencas();
-    onReload();
+    if (!await confirm('Renovar Licença', 'Cria uma nova licença ATIVA copiando os dados desta (que será inativada). Os funcionários vinculados NÃO são transferidos. Continuar?')) return;
+    try {
+      await licencaService.renovar(licId);
+      toast('success', 'Licença renovada');
+      loadLicencas();
+      onReload();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast('error', msg || 'Erro ao renovar licença');
+    }
   }
 
   async function handleInativar(licId: string) {
-    await licencaService.inativar(licId);
-    loadLicencas();
-    onReload();
+    if (!await confirm('Inativar Licença', 'Deseja inativar esta licença?')) return;
+    try {
+      await licencaService.inativar(licId);
+      loadLicencas();
+      onReload();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast('error', msg || 'Erro ao inativar licença');
+    }
+  }
+
+  async function handleExcluir(licId: string) {
+    if (!await confirm('Excluir Licença', 'Deseja realmente excluir esta licença?', { variant: 'danger' })) return;
+    try {
+      await licencaService.excluir(licId);
+      toast('success', 'Licença excluída');
+      loadLicencas();
+      onReload();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast('error', msg || 'Erro ao excluir licença');
+    }
   }
 
   function isVencendo(lic: SoftwareLicenca) {
@@ -724,120 +779,120 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
 
   return (
     <div>
-      {isAdmin && !showForm && (
+      {isAdmin && (
         <button
-          onClick={() => setShowForm(true)}
+          onClick={openCreate}
           className="flex items-center gap-2 text-sm text-capul-600 border border-capul-300 px-3 py-1.5 rounded-lg hover:bg-capul-50 mb-4"
         >
           <Plus className="w-4 h-4" />
-          Nova Licenca
+          Nova Licença
         </button>
       )}
 
       {showForm && (
-        <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-sm font-semibold text-slate-700">Nova Licenca</h4>
-            <button onClick={resetForm}><X className="w-4 h-4 text-slate-400" /></button>
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={resetForm}>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white z-10">
+              <h4 className="text-base font-semibold text-slate-800">{editingLicId ? 'Editar Licença' : 'Nova Licença'} — {software.nome}</h4>
+              <button onClick={resetForm}><X className="w-5 h-5 text-slate-400 hover:text-slate-600" /></button>
+            </div>
+            <div className="p-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Modelo</label>
+                  <select
+                    value={modeloLicenca}
+                    onChange={(e) => setModeloLicenca(e.target.value as ModeloLicenca | '')}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white w-full"
+                  >
+                    <option value="">Modelo</option>
+                    {Object.entries(modeloLicencaLabel).map(([k, v]) => (
+                      <option key={k} value={k}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Quantidade</label>
+                  <input
+                    type="number"
+                    value={quantidade}
+                    onChange={(e) => setQuantidade(e.target.value)}
+                    placeholder="Quantidade"
+                    min="1"
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Fornecedor (cadastro)</label>
+                  <SearchSelect
+                    options={fornecedorOptions}
+                    value={fornecedorId}
+                    onChange={setFornecedorId}
+                    placeholder="Fornecedor (cadastro)..."
+                  />
+                </div>
+              </div>
+              {/* S11 — Texto livre p/ fornecedor sem cadastro. */}
+              <div className="mb-3">
+                <input
+                  value={fornecedor}
+                  onChange={(e) => setFornecedor(e.target.value)}
+                  placeholder="Fornecedor — descrição livre (opcional, p/ fornecedor sem cadastro)"
+                  className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full"
+                />
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Valor Total (R$)</label>
+                  <input type="number" step="0.01" value={valorTotal} onChange={(e) => setValorTotal(e.target.value)} placeholder="Valor Total" className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Valor Unitário (R$)</label>
+                  <input type="number" step="0.01" value={valorUnitario} onChange={(e) => setValorUnitario(e.target.value)} placeholder="Valor Unitário" className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Início</label>
+                  <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Vencimento</label>
+                  <input type="date" value={dataVencimento} onChange={(e) => setDataVencimento(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Chave Serial</label>
+                  <input value={chaveSerial} onChange={(e) => setChaveSerial(e.target.value)} placeholder="Chave Serial" className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Chave NF-e</label>
+                  <input
+                    value={chaveNfe}
+                    onChange={(e) => setChaveNfe(e.target.value.replace(/\D/g, ''))}
+                    placeholder="44 dígitos"
+                    title="Chave da NF-e que originou esta licença (44 dígitos) — vincula ao módulo Fiscal."
+                    inputMode="numeric"
+                    maxLength={44}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono tracking-tight focus:outline-none focus:ring-2 focus:ring-capul-600 w-full"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Observações</label>
+                  <input value={observacoes} onChange={(e) => setObservacoes(e.target.value)} placeholder="Observações" className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button onClick={resetForm} className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100">Cancelar</button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50"
+                >
+                  {saving ? 'Salvando...' : (editingLicId ? 'Salvar' : 'Adicionar Licença')}
+                </button>
+              </div>
+            </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-            <select
-              value={modeloLicenca}
-              onChange={(e) => setModeloLicenca(e.target.value as ModeloLicenca | '')}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
-            >
-              <option value="">Modelo</option>
-              {Object.entries(modeloLicencaLabel).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
-            </select>
-            <input
-              type="number"
-              value={quantidade}
-              onChange={(e) => setQuantidade(e.target.value)}
-              placeholder="Quantidade"
-              min="1"
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
-            />
-            {/* S11 — Fornecedor cadastrado (preferencial). Texto livre fica abaixo. */}
-            <SearchSelect
-              options={fornecedorOptions}
-              value={fornecedorId}
-              onChange={setFornecedorId}
-              placeholder="Fornecedor (cadastro)..."
-            />
-          </div>
-          {/* S11 — Texto livre p/ fornecedor sem cadastro. */}
-          <div className="mb-3">
-            <input
-              value={fornecedor}
-              onChange={(e) => setFornecedor(e.target.value)}
-              placeholder="Fornecedor — descrição livre (opcional, p/ fornecedor sem cadastro)"
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full"
-            />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
-            <input
-              type="number"
-              step="0.01"
-              value={valorTotal}
-              onChange={(e) => setValorTotal(e.target.value)}
-              placeholder="Valor Total (R$)"
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
-            />
-            <input
-              type="number"
-              step="0.01"
-              value={valorUnitario}
-              onChange={(e) => setValorUnitario(e.target.value)}
-              placeholder="Valor Unitario (R$)"
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
-            />
-            <input
-              type="date"
-              value={dataInicio}
-              onChange={(e) => setDataInicio(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
-              title="Data Inicio"
-            />
-            <input
-              type="date"
-              value={dataVencimento}
-              onChange={(e) => setDataVencimento(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
-              title="Data Vencimento"
-            />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-            <input
-              value={chaveSerial}
-              onChange={(e) => setChaveSerial(e.target.value)}
-              placeholder="Chave Serial"
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
-            />
-            <input
-              value={chaveNfe}
-              onChange={(e) => setChaveNfe(e.target.value.replace(/\D/g, ''))}
-              placeholder="44 dígitos"
-              title="Chave da NF-e que originou esta licença (44 dígitos) — vincula ao módulo Fiscal."
-              inputMode="numeric"
-              maxLength={44}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono tracking-tight focus:outline-none focus:ring-2 focus:ring-capul-600 disabled:bg-slate-100 disabled:text-slate-500"
-            />
-            <input
-              value={observacoes}
-              onChange={(e) => setObservacoes(e.target.value)}
-              placeholder="Observacoes"
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
-            />
-          </div>
-          <button
-            onClick={handleCreate}
-            disabled={saving}
-            className="bg-capul-600 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50"
-          >
-            {saving ? 'Salvando...' : 'Adicionar Licenca'}
-          </button>
         </div>
       )}
 
@@ -919,6 +974,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                       {isAdmin && (
                         <td className="px-4 py-3">
                           <div className="flex gap-2">
+                            <button onClick={() => openEdit(lic)} className="text-xs text-capul-600 hover:underline">Editar</button>
                             {lic.status === 'ATIVA' && (
                               <>
                                 <button
@@ -935,6 +991,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                                 </button>
                               </>
                             )}
+                            <button onClick={() => handleExcluir(lic.id)} className="text-xs text-red-500 hover:underline">Excluir</button>
                           </div>
                         </td>
                       )}
