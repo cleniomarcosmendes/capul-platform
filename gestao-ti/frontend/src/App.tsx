@@ -18,7 +18,9 @@ import { SlaPage } from './pages/sla/SlaPage';
 import { SoftwaresListPage } from './pages/portfolio/SoftwaresListPage';
 import { SoftwareFormPage } from './pages/portfolio/SoftwareFormPage';
 import { SoftwareDetalhePage } from './pages/portfolio/SoftwareDetalhePage';
-import { LicencasPage } from './pages/portfolio/LicencasPage';
+import { NotaLicencaListPage } from './pages/portfolio/NotaLicencaListPage';
+import { NotaLicencaFormPage } from './pages/portfolio/NotaLicencaFormPage';
+import { NotaLicencaDetalhePage } from './pages/portfolio/NotaLicencaDetalhePage';
 import { ContratosListPage } from './pages/contratos/ContratosListPage';
 import { ContratoFormPage } from './pages/contratos/ContratoFormPage';
 import { ContratoDetalhePage } from './pages/contratos/ContratoDetalhePage';
@@ -128,7 +130,9 @@ function AppRoutes() {
         <Route path="softwares/novo" element={<SoftwareFormPage />} />
         <Route path="softwares/:id" element={<SoftwareDetalhePage />} />
         <Route path="softwares/:id/editar" element={<SoftwareFormPage />} />
-        <Route path="licencas" element={<LicencasPage />} />
+        <Route path="licencas" element={<NotaLicencaListPage />} />
+        <Route path="licencas/nova" element={<NotaLicencaFormPage />} />
+        <Route path="licencas/:id" element={<NotaLicencaDetalhePage />} />
         <Route path="contratos" element={<ContratosListPage />} />
         <Route path="contratos/novo" element={<ContratoFormPage />} />
         <Route path="contratos/:id" element={<ContratoDetalhePage />} />

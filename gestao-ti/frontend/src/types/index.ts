@@ -540,6 +540,27 @@ export interface SoftwareLicenca {
   _count?: { funcionarios: number };
 }
 
+// === Compra de Licenças (cabeçalho NF, itens = licenças) — 03/06 ===
+export interface LicencaCompra {
+  id: string;
+  numero: string;
+  semNota: boolean;
+  dataLancamento: string;
+  dataVencimento: string | null;
+  chaveNfe: string | null;
+  valorTotal: number;
+  observacao: string | null;
+  fornecedorId: string | null;
+  fornecedor?: { id: string; codigo: string; loja: string; nome: string } | null;
+  criadoPorId: string | null;
+  criadoPor?: { id: string; nome: string; username: string } | null;
+  departamentoLancamentoId: string;
+  createdAt: string;
+  updatedAt: string;
+  itens?: SoftwareLicenca[];
+  _count?: { itens: number };
+}
+
 // === Contrato interfaces ===
 
 export interface Contrato {
