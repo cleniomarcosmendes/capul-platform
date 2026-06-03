@@ -64,3 +64,6 @@ tmp/
 # scripts/backup.sh e pelo ciclo restore_from_prod. Podem chegar a centenas
 # de MB; ficam fora do git por design (versionar dump não faz sentido).
 backups/
+
+# Override local de DEV (expõe RFB na LAN p/ Opção B) — não vai pra HOM/PROD
+docker-compose.override.yml

@@ -90,14 +90,20 @@ services:
     image: postgres:16-alpine
     container_name: capul-db-rfb
     environment:
-      POSTGRES_USER: ${DB_USER:?DB_USER obrigatorio no .env}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD obrigatorio no .env}
+      # Credenciais dedicadas da RFB. Se RFB_DB_USER/RFB_DB_PASSWORD não forem
+      # definidos no .env, caem para DB_USER/DB_PASSWORD (comportamento legado).
+      # Numa máquina dedicada provisionada do zero, definir RFB_DB_* cria a role
+      # já no primeiro boot. ATENÇÃO: estas vars só valem na 1ª inicialização do
+      # volume; em banco já criado, ajustar a role via SQL (CREATE/ALTER ROLE).
+      POSTGRES_USER: ${RFB_DB_USER:-${DB_USER:?DB_USER obrigatorio no .env}}
+      POSTGRES_PASSWORD: ${RFB_DB_PASSWORD:-${DB_PASSWORD:?DB_PASSWORD obrigatorio no .env}}
       POSTGRES_DB: capul_rfb
     # Porta NAO exposta externamente — acesso apenas via rede Docker interna.
+    # (Em DEV, docker-compose.override.yml publica 5433 p/ HOM/PROD consumirem.)
     volumes:
       - postgres_rfb_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${RFB_DB_USER:-${DB_USER}}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -399,12 +405,14 @@ services:
     container_name: capul-fiscal-api
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public&connection_limit=10
-      # Base RFB em banco DEDICADO. Host/porta/banco configuráveis via .env:
-      #   default = container local `postgres-rfb` (capul-db-rfb).
+      # Base RFB em banco DEDICADO. Host/porta/banco/credenciais via .env:
+      #   default = container local `postgres-rfb` (capul-db-rfb), creds = DB_USER/DB_PASSWORD.
       #   p/ apontar a uma máquina externa (ex.: máquina de DEV que já tem os
-      #   41 GB carregados, ou a máquina exclusiva do Douglas), basta definir
-      #   RFB_DB_HOST / RFB_DB_PORT / RFB_DB_NAME no .env — sem editar o compose.
-      RFB_DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@${RFB_DB_HOST:-postgres-rfb}:${RFB_DB_PORT:-5432}/${RFB_DB_NAME:-capul_rfb}?schema=rfb&connection_limit=10
+      #   41 GB carregados, ou a máquina exclusiva do Douglas), definir
+      #   RFB_DB_HOST / RFB_DB_PORT / RFB_DB_NAME + RFB_DB_USER / RFB_DB_PASSWORD
+      #   no .env — credenciais próprias (role read-only), desacopladas do banco
+      #   operacional. Se RFB_DB_USER/RFB_DB_PASSWORD vazios, usa DB_USER/DB_PASSWORD.
+      RFB_DATABASE_URL: postgresql://${RFB_DB_USER:-${DB_USER}}:${RFB_DB_PASSWORD:-${DB_PASSWORD}}@${RFB_DB_HOST:-postgres-rfb}:${RFB_DB_PORT:-5432}/${RFB_DB_NAME:-capul_rfb}?schema=rfb&connection_limit=10
       JWT_SECRET: ${JWT_SECRET}
       DB_SCHEMA: fiscal
       CORE_SCHEMA: core
