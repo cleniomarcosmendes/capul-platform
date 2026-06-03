@@ -41,6 +41,13 @@ export interface TimelineEvento {
   protocolo: string | null;
   cStat: string | null;
   xMotivo: string | null;
+  /**
+   * Id do evento (cte_evento.idEvento) quando há detalhe disponível para abrir.
+   * Null para eventos sem XML (ex.: autorização sintética, resumo SEFAZ).
+   */
+  id?: string | null;
+  /** Indica se há XML do evento persistido para abrir o detalhe/impressão. */
+  possuiDetalhe?: boolean;
 }
 
 export interface CteConsultaResult {
@@ -380,19 +387,117 @@ export class CteService {
     // 3) Persiste (idempotente)
     await this.documentoEvento.upsertMany(documentoId, eventosParaPersistir);
 
-    // 4) Retorna lista cronológica do banco
+    // 4) Lista cronológica do banco (autorização + eventos do SEFAZ per-UF)
     const persistidos = await this.documentoEvento.listarPorDocumento(documentoId);
-    const eventos: TimelineEvento[] = persistidos.map((e) => ({
-      tipoEvento: e.tipoEvento,
-      tipoEventoLabel: TIPO_EVENTO_LABEL[e.tipoEvento] ?? `Evento ${e.tipoEvento}`,
-      descricao: e.descricao,
-      dataEvento: e.dataEvento.toISOString(),
-      protocolo: e.protocoloEvento,
-      cStat: e.cStat,
-      xMotivo: e.xMotivo,
-    }));
+
+    // 5) Eventos ricos da distribuição (fiscal.cte_evento) — chegam via
+    //    CTeDistribuicaoDFe/distNSU com o XML completo (procEventoCTe), o que
+    //    permite abrir o detalhe e imprimir. Fonte canônica dos eventos de
+    //    CT-e nesta plataforma (cancelamento, CC-e, desacordo, MDF-e vinculado).
+    const eventosCte = await this.carregarEventosCte(chave);
+
+    // 6) Merge + dedup. cte_evento é a fonte com detalhe; quando o mesmo tpEvento
+    //    já veio pela distribuição, descartamos o resumo do SEFAZ (sem XML) para
+    //    não duplicar a linha. A autorização (sem tpEvento numérico) sempre fica.
+    const tiposComDetalhe = new Set(eventosCte.map((e) => e.tipoEvento));
+    const eventosPersistidos: TimelineEvento[] = persistidos
+      .filter(
+        (e) =>
+          e.tipoEvento === TIPO_EVENTO_AUTORIZACAO ||
+          !tiposComDetalhe.has(e.tipoEvento),
+      )
+      .map((e) => ({
+        id: null,
+        possuiDetalhe: false,
+        tipoEvento: e.tipoEvento,
+        tipoEventoLabel: TIPO_EVENTO_LABEL[e.tipoEvento] ?? `Evento ${e.tipoEvento}`,
+        descricao: e.descricao,
+        dataEvento: e.dataEvento.toISOString(),
+        protocolo: e.protocoloEvento,
+        cStat: e.cStat,
+        xMotivo: e.xMotivo,
+      }));
+
+    const eventos: TimelineEvento[] = [...eventosPersistidos, ...eventosCte].sort(
+      (a, b) => a.dataEvento.localeCompare(b.dataEvento),
+    );
 
     return { eventos, consultaProtocoloStatus };
+  }
+
+  /**
+   * Carrega os eventos de um CT-e da tabela fiscal.cte_evento (populada pela
+   * ingestão de distribuição distNSU) e converte para TimelineEvento. Cada
+   * evento traz `id` (idEvento) e `possuiDetalhe=true`, habilitando o clique
+   * para abrir o detalhe/impressão no frontend. Sem chamadas SEFAZ.
+   */
+  private async carregarEventosCte(chave: string): Promise<TimelineEvento[]> {
+    const eventos = await this.prisma.client.cteEvento.findMany({
+      where: { chave },
+      orderBy: { dhEvento: 'asc' },
+    });
+    return eventos.map((e) => {
+      const tipo = String(e.tpEventoNum);
+      const label = TIPO_EVENTO_LABEL[tipo] ?? `Evento ${tipo}`;
+      return {
+        id: e.idEvento,
+        possuiDetalhe: !!e.xml,
+        tipoEvento: tipo,
+        tipoEventoLabel: label,
+        descricao: label,
+        dataEvento: e.dhEvento.toISOString(),
+        protocolo: e.protocolo,
+        cStat: e.cStat,
+        xMotivo: e.xMotivo,
+      };
+    });
+  }
+
+  /**
+   * Detalhe completo de um evento de CT-e — parseia o XML procEventoCTe
+   * armazenado em fiscal.cte_evento. Alimenta o modal de detalhe / impressão
+   * do frontend (tela "AUTOR DO EVENTO" + "Observação" do portal SEFAZ).
+   * Não dispara nenhuma chamada SEFAZ — apenas lê o XML já persistido.
+   */
+  async obterEventoDetalhe(chave: string, idEvento: string) {
+    this.validateChave(chave);
+    const evento = await this.prisma.client.cteEvento.findUnique({
+      where: { idEvento },
+    });
+    if (!evento || evento.chave !== chave) {
+      throw new NotFoundException(
+        `Evento ${idEvento} não encontrado para o CT-e ${chave}.`,
+      );
+    }
+    const detalhe = this.parser.parseEventoCteXml(evento.xml);
+    // Complementa autorização com o que está persistido (caso o retEventoCTe
+    // não tenha vindo completo no XML).
+    if (!detalhe.autorizacaoCStat && evento.cStat) {
+      detalhe.autorizacaoCStat = evento.cStat;
+      detalhe.autorizacaoMensagem =
+        evento.cStat === '135'
+          ? '135 - Evento registrado e vinculado a CT-e'
+          : evento.cStat;
+    }
+    if (!detalhe.autorizacaoMotivo && evento.xMotivo) {
+      detalhe.autorizacaoMotivo = evento.xMotivo;
+    }
+    if (!detalhe.autorizacaoProtocolo && evento.protocolo) {
+      detalhe.autorizacaoProtocolo = evento.protocolo;
+    }
+    if (!detalhe.autorizacaoDataHora) {
+      detalhe.autorizacaoDataHora = evento.dhEvento.toISOString();
+    }
+    return {
+      id: evento.idEvento,
+      tipoEvento: String(evento.tpEventoNum),
+      descricao: detalhe.descricaoEvento ?? detalhe.tipoEventoDescricao,
+      dataEvento: evento.dhEvento.toISOString(),
+      protocolo: evento.protocolo,
+      cStat: evento.cStat,
+      xMotivo: evento.xMotivo,
+      detalhe,
+    };
   }
 
   private validateChave(chave: string): void {

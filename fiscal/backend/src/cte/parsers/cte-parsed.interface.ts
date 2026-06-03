@@ -372,3 +372,40 @@ export interface CteParsed {
   // Atalhos legados
   observacoes?: string | null;        // = infoAdicionais.observacoes (backwards compat)
 }
+
+/**
+ * Detalhe completo de um evento de CT-e — extraído do XML procEventoCTe
+ * armazenado em fiscal.cte_evento (chega via CTeDistribuicaoDFe/distNSU).
+ * Espelha NfeEventoDetalhe, com o adicional `observacao` (xObs) usado pela
+ * Prestação de Serviço em Desacordo (tpEvento 610110). Renderiza a tela
+ * "AUTOR DO EVENTO" + "Observação" igual ao portal SEFAZ.
+ */
+export interface CteEventoDetalhe {
+  // Cabeçalho do evento (infEvento do request)
+  orgaoRecepcao?: string | null;          // cOrgao (código IBGE do órgão)
+  orgaoRecepcaoDescricao?: string | null;
+  ambiente: '1' | '2';                    // tpAmb
+  ambienteDescricao: string;              // 1-Produção / 2-Homologação
+  versao?: string | null;                 // @versao do evento
+  chave: string;                          // chCTe
+  idEvento: string | null;                // @Id — "ID" + tpEvento + chCTe + nSeqEvento
+  autorCnpj?: string | null;              // CNPJ
+  autorCpf?: string | null;               // CPF
+  dataEvento: string;                     // dhEvento
+  tipoEvento: string;                     // tpEvento
+  tipoEventoDescricao: string;
+  sequencial: number | null;              // nSeqEvento
+  versaoEvento?: string | null;           // @versaoEvento do detEvento
+  descricaoEvento?: string | null;        // detEvento/descEvento
+  // Campos específicos por tipo de evento (preenchidos conforme aplicável):
+  observacao?: string | null;             // detEvento/.../xObs (Prestação em Desacordo 610110)
+  justificativa?: string | null;          // detEvento/.../xJust (cancelamento 110111)
+  correcao?: string | null;               // detEvento/.../xCorrecao ou grupoAlterado (CC-e 110110)
+  condicoesUso?: string | null;           // detEvento/.../xCondUso (CC-e 110110)
+  // Autorização pela SEFAZ (retEventoCTe)
+  autorizacaoCStat?: string | null;
+  autorizacaoMotivo?: string | null;      // xMotivo
+  autorizacaoMensagem?: string | null;    // cStat + " - " + xMotivo
+  autorizacaoProtocolo?: string | null;   // nProt
+  autorizacaoDataHora?: string | null;    // dhRegEvento
+}

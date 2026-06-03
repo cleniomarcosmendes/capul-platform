@@ -1,6 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { XMLParser } from 'fast-xml-parser';
+import { ORGAO_RECEPCAO_MAP } from '../../nfe/parsers/nfe-parser.service.js';
+import { TIPO_EVENTO_LABEL } from '../../nfe/documento-evento.service.js';
 import type {
+  CteEventoDetalhe,
   CteCarga,
   CteDadosGerais,
   CteDocumentoAnterior,
@@ -728,6 +731,82 @@ export class CteParserService {
     };
   }
 
+  /**
+   * Parseia o XML de um evento de CT-e (procEventoCTe) já persistido em
+   * fiscal.cte_evento. Estrutura (removeNSPrefix=true):
+   *   <procEventoCTe>
+   *     <eventoCTe><infEvento Id="ID..."><cOrgao/><tpAmb/><CNPJ|CPF/>
+   *        <chCTe/><dhEvento/><tpEvento/><nSeqEvento/>
+   *        <detEvento versaoEvento="4.00"><evXxx>...</evXxx></detEvento>
+   *     </infEvento></eventoCTe>
+   *     <retEventoCTe><infEvento><cStat/><xMotivo/><nProt/><dhRegEvento/></infEvento></retEventoCTe>
+   *   </procEventoCTe>
+   * Não dispara SEFAZ — apenas lê o XML armazenado.
+   */
+  parseEventoCteXml(xml: string): CteEventoDetalhe {
+    let root: any;
+    try {
+      root = this.xmlParser.parse(xml);
+    } catch (err) {
+      throw new BadRequestException(`XML de evento CT-e inválido: ${(err as Error).message}`);
+    }
+    const proc = root?.procEventoCTe ?? root;
+    const evento = proc?.eventoCTe ?? proc?.evento ?? proc?.Evento;
+    const retEvento = proc?.retEventoCTe ?? proc?.retEvento ?? proc?.RetEvento;
+    // Fallback: <infEvento> puro como root (shape minimalista).
+    const infEventoPuro = !evento && (root?.infEvento || proc?.infEvento);
+    const inf = evento?.infEvento ?? infEventoPuro;
+    if (!inf) {
+      throw new BadRequestException('Bloco <infEvento> ausente no XML do evento CT-e.');
+    }
+    const ret = retEvento?.infEvento ?? {};
+    const detEvento = inf.detEvento ?? {};
+
+    const ambiente = String(inf.tpAmb ?? '1') as '1' | '2';
+    const tipoEvento = String(inf.tpEvento ?? '');
+    const orgao = str(inf.cOrgao);
+    const idEvento = str(inf['@_Id']) ?? str(inf.Id) ?? '';
+    const versaoEvento =
+      str(detEvento['@_versaoEvento']) ?? str(detEvento['@_versao']) ?? str(inf.verEvento) ?? null;
+
+    const cStatRet = str(ret.cStat);
+    const xMotRet = str(ret.xMotivo);
+    const labelTipo = TIPO_EVENTO_LABEL[tipoEvento];
+    const descGrupo = buscarCampoEvento(detEvento, 'descEvento');
+
+    return {
+      orgaoRecepcao: orgao,
+      orgaoRecepcaoDescricao: orgao ? ORGAO_RECEPCAO_MAP[orgao] ?? null : null,
+      ambiente,
+      ambienteDescricao: ambiente === '1' ? '1 - Produção' : '2 - Homologação',
+      versao: str(evento?.['@_versao']) ?? str(inf['@_versao']) ?? versaoEvento,
+      chave: String(inf.chCTe ?? ''),
+      idEvento: idEvento || null,
+      autorCnpj: str(inf.CNPJ),
+      autorCpf: str(inf.CPF),
+      dataEvento: String(inf.dhEvento ?? ''),
+      tipoEvento,
+      tipoEventoDescricao: tipoEvento
+        ? `${tipoEvento} - ${labelTipo ?? descGrupo ?? 'Evento'}`
+        : descGrupo ?? '-',
+      sequencial: optNum(inf.nSeqEvento),
+      versaoEvento,
+      descricaoEvento: descGrupo,
+      observacao: buscarCampoEvento(detEvento, 'xObs'),
+      justificativa: buscarCampoEvento(detEvento, 'xJust'),
+      correcao:
+        buscarCampoEvento(detEvento, 'xCorrecao') ??
+        buscarCampoEvento(detEvento, 'valorAlterado'),
+      condicoesUso: buscarCampoEvento(detEvento, 'xCondUso'),
+      autorizacaoCStat: cStatRet,
+      autorizacaoMotivo: xMotRet,
+      autorizacaoMensagem:
+        cStatRet && xMotRet ? `${cStatRet} - ${xMotRet}` : xMotRet ?? cStatRet,
+      autorizacaoProtocolo: str(ret.nProt),
+      autorizacaoDataHora: str(ret.dhRegEvento),
+    };
+  }
+
   private parseProtocolo(protCTe: any): CteProtocoloAutorizacao | null {
     if (!protCTe?.infProt) return null;
     const inf = protCTe.infProt;
@@ -762,4 +841,28 @@ function optNum(v: any): number | null {
 function arr<T = any>(v: T | T[] | undefined | null): T[] {
   if (v === undefined || v === null) return [];
   return Array.isArray(v) ? v : [v];
+}
+
+/**
+ * Busca a primeira ocorrência (DFS) de um campo de texto dentro do detEvento
+ * de um evento CT-e, independente do grupo (evPrestDesacordo, evCancCTe,
+ * evCCeCTe, evCTeAutorizadoMDFe, etc.). Ignora atributos (@_...). Retorna o
+ * valor como string ou null se ausente.
+ */
+function buscarCampoEvento(node: any, campo: string): string | null {
+  if (node === undefined || node === null || typeof node !== 'object') return null;
+  for (const [chave, valor] of Object.entries(node)) {
+    if (chave.startsWith('@_')) continue;
+    if (chave === campo && valor !== undefined && valor !== null && valor !== '') {
+      return String(valor);
+    }
+    if (typeof valor === 'object') {
+      const itens = Array.isArray(valor) ? valor : [valor];
+      for (const item of itens) {
+        const achado = buscarCampoEvento(item, campo);
+        if (achado !== null) return achado;
+      }
+    }
+  }
+  return null;
 }

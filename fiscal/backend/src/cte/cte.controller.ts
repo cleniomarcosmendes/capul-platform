@@ -123,6 +123,21 @@ export class CteController {
     res.send(pdf);
   }
 
+  /**
+   * Detalhe de um evento da timeline do CT-e — equivale à tela que o portal
+   * SEFAZ abre ao clicar no evento ("AUTOR DO EVENTO" + "Observação").
+   * Lê o XML procEventoCTe já persistido em fiscal.cte_evento (vindo da
+   * distribuição distNSU). Não dispara nenhuma chamada SEFAZ.
+   */
+  @Get(':chave/eventos/:idEvento')
+  @RoleMinima('OPERADOR_ENTRADA')
+  async obterEventoDetalhe(
+    @Param('chave') chave: string,
+    @Param('idEvento') idEvento: string,
+  ) {
+    return this.cte.obterEventoDetalhe(chave, idEvento);
+  }
+
   @Get('health')
   @RoleMinima('OPERADOR_ENTRADA')
   async health() {
