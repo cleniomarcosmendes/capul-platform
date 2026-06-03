@@ -49,6 +49,14 @@ export class LicencaCompraService {
       where,
       include: {
         fornecedor: { select: { id: true, codigo: true, loja: true, nome: true } },
+        // Itens (leve) p/ o grid mostrar QUAIS licenças/softwares e onde alocadas.
+        itens: {
+          select: {
+            id: true, nome: true, modeloLicenca: true, status: true,
+            software: { select: { nome: true } },
+            departamento: { select: { nome: true } },
+          },
+        },
         _count: { select: { itens: true } },
       },
       orderBy: { dataLancamento: 'desc' as const },

@@ -8,6 +8,19 @@ import type { LicencaCompra } from '../../types';
 
 function formatDateBR(d: string) { return new Date(d).toLocaleDateString('pt-BR'); }
 
+// Resumo dos itens (softwares/licenças) da nota — pro grid ser legível.
+function resumoLicencas(n: LicencaCompra): string {
+  const its = n.itens || [];
+  if (its.length === 0) return '—';
+  const primeiro = its[0].software?.nome || its[0].nome || 'Licença';
+  return its.length > 1 ? `${primeiro} +${its.length - 1}` : primeiro;
+}
+function resumoDeptos(n: LicencaCompra): string {
+  const nomes = Array.from(new Set((n.itens || []).map((i) => i.departamento?.nome).filter(Boolean))) as string[];
+  if (nomes.length === 0) return '—';
+  return nomes.length > 1 ? `${nomes[0]} +${nomes.length - 1}` : nomes[0];
+}
+
 export function NotaLicencaListPage() {
   const { gestaoTiRole } = useAuth();
   const isAdmin = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole || '');
@@ -66,12 +79,13 @@ export function NotaLicencaListPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 text-left">
-                    <th className="px-4 py-3 font-medium text-slate-600">Número</th>
+                    <th className="px-4 py-3 font-medium text-slate-600">Software / Licença</th>
+                    <th className="px-4 py-3 font-medium text-slate-600">Depto Alocado</th>
+                    <th className="px-4 py-3 font-medium text-slate-600">Número NF</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Fornecedor</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Lançamento</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Licenças</th>
+                    <th className="px-4 py-3 font-medium text-slate-600">Qtd</th>
                     <th className="px-4 py-3 font-medium text-slate-600">Valor Total</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Chave NF-e</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -79,17 +93,16 @@ export function NotaLicencaListPage() {
                     <tr key={n.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
                         <Link to={`/gestao-ti/licencas/${n.id}`} className="text-capul-600 hover:underline font-medium">
-                          {n.semNota ? <span className="text-slate-500">S/N</span> : n.numero}
+                          {resumoLicencas(n)}
                         </Link>
                       </td>
+                      <td className="px-4 py-3 text-slate-600">{resumoDeptos(n)}</td>
+                      <td className="px-4 py-3 text-slate-600">{n.semNota ? <span className="text-slate-400">S/N</span> : n.numero}</td>
                       <td className="px-4 py-3 text-slate-600">{n.fornecedor?.nome ?? '-'}</td>
                       <td className="px-4 py-3 text-slate-500 text-xs">{formatDateBR(n.dataLancamento)}</td>
                       <td className="px-4 py-3 text-slate-600">{n._count?.itens ?? n.itens?.length ?? 0}</td>
                       <td className="px-4 py-3 text-slate-600">
                         R$ {Number(n.valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-4 py-3 text-xs font-mono text-slate-500">
-                        {n.chaveNfe ? `${n.chaveNfe.slice(0, 6)}…${n.chaveNfe.slice(-6)}` : '-'}
                       </td>
                     </tr>
                   ))}
