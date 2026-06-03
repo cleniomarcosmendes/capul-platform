@@ -94,6 +94,7 @@ model Usuario {
   anexosConhecimento     AnexoConhecimento[]     @relation("AnexoConhecimentoUsuario")
   horarioTrabalho        HorarioTrabalho?        @relation("HorarioTrabalho")
   notasFiscaisCriadas    NotaFiscal[]            @relation("NotaFiscalCriadaPor")
+  licencaCompras         LicencaCompra[]         @relation("LicencaCompraCriadaPor")
   anexosNotaFiscal       AnexoNotaFiscal[]       @relation("AnexoNFUsuario")
   alteracoesChaveNF      NotaFiscalChaveHistorico[] @relation("NFChaveAlteradoPor")
 
@@ -770,6 +771,7 @@ model FornecedorConfig {
   contratos        Contrato[]
   notasFiscais     NotaFiscal[]
   softwareLicencas SoftwareLicenca[]
+  licencaCompras   LicencaCompra[]   @relation("LicencaCompraFornecedor")
 
   @@unique([codigo, loja])
   @@map("fornecedores")
@@ -1281,12 +1283,57 @@ model SoftwareLicenca {
 
   funcionarios LicencaFuncionario[]
 
+  // 03/06 — toda licença passa a ser ITEM de uma "compra de licença" (cabeçalho
+  // NF de compra, ou registro "S/N" = sem nota fiscal). nota_id é NULLABLE nesta
+  // fase de transição (o fluxo NF substitui o cadastro antigo na F3). A chave
+  // NF-e canônica vive no cabeçalho; o depto de ALOCAÇÃO (departamentoId) é por licença.
+  notaId String?        @map("nota_id")
+  nota   LicencaCompra? @relation(fields: [notaId], references: [id])
+
   @@index([dataVencimento])
   @@index([softwareId, status])
   @@index([departamentoId])
   @@index([equipeResponsavelId])
   @@index([fornecedorId])
+  @@index([notaId])
   @@map("software_licencas")
+  @@schema("gestao_ti")
+}
+
+// Cabeçalho da COMPRA DE LICENÇAS (modelo Nota Fiscal — itens = licenças).
+// Decisão 03/06: toda licença nasce de um registro destes. numero = "S/N"
+// quando registrada SEM nota fiscal (vários registros podem ter "S/N" → sem
+// unique em numero). chave_nfe e fornecedor são opcionais (ausentes no S/N).
+model LicencaCompra {
+  id             String    @id @default(uuid())
+  numero         String    @db.VarChar(20)
+  semNota        Boolean   @default(false) @map("sem_nota")
+  dataLancamento DateTime  @map("data_lancamento")
+  dataVencimento DateTime? @map("data_vencimento")
+  // Chave NF-e (44 díg.). Ausente quando S/N. Não-unique (S/N repete; e a mesma
+  // NF pode, em legado, aparecer em mais de um registro migrado).
+  chaveNfe   String?  @map("chave_nfe") @db.Char(44)
+  valorTotal Decimal  @default(0) @map("valor_total") @db.Decimal(12, 2)
+  observacao String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  fornecedorId String?           @map("fornecedor_id")
+  fornecedor   FornecedorConfig? @relation("LicencaCompraFornecedor", fields: [fornecedorId], references: [id])
+
+  // Criador (nullable: registros migrados do legado não têm autor conhecido).
+  criadoPorId String?  @map("criado_por_id")
+  criadoPor   Usuario? @relation("LicencaCompraCriadaPor", fields: [criadoPorId], references: [id])
+
+  // Workspace de LANÇAMENTO (oculto na UI) — quem lançou. Auditoria + RBAC.
+  departamentoLancamentoId String @map("departamento_lancamento_id")
+
+  itens SoftwareLicenca[]
+
+  @@index([fornecedorId])
+  @@index([chaveNfe])
+  @@index([dataLancamento])
+  @@map("licenca_compras")
   @@schema("gestao_ti")
 }
 
