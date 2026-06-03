@@ -622,11 +622,6 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
     setObservacoes('');
   }
 
-  function openCreate() {
-    resetForm();
-    setShowForm(true);
-  }
-
   function openEdit(lic: SoftwareLicenca) {
     setEditingLicId(lic.id);
     setModeloLicenca(lic.modeloLicenca || '');
@@ -780,13 +775,14 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
   return (
     <div>
       {isAdmin && (
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 text-sm text-capul-600 border border-capul-300 px-3 py-1.5 rounded-lg hover:bg-capul-50 mb-4"
+        <Link
+          to="/gestao-ti/licencas/nova"
+          className="inline-flex items-center gap-2 text-sm text-capul-600 border border-capul-300 px-3 py-1.5 rounded-lg hover:bg-capul-50 mb-4"
+          title="Licenças são cadastradas a partir de uma Nota (compra). Aqui você só consulta/edita as deste software."
         >
           <Plus className="w-4 h-4" />
-          Nova Licença
-        </button>
+          Nova Licença (via Nota)
+        </Link>
       )}
 
       {showForm && (
