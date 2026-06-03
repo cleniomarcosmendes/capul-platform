@@ -579,7 +579,8 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                 <tr className="bg-slate-50 text-left">
                   <th className="px-4 py-3 font-medium text-slate-600">Modelo</th>
                   <th className="px-4 py-3 font-medium text-slate-600">Qtd</th>
-                  <th className="px-4 py-3 font-medium text-slate-600">Usuarios</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Chave Serial</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Usuário(s)</th>
                   <th className="px-4 py-3 font-medium text-slate-600">Valor Total</th>
                   <th className="px-4 py-3 font-medium text-slate-600">Fornecedor</th>
                   <th className="px-4 py-3 font-medium text-slate-600">Vencimento</th>
@@ -595,19 +596,27 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                         {lic.modeloLicenca ? modeloLicencaLabel[lic.modeloLicenca] || lic.modeloLicenca : '-'}
                       </td>
                       <td className="px-4 py-3 text-slate-600">{lic.quantidade ?? '-'}</td>
+                      <td className="px-4 py-3 text-xs font-mono text-slate-500">{lic.chaveSerial || '-'}</td>
                       <td className="px-4 py-3">
                         {podeGerenciarUsuarios(lic) ? (
-                          <button
-                            onClick={() => toggleUsuarios(lic.id)}
-                            className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium transition-colors ${
-                              expandedLicId === lic.id
-                                ? 'bg-capul-100 text-capul-700'
-                                : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                            }`}
-                          >
-                            <Users className="w-3 h-3" />
-                            {lic._count?.funcionarios ?? 0}/{lic.quantidade ?? '∞'}
-                          </button>
+                          <div className="flex flex-col gap-1 items-start">
+                            <button
+                              onClick={() => toggleUsuarios(lic.id)}
+                              className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium transition-colors ${
+                                expandedLicId === lic.id
+                                  ? 'bg-capul-100 text-capul-700'
+                                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                              }`}
+                            >
+                              <Users className="w-3 h-3" />
+                              {lic._count?.funcionarios ?? 0}/{lic.quantidade ?? '∞'}
+                            </button>
+                            {lic.funcionarios && lic.funcionarios.length > 0 && (
+                              <span className="text-xs text-slate-600">
+                                {lic.funcionarios.map((f) => f.nome).join(', ')}
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-xs text-slate-400">-</span>
                         )}
@@ -669,7 +678,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                     {/* Painel expandivel de usuarios */}
                     {expandedLicId === lic.id && podeGerenciarUsuarios(lic) && (
                       <tr>
-                        <td colSpan={isAdmin ? 8 : 7} className="px-4 py-3 bg-slate-50">
+                        <td colSpan={isAdmin ? 9 : 8} className="px-4 py-3 bg-slate-50">
                           <div className="border border-slate-200 rounded-lg bg-white p-4">
                             <div className="flex items-center justify-between mb-3">
                               <h5 className="text-sm font-semibold text-slate-700 flex items-center gap-2">

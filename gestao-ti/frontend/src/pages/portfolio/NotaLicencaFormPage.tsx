@@ -124,7 +124,10 @@ export function NotaLicencaFormPage() {
         itens: itensPayload,
       });
       toast('success', 'Nota de licenças registrada');
-      navigate(`/gestao-ti/licencas/${nota.id}`);
+      // Se veio do detalhe de um software ("Nova Nota com este software"),
+      // volta pra ele (a licença nova aparece na lista). Senão, vai pro detalhe da nota.
+      const origemSoftware = searchParams.get('software');
+      navigate(origemSoftware ? `/gestao-ti/softwares/${origemSoftware}` : `/gestao-ti/licencas/${nota.id}`);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setErro(Array.isArray(msg) ? msg.join(', ') : (msg || 'Erro ao salvar'));
@@ -288,7 +291,7 @@ export function NotaLicencaFormPage() {
           <button onClick={handleSalvar} disabled={saving} className="bg-capul-600 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50">
             {saving ? 'Salvando...' : 'Salvar'}
           </button>
-          <button onClick={() => navigate('/gestao-ti/licencas')} className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2.5">Cancelar</button>
+          <button onClick={() => { const o = searchParams.get('software'); navigate(o ? `/gestao-ti/softwares/${o}` : '/gestao-ti/licencas'); }} className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2.5">Cancelar</button>
         </div>
       </div>
     </>

@@ -95,6 +95,8 @@ export class LicencaService {
       where: whereFiltrado,
       include: {
         ...licencaInclude,
+        // nomes dos funcionários (p/ exibir na lista, não só a contagem).
+        funcionarios: { select: { nome: true, matricula: true }, orderBy: { createdAt: 'asc' as const } },
         _count: { select: { funcionarios: true } },
       },
       // Ordenação por clique no cabeçalho (whitelist — protege contra injection).
