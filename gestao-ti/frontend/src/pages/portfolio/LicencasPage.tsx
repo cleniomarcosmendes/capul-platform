@@ -5,12 +5,13 @@ import { licencaService } from '../../services/licenca.service';
 import { softwareService } from '../../services/software.service';
 import { contratoService } from '../../services/contrato.service';
 import { coreService } from '../../services/core.service';
+import { gestaoApi } from '../../services/api';
 import { KeyRound, AlertTriangle, Download, Plus, X, Search, Users, UserPlus, UserMinus } from 'lucide-react';
 import { DepartamentoField } from '../../components/DepartamentoField';
 import { SearchSelect } from '../../components/SearchSelect';
 import type { SearchSelectOption } from '../../components/SearchSelect';
 import { exportService } from '../../services/export.service';
-import type { SoftwareLicenca, Software, StatusLicenca, CategoriaLicenca, FornecedorConfig, Departamento, UsuarioCore, LicencaUsuario } from '../../types';
+import type { SoftwareLicenca, Software, StatusLicenca, CategoriaLicenca, FornecedorConfig, Departamento, LicencaFuncionario } from '../../types';
 
 import { formatDateBR } from '../../utils/date';
 import { useToast } from '../../components/Toast';
@@ -74,9 +75,8 @@ export function LicencasPage() {
   // Antes só existia na aba Licenças do detalhe do Software; aqui cobre também
   // licenças avulsas (sem software). Endpoints/serviço já existiam.
   const [expandedLicId, setExpandedLicId] = useState<string | null>(null);
-  const [licencaUsuarios, setLicencaUsuarios] = useState<LicencaUsuario[]>([]);
-  const [allUsuarios, setAllUsuarios] = useState<UsuarioCore[]>([]);
-  const [selectedUsuarioId, setSelectedUsuarioId] = useState('');
+  const [licencaFuncionarios, setLicencaFuncionarios] = useState<LicencaFuncionario[]>([]);
+  const [matriculaInput, setMatriculaInput] = useState('');
   const [loadingUsuarios, setLoadingUsuarios] = useState(false);
   const [savingUsuario, setSavingUsuario] = useState(false);
 
@@ -278,14 +278,9 @@ export function LicencasPage() {
     }
     setExpandedLicId(licId);
     setLoadingUsuarios(true);
-    setSelectedUsuarioId('');
+    setMatriculaInput('');
     try {
-      const [usuarios, todos] = await Promise.all([
-        licencaService.listarUsuarios(licId),
-        allUsuarios.length ? Promise.resolve(allUsuarios) : coreService.listarUsuarios(),
-      ]);
-      setLicencaUsuarios(usuarios);
-      if (!allUsuarios.length) setAllUsuarios(todos);
+      setLicencaFuncionarios(await licencaService.listarFuncionarios(licId));
     } catch {
       /* erro silencioso — painel fica vazio */
     }
@@ -293,28 +288,36 @@ export function LicencasPage() {
   }
 
   async function handleAtribuir(licId: string) {
-    if (!selectedUsuarioId) return;
+    const mat = matriculaInput.trim();
+    if (!mat) return;
     setSavingUsuario(true);
     try {
-      await licencaService.atribuirUsuario(licId, selectedUsuarioId);
-      setLicencaUsuarios(await licencaService.listarUsuarios(licId));
-      setSelectedUsuarioId('');
+      // Resolve o nome no cadastro de funcionários do Protheus (sem senha).
+      // Se não achar, o backend revalida e rejeita.
+      let nome = '';
+      try {
+        const { data } = await gestaoApi.get(`/protheus/colaborador/${encodeURIComponent(mat)}`);
+        if (data?.encontrado && data?.nome) nome = data.nome;
+      } catch { /* backend revalida */ }
+      await licencaService.atribuirFuncionario(licId, mat, nome || undefined);
+      setLicencaFuncionarios(await licencaService.listarFuncionarios(licId));
+      setMatriculaInput('');
       carregarLicencas();
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      toast('error', msg || 'Erro ao atribuir usuario');
+      toast('error', msg || 'Erro ao atribuir funcionário');
     }
     setSavingUsuario(false);
   }
 
-  async function handleDesatribuir(licId: string, usuarioId: string) {
+  async function handleDesatribuir(licId: string, matricula: string) {
     try {
-      await licencaService.desatribuirUsuario(licId, usuarioId);
-      setLicencaUsuarios(await licencaService.listarUsuarios(licId));
+      await licencaService.desatribuirFuncionario(licId, matricula);
+      setLicencaFuncionarios(await licencaService.listarFuncionarios(licId));
       carregarLicencas();
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      toast('error', msg || 'Erro ao remover usuario');
+      toast('error', msg || 'Erro ao remover funcionário');
     }
   }
 
@@ -505,7 +508,7 @@ export function LicencasPage() {
                 <input type="date" value={formDataVencimento} onChange={(e) => setFormDataVencimento(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full" />
               </div>
               <input type="text" placeholder="Chave Serial" value={formChaveSerial} onChange={(e) => setFormChaveSerial(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-              <input type="text" inputMode="numeric" maxLength={54} placeholder="Chave NF-e (44 dígitos)" title="Chave da NF-e que originou esta licença (44 dígitos) — vincula ao módulo Fiscal." value={formChaveNfe} onChange={(e) => setFormChaveNfe(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono" />
+              <input type="text" inputMode="numeric" maxLength={44} placeholder="Chave NF-e — 44 dígitos" title="Chave da NF-e que originou esta licença (44 dígitos) — vincula ao módulo Fiscal." value={formChaveNfe} onChange={(e) => setFormChaveNfe(e.target.value.replace(/\D/g, ''))} className="border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono tracking-tight focus:outline-none focus:ring-2 focus:ring-capul-600 disabled:bg-slate-100 disabled:text-slate-500" />
               <input type="text" placeholder="Observacoes" value={formObservacoes} onChange={(e) => setFormObservacoes(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
             </div>
 
@@ -686,7 +689,7 @@ export function LicencasPage() {
                           }`}
                         >
                           <Users className="w-3 h-3" />
-                          {lic._count?.usuarios ?? 0}/{lic.quantidade ?? '\u221E'}
+                          {lic._count?.funcionarios ?? 0}/{lic.quantidade ?? '\u221E'}
                         </button>
                       </td>
                       <td className="px-4 py-3 text-slate-600">
@@ -778,7 +781,7 @@ export function LicencasPage() {
                             <input type="number" step="0.01" min="0" placeholder="Valor Total" value={editValorTotal} onChange={(e) => setEditValorTotal(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
                             <input type="number" step="0.01" min="0" placeholder="Valor Unitario" value={editValorUnitario} onChange={(e) => setEditValorUnitario(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
                             <input type="text" placeholder="Chave Serial" value={editChaveSerial} onChange={(e) => setEditChaveSerial(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-                            <input type="text" inputMode="numeric" maxLength={54} placeholder="Chave NF-e (44 dígitos)" title="Chave da NF-e que originou esta licença (44 dígitos)." value={editChaveNfe} onChange={(e) => setEditChaveNfe(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono" />
+                            <input type="text" inputMode="numeric" maxLength={44} placeholder="Chave NF-e — 44 dígitos" title="Chave da NF-e que originou esta licença (44 dígitos)." value={editChaveNfe} onChange={(e) => setEditChaveNfe(e.target.value.replace(/\D/g, ''))} className="border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono tracking-tight focus:outline-none focus:ring-2 focus:ring-capul-600 disabled:bg-slate-100 disabled:text-slate-500" />
                           </div>
                           {/* S11 — texto livre p/ fornecedor sem cadastro. */}
                           <div className="mb-3">
@@ -819,10 +822,10 @@ export function LicencasPage() {
                             <div className="flex items-center justify-between mb-3">
                               <h5 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                                 <Users className="w-4 h-4 text-capul-600" />
-                                Usuarios Atribuidos
+                                Funcionários Atribuídos
                                 {lic.quantidade != null && (
                                   <span className="text-xs font-normal text-slate-500">
-                                    ({licencaUsuarios.length}/{lic.quantidade})
+                                    ({licencaFuncionarios.length}/{lic.quantidade})
                                   </span>
                                 )}
                               </h5>
@@ -830,9 +833,9 @@ export function LicencasPage() {
                                 <div className="w-32 bg-slate-200 rounded-full h-2">
                                   <div
                                     className={`h-2 rounded-full transition-all ${
-                                      licencaUsuarios.length >= lic.quantidade ? 'bg-red-500' : 'bg-capul-500'
+                                      licencaFuncionarios.length >= lic.quantidade ? 'bg-red-500' : 'bg-capul-500'
                                     }`}
-                                    style={{ width: `${Math.min((licencaUsuarios.length / lic.quantidade) * 100, 100)}%` }}
+                                    style={{ width: `${Math.min((licencaFuncionarios.length / lic.quantidade) * 100, 100)}%` }}
                                   />
                                 </div>
                               )}
@@ -843,59 +846,53 @@ export function LicencasPage() {
                             ) : (
                               <>
                                 {isAdmin && lic.status === 'ATIVA' && (
-                                  <div className="flex gap-2 mb-3">
-                                    <select
-                                      value={selectedUsuarioId}
-                                      onChange={(e) => setSelectedUsuarioId(e.target.value)}
-                                      className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white"
-                                    >
-                                      <option value="">Selecione um usuario...</option>
-                                      {allUsuarios
-                                        .filter((u) => !licencaUsuarios.some((lu) => lu.usuarioId === u.id))
-                                        .map((u) => (
-                                          <option key={u.id} value={u.id}>
-                                            {u.nome} ({u.username}){u.email ? ` - ${u.email}` : ''}
-                                          </option>
-                                        ))}
-                                    </select>
+                                  <div className="flex gap-2 mb-1">
+                                    <input
+                                      type="text"
+                                      value={matriculaInput}
+                                      onChange={(e) => setMatriculaInput(e.target.value)}
+                                      onKeyDown={(e) => { if (e.key === 'Enter') handleAtribuir(lic.id); }}
+                                      placeholder="Matrícula do funcionário (ex.: E12345)"
+                                      className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-capul-600"
+                                    />
                                     <button
                                       onClick={() => handleAtribuir(lic.id)}
-                                      disabled={!selectedUsuarioId || savingUsuario || (lic.quantidade != null && licencaUsuarios.length >= lic.quantidade)}
+                                      disabled={!matriculaInput.trim() || savingUsuario || (lic.quantidade != null && licencaFuncionarios.length >= lic.quantidade)}
                                       className="flex items-center gap-1 bg-capul-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50"
                                     >
                                       <UserPlus className="w-3.5 h-3.5" />
-                                      {savingUsuario ? 'Atribuindo...' : 'Atribuir'}
+                                      {savingUsuario ? 'Buscando...' : 'Atribuir'}
                                     </button>
                                   </div>
                                 )}
+                                {isAdmin && lic.status === 'ATIVA' && (
+                                  <p className="text-xs text-slate-400 mb-3">Digite a matrícula — o nome é buscado no cadastro de funcionários (Protheus), sem senha.</p>
+                                )}
 
-                                {licencaUsuarios.length === 0 ? (
-                                  <p className="text-sm text-slate-400 text-center py-2">Nenhum usuario atribuido</p>
+                                {licencaFuncionarios.length === 0 ? (
+                                  <p className="text-sm text-slate-400 text-center py-2">Nenhum funcionário atribuído</p>
                                 ) : (
                                   <div className="space-y-1">
-                                    {licencaUsuarios.map((lu) => (
-                                      <div key={lu.id} className="flex items-center justify-between py-1.5 px-3 rounded-lg hover:bg-slate-50">
+                                    {licencaFuncionarios.map((lf) => (
+                                      <div key={lf.id} className="flex items-center justify-between py-1.5 px-3 rounded-lg hover:bg-slate-50">
                                         <div className="flex items-center gap-3">
                                           <div className="w-7 h-7 rounded-full bg-capul-100 text-capul-700 flex items-center justify-center text-xs font-semibold">
-                                            {lu.usuario.nome.charAt(0).toUpperCase()}
+                                            {(lf.nome || lf.matricula).charAt(0).toUpperCase()}
                                           </div>
                                           <div>
-                                            <span className="text-sm font-medium text-slate-800">{lu.usuario.nome}</span>
-                                            <span className="text-xs text-slate-400 ml-2">@{lu.usuario.username}</span>
-                                            {lu.usuario.email && (
-                                              <span className="text-xs text-slate-400 ml-2">{lu.usuario.email}</span>
-                                            )}
+                                            <span className="text-sm font-medium text-slate-800">{lf.nome}</span>
+                                            <span className="text-xs text-slate-400 ml-2">mat. {lf.matricula}</span>
                                           </div>
                                         </div>
                                         <div className="flex items-center gap-3">
                                           <span className="text-xs text-slate-400">
-                                            {new Date(lu.createdAt).toLocaleDateString('pt-BR')}
+                                            {new Date(lf.createdAt).toLocaleDateString('pt-BR')}
                                           </span>
                                           {isAdmin && (
                                             <button
-                                              onClick={() => handleDesatribuir(lic.id, lu.usuarioId)}
+                                              onClick={() => handleDesatribuir(lic.id, lf.matricula)}
                                               className="text-red-400 hover:text-red-600"
-                                              title="Remover usuario"
+                                              title="Remover funcionário"
                                             >
                                               <UserMinus className="w-4 h-4" />
                                             </button>

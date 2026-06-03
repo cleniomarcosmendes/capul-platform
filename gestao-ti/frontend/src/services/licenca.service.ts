@@ -1,5 +1,5 @@
 import { gestaoApi } from './api';
-import type { SoftwareLicenca, LicencaUsuario, StatusLicenca, CategoriaLicenca } from '../types';
+import type { SoftwareLicenca, LicencaFuncionario, StatusLicenca, CategoriaLicenca } from '../types';
 import type { PaginatedResponse } from '../components/Paginator';
 
 interface LicencaFilters {
@@ -90,20 +90,20 @@ export const licencaService = {
     await gestaoApi.delete(`/licencas/${id}`);
   },
 
-  // ─── Usuarios da Licenca ────────────────────────────────
+  // ─── Funcionarios da Licenca (matrícula Protheus, sem senha) ──
 
-  async listarUsuarios(licencaId: string): Promise<LicencaUsuario[]> {
-    const { data } = await gestaoApi.get(`/licencas/${licencaId}/usuarios`);
+  async listarFuncionarios(licencaId: string): Promise<LicencaFuncionario[]> {
+    const { data } = await gestaoApi.get(`/licencas/${licencaId}/funcionarios`);
     return data;
   },
 
-  async atribuirUsuario(licencaId: string, usuarioId: string): Promise<SoftwareLicenca> {
-    const { data } = await gestaoApi.post(`/licencas/${licencaId}/usuarios`, { usuarioId });
+  async atribuirFuncionario(licencaId: string, matricula: string, nome?: string): Promise<SoftwareLicenca> {
+    const { data } = await gestaoApi.post(`/licencas/${licencaId}/funcionarios`, { matricula, nome });
     return data;
   },
 
-  async desatribuirUsuario(licencaId: string, usuarioId: string): Promise<SoftwareLicenca> {
-    const { data } = await gestaoApi.delete(`/licencas/${licencaId}/usuarios/${usuarioId}`);
+  async desatribuirFuncionario(licencaId: string, matricula: string): Promise<SoftwareLicenca> {
+    const { data } = await gestaoApi.delete(`/licencas/${licencaId}/funcionarios/${encodeURIComponent(matricula)}`);
     return data;
   },
 

@@ -91,7 +91,6 @@ model Usuario {
   pendenciasCriador      PendenciaProjeto[]      @relation("PendenciaCriador")
   interacoesPendencia    InteracaoPendencia[]    @relation("InteracaoPendenciaUsuario")
   anexosPendencia        AnexoPendencia[]        @relation("AnexoPendenciaUsuario")
-  licencaUsuarios        LicencaUsuario[]        @relation("LicencaUsuario")
   anexosConhecimento     AnexoConhecimento[]     @relation("AnexoConhecimentoUsuario")
   horarioTrabalho        HorarioTrabalho?        @relation("HorarioTrabalho")
   notasFiscaisCriadas    NotaFiscal[]            @relation("NotaFiscalCriadaPor")
@@ -1280,7 +1279,7 @@ model SoftwareLicenca {
   equipeResponsavelId String?      @map("equipe_responsavel_id")
   equipeResponsavel   Equipe?    @relation("EquipeResponsavelLicenca", fields: [equipeResponsavelId], references: [id])
 
-  usuarios LicencaUsuario[]
+  funcionarios LicencaFuncionario[]
 
   @@index([dataVencimento])
   @@index([softwareId, status])
@@ -1291,19 +1290,23 @@ model SoftwareLicenca {
   @@schema("gestao_ti")
 }
 
-model LicencaUsuario {
+// Vínculo de FUNCIONÁRIO à licença (03/06). Antes era FK para core.usuarios
+// (LicencaUsuario); passou a apontar o cadastro de funcionários do Protheus
+// por matrícula — cobre quem usa licença mas não tem login no sistema.
+// matrícula+nome são resolvidos via INFOCLIENTES (sem senha).
+model LicencaFuncionario {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now()) @map("created_at")
 
   licencaId String          @map("licenca_id")
   licenca   SoftwareLicenca @relation(fields: [licencaId], references: [id], onDelete: Cascade)
 
-  usuarioId String  @map("usuario_id")
-  usuario   Usuario @relation("LicencaUsuario", fields: [usuarioId], references: [id])
+  matricula String  @map("matricula")
+  nome      String  @map("nome")
 
-  @@unique([licencaId, usuarioId])
+  @@unique([licencaId, matricula])
   @@index([licencaId])
-  @@map("licenca_usuarios")
+  @@map("licenca_funcionarios")
   @@schema("gestao_ti")
 }
 

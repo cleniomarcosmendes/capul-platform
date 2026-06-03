@@ -488,11 +488,13 @@ export interface ModuloFilialItem {
   createdAt: string;
 }
 
-export interface LicencaUsuario {
+// 03/06 — vínculo de licença por FUNCIONÁRIO (matrícula Protheus), não mais
+// por usuário do sistema. matrícula+nome resolvidos via INFOCLIENTES (sem senha).
+export interface LicencaFuncionario {
   id: string;
   licencaId: string;
-  usuarioId: string;
-  usuario: { id: string; username: string; nome: string; email: string | null };
+  matricula: string;
+  nome: string;
   createdAt: string;
 }
 
@@ -534,8 +536,8 @@ export interface SoftwareLicenca {
   departamentoLancamentoId?: string;
   // S11 (25/05) — nome do depto exposto via include p/ coluna na listagem.
   departamento?: { id: string; nome: string };
-  usuarios?: LicencaUsuario[];
-  _count?: { usuarios: number };
+  funcionarios?: LicencaFuncionario[];
+  _count?: { funcionarios: number };
 }
 
 // === Contrato interfaces ===

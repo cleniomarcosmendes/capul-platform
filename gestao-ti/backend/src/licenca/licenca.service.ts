@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ProtheusService } from '../protheus/protheus.service.js';
 import { CreateLicencaDto } from './dto/create-licenca.dto.js';
 import { UpdateLicencaDto } from './dto/update-licenca.dto.js';
 import { CreateCategoriaLicencaDto, UpdateCategoriaLicencaDto } from './dto/create-categoria-licenca.dto.js';
@@ -25,15 +26,12 @@ const licencaInclude = {
   fornecedorRef: { select: { id: true, codigo: true, loja: true, nome: true } },
 };
 
-const licencaIncludeComUsuarios = {
+const licencaIncludeComFuncionarios = {
   ...licencaInclude,
-  usuarios: {
-    include: {
-      usuario: { select: { id: true, username: true, nome: true, email: true } },
-    },
+  funcionarios: {
     orderBy: { createdAt: 'asc' as const },
   },
-  _count: { select: { usuarios: true } },
+  _count: { select: { funcionarios: true } },
 };
 
 /** Ordenação do grid de Licenças por clique no cabeçalho. Whitelist (não aceita
@@ -50,14 +48,18 @@ function buildLicencaOrderBy(sortBy?: string, sortOrder?: 'asc' | 'desc') {
     case 'dataVencimento': return { dataVencimento: dir };
     case 'status': return { status: dir };
     case 'departamento': return { departamento: { nome: dir } };
-    case 'usuarios': return { usuarios: { _count: dir } };
+    case 'usuarios':
+    case 'funcionarios': return { funcionarios: { _count: dir } };
     default: return { dataVencimento: 'asc' as const };
   }
 }
 
 @Injectable()
 export class LicencaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly protheus: ProtheusService,
+  ) {}
 
   async findAll(filters: {
     softwareId?: string;
@@ -97,7 +99,7 @@ export class LicencaService {
       where: whereFiltrado,
       include: {
         ...licencaInclude,
-        _count: { select: { usuarios: true } },
+        _count: { select: { funcionarios: true } },
       },
       // Ordenação por clique no cabeçalho (whitelist — protege contra injection).
       // Default mantém vencimento asc (comportamento anterior).
@@ -116,7 +118,7 @@ export class LicencaService {
   async findOne(id: string, role: string) {
     const licenca = await this.prisma.softwareLicenca.findUnique({
       where: { id },
-      include: licencaIncludeComUsuarios,
+      include: licencaIncludeComFuncionarios,
     });
     if (!licenca) throw new NotFoundException('Licenca nao encontrada');
 
@@ -239,6 +241,8 @@ export class LicencaService {
         fornecedor: anterior.fornecedor,
         fornecedorId: anterior.fornecedorId,
         chaveSerial: anterior.chaveSerial,
+        // Rastreabilidade fiscal preservada na renovação (antes só chaveSerial).
+        chaveNfe: anterior.chaveNfe,
         observacoes: `Renovacao da licenca anterior (${anterior.id})`,
       },
       include: licencaInclude,
@@ -260,9 +264,9 @@ export class LicencaService {
   async remove(id: string, user?: JwtPayload) {
     const licenca = await this.getLicencaOrFail(id);
     if (user) assertDepartamentoDoUser(user, null, licenca.departamentoId);
-    const usuarios = await this.prisma.licencaUsuario.count({ where: { licencaId: id } });
-    if (usuarios > 0) {
-      throw new BadRequestException(`Licenca possui ${usuarios} usuario(s) vinculado(s). Remova os usuarios antes de excluir.`);
+    const funcionarios = await this.prisma.licencaFuncionario.count({ where: { licencaId: id } });
+    if (funcionarios > 0) {
+      throw new BadRequestException(`Licenca possui ${funcionarios} funcionario(s) vinculado(s). Remova os funcionarios antes de excluir.`);
     }
     if (licenca.contratoId) {
       throw new BadRequestException('Licenca esta vinculada a um contrato. Desvincule antes de excluir.');
@@ -271,62 +275,63 @@ export class LicencaService {
     return { success: true };
   }
 
-  // ─── Usuarios da Licenca ────────────────────────────────────
+  // ─── Funcionarios da Licenca (matrícula Protheus, sem senha) ──
 
-  async listarUsuariosLicenca(licencaId: string) {
+  async listarFuncionariosLicenca(licencaId: string) {
     await this.getLicencaOrFail(licencaId);
-    return this.prisma.licencaUsuario.findMany({
+    return this.prisma.licencaFuncionario.findMany({
       where: { licencaId },
-      include: {
-        usuario: { select: { id: true, username: true, nome: true, email: true } },
-      },
       orderBy: { createdAt: 'asc' },
     });
   }
 
-  async atribuirUsuario(licencaId: string, usuarioId: string) {
+  async atribuirFuncionario(licencaId: string, matricula: string, nomeInformado?: string) {
     const licenca = await this.getLicencaOrFail(licencaId);
 
     if (licenca.status !== 'ATIVA') {
-      throw new BadRequestException('Nao e possivel atribuir usuarios a uma licenca inativa ou vencida');
+      throw new BadRequestException('Nao e possivel atribuir funcionarios a uma licenca inativa ou vencida');
     }
 
-    // 01/06 — vínculo liberado p/ qualquer modelo (antes só POR_USUARIO/
-    // SUBSCRICAO/SAAS). Licença PERPÉTUA/OEM também registra o usuário/estação
-    // que a utiliza (1 usuário por licença qtd=1). O limite é a `quantidade`,
-    // validado logo abaixo.
+    const matriculaNorm = (matricula || '').trim();
+    if (!matriculaNorm) throw new BadRequestException('Matrícula é obrigatória');
 
-    const usuario = await this.prisma.usuario.findUnique({ where: { id: usuarioId } });
-    if (!usuario) throw new BadRequestException('Usuario nao encontrado');
+    // Resolve o nome no cadastro de funcionários do Protheus (INFOCLIENTES,
+    // sem senha). Se o Protheus estiver indisponível, usa o nome já informado
+    // pelo frontend (que fez o mesmo lookup) como fallback.
+    const colaborador = await this.protheus.buscarColaborador(matriculaNorm).catch(() => null);
+    const nome = colaborador?.nome || (nomeInformado || '').trim();
+    if (!nome) {
+      throw new BadRequestException(`Funcionário (matrícula ${matriculaNorm}) não encontrado no Protheus.`);
+    }
 
-    const existente = await this.prisma.licencaUsuario.findUnique({
-      where: { licencaId_usuarioId: { licencaId, usuarioId } },
+    const existente = await this.prisma.licencaFuncionario.findUnique({
+      where: { licencaId_matricula: { licencaId, matricula: matriculaNorm } },
     });
-    if (existente) throw new BadRequestException('Usuario ja atribuido a esta licenca');
+    if (existente) throw new BadRequestException('Funcionário já atribuído a esta licença');
 
     if (licenca.quantidade) {
-      const count = await this.prisma.licencaUsuario.count({ where: { licencaId } });
+      const count = await this.prisma.licencaFuncionario.count({ where: { licencaId } });
       if (count >= licenca.quantidade) {
-        throw new BadRequestException(`Limite de usuarios da licenca atingido (${count}/${licenca.quantidade})`);
+        throw new BadRequestException(`Limite de funcionários da licença atingido (${count}/${licenca.quantidade})`);
       }
     }
 
-    await this.prisma.licencaUsuario.create({
-      data: { licencaId, usuarioId },
+    await this.prisma.licencaFuncionario.create({
+      data: { licencaId, matricula: matriculaNorm, nome },
     });
 
     return this.findOne(licencaId, 'ADMIN');
   }
 
-  async desatribuirUsuario(licencaId: string, usuarioId: string) {
+  async desatribuirFuncionario(licencaId: string, matricula: string) {
     await this.getLicencaOrFail(licencaId);
 
-    const vinculo = await this.prisma.licencaUsuario.findUnique({
-      where: { licencaId_usuarioId: { licencaId, usuarioId } },
+    const vinculo = await this.prisma.licencaFuncionario.findUnique({
+      where: { licencaId_matricula: { licencaId, matricula: (matricula || '').trim() } },
     });
     if (!vinculo) throw new NotFoundException('Vinculo nao encontrado');
 
-    await this.prisma.licencaUsuario.delete({ where: { id: vinculo.id } });
+    await this.prisma.licencaFuncionario.delete({ where: { id: vinculo.id } });
 
     return this.findOne(licencaId, 'ADMIN');
   }

@@ -12,7 +12,7 @@ import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
 import { CreateLicencaDto } from './dto/create-licenca.dto.js';
 import { UpdateLicencaDto } from './dto/update-licenca.dto.js';
-import { AtribuirUsuarioDto } from './dto/atribuir-usuario.dto.js';
+import { AtribuirFuncionarioDto } from './dto/atribuir-funcionario.dto.js';
 import { CreateCategoriaLicencaDto, UpdateCategoriaLicencaDto } from './dto/create-categoria-licenca.dto.js';
 import { StatusLicenca } from '@prisma/client';
 import { ROLES_TI } from '../common/constants/roles.constant.js';
@@ -127,28 +127,28 @@ export class LicencaController {
     return this.service.remove(id, user);
   }
 
-  // ─── Usuarios da Licenca ────────────────────────────────
+  // ─── Funcionarios da Licenca (matrícula Protheus) ───────────
 
-  @Get(':id/usuarios')
-  listarUsuarios(@Param('id') id: string) {
-    return this.service.listarUsuariosLicenca(id);
+  @Get(':id/funcionarios')
+  listarFuncionarios(@Param('id') id: string) {
+    return this.service.listarFuncionariosLicenca(id);
   }
 
-  @Post(':id/usuarios')
+  @Post(':id/funcionarios')
   @Roles(...ROLES_TI)
-  atribuirUsuario(
+  atribuirFuncionario(
     @Param('id') id: string,
-    @Body() dto: AtribuirUsuarioDto,
+    @Body() dto: AtribuirFuncionarioDto,
   ) {
-    return this.service.atribuirUsuario(id, dto.usuarioId);
+    return this.service.atribuirFuncionario(id, dto.matricula, dto.nome);
   }
 
-  @Delete(':id/usuarios/:usuarioId')
+  @Delete(':id/funcionarios/:matricula')
   @Roles(...ROLES_TI)
-  desatribuirUsuario(
+  desatribuirFuncionario(
     @Param('id') id: string,
-    @Param('usuarioId') usuarioId: string,
+    @Param('matricula') matricula: string,
   ) {
-    return this.service.desatribuirUsuario(id, usuarioId);
+    return this.service.desatribuirFuncionario(id, matricula);
   }
 }
