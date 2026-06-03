@@ -125,35 +125,24 @@ export function SoftwareDetalhePage() {
                   {statusLabel[software.status] || software.status}
                 </span>
               </div>
-              <div className="flex flex-wrap gap-4 text-sm text-slate-500">
-                {software.fabricante && <span>Fabricante: <strong className="text-slate-700">{software.fabricante}</strong></span>}
-                {software.tipo && <span>Tipo: <strong className="text-slate-700">{software.tipo}</strong></span>}
-                {software.criticidade && <span>Criticidade: <strong className="text-slate-700">{software.criticidade}</strong></span>}
-                {software.versaoAtual && <span>Versao: <strong className="text-slate-700">{software.versaoAtual}</strong></span>}
-                {software.ambiente && <span>Ambiente: <strong className="text-slate-700">{software.ambiente}</strong></span>}
-                {software.equipeResponsavel && (
-                  <span>
-                    Equipe:{' '}
-                    <strong className="text-slate-700">
-                      {software.equipeResponsavel.sigla} - {software.equipeResponsavel.nome}
-                    </strong>
-                  </span>
-                )}
+              {/* Cadastro completo do software — todos os campos sempre visíveis ('—' quando vazio). */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1 text-sm text-slate-500 mt-1">
+                <span>Fabricante: <strong className="text-slate-700">{software.fabricante || '—'}</strong></span>
+                <span>Tipo: <strong className="text-slate-700">{software.tipo || '—'}</strong></span>
+                <span>Criticidade: <strong className="text-slate-700">{software.criticidade || '—'}</strong></span>
+                <span>Versão: <strong className="text-slate-700">{software.versaoAtual || '—'}</strong></span>
+                <span>Ambiente: <strong className="text-slate-700">{software.ambiente || '—'}</strong></span>
+                <span>Equipe: <strong className="text-slate-700">{software.equipeResponsavel ? `${software.equipeResponsavel.sigla} - ${software.equipeResponsavel.nome}` : '—'}</strong></span>
+                <span className="col-span-2 md:col-span-3">
+                  URL:{' '}
+                  {software.urlAcesso ? (
+                    <a href={software.urlAcesso} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-capul-600 hover:underline">
+                      <ExternalLink className="w-3 h-3" />{software.urlAcesso}
+                    </a>
+                  ) : <strong className="text-slate-700">—</strong>}
+                </span>
+                <span className="col-span-2 md:col-span-3">Observações: <strong className="text-slate-700 font-normal">{software.observacoes || '—'}</strong></span>
               </div>
-              {software.urlAcesso && (
-                <a
-                  href={software.urlAcesso}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-sm text-capul-600 hover:underline mt-2"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  Acessar sistema
-                </a>
-              )}
-              {software.observacoes && (
-                <p className="text-sm text-slate-500 mt-2">{software.observacoes}</p>
-              )}
             </div>
             {isAdmin && (
               <div className="flex gap-2">
