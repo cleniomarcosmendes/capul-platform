@@ -53,13 +53,23 @@ function sortValue(n: LicencaCompra, col: string): string | number {
     default: return '';
   }
 }
+// Busca ampla (client-side): número, chave, fornecedor, software/licença, usuário,
+// matrícula, depto alocado, serial e vencimento (data formatada).
+function matchBusca(n: LicencaCompra, termo: string): boolean {
+  const campos: string[] = [n.numero, n.chaveNfe || '', n.fornecedor?.nome || ''];
+  for (const i of n.itens || []) {
+    campos.push(i.nome || '', i.software?.nome || '', i.departamento?.nome || '', i.chaveSerial || '');
+    if (i.dataVencimento) campos.push(formatDateBR(i.dataVencimento));
+    for (const f of i.funcionarios || []) campos.push(f.nome || '', f.matricula || '');
+  }
+  return campos.some((c) => c.toLowerCase().includes(termo));
+}
 
 export function NotaLicencaListPage() {
   const { gestaoTiRole } = useAuth();
   const isAdmin = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole || '');
 
   const [notas, setNotas] = useState<LicencaCompra[]>([]);
-  const [total, setTotal] = useState(0);
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<string | null>(null);
@@ -75,28 +85,31 @@ export function NotaLicencaListPage() {
       {label}<span className="ml-1 text-xs text-slate-400">{sortBy === col ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}</span>
     </th>
   );
-  const sortedNotas = useMemo(() => {
-    if (!sortBy) return notas;
-    return [...notas].sort((a, b) => {
-      const av = sortValue(a, sortBy), bv = sortValue(b, sortBy);
-      const aE = av === '', bE = bv === '';
-      if (aE && bE) return 0;
-      if (aE) return 1;
-      if (bE) return -1;
-      const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv));
-      return sortOrder === 'asc' ? cmp : -cmp;
-    });
-  }, [notas, sortBy, sortOrder]);
+  const visiveis = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    const arr = termo ? notas.filter((n) => matchBusca(n, termo)) : notas.slice();
+    if (sortBy) {
+      arr.sort((a, b) => {
+        const av = sortValue(a, sortBy), bv = sortValue(b, sortBy);
+        const aE = av === '', bE = bv === '';
+        if (aE && bE) return 0;
+        if (aE) return 1;
+        if (bE) return -1;
+        const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv));
+        return sortOrder === 'asc' ? cmp : -cmp;
+      });
+    }
+    return arr;
+  }, [notas, busca, sortBy, sortOrder]);
 
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await licencaCompraService.listar({ busca: busca.trim() || undefined, pageSize: 100 });
+      const r = await licencaCompraService.listar({ pageSize: 100 });
       setNotas(r.items);
-      setTotal(r.total);
     } catch { /* ignore */ }
     setLoading(false);
-  }, [busca]);
+  }, []);
 
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -119,14 +132,14 @@ export function NotaLicencaListPage() {
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">
           <div className="relative w-72">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input type="text" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por número, chave ou fornecedor..."
+            <input type="text" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar: software/licença, usuário, depto, vencimento, serial, número, chave, fornecedor..."
               className="border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm bg-white w-full" />
           </div>
         </div>
 
         {loading ? (
           <p className="text-slate-500">Carregando...</p>
-        ) : notas.length === 0 ? (
+        ) : visiveis.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
             <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500">Nenhuma nota de licença encontrada</p>
@@ -148,7 +161,7 @@ export function NotaLicencaListPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {sortedNotas.map((n) => (
+                  {visiveis.map((n) => (
                     <tr key={n.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
                         <Link to={`/gestao-ti/licencas/${n.id}`} className="text-capul-600 hover:underline font-medium">
@@ -169,7 +182,7 @@ export function NotaLicencaListPage() {
                 </tbody>
               </table>
             </div>
-            <div className="px-4 py-2 text-xs text-slate-400 border-t border-slate-100">{total} nota(s)</div>
+            <div className="px-4 py-2 text-xs text-slate-400 border-t border-slate-100">{visiveis.length} nota(s)</div>
           </div>
         )}
       </div>
