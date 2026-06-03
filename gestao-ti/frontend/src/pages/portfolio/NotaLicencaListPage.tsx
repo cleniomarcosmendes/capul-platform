@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
@@ -35,6 +35,24 @@ function resumoVenc(n: LicencaCompra): string {
   if (datas.length === 0) return '—';
   return formatDateBR(datas.reduce((a, b) => (a < b ? a : b)));
 }
+// Valor de ordenação por coluna ('' = vazio, vai pro fim).
+function sortValue(n: LicencaCompra, col: string): string | number {
+  const norm = (v: string) => (v === '—' ? '' : v.toLowerCase());
+  switch (col) {
+    case 'licenca': return norm(resumoLicencas(n));
+    case 'usuario': return norm(resumoUsuarios(n));
+    case 'depto': return norm(resumoDeptos(n));
+    case 'serial': return norm(resumoSerial(n));
+    case 'numero': return (n.semNota ? 's/n' : (n.numero || '').toLowerCase());
+    case 'fornecedor': return (n.fornecedor?.nome || '').toLowerCase();
+    case 'valor': return Number(n.valorTotal);
+    case 'vencimento': {
+      const ds = (n.itens || []).map((i) => i.dataVencimento).filter(Boolean) as string[];
+      return ds.length ? ds.reduce((a, b) => (a < b ? a : b)) : '';
+    }
+    default: return '';
+  }
+}
 
 export function NotaLicencaListPage() {
   const { gestaoTiRole } = useAuth();
@@ -44,6 +62,31 @@ export function NotaLicencaListPage() {
   const [total, setTotal] = useState(0);
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(true);
+  const [sortBy, setSortBy] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  function toggleSort(col: string) {
+    if (sortBy !== col) { setSortBy(col); setSortOrder('asc'); return; }
+    if (sortOrder === 'asc') { setSortOrder('desc'); return; }
+    setSortBy(null); setSortOrder('asc');
+  }
+  const thSort = (label: string, col: string) => (
+    <th className="px-4 py-3 font-medium text-slate-600 cursor-pointer select-none hover:text-slate-900" onClick={() => toggleSort(col)} title="Clique para ordenar">
+      {label}<span className="ml-1 text-xs text-slate-400">{sortBy === col ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}</span>
+    </th>
+  );
+  const sortedNotas = useMemo(() => {
+    if (!sortBy) return notas;
+    return [...notas].sort((a, b) => {
+      const av = sortValue(a, sortBy), bv = sortValue(b, sortBy);
+      const aE = av === '', bE = bv === '';
+      if (aE && bE) return 0;
+      if (aE) return 1;
+      if (bE) return -1;
+      const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv));
+      return sortOrder === 'asc' ? cmp : -cmp;
+    });
+  }, [notas, sortBy, sortOrder]);
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -94,18 +137,18 @@ export function NotaLicencaListPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 text-left">
-                    <th className="px-4 py-3 font-medium text-slate-600">Software / Licença</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Usuário</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Depto Alocado</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Vencimento</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Chave Serial</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Número NF</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Fornecedor</th>
-                    <th className="px-4 py-3 font-medium text-slate-600">Valor Total</th>
+                    {thSort('Software / Licença', 'licenca')}
+                    {thSort('Usuário', 'usuario')}
+                    {thSort('Depto Alocado', 'depto')}
+                    {thSort('Vencimento', 'vencimento')}
+                    {thSort('Chave Serial', 'serial')}
+                    {thSort('Número NF', 'numero')}
+                    {thSort('Fornecedor', 'fornecedor')}
+                    {thSort('Valor Total', 'valor')}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {notas.map((n) => (
+                  {sortedNotas.map((n) => (
                     <tr key={n.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
                         <Link to={`/gestao-ti/licencas/${n.id}`} className="text-capul-600 hover:underline font-medium">
