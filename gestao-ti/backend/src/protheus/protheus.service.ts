@@ -58,7 +58,9 @@ export class ProtheusService {
     return config.authConfig;
   }
 
-  async buscarColaborador(matricula: string): Promise<{ matricula: string; nome: string } | null> {
+  async buscarColaborador(
+    matricula: string,
+  ): Promise<{ matricula: string; nome: string; cc: string | null } | null> {
     const config = await this.getConfig();
 
     let url: string;
@@ -66,14 +68,16 @@ export class ProtheusService {
     let timeoutMs: number;
 
     if (config) {
-      const ep = config.endpoints.find((e) => e.operacao === 'INFOCLIENTES');
+      // Operação `infoFuncionario` (portal RH): GET ?MATRICULA= → {matricula,nome,cc}.
+      // Distinta de `INFOCLIENTES` (getLimite), que é cadastro de CLIENTES (SA1).
+      const ep = config.endpoints.find((e) => e.operacao === 'infoFuncionario');
       if (ep) {
-        url = `${ep.url}?CODCLIENTE=${encodeURIComponent(matricula)}`;
+        url = `${ep.url}?MATRICULA=${encodeURIComponent(matricula)}`;
         // Default 3s — UX: usuário espera no máximo 3s antes do fallback liberar.
         // Configurável via Configurador → Integrações API (`timeoutMs` por endpoint).
         timeoutMs = ep.timeoutMs || 3000;
       } else {
-        this.logger.warn('Endpoint INFOCLIENTES nao encontrado na config, usando endpoints disponiveis');
+        this.logger.warn('Endpoint infoFuncionario nao encontrado na config Protheus (GESTAO_TI)');
         return null;
       }
       authHeader = this.buildAuthHeader(config);
@@ -114,14 +118,19 @@ export class ProtheusService {
 
           try {
             const data = JSON.parse(body);
+            // Sempre HTTP 200: matrícula inválida vem como { mensagem: ... }
+            // (sem `nome`). Detecção de erro é pela ausência de `nome`.
             if (!data || !data.nome) {
-              this.logger.warn(`Protheus nao retornou nome para matricula ${matricula}`);
+              this.logger.warn(
+                `Protheus infoFuncionario sem nome p/ matricula ${matricula}${data?.mensagem ? ` (${data.mensagem})` : ''}`,
+              );
               resolve(null);
               return;
             }
             resolve({
-              matricula: data.matricula || matricula,
+              matricula: (data.matricula || matricula).trim(),
               nome: (data.nome || '').trim(),
+              cc: data.cc ? String(data.cc).trim() : null,
             });
           } catch {
             this.logger.error(`Erro ao parsear resposta Protheus para matricula ${matricula}`);

@@ -283,6 +283,10 @@ async function main() {
 
   const endpointsGestaoTiPrd = [
     { modulo: 'GESTAO_TI' as const, ambiente: 'PRODUCAO' as const, operacao: 'INFOCLIENTES', url: `${BASE_PRD}/getLimite`, metodo: 'GET' as const, timeoutMs: 60000 },
+    // 04/06/2026 — FUNCIONÁRIO por matrícula (portal RH): GET ?MATRICULA= →
+    // { matricula, nome, cc }. Operação separada do getLimite (esse é CLIENTES).
+    // Consumido por protheus.service.buscarColaborador (autofill do vínculo de licença).
+    { modulo: 'GESTAO_TI' as const, ambiente: 'PRODUCAO' as const, operacao: 'infoFuncionario', url: `${BASE_PRD}/infoPortal`, metodo: 'GET' as const, timeoutMs: 60000 },
   ];
 
   const endpointsGestaoTiHlg = endpointsGestaoTiPrd.map((ep) => ({
@@ -328,7 +332,7 @@ async function main() {
         },
       },
     });
-    console.log(`Integracao PROTHEUS criada: ${integracao.nome} (${todosEndpoints.length} endpoints = 5 Inv + 1 TI + 4 Fiscal, x 2 ambientes)`);
+    console.log(`Integracao PROTHEUS criada: ${integracao.nome} (${todosEndpoints.length} endpoints = 5 Inv + 2 TI + 4 Fiscal, x 2 ambientes)`);
   } else {
     console.log(`Integracao PROTHEUS existente: ${integracao.nome}`);
   }
