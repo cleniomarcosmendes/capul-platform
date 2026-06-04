@@ -50,6 +50,7 @@ export class CreateEntregaDto {
   @IsOptional() @IsString() @MaxLength(80) endComplemento?: string;
   @IsOptional() @IsString() @MaxLength(80) endBairro?: string;
   @IsOptional() @IsString() @MaxLength(80) endCidade?: string;
+  @IsOptional() @IsString() @MaxLength(2) endUf?: string;
   @IsOptional() @IsString() @MaxLength(9) endCep?: string;
   @IsOptional() @IsString() @MaxLength(150) endReferencia?: string;
 

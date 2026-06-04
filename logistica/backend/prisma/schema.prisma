@@ -182,6 +182,7 @@ model Entrega {
   endComplemento    String?            @map("end_complemento")
   endBairro         String?            @map("end_bairro")
   endCidade         String?            @map("end_cidade")
+  endUf             String?            @map("end_uf") @db.VarChar(2)
   endCep            String?            @map("end_cep")
   endReferencia     String?            @map("end_referencia")
   horario           String?

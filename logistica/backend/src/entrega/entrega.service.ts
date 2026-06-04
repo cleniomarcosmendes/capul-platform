@@ -114,6 +114,7 @@ export class EntregaService {
         endComplemento: end.complemento,
         endBairro: end.bairro,
         endCidade: end.cidade,
+        endUf: end.uf,
         endCep: end.cep,
         endReferencia: end.pontoReferencia,
       };
@@ -127,6 +128,7 @@ export class EntregaService {
       endComplemento: dto.endComplemento?.trim() || null,
       endBairro: dto.endBairro?.trim() || null,
       endCidade: dto.endCidade?.trim() || null,
+      endUf: dto.endUf?.trim().toUpperCase() || null,
       endCep: dto.endCep ? onlyDigits(dto.endCep) : null,
       endReferencia: dto.endReferencia?.trim() || null,
     };
