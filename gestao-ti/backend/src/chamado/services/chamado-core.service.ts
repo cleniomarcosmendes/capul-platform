@@ -20,6 +20,7 @@ import { ChamadoAgrupamentoService } from './chamado-agrupamento.service.js';
 import { ChamadoTempoService } from './chamado-tempo.service.js';
 import { chamadoInclude } from './chamado.constants.js';
 import { isGestor, isTI, hasStaffPerfilEmTI, getDeptosOndeStaff, getRoleNoDepto } from '../../common/constants/roles.constant.js';
+import { hasCapability } from '../../common/helpers/capability.helper.js';
 import { Prisma, StatusChamado, Visibilidade } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -605,8 +606,20 @@ export class ChamadoCoreService {
     });
     if (!equipe) throw new BadRequestException('Equipe nao encontrada');
 
-    if (role === 'USUARIO_FINAL' && !equipe.aceitaChamadoExterno) {
-      throw new ForbiddenException('Esta equipe nao aceita chamados externos');
+    // Equipe PRIVADA: só staff (ADMIN/GESTOR/SUPORTE) do PRÓPRIO departamento
+    // — ou quem tem OVERSIGHT_PLATAFORMA — pode abrir chamado direto. Usuário
+    // final/chave/terceirizado e staff de outros deptos passam pela equipe de
+    // suporte (pública), que tria e transfere. Defesa em profundidade: o
+    // frontend já oculta via GET /equipes/abertura; aqui revalida contra
+    // request manipulado. (Substitui o antigo gate aceitaChamadoExterno.)
+    if (
+      equipe.privada &&
+      !getDeptosOndeStaff(user).includes(equipe.departamentoId) &&
+      !hasCapability(user, 'OVERSIGHT_PLATAFORMA')
+    ) {
+      throw new ForbiddenException(
+        'Esta equipe é privada — apenas o próprio departamento pode abrir chamado direto. Selecione a equipe de suporte.',
+      );
     }
 
     // Visibilidade PRIVADO restrita a equipe de TI (ROLES_TI). Outros roles

@@ -34,9 +34,11 @@ export class CreateEquipeDto {
   @MaxLength(50)
   icone?: string;
 
+  // Visibilidade da equipe na abertura de chamado. true => privada (só staff
+  // do próprio departamento pode abrir direto). Default público.
   @IsOptional()
   @IsBoolean()
-  aceitaChamadoExterno?: boolean;
+  privada?: boolean;
 
   @IsOptional()
   @IsString()

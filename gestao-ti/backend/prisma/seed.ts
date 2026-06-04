@@ -23,21 +23,21 @@ async function main() {
   let equipeSup = await prisma.equipe.findFirst({ where: { nome: 'Suporte N1' } });
   if (!equipeSup) {
     equipeSup = await prisma.equipe.create({
-      data: { nome: 'Suporte N1', sigla: 'SUP', cor: '#3B82F6', descricao: 'Atendimento de primeiro nivel a usuarios', aceitaChamadoExterno: true, ordem: 1, departamentoId },
+      data: { nome: 'Suporte N1', sigla: 'SUP', cor: '#3B82F6', descricao: 'Atendimento de primeiro nivel a usuarios', privada: false, ordem: 1, departamentoId },
     });
   }
 
   let equipeInf = await prisma.equipe.findFirst({ where: { nome: 'Infraestrutura' } });
   if (!equipeInf) {
     equipeInf = await prisma.equipe.create({
-      data: { nome: 'Infraestrutura', sigla: 'INF', cor: '#10B981', descricao: 'Redes, servidores e infraestrutura de TI', aceitaChamadoExterno: false, ordem: 2, departamentoId },
+      data: { nome: 'Infraestrutura', sigla: 'INF', cor: '#10B981', descricao: 'Redes, servidores e infraestrutura de TI', privada: true, ordem: 2, departamentoId },
     });
   }
 
   let equipeDev = await prisma.equipe.findFirst({ where: { nome: 'Desenvolvimento' } });
   if (!equipeDev) {
     equipeDev = await prisma.equipe.create({
-      data: { nome: 'Desenvolvimento', sigla: 'DEV', cor: '#8B5CF6', descricao: 'Desenvolvimento e manutencao de sistemas', aceitaChamadoExterno: false, ordem: 3, departamentoId },
+      data: { nome: 'Desenvolvimento', sigla: 'DEV', cor: '#8B5CF6', descricao: 'Desenvolvimento e manutencao de sistemas', privada: true, ordem: 3, departamentoId },
     });
   }
 

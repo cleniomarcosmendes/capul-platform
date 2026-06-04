@@ -76,6 +76,20 @@ export class EquipeController {
     return this.equipeService.findOneParaConfig(id, user);
   }
 
+  /**
+   * Equipes SELECIONÁVEIS na ABERTURA de chamado — aplica visibilidade
+   * pública/privada por departamento (ver `findSelecionaveis`). Distinto do
+   * `GET /equipes` (global, usado pela transferência). Sem @Roles: qualquer
+   * usuário que pode abrir chamado consulta (o filtro já protege as privadas).
+   */
+  @Get('abertura')
+  findSelecionaveis(
+    @Query('status') status: StatusGeral | undefined,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.equipeService.findSelecionaveis(user, status ?? 'ATIVO');
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.equipeService.findOne(id);

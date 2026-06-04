@@ -176,7 +176,11 @@ model Equipe {
   descricao            String?
   cor                  String?     @default("#3B82F6")
   icone                String?     @default("users")
-  aceitaChamadoExterno Boolean     @default(true) @map("aceita_chamado_externo")
+  // Visibilidade na ABERTURA de chamado (unifica/substitui aceita_chamado_externo).
+  // privada=true => só staff (ADMIN/GESTOR/SUPORTE) do PRÓPRIO departamento pode
+  // abrir chamado direto pra equipe; usuário final/chave/terceirizado e staff de
+  // outros deptos não a veem. Transferência permanece global (inalterada).
+  privada              Boolean     @default(false)
   emailEquipe          String?     @map("email_equipe")
   ordem                Int         @default(0)
   status               StatusGeral @default(ATIVO)

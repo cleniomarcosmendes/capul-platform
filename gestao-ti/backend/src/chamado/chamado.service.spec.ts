@@ -69,7 +69,7 @@ describe('ChamadoService', () => {
 
   describe('create', () => {
     it('cria chamado basico com campos corretos', async () => {
-      const equipe = { id: 'eq-1', aceitaChamadoExterno: true };
+      const equipe = { id: 'eq-1', privada: false, departamentoId: 'dep-ti' };
       prisma.equipe.findUnique.mockResolvedValue(equipe);
       prisma.slaDefinicao.findUnique.mockResolvedValue(null);
       prisma.chamado.create.mockResolvedValue(baseChamado());
@@ -92,7 +92,7 @@ describe('ChamadoService', () => {
     });
 
     it('calcula data limite SLA quando existe definicao', async () => {
-      const equipe = { id: 'eq-1', aceitaChamadoExterno: true };
+      const equipe = { id: 'eq-1', privada: false, departamentoId: 'dep-ti' };
       const sla = { id: 'sla-1', horasResolucao: 24 };
       prisma.equipe.findUnique.mockResolvedValue(equipe);
       prisma.slaDefinicao.findUnique.mockResolvedValue(sla);
@@ -107,18 +107,38 @@ describe('ChamadoService', () => {
       expect(createCall.data.dataLimiteSla).toBeInstanceOf(Date);
     });
 
-    it('lanca ForbiddenException se equipe nao aceita chamado externo', async () => {
-      const equipe = { id: 'eq-1', aceitaChamadoExterno: false };
+    it('lanca ForbiddenException ao abrir p/ equipe PRIVADA sem ser staff do depto', async () => {
+      // mockUser nao tem modulos WORKSPACE => getDeptosOndeStaff = [] e
+      // hasCapability(OVERSIGHT) = false => bloqueado para equipe privada,
+      // independentemente do papel (regra por departamento, nao por papel).
+      const equipe = { id: 'eq-1', privada: true, departamentoId: 'dep-ti' };
       prisma.equipe.findUnique.mockResolvedValue(equipe);
 
       const dto = { titulo: 'Teste', descricao: 'Desc', equipeAtualId: 'eq-1' };
-      await expect(service.create(dto as any, mockUser as any, 'USUARIO_FINAL')).rejects.toThrow(
+      await expect(service.create(dto as any, mockUser as any, 'SUPORTE')).rejects.toThrow(
         ForbiddenException,
       );
     });
 
+    it('permite abrir p/ equipe PRIVADA quando o user e staff do depto dela', async () => {
+      const equipe = { id: 'eq-1', privada: true, departamentoId: 'dep-ti' };
+      prisma.equipe.findUnique.mockResolvedValue(equipe);
+      prisma.slaDefinicao.findUnique.mockResolvedValue(null);
+      prisma.membroEquipe.findUnique.mockResolvedValue(null);
+      prisma.chamado.create.mockResolvedValue(baseChamado());
+      prisma.historicoChamado.create.mockResolvedValue({});
+
+      // user com papel SUPORTE no depto 'dep-ti' no modulo WORKSPACE => staff.
+      const staffUser = {
+        ...mockUser,
+        modulos: [{ codigo: 'WORKSPACE', departamentos: [{ id: 'dep-ti', role: 'SUPORTE' }] }],
+      };
+      const dto = { titulo: 'Teste', descricao: 'Desc', equipeAtualId: 'eq-1' };
+      await expect(service.create(dto as any, staffUser as any, 'SUPORTE')).resolves.toBeDefined();
+    });
+
     it('auto-assume (EM_ATENDIMENTO) quando o solicitante e membro ATIVO da equipe escolhida', async () => {
-      prisma.equipe.findUnique.mockResolvedValue({ id: 'eq-1', aceitaChamadoExterno: true, departamentoId: 'dep-ti' });
+      prisma.equipe.findUnique.mockResolvedValue({ id: 'eq-1', privada: false, departamentoId: 'dep-ti' });
       prisma.slaDefinicao.findUnique.mockResolvedValue(null);
       prisma.membroEquipe.findUnique.mockResolvedValue({ status: 'ATIVO' });
       prisma.chamado.create.mockResolvedValue(baseChamado());
@@ -136,7 +156,7 @@ describe('ChamadoService', () => {
 
     it('NAO auto-assume (ABERTO) quando o solicitante NAO e membro da equipe escolhida (outro workspace/equipe)', async () => {
       // Ex: usuario do Setor Fiscal (ou de outra equipe da T.I.) abrindo p/ esta equipe.
-      prisma.equipe.findUnique.mockResolvedValue({ id: 'eq-ti', aceitaChamadoExterno: true, departamentoId: 'dep-ti' });
+      prisma.equipe.findUnique.mockResolvedValue({ id: 'eq-ti', privada: false, departamentoId: 'dep-ti' });
       prisma.slaDefinicao.findUnique.mockResolvedValue(null);
       prisma.membroEquipe.findUnique.mockResolvedValue(null); // nao e membro
       prisma.chamado.create.mockResolvedValue(baseChamado());

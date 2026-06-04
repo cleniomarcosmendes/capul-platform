@@ -30,8 +30,45 @@ export class EquipeService {
     // departamental movido pra create/update/delete (escrita por depto-dono).
     // C2.7 UX 24/05 — inclui `departamento` pra UI montar select encadeado
     // (escolhe depto destino, equipes filtram pelo depto).
+    // NB: listagem GLOBAL (sem filtro de visibilidade) — é a usada pela
+    // TRANSFERÊNCIA de chamado, que precisa enxergar até equipes privadas.
+    // A ABERTURA usa `findSelecionaveis` (filtrada). Não filtrar aqui.
     return this.prisma.equipe.findMany({
       where: status ? { status } : {},
+      include: {
+        membros: {
+          include: { usuario: true },
+          where: { status: 'ATIVO' },
+        },
+        departamento: { select: { id: true, nome: true } },
+      },
+      orderBy: { ordem: 'asc' },
+    });
+  }
+
+  /**
+   * Equipes SELECIONÁVEIS na ABERTURA de chamado. Aplica a visibilidade:
+   * equipe pública (privada=false) aparece pra todos; equipe privada só
+   * aparece pra quem é STAFF (ADMIN/GESTOR/SUPORTE) do departamento dela —
+   * via `getDeptosOndeStaff` — ou pra quem tem `OVERSIGHT_PLATAFORMA`.
+   * Usuário final/chave/terceirizado e staff de outros deptos não veem as
+   * privadas. Filtro server-side (defesa em profundidade — o backend de
+   * criação `ChamadoCoreService.create` revalida). NÃO usada pela
+   * transferência (essa continua no `findAll` global).
+   */
+  async findSelecionaveis(user: JwtPayload, status: StatusGeral = 'ATIVO') {
+    const whereStatus = { status };
+    const where = hasCapability(user, 'OVERSIGHT_PLATAFORMA')
+      ? whereStatus
+      : {
+          ...whereStatus,
+          OR: [
+            { privada: false },
+            { departamentoId: { in: getDeptosOndeStaff(user) } },
+          ],
+        };
+    return this.prisma.equipe.findMany({
+      where,
       include: {
         membros: {
           include: { usuario: true },
@@ -142,7 +179,7 @@ export class EquipeService {
         descricao: dto.descricao,
         cor: dto.cor,
         icone: dto.icone,
-        aceitaChamadoExterno: dto.aceitaChamadoExterno,
+        privada: dto.privada,
         emailEquipe: dto.emailEquipe,
         ordem: dto.ordem,
         departamentoId,
