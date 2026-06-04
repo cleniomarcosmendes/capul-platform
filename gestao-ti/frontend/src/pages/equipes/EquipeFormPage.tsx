@@ -13,7 +13,7 @@ interface FormData {
   descricao: string;
   cor: string;
   icone: string;
-  aceitaChamadoExterno: boolean;
+  privada: boolean;
   emailEquipe: string;
   ordem: number;
   /** Workspace Onda 2 C2.8 — depto-dono explícito no form (antes vinha
@@ -27,7 +27,7 @@ const initialForm: FormData = {
   descricao: '',
   cor: '#006838',
   icone: 'users',
-  aceitaChamadoExterno: true,
+  privada: false,
   emailEquipe: '',
   ordem: 0,
   departamentoId: '',
@@ -65,7 +65,7 @@ export function EquipeFormPage() {
             descricao: equipe.descricao || '',
             cor: equipe.cor || '#006838',
             icone: equipe.icone || 'users',
-            aceitaChamadoExterno: equipe.aceitaChamadoExterno,
+            privada: equipe.privada,
             emailEquipe: equipe.emailEquipe || '',
             ordem: equipe.ordem,
             departamentoId: equipe.departamentoId ?? '',
@@ -245,16 +245,23 @@ export function EquipeFormPage() {
             />
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-start gap-3">
             <input
               type="checkbox"
-              id="aceitaChamadoExterno"
-              checked={form.aceitaChamadoExterno}
-              onChange={(e) => handleChange('aceitaChamadoExterno', e.target.checked)}
-              className="w-4 h-4 rounded border-slate-300 text-capul-600 focus:ring-capul-600"
+              id="privada"
+              checked={form.privada}
+              onChange={(e) => handleChange('privada', e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded border-slate-300 text-capul-600 focus:ring-capul-600"
             />
-            <label htmlFor="aceitaChamadoExterno" className="text-sm text-slate-700">
-              Aceita chamados externos (usuarios finais podem selecionar esta equipe)
+            <label htmlFor="privada" className="text-sm text-slate-700">
+              Equipe privada
+              <span className="block text-xs text-slate-500">
+                Quando marcada, só o staff (ADMIN/GESTOR/SUPORTE) do próprio
+                departamento pode abrir chamado direto para esta equipe. Os
+                demais (usuário final, chave, terceirizado e outros setores)
+                não a veem na abertura — chegam via transferência. A
+                transferência entre equipes não muda.
+              </span>
             </label>
           </div>
 

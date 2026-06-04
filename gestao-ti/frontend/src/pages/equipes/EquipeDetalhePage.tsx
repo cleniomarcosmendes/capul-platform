@@ -176,8 +176,8 @@ export function EquipeDetalhePage() {
                 <span className="text-slate-700 font-medium">{equipe.sigla}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Chamados externos:</span>
-                <span className="text-slate-700">{equipe.aceitaChamadoExterno ? 'Sim' : 'Nao'}</span>
+                <span className="text-slate-500">Visibilidade:</span>
+                <span className="text-slate-700">{equipe.privada ? 'Privada (só o próprio depto)' : 'Pública'}</span>
               </div>
               {equipe.emailEquipe && (
                 <div className="flex justify-between">

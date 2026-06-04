@@ -120,7 +120,7 @@ export function EquipesListPage() {
                   <th className="px-6 py-3"><button onClick={() => toggleSort('nome')} className="flex items-center gap-1 hover:text-slate-700">Equipe <SortIcon col="nome" /></button></th>
                   <th className="px-6 py-3"><button onClick={() => toggleSort('sigla')} className="flex items-center gap-1 hover:text-slate-700">Sigla <SortIcon col="sigla" /></button></th>
                   <th className="px-6 py-3"><button onClick={() => toggleSort('membros')} className="flex items-center gap-1 hover:text-slate-700">Membros <SortIcon col="membros" /></button></th>
-                  <th className="px-6 py-3">Chamados Externos</th>
+                  <th className="px-6 py-3">Visibilidade</th>
                   <th className="px-6 py-3"><button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-slate-700">Status <SortIcon col="status" /></button></th>
                   {isAdmin && <th className="px-6 py-3">Acoes</th>}
                 </tr>
@@ -147,12 +147,12 @@ export function EquipesListPage() {
                     <td className="px-6 py-4">
                       <span
                         className={`text-xs px-2 py-1 rounded-full ${
-                          equipe.aceitaChamadoExterno
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-slate-100 text-slate-500'
+                          equipe.privada
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-green-100 text-green-700'
                         }`}
                       >
-                        {equipe.aceitaChamadoExterno ? 'Sim' : 'Nao'}
+                        {equipe.privada ? 'Privada' : 'Pública'}
                       </span>
                     </td>
                     <td className="px-6 py-4">

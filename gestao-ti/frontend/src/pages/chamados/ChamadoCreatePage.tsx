@@ -138,10 +138,9 @@ export function ChamadoCreatePage() {
   const [arquivos, setArquivos] = useState<File[]>([]);
 
   useEffect(() => {
-    equipeService.listar('ATIVO').then((data) => {
-      const filtered = isUsuarioFinal ? data.filter((e) => e.aceitaChamadoExterno) : data;
-      setEquipes(filtered);
-    }).catch(() => {});
+    // Visibilidade pública/privada é resolvida no servidor (GET /equipes/abertura):
+    // equipe privada só vem pra staff do próprio depto. Sem filtro client-side.
+    equipeService.listarSelecionaveis('ATIVO').then(setEquipes).catch(() => {});
     softwareService.listar({ status: 'ATIVO' }).then(setSoftwaresList).catch(() => {});
     if (projetoIdParam) {
       projetoService.buscar(projetoIdParam).then(setProjetoVinculado).catch(() => {});

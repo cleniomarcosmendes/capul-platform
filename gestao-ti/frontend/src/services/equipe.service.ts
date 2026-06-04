@@ -14,6 +14,17 @@ export const equipeService = {
   },
 
   /**
+   * Equipes SELECIONÁVEIS na ABERTURA de chamado — aplica a visibilidade
+   * pública/privada por departamento (privada só aparece pra staff do depto
+   * dela). Distinto de `listar` (global, usado pela TRANSFERÊNCIA).
+   */
+  async listarSelecionaveis(status?: string): Promise<Equipe[]> {
+    const params = status ? { status } : {};
+    const { data } = await gestaoApi.get('/equipes/abertura', { params });
+    return data;
+  },
+
+  /**
    * S15.4 (27/05) — Lista equipes restritas aos deptos onde o user é STAFF
    * (ADMIN/GESTOR/SUPORTE). Pra TELA DE CONFIGURAÇÃO (`/gestao-ti/equipes`).
    * Outras telas que usam dropdown de equipe (chamado/contrato/etc) seguem

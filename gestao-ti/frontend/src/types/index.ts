@@ -49,7 +49,9 @@ export interface Equipe {
   descricao: string | null;
   cor: string | null;
   icone: string | null;
-  aceitaChamadoExterno: boolean;
+  // Visibilidade na abertura de chamado: true => privada (só staff do próprio
+  // departamento abre direto). Substitui o antigo aceitaChamadoExterno.
+  privada: boolean;
   emailEquipe: string | null;
   ordem: number;
   status: 'ATIVO' | 'INATIVO';
