@@ -14,6 +14,7 @@ import { resolveDepartamento } from '../common/helpers/resolve-departamento.help
 import { resolveDepartamentoLancamento } from '../common/helpers/resolve-departamento-lancamento.helper.js';
 import { applyDepartamentoFilterCadastroOpStaff, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
+import { ProtheusService } from '../protheus/protheus.service.js';
 
 const licencaInclude = {
   software: { select: { id: true, nome: true, fabricante: true, tipo: true } },
@@ -55,7 +56,10 @@ function buildLicencaOrderBy(sortBy?: string, sortOrder?: 'asc' | 'desc') {
 
 @Injectable()
 export class LicencaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly protheus: ProtheusService,
+  ) {}
 
   async findAll(filters: {
     softwareId?: string;
@@ -283,7 +287,7 @@ export class LicencaService {
     });
   }
 
-  async atribuirFuncionario(licencaId: string, matricula: string, nomeInformado: string) {
+  async atribuirFuncionario(licencaId: string, matricula: string, _nomeCliente?: string) {
     const licenca = await this.getLicencaOrFail(licencaId);
 
     if (licenca.status !== 'ATIVA') {
@@ -293,14 +297,22 @@ export class LicencaService {
     const matriculaNorm = (matricula || '').trim();
     if (!matriculaNorm) throw new BadRequestException('Matrícula é obrigatória');
 
-    // Nome chega do frontend (autofill Protheus via operação infoFuncionario,
-    // por matrícula; fallback manual). Persistimos o que veio — fonte da verdade
-    // é o que o operador confirmou na tela.
-    const nome = (nomeInformado || '').trim();
-    if (!nome) throw new BadRequestException('Nome do funcionário é obrigatório');
+    // Fonte da verdade = Protheus (operação infoFuncionario / portal RH). O nome
+    // enviado pelo cliente é IGNORADO — resolvemos server-side pela matrícula.
+    // Defesa em profundidade: o frontend já trava o campo nome (read-only), aqui
+    // garantimos contra request manipulado e contra divergência de nome.
+    const colaborador = await this.protheus.buscarColaborador(matriculaNorm);
+    if (!colaborador?.nome) {
+      throw new BadRequestException(
+        'Matrícula não encontrada no Protheus (ou Protheus indisponível). Verifique a matrícula e tente novamente.',
+      );
+    }
+    // Usa a matrícula canônica devolvida pelo Protheus (ex.: zero-padded).
+    const matriculaFinal = (colaborador.matricula || matriculaNorm).trim();
+    const nome = colaborador.nome;
 
     const existente = await this.prisma.licencaFuncionario.findUnique({
-      where: { licencaId_matricula: { licencaId, matricula: matriculaNorm } },
+      where: { licencaId_matricula: { licencaId, matricula: matriculaFinal } },
     });
     if (existente) throw new BadRequestException('Funcionário já atribuído a esta licença');
 
@@ -312,7 +324,7 @@ export class LicencaService {
     }
 
     await this.prisma.licencaFuncionario.create({
-      data: { licencaId, matricula: matriculaNorm, nome },
+      data: { licencaId, matricula: matriculaFinal, nome },
     });
 
     return this.findOne(licencaId, 'ADMIN');
