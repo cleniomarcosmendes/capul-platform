@@ -293,10 +293,9 @@ export class LicencaService {
     const matriculaNorm = (matricula || '').trim();
     if (!matriculaNorm) throw new BadRequestException('Matrícula é obrigatória');
 
-    // Nome é informado manualmente: NÃO há endpoint Protheus que resolva o nome
-    // de funcionário por matrícula sem senha (INFOCLIENTES é cadastro de CLIENTES,
-    // não funcionários). Ver pendência Protheus. Quando existir o endpoint SRA,
-    // dá pra reativar um autofill/validação aqui.
+    // Nome chega do frontend (autofill Protheus via operação infoFuncionario,
+    // por matrícula; fallback manual). Persistimos o que veio — fonte da verdade
+    // é o que o operador confirmou na tela.
     const nome = (nomeInformado || '').trim();
     if (!nome) throw new BadRequestException('Nome do funcionário é obrigatório');
 

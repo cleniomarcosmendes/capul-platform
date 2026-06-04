@@ -7,9 +7,9 @@ export class AtribuirFuncionarioDto {
   @MaxLength(20)
   matricula: string;
 
-  // Nome do funcionário (digitado). NÃO há endpoint Protheus que resolva o nome
-  // de funcionário por matrícula sem senha — o INFOCLIENTES é cadastro de CLIENTES,
-  // não funcionários (ver pendência Protheus / memory). Por isso é informado aqui.
+  // Nome do funcionário. Desde 04/06/2026 o frontend faz autofill via Protheus
+  // (operação infoFuncionario / portal RH, por matrícula); permanece obrigatório
+  // e editável (fallback manual quando a matrícula não é encontrada).
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)
