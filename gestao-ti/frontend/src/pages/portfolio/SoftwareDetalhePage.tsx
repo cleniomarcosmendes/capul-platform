@@ -722,7 +722,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                                       <input
                                         type="text"
                                         value={matriculaInput}
-                                        onChange={(e) => { setMatriculaInput(e.target.value); setNomeAuto(null); }}
+                                        onChange={(e) => { setMatriculaInput(e.target.value); setNomeAuto(null); setNomeInput(''); }}
                                         onBlur={buscarNomeFuncionario}
                                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscarNomeFuncionario(); } }}
                                         placeholder="Matrícula"
@@ -731,11 +731,10 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                                       <input
                                         type="text"
                                         value={nomeInput}
-                                        onChange={(e) => { setNomeInput(e.target.value); setNomeAuto(null); }}
-                                        onKeyDown={(e) => { if (e.key === 'Enter') handleAtribuir(lic.id); }}
-                                        placeholder={buscandoNome ? 'Buscando nome…' : 'Nome do funcionário'}
-                                        disabled={buscandoNome}
-                                        className="flex-1 min-w-[160px] border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-capul-600 disabled:bg-slate-50"
+                                        readOnly
+                                        title="Nome vem do Protheus pela matrícula — não editável"
+                                        placeholder={buscandoNome ? 'Buscando nome…' : 'Nome (do Protheus)'}
+                                        className="flex-1 min-w-[160px] border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-slate-50 text-slate-700 cursor-default focus:outline-none"
                                       />
                                       <button
                                         onClick={() => handleAtribuir(lic.id)}
@@ -748,9 +747,9 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                                     </div>
                                     <p className="text-xs mb-3">
                                       {buscandoNome ? <span className="text-slate-400">Buscando funcionário no Protheus…</span>
-                                        : nomeAuto === true ? <span className="text-green-600">✓ Nome preenchido pelo Protheus (confira e ajuste se necessário).</span>
-                                        : nomeAuto === false ? <span className="text-amber-600">Matrícula não encontrada no Protheus — informe o nome manualmente.</span>
-                                        : <span className="text-slate-400">Informe a matrícula (o nome é buscado no Protheus automaticamente).</span>}
+                                        : nomeAuto === true ? <span className="text-green-600">✓ Funcionário identificado no Protheus.</span>
+                                        : nomeAuto === false ? <span className="text-amber-600">Matrícula não encontrada no Protheus — não é possível atribuir.</span>
+                                        : <span className="text-slate-400">Informe a matrícula — o nome é buscado no Protheus (não editável).</span>}
                                     </p>
                                   </>
                                 )}

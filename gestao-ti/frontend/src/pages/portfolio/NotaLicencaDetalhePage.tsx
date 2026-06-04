@@ -160,17 +160,17 @@ export function NotaLicencaDetalhePage() {
                         {isAdmin && l.status === 'ATIVA' && (
                           <>
                             <div className="flex flex-wrap gap-2 mb-1">
-                              <input value={mat} onChange={(e) => { setMat(e.target.value); setNomeAuto(null); }} onBlur={buscarNome} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscarNome(); } }} placeholder="Matrícula" className="w-32 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" />
-                              <input value={nomeFunc} onChange={(e) => { setNomeFunc(e.target.value); setNomeAuto(null); }} onKeyDown={(e) => { if (e.key === 'Enter') atribuir(l.id); }} placeholder={buscandoNome ? 'Buscando nome…' : 'Nome do funcionário'} disabled={buscandoNome} className="flex-1 min-w-[160px] border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600 disabled:bg-slate-50" />
+                              <input value={mat} onChange={(e) => { setMat(e.target.value); setNomeAuto(null); setNomeFunc(''); }} onBlur={buscarNome} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscarNome(); } }} placeholder="Matrícula" className="w-32 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" />
+                              <input value={nomeFunc} readOnly placeholder={buscandoNome ? 'Buscando nome…' : 'Nome (do Protheus)'} title="Nome vem do Protheus pela matrícula — não editável" className="flex-1 min-w-[160px] border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-slate-50 text-slate-700 cursor-default focus:outline-none" />
                               <button onClick={() => atribuir(l.id)} disabled={!mat.trim() || !nomeFunc.trim() || savingFunc || buscandoNome || (l.quantidade != null && funcs.length >= l.quantidade)} className="flex items-center gap-1 bg-capul-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
                                 <UserPlus className="w-3.5 h-3.5" />{savingFunc ? 'Atribuindo...' : 'Atribuir'}
                               </button>
                             </div>
                             <p className="text-xs mb-3">
                               {buscandoNome ? <span className="text-slate-400">Buscando funcionário no Protheus…</span>
-                                : nomeAuto === true ? <span className="text-green-600">✓ Nome preenchido pelo Protheus (confira e ajuste se necessário).</span>
-                                : nomeAuto === false ? <span className="text-amber-600">Matrícula não encontrada no Protheus — informe o nome manualmente.</span>
-                                : <span className="text-slate-400">Informe a matrícula (o nome é buscado no Protheus automaticamente).</span>}
+                                : nomeAuto === true ? <span className="text-green-600">✓ Funcionário identificado no Protheus.</span>
+                                : nomeAuto === false ? <span className="text-amber-600">Matrícula não encontrada no Protheus — não é possível atribuir.</span>
+                                : <span className="text-slate-400">Informe a matrícula — o nome é buscado no Protheus (não editável).</span>}
                             </p>
                           </>
                         )}
