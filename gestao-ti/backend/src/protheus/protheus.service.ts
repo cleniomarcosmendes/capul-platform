@@ -143,6 +143,22 @@ export class ProtheusService {
     });
   }
 
+  /**
+   * Normaliza um registro de funcionário do portal RH ({matricula,nome,cc} com
+   * espaços à direita). Retorna null se faltar matrícula ou nome (ex.: registro
+   * de erro). Compartilhado entre busca por matrícula e por nome.
+   */
+  private mapFuncionario(
+    raw: Record<string, unknown> | null | undefined,
+  ): { matricula: string; nome: string; cc: string | null } | null {
+    if (!raw) return null;
+    const norm = (v: unknown) => String(v ?? '').trim();
+    const matricula = norm(raw.matricula);
+    const nome = norm(raw.nome);
+    if (!matricula || !nome) return null;
+    return { matricula, nome, cc: raw.cc ? norm(raw.cc) : null };
+  }
+
   async buscarColaborador(
     matricula: string,
   ): Promise<{ matricula: string; nome: string; cc: string | null } | null> {
@@ -153,16 +169,28 @@ export class ProtheusService {
     this.logger.log(`Buscando colaborador ${matricula} (ambiente: ${ep.ambiente})`);
 
     const data = await this.requestJson(url, ep.authHeader, ep.timeoutMs);
-    // Sempre HTTP 200: matrícula inválida vem como { mensagem: ... } (sem `nome`).
-    if (!data || !data.nome) {
-      if (data?.mensagem) this.logger.warn(`Protheus infoFuncionario: ${String(data.mensagem)} (matricula ${matricula})`);
+    if (!data) return null;
+
+    // Desde 05/06 o portal RH unificou o retorno: ?MATRICULA= passou a vir
+    // embrulhado em { funcionarios: [...] } (como o ?NOME=), não mais flat
+    // { matricula,nome,cc }. Toleramos ambos os formatos — DEV/HOM/PROD já
+    // divergiram antes. Matrícula inválida → { mensagem: ... } (sem funcionarios).
+    const candidatos: Array<Record<string, unknown>> = Array.isArray(data.funcionarios)
+      ? (data.funcionarios as Array<Record<string, unknown>>)
+      : data.nome
+        ? [data]
+        : [];
+    // ?MATRICULA= é busca específica (1 item), mas preferimos o match exato e
+    // caímos no 1º como fallback (prefixo 'E'/zero-padding diverge por ambiente).
+    const norm = (v: unknown) => String(v ?? '').trim();
+    const escolhido =
+      candidatos.find((f) => norm(f.matricula) === norm(matricula)) ?? candidatos[0];
+    const alvo = this.mapFuncionario(escolhido);
+    if (!alvo) {
+      if (data.mensagem) this.logger.warn(`Protheus infoFuncionario: ${String(data.mensagem)} (matricula ${matricula})`);
       return null;
     }
-    return {
-      matricula: String(data.matricula || matricula).trim(),
-      nome: String(data.nome || '').trim(),
-      cc: data.cc ? String(data.cc).trim() : null,
-    };
+    return alvo;
   }
 
   /**
@@ -184,12 +212,7 @@ export class ProtheusService {
     const data = await this.requestJson(url, ep.authHeader, ep.timeoutMs);
     const lista = Array.isArray(data?.funcionarios) ? (data!.funcionarios as unknown[]) : [];
     return lista
-      .map((f) => f as { matricula?: unknown; nome?: unknown; cc?: unknown })
-      .map((f) => ({
-        matricula: String(f.matricula ?? '').trim(),
-        nome: String(f.nome ?? '').trim(),
-        cc: f.cc ? String(f.cc).trim() : null,
-      }))
-      .filter((f) => f.matricula && f.nome);
+      .map((f) => this.mapFuncionario(f as Record<string, unknown>))
+      .filter((f): f is { matricula: string; nome: string; cc: string | null } => f !== null);
   }
 }
