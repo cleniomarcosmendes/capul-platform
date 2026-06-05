@@ -8,11 +8,10 @@ import { CreateLicencaDto } from './dto/create-licenca.dto.js';
 import { UpdateLicencaDto } from './dto/update-licenca.dto.js';
 import { CreateCategoriaLicencaDto, UpdateCategoriaLicencaDto } from './dto/create-categoria-licenca.dto.js';
 import { StatusLicenca } from '@prisma/client';
-import { isGestor } from '../common/constants/roles.constant.js';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
 import { resolveDepartamentoLancamento } from '../common/helpers/resolve-departamento-lancamento.helper.js';
-import { applyDepartamentoFilterCadastroOpStaff, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
+import { applyDepartamentoLancamentoFilterCadastroOpStaff, assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { ProtheusService } from '../protheus/protheus.service.js';
 
@@ -93,7 +92,8 @@ export class LicencaService {
     // S15.3 (27/05) — Visão restrita a STAFF do depto (ADMIN/GESTOR/SUPORTE).
     // USUARIO_FINAL/USUARIO_CHAVE/TERCEIRIZADO não vê cadastros mesmo com perfil
     // no workspace. Espelha S13a (chamado/projeto). Incidente Juliana.
-    const whereFiltrado = applyDepartamentoFilterCadastroOpStaff(where, user ?? null);
+    // 05/06 — alocação livre: visão pelo depto de LANÇAMENTO (quem cadastrou).
+    const whereFiltrado = applyDepartamentoLancamentoFilterCadastroOpStaff(where, user ?? null);
 
     const resultado = await paginate(this.prisma, this.prisma.softwareLicenca, {
       where: whereFiltrado,
@@ -110,11 +110,12 @@ export class LicencaService {
       pageSize: filters.pageSize,
     });
 
-    // Mantém shape paginado; filtra campos sensíveis dentro de `items`.
-    return {
-      ...resultado,
-      items: this.filterSensitiveFields(resultado.items as never[], role),
-    };
+    // 05/06 — sem controle de acesso intra-workspace: a chaveSerial é visível
+    // a todo o workspace de T.I. (a privacidade é na fronteira do workspace,
+    // já garantida pelo filtro por depto de lançamento acima). `role` mantido
+    // na assinatura por compat com o controller.
+    void role;
+    return resultado;
   }
 
   async findOne(id: string, role: string) {
@@ -123,8 +124,8 @@ export class LicencaService {
       include: licencaIncludeComFuncionarios,
     });
     if (!licenca) throw new NotFoundException('Licenca nao encontrada');
-
-    return this.filterSensitiveField(licenca, role);
+    void role;
+    return licenca;
   }
 
   async create(dto: CreateLicencaDto, user?: JwtPayload) {
@@ -146,9 +147,8 @@ export class LicencaService {
       dto.departamentoId,
     );
 
-    // Onda 3 S10 — gate de escrita (OVERSIGHT bypass).
-    if (user) assertDepartamentoDoUser(user, null, departamentoId);
-
+    // 05/06 — alocação livre: departamentoId = "onde a licença é usada"
+    // (qualquer depto), não fronteira de escrita. Posse fica no lançamento.
     const departamentoLancamentoId = resolveDepartamentoLancamento(user, departamentoId);
 
     // S11 — se veio fornecedorId, valida existência (FK ON DELETE SET NULL,
@@ -183,13 +183,9 @@ export class LicencaService {
 
   async update(id: string, dto: UpdateLicencaDto, user?: JwtPayload) {
     const existing = await this.getLicencaOrFail(id);
-    // Onda 3 S10 — gate de escrita (OVERSIGHT bypass).
-    if (user) {
-      assertDepartamentoDoUser(user, null, existing.departamentoId);
-      if (dto.departamentoId && dto.departamentoId !== existing.departamentoId) {
-        assertDepartamentoDoUser(user, null, dto.departamentoId);
-      }
-    }
+    // 05/06 — editar exige ser STAFF do depto de LANÇAMENTO (dono). Realocação
+    // (departamentoId) é livre.
+    if (user) assertStaffEmDepto(user, existing.departamentoLancamentoId);
     // S11 — validar FK fornecedor se vier no payload (BadRequest amigável).
     // String vazia = "limpar vínculo" → vira null. UUID → valida existência.
     let fornecedorIdNorm: string | null | undefined = undefined;
@@ -216,7 +212,7 @@ export class LicencaService {
 
   async renovar(id: string, user?: JwtPayload) {
     const anterior = await this.getLicencaOrFail(id);
-    if (user) assertDepartamentoDoUser(user, null, anterior.departamentoId);
+    if (user) assertStaffEmDepto(user, anterior.departamentoLancamentoId);
 
     // Inativar a licenca anterior
     await this.prisma.softwareLicenca.update({
@@ -255,7 +251,7 @@ export class LicencaService {
 
   async inativar(id: string, user?: JwtPayload) {
     const licenca = await this.getLicencaOrFail(id);
-    if (user) assertDepartamentoDoUser(user, null, licenca.departamentoId);
+    if (user) assertStaffEmDepto(user, licenca.departamentoLancamentoId);
     return this.prisma.softwareLicenca.update({
       where: { id },
       data: { status: 'INATIVA' },
@@ -265,7 +261,7 @@ export class LicencaService {
 
   async remove(id: string, user?: JwtPayload) {
     const licenca = await this.getLicencaOrFail(id);
-    if (user) assertDepartamentoDoUser(user, null, licenca.departamentoId);
+    if (user) assertStaffEmDepto(user, licenca.departamentoLancamentoId);
     const funcionarios = await this.prisma.licencaFuncionario.count({ where: { licencaId: id } });
     if (funcionarios > 0) {
       throw new BadRequestException(`Licenca possui ${funcionarios} funcionario(s) vinculado(s). Remova os funcionarios antes de excluir.`);
@@ -395,17 +391,5 @@ export class LicencaService {
     const licenca = await this.prisma.softwareLicenca.findUnique({ where: { id } });
     if (!licenca) throw new NotFoundException('Licenca nao encontrada');
     return licenca;
-  }
-
-  private filterSensitiveFields(licencas: unknown[], role: string) {
-    if (isGestor(role)) return licencas;
-    return licencas.map((l) => this.filterSensitiveField(l, role));
-  }
-
-  private filterSensitiveField(licenca: unknown, role: string) {
-    if (isGestor(role)) return licenca;
-    const obj = { ...(licenca as Record<string, unknown>) };
-    obj.chaveSerial = null;
-    return obj;
   }
 }

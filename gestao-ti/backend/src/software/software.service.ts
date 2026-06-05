@@ -13,7 +13,7 @@ import { TipoSoftware, Criticidade, StatusSoftware, StatusModulo } from '@prisma
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
 import { resolveDepartamentoLancamento } from '../common/helpers/resolve-departamento-lancamento.helper.js';
-import { applyDepartamentoFilterCadastroOpStaff, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
+import { applyDepartamentoLancamentoFilterCadastroOpStaff, assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 const softwareListInclude = {
@@ -62,7 +62,8 @@ export class SoftwareService {
     // S15.3 (27/05) — Visão restrita a STAFF do depto (ADMIN/GESTOR/SUPORTE).
     // USUARIO_FINAL/USUARIO_CHAVE/TERCEIRIZADO não vê cadastros mesmo com perfil
     // no workspace. Espelha S13a (chamado/projeto). Incidente Juliana.
-    const whereFiltrado = applyDepartamentoFilterCadastroOpStaff(where, user ?? null);
+    // 05/06 — alocação livre: visão pelo depto de LANÇAMENTO (quem cadastrou).
+    const whereFiltrado = applyDepartamentoLancamentoFilterCadastroOpStaff(where, user ?? null);
 
     return paginate(this.prisma, this.prisma.software, {
       where: whereFiltrado,
@@ -94,9 +95,8 @@ export class SoftwareService {
       dto.departamentoId,
     );
 
-    // Onda 3 S10 — valida que user pode escrever nesse depto (OVERSIGHT bypass).
-    if (user) assertDepartamentoDoUser(user, null, departamentoId);
-
+    // 05/06 — alocação livre: departamentoId é "onde o software é usado"
+    // (qualquer depto), não fronteira de escrita. Posse fica no lançamento.
     const departamentoLancamentoId = resolveDepartamentoLancamento(user, departamentoId);
 
     return this.prisma.software.create({
@@ -111,14 +111,9 @@ export class SoftwareService {
       const conflict = await this.prisma.software.findFirst({ where: { nome: dto.nome, NOT: { id } } });
       if (conflict) throw new ConflictException('Ja existe um software com este nome');
     }
-    // Onda 3 S10 — valida deptos: o atual (proteção de leitura) E o novo
-    // se está sendo alterado (proteção da realocação).
-    if (user) {
-      assertDepartamentoDoUser(user, null, existing.departamentoId);
-      if (dto.departamentoId && dto.departamentoId !== existing.departamentoId) {
-        assertDepartamentoDoUser(user, null, dto.departamentoId);
-      }
-    }
+    // 05/06 — editar exige ser STAFF do depto de LANÇAMENTO (dono). Realocação
+    // (departamentoId) é livre.
+    if (user) assertStaffEmDepto(user, existing.departamentoLancamentoId);
     return this.prisma.software.update({
       where: { id },
       data: dto,
@@ -128,13 +123,13 @@ export class SoftwareService {
 
   async updateStatus(id: string, status: StatusSoftware, user?: JwtPayload) {
     const software = await this.getSoftwareOrFail(id);
-    if (user) assertDepartamentoDoUser(user, null, software.departamentoId);
+    if (user) assertStaffEmDepto(user, software.departamentoLancamentoId);
     return this.prisma.software.update({ where: { id }, data: { status } });
   }
 
   async remove(id: string, user?: JwtPayload) {
     const software = await this.getSoftwareOrFail(id);
-    if (user) assertDepartamentoDoUser(user, null, software.departamentoId);
+    if (user) assertStaffEmDepto(user, software.departamentoLancamentoId);
     const chamados = await this.prisma.chamado.count({ where: { softwareId: id } });
     const licencas = await this.prisma.softwareLicenca.count({ where: { softwareId: id } });
     const contratos = await this.prisma.contrato.count({ where: { softwareId: id } });

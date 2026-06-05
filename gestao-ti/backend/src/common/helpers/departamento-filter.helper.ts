@@ -154,6 +154,31 @@ export function applyDepartamentoFilterCadastroOpStaff<
 }
 
 /**
+ * Workspace (05/06 — decisão Clenio) — cadastros de ALOCAÇÃO LIVRE
+ * (Software/Licença/Ativo). Diferente de
+ * `applyDepartamentoFilterCadastroOpStaff`: a visão é chaveada pelo depto de
+ * LANÇAMENTO (`departamentoLancamentoId` = quem cadastrou / workspace dono),
+ * NÃO pelo de alocação (`departamentoId`), que nesses 3 cadastros é metadado
+ * livre ("qualquer depto da empresa"). Mantém a regra STAFF (preserva a
+ * proteção do incidente Juliana) + bypass OVERSIGHT.
+ *
+ * Nota: Contrato/NF/Parada seguem usando a variante por alocação
+ * (`applyDepartamentoFilterCadastroOpStaff`) — escopo intencional.
+ */
+export function applyDepartamentoLancamentoFilterCadastroOpStaff<
+  T extends Record<string, unknown>,
+>(where: T, user: JwtPayload | null | undefined): T {
+  if (user && hasCapability(user, 'OVERSIGHT_PLATAFORMA')) return where;
+
+  const deptosStaff = getDeptosOndeStaff(user);
+
+  return {
+    ...where,
+    departamentoLancamentoId: { in: deptosStaff },
+  } as T;
+}
+
+/**
  * Valida que o user pode escrever pra `departamentoId` informado.
  *
  * Lança `ForbiddenException` se:

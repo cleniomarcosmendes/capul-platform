@@ -9,7 +9,7 @@ import { StatusAtivo } from '@prisma/client';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
 import { resolveDepartamentoLancamento } from '../common/helpers/resolve-departamento-lancamento.helper.js';
-import { applyDepartamentoFilterCadastroOpStaff, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
+import { applyDepartamentoLancamentoFilterCadastroOpStaff, assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 const ativoListInclude = {
@@ -65,7 +65,9 @@ export class AtivoService {
     // S15.3 (27/05) — Visão restrita a STAFF do depto (ADMIN/GESTOR/SUPORTE).
     // USUARIO_FINAL/USUARIO_CHAVE/TERCEIRIZADO não vê cadastros mesmo com perfil
     // no workspace. Espelha S13a (chamado/projeto). Incidente Juliana.
-    const whereFiltrado = applyDepartamentoFilterCadastroOpStaff(where, user ?? null);
+    // 05/06 — alocação livre: visão pelo depto de LANÇAMENTO (quem cadastrou),
+    // não pelo de alocação (metadado livre "qualquer depto").
+    const whereFiltrado = applyDepartamentoLancamentoFilterCadastroOpStaff(where, user ?? null);
 
     return paginate(this.prisma, this.prisma.ativo, {
       where: whereFiltrado,
@@ -97,9 +99,10 @@ export class AtivoService {
       dto.departamentoId,
     );
 
-    // Onda 3 S10 — gate de escrita (OVERSIGHT bypass).
-    if (user) assertDepartamentoDoUser(user, null, departamentoId);
-
+    // 05/06 — alocação livre: o depto do <DepartamentoField> é "onde o ativo
+    // é usado" (qualquer depto da empresa), não uma fronteira de escrita. A
+    // posse fica em departamentoLancamentoId (= depto do user). Sem gate de
+    // alocação aqui (criar já exige ROLES_TI + funcionalidade ATIVO).
     return this.prisma.ativo.create({
       data: {
         tag: dto.tag,
@@ -139,13 +142,9 @@ export class AtivoService {
       if (exists) throw new BadRequestException('Tag ja existe');
     }
 
-    // Onda 3 S10 — gate de escrita (OVERSIGHT bypass).
-    if (user) {
-      assertDepartamentoDoUser(user, null, existing.departamentoId);
-      if (dto.departamentoId && dto.departamentoId !== existing.departamentoId) {
-        assertDepartamentoDoUser(user, null, dto.departamentoId);
-      }
-    }
+    // 05/06 — editar exige ser STAFF do depto de LANÇAMENTO (dono do registro).
+    // A realocação (departamentoId) é livre — não é mais gate.
+    if (user) assertStaffEmDepto(user, existing.departamentoLancamentoId);
 
     const data: Record<string, unknown> = { ...dto };
     if (dto.dataAquisicao) data.dataAquisicao = new Date(dto.dataAquisicao);
@@ -160,7 +159,7 @@ export class AtivoService {
 
   async updateStatus(id: string, status: StatusAtivo, user?: JwtPayload) {
     const ativo = await this.getOrFail(id);
-    if (user) assertDepartamentoDoUser(user, null, ativo.departamentoId);
+    if (user) assertStaffEmDepto(user, ativo.departamentoLancamentoId);
     return this.prisma.ativo.update({
       where: { id },
       data: { status },
@@ -170,7 +169,7 @@ export class AtivoService {
 
   async delete(id: string, user?: JwtPayload) {
     const ativo = await this.getOrFail(id);
-    if (user) assertDepartamentoDoUser(user, null, ativo.departamentoId);
+    if (user) assertStaffEmDepto(user, ativo.departamentoLancamentoId);
     await this.prisma.ativo.delete({ where: { id } });
   }
 

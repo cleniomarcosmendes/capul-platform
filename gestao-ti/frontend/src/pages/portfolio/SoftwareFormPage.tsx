@@ -125,6 +125,7 @@ export function SoftwareFormPage() {
           <DepartamentoField
             value={departamentoId}
             onChange={setDepartamentoId}
+            escopoLivre
             help="Departamento ONDE o software está alocado (livre — qualquer depto da empresa). Quem cadastrou é registrado separadamente para auditoria."
           />
 

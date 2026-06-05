@@ -91,9 +91,10 @@ export class LicencaController {
     @GestaoTiRole() role: string,
     @CurrentUser() user: JwtPayload,
   ) {
-    const licenca = (await this.service.findOne(id, role)) as { departamentoId: string | null };
+    const licenca = (await this.service.findOne(id, role)) as { departamentoLancamentoId: string | null };
     // S15.7 (27/05) — gate STAFF do depto (bypass OVERSIGHT).
-    assertStaffEmDepto(user, licenca.departamentoId);
+    // 05/06 — alocação livre: gate pelo depto de LANÇAMENTO (dono).
+    assertStaffEmDepto(user, licenca.departamentoLancamentoId);
     return licenca;
   }
 

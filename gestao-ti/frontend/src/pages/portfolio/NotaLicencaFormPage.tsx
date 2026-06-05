@@ -267,7 +267,7 @@ export function NotaLicencaFormPage() {
                     <input type="text" value={it.chaveSerial} onChange={(e) => updateItem(it.key, { chaveSerial: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
                   </div>
                   <div className="md:col-span-2">
-                    <DepartamentoField value={it.departamentoId} onChange={(v) => updateItem(it.key, { departamentoId: v })} label="Depto Licença Alocada *" help="Onde ESTA licença é usada (livre — qualquer depto)." />
+                    <DepartamentoField value={it.departamentoId} onChange={(v) => updateItem(it.key, { departamentoId: v })} escopoLivre label="Depto Licença Alocada *" help="Onde ESTA licença é usada (livre — qualquer depto)." />
                   </div>
                 </div>
                 <div className="mt-3">
