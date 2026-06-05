@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { Loader2, Plus, Trash2, Package, X } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { Loader2, Plus, Trash2, Package, X, Search } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { maskTelefone, maskCep, onlyDigits, UFS } from '../utils/format';
 
 type TipoCliente = 'IDENTIFICADO' | 'RECORRENTE_LOCAL' | 'EVENTUAL';
 
@@ -10,15 +11,25 @@ interface EntregaItem {
   id: string;
   numero: number;
   destinatarioNome: string;
-  telefone?: string | null;
   endLogradouro: string;
   endNumero?: string | null;
   endBairro?: string | null;
-  endCidade?: string | null;
   quantidadeVolumes: number;
-  status: string;
   totalCupons: number;
 }
+
+// Busca unificada (GET /cadastro/busca) — fontes locais.
+interface EnderecoBusca {
+  id: string; logradouro: string; numero?: string | null; complemento?: string | null;
+  bairro?: string | null; cidade?: string | null; uf?: string | null; cep?: string | null;
+  pontoReferencia?: string | null;
+}
+interface ClienteBusca { id: string; nome: string; telefone?: string | null; enderecos: EnderecoBusca[] }
+interface HistoricoBusca {
+  destinatarioNome: string; telefone?: string | null;
+  endLogradouro?: string | null; endNumero?: string | null; endBairro?: string | null; endCidade?: string | null;
+}
+interface BuscaResp { clientesLocais: ClienteBusca[]; historicoEntregas: HistoricoBusca[] }
 
 const TIPOS: { v: TipoCliente; label: string }[] = [
   { v: 'IDENTIFICADO', label: 'Com matrícula' },
@@ -36,17 +47,29 @@ export function EntregaNovaPage() {
   const [telefone, setTelefone] = useState('');
   const [logradouro, setLogradouro] = useState('');
   const [numero, setNumero] = useState('');
+  const [complemento, setComplemento] = useState('');
   const [bairro, setBairro] = useState('');
   const [cidade, setCidade] = useState('Unaí');
+  const [uf, setUf] = useState('MG');
   const [cep, setCep] = useState('');
   const [referencia, setReferencia] = useState('');
   const [volumes, setVolumes] = useState(1);
   const [observacoes, setObservacoes] = useState('');
   const [cupons, setCupons] = useState<Cupom[]>([{ numeroCupom: '', valor: '' }]);
+  // Quando o endereço veio de um cadastro existente, guardamos a referência
+  // (snapshot tirado dela no backend). Editar qualquer campo de endereço limpa.
+  const [enderecoEntregaId, setEnderecoEntregaId] = useState('');
+  const [clienteLocalId, setClienteLocalId] = useState('');
+
+  // Busca por telefone (autofill)
+  const [sugestoes, setSugestoes] = useState<BuscaResp | null>(null);
+  const [mostrarSug, setMostrarSug] = useState(false);
+  const [buscando, setBuscando] = useState(false);
 
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
   const [pendentes, setPendentes] = useState<EntregaItem[]>([]);
+  const ultimoCupomRef = useRef<HTMLInputElement>(null);
 
   const totalCupons = cupons.reduce((acc, c) => acc + (parseFloat(c.valor) || 0), 0);
 
@@ -60,10 +83,77 @@ export function EntregaNovaPage() {
   }
   useEffect(() => { void carregarPendentes(); }, [filialId]);
 
+  // Busca por telefone (debounce 400ms; só com >= 4 dígitos).
+  useEffect(() => {
+    const digits = onlyDigits(telefone);
+    if (digits.length < 4) { setSugestoes(null); setMostrarSug(false); return; }
+    setBuscando(true);
+    const t = setTimeout(async () => {
+      try {
+        const { data } = await logisticaApi.get<BuscaResp>('/cadastro/busca', { params: { termo: digits } });
+        const temAlgo = data.clientesLocais.length > 0 || data.historicoEntregas.length > 0;
+        setSugestoes(data);
+        setMostrarSug(temAlgo);
+      } catch { setSugestoes(null); }
+      finally { setBuscando(false); }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [telefone]);
+
+  // Setter de campo de endereço que desfaz o vínculo com cadastro (o operador
+  // está editando à mão → snapshot passa a ser o que está na tela).
+  function editEndereco<T>(setter: (v: T) => void) {
+    return (v: T) => { setter(v); setEnderecoEntregaId(''); };
+  }
+
+  function aplicarCliente(c: ClienteBusca, end?: EnderecoBusca) {
+    setDestinatarioNome(c.nome);
+    if (c.telefone) setTelefone(maskTelefone(c.telefone));
+    setClienteLocalId(c.id);
+    setTipoCliente('RECORRENTE_LOCAL');
+    if (end) {
+      setEnderecoEntregaId(end.id);
+      setLogradouro(end.logradouro ?? '');
+      setNumero(end.numero ?? '');
+      setComplemento(end.complemento ?? '');
+      setBairro(end.bairro ?? '');
+      setCidade(end.cidade ?? 'Unaí');
+      setUf((end.uf ?? 'MG').toUpperCase());
+      setCep(end.cep ? maskCep(end.cep) : '');
+      setReferencia(end.pontoReferencia ?? '');
+    }
+    setMostrarSug(false);
+  }
+
+  function aplicarHistorico(h: HistoricoBusca) {
+    setDestinatarioNome(h.destinatarioNome);
+    if (h.telefone) setTelefone(maskTelefone(h.telefone));
+    setEnderecoEntregaId('');
+    setLogradouro(h.endLogradouro ?? '');
+    setNumero(h.endNumero ?? '');
+    setBairro(h.endBairro ?? '');
+    setCidade(h.endCidade ?? 'Unaí');
+    setMostrarSug(false);
+  }
+
   function resetForm() {
     setMatricula(''); setDestinatarioNome(''); setTelefone('');
-    setLogradouro(''); setNumero(''); setBairro(''); setCep(''); setReferencia('');
+    setLogradouro(''); setNumero(''); setComplemento(''); setBairro('');
+    setCidade('Unaí'); setUf('MG'); setCep(''); setReferencia('');
     setVolumes(1); setObservacoes(''); setCupons([{ numeroCupom: '', valor: '' }]);
+    setEnderecoEntregaId(''); setClienteLocalId(''); setSugestoes(null); setMostrarSug(false);
+  }
+
+  // Bloqueia Enter de submeter o form acidentalmente — só o botão Registrar grava.
+  function bloquearEnterSubmit(e: KeyboardEvent<HTMLFormElement>) {
+    const alvo = e.target as HTMLElement;
+    if (e.key === 'Enter' && alvo.tagName !== 'TEXTAREA') e.preventDefault();
+  }
+
+  function addCupom() {
+    setCupons((p) => [...p, { numeroCupom: '', valor: '' }]);
+    // foca o nº do novo cupom no próximo tick
+    setTimeout(() => ultimoCupomRef.current?.focus(), 0);
   }
 
   async function submit(e: FormEvent) {
@@ -76,13 +166,17 @@ export function EntregaNovaPage() {
         filialId,
         tipoCliente,
         matricula: tipoCliente === 'IDENTIFICADO' ? matricula || undefined : undefined,
+        clienteLocalId: clienteLocalId || undefined,
         destinatarioNome,
-        telefone: telefone || undefined,
+        telefone: telefone ? onlyDigits(telefone) : undefined,
+        enderecoEntregaId: enderecoEntregaId || undefined,
         endLogradouro: logradouro,
         endNumero: numero || undefined,
+        endComplemento: complemento || undefined,
         endBairro: bairro || undefined,
         endCidade: cidade || undefined,
-        endCep: cep || undefined,
+        endUf: uf || undefined,
+        endCep: cep ? onlyDigits(cep) : undefined,
         endReferencia: referencia || undefined,
         quantidadeVolumes: volumes,
         observacoes: observacoes || undefined,
@@ -108,11 +202,12 @@ export function EntregaNovaPage() {
   }
 
   const inp = 'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none';
+  const lbl = 'block text-xs font-medium text-slate-500';
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* Formulário */}
-      <form onSubmit={submit} className="lg:col-span-2 space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+      <form onSubmit={submit} onKeyDown={bloquearEnterSubmit} className="lg:col-span-2 space-y-4 rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-lg font-semibold text-slate-800">Nova entrega</h2>
 
         <div className="flex gap-2">
@@ -126,79 +221,139 @@ export function EntregaNovaPage() {
 
         {tipoCliente === 'IDENTIFICADO' && (
           <div>
-            <label className="block text-xs font-medium text-slate-500">Matrícula</label>
+            <label className={lbl}>Matrícula</label>
             <input value={matricula} onChange={(e) => setMatricula(e.target.value)} className={inp} />
           </div>
         )}
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium text-slate-500">Destinatário *</label>
-            <input value={destinatarioNome} onChange={(e) => setDestinatarioNome(e.target.value)} required className={inp} />
+            <label className={lbl}>Nome do cliente *</label>
+            <input value={destinatarioNome} onChange={(e) => setDestinatarioNome(e.target.value)} required className={inp} placeholder="Nome de quem recebe" />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-500">Telefone</label>
-            <input value={telefone} onChange={(e) => setTelefone(e.target.value)} className={inp} />
+          <div className="relative">
+            <label className={lbl}>Telefone</label>
+            <div className="relative">
+              <input
+                value={telefone}
+                onChange={(e) => setTelefone(maskTelefone(e.target.value))}
+                onFocus={() => { if (sugestoes) setMostrarSug(true); }}
+                onBlur={() => setTimeout(() => setMostrarSug(false), 150)}
+                placeholder="(38) 99999-9999"
+                inputMode="numeric"
+                className={inp}
+              />
+              <span className="pointer-events-none absolute right-2 top-3 text-slate-400">
+                {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              </span>
+            </div>
+            {mostrarSug && sugestoes && (
+              <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                <div className="border-b border-slate-100 px-3 py-1.5 text-[11px] font-medium text-slate-400">
+                  Clientes/endereços já cadastrados — clique para preencher
+                </div>
+                {sugestoes.clientesLocais.flatMap((c) =>
+                  (c.enderecos.length ? c.enderecos : [undefined]).map((end, i) => (
+                    <button type="button" key={`c-${c.id}-${i}`} onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => aplicarCliente(c, end)}
+                      className="block w-full px-3 py-2 text-left text-sm hover:bg-sky-50">
+                      <div className="font-medium text-slate-700">{c.nome} {c.telefone ? <span className="text-xs text-slate-400">· {maskTelefone(c.telefone)}</span> : null}</div>
+                      {end && <div className="text-xs text-slate-500">{end.logradouro}{end.numero ? `, ${end.numero}` : ''}{end.bairro ? ` — ${end.bairro}` : ''}{end.cidade ? `, ${end.cidade}` : ''}{end.uf ? `/${end.uf}` : ''}</div>}
+                    </button>
+                  )),
+                )}
+                {sugestoes.historicoEntregas.map((h, i) => (
+                  <button type="button" key={`h-${i}`} onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => aplicarHistorico(h)}
+                    className="block w-full border-t border-slate-50 px-3 py-2 text-left text-sm hover:bg-sky-50">
+                    <div className="font-medium text-slate-700">{h.destinatarioNome} <span className="text-[11px] text-slate-400">(do histórico)</span></div>
+                    <div className="text-xs text-slate-500">{h.endLogradouro}{h.endNumero ? `, ${h.endNumero}` : ''}{h.endBairro ? ` — ${h.endBairro}` : ''}</div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
         <div className="grid grid-cols-6 gap-3">
           <div className="col-span-4">
-            <label className="block text-xs font-medium text-slate-500">Logradouro *</label>
-            <input value={logradouro} onChange={(e) => setLogradouro(e.target.value)} required className={inp} />
+            <label className={lbl}>Endereço de Entrega *</label>
+            <input value={logradouro} onChange={(e) => editEndereco(setLogradouro)(e.target.value)} required className={inp} placeholder="Rua / Avenida" />
           </div>
           <div className="col-span-2">
-            <label className="block text-xs font-medium text-slate-500">Número</label>
-            <input value={numero} onChange={(e) => setNumero(e.target.value)} className={inp} />
+            <label className={lbl}>Número</label>
+            <input value={numero} onChange={(e) => editEndereco(setNumero)(e.target.value)} className={inp} />
+          </div>
+          <div className="col-span-3">
+            <label className={lbl}>Complemento</label>
+            <input value={complemento} onChange={(e) => editEndereco(setComplemento)(e.target.value)} className={inp} placeholder="Apto, bloco, casa…" />
+          </div>
+          <div className="col-span-3">
+            <label className={lbl}>Bairro</label>
+            <input value={bairro} onChange={(e) => editEndereco(setBairro)(e.target.value)} className={inp} />
+          </div>
+          <div className="col-span-3">
+            <label className={lbl}>Cidade</label>
+            <input value={cidade} onChange={(e) => editEndereco(setCidade)(e.target.value)} className={inp} />
+          </div>
+          <div className="col-span-1">
+            <label className={lbl}>UF</label>
+            <select value={uf} onChange={(e) => editEndereco(setUf)(e.target.value)} className={inp}>
+              {UFS.map((u) => <option key={u} value={u}>{u}</option>)}
+            </select>
           </div>
           <div className="col-span-2">
-            <label className="block text-xs font-medium text-slate-500">Bairro</label>
-            <input value={bairro} onChange={(e) => setBairro(e.target.value)} className={inp} />
-          </div>
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-slate-500">Cidade</label>
-            <input value={cidade} onChange={(e) => setCidade(e.target.value)} className={inp} />
-          </div>
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-slate-500">CEP</label>
-            <input value={cep} onChange={(e) => setCep(e.target.value)} className={inp} />
+            <label className={lbl}>CEP</label>
+            <input value={cep} onChange={(e) => editEndereco(setCep)(maskCep(e.target.value))} className={inp} placeholder="00000-000" inputMode="numeric" />
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-500">Ponto de referência</label>
-          <input value={referencia} onChange={(e) => setReferencia(e.target.value)} className={inp} />
+          <label className={lbl}>Ponto de referência</label>
+          <input value={referencia} onChange={(e) => setReferencia(e.target.value)} className={inp} placeholder="Perto de…" />
         </div>
 
-        {/* Cupons */}
+        {/* Cupons / Notas */}
         <div>
-          <label className="block text-xs font-medium text-slate-500">Cupons / Notas</label>
+          <label className={lbl}>Cupons / Notas</label>
           <div className="mt-1 space-y-2">
             {cupons.map((c, i) => (
-              <div key={i} className="flex gap-2">
-                <input placeholder="Nº cupom" value={c.numeroCupom}
+              <div key={i} className="flex items-center gap-2">
+                <span className="w-5 text-right text-xs text-slate-400">{i + 1}.</span>
+                <input
+                  ref={i === cupons.length - 1 ? ultimoCupomRef : undefined}
+                  placeholder="Nº cupom / nota"
+                  value={c.numeroCupom}
+                  inputMode="numeric"
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCupom(); } }}
                   onChange={(e) => setCupons((p) => p.map((x, j) => j === i ? { ...x, numeroCupom: e.target.value } : x))}
-                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-                <input placeholder="Valor" type="number" step="0.01" value={c.valor}
+                  className="w-44 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none" />
+                <input
+                  placeholder="Valor"
+                  type="number" step="0.01" value={c.valor}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCupom(); } }}
                   onChange={(e) => setCupons((p) => p.map((x, j) => j === i ? { ...x, valor: e.target.value } : x))}
-                  className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-                <button type="button" onClick={() => setCupons((p) => p.filter((_, j) => j !== i))}
-                  className="text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                  className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none" />
+                <button type="button" onClick={() => setCupons((p) => p.length > 1 ? p.filter((_, j) => j !== i) : [{ numeroCupom: '', valor: '' }])}
+                  className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>
               </div>
             ))}
           </div>
-          <button type="button" onClick={() => setCupons((p) => [...p, { numeroCupom: '', valor: '' }])}
-            className="mt-2 flex items-center gap-1 text-xs text-sky-700 hover:underline"><Plus className="h-3 w-3" /> Adicionar cupom</button>
-          <div className="mt-1 text-right text-sm text-slate-600">Total: <strong>R$ {totalCupons.toFixed(2)}</strong></div>
+          <div className="mt-2 flex items-center justify-between">
+            <button type="button" onClick={addCupom}
+              className="flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline"><Plus className="h-3 w-3" /> Adicionar cupom</button>
+            <div className="text-sm text-slate-600">Total: <strong>R$ {totalCupons.toFixed(2)}</strong></div>
+          </div>
+          <p className="mt-1 text-[11px] text-slate-400">Enter adiciona outro cupom; o cadastro só é gravado no botão “Registrar entrega”.</p>
         </div>
 
         <div className="grid grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs font-medium text-slate-500">Volumes</label>
+            <label className={lbl}>Volumes</label>
             <input type="number" min={1} value={volumes} onChange={(e) => setVolumes(Math.max(1, parseInt(e.target.value) || 1))} className={inp} />
           </div>
           <div className="col-span-2">
-            <label className="block text-xs font-medium text-slate-500">Observações</label>
+            <label className={lbl}>Observações</label>
             <input value={observacoes} onChange={(e) => setObservacoes(e.target.value)} className={inp} />
           </div>
         </div>
