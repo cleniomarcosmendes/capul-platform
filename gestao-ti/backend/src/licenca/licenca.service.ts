@@ -283,7 +283,7 @@ export class LicencaService {
     });
   }
 
-  async atribuirFuncionario(licencaId: string, matricula: string, _nomeCliente?: string) {
+  async atribuirFuncionario(licencaId: string, matricula: string, nomeCliente?: string) {
     const licenca = await this.getLicencaOrFail(licencaId);
 
     if (licenca.status !== 'ATIVA') {
@@ -294,13 +294,28 @@ export class LicencaService {
     if (!matriculaNorm) throw new BadRequestException('Matrícula é obrigatória');
 
     // Fonte da verdade = Protheus (operação infoFuncionario / portal RH). O nome
-    // enviado pelo cliente é IGNORADO — resolvemos server-side pela matrícula.
-    // Defesa em profundidade: o frontend já trava o campo nome (read-only), aqui
+    // enviado pelo cliente é IGNORADO — resolvemos server-side.
+    // Defesa em profundidade: o frontend trava o campo nome (read-only), aqui
     // garantimos contra request manipulado e contra divergência de nome.
-    const colaborador = await this.protheus.buscarColaborador(matriculaNorm);
+    let colaborador = await this.protheus.buscarColaborador(matriculaNorm);
+
+    // Fallback (05/06): ambientes onde o portal RH responde por ?NOME= mas falha
+    // no ?MATRICULA= (regressão do endpoint). Re-valida pelo NOME (que veio do
+    // próprio autocomplete) e casa pela matrícula — o nome continua vindo do
+    // Protheus (do resultado da busca), NÃO do cliente. Sem isso, o que foi
+    // escolhido no autocomplete não conseguia ser atribuído.
+    if (!colaborador?.nome) {
+      const termo = (nomeCliente || '').trim();
+      if (termo.length >= 3) {
+        const lista = await this.protheus.buscarPorNome(termo);
+        const match = lista.find((f) => f.matricula === matriculaNorm);
+        if (match) colaborador = match;
+      }
+    }
+
     if (!colaborador?.nome) {
       throw new BadRequestException(
-        'Matrícula não encontrada no Protheus (ou Protheus indisponível). Verifique a matrícula e tente novamente.',
+        'Funcionário não confirmado no Protheus (ou Protheus indisponível). Selecione novamente pelo nome e tente de novo.',
       );
     }
     // Usa a matrícula canônica devolvida pelo Protheus (ex.: zero-padded).
