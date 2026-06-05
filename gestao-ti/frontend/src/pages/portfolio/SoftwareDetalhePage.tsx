@@ -231,9 +231,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
   const [matriculaInput, setMatriculaInput] = useState('');
   const [nomeInput, setNomeInput] = useState('');
   const [savingUsuario, setSavingUsuario] = useState(false);
-  const [buscandoNome, setBuscandoNome] = useState(false);
-  const [nomeAuto, setNomeAuto] = useState<boolean | null>(null);
-  // Autocomplete por nome (portal RH) — busca principal; matrícula é o plano B.
+  // Busca de funcionário por NOME (portal RH) — única forma de alocação.
   const [buscaNome, setBuscaNome] = useState('');
   const [resultadosFunc, setResultadosFunc] = useState<FuncionarioProtheus[]>([]);
   const [buscandoLista, setBuscandoLista] = useState(false);
@@ -254,23 +252,8 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
   function selecionarFuncionario(f: FuncionarioProtheus) {
     setMatriculaInput(f.matricula);
     setNomeInput(f.nome);
-    setNomeAuto(true);
     setBuscaNome('');
     setResultadosFunc([]);
-  }
-
-  // Autofill do nome pela matrícula (Protheus / portal RH). Fallback manual.
-  async function buscarNomeFuncionario() {
-    const m = matriculaInput.trim();
-    if (!m) { setNomeAuto(null); return; }
-    setBuscandoNome(true);
-    try {
-      const r = await protheusService.buscarColaborador(m);
-      if (r.encontrado && r.nome) { setNomeInput(r.nome); setNomeAuto(true); }
-      else setNomeAuto(false);
-    } finally {
-      setBuscandoNome(false);
-    }
   }
 
   const [modeloLicenca, setModeloLicenca] = useState<ModeloLicenca | ''>('');
@@ -438,7 +421,6 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
     setLoadingUsuarios(true);
     setMatriculaInput('');
     setNomeInput('');
-    setNomeAuto(null);
     setBuscaNome('');
     setResultadosFunc([]);
     try {
@@ -458,7 +440,6 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
       setLicencaFuncionarios(await licencaService.listarFuncionarios(licId));
       setMatriculaInput('');
       setNomeInput('');
-      setNomeAuto(null);
       setBuscaNome('');
       setResultadosFunc([]);
       loadLicencas();
@@ -772,28 +753,17 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                                         </div>
                                       )}
                                     </div>
-                                    <p className="text-[11px] text-slate-400 mb-2">ou informe a matrícula direto:</p>
-                                    <div className="flex flex-wrap gap-2 mb-1">
-                                      <input
-                                        type="text"
-                                        value={matriculaInput}
-                                        onChange={(e) => { setMatriculaInput(e.target.value); setNomeAuto(null); setNomeInput(''); }}
-                                        onBlur={buscarNomeFuncionario}
-                                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscarNomeFuncionario(); } }}
-                                        placeholder="Matrícula"
-                                        className="w-32 border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-capul-600"
-                                      />
+                                    <div className="flex flex-wrap items-center gap-2 mb-1">
                                       <input
                                         type="text"
                                         value={nomeInput}
                                         readOnly
-                                        title="Nome vem do Protheus pela matrícula — não editável"
-                                        placeholder={buscandoNome ? 'Buscando nome…' : 'Nome (do Protheus)'}
-                                        className="flex-1 min-w-[160px] border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-slate-50 text-slate-700 cursor-default focus:outline-none"
+                                        placeholder="Selecione um funcionário na busca acima"
+                                        className="flex-1 min-w-[200px] border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-slate-50 text-slate-700 cursor-default focus:outline-none"
                                       />
                                       <button
                                         onClick={() => handleAtribuir(lic.id)}
-                                        disabled={!matriculaInput.trim() || !nomeInput.trim() || savingUsuario || buscandoNome || (lic.quantidade != null && licencaFuncionarios.length >= lic.quantidade)}
+                                        disabled={!matriculaInput.trim() || !nomeInput.trim() || savingUsuario || (lic.quantidade != null && licencaFuncionarios.length >= lic.quantidade)}
                                         className="flex items-center gap-1 bg-capul-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50"
                                       >
                                         <UserPlus className="w-3.5 h-3.5" />
@@ -801,10 +771,9 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                                       </button>
                                     </div>
                                     <p className="text-xs mb-3">
-                                      {buscandoNome ? <span className="text-slate-400">Buscando funcionário no Protheus…</span>
-                                        : nomeAuto === true ? <span className="text-green-600">✓ Funcionário identificado no Protheus.</span>
-                                        : nomeAuto === false ? <span className="text-amber-600">Matrícula não encontrada no Protheus — não é possível atribuir.</span>
-                                        : <span className="text-slate-400">Informe a matrícula — o nome é buscado no Protheus (não editável).</span>}
+                                      {matriculaInput.trim() && nomeInput.trim()
+                                        ? <span className="text-green-600">✓ {nomeInput} (mat. {matriculaInput}) — clique em Atribuir.</span>
+                                        : <span className="text-slate-400">Busque o funcionário pelo nome e selecione na lista.</span>}
                                     </p>
                                   </>
                                 )}
