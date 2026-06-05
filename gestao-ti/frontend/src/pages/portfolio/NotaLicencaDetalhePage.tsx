@@ -3,10 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/Toast';
-import { ArrowLeft, Trash2, Users, UserPlus, UserMinus, KeyRound } from 'lucide-react';
+import { ArrowLeft, Trash2, Users, UserPlus, UserMinus, KeyRound, Search } from 'lucide-react';
 import { licencaCompraService } from '../../services/licencaCompra.service';
 import { licencaService } from '../../services/licenca.service';
-import { protheusService } from '../../services/protheus.service';
+import { protheusService, type FuncionarioProtheus } from '../../services/protheus.service';
 import type { LicencaCompra, LicencaFuncionario, SoftwareLicenca } from '../../types';
 
 const modeloLabel: Record<string, string> = {
@@ -35,6 +35,31 @@ export function NotaLicencaDetalhePage() {
   const [buscandoNome, setBuscandoNome] = useState(false);
   // null = ainda não buscou; true = nome veio do Protheus; false = não achou (manual)
   const [nomeAuto, setNomeAuto] = useState<boolean | null>(null);
+  // Autocomplete por nome (portal RH) — busca principal; matrícula é o plano B.
+  const [buscaNome, setBuscaNome] = useState('');
+  const [resultados, setResultados] = useState<FuncionarioProtheus[]>([]);
+  const [buscandoLista, setBuscandoLista] = useState(false);
+
+  // Debounce (350ms) + mín. 3 chars — não martela o Protheus a cada tecla.
+  useEffect(() => {
+    const q = buscaNome.trim();
+    if (q.length < 3) { setResultados([]); setBuscandoLista(false); return; }
+    setBuscandoLista(true);
+    const t = setTimeout(() => {
+      protheusService.buscarPorNome(q)
+        .then(setResultados)
+        .finally(() => setBuscandoLista(false));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [buscaNome]);
+
+  function selecionarFuncionario(f: FuncionarioProtheus) {
+    setMat(f.matricula);
+    setNomeFunc(f.nome);
+    setNomeAuto(true);
+    setBuscaNome('');
+    setResultados([]);
+  }
 
   // Autofill do nome pela matrícula (Protheus / portal RH). Se não encontrar,
   // mantém edição manual. Não bloqueia o fluxo se o Protheus estiver fora.
@@ -61,7 +86,7 @@ export function NotaLicencaDetalhePage() {
 
   async function toggleFunc(licId: string) {
     if (expandLic === licId) { setExpandLic(null); return; }
-    setExpandLic(licId); setMat(''); setNomeFunc(''); setNomeAuto(null);
+    setExpandLic(licId); setMat(''); setNomeFunc(''); setNomeAuto(null); setBuscaNome(''); setResultados([]);
     try { setFuncs(await licencaService.listarFuncionarios(licId)); } catch { setFuncs([]); }
   }
   async function atribuir(licId: string) {
@@ -71,7 +96,7 @@ export function NotaLicencaDetalhePage() {
     try {
       await licencaService.atribuirFuncionario(licId, m, nm);
       setFuncs(await licencaService.listarFuncionarios(licId));
-      setMat(''); setNomeFunc(''); setNomeAuto(null);
+      setMat(''); setNomeFunc(''); setNomeAuto(null); setBuscaNome(''); setResultados([]);
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast('error', msg || 'Erro ao atribuir funcionário');
@@ -159,6 +184,26 @@ export function NotaLicencaDetalhePage() {
                       <div className="border border-slate-200 rounded-lg bg-white p-4">
                         {isAdmin && l.status === 'ATIVA' && (
                           <>
+                            {/* Busca principal: por NOME (autocomplete, portal RH) */}
+                            <div className="relative mb-2 max-w-md">
+                              <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-[9px]" />
+                              <input value={buscaNome} onChange={(e) => setBuscaNome(e.target.value)} placeholder="Buscar funcionário por nome (mín. 3 letras)…" className="w-full border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" />
+                              {buscaNome.trim().length >= 3 && (
+                                <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+                                  {buscandoLista ? (
+                                    <div className="px-3 py-2 text-sm text-slate-400">Buscando no Protheus…</div>
+                                  ) : resultados.length === 0 ? (
+                                    <div className="px-3 py-2 text-sm text-slate-400">Nenhum funcionário encontrado (ou sem acesso ao portal RH).</div>
+                                  ) : resultados.map((f) => (
+                                    <button key={f.matricula} type="button" onClick={() => selecionarFuncionario(f)} className="w-full text-left px-3 py-2 hover:bg-slate-50 border-b border-slate-100 last:border-0">
+                                      <span className="text-sm font-medium text-slate-800">{f.nome}</span>
+                                      <span className="text-xs text-slate-400 ml-2">mat. {f.matricula}{f.cc ? ` · cc ${f.cc}` : ''}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-400 mb-2">ou informe a matrícula direto:</p>
                             <div className="flex flex-wrap gap-2 mb-1">
                               <input value={mat} onChange={(e) => { setMat(e.target.value); setNomeAuto(null); setNomeFunc(''); }} onBlur={buscarNome} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscarNome(); } }} placeholder="Matrícula" className="w-32 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" />
                               <input value={nomeFunc} readOnly placeholder={buscandoNome ? 'Buscando nome…' : 'Nome (do Protheus)'} title="Nome vem do Protheus pela matrícula — não editável" className="flex-1 min-w-[160px] border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-slate-50 text-slate-700 cursor-default focus:outline-none" />

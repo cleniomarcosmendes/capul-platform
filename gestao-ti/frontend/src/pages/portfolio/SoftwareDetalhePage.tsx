@@ -4,11 +4,11 @@ import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { softwareService } from '../../services/software.service';
 import { licencaService } from '../../services/licenca.service';
-import { protheusService } from '../../services/protheus.service';
+import { protheusService, type FuncionarioProtheus } from '../../services/protheus.service';
 import { contratoService } from '../../services/contrato.service';
 import {
   ArrowLeft, Pencil, Plus, Trash2, X, KeyRound,
-  AlertTriangle, ExternalLink, Users, UserPlus, UserMinus,
+  AlertTriangle, ExternalLink, Users, UserPlus, UserMinus, Search,
 } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 import { SearchSelect } from '../../components/SearchSelect';
@@ -233,6 +233,31 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
   const [savingUsuario, setSavingUsuario] = useState(false);
   const [buscandoNome, setBuscandoNome] = useState(false);
   const [nomeAuto, setNomeAuto] = useState<boolean | null>(null);
+  // Autocomplete por nome (portal RH) — busca principal; matrícula é o plano B.
+  const [buscaNome, setBuscaNome] = useState('');
+  const [resultadosFunc, setResultadosFunc] = useState<FuncionarioProtheus[]>([]);
+  const [buscandoLista, setBuscandoLista] = useState(false);
+
+  // Debounce (350ms) + mín. 3 chars — não martela o Protheus a cada tecla.
+  useEffect(() => {
+    const q = buscaNome.trim();
+    if (q.length < 3) { setResultadosFunc([]); setBuscandoLista(false); return; }
+    setBuscandoLista(true);
+    const t = setTimeout(() => {
+      protheusService.buscarPorNome(q)
+        .then(setResultadosFunc)
+        .finally(() => setBuscandoLista(false));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [buscaNome]);
+
+  function selecionarFuncionario(f: FuncionarioProtheus) {
+    setMatriculaInput(f.matricula);
+    setNomeInput(f.nome);
+    setNomeAuto(true);
+    setBuscaNome('');
+    setResultadosFunc([]);
+  }
 
   // Autofill do nome pela matrícula (Protheus / portal RH). Fallback manual.
   async function buscarNomeFuncionario() {
@@ -414,6 +439,8 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
     setMatriculaInput('');
     setNomeInput('');
     setNomeAuto(null);
+    setBuscaNome('');
+    setResultadosFunc([]);
     try {
       setLicencaFuncionarios(await licencaService.listarFuncionarios(licId));
     } catch { /* ignore */ }
@@ -432,6 +459,8 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
       setMatriculaInput('');
       setNomeInput('');
       setNomeAuto(null);
+      setBuscaNome('');
+      setResultadosFunc([]);
       loadLicencas();
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -718,6 +747,32 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
                                 {/* Atribuir por matrícula (funcionário Protheus, sem senha) */}
                                 {isAdmin && lic.status === 'ATIVA' && (
                                   <>
+                                    {/* Busca principal: por NOME (autocomplete, portal RH) */}
+                                    <div className="relative mb-2 max-w-md">
+                                      <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-[9px]" />
+                                      <input
+                                        type="text"
+                                        value={buscaNome}
+                                        onChange={(e) => setBuscaNome(e.target.value)}
+                                        placeholder="Buscar funcionário por nome (mín. 3 letras)…"
+                                        className="w-full border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-capul-600"
+                                      />
+                                      {buscaNome.trim().length >= 3 && (
+                                        <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+                                          {buscandoLista ? (
+                                            <div className="px-3 py-2 text-sm text-slate-400">Buscando no Protheus…</div>
+                                          ) : resultadosFunc.length === 0 ? (
+                                            <div className="px-3 py-2 text-sm text-slate-400">Nenhum funcionário encontrado (ou sem acesso ao portal RH).</div>
+                                          ) : resultadosFunc.map((f) => (
+                                            <button key={f.matricula} type="button" onClick={() => selecionarFuncionario(f)} className="w-full text-left px-3 py-2 hover:bg-slate-50 border-b border-slate-100 last:border-0">
+                                              <span className="text-sm font-medium text-slate-800">{f.nome}</span>
+                                              <span className="text-xs text-slate-400 ml-2">mat. {f.matricula}{f.cc ? ` · cc ${f.cc}` : ''}</span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 mb-2">ou informe a matrícula direto:</p>
                                     <div className="flex flex-wrap gap-2 mb-1">
                                       <input
                                         type="text"

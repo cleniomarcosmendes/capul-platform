@@ -58,36 +58,42 @@ export class ProtheusService {
     return config.authConfig;
   }
 
-  async buscarColaborador(
-    matricula: string,
-  ): Promise<{ matricula: string; nome: string; cc: string | null } | null> {
+  /**
+   * Resolve a operação `infoFuncionario` (portal RH): base URL + auth + timeout.
+   * GET ?MATRICULA= → {matricula,nome,cc} | GET ?NOME= → {funcionarios:[...]}.
+   * Distinta de `INFOCLIENTES` (getLimite), que é cadastro de CLIENTES (SA1).
+   * Default 3s de timeout (configurável por endpoint no Configurador).
+   */
+  private async resolveInfoFuncionario(): Promise<{
+    baseUrl: string;
+    authHeader: string;
+    timeoutMs: number;
+    ambiente: string;
+  } | null> {
     const config = await this.getConfig();
-
-    let url: string;
-    let authHeader: string;
-    let timeoutMs: number;
-
-    if (config) {
-      // Operação `infoFuncionario` (portal RH): GET ?MATRICULA= → {matricula,nome,cc}.
-      // Distinta de `INFOCLIENTES` (getLimite), que é cadastro de CLIENTES (SA1).
-      const ep = config.endpoints.find((e) => e.operacao === 'infoFuncionario');
-      if (ep) {
-        url = `${ep.url}?MATRICULA=${encodeURIComponent(matricula)}`;
-        // Default 3s — UX: usuário espera no máximo 3s antes do fallback liberar.
-        // Configurável via Configurador → Integrações API (`timeoutMs` por endpoint).
-        timeoutMs = ep.timeoutMs || 3000;
-      } else {
-        this.logger.warn('Endpoint infoFuncionario nao encontrado na config Protheus (GESTAO_TI)');
-        return null;
-      }
-      authHeader = this.buildAuthHeader(config);
-    } else {
+    if (!config) {
       this.logger.warn('Config Protheus indisponivel');
       return null;
     }
+    const ep = config.endpoints.find((e) => e.operacao === 'infoFuncionario');
+    if (!ep) {
+      this.logger.warn('Endpoint infoFuncionario nao encontrado na config Protheus (GESTAO_TI)');
+      return null;
+    }
+    return {
+      baseUrl: ep.url,
+      authHeader: this.buildAuthHeader(config),
+      timeoutMs: ep.timeoutMs || 3000,
+      ambiente: config.ambiente,
+    };
+  }
 
-    this.logger.log(`Buscando colaborador ${matricula} em ${url} (ambiente: ${config.ambiente})`);
-
+  /** GET genérico que devolve o JSON parseado (ou null em erro/timeout/status>=400). */
+  private requestJson(
+    url: string,
+    authHeader: string,
+    timeoutMs: number,
+  ): Promise<Record<string, unknown> | null> {
     return new Promise((resolve) => {
       const urlObj = new URL(url);
       const isHttps = urlObj.protocol === 'https:';
@@ -111,29 +117,14 @@ export class ProtheusService {
         res.on('data', (chunk) => { body += chunk; });
         res.on('end', () => {
           if (!res.statusCode || res.statusCode >= 400) {
-            this.logger.warn(`Protheus retornou status ${res.statusCode} para matricula ${matricula}`);
+            this.logger.warn(`Protheus retornou status ${res.statusCode} para ${urlObj.pathname}${urlObj.search}`);
             resolve(null);
             return;
           }
-
           try {
-            const data = JSON.parse(body);
-            // Sempre HTTP 200: matrícula inválida vem como { mensagem: ... }
-            // (sem `nome`). Detecção de erro é pela ausência de `nome`.
-            if (!data || !data.nome) {
-              this.logger.warn(
-                `Protheus infoFuncionario sem nome p/ matricula ${matricula}${data?.mensagem ? ` (${data.mensagem})` : ''}`,
-              );
-              resolve(null);
-              return;
-            }
-            resolve({
-              matricula: (data.matricula || matricula).trim(),
-              nome: (data.nome || '').trim(),
-              cc: data.cc ? String(data.cc).trim() : null,
-            });
+            resolve(JSON.parse(body));
           } catch {
-            this.logger.error(`Erro ao parsear resposta Protheus para matricula ${matricula}`);
+            this.logger.error(`Erro ao parsear resposta Protheus de ${urlObj.pathname}`);
             resolve(null);
           }
         });
@@ -141,16 +132,64 @@ export class ProtheusService {
 
       req.on('timeout', () => {
         req.destroy();
-        this.logger.error(`Timeout ao buscar colaborador ${matricula}`);
+        this.logger.error(`Timeout ao consultar Protheus ${urlObj.pathname}${urlObj.search}`);
         resolve(null);
       });
-
       req.on('error', (err) => {
-        this.logger.error(`Erro ao buscar colaborador ${matricula}: ${err.message}`);
+        this.logger.error(`Erro ao consultar Protheus: ${err.message}`);
         resolve(null);
       });
-
       req.end();
     });
+  }
+
+  async buscarColaborador(
+    matricula: string,
+  ): Promise<{ matricula: string; nome: string; cc: string | null } | null> {
+    const ep = await this.resolveInfoFuncionario();
+    if (!ep) return null;
+
+    const url = `${ep.baseUrl}?MATRICULA=${encodeURIComponent(matricula)}`;
+    this.logger.log(`Buscando colaborador ${matricula} (ambiente: ${ep.ambiente})`);
+
+    const data = await this.requestJson(url, ep.authHeader, ep.timeoutMs);
+    // Sempre HTTP 200: matrícula inválida vem como { mensagem: ... } (sem `nome`).
+    if (!data || !data.nome) {
+      if (data?.mensagem) this.logger.warn(`Protheus infoFuncionario: ${String(data.mensagem)} (matricula ${matricula})`);
+      return null;
+    }
+    return {
+      matricula: String(data.matricula || matricula).trim(),
+      nome: String(data.nome || '').trim(),
+      cc: data.cc ? String(data.cc).trim() : null,
+    };
+  }
+
+  /**
+   * Busca funcionários por parte do NOME (portal RH, `?NOME=`). Retorna a lista
+   * ordenada por nome (a ordenação vem do Protheus). Trim em todos os campos
+   * (a resposta vem com espaços à direita). Não encontrado / sem acesso ao
+   * portal → `{ mensagem }` → lista vazia. Pra autocomplete na alocação de
+   * licença (usuário não precisa saber a matrícula).
+   */
+  async buscarPorNome(
+    nome: string,
+  ): Promise<Array<{ matricula: string; nome: string; cc: string | null }>> {
+    const ep = await this.resolveInfoFuncionario();
+    if (!ep) return [];
+
+    const url = `${ep.baseUrl}?NOME=${encodeURIComponent(nome)}`;
+    this.logger.log(`Buscando funcionarios por nome "${nome}" (ambiente: ${ep.ambiente})`);
+
+    const data = await this.requestJson(url, ep.authHeader, ep.timeoutMs);
+    const lista = Array.isArray(data?.funcionarios) ? (data!.funcionarios as unknown[]) : [];
+    return lista
+      .map((f) => f as { matricula?: unknown; nome?: unknown; cc?: unknown })
+      .map((f) => ({
+        matricula: String(f.matricula ?? '').trim(),
+        nome: String(f.nome ?? '').trim(),
+        cc: f.cc ? String(f.cc).trim() : null,
+      }))
+      .filter((f) => f.matricula && f.nome);
   }
 }
