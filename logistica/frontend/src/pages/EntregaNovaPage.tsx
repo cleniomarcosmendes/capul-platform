@@ -91,6 +91,8 @@ export function EntregaNovaPage() {
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
   const [pendentes, setPendentes] = useState<EntregaItem[]>([]);
   const ultimoCupomRef = useRef<HTMLInputElement>(null);
+  // Quando o telefone é preenchido por autofill, pula a próxima busca/dropdown.
+  const pularBuscaTelRef = useRef(false);
 
   const totalCupons = cupons.reduce((acc, c) => acc + (parseFloat(c.valor) || 0), 0);
   const identificado = tipoCliente === 'IDENTIFICADO';
@@ -105,8 +107,12 @@ export function EntregaNovaPage() {
   }
   useEffect(() => { void carregarPendentes(); }, [filialId]);
 
-  // Busca por telefone (debounce 400ms; só com >= 4 dígitos).
+  // Busca por telefone (debounce 400ms; só com >= 4 dígitos). NÃO roda na aba
+  // "Com matrícula" (lá o telefone vem do Protheus), nem quando o telefone foi
+  // preenchido por autofill (evita reabrir o dropdown por cima do form).
   useEffect(() => {
+    if (identificado) { setSugestoes(null); setMostrarSug(false); return; }
+    if (pularBuscaTelRef.current) { pularBuscaTelRef.current = false; return; }
     const digits = onlyDigits(telefone);
     if (digits.length < 4) { setSugestoes(null); setMostrarSug(false); return; }
     setBuscando(true);
@@ -120,7 +126,7 @@ export function EntregaNovaPage() {
       finally { setBuscando(false); }
     }, 400);
     return () => clearTimeout(t);
-  }, [telefone]);
+  }, [telefone, identificado]);
 
   // Setter de campo de endereço que desfaz o vínculo com cadastro (o operador
   // está editando à mão → snapshot passa a ser o que está na tela) e marca o
@@ -130,6 +136,7 @@ export function EntregaNovaPage() {
   }
 
   function aplicarCliente(c: ClienteBusca, end?: EnderecoBusca) {
+    pularBuscaTelRef.current = true;
     setDestinatarioNome(c.nome);
     if (c.telefone) setTelefone(maskTelefone(c.telefone));
     setClienteLocalId(c.id);
@@ -147,6 +154,7 @@ export function EntregaNovaPage() {
   }
 
   function aplicarHistorico(h: HistoricoBusca) {
+    pularBuscaTelRef.current = true;
     setDestinatarioNome(h.destinatarioNome);
     if (h.telefone) setTelefone(maskTelefone(h.telefone));
     setEnderecosSugeridos([]);

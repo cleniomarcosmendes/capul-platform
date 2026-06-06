@@ -112,7 +112,17 @@ export class ProtheusClienteService {
     // Monta a lista de endereços: o de COBRANÇA (mais completo — tem bairro/CEP)
     // + cada cadastro/loja. Dedupe por logradouro+cidade. O operador escolhe um
     // ou digita um novo no cadastro da entrega.
+    // Chave de dedupe tolerante: o mesmo endereço aparece no bloco de cobrança
+    // ("475 APTO 108") e no cadastro/loja ("475 AP 108") com formatações
+    // diferentes. Normaliza abreviações comuns + remove pontuação/espaços.
+    const chaveDedupe = (logradouro: string, cidade: string | null) =>
+      `${logradouro} ${cidade ?? ''}`
+        .toUpperCase()
+        .replace(/APARTAMENTO|APTO/g, 'AP')
+        .replace(/[^A-Z0-9]/g, '');
+
     const enderecos: EnderecoCliente[] = [];
+    // Cobrança primeiro (mais completo: tem bairro/CEP) → vence no dedupe.
     const logCob = trim(mc.endcob);
     if (logCob) {
       enderecos.push({
@@ -121,7 +131,7 @@ export class ProtheusClienteService {
         cidade: trim(mc.munc) || null,
         uf: trim(mc.estc) || null,
         cep: trim(mc.cepc) || null,
-        rotulo: 'Cobrança',
+        rotulo: 'Cadastro',
       });
     }
     for (const c of cads) {
@@ -133,12 +143,12 @@ export class ProtheusClienteService {
         cidade: trim(c.municipio) || null,
         uf: trim(c.estado) || null,
         cep: null,
-        rotulo: `Loja ${trim(c.loja)}`.trim(),
+        rotulo: cads.length > 1 ? `Loja ${trim(c.loja)}`.trim() : 'Cadastro',
       });
     }
     const vistos = new Set<string>();
     const enderecosUnicos = enderecos.filter((e) => {
-      const k = `${e.logradouro}|${e.cidade ?? ''}`.toLowerCase();
+      const k = chaveDedupe(e.logradouro, e.cidade);
       if (vistos.has(k)) return false;
       vistos.add(k);
       return true;
