@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Loader2, Truck, Send, Trash2, Printer, CheckCircle2, FileText } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
 interface Veiculo { id: string; placa: string; modelo?: string | null; situacao: string }
@@ -35,6 +36,7 @@ export function ViagensPage() {
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [detalhe, setDetalhe] = useState<ViagemDet | null>(null); // viagem expandida (ver entregas)
+  const [confirmacao, setConfirmacao] = useState<{ titulo: string; mensagem: string; acao: () => Promise<void> } | null>(null);
 
   async function carregar() {
     setLoading(true);
@@ -205,7 +207,7 @@ export function ViagensPage() {
                           <>
                             <button onClick={() => despachar(v.id)} disabled={busy} title="Despachar"
                               className="flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"><Send className="h-3.5 w-3.5" /> Despachar</button>
-                            <button onClick={() => descartar(v.id)} disabled={busy} title="Descartar"
+                            <button onClick={() => setConfirmacao({ titulo: 'Descartar viagem', mensagem: `Descartar a viagem #${v.numero}? As entregas voltam para a fila de pendentes.`, acao: () => descartar(v.id) })} disabled={busy} title="Descartar"
                               className="text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                           </>
                         )}
@@ -231,7 +233,7 @@ export function ViagensPage() {
                                   </div>
                                 </div>
                                 {v.situacao === 'RASCUNHO' && p.entrega && (
-                                  <button onClick={() => removerEntrega(v.id, p.entrega!.id)} disabled={busy} title="Remover da viagem"
+                                  <button onClick={() => setConfirmacao({ titulo: 'Remover entrega', mensagem: `Remover a entrega #${p.entrega!.numero} (${p.entrega!.destinatarioNome}) desta viagem? Ela volta para a fila de pendentes.`, acao: () => removerEntrega(v.id, p.entrega!.id) })} disabled={busy} title="Remover da viagem"
                                     className="shrink-0 text-slate-400 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
                                 )}
                               </li>
@@ -245,6 +247,16 @@ export function ViagensPage() {
               </div>}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!confirmacao}
+        titulo={confirmacao?.titulo ?? ''}
+        mensagem={confirmacao?.mensagem ?? ''}
+        perigo
+        busy={busy}
+        onCancel={() => setConfirmacao(null)}
+        onConfirm={async () => { if (confirmacao) { await confirmacao.acao(); setConfirmacao(null); } }}
+      />
     </div>
   );
 }
