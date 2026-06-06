@@ -270,13 +270,15 @@ export function EntregaNovaPage() {
           <div>
             <label className={lbl}>Matrícula do cliente</label>
             <div className="flex items-center gap-2">
-              <input
-                value={matricula}
-                onChange={(e) => setMatricula(e.target.value.toUpperCase())}
-                onBlur={buscarPorMatricula}
-                placeholder="E01047"
-                className={`${inp} uppercase`}
-              />
+              <div className="w-44">
+                <input
+                  value={matricula}
+                  onChange={(e) => setMatricula(e.target.value.toUpperCase())}
+                  onBlur={buscarPorMatricula}
+                  placeholder="E01047"
+                  className={`${inp} uppercase`}
+                />
+              </div>
               {buscandoMat && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
             </div>
             {msgMat && (
@@ -406,12 +408,12 @@ export function EntregaNovaPage() {
           <p className="mt-1 text-[11px] text-slate-400">Enter adiciona outro cupom; o cadastro só é gravado no botão “Registrar entrega”.</p>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          <div>
+        <div className="flex gap-3">
+          <div className="w-24">
             <label className={lbl}>Volumes</label>
             <input type="number" min={1} value={volumes} onChange={(e) => setVolumes(Math.max(1, parseInt(e.target.value) || 1))} className={inp} />
           </div>
-          <div className="col-span-2">
+          <div className="flex-1">
             <label className={lbl}>Observações</label>
             <input value={observacoes} onChange={(e) => setObservacoes(e.target.value)} className={inp} />
           </div>
