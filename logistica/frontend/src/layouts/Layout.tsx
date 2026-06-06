@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, Users, Truck, LogOut, ExternalLink, Package, Car, Route, BarChart3 } from 'lucide-react';
+import { Home, MapPin, Truck, LogOut, ExternalLink, Package, Car, Route, BarChart3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const navItems = [
@@ -8,7 +8,7 @@ const navItems = [
   { to: '/painel', label: 'Painel', icon: BarChart3, end: false },
   { to: '/entregas/nova', label: 'Nova Entrega', icon: Package, end: false },
   { to: '/viagens', label: 'Viagens', icon: Route, end: false },
-  { to: '/clientes', label: 'Clientes', icon: Users, end: false },
+  { to: '/clientes', label: 'Endereços', icon: MapPin, end: false },
   { to: '/veiculos', label: 'Frota', icon: Car, end: false },
 ];
 

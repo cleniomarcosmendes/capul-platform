@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Users, Package, Truck, Route, BarChart3 } from 'lucide-react';
+import { MapPin, Package, Truck, Route, BarChart3 } from 'lucide-react';
 
 export function HomePage() {
   return (
@@ -25,9 +25,9 @@ export function HomePage() {
           to="/clientes"
           className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
         >
-          <Users className="h-7 w-7 text-sky-600" />
-          <div className="mt-3 font-medium text-slate-800">Clientes &amp; Endereços</div>
-          <div className="text-xs text-slate-500">Cadastro local e busca unificada</div>
+          <MapPin className="h-7 w-7 text-sky-600" />
+          <div className="mt-3 font-medium text-slate-800">Endereços</div>
+          <div className="text-xs text-slate-500">Consulta por telefone, nome ou matrícula</div>
         </Link>
 
         <Link

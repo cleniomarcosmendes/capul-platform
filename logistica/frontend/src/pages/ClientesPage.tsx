@@ -1,162 +1,154 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { Search, Plus, Loader2, MapPin } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import { Search, Loader2, MapPin } from 'lucide-react';
 import { logisticaApi } from '../services/api';
-import { maskTelefone, onlyDigits } from '../utils/format';
+import { maskTelefone } from '../utils/format';
 
 interface Endereco {
-  id: string;
-  apelido?: string | null;
-  logradouro: string;
-  numero?: string | null;
-  bairro?: string | null;
-  cidade?: string | null;
-  uf?: string | null;
+  id?: string; apelido?: string | null; logradouro: string; numero?: string | null; complemento?: string | null;
+  bairro?: string | null; cidade?: string | null; uf?: string | null; cep?: string | null;
 }
-interface ClienteLocal {
-  id: string;
-  nome: string;
-  telefone?: string | null;
-  enderecos?: Endereco[];
+interface ClienteLocal { id: string; nome: string; telefone?: string | null; enderecos?: Endereco[] }
+interface Historico {
+  destinatarioNome: string; telefone?: string | null;
+  endLogradouro?: string | null; endNumero?: string | null; endBairro?: string | null; endCidade?: string | null;
+}
+interface ProtheusCliente {
+  nome: string; telefone: string | null;
+  enderecos: { logradouro: string; bairro: string | null; cidade: string | null; uf: string | null; cep: string | null; rotulo: string }[];
+}
+interface BuscaResp {
+  clientesLocais: ClienteLocal[];
+  historicoEntregas: Historico[];
+  protheus?: { cliente: ProtheusCliente | null };
 }
 
+type Origem = 'Cliente local' | 'Histórico' | 'Protheus';
+interface Linha {
+  nome: string; telefone?: string | null; endereco: string; cidadeUf: string; origem: Origem;
+}
+
+const COR: Record<Origem, string> = {
+  'Cliente local': 'bg-sky-100 text-sky-700',
+  'Histórico': 'bg-slate-100 text-slate-600',
+  'Protheus': 'bg-amber-100 text-amber-700',
+};
+
+/**
+ * Consulta consolidada de ENDEREÇOS — read-only. Um termo (telefone, nome ou
+ * matrícula E#####) varre todas as fontes (clientes locais, histórico de
+ * entregas e Protheus) e mostra os endereços vinculados. Não cadastra nada —
+ * o cadastro de cliente/endereço acontece no fluxo da Nova Entrega.
+ */
 export function ClientesPage() {
   const [termo, setTermo] = useState('');
-  const [clientes, setClientes] = useState<ClienteLocal[]>([]);
+  const [linhas, setLinhas] = useState<Linha[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  // form novo cliente
-  const [nome, setNome] = useState('');
-  const [telefone, setTelefone] = useState('');
-  const [salvando, setSalvando] = useState(false);
-
-  async function carregar(q?: string) {
-    setLoading(true);
-    setErro(null);
-    try {
-      const { data } = await logisticaApi.get<ClienteLocal[]>('/cadastro/clientes-locais', {
-        params: q ? { q } : undefined,
-      });
-      setClientes(data);
-    } catch {
-      setErro('Falha ao carregar clientes.');
-    } finally {
-      setLoading(false);
+  function montarLinhas(d: BuscaResp): Linha[] {
+    const out: Linha[] = [];
+    for (const c of d.clientesLocais) {
+      for (const e of c.enderecos ?? []) {
+        out.push({
+          nome: c.nome, telefone: c.telefone,
+          endereco: `${e.logradouro}${e.numero ? `, ${e.numero}` : ''}${e.bairro ? ` — ${e.bairro}` : ''}`,
+          cidadeUf: [e.cidade, e.uf].filter(Boolean).join('/'), origem: 'Cliente local',
+        });
+      }
     }
+    for (const h of d.historicoEntregas) {
+      out.push({
+        nome: h.destinatarioNome, telefone: h.telefone,
+        endereco: `${h.endLogradouro ?? ''}${h.endNumero ? `, ${h.endNumero}` : ''}${h.endBairro ? ` — ${h.endBairro}` : ''}`,
+        cidadeUf: h.endCidade ?? '', origem: 'Histórico',
+      });
+    }
+    const p = d.protheus?.cliente;
+    if (p) {
+      for (const e of p.enderecos) {
+        out.push({
+          nome: p.nome, telefone: p.telefone,
+          endereco: `${e.logradouro}${e.bairro ? ` — ${e.bairro}` : ''}`,
+          cidadeUf: [e.cidade, e.uf].filter(Boolean).join('/'), origem: 'Protheus',
+        });
+      }
+    }
+    // dedupe por nome+endereço+cidade
+    const vistos = new Set<string>();
+    return out.filter((l) => {
+      const k = `${l.nome}|${l.endereco}|${l.cidadeUf}`.toLowerCase();
+      if (vistos.has(k)) return false;
+      vistos.add(k);
+      return true;
+    });
   }
 
-  useEffect(() => {
-    void carregar();
-  }, []);
-
-  async function criar(e: FormEvent) {
-    e.preventDefault();
-    if (!nome.trim()) return;
-    setSalvando(true);
-    setErro(null);
+  async function buscar(e?: FormEvent) {
+    e?.preventDefault();
+    const q = termo.trim();
+    if (q.length < 3) { setErro('Informe ao menos 3 caracteres (telefone, nome ou matrícula).'); return; }
+    setLoading(true); setErro(null);
     try {
-      await logisticaApi.post('/cadastro/clientes-locais', {
-        nome: nome.trim(),
-        telefone: telefone ? onlyDigits(telefone) : undefined,
-      });
-      setNome('');
-      setTelefone('');
-      await carregar(termo || undefined);
+      const { data } = await logisticaApi.get<BuscaResp>('/cadastro/busca', { params: { termo: q } });
+      setLinhas(montarLinhas(data));
     } catch {
-      setErro('Falha ao salvar cliente.');
+      setErro('Falha na consulta.');
     } finally {
-      setSalvando(false);
+      setLoading(false);
     }
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-slate-800">Clientes &amp; Endereços</h2>
-        <p className="text-sm text-slate-500">Cadastro local (recorrente sem matrícula) e busca.</p>
+        <h2 className="text-lg font-semibold text-slate-800">Consulta de Endereços</h2>
+        <p className="text-sm text-slate-500">
+          Busque por telefone, nome ou matrícula e veja os endereços vinculados (clientes locais, histórico e Protheus).
+          O cadastro é feito na <strong>Nova Entrega</strong>.
+        </p>
       </div>
 
-      {/* Busca */}
-      <div className="flex gap-2">
+      <form onSubmit={buscar} className="flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
           <input
             value={termo}
             onChange={(e) => setTermo(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && carregar(termo || undefined)}
-            placeholder="Buscar por nome ou telefone…"
+            placeholder="Telefone, nome ou matrícula (ex.: E01047)…"
             className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm focus:border-sky-500 focus:outline-none"
           />
         </div>
-        <button
-          onClick={() => carregar(termo || undefined)}
-          className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700"
-        >
-          Buscar
-        </button>
-      </div>
-
-      {/* Novo cliente */}
-      <form onSubmit={criar} className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex-1 min-w-[180px]">
-          <label className="block text-xs font-medium text-slate-500">Nome do cliente *</label>
-          <input
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            placeholder="Nome completo"
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
-          />
-        </div>
-        <div className="w-44">
-          <label className="block text-xs font-medium text-slate-500">Telefone</label>
-          <input
-            value={telefone}
-            onChange={(e) => setTelefone(maskTelefone(e.target.value))}
-            placeholder="(00) 00000-0000"
-            inputMode="numeric"
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={salvando || !nome.trim()}
-          className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-        >
-          {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          Novo cliente
+        <button type="submit" disabled={loading}
+          className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Consultar
         </button>
       </form>
 
       {erro && <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{erro}</div>}
 
-      {/* Lista */}
-      <div className="rounded-xl border border-slate-200 bg-white">
-        {loading ? (
-          <div className="flex items-center gap-2 p-6 text-sm text-slate-500">
-            <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
-          </div>
-        ) : clientes.length === 0 ? (
-          <div className="p-6 text-sm text-slate-500">Nenhum cliente encontrado.</div>
-        ) : (
-          <ul className="divide-y divide-slate-100">
-            {clientes.map((c) => (
-              <li key={c.id} className="px-4 py-3">
-                <div className="font-medium text-slate-800">{c.nome}</div>
-                <div className="text-xs text-slate-500">{c.telefone ? maskTelefone(c.telefone) : 'sem telefone'}</div>
-                {c.enderecos && c.enderecos.length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-2">
-                    {c.enderecos.map((e) => (
-                      <span key={e.id} className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-                        <MapPin className="h-3 w-3" /> {e.logradouro}{e.numero ? `, ${e.numero}` : ''} — {e.cidade}/{e.uf}
-                      </span>
-                    ))}
+      {linhas !== null && (
+        <div className="rounded-xl border border-slate-200 bg-white">
+          {linhas.length === 0 ? (
+            <div className="p-6 text-sm text-slate-500">Nenhum endereço encontrado para “{termo}”.</div>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {linhas.map((l, i) => (
+                <li key={i} className="flex items-start gap-3 px-4 py-3">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-slate-800">{l.nome}</span>
+                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${COR[l.origem]}`}>{l.origem}</span>
+                    </div>
+                    <div className="text-sm text-slate-600">{l.endereco}{l.cidadeUf ? ` · ${l.cidadeUf}` : ''}</div>
+                    <div className="text-xs text-slate-400">{l.telefone ? maskTelefone(l.telefone) : 'sem telefone'}</div>
                   </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }
