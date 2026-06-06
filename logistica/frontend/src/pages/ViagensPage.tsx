@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Truck, Send, Trash2 } from 'lucide-react';
+import { Loader2, Truck, Send, Trash2, Printer } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -127,6 +127,8 @@ export function ViagensPage() {
                         <div className="font-medium text-slate-700">#{e.numero} · {e.destinatarioNome}</div>
                         <div className="text-xs text-slate-500">{e.endLogradouro} — {e.endBairro} · {e.quantidadeVolumes} vol</div>
                       </div>
+                      <a href={`/entregas/etiquetas/entrega/${e.id}`} target="_blank" rel="noopener" title="Etiqueta"
+                        className="text-slate-300 hover:text-sky-600"><Printer className="h-4 w-4" /></a>
                     </li>
                   );
                 })}
@@ -147,14 +149,20 @@ export function ViagensPage() {
                         {' '}· {v._count?.paradas ?? 0} paradas
                       </div>
                     </div>
-                    {v.situacao === 'RASCUNHO' && (
-                      <div className="flex gap-2">
-                        <button onClick={() => despachar(v.id)} disabled={busy} title="Despachar"
-                          className="flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"><Send className="h-3.5 w-3.5" /> Despachar</button>
-                        <button onClick={() => descartar(v.id)} disabled={busy} title="Descartar"
-                          className="text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {(v.situacao === 'RASCUNHO' || v.situacao === 'EM_CURSO') && (
+                        <a href={`/entregas/etiquetas/viagem/${v.id}`} target="_blank" rel="noopener" title="Imprimir etiquetas"
+                          className="flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"><Printer className="h-3.5 w-3.5" /> Etiquetas</a>
+                      )}
+                      {v.situacao === 'RASCUNHO' && (
+                        <>
+                          <button onClick={() => despachar(v.id)} disabled={busy} title="Despachar"
+                            className="flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"><Send className="h-3.5 w-3.5" /> Despachar</button>
+                          <button onClick={() => descartar(v.id)} disabled={busy} title="Descartar"
+                            className="text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                        </>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>}
