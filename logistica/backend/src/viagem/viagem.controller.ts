@@ -34,6 +34,11 @@ export class ViagemController {
     return this.viagens.despachar(id, dto);
   }
 
+  @Post(':id/concluir')
+  concluir(@Param('id') id: string) {
+    return this.viagens.concluir(id);
+  }
+
   @Delete(':id')
   descartar(@Param('id') id: string) {
     return this.viagens.descartar(id);

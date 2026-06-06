@@ -124,6 +124,37 @@ export class ViagemService {
     });
   }
 
+  /**
+   * Conclui a viagem (stopgap Fase 1a, SEM prova): EM_CURSO → CONCLUIDA. Libera
+   * o veículo (→ DISPONIVEL) e baixa as entregas (EM_VIAGEM → ENTREGUE). A prova
+   * de entrega real (foto/assinatura/GPS) é da Fase 1b — aqui é baixa manual no
+   * balcão pra fechar o ciclo operacional. Exige viagem EM_CURSO.
+   */
+  async concluir(id: string) {
+    const v = await this.prisma.viagem.findUnique({
+      where: { id },
+      include: { paradas: { select: { entregaId: true } } },
+    });
+    if (!v) throw new NotFoundException('Viagem não encontrada.');
+    if (v.situacao !== StatusViagem.EM_CURSO) {
+      throw new BadRequestException(`Só conclui viagem EM_CURSO (atual: ${v.situacao}).`);
+    }
+    const entregaIds = v.paradas.map((p) => p.entregaId).filter((x): x is string => !!x);
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.entrega.updateMany({
+        where: { id: { in: entregaIds }, status: StatusEntrega.EM_VIAGEM },
+        data: { status: StatusEntrega.ENTREGUE },
+      });
+      await tx.veiculo.update({ where: { id: v.veiculoId }, data: { situacao: SituacaoVeiculo.DISPONIVEL } });
+      return tx.viagem.update({
+        where: { id },
+        data: { situacao: StatusViagem.CONCLUIDA, dataHoraChegada: new Date() },
+        include: { paradas: { include: { entrega: true }, orderBy: { sequencia: 'asc' } } },
+      });
+    });
+  }
+
   /** Descarta uma montagem (RASCUNHO) — libera as entregas (cascade nas paradas). */
   async descartar(id: string) {
     const v = await this.prisma.viagem.findUnique({ where: { id }, select: { situacao: true } });

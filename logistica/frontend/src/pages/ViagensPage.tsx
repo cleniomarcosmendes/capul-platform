@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Truck, Send, Trash2, Printer } from 'lucide-react';
+import { Loader2, Truck, Send, Trash2, Printer, CheckCircle2 } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -70,6 +70,18 @@ export function ViagensPage() {
     catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
       setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao despachar.' });
+    } finally { setBusy(false); }
+  }
+
+  async function concluir(id: string) {
+    setBusy(true);
+    try {
+      await logisticaApi.post(`/viagens/${id}/concluir`, {});
+      setMsg({ tipo: 'ok', texto: 'Viagem concluída — veículo liberado e entregas baixadas.' });
+      void carregar();
+    } catch (err) {
+      const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+      setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao concluir.' });
     } finally { setBusy(false); }
   }
   async function descartar(id: string) {
@@ -162,6 +174,10 @@ export function ViagensPage() {
                           <button onClick={() => descartar(v.id)} disabled={busy} title="Descartar"
                             className="text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                         </>
+                      )}
+                      {v.situacao === 'EM_CURSO' && (
+                        <button onClick={() => concluir(v.id)} disabled={busy} title="Concluir viagem (baixa manual — libera veículo e baixa entregas)"
+                          className="flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"><CheckCircle2 className="h-3.5 w-3.5" /> Concluir</button>
                       )}
                     </div>
                   </li>
