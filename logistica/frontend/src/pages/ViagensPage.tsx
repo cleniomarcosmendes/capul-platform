@@ -176,10 +176,14 @@ export function ViagensPage() {
         <div className="rounded-xl border border-slate-200 bg-white">
           <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Viagens</div>
           {viagens.length === 0 ? <div className="p-6 text-sm text-slate-500">Nenhuma viagem.</div>
-            : <ul className="divide-y divide-slate-100 max-h-[420px] overflow-auto">
+            : <div className="space-y-2.5 max-h-[460px] overflow-auto bg-slate-50 p-3">
                 {viagens.map((v) => (
-                  <li key={v.id} className="px-4 py-2 text-sm">
-                    <div className="flex items-center justify-between">
+                  <div key={v.id} className={`rounded-lg border border-slate-200 border-l-4 bg-white p-3 text-sm shadow-sm ${
+                    v.situacao === 'EM_CURSO' ? 'border-l-amber-400'
+                    : v.situacao === 'CONCLUIDA' ? 'border-l-emerald-400'
+                    : v.situacao === 'CANCELADA' ? 'border-l-rose-400'
+                    : 'border-l-sky-400'}`}>
+                    <div className="flex items-center justify-between gap-2">
                       <div>
                         <div className="font-medium text-slate-700">Viagem #{v.numero} · {v.veiculo?.placa}{v.motoristaNome ? ` · ${v.motoristaNome}` : ''}</div>
                         <div className="text-xs text-slate-500">
@@ -236,9 +240,9 @@ export function ViagensPage() {
                         )}
                       </div>
                     )}
-                  </li>
+                  </div>
                 ))}
-              </ul>}
+              </div>}
         </div>
       </div>
     </div>
