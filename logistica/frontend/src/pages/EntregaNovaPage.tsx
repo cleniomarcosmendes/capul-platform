@@ -336,6 +336,7 @@ export function EntregaNovaPage() {
                 value={identificado ? matricula : ''}
                 onChange={(e) => setMatricula(e.target.value.toUpperCase())}
                 onBlur={buscarPorMatricula}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscarPorMatricula(); } }}
                 disabled={!identificado}
                 placeholder={identificado ? 'E01047' : '—'}
                 title={identificado ? '' : "Disponível na opção 'Com matrícula'"}
