@@ -29,7 +29,15 @@ interface HistoricoBusca {
   destinatarioNome: string; telefone?: string | null;
   endLogradouro?: string | null; endNumero?: string | null; endBairro?: string | null; endCidade?: string | null;
 }
-interface BuscaResp { clientesLocais: ClienteBusca[]; historicoEntregas: HistoricoBusca[] }
+interface ClienteProtheus {
+  matricula: string; nome: string; cpfCnpj: string | null; telefone: string | null;
+  endereco: { logradouro: string; bairro: string | null; cidade: string | null; uf: string | null; cep: string | null };
+}
+interface BuscaResp {
+  clientesLocais: ClienteBusca[];
+  historicoEntregas: HistoricoBusca[];
+  protheus?: { cliente: ClienteProtheus | null };
+}
 
 const TIPOS: { v: TipoCliente; label: string }[] = [
   { v: 'IDENTIFICADO', label: 'Com matrícula' },
@@ -65,6 +73,8 @@ export function EntregaNovaPage() {
   const [sugestoes, setSugestoes] = useState<BuscaResp | null>(null);
   const [mostrarSug, setMostrarSug] = useState(false);
   const [buscando, setBuscando] = useState(false);
+  const [buscandoMat, setBuscandoMat] = useState(false);
+  const [msgMat, setMsgMat] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
 
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
@@ -134,6 +144,43 @@ export function EntregaNovaPage() {
     setBairro(h.endBairro ?? '');
     setCidade(h.endCidade ?? 'Unaí');
     setMostrarSug(false);
+  }
+
+  // Cliente identificado: matrícula (E#####) → Protheus (SA1) preenche
+  // nome/telefone/endereço (editável). Endereço vem combinado (logradouro+nº);
+  // o operador ajusta se precisar.
+  function aplicarProtheus(c: ClienteProtheus) {
+    setDestinatarioNome(c.nome);
+    if (c.telefone) setTelefone(maskTelefone(c.telefone));
+    setEnderecoEntregaId(''); setClienteLocalId('');
+    setLogradouro(c.endereco.logradouro ?? '');
+    setNumero(''); setComplemento('');
+    setBairro(c.endereco.bairro ?? '');
+    setCidade(c.endereco.cidade ?? 'Unaí');
+    setUf((c.endereco.uf ?? 'MG').toUpperCase());
+    setCep(c.endereco.cep ? maskCep(c.endereco.cep) : '');
+  }
+
+  async function buscarPorMatricula() {
+    const mat = matricula.trim().toUpperCase();
+    setMsgMat(null);
+    if (!/^E\d{1,14}$/.test(mat)) return; // formato do balcão: E#####
+    setBuscandoMat(true);
+    try {
+      const { data } = await logisticaApi.get<BuscaResp>('/cadastro/busca', { params: { termo: mat } });
+      const c = data.protheus?.cliente;
+      if (c) {
+        aplicarProtheus(c);
+        setMatricula(c.matricula);
+        setMsgMat({ tipo: 'ok', texto: 'Cliente encontrado no Protheus — confira/edite o endereço.' });
+      } else {
+        setMsgMat({ tipo: 'erro', texto: 'Matrícula não encontrada no Protheus. Preencha manualmente.' });
+      }
+    } catch {
+      setMsgMat({ tipo: 'erro', texto: 'Protheus indisponível. Preencha manualmente.' });
+    } finally {
+      setBuscandoMat(false);
+    }
   }
 
   function resetForm() {
@@ -221,8 +268,20 @@ export function EntregaNovaPage() {
 
         {tipoCliente === 'IDENTIFICADO' && (
           <div>
-            <label className={lbl}>Matrícula</label>
-            <input value={matricula} onChange={(e) => setMatricula(e.target.value)} className={inp} />
+            <label className={lbl}>Matrícula do cliente</label>
+            <div className="flex items-center gap-2">
+              <input
+                value={matricula}
+                onChange={(e) => setMatricula(e.target.value.toUpperCase())}
+                onBlur={buscarPorMatricula}
+                placeholder="E01047"
+                className={`${inp} uppercase`}
+              />
+              {buscandoMat && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+            </div>
+            {msgMat && (
+              <p className={`mt-1 text-xs ${msgMat.tipo === 'ok' ? 'text-emerald-700' : 'text-amber-700'}`}>{msgMat.texto}</p>
+            )}
           </div>
         )}
 
