@@ -7,12 +7,21 @@ const AUTH_GATEWAY_URL = process.env.AUTH_GATEWAY_URL || 'http://auth-gateway:30
 interface ProtheusEndpoint { operacao: string; url: string; metodo: string; timeoutMs: number }
 interface ProtheusConfig { ambiente: string; tipoAuth: string; authConfig: string | null; endpoints: ProtheusEndpoint[] }
 
+export interface EnderecoCliente {
+  logradouro: string;
+  bairro: string | null;
+  cidade: string | null;
+  uf: string | null;
+  cep: string | null;
+  rotulo: string; // origem: "Cobrança", "Loja 0001"...
+}
+
 export interface ClienteProtheus {
   matricula: string;
   nome: string;
   cpfCnpj: string | null;
   telefone: string | null;
-  endereco: { logradouro: string; bairro: string | null; cidade: string | null; uf: string | null; cep: string | null };
+  enderecos: EnderecoCliente[]; // pode ter mais de um — operador escolhe (ou digita novo)
 }
 
 // Cache de config (TTL 5 min) — igual ao gestao-ti.
@@ -93,24 +102,54 @@ export class ProtheusClienteService {
     if (!matricula || matricula.toUpperCase() !== matriculaBusca.trim().toUpperCase()) return null;
 
     const mc = ((j.manutencaocompartilhada ?? {}) as Record<string, unknown>);
-    const cad = (((j.cadastrosativos ?? []) as unknown[])[0] ?? {}) as Record<string, unknown>;
+    const cads = (((j.cadastrosativos ?? []) as unknown[]).filter(Boolean)) as Record<string, unknown>[];
     // DDD vem com zero de discagem ("038") — o DDD real é 2 dígitos. Limpa não
     // dígitos e tira o zero à esquerda antes de juntar com o número.
     const ddd = trim(mc.ddd).replace(/\D/g, '').replace(/^0+/, '');
     const num = trim(mc.tel).replace(/\D/g, '');
     const tel = `${ddd}${num}`;
+
+    // Monta a lista de endereços: o de COBRANÇA (mais completo — tem bairro/CEP)
+    // + cada cadastro/loja. Dedupe por logradouro+cidade. O operador escolhe um
+    // ou digita um novo no cadastro da entrega.
+    const enderecos: EnderecoCliente[] = [];
+    const logCob = trim(mc.endcob);
+    if (logCob) {
+      enderecos.push({
+        logradouro: logCob,
+        bairro: trim(mc.bairroc) || null,
+        cidade: trim(mc.munc) || null,
+        uf: trim(mc.estc) || null,
+        cep: trim(mc.cepc) || null,
+        rotulo: 'Cobrança',
+      });
+    }
+    for (const c of cads) {
+      const log = trim(c.endereco);
+      if (!log) continue;
+      enderecos.push({
+        logradouro: log,
+        bairro: null,
+        cidade: trim(c.municipio) || null,
+        uf: trim(c.estado) || null,
+        cep: null,
+        rotulo: `Loja ${trim(c.loja)}`.trim(),
+      });
+    }
+    const vistos = new Set<string>();
+    const enderecosUnicos = enderecos.filter((e) => {
+      const k = `${e.logradouro}|${e.cidade ?? ''}`.toLowerCase();
+      if (vistos.has(k)) return false;
+      vistos.add(k);
+      return true;
+    });
+
     return {
       matricula,
       nome: trim(j.nome),
-      cpfCnpj: trim(cad.cgc) || null,
+      cpfCnpj: trim((cads[0] ?? {}).cgc) || null,
       telefone: tel || null,
-      endereco: {
-        logradouro: trim(cad.endereco) || trim(mc.endcob),
-        bairro: trim(mc.bairroc) || null,
-        cidade: trim(cad.municipio) || trim(mc.munc) || null,
-        uf: trim(cad.estado) || trim(mc.estc) || null,
-        cep: trim(mc.cepc) || null,
-      },
+      enderecos: enderecosUnicos,
     };
   }
 

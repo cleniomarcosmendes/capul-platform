@@ -20,7 +20,7 @@ interface EntregaItem {
 
 // Busca unificada (GET /cadastro/busca) — fontes locais.
 interface EnderecoBusca {
-  id: string; logradouro: string; numero?: string | null; complemento?: string | null;
+  id: string; apelido?: string | null; logradouro: string; numero?: string | null; complemento?: string | null;
   bairro?: string | null; cidade?: string | null; uf?: string | null; cep?: string | null;
   pontoReferencia?: string | null;
 }
@@ -31,7 +31,14 @@ interface HistoricoBusca {
 }
 interface ClienteProtheus {
   matricula: string; nome: string; cpfCnpj: string | null; telefone: string | null;
-  endereco: { logradouro: string; bairro: string | null; cidade: string | null; uf: string | null; cep: string | null };
+  enderecos: { logradouro: string; bairro: string | null; cidade: string | null; uf: string | null; cep: string | null; rotulo: string }[];
+}
+/** Candidato de endereço apresentado no seletor (de qualquer fonte). */
+interface EnderecoSug {
+  rotulo: string;
+  logradouro: string; numero?: string | null; complemento?: string | null;
+  bairro?: string | null; cidade?: string | null; uf?: string | null; cep?: string | null; referencia?: string | null;
+  enderecoEntregaId?: string; // quando vem de um EnderecoEntrega salvo (linka o snapshot)
 }
 interface BuscaResp {
   clientesLocais: ClienteBusca[];
@@ -68,6 +75,10 @@ export function EntregaNovaPage() {
   // (snapshot tirado dela no backend). Editar qualquer campo de endereço limpa.
   const [enderecoEntregaId, setEnderecoEntregaId] = useState('');
   const [clienteLocalId, setClienteLocalId] = useState('');
+  // Seletor de endereços do cliente identificado (Protheus/local podem ter +1).
+  // O operador escolhe um OU clica "Novo endereço" (idx -1 = digitação manual).
+  const [enderecosSugeridos, setEnderecosSugeridos] = useState<EnderecoSug[]>([]);
+  const [enderecoSelIdx, setEnderecoSelIdx] = useState(-1);
 
   // Busca por telefone (autofill)
   const [sugestoes, setSugestoes] = useState<BuscaResp | null>(null);
@@ -112,9 +123,10 @@ export function EntregaNovaPage() {
   }, [telefone]);
 
   // Setter de campo de endereço que desfaz o vínculo com cadastro (o operador
-  // está editando à mão → snapshot passa a ser o que está na tela).
+  // está editando à mão → snapshot passa a ser o que está na tela) e marca o
+  // seletor como "novo/manual".
   function editEndereco<T>(setter: (v: T) => void) {
-    return (v: T) => { setter(v); setEnderecoEntregaId(''); };
+    return (v: T) => { setter(v); setEnderecoEntregaId(''); setEnderecoSelIdx(-1); };
   }
 
   function aplicarCliente(c: ClienteBusca, end?: EnderecoBusca) {
@@ -122,23 +134,23 @@ export function EntregaNovaPage() {
     if (c.telefone) setTelefone(maskTelefone(c.telefone));
     setClienteLocalId(c.id);
     setTipoCliente('RECORRENTE_LOCAL');
-    if (end) {
-      setEnderecoEntregaId(end.id);
-      setLogradouro(end.logradouro ?? '');
-      setNumero(end.numero ?? '');
-      setComplemento(end.complemento ?? '');
-      setBairro(end.bairro ?? '');
-      setCidade(end.cidade ?? 'Unaí');
-      setUf((end.uf ?? 'MG').toUpperCase());
-      setCep(end.cep ? maskCep(end.cep) : '');
-      setReferencia(end.pontoReferencia ?? '');
-    }
+    // Monta o seletor com TODOS os endereços do cliente local.
+    const sug: EnderecoSug[] = (c.enderecos ?? []).map((e) => ({
+      rotulo: e.apelido || e.logradouro, logradouro: e.logradouro, numero: e.numero, complemento: e.complemento,
+      bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep, referencia: e.pontoReferencia, enderecoEntregaId: e.id,
+    }));
+    setEnderecosSugeridos(sug);
+    const idx = end ? sug.findIndex((s) => s.enderecoEntregaId === end.id) : 0;
+    if (sug.length > 0) aplicarEndereco(sug[Math.max(0, idx)], Math.max(0, idx));
+    else enderecoNovo();
     setMostrarSug(false);
   }
 
   function aplicarHistorico(h: HistoricoBusca) {
     setDestinatarioNome(h.destinatarioNome);
     if (h.telefone) setTelefone(maskTelefone(h.telefone));
+    setEnderecosSugeridos([]);
+    setEnderecoSelIdx(-1);
     setEnderecoEntregaId('');
     setLogradouro(h.endLogradouro ?? '');
     setNumero(h.endNumero ?? '');
@@ -147,19 +159,40 @@ export function EntregaNovaPage() {
     setMostrarSug(false);
   }
 
-  // Cliente identificado: matrícula (E#####) → Protheus (SA1) preenche
-  // nome/telefone/endereço (editável). Endereço vem combinado (logradouro+nº);
-  // o operador ajusta se precisar.
+  /** Preenche os campos de endereço a partir de um candidato escolhido no seletor. */
+  function aplicarEndereco(e: EnderecoSug, idx: number) {
+    setEnderecoSelIdx(idx);
+    setEnderecoEntregaId(e.enderecoEntregaId ?? '');
+    setLogradouro(e.logradouro ?? '');
+    setNumero(e.numero ?? '');
+    setComplemento(e.complemento ?? '');
+    setBairro(e.bairro ?? '');
+    setCidade(e.cidade ?? 'Unaí');
+    setUf((e.uf ?? 'MG').toUpperCase());
+    setCep(e.cep ? maskCep(e.cep) : '');
+    setReferencia(e.referencia ?? '');
+  }
+
+  /** "Novo endereço": limpa os campos pra digitação manual (não desfaz o cliente). */
+  function enderecoNovo() {
+    setEnderecoSelIdx(-1);
+    setEnderecoEntregaId('');
+    setLogradouro(''); setNumero(''); setComplemento(''); setBairro('');
+    setCidade('Unaí'); setUf('MG'); setCep(''); setReferencia('');
+  }
+
+  // Cliente identificado: matrícula (E#####) → Protheus (SA1). Preenche
+  // nome/telefone e monta o seletor de endereços (Protheus pode ter +1).
   function aplicarProtheus(c: ClienteProtheus) {
     setDestinatarioNome(c.nome);
     if (c.telefone) setTelefone(maskTelefone(c.telefone));
-    setEnderecoEntregaId(''); setClienteLocalId('');
-    setLogradouro(c.endereco.logradouro ?? '');
-    setNumero(''); setComplemento('');
-    setBairro(c.endereco.bairro ?? '');
-    setCidade(c.endereco.cidade ?? 'Unaí');
-    setUf((c.endereco.uf ?? 'MG').toUpperCase());
-    setCep(c.endereco.cep ? maskCep(c.endereco.cep) : '');
+    setClienteLocalId('');
+    const sug: EnderecoSug[] = c.enderecos.map((e) => ({
+      rotulo: e.rotulo, logradouro: e.logradouro, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep,
+    }));
+    setEnderecosSugeridos(sug);
+    if (sug.length > 0) aplicarEndereco(sug[0], 0);
+    else enderecoNovo();
   }
 
   async function buscarPorMatricula() {
@@ -190,6 +223,7 @@ export function EntregaNovaPage() {
     setCidade('Unaí'); setUf('MG'); setCep(''); setReferencia('');
     setVolumes(1); setObservacoes(''); setCupons([{ numeroCupom: '', valor: '' }]);
     setEnderecoEntregaId(''); setClienteLocalId(''); setSugestoes(null); setMostrarSug(false);
+    setEnderecosSugeridos([]); setEnderecoSelIdx(-1); setMsgMat(null);
   }
 
   // Bloqueia Enter de submeter o form acidentalmente — só o botão Registrar grava.
@@ -344,6 +378,25 @@ export function EntregaNovaPage() {
           </div>
         </div>
 
+        {enderecosSugeridos.length > 0 && (
+          <div>
+            <label className={lbl}>Endereços do cliente</label>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {enderecosSugeridos.map((e, i) => (
+                <button type="button" key={i} onClick={() => aplicarEndereco(e, i)}
+                  className={`rounded-lg border px-3 py-1.5 text-left text-xs ${enderecoSelIdx === i ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                  <div className="font-medium">{e.rotulo}</div>
+                  <div className="text-[11px] text-slate-500">{e.logradouro}{e.cidade ? ` · ${e.cidade}${e.uf ? '/' + e.uf : ''}` : ''}</div>
+                </button>
+              ))}
+              <button type="button" onClick={enderecoNovo}
+                className={`rounded-lg border border-dashed px-3 py-1.5 text-xs ${enderecoSelIdx === -1 ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-300 text-slate-500 hover:bg-slate-50'}`}>
+                + Novo endereço
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-6 gap-3">
           <div className="col-span-4">
             <label className={lbl}>Endereço de Entrega *</label>
@@ -413,7 +466,7 @@ export function EntregaNovaPage() {
               className="flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline"><Plus className="h-3 w-3" /> Adicionar cupom</button>
             <div className="text-sm text-slate-600">Total: <strong>R$ {totalCupons.toFixed(2)}</strong></div>
           </div>
-          <p className="mt-1 text-[11px] text-slate-400">Enter adiciona outro cupom; o cadastro só é gravado no botão “Registrar entrega”.</p>
+          <p className="mt-1 text-[11px] text-slate-400">Enter adiciona outro cupom; o cadastro só é gravado no botão “Salvar entrega”.</p>
         </div>
 
         <div className="flex gap-3">
