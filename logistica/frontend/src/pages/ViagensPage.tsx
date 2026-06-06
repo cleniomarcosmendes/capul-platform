@@ -87,14 +87,14 @@ export function ViagensPage() {
 
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
         <div>
-          <label className="block text-xs font-medium text-slate-500">Veículo (disponível)</label>
+          <label className="block text-xs font-medium text-slate-500">Veículo (disponível) *</label>
           <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} className={`mt-1 ${sel}`}>
             <option value="">—</option>
             {veiculos.map((v) => <option key={v.id} value={v.id}>{v.placa} {v.modelo ? `· ${v.modelo}` : ''}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-500">Motorista</label>
+          <label className="block text-xs font-medium text-slate-500">Motorista *</label>
           <select value={motoristaId} onChange={(e) => setMotoristaId(e.target.value)} className={`mt-1 ${sel}`}>
             <option value="">—</option>
             {motoristas.map((u) => <option key={u.id} value={u.id}>{labelCore(u)}</option>)}

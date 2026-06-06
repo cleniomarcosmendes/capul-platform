@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Loader2, Truck, Plus } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
+import { maskPlaca } from '../utils/format';
 
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
 interface Veiculo {
@@ -100,7 +101,7 @@ export function VeiculosPage() {
       <form onSubmit={submit} className="lg:col-span-1 space-y-3 rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800"><Truck className="h-5 w-5 text-sky-600" /> Novo veículo</h2>
         <div className="grid grid-cols-2 gap-3">
-          <div><label className="block text-xs font-medium text-slate-500">Placa *</label><input value={placa} onChange={(e) => setPlaca(e.target.value)} required className={inp} /></div>
+          <div><label className="block text-xs font-medium text-slate-500">Placa *</label><input value={placa} onChange={(e) => setPlaca(maskPlaca(e.target.value))} required placeholder="ABC1D23" maxLength={7} className={`${inp} font-mono uppercase`} /></div>
           <div><label className="block text-xs font-medium text-slate-500">Tipo</label>
             <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={inp}>{TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}</select>
           </div>

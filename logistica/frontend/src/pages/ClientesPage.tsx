@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Search, Plus, Loader2, MapPin } from 'lucide-react';
 import { logisticaApi } from '../services/api';
+import { maskTelefone, onlyDigits } from '../utils/format';
 
 interface Endereco {
   id: string;
@@ -54,7 +55,10 @@ export function ClientesPage() {
     setSalvando(true);
     setErro(null);
     try {
-      await logisticaApi.post('/cadastro/clientes-locais', { nome, telefone: telefone || undefined });
+      await logisticaApi.post('/cadastro/clientes-locais', {
+        nome: nome.trim(),
+        telefone: telefone ? onlyDigits(telefone) : undefined,
+      });
       setNome('');
       setTelefone('');
       await carregar(termo || undefined);
@@ -95,10 +99,11 @@ export function ClientesPage() {
       {/* Novo cliente */}
       <form onSubmit={criar} className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex-1 min-w-[180px]">
-          <label className="block text-xs font-medium text-slate-500">Nome</label>
+          <label className="block text-xs font-medium text-slate-500">Nome do cliente *</label>
           <input
             value={nome}
             onChange={(e) => setNome(e.target.value)}
+            placeholder="Nome completo"
             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
           />
         </div>
@@ -106,7 +111,9 @@ export function ClientesPage() {
           <label className="block text-xs font-medium text-slate-500">Telefone</label>
           <input
             value={telefone}
-            onChange={(e) => setTelefone(e.target.value)}
+            onChange={(e) => setTelefone(maskTelefone(e.target.value))}
+            placeholder="(00) 00000-0000"
+            inputMode="numeric"
             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
           />
         </div>
@@ -135,7 +142,7 @@ export function ClientesPage() {
             {clientes.map((c) => (
               <li key={c.id} className="px-4 py-3">
                 <div className="font-medium text-slate-800">{c.nome}</div>
-                <div className="text-xs text-slate-500">{c.telefone || 'sem telefone'}</div>
+                <div className="text-xs text-slate-500">{c.telefone ? maskTelefone(c.telefone) : 'sem telefone'}</div>
                 {c.enderecos && c.enderecos.length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-2">
                     {c.enderecos.map((e) => (

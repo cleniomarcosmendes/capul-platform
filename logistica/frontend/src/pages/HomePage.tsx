@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Users, Package, Truck } from 'lucide-react';
+import { Users, Package, Truck, Route } from 'lucide-react';
 
 export function HomePage() {
   return (
@@ -11,7 +11,7 @@ export function HomePage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Link
           to="/clientes"
           className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
@@ -43,7 +43,7 @@ export function HomePage() {
           to="/viagens"
           className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
         >
-          <Package className="h-7 w-7 text-sky-600" />
+          <Route className="h-7 w-7 text-sky-600" />
           <div className="mt-3 font-medium text-slate-800">Viagens</div>
           <div className="text-xs text-slate-500">Montar e despachar</div>
         </Link>

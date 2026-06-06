@@ -19,6 +19,11 @@ export function maskCep(v: string): string {
   return d.replace(/^(\d{5})(\d{0,3})/, '$1-$2');
 }
 
+/** Placa BR (antiga `ABC1234` ou Mercosul `ABC1D23`): maiúsculas, alfanumérico, 7 chars. */
+export function maskPlaca(v: string): string {
+  return (v ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
+}
+
 /** UFs brasileiras (para o select de UF). */
 export const UFS = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
