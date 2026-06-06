@@ -2,6 +2,8 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { SituacaoVeiculo, StatusEntrega, StatusViagem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
+import { assertPodeVerRegistro } from '../common/filial-scope.js';
+import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { CreateViagemDto, DespacharViagemDto } from './dto.js';
 
 @Injectable()
@@ -70,7 +72,7 @@ export class ViagemService {
     return viagens.map((v) => ({ ...v, motoristaNome: motoristas.get(v.motoristaId) ?? null }));
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user?: JwtPayload) {
     const v = await this.prisma.viagem.findUnique({
       where: { id },
       include: {
@@ -79,6 +81,7 @@ export class ViagemService {
       },
     });
     if (!v) throw new NotFoundException('Viagem não encontrada.');
+    if (user) assertPodeVerRegistro(user, v.filialId);
     return v;
   }
 

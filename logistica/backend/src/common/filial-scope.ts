@@ -36,6 +36,18 @@ export function assertRegistroDaFilial(user: JwtPayload, registroFilialId: strin
   }
 }
 
+/**
+ * Leitura por id (findOne): barra registro de outra filial — exceto perfis que
+ * podem ver todas (ADMIN/GESTOR_ENTREGA). Espelha o escopo da listagem no
+ * "obter por id".
+ */
+export function assertPodeVerRegistro(user: JwtPayload, registroFilialId: string): void {
+  if (podeVerOutrasFiliais(user)) return;
+  if (registroFilialId !== user?.filialId) {
+    throw new ForbiddenException('Registro de outra filial — acesso não permitido.');
+  }
+}
+
 /** Leitura: resolve o filtro de filial conforme o perfil. */
 export function resolverFilialLeitura(user: JwtPayload, filialIdParam?: string): string | undefined {
   if (podeVerOutrasFiliais(user)) return filialIdParam || undefined;

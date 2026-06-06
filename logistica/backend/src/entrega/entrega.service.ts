@@ -2,6 +2,8 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { Prisma, StatusEntrega } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
+import { assertPodeVerRegistro } from '../common/filial-scope.js';
+import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { CreateEntregaDto } from './dto.js';
 
 const onlyDigits = (s?: string | null) => (s ?? '').replace(/\D/g, '');
@@ -122,9 +124,10 @@ export class EntregaService {
     return entregas.map((e) => this.comTotal(e));
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user?: JwtPayload) {
     const e = await this.prisma.entrega.findUnique({ where: { id }, include: { cupons: true } });
     if (!e) throw new NotFoundException('Entrega não encontrada.');
+    if (user) assertPodeVerRegistro(user, e.filialId);
     return this.comTotal(e);
   }
 

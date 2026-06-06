@@ -24,8 +24,8 @@ export class EntregaController {
   }
 
   @Get(':id')
-  obter(@Param('id') id: string) {
-    return this.entregas.findOne(id);
+  obter(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.entregas.findOne(id, user);
   }
 
   /** Cancelamento local (só PENDENTE). */

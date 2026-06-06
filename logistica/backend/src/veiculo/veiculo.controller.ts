@@ -28,8 +28,8 @@ export class VeiculoController {
   }
 
   @Get(':id')
-  obter(@Param('id') id: string) {
-    return this.veiculos.findOne(id);
+  obter(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.veiculos.findOne(id, user);
   }
 
   @Patch(':id')

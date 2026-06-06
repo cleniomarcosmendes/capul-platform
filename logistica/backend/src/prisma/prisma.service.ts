@@ -4,9 +4,9 @@ import { PrismaClient } from '@prisma/client';
 /**
  * PrismaService do módulo Logística (schema `logistica`).
  *
- * PR1: schema isolado, sem models de `core` ainda — quando a PR2 trouxer o
- * mirror read-only de core (usuarios/filiais/departamentos), adicionar aqui
- * a extensão de bloqueio de escrita em core (mesmo padrão de fiscal/gestao-ti).
+ * O acesso ao schema `core` (filiais/usuarios/departamentos) é READ-ONLY via
+ * `$queryRaw` no CoreLookupService — o Prisma da logística não declara esses
+ * models, então não há caminho de escrita em `core` por aqui.
  */
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {

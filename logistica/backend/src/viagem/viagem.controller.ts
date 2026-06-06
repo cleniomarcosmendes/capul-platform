@@ -28,8 +28,8 @@ export class ViagemController {
   }
 
   @Get(':id')
-  obter(@Param('id') id: string) {
-    return this.viagens.findOne(id);
+  obter(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.viagens.findOne(id, user);
   }
 
   @Post(':id/despachar')

@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -60,7 +61,7 @@ export class CreateEntregaDto {
   @IsOptional() @IsString() @MaxLength(500)
   observacoes?: string;
 
-  @IsInt() @Min(1)
+  @IsInt() @Min(1) @Max(999)
   quantidadeVolumes!: number;
 
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => CupomDto)

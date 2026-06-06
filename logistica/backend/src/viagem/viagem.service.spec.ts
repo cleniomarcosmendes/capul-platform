@@ -88,4 +88,20 @@ describe('ViagemService', () => {
       await expect(svc.descartar('v1', 'f1')).rejects.toThrow(ForbiddenException);
     });
   });
+
+  describe('findOne (escopo de filial — F1)', () => {
+    const op = (f: string) => ({ sub: 'u', filialId: f, modulos: [{ codigo: 'LOGISTICA', role: 'OPERADOR_ENTREGA' }] }) as any;
+    it('OPERADOR NÃO vê viagem de outra filial (403)', async () => {
+      prisma.viagem.findUnique.mockResolvedValue({ id: 'v1', filialId: 'f2', paradas: [] });
+      await expect(svc.findOne('v1', op('f1'))).rejects.toThrow(ForbiddenException);
+    });
+    it('OPERADOR vê viagem da própria filial', async () => {
+      prisma.viagem.findUnique.mockResolvedValue({ id: 'v1', filialId: 'f1', paradas: [] });
+      await expect(svc.findOne('v1', op('f1'))).resolves.toBeTruthy();
+    });
+    it('sem user (chamada interna) não aplica escopo', async () => {
+      prisma.viagem.findUnique.mockResolvedValue({ id: 'v1', filialId: 'f2', paradas: [] });
+      await expect(svc.findOne('v1')).resolves.toBeTruthy();
+    });
+  });
 });

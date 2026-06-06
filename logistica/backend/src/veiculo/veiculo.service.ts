@@ -2,6 +2,8 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { Prisma, SituacaoVeiculo } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
+import { assertPodeVerRegistro } from '../common/filial-scope.js';
+import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { CreateVeiculoDto, UpdateVeiculoDto } from './dto.js';
 
 @Injectable()
@@ -88,12 +90,13 @@ export class VeiculoService {
     return this.enriquecer(veiculos);
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user?: JwtPayload) {
     const v = await this.prisma.veiculo.findUnique({
       where: { id },
       include: { historicoSupervisor: { orderBy: { alteradoEm: 'desc' } } },
     });
     if (!v) throw new NotFoundException('Veículo não encontrado.');
+    if (user) assertPodeVerRegistro(user, v.filialId);
     // Nomes do veículo + nomes dos usuários citados no histórico de supervisor.
     const [enriquecido] = await this.enriquecer([v]);
     const usuariosHist = await this.core.nomesUsuarios(
