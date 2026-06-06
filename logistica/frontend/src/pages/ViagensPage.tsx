@@ -9,6 +9,7 @@ interface Entrega { id: string; numero: number; destinatarioNome: string; endLog
 interface Viagem {
   id: string; numero: number; situacao: string;
   veiculo?: { placa: string } | null; _count?: { paradas: number };
+  motoristaNome?: string | null;
 }
 
 const labelCore = (i: CoreItem) => i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8);
@@ -143,7 +144,7 @@ export function ViagensPage() {
                 {viagens.map((v) => (
                   <li key={v.id} className="flex items-center justify-between px-4 py-2 text-sm">
                     <div>
-                      <div className="font-medium text-slate-700">Viagem #{v.numero} · {v.veiculo?.placa}</div>
+                      <div className="font-medium text-slate-700">Viagem #{v.numero} · {v.veiculo?.placa}{v.motoristaNome ? ` · ${v.motoristaNome}` : ''}</div>
                       <div className="text-xs text-slate-500">
                         <span className={`rounded px-1.5 py-0.5 ${v.situacao === 'EM_CURSO' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>{v.situacao}</span>
                         {' '}· {v._count?.paradas ?? 0} paradas

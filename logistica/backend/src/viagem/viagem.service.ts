@@ -1,11 +1,15 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { SituacaoVeiculo, StatusEntrega, StatusViagem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { CoreLookupService } from '../core/core-lookup.service.js';
 import { CreateViagemDto, DespacharViagemDto } from './dto.js';
 
 @Injectable()
 export class ViagemService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly core: CoreLookupService,
+  ) {}
 
   /**
    * Cria a viagem em RASCUNHO (montagem). As entregas selecionadas (já na
@@ -18,6 +22,8 @@ export class ViagemService {
     if (veiculo.filialId !== dto.filialId) {
       throw new BadRequestException('Veículo é de outra filial.');
     }
+    // Motorista é colaborador do core — valida que existe (evita ID órfão).
+    await this.core.validarUsuario(dto.motoristaId, 'Motorista');
 
     const entregaIds = dto.entregaIds ?? [];
     if (entregaIds.length) {
@@ -48,8 +54,8 @@ export class ViagemService {
     });
   }
 
-  list(params: { filialId?: string; situacao?: StatusViagem; veiculoId?: string }) {
-    return this.prisma.viagem.findMany({
+  async list(params: { filialId?: string; situacao?: StatusViagem; veiculoId?: string }) {
+    const viagens = await this.prisma.viagem.findMany({
       where: {
         ...(params.filialId ? { filialId: params.filialId } : {}),
         ...(params.situacao ? { situacao: params.situacao } : {}),
@@ -59,6 +65,9 @@ export class ViagemService {
       orderBy: { criadoEm: 'desc' },
       take: 200,
     });
+    // Nome do motorista (core) em cada viagem — evita o front resolver à parte.
+    const motoristas = await this.core.nomesUsuarios(viagens.map((v) => v.motoristaId));
+    return viagens.map((v) => ({ ...v, motoristaNome: motoristas.get(v.motoristaId) ?? null }));
   }
 
   async findOne(id: string) {

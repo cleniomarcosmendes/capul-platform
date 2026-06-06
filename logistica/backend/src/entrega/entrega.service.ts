@@ -1,13 +1,17 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, StatusEntrega } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { CoreLookupService } from '../core/core-lookup.service.js';
 import { CreateEntregaDto } from './dto.js';
 
 const onlyDigits = (s?: string | null) => (s ?? '').replace(/\D/g, '');
 
 @Injectable()
 export class EntregaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly core: CoreLookupService,
+  ) {}
 
   /**
    * Cria a entrega. Atômico: incrementa o contador por filial (nº tipo talão),
@@ -15,6 +19,7 @@ export class EntregaService {
    * EnderecoEntrega) e grava os cupons. Status inicial PENDENTE.
    */
   async create(dto: CreateEntregaDto, criadoPorId: string) {
+    await this.core.validarFilial(dto.filialId);
     const snap = await this.resolverSnapshotEndereco(dto);
 
     const cupons = (dto.cupons ?? []).filter((c) => c.numeroCupom || c.valor != null);

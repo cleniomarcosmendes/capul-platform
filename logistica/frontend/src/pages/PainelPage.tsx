@@ -12,9 +12,9 @@ interface Painel {
     veiculosDisponiveis: number; veiculosEmUso: number; veiculosManutencao: number;
   };
   porDia: { dia: string; criadas: number; despachadas: number }[];
-  porFilial: { filialId: string; pendentes: number; emViagem: number; entregues: number; total: number }[];
+  porFilial: { filialId: string; nomeFilial?: string | null; pendentes: number; emViagem: number; entregues: number; total: number }[];
   porVeiculo: { veiculoId: string; placa: string; viagens: number }[];
-  porMotorista: { motoristaId: string; viagens: number }[];
+  porMotorista: { motoristaId: string; nomeMotorista?: string | null; viagens: number }[];
 }
 
 const labelCore = (i?: CoreItem) => (i ? i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8) : '—');
@@ -120,7 +120,7 @@ export function PainelPage() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <Tabela titulo="Por filial">
               {data.porFilial.length === 0 ? <Vazio /> : data.porFilial.map((f) => (
-                <Linha key={f.filialId} esq={nomeFilial(f.filialId)}
+                <Linha key={f.filialId} esq={f.nomeFilial || nomeFilial(f.filialId)}
                   dir={<span><b>{f.total}</b> <span className="text-slate-400">({f.pendentes} pend · {f.emViagem} em viagem)</span></span>} />
               ))}
             </Tabela>
@@ -131,7 +131,7 @@ export function PainelPage() {
             </Tabela>
             <Tabela titulo="Viagens por motorista">
               {data.porMotorista.length === 0 ? <Vazio /> : data.porMotorista.map((m) => (
-                <Linha key={m.motoristaId} esq={nomeUsuario(m.motoristaId)} dir={<b>{m.viagens}</b>} />
+                <Linha key={m.motoristaId} esq={m.nomeMotorista || nomeUsuario(m.motoristaId)} dir={<b>{m.viagens}</b>} />
               ))}
             </Tabela>
           </div>

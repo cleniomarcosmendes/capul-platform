@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, SituacaoVeiculo, StatusEntrega, StatusViagem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { CoreLookupService } from '../core/core-lookup.service.js';
 
 /**
  * Indicadores da Fase 1a — computáveis SEM o app do entregador (PR7).
@@ -10,7 +11,10 @@ import { PrismaService } from '../prisma/prisma.service.js';
  */
 @Injectable()
 export class PainelService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly core: CoreLookupService,
+  ) {}
 
   async resumo(filialId?: string, dias = 14) {
     const janela = Math.min(Math.max(Number(dias) || 14, 1), 90);
@@ -101,6 +105,13 @@ export class PainelService {
       ) v ON v.dd = d
       ORDER BY d`);
 
+    // Nomes (core) para filial e motorista — painel autossuficiente.
+    const filiaisOrden = [...filialMap.values()].sort((a, b) => b.total - a.total);
+    const [nomesFil, nomesMot] = await Promise.all([
+      this.core.nomesFiliais(filiaisOrden.map((f) => f.filialId)),
+      this.core.nomesUsuarios(porMotorista.map((m) => m.motoristaId)),
+    ]);
+
     return {
       filtros: { filialId: filialId ?? null, dias: janela },
       cards: {
@@ -117,9 +128,9 @@ export class PainelService {
         veiculosManutencao: veicManutencao,
       },
       porDia,
-      porFilial: [...filialMap.values()].sort((a, b) => b.total - a.total),
+      porFilial: filiaisOrden.map((f) => ({ ...f, nomeFilial: nomesFil.get(f.filialId) ?? null })),
       porVeiculo,
-      porMotorista,
+      porMotorista: porMotorista.map((m) => ({ ...m, nomeMotorista: nomesMot.get(m.motoristaId) ?? null })),
     };
   }
 }
