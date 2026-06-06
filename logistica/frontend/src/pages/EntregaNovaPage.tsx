@@ -82,6 +82,7 @@ export function EntregaNovaPage() {
   const ultimoCupomRef = useRef<HTMLInputElement>(null);
 
   const totalCupons = cupons.reduce((acc, c) => acc + (parseFloat(c.valor) || 0), 0);
+  const identificado = tipoCliente === 'IDENTIFICADO';
 
   async function carregarPendentes() {
     try {
@@ -259,33 +260,36 @@ export function EntregaNovaPage() {
 
         <div className="flex gap-2">
           {TIPOS.map((t) => (
-            <button type="button" key={t.v} onClick={() => setTipoCliente(t.v)}
+            <button type="button" key={t.v} onClick={() => { setTipoCliente(t.v); setMsgMat(null); }}
               className={`rounded-lg border px-3 py-1.5 text-sm ${tipoCliente === t.v ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-300 text-slate-600'}`}>
               {t.label}
             </button>
           ))}
         </div>
 
-        {tipoCliente === 'IDENTIFICADO' && (
-          <div>
-            <label className={lbl}>Matrícula do cliente</label>
-            <div className="flex items-center gap-2">
-              <div className="w-44">
-                <input
-                  value={matricula}
-                  onChange={(e) => setMatricula(e.target.value.toUpperCase())}
-                  onBlur={buscarPorMatricula}
-                  placeholder="E01047"
-                  className={`${inp} uppercase`}
-                />
-              </div>
-              {buscandoMat && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+        {/* Sempre presente (mesma posição/tamanho nas 3 tabs); só ativo em
+            "Com matrícula" — evita o layout pular ao trocar de tab. */}
+        <div>
+          <label className={lbl}>Matrícula do cliente</label>
+          <div className="flex items-center gap-2">
+            <div className="w-44">
+              <input
+                value={identificado ? matricula : ''}
+                onChange={(e) => setMatricula(e.target.value.toUpperCase())}
+                onBlur={buscarPorMatricula}
+                disabled={!identificado}
+                placeholder={identificado ? 'E01047' : '—'}
+                title={identificado ? '' : "Disponível na opção 'Com matrícula'"}
+                className={`${inp} uppercase disabled:bg-slate-100 disabled:text-slate-400`}
+              />
             </div>
-            {msgMat && (
-              <p className={`mt-1 text-xs ${msgMat.tipo === 'ok' ? 'text-emerald-700' : 'text-amber-700'}`}>{msgMat.texto}</p>
-            )}
+            {buscandoMat && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
           </div>
-        )}
+          {/* Linha de feedback com altura reservada — não desloca os campos abaixo. */}
+          <p className={`mt-1 min-h-[1rem] text-xs ${msgMat?.tipo === 'erro' ? 'text-amber-700' : 'text-emerald-700'}`}>
+            {identificado && msgMat ? msgMat.texto : ''}
+          </p>
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
