@@ -73,16 +73,15 @@ operação `cadastroFiscal` atual (que já devolve `endereco`+`contato`), além 
 CPF/CNPJ. Aí reaproveitamos 100% o contrato existente.
 
 ### Requisitos (ambas)
+- **Leitura da SA1010 (CLIENTES).** Confirmado internamente (CAPUL): vendemos e
+  entregamos para **clientes** → a entrega usa a **SA1**. A SRA010 (funcionários)
+  é uso **separado** na logística — identificar o **condutor** que loga para usar
+  um veículo, e para isso a operação **`infoPortal`** já existe (não faz parte
+  deste pedido).
 - **Sem senha** (apenas a auth Basic de serviço).
-- **Sem SEFAZ** — leitura direta da SA1/SA2 no Protheus (o `cadastroFiscal` já é
+- **Sem SEFAZ** — leitura direta da SA1 no Protheus (o `cadastroFiscal` já é
   assim). **Não** envolver consulta SEFAZ/CCC (risco de bloqueio + cota).
 - Trazer **CEP e UF** sempre que existirem.
-
-> **Dúvida a confirmar (CAPUL interno):** a "matrícula" usada no balcão é de
-> **cliente/cooperado (SA1)** ou de **funcionário (SRA)**? Se for SRA, a operação
-> **`infoPortal`** (já entregue) **já aceita `MATRICULA`/`NOME`** — bastaria
-> **adicionar `endereco` + `telefone`** ao retorno dela, e nem precisaríamos de
-> endpoint novo. Vamos confirmar e avisar.
 
 ---
 
@@ -99,7 +98,7 @@ CPF/CNPJ. Aí reaproveitamos 100% o contrato existente.
 
 ## 4. Status
 
-- [ ] Definido (CAPUL): matrícula = SA1 (cliente) ou SRA (funcionário)?
+- [x] Definido (CAPUL): **SA1010 (cliente)**. SRA010 (funcionário) é uso separado — condutor do veículo, via `infoPortal`.
 - [ ] Endpoint/extensão criado pela equipe Protheus (HOM)
 - [ ] Validado pela Plataforma em HOM
 - [ ] Cadastrado em PROD (Configurador) + ligado o autofill na Nova Entrega
