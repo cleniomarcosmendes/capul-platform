@@ -63,6 +63,14 @@ export function RomaneioPage() {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
+  // Injeta o CSS direto no <head> (robusto — não depende do <style> do React 19).
+  useEffect(() => {
+    const s = document.createElement('style');
+    s.textContent = CSS;
+    document.head.appendChild(s);
+    return () => { s.remove(); };
+  }, []);
+
   useEffect(() => {
     Promise.all([
       coreApi.get<CoreItem[]>('/filiais').catch(() => ({ data: [] })),
@@ -88,7 +96,6 @@ export function RomaneioPage() {
 
   return (
     <div className="rom-root">
-      <style>{CSS}</style>
       <div className="no-print rom-bar">
         <button onClick={() => history.back()} className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">
           <ArrowLeft className="h-4 w-4" /> Voltar

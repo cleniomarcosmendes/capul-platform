@@ -44,6 +44,14 @@ export function EtiquetasPage({ modo }: { modo: 'viagem' | 'entrega' }) {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
+  // Injeta o CSS no <head> (robusto — não depende do <style> do React 19).
+  useEffect(() => {
+    const s = document.createElement('style');
+    s.textContent = CSS;
+    document.head.appendChild(s);
+    return () => { s.remove(); };
+  }, []);
+
   useEffect(() => {
     coreApi.get<CoreItem[]>('/filiais').then((r) => setFiliais(r.data)).catch(() => {});
   }, []);
@@ -77,7 +85,6 @@ export function EtiquetasPage({ modo }: { modo: 'viagem' | 'entrega' }) {
 
   return (
     <div className="etq-root">
-      <style>{CSS}</style>
       <div className="no-print etq-toolbar">
         <button onClick={() => history.back()} className={`${btn} text-slate-600 hover:bg-slate-100`}>
           <ArrowLeft className="h-4 w-4" /> Voltar
