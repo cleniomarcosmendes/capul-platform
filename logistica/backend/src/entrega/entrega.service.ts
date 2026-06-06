@@ -84,8 +84,9 @@ export class EntregaService {
     if (!snap.endLogradouro) return;
 
     const dono = matricula ? { matricula } : { clienteLocalId };
+    // Dedup escopado por filial: o mesmo endereço noutra filial é registro à parte.
     const existentes = await this.prisma.enderecoEntrega.findMany({
-      where: { ativo: true, ...dono },
+      where: { ativo: true, filialId: dto.filialId, ...dono },
       select: { logradouro: true, cidade: true },
     });
     const chave = this.chaveEndereco(snap.endLogradouro, snap.endCidade);
@@ -93,6 +94,7 @@ export class EntregaService {
 
     await this.prisma.enderecoEntrega.create({
       data: {
+        filialId: dto.filialId,
         ...dono,
         logradouro: snap.endLogradouro,
         numero: snap.endNumero,

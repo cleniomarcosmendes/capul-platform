@@ -13,7 +13,7 @@ const onlyDigits = (s?: string) => (s ?? '').replace(/\D/g, '');
 export class EnderecoService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateEnderecoDto) {
+  async create(dto: CreateEnderecoDto, filialId?: string) {
     if (dto.clienteLocalId) {
       const cl = await this.prisma.clienteLocal.findUnique({
         where: { id: dto.clienteLocalId },
@@ -23,6 +23,7 @@ export class EnderecoService {
     }
     return this.prisma.enderecoEntrega.create({
       data: {
+        filialId: filialId || null,
         matricula: dto.matricula?.trim() || null,
         clienteLocalId: dto.clienteLocalId || null,
         apelido: dto.apelido?.trim() || null,
@@ -38,8 +39,8 @@ export class EnderecoService {
     });
   }
 
-  /** Lista endereços ativos de um dono (matrícula ou clienteLocalId). */
-  list(params: { matricula?: string; clienteLocalId?: string }) {
+  /** Lista endereços ativos de um dono (matrícula ou clienteLocalId). Escopo por filial. */
+  list(params: { matricula?: string; clienteLocalId?: string; filialId?: string }) {
     const matricula = params.matricula?.trim();
     const clienteLocalId = params.clienteLocalId?.trim();
     if (!matricula && !clienteLocalId) {
@@ -48,6 +49,7 @@ export class EnderecoService {
     return this.prisma.enderecoEntrega.findMany({
       where: {
         ativo: true,
+        ...(params.filialId ? { filialId: params.filialId } : {}),
         ...(matricula ? { matricula } : {}),
         ...(clienteLocalId ? { clienteLocalId } : {}),
       },

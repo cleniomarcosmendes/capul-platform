@@ -9,6 +9,8 @@ import {
   Query,
 } from '@nestjs/common';
 import { Roles } from '../common/decorators/roles.decorator.js';
+import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
+import { filialDoUsuario } from '../common/filial-scope.js';
 import { ClienteLocalService } from './cliente-local.service.js';
 import { EnderecoService } from './endereco.service.js';
 import { BuscaService } from './busca.service.js';
@@ -35,19 +37,19 @@ export class CadastroController {
 
   // ---------- Busca unificada ----------
   @Get('busca')
-  buscaUnificada(@Query('termo') termo: string) {
-    return this.busca.buscaUnificada(termo ?? '');
+  buscaUnificada(@Query('termo') termo: string, @CurrentUser() user: JwtPayload) {
+    return this.busca.buscaUnificada(termo ?? '', filialDoUsuario(user));
   }
 
   // ---------- Clientes locais ----------
   @Post('clientes-locais')
-  criarCliente(@Body() dto: CreateClienteLocalDto) {
-    return this.clientes.create(dto);
+  criarCliente(@Body() dto: CreateClienteLocalDto, @CurrentUser() user: JwtPayload) {
+    return this.clientes.create(dto, filialDoUsuario(user));
   }
 
   @Get('clientes-locais')
-  listarClientes(@Query('q') q?: string) {
-    return this.clientes.list(q);
+  listarClientes(@CurrentUser() user: JwtPayload, @Query('q') q?: string) {
+    return this.clientes.list(q, filialDoUsuario(user));
   }
 
   @Get('clientes-locais/:id')
@@ -65,18 +67,19 @@ export class CadastroController {
     return this.clientes.remove(id);
   }
 
-  // ---------- Endereços (globais) ----------
+  // ---------- Endereços (por filial) ----------
   @Post('enderecos')
-  criarEndereco(@Body() dto: CreateEnderecoDto) {
-    return this.enderecos.create(dto);
+  criarEndereco(@Body() dto: CreateEnderecoDto, @CurrentUser() user: JwtPayload) {
+    return this.enderecos.create(dto, filialDoUsuario(user));
   }
 
   @Get('enderecos')
   listarEnderecos(
+    @CurrentUser() user: JwtPayload,
     @Query('matricula') matricula?: string,
     @Query('clienteLocalId') clienteLocalId?: string,
   ) {
-    return this.enderecos.list({ matricula, clienteLocalId });
+    return this.enderecos.list({ matricula, clienteLocalId, filialId: filialDoUsuario(user) });
   }
 
   @Patch('enderecos/:id')

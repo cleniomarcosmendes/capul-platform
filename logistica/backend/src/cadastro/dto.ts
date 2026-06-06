@@ -34,7 +34,7 @@ export class UpdateClienteLocalDto {
   ativo?: boolean;
 }
 
-// ---------- EnderecoEntrega (global, cross-filial) ----------
+// ---------- EnderecoEntrega (escopo por filial; filialId vem do token) ----------
 export class CreateEnderecoDto {
   // Dono do endereço: matrícula (ERP) OU clienteLocalId. Ambos opcionais
   // (eventual ad-hoc não cadastra aqui, mas o endpoint aceita avulso se preciso).

@@ -69,6 +69,7 @@ enum TipoVeiculo {
 // ---------- Cliente / Endereço (GLOBAIS, cross-filial) ----------
 model ClienteLocal {
   id         String            @id @default(uuid())
+  filialId   String?           @map("filial_id") // filial dona (escopo por cidade)
   nome       String
   telefone   String?
   observacao String?
@@ -79,12 +80,14 @@ model ClienteLocal {
 
   @@index([telefone])
   @@index([nome])
+  @@index([filialId])
   @@map("cliente_local")
   @@schema("logistica")
 }
 
 model EnderecoEntrega {
   id              String        @id @default(uuid())
+  filialId        String?       @map("filial_id") // filial dona (escopo por cidade)
   matricula       String?
   clienteLocalId  String?       @map("cliente_local_id")
   clienteLocal    ClienteLocal? @relation(fields: [clienteLocalId], references: [id])
@@ -105,6 +108,7 @@ model EnderecoEntrega {
 
   @@index([matricula])
   @@index([clienteLocalId])
+  @@index([filialId])
   @@map("endereco_entrega")
   @@schema("logistica")
 }

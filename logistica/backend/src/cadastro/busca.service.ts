@@ -19,18 +19,21 @@ export class BuscaService {
     private readonly protheus: ProtheusClienteService,
   ) {}
 
-  async buscaUnificada(termoRaw: string) {
+  async buscaUnificada(termoRaw: string, filialId?: string) {
     const termo = (termoRaw ?? '').trim();
     const digits = onlyDigits(termo);
     const pareceMatricula = MATRICULA_RE.test(termo);
     const matriculaNorm = pareceMatricula ? termo.toUpperCase() : '';
+    // Escopo por filial (cidades diferentes → não misturar endereços homônimos).
+    const escopo = filialId ? { filialId } : {};
 
     const [clientesLocais, enderecosPorMatricula, historicoEntregas, clienteProtheus] = await Promise.all([
-      // ClienteLocal por nome/telefone
+      // ClienteLocal por nome/telefone (da filial)
       termo
         ? this.prisma.clienteLocal.findMany({
             where: {
               ativo: true,
+              ...escopo,
               OR: [
                 { nome: { contains: termo, mode: 'insensitive' } },
                 ...(digits.length >= 4 ? [{ telefone: { contains: digits } }] : []),
@@ -40,18 +43,19 @@ export class BuscaService {
             take: 20,
           })
         : Promise.resolve([]),
-      // Endereços já conhecidos por matrícula (histórico de cliente identificado)
+      // Endereços já conhecidos por matrícula na filial (cliente identificado)
       pareceMatricula
         ? this.prisma.enderecoEntrega.findMany({
-            where: { ativo: true, matricula: matriculaNorm },
+            where: { ativo: true, ...escopo, matricula: matriculaNorm },
             orderBy: { criadoEm: 'desc' },
             take: 20,
           })
         : Promise.resolve([]),
-      // Histórico de entregas (cobre eventual reuso por telefone/nome do destinatário)
+      // Histórico de entregas DA FILIAL (reuso por telefone/nome do destinatário)
       termo
         ? this.prisma.entrega.findMany({
             where: {
+              ...escopo,
               OR: [
                 ...(pareceMatricula ? [{ matricula: matriculaNorm }] : []),
                 ...(digits.length >= 4 ? [{ telefone: { contains: digits } }] : []),

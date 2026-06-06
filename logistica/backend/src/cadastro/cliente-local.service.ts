@@ -12,9 +12,10 @@ const onlyDigits = (s?: string) => (s ?? '').replace(/\D/g, '');
 export class ClienteLocalService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(dto: CreateClienteLocalDto) {
+  create(dto: CreateClienteLocalDto, filialId?: string) {
     return this.prisma.clienteLocal.create({
       data: {
+        filialId: filialId || null,
         nome: dto.nome.trim(),
         telefone: dto.telefone ? onlyDigits(dto.telefone) : null,
         observacao: dto.observacao?.trim() || null,
@@ -22,12 +23,13 @@ export class ClienteLocalService {
     });
   }
 
-  /** Lista/busca por nome (contains, case-insensitive) ou telefone (dígitos). */
-  async list(q?: string) {
+  /** Lista/busca por nome (contains) ou telefone (dígitos). Escopo por filial. */
+  async list(q?: string, filialId?: string) {
     const termo = (q ?? '').trim();
+    const escopo = filialId ? { filialId } : {};
     if (!termo) {
       return this.prisma.clienteLocal.findMany({
-        where: { ativo: true },
+        where: { ativo: true, ...escopo },
         orderBy: { nome: 'asc' },
         take: 50,
       });
@@ -36,6 +38,7 @@ export class ClienteLocalService {
     return this.prisma.clienteLocal.findMany({
       where: {
         ativo: true,
+        ...escopo,
         OR: [
           { nome: { contains: termo, mode: 'insensitive' } },
           ...(digits.length >= 4 ? [{ telefone: { contains: digits } }] : []),
