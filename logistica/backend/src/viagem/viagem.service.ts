@@ -157,6 +157,36 @@ export class ViagemService {
     });
   }
 
+  /**
+   * Remove UMA entrega da viagem (só RASCUNHO). Apaga a parada (a entrega segue
+   * PENDENTE — em RASCUNHO ela nunca mudou de status) e re-sequencia as demais.
+   */
+  async removerEntrega(viagemId: string, entregaId: string, userFilialId?: string) {
+    const v = await this.prisma.viagem.findUnique({
+      where: { id: viagemId },
+      include: { paradas: { orderBy: { sequencia: 'asc' } } },
+    });
+    if (!v) throw new NotFoundException('Viagem não encontrada.');
+    if (userFilialId && v.filialId !== userFilialId) throw new ForbiddenException('Viagem de outra filial.');
+    if (v.situacao !== StatusViagem.RASCUNHO) {
+      throw new BadRequestException('Só dá para remover entrega de viagem em RASCUNHO (ainda não despachada).');
+    }
+    const parada = v.paradas.find((p) => p.entregaId === entregaId);
+    if (!parada) throw new NotFoundException('Entrega não está nesta viagem.');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.parada.delete({ where: { id: parada.id } });
+      // re-sequencia 1..N as paradas restantes (mantém a ordem da rota).
+      const restantes = v.paradas.filter((p) => p.id !== parada.id);
+      for (let i = 0; i < restantes.length; i++) {
+        if (restantes[i].sequencia !== i + 1) {
+          await tx.parada.update({ where: { id: restantes[i].id }, data: { sequencia: i + 1 } });
+        }
+      }
+    });
+    return this.findOne(viagemId);
+  }
+
   /** Descarta uma montagem (RASCUNHO) — libera as entregas (cascade nas paradas). */
   async descartar(id: string, userFilialId?: string) {
     const v = await this.prisma.viagem.findUnique({ where: { id }, select: { situacao: true, filialId: true } });

@@ -42,6 +42,11 @@ export class ViagemController {
     return this.viagens.concluir(id, user.filialId);
   }
 
+  @Delete(':id/entregas/:entregaId')
+  removerEntrega(@Param('id') id: string, @Param('entregaId') entregaId: string, @CurrentUser() user: JwtPayload) {
+    return this.viagens.removerEntrega(id, entregaId, user.filialId);
+  }
+
   @Delete(':id')
   descartar(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.viagens.descartar(id, user.filialId);
