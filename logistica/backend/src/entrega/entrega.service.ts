@@ -58,7 +58,50 @@ export class EntregaService {
       });
     });
 
+    // Persiste o endereço como reutilizável (cliente identificado/recorrente),
+    // pra aparecer no seletor da próxima entrega. Best-effort (não derruba a
+    // entrega se falhar). EVENTUAL (sem matrícula/cliente) não persiste.
+    await this.persistirEnderecoReutilizavel(dto, snap).catch(() => {});
+
     return this.comTotal(entrega);
+  }
+
+  /** Normaliza endereço pra dedupe (APTO/AP + sem pontuação/espaços). */
+  private chaveEndereco(logradouro?: string | null, cidade?: string | null) {
+    return `${logradouro ?? ''} ${cidade ?? ''}`.toUpperCase().replace(/APARTAMENTO|APTO/g, 'AP').replace(/[^A-Z0-9]/g, '');
+  }
+
+  private async persistirEnderecoReutilizavel(
+    dto: CreateEntregaDto,
+    snap: { endLogradouro: string; endNumero: string | null; endComplemento: string | null; endBairro: string | null; endCidade: string | null; endUf: string | null; endCep: string | null; endReferencia: string | null },
+  ) {
+    if (dto.enderecoEntregaId) return; // veio de um endereço já salvo
+    const matricula = dto.matricula?.trim() || null;
+    const clienteLocalId = dto.clienteLocalId || null;
+    if (!matricula && !clienteLocalId) return; // eventual — não cadastra
+    if (!snap.endLogradouro) return;
+
+    const dono = matricula ? { matricula } : { clienteLocalId };
+    const existentes = await this.prisma.enderecoEntrega.findMany({
+      where: { ativo: true, ...dono },
+      select: { logradouro: true, cidade: true },
+    });
+    const chave = this.chaveEndereco(snap.endLogradouro, snap.endCidade);
+    if (existentes.some((e) => this.chaveEndereco(e.logradouro, e.cidade) === chave)) return; // já existe
+
+    await this.prisma.enderecoEntrega.create({
+      data: {
+        ...dono,
+        logradouro: snap.endLogradouro,
+        numero: snap.endNumero,
+        complemento: snap.endComplemento,
+        bairro: snap.endBairro,
+        cidade: snap.endCidade,
+        uf: snap.endUf,
+        cep: snap.endCep,
+        pontoReferencia: snap.endReferencia,
+      },
+    });
   }
 
   /** Lista por filial + status (default: PENDENTE — a fila de montagem). */

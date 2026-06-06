@@ -42,6 +42,7 @@ interface EnderecoSug {
 }
 interface BuscaResp {
   clientesLocais: ClienteBusca[];
+  enderecosPorMatricula?: EnderecoBusca[]; // EnderecoEntrega salvos por matrícula
   historicoEntregas: HistoricoBusca[];
   protheus?: { cliente: ClienteProtheus | null };
 }
@@ -189,18 +190,32 @@ export function EntregaNovaPage() {
     setCidade('Unaí'); setUf('MG'); setCep(''); setReferencia('');
   }
 
-  // Cliente identificado: matrícula (E#####) → Protheus (SA1). Preenche
-  // nome/telefone e monta o seletor de endereços (Protheus pode ter +1).
-  function aplicarProtheus(c: ClienteProtheus) {
-    setDestinatarioNome(c.nome);
-    if (c.telefone) setTelefone(maskTelefone(c.telefone));
+  // Cliente identificado: matrícula (E#####). Monta o seletor agregando TODAS
+  // as fontes do cliente: Protheus + endereços já salvos pra essa matrícula +
+  // histórico de entregas (assim um "novo endereço" usado antes reaparece).
+  function montarSeletorMatricula(data: BuscaResp, mat: string) {
+    const c = data.protheus?.cliente;
+    const sug: EnderecoSug[] = [];
+    if (c) sug.push(...c.enderecos.map((e) => ({ rotulo: e.rotulo, logradouro: e.logradouro, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep })));
+    for (const e of data.enderecosPorMatricula ?? [])
+      sug.push({ rotulo: e.apelido || 'Salvo', logradouro: e.logradouro, numero: e.numero, complemento: e.complemento, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep, referencia: e.pontoReferencia, enderecoEntregaId: e.id });
+    for (const h of data.historicoEntregas)
+      sug.push({ rotulo: 'Histórico', logradouro: h.endLogradouro ?? '', numero: h.endNumero, bairro: h.endBairro, cidade: h.endCidade });
+    // Dedupe (mesmo endereço de fontes diferentes vira 1).
+    const norm = (l?: string | null, ci?: string | null) => `${l ?? ''} ${ci ?? ''}`.toUpperCase().replace(/APARTAMENTO|APTO/g, 'AP').replace(/[^A-Z0-9]/g, '');
+    const vistos = new Set<string>();
+    const unicas = sug.filter((s) => { if (!s.logradouro) return false; const k = norm(s.logradouro, s.cidade); if (vistos.has(k)) return false; vistos.add(k); return true; });
+
+    const nome = c?.nome ?? data.historicoEntregas[0]?.destinatarioNome ?? '';
+    const tel = c?.telefone ?? data.historicoEntregas.find((h) => h.telefone)?.telefone ?? null;
+    if (nome) setDestinatarioNome(nome);
+    if (tel) { pularBuscaTelRef.current = true; setTelefone(maskTelefone(tel)); }
     setClienteLocalId('');
-    const sug: EnderecoSug[] = c.enderecos.map((e) => ({
-      rotulo: e.rotulo, logradouro: e.logradouro, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep,
-    }));
-    setEnderecosSugeridos(sug);
-    if (sug.length > 0) aplicarEndereco(sug[0], 0);
+    setMatricula(c?.matricula ?? mat);
+    setEnderecosSugeridos(unicas);
+    if (unicas.length > 0) aplicarEndereco(unicas[0], 0);
     else enderecoNovo();
+    return { achou: !!c || unicas.length > 0 || !!nome, viaProtheus: !!c };
   }
 
   async function buscarPorMatricula() {
@@ -210,13 +225,11 @@ export function EntregaNovaPage() {
     setBuscandoMat(true);
     try {
       const { data } = await logisticaApi.get<BuscaResp>('/cadastro/busca', { params: { termo: mat } });
-      const c = data.protheus?.cliente;
-      if (c) {
-        aplicarProtheus(c);
-        setMatricula(c.matricula);
-        setMsgMat({ tipo: 'ok', texto: 'Cliente encontrado no Protheus — confira/edite o endereço.' });
+      const r = montarSeletorMatricula(data, mat);
+      if (r.achou) {
+        setMsgMat({ tipo: 'ok', texto: r.viaProtheus ? 'Cliente encontrado no Protheus — escolha o endereço ou adicione um novo.' : 'Cliente encontrado nos cadastros locais.' });
       } else {
-        setMsgMat({ tipo: 'erro', texto: 'Matrícula não encontrada no Protheus. Preencha manualmente.' });
+        setMsgMat({ tipo: 'erro', texto: 'Matrícula não encontrada. Preencha manualmente.' });
       }
     } catch {
       setMsgMat({ tipo: 'erro', texto: 'Protheus indisponível. Preencha manualmente.' });
