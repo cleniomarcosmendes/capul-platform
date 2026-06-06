@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Loader2, Truck, Plus } from 'lucide-react';
+import { Loader2, Truck, Plus, Pencil } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { maskPlaca } from '../utils/format';
 
@@ -9,6 +9,7 @@ interface Veiculo {
   placa: string;
   modelo?: string | null;
   marca?: string | null;
+  ano?: number | null;
   tipo: string;
   situacao: string;
   kmAtual: number;
@@ -18,6 +19,7 @@ interface Veiculo {
 }
 
 const TIPOS = ['CARRO', 'UTILITARIO', 'CAMINHAO', 'OUTRO'];
+const SITUACOES = ['DISPONIVEL', 'EM_USO', 'EM_MANUTENCAO', 'BAIXADO'];
 const labelCore = (i: CoreItem) => i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8);
 
 export function VeiculosPage() {
@@ -36,6 +38,8 @@ export function VeiculosPage() {
   const [filialId, setFilialId] = useState('');
   const [departamentoLotacaoId, setDepartamentoId] = useState('');
   const [supervisorId, setSupervisorId] = useState('');
+  const [situacao, setSituacao] = useState('DISPONIVEL');
+  const [editId, setEditId] = useState<string | null>(null); // null = novo cadastro
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
 
@@ -63,6 +67,20 @@ export function VeiculosPage() {
     return i ? labelCore(i) : id.slice(0, 8);
   };
 
+  function novoVeiculo() {
+    setEditId(null); setMsg(null);
+    setPlaca(''); setModelo(''); setMarca(''); setAno(''); setTipo('CARRO'); setKmAtual('0');
+    setFilialId(''); setDepartamentoId(''); setSupervisorId(''); setSituacao('DISPONIVEL');
+  }
+
+  function editarVeiculo(v: Veiculo) {
+    setEditId(v.id); setMsg(null);
+    setPlaca(v.placa); setModelo(v.modelo ?? ''); setMarca(v.marca ?? '');
+    setAno(v.ano ? String(v.ano) : ''); setTipo(v.tipo); setKmAtual(String(v.kmAtual ?? 0));
+    setFilialId(v.filialId); setDepartamentoId(v.departamentoLotacaoId); setSupervisorId(v.supervisorId);
+    setSituacao(v.situacao);
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     setMsg(null);
@@ -71,24 +89,32 @@ export function VeiculosPage() {
       return;
     }
     setSalvando(true);
+    const payload = {
+      filialId,
+      placa,
+      modelo: modelo || undefined,
+      marca: marca || undefined,
+      ano: ano ? parseInt(ano) : undefined,
+      tipo,
+      kmAtual: kmAtual ? parseInt(kmAtual) : 0,
+      departamentoLotacaoId,
+      supervisorId,
+      ...(editId ? { situacao } : {}),
+    };
     try {
-      await logisticaApi.post('/veiculos', {
-        filialId,
-        placa,
-        modelo: modelo || undefined,
-        marca: marca || undefined,
-        ano: ano ? parseInt(ano) : undefined,
-        tipo,
-        kmAtual: kmAtual ? parseInt(kmAtual) : 0,
-        departamentoLotacaoId,
-        supervisorId,
-      });
-      setMsg({ tipo: 'ok', texto: `Veículo ${placa.toUpperCase()} cadastrado.` });
-      setPlaca(''); setModelo(''); setMarca(''); setAno(''); setKmAtual('0');
+      if (editId) {
+        await logisticaApi.patch(`/veiculos/${editId}`, payload);
+        setMsg({ tipo: 'ok', texto: `Veículo ${placa.toUpperCase()} atualizado.` });
+        novoVeiculo();
+      } else {
+        await logisticaApi.post('/veiculos', payload);
+        setMsg({ tipo: 'ok', texto: `Veículo ${placa.toUpperCase()} cadastrado.` });
+        setPlaca(''); setModelo(''); setMarca(''); setAno(''); setKmAtual('0');
+      }
       void carregar();
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao cadastrar veículo.' });
+      setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao salvar veículo.' });
     } finally {
       setSalvando(false);
     }
@@ -99,7 +125,10 @@ export function VeiculosPage() {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <form onSubmit={submit} className="lg:col-span-1 space-y-3 rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800"><Truck className="h-5 w-5 text-sky-600" /> Novo veículo</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800"><Truck className="h-5 w-5 text-sky-600" /> {editId ? 'Editar veículo' : 'Novo veículo'}</h2>
+          {editId && <button type="button" onClick={novoVeiculo} className="flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline"><Plus className="h-3 w-3" /> Novo</button>}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div><label className="block text-xs font-medium text-slate-500">Placa *</label><input value={placa} onChange={(e) => setPlaca(maskPlaca(e.target.value))} required placeholder="ABC1D23" maxLength={7} className={`${inp} font-mono uppercase`} /></div>
           <div><label className="block text-xs font-medium text-slate-500">Tipo</label>
@@ -119,6 +148,11 @@ export function VeiculosPage() {
         <div><label className="block text-xs font-medium text-slate-500">Supervisor responsável *</label>
           <select value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)} className={inp}><option value="">—</option>{usuarios.map((u) => <option key={u.id} value={u.id}>{labelCore(u)}</option>)}</select>
         </div>
+        {editId && (
+          <div><label className="block text-xs font-medium text-slate-500">Situação</label>
+            <select value={situacao} onChange={(e) => setSituacao(e.target.value)} className={inp}>{SITUACOES.map((s) => <option key={s} value={s}>{s}</option>)}</select>
+          </div>
+        )}
         {msg && <div className={`rounded-lg px-3 py-2 text-sm ${msg.tipo === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.texto}</div>}
         <button type="submit" disabled={salvando} className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
           {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Salvar
@@ -134,16 +168,19 @@ export function VeiculosPage() {
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr><th className="px-4 py-2 text-left">Placa</th><th className="px-4 py-2 text-left">Modelo</th><th className="px-4 py-2 text-left">Situação</th><th className="px-4 py-2 text-left">Supervisor</th><th className="px-4 py-2 text-right">KM</th></tr>
+              <tr><th className="px-4 py-2 text-left">Placa</th><th className="px-4 py-2 text-left">Modelo</th><th className="px-4 py-2 text-left">Situação</th><th className="px-4 py-2 text-left">Supervisor</th><th className="px-4 py-2 text-right">KM</th><th className="px-4 py-2 text-right">Ações</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {veiculos.map((v) => (
-                <tr key={v.id} className="hover:bg-slate-50">
+                <tr key={v.id} className={`hover:bg-slate-50 ${editId === v.id ? 'bg-sky-50' : ''}`}>
                   <td className="px-4 py-2 font-mono font-medium">{v.placa}</td>
                   <td className="px-4 py-2">{v.marca} {v.modelo}</td>
-                  <td className="px-4 py-2"><span className="rounded bg-slate-100 px-2 py-0.5 text-xs">{v.situacao}</span></td>
+                  <td className="px-4 py-2"><span className={`rounded px-2 py-0.5 text-xs ${v.situacao === 'EM_MANUTENCAO' ? 'bg-amber-100 text-amber-700' : v.situacao === 'BAIXADO' ? 'bg-rose-100 text-rose-700' : v.situacao === 'EM_USO' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-600'}`}>{v.situacao}</span></td>
                   <td className="px-4 py-2 text-slate-600">{nomePorId(usuarios, v.supervisorId)}</td>
                   <td className="px-4 py-2 text-right font-mono">{v.kmAtual}</td>
+                  <td className="px-4 py-2 text-right">
+                    <button onClick={() => editarVeiculo(v)} title="Editar" className="text-slate-400 hover:text-sky-600"><Pencil className="h-4 w-4" /></button>
+                  </td>
                 </tr>
               ))}
             </tbody>
