@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { Loader2, Plus, Trash2, Package, X, Search } from 'lucide-react';
+import { Loader2, Plus, Trash2, Package, X, Search, MapPin } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { maskTelefone, maskCep, onlyDigits, UFS } from '../utils/format';
@@ -402,18 +402,26 @@ export function EntregaNovaPage() {
 
         {enderecosSugeridos.length > 0 && (
           <div>
-            <label className={lbl}>Endereços do cliente</label>
-            <div className="mt-1 flex flex-wrap gap-2">
+            <label className={lbl}>Endereços do cliente — escolha um ou adicione um novo</label>
+            <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {enderecosSugeridos.map((e, i) => (
                 <button type="button" key={i} onClick={() => aplicarEndereco(e, i)}
-                  className={`rounded-lg border px-3 py-1.5 text-left text-xs ${enderecoSelIdx === i ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
-                  <div className="font-medium">{e.rotulo}</div>
-                  <div className="text-[11px] text-slate-500">{e.logradouro}{e.cidade ? ` · ${e.cidade}${e.uf ? '/' + e.uf : ''}` : ''}</div>
+                  className={`rounded-lg border p-3 text-left transition-colors ${enderecoSelIdx === i ? 'border-sky-500 bg-sky-50 ring-1 ring-sky-200' : 'border-slate-300 hover:bg-slate-50'}`}>
+                  <div className="flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{e.rotulo}</span>
+                  </div>
+                  <div className="mt-0.5 text-sm font-medium text-slate-800">
+                    {e.logradouro}{e.numero ? `, ${e.numero}` : ''}{e.complemento ? ` — ${e.complemento}` : ''}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {[e.bairro, [e.cidade, e.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ')}{e.cep ? ` · CEP ${maskCep(e.cep)}` : ''}
+                  </div>
                 </button>
               ))}
               <button type="button" onClick={enderecoNovo}
-                className={`rounded-lg border border-dashed px-3 py-1.5 text-xs ${enderecoSelIdx === -1 ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-300 text-slate-500 hover:bg-slate-50'}`}>
-                + Novo endereço
+                className={`flex items-center justify-center gap-1.5 rounded-lg border border-dashed p-3 text-sm font-medium ${enderecoSelIdx === -1 ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-300 text-slate-500 hover:bg-slate-50'}`}>
+                <Plus className="h-4 w-4" /> Novo endereço
               </button>
             </div>
           </div>
