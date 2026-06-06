@@ -106,10 +106,14 @@ export class EntregaService {
 
   /** Lista por filial + status (default: PENDENTE — a fila de montagem). */
   async list(params: { filialId?: string; status?: StatusEntrega }) {
+    const status = params.status ?? StatusEntrega.PENDENTE;
     const entregas = await this.prisma.entrega.findMany({
       where: {
         ...(params.filialId ? { filialId: params.filialId } : {}),
-        status: params.status ?? StatusEntrega.PENDENTE,
+        status,
+        // Entregas PENDENTES já montadas numa viagem (têm parada) saem da fila —
+        // não são mais "pendentes de montagem". Voltam se a viagem for descartada.
+        ...(status === StatusEntrega.PENDENTE ? { parada: { is: null } } : {}),
       },
       include: { cupons: true },
       orderBy: { criadoEm: 'asc' }, // quem comprou primeiro tende a sair primeiro
