@@ -94,7 +94,11 @@ export class ProtheusClienteService {
 
     const mc = ((j.manutencaocompartilhada ?? {}) as Record<string, unknown>);
     const cad = (((j.cadastrosativos ?? []) as unknown[])[0] ?? {}) as Record<string, unknown>;
-    const tel = `${trim(mc.ddd)}${trim(mc.tel)}`;
+    // DDD vem com zero de discagem ("038") — o DDD real é 2 dígitos. Limpa não
+    // dígitos e tira o zero à esquerda antes de juntar com o número.
+    const ddd = trim(mc.ddd).replace(/\D/g, '').replace(/^0+/, '');
+    const num = trim(mc.tel).replace(/\D/g, '');
+    const tel = `${ddd}${num}`;
     return {
       matricula,
       nome: trim(j.nome),
