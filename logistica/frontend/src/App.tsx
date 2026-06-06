@@ -8,6 +8,7 @@ import { EntregaNovaPage } from './pages/EntregaNovaPage';
 import { VeiculosPage } from './pages/VeiculosPage';
 import { ViagensPage } from './pages/ViagensPage';
 import { EtiquetasPage } from './pages/EtiquetasPage';
+import { RomaneioPage } from './pages/RomaneioPage';
 
 function Protected() {
   const { loading, logisticaRole } = useAuth();
@@ -26,6 +27,7 @@ function Protected() {
       {/* Impressão de etiquetas: fora do Layout (sem sidebar/header) */}
       <Route path="/etiquetas/viagem/:id" element={<EtiquetasPage modo="viagem" />} />
       <Route path="/etiquetas/entrega/:id" element={<EtiquetasPage modo="entrega" />} />
+      <Route path="/romaneio/viagem/:id" element={<RomaneioPage />} />
       <Route
         path="/*"
         element={

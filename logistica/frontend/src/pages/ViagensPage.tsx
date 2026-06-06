@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Truck, Send, Trash2, Printer, CheckCircle2 } from 'lucide-react';
+import { Loader2, Truck, Send, Trash2, Printer, CheckCircle2, FileText } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -191,6 +191,8 @@ export function ViagensPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        <a href={`/entregas/romaneio/viagem/${v.id}`} target="_blank" rel="noopener" title="Romaneio (relatório da viagem)"
+                          className="flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"><FileText className="h-3.5 w-3.5" /> Romaneio</a>
                         {(v.situacao === 'RASCUNHO' || v.situacao === 'EM_CURSO') && (
                           <a href={`/entregas/etiquetas/viagem/${v.id}`} target="_blank" rel="noopener" title="Imprimir etiquetas"
                             className="flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"><Printer className="h-3.5 w-3.5" /> Etiquetas</a>
