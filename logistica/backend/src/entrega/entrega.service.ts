@@ -86,11 +86,22 @@ export class EntregaService {
    * nunca se cancela com o veículo na rua (entrega já EM_VIAGEM não cancela aqui).
    */
   async cancelar(id: string, motivo: string | undefined, canceladaPorId: string) {
-    const e = await this.prisma.entrega.findUnique({ where: { id }, select: { status: true } });
+    const e = await this.prisma.entrega.findUnique({
+      where: { id },
+      select: { status: true, parada: { select: { viagem: { select: { numero: true } } } } },
+    });
     if (!e) throw new NotFoundException('Entrega não encontrada.');
     if (e.status !== StatusEntrega.PENDENTE) {
       throw new BadRequestException(
         `Só é possível cancelar entrega PENDENTE (status atual: ${e.status}). Entrega despachada não se cancela aqui.`,
+      );
+    }
+    // Se já está montada numa viagem (parada), cancelar deixaria uma "parada
+    // fantasma" cancelada que ainda seria despachada. Descartar/remover da
+    // viagem antes. (Espelha o guard da montagem.)
+    if (e.parada) {
+      throw new BadRequestException(
+        `Entrega está na viagem #${e.parada.viagem?.numero ?? '?'} (em montagem). Remova-a da viagem (descarte a montagem) antes de cancelar.`,
       );
     }
     const atualizada = await this.prisma.entrega.update({
