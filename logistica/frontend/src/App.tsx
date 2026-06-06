@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Layout } from './layouts/Layout';
 import { HomePage } from './pages/HomePage';
+import { PainelPage } from './pages/PainelPage';
 import { ClientesPage } from './pages/ClientesPage';
 import { EntregaNovaPage } from './pages/EntregaNovaPage';
 import { VeiculosPage } from './pages/VeiculosPage';
@@ -23,6 +24,7 @@ function Protected() {
     <Layout>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/painel" element={<PainelPage />} />
         <Route path="/clientes" element={<ClientesPage />} />
         <Route path="/entregas/nova" element={<EntregaNovaPage />} />
         <Route path="/veiculos" element={<VeiculosPage />} />

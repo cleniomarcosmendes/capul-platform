@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Users, Package, Truck, Route } from 'lucide-react';
+import { Users, Package, Truck, Route, BarChart3 } from 'lucide-react';
 
 export function HomePage() {
   return (
@@ -12,6 +12,15 @@ export function HomePage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Link
+          to="/painel"
+          className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+        >
+          <BarChart3 className="h-7 w-7 text-sky-600" />
+          <div className="mt-3 font-medium text-slate-800">Painel</div>
+          <div className="text-xs text-slate-500">Indicadores de entregas e frota</div>
+        </Link>
+
         <Link
           to="/clientes"
           className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
