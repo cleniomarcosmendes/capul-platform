@@ -57,7 +57,7 @@ export function EntregaNovaPage() {
   const { usuario } = useAuth();
   const filialId = usuario?.filialAtual?.id ?? usuario?.filiais?.[0]?.id ?? '';
 
-  const [tipoCliente, setTipoCliente] = useState<TipoCliente>('EVENTUAL');
+  const [tipoCliente, setTipoCliente] = useState<TipoCliente>('IDENTIFICADO');
   const [matricula, setMatricula] = useState('');
   const [destinatarioNome, setDestinatarioNome] = useState('');
   const [telefone, setTelefone] = useState('');
@@ -92,8 +92,12 @@ export function EntregaNovaPage() {
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
   const [pendentes, setPendentes] = useState<EntregaItem[]>([]);
   const ultimoCupomRef = useRef<HTMLInputElement>(null);
+  const matriculaRef = useRef<HTMLInputElement>(null);
   // Quando o telefone é preenchido por autofill, pula a próxima busca/dropdown.
   const pularBuscaTelRef = useRef(false);
+
+  // Ao carregar a página, foca o primeiro campo (matrícula) — pronto pra digitar.
+  useEffect(() => { matriculaRef.current?.focus(); }, []);
 
   const totalCupons = cupons.reduce((acc, c) => acc + (parseFloat(c.valor) || 0), 0);
   const identificado = tipoCliente === 'IDENTIFICADO';
@@ -136,36 +140,51 @@ export function EntregaNovaPage() {
     return (v: T) => { setter(v); setEnderecoEntregaId(''); setEnderecoSelIdx(-1); };
   }
 
-  function aplicarCliente(c: ClienteBusca, end?: EnderecoBusca) {
+  // Normaliza endereço pra dedupe (APTO/AP + sem pontuação/espaços).
+  const normEnd = (l?: string | null, ci?: string | null) =>
+    `${l ?? ''} ${ci ?? ''}`.toUpperCase().replace(/APARTAMENTO|APTO/g, 'AP').replace(/[^A-Z0-9]/g, '');
+
+  // Agrega endereços de TODAS as fontes da busca (Protheus, salvos por matrícula,
+  // endereços de clientes locais, histórico), deduplicado. Espinha dorsal do
+  // seletor de cards — usado igual nas 3 abas.
+  function coletarEnderecos(data: BuscaResp): EnderecoSug[] {
+    const sug: EnderecoSug[] = [];
+    const c = data.protheus?.cliente;
+    if (c) sug.push(...c.enderecos.map((e) => ({ rotulo: e.rotulo, logradouro: e.logradouro, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep })));
+    for (const e of data.enderecosPorMatricula ?? [])
+      sug.push({ rotulo: e.apelido || 'Salvo', logradouro: e.logradouro, numero: e.numero, complemento: e.complemento, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep, referencia: e.pontoReferencia, enderecoEntregaId: e.id });
+    for (const cl of data.clientesLocais)
+      for (const e of cl.enderecos ?? [])
+        sug.push({ rotulo: e.apelido || 'Cadastro', logradouro: e.logradouro, numero: e.numero, complemento: e.complemento, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep, referencia: e.pontoReferencia, enderecoEntregaId: e.id });
+    for (const h of data.historicoEntregas)
+      sug.push({ rotulo: 'Histórico', logradouro: h.endLogradouro ?? '', numero: h.endNumero, bairro: h.endBairro, cidade: h.endCidade });
+    const vistos = new Set<string>();
+    return sug.filter((s) => { if (!s.logradouro) return false; const k = normEnd(s.logradouro, s.cidade); if (vistos.has(k)) return false; vistos.add(k); return true; });
+  }
+
+  // Escolheu uma sugestão no dropdown de telefone (recorrente/eventual) → mostra
+  // os MESMOS cards de endereço da aba "Com matrícula" (padrão único nas 3 abas).
+  function aplicarSugestaoTelefone(nome: string, telefone: string | null | undefined, clienteLocalId: string, alvo?: EnderecoSug) {
     pularBuscaTelRef.current = true;
-    setDestinatarioNome(c.nome);
-    if (c.telefone) setTelefone(maskTelefone(c.telefone));
-    setClienteLocalId(c.id);
-    setTipoCliente('RECORRENTE_LOCAL');
-    // Monta o seletor com TODOS os endereços do cliente local.
-    const sug: EnderecoSug[] = (c.enderecos ?? []).map((e) => ({
-      rotulo: e.apelido || e.logradouro, logradouro: e.logradouro, numero: e.numero, complemento: e.complemento,
-      bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep, referencia: e.pontoReferencia, enderecoEntregaId: e.id,
-    }));
-    setEnderecosSugeridos(sug);
-    const idx = end ? sug.findIndex((s) => s.enderecoEntregaId === end.id) : 0;
-    if (sug.length > 0) aplicarEndereco(sug[Math.max(0, idx)], Math.max(0, idx));
+    setDestinatarioNome(nome);
+    if (telefone) setTelefone(maskTelefone(telefone));
+    setClienteLocalId(clienteLocalId);
+    const cards = sugestoes ? coletarEnderecos(sugestoes) : [];
+    setEnderecosSugeridos(cards);
+    let idx = 0;
+    if (alvo) { const k = normEnd(alvo.logradouro, alvo.cidade); const f = cards.findIndex((s) => normEnd(s.logradouro, s.cidade) === k); if (f >= 0) idx = f; }
+    if (cards.length > 0) aplicarEndereco(cards[idx], idx);
     else enderecoNovo();
     setMostrarSug(false);
   }
 
+  function aplicarCliente(c: ClienteBusca, end?: EnderecoBusca) {
+    setTipoCliente('RECORRENTE_LOCAL');
+    aplicarSugestaoTelefone(c.nome, c.telefone, c.id, end ? { rotulo: '', logradouro: end.logradouro, cidade: end.cidade } : undefined);
+  }
+
   function aplicarHistorico(h: HistoricoBusca) {
-    pularBuscaTelRef.current = true;
-    setDestinatarioNome(h.destinatarioNome);
-    if (h.telefone) setTelefone(maskTelefone(h.telefone));
-    setEnderecosSugeridos([]);
-    setEnderecoSelIdx(-1);
-    setEnderecoEntregaId('');
-    setLogradouro(h.endLogradouro ?? '');
-    setNumero(h.endNumero ?? '');
-    setBairro(h.endBairro ?? '');
-    setCidade(h.endCidade ?? 'Unaí');
-    setMostrarSug(false);
+    aplicarSugestaoTelefone(h.destinatarioNome, h.telefone, '', { rotulo: 'Histórico', logradouro: h.endLogradouro ?? '', cidade: h.endCidade });
   }
 
   /** Preenche os campos de endereço a partir de um candidato escolhido no seletor. */
@@ -195,27 +214,17 @@ export function EntregaNovaPage() {
   // histórico de entregas (assim um "novo endereço" usado antes reaparece).
   function montarSeletorMatricula(data: BuscaResp, mat: string) {
     const c = data.protheus?.cliente;
-    const sug: EnderecoSug[] = [];
-    if (c) sug.push(...c.enderecos.map((e) => ({ rotulo: e.rotulo, logradouro: e.logradouro, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep })));
-    for (const e of data.enderecosPorMatricula ?? [])
-      sug.push({ rotulo: e.apelido || 'Salvo', logradouro: e.logradouro, numero: e.numero, complemento: e.complemento, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep, referencia: e.pontoReferencia, enderecoEntregaId: e.id });
-    for (const h of data.historicoEntregas)
-      sug.push({ rotulo: 'Histórico', logradouro: h.endLogradouro ?? '', numero: h.endNumero, bairro: h.endBairro, cidade: h.endCidade });
-    // Dedupe (mesmo endereço de fontes diferentes vira 1).
-    const norm = (l?: string | null, ci?: string | null) => `${l ?? ''} ${ci ?? ''}`.toUpperCase().replace(/APARTAMENTO|APTO/g, 'AP').replace(/[^A-Z0-9]/g, '');
-    const vistos = new Set<string>();
-    const unicas = sug.filter((s) => { if (!s.logradouro) return false; const k = norm(s.logradouro, s.cidade); if (vistos.has(k)) return false; vistos.add(k); return true; });
-
+    const cards = coletarEnderecos(data);
     const nome = c?.nome ?? data.historicoEntregas[0]?.destinatarioNome ?? '';
     const tel = c?.telefone ?? data.historicoEntregas.find((h) => h.telefone)?.telefone ?? null;
     if (nome) setDestinatarioNome(nome);
     if (tel) { pularBuscaTelRef.current = true; setTelefone(maskTelefone(tel)); }
     setClienteLocalId('');
     setMatricula(c?.matricula ?? mat);
-    setEnderecosSugeridos(unicas);
-    if (unicas.length > 0) aplicarEndereco(unicas[0], 0);
+    setEnderecosSugeridos(cards);
+    if (cards.length > 0) aplicarEndereco(cards[0], 0);
     else enderecoNovo();
-    return { achou: !!c || unicas.length > 0 || !!nome, viaProtheus: !!c };
+    return { achou: !!c || cards.length > 0 || !!nome, viaProtheus: !!c };
   }
 
   async function buscarPorMatricula() {
@@ -333,6 +342,7 @@ export function EntregaNovaPage() {
           <div className="flex items-center gap-2">
             <div className="w-44">
               <input
+                ref={matriculaRef}
                 value={identificado ? matricula : ''}
                 onChange={(e) => setMatricula(e.target.value.toUpperCase())}
                 onBlur={buscarPorMatricula}
