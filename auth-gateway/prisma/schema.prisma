@@ -392,6 +392,7 @@ enum ModuloConsumidor {
   FISCAL
   GESTAO_TI
   INVENTARIO
+  LOGISTICA
 
   @@schema("core")
 }

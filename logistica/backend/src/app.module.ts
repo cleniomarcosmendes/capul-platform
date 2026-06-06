@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { PrismaModule } from './prisma/prisma.module.js';
 import { CoreModule } from './core/core.module.js';
+import { ProtheusModule } from './protheus/protheus.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { HealthModule } from './health/health.module.js';
 import { CadastroModule } from './cadastro/cadastro.module.js';
@@ -21,6 +22,7 @@ import { RolesGuard } from './common/guards/roles.guard.js';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 300 }]),
     PrismaModule,
     CoreModule,
+    ProtheusModule,
     AuthModule,
     HealthModule,
     CadastroModule,

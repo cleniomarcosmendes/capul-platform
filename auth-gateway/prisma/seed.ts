@@ -308,10 +308,25 @@ async function main() {
     url: ep.url.replace(BASE_PRD, BASE_HLG),
   }));
 
+  // LOGISTICA — cliente (SA1) por matrícula p/ autofill de endereço na entrega.
+  // INTERINO: aponta para `getLimite` (já devolve nome+endereço+telefone+CPF do
+  // cliente). Troca-se a URL quando o Protheus entregar endpoint dedicado
+  // (docs/SOLICITACAO_PROTHEUS_enderecos_SA1.md). Só leitura, sem SEFAZ.
+  const endpointsLogisticaPrd = [
+    { modulo: 'LOGISTICA' as const, ambiente: 'PRODUCAO' as const, operacao: 'clienteEndereco', url: `${BASE_PRD}/getLimite`, metodo: 'GET' as const, timeoutMs: 10000 },
+  ];
+
+  const endpointsLogisticaHlg = endpointsLogisticaPrd.map((ep) => ({
+    ...ep,
+    ambiente: 'HOMOLOGACAO' as const,
+    url: ep.url.replace(BASE_PRD, BASE_HLG),
+  }));
+
   const todosEndpoints = [
     ...endpointsInventarioPrd, ...endpointsInventarioHlg,
     ...endpointsGestaoTiPrd, ...endpointsGestaoTiHlg,
     ...endpointsFiscalPrd, ...endpointsFiscalHlg,
+    ...endpointsLogisticaPrd, ...endpointsLogisticaHlg,
   ];
 
   let integracao = await prisma.integracaoApi.findUnique({
