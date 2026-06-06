@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, SituacaoVeiculo } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
@@ -110,9 +110,10 @@ export class VeiculoService {
     };
   }
 
-  async update(id: string, dto: UpdateVeiculoDto, alteradoPorId: string) {
+  async update(id: string, dto: UpdateVeiculoDto, alteradoPorId: string, userFilialId?: string) {
     const atual = await this.prisma.veiculo.findUnique({ where: { id } });
     if (!atual) throw new NotFoundException('Veículo não encontrado.');
+    if (userFilialId && atual.filialId !== userFilialId) throw new ForbiddenException('Veículo de outra filial.');
 
     // Valida FKs do core que vierem no update.
     await Promise.all([
@@ -157,9 +158,10 @@ export class VeiculoService {
   }
 
   /** Soft-delete (ativo=false) — preserva histórico/viagens. */
-  async remove(id: string) {
-    const v = await this.prisma.veiculo.findUnique({ where: { id }, select: { id: true } });
+  async remove(id: string, userFilialId?: string) {
+    const v = await this.prisma.veiculo.findUnique({ where: { id }, select: { id: true, filialId: true } });
     if (!v) throw new NotFoundException('Veículo não encontrado.');
+    if (userFilialId && v.filialId !== userFilialId) throw new ForbiddenException('Veículo de outra filial.');
     return this.prisma.veiculo.update({ where: { id }, data: { ativo: false } });
   }
 }

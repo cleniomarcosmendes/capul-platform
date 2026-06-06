@@ -1,7 +1,8 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { StatusEntrega } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
-import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
+import { assertMesmaFilial, resolverFilialLeitura } from '../common/filial-scope.js';
 import { EntregaService } from './entrega.service.js';
 import { CancelarEntregaDto, CreateEntregaDto } from './dto.js';
 
@@ -11,14 +12,15 @@ export class EntregaController {
   constructor(private readonly entregas: EntregaService) {}
 
   @Post()
-  criar(@Body() dto: CreateEntregaDto, @CurrentUser('sub') userId: string) {
-    return this.entregas.create(dto, userId);
+  criar(@Body() dto: CreateEntregaDto, @CurrentUser() user: JwtPayload) {
+    assertMesmaFilial(user, dto.filialId);
+    return this.entregas.create(dto, user.sub);
   }
 
   /** Lista (default PENDENTE = fila de montagem). Filtros: filialId, status. */
   @Get()
-  listar(@Query('filialId') filialId?: string, @Query('status') status?: StatusEntrega) {
-    return this.entregas.list({ filialId, status });
+  listar(@CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string, @Query('status') status?: StatusEntrega) {
+    return this.entregas.list({ filialId: resolverFilialLeitura(user, filialId), status });
   }
 
   @Get(':id')
@@ -31,8 +33,8 @@ export class EntregaController {
   cancelar(
     @Param('id') id: string,
     @Body() dto: CancelarEntregaDto,
-    @CurrentUser('sub') userId: string,
+    @CurrentUser() user: JwtPayload,
   ) {
-    return this.entregas.cancelar(id, dto.motivo, userId);
+    return this.entregas.cancelar(id, dto.motivo, user.sub, user.filialId);
   }
 }

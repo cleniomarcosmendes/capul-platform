@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { SituacaoVeiculo, StatusEntrega, StatusViagem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
@@ -86,12 +86,13 @@ export class ViagemService {
    * Despacha: RASCUNHO → EM_CURSO. As entregas das paradas viram EM_VIAGEM e o
    * veículo vira EM_USO. Exige veículo DISPONIVEL e ao menos 1 parada.
    */
-  async despachar(id: string, dto: DespacharViagemDto) {
+  async despachar(id: string, dto: DespacharViagemDto, userFilialId?: string) {
     const v = await this.prisma.viagem.findUnique({
       where: { id },
       include: { paradas: { select: { entregaId: true } } },
     });
     if (!v) throw new NotFoundException('Viagem não encontrada.');
+    if (userFilialId && v.filialId !== userFilialId) throw new ForbiddenException('Viagem de outra filial.');
     if (v.situacao !== StatusViagem.RASCUNHO) {
       throw new BadRequestException(`Só despacha viagem em RASCUNHO (atual: ${v.situacao}).`);
     }
@@ -130,12 +131,13 @@ export class ViagemService {
    * de entrega real (foto/assinatura/GPS) é da Fase 1b — aqui é baixa manual no
    * balcão pra fechar o ciclo operacional. Exige viagem EM_CURSO.
    */
-  async concluir(id: string) {
+  async concluir(id: string, userFilialId?: string) {
     const v = await this.prisma.viagem.findUnique({
       where: { id },
       include: { paradas: { select: { entregaId: true } } },
     });
     if (!v) throw new NotFoundException('Viagem não encontrada.');
+    if (userFilialId && v.filialId !== userFilialId) throw new ForbiddenException('Viagem de outra filial.');
     if (v.situacao !== StatusViagem.EM_CURSO) {
       throw new BadRequestException(`Só conclui viagem EM_CURSO (atual: ${v.situacao}).`);
     }
@@ -156,9 +158,10 @@ export class ViagemService {
   }
 
   /** Descarta uma montagem (RASCUNHO) — libera as entregas (cascade nas paradas). */
-  async descartar(id: string) {
-    const v = await this.prisma.viagem.findUnique({ where: { id }, select: { situacao: true } });
+  async descartar(id: string, userFilialId?: string) {
+    const v = await this.prisma.viagem.findUnique({ where: { id }, select: { situacao: true, filialId: true } });
     if (!v) throw new NotFoundException('Viagem não encontrada.');
+    if (userFilialId && v.filialId !== userFilialId) throw new ForbiddenException('Viagem de outra filial.');
     if (v.situacao !== StatusViagem.RASCUNHO) {
       throw new BadRequestException('Só é possível descartar viagem em RASCUNHO (ainda não despachada).');
     }

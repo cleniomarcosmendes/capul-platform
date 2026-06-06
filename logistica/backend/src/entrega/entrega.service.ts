@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, StatusEntrega } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
@@ -85,12 +85,15 @@ export class EntregaService {
    * Cancelamento LOCAL — só permitido enquanto PENDENTE. Regra do negócio:
    * nunca se cancela com o veículo na rua (entrega já EM_VIAGEM não cancela aqui).
    */
-  async cancelar(id: string, motivo: string | undefined, canceladaPorId: string) {
+  async cancelar(id: string, motivo: string | undefined, canceladaPorId: string, userFilialId?: string) {
     const e = await this.prisma.entrega.findUnique({
       where: { id },
-      select: { status: true, parada: { select: { viagem: { select: { numero: true } } } } },
+      select: { status: true, filialId: true, parada: { select: { viagem: { select: { numero: true } } } } },
     });
     if (!e) throw new NotFoundException('Entrega não encontrada.');
+    if (userFilialId && e.filialId !== userFilialId) {
+      throw new ForbiddenException('Entrega de outra filial — operação não permitida.');
+    }
     if (e.status !== StatusEntrega.PENDENTE) {
       throw new BadRequestException(
         `Só é possível cancelar entrega PENDENTE (status atual: ${e.status}). Entrega despachada não se cancela aqui.`,
