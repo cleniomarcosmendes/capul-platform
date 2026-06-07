@@ -14,23 +14,23 @@ export class DispositivoSessaoController {
   constructor(private readonly sessoes: DispositivoSessaoService) {}
 
   @Get()
-  meus(@CurrentUser('sub') usuarioId: string) {
+  meus(@CurrentUser('id') usuarioId: string) {
     return this.sessoes.listarMeus(usuarioId);
   }
 
   // Rotas específicas ANTES da rota com :id (ordem importa no matching).
   @Delete('todas')
-  revogarTodas(@CurrentUser('sub') usuarioId: string) {
+  revogarTodas(@CurrentUser('id') usuarioId: string) {
     return this.sessoes.revogarTodasDoUsuario(usuarioId, usuarioId);
   }
 
   @Delete('device/:deviceId')
-  revogarDevice(@Param('deviceId') deviceId: string, @CurrentUser('sub') usuarioId: string) {
+  revogarDevice(@Param('deviceId') deviceId: string, @CurrentUser('id') usuarioId: string) {
     return this.sessoes.revogarDispositivo(deviceId, usuarioId, usuarioId);
   }
 
   @Delete(':id')
-  revogar(@Param('id') id: string, @CurrentUser('sub') usuarioId: string) {
+  revogar(@Param('id') id: string, @CurrentUser('id') usuarioId: string) {
     return this.sessoes.revogarSessao(id, usuarioId, usuarioId);
   }
 }
