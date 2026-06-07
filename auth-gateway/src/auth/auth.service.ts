@@ -18,6 +18,7 @@ import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { buildModulosPayload } from './helpers/build-modulos-payload';
 import { buildCapabilitiesPayload } from './helpers/build-capabilities-payload';
 import { buildModulosResponse } from './helpers/build-modulos-response';
+import { DispositivoSessaoService } from '../dispositivo-sessao/dispositivo-sessao.service';
 
 @Injectable()
 export class AuthService {
@@ -26,6 +27,7 @@ export class AuthService {
     private jwtService: JwtService,
     private config: ConfigService,
     private auditLog: AuditLogService,
+    private dispositivos: DispositivoSessaoService,
   ) {}
 
   async login(dto: LoginDto, ip?: string, userAgent?: string) {
@@ -89,19 +91,13 @@ export class AuthService {
       capabilities: await buildCapabilitiesPayload(this.prisma, usuario.id),
     };
 
-    const accessToken = this.jwtService.sign(payload, {
-      secret: this.config.get('JWT_SECRET'),
-      expiresIn: this.config.get('JWT_ACCESS_EXPIRATION', '60m'),
-    });
-
-    const refreshToken = await this.createRefreshToken(usuario.id);
-
     await this.prisma.usuario.update({
       where: { id: usuario.id },
       data: { ultimoLogin: new Date() },
     });
 
-    // Se MFA habilitado, retornar token parcial para segunda etapa
+    // Se MFA habilitado, retornar token parcial para segunda etapa (tokens reais
+    // só são emitidos no verifyMfa). Mobile+MFA: a sessão também nasce lá.
     if (usuario.mfaEnabled) {
       // Auditoria 10/05/2026 #B1 — MFA token assinado com JWT_MFA_SECRET separado
       // (princípio do menor privilégio: comprometimento de JWT_SECRET não permite
@@ -113,6 +109,33 @@ export class AuthService {
       this.auditLog.log({ action: 'LOGIN_MFA_REQUIRED', usuarioId: usuario.id, ipAddress: ip, userAgent });
       return { mfaRequired: true, mfaToken };
     }
+
+    // Login mobile (app entregador): cria a sessão de dispositivo, emite access
+    // CURTO (15m) e refresh ligado à sessão. Web segue 60m, sem sessão.
+    const isMobile = !!dto.deviceId;
+    let sessaoId: string | undefined;
+    if (isMobile) {
+      const refreshDays = parseInt(this.config.get('JWT_REFRESH_EXPIRATION', '7d')) || 7;
+      const expiraEm = new Date();
+      expiraEm.setDate(expiraEm.getDate() + refreshDays);
+      const sessao = await this.dispositivos.criar({
+        usuarioId: usuario.id,
+        deviceId: dto.deviceId as string,
+        deviceInfo: dto.deviceInfo,
+        plataforma: dto.plataforma,
+        expiraEm,
+      });
+      sessaoId = sessao.id;
+      payload.sid = sessaoId;
+    }
+
+    const accessToken = this.jwtService.sign(payload, {
+      secret: this.config.get('JWT_SECRET'),
+      expiresIn: isMobile
+        ? this.config.get('JWT_MOBILE_EXPIRATION', '15m')
+        : this.config.get('JWT_ACCESS_EXPIRATION', '60m'),
+    });
+    const refreshToken = await this.createRefreshToken(usuario.id, sessaoId);
 
     this.auditLog.log({ action: 'LOGIN_SUCCESS', usuarioId: usuario.id, ipAddress: ip, userAgent });
 
@@ -164,6 +187,11 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token invalido ou expirado');
     }
 
+    // Mobile: a sessão de dispositivo precisa estar ATIVA. Revogada/expirada
+    // bloqueia o refresh → é o ponto que dá efeito à revogação (≤15m, Opção B).
+    const sessaoId = storedToken.dispositivoSessaoId ?? undefined;
+    if (sessaoId) await this.dispositivos.assertAtiva(sessaoId);
+
     // Revogar o token usado (rotacao)
     await this.prisma.refreshToken.update({
       where: { id: storedToken.id },
@@ -189,12 +217,17 @@ export class AuthService {
       capabilities: await buildCapabilitiesPayload(this.prisma, usuario.id),
     };
 
+    if (sessaoId) payload.sid = sessaoId;
+
     const accessToken = this.jwtService.sign(payload, {
       secret: this.config.get('JWT_SECRET'),
-      expiresIn: this.config.get('JWT_ACCESS_EXPIRATION', '60m'),
+      expiresIn: sessaoId
+        ? this.config.get('JWT_MOBILE_EXPIRATION', '15m')
+        : this.config.get('JWT_ACCESS_EXPIRATION', '60m'),
     });
 
-    const newRefreshToken = await this.createRefreshToken(usuario.id);
+    const newRefreshToken = await this.createRefreshToken(usuario.id, sessaoId);
+    if (sessaoId) await this.dispositivos.tocar(sessaoId); // atualiza ultimoUso
 
     return {
       accessToken,
@@ -509,7 +542,7 @@ export class AuthService {
     };
   }
 
-  private async createRefreshToken(usuarioId: string) {
+  private async createRefreshToken(usuarioId: string, dispositivoSessaoId?: string) {
     const token = randomUUID();
     const expiresIn = this.config.get('JWT_REFRESH_EXPIRATION', '7d');
     const days = parseInt(expiresIn) || 7;
@@ -521,6 +554,7 @@ export class AuthService {
         token,
         expiresAt,
         usuarioId,
+        dispositivoSessaoId: dispositivoSessaoId ?? null,
       },
     });
   }
