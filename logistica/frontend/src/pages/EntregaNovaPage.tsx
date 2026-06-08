@@ -20,7 +20,7 @@ interface EntregaItem {
 
 // Busca unificada (GET /cadastro/busca) — fontes locais.
 interface EnderecoBusca {
-  id: string; apelido?: string | null; logradouro: string; numero?: string | null; complemento?: string | null;
+  id: string; apelido?: string | null; telefone?: string | null; logradouro: string; numero?: string | null; complemento?: string | null;
   bairro?: string | null; cidade?: string | null; uf?: string | null; cep?: string | null;
   pontoReferencia?: string | null;
 }
@@ -38,6 +38,7 @@ interface EnderecoSug {
   rotulo: string;
   logradouro: string; numero?: string | null; complemento?: string | null;
   bairro?: string | null; cidade?: string | null; uf?: string | null; cep?: string | null; referencia?: string | null;
+  telefone?: string | null; // telefone do endereço (contato p/ o entregador ligar)
   enderecoEntregaId?: string; // quando vem de um EnderecoEntrega salvo (linka o snapshot)
 }
 interface BuscaResp {
@@ -150,14 +151,14 @@ export function EntregaNovaPage() {
   function coletarEnderecos(data: BuscaResp): EnderecoSug[] {
     const sug: EnderecoSug[] = [];
     const c = data.protheus?.cliente;
-    if (c) sug.push(...c.enderecos.map((e) => ({ rotulo: e.rotulo, logradouro: e.logradouro, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep })));
+    if (c) sug.push(...c.enderecos.map((e) => ({ rotulo: e.rotulo, logradouro: e.logradouro, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep, telefone: c.telefone })));
     for (const e of data.enderecosPorMatricula ?? [])
-      sug.push({ rotulo: e.apelido || 'Salvo', logradouro: e.logradouro, numero: e.numero, complemento: e.complemento, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep, referencia: e.pontoReferencia, enderecoEntregaId: e.id });
+      sug.push({ rotulo: e.apelido || 'Salvo', logradouro: e.logradouro, numero: e.numero, complemento: e.complemento, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep, referencia: e.pontoReferencia, telefone: e.telefone, enderecoEntregaId: e.id });
     for (const cl of data.clientesLocais)
       for (const e of cl.enderecos ?? [])
-        sug.push({ rotulo: e.apelido || 'Cadastro', logradouro: e.logradouro, numero: e.numero, complemento: e.complemento, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep, referencia: e.pontoReferencia, enderecoEntregaId: e.id });
+        sug.push({ rotulo: e.apelido || 'Cadastro', logradouro: e.logradouro, numero: e.numero, complemento: e.complemento, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep, referencia: e.pontoReferencia, telefone: e.telefone ?? cl.telefone, enderecoEntregaId: e.id });
     for (const h of data.historicoEntregas)
-      sug.push({ rotulo: 'Histórico', logradouro: h.endLogradouro ?? '', numero: h.endNumero, bairro: h.endBairro, cidade: h.endCidade });
+      sug.push({ rotulo: 'Histórico', logradouro: h.endLogradouro ?? '', numero: h.endNumero, bairro: h.endBairro, cidade: h.endCidade, telefone: h.telefone });
     const vistos = new Set<string>();
     return sug.filter((s) => { if (!s.logradouro) return false; const k = normEnd(s.logradouro, s.cidade); if (vistos.has(k)) return false; vistos.add(k); return true; });
   }
@@ -199,6 +200,9 @@ export function EntregaNovaPage() {
     setUf((e.uf ?? 'MG').toUpperCase());
     setCep(e.cep ? maskCep(e.cep) : '');
     setReferencia(e.referencia ?? '');
+    // Telefone do endereço = contato que o entregador liga ao chegar. Quando o
+    // endereço escolhido tem o seu, prevalece (ex.: casa de parente ≠ tel. do cliente).
+    if (e.telefone) { pularBuscaTelRef.current = true; setTelefone(maskTelefone(e.telefone)); }
   }
 
   /** "Novo endereço": limpa os campos pra digitação manual (não desfaz o cliente). */

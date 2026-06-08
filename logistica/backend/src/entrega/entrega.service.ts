@@ -107,6 +107,8 @@ export class EntregaService {
       data: {
         filialId: dto.filialId,
         ...dono,
+        // Telefone DESTE endereço (contato que o entregador liga ao chegar).
+        telefone: dto.telefone ? onlyDigits(dto.telefone) : null,
         logradouro: snap.endLogradouro,
         numero: snap.endNumero,
         complemento: snap.endComplemento,

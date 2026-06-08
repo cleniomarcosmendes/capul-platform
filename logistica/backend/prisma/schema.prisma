@@ -92,6 +92,10 @@ model EnderecoEntrega {
   clienteLocalId  String?       @map("cliente_local_id")
   clienteLocal    ClienteLocal? @relation(fields: [clienteLocalId], references: [id])
   apelido         String?
+  // Telefone DESTE endereço — é o contato que o entregador liga ao chegar no
+  // local (cada endereço pode ter o seu, ex.: casa de parente). Vai junto no
+  // snapshot da entrega (entrega.telefone) e reaparece ao reusar o endereço.
+  telefone        String?
   logradouro      String
   numero          String?
   complemento     String?

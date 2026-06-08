@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Truck, Send, Trash2, Printer, CheckCircle2, FileText, Camera, Phone } from 'lucide-react';
+import { Loader2, Truck, Send, Trash2, Printer, CheckCircle2, FileText, Camera, Phone, Clock } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -8,7 +8,7 @@ import { maskTelefone } from '../utils/format';
 
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
 interface Veiculo { id: string; placa: string; modelo?: string | null; situacao: string }
-interface Entrega { id: string; numero: number; destinatarioNome: string; endLogradouro: string; endBairro?: string | null; quantidadeVolumes: number }
+interface Entrega { id: string; numero: number; destinatarioNome: string; endLogradouro: string; endBairro?: string | null; quantidadeVolumes: number; criadoEm: string; horario?: string | null }
 interface Viagem {
   id: string; numero: number; situacao: string;
   veiculo?: { placa: string } | null; _count?: { paradas: number };
@@ -168,6 +168,10 @@ export function ViagensPage() {
                       <div className="flex-1">
                         <div className="font-medium text-slate-700">#{e.numero} · {e.destinatarioNome}</div>
                         <div className="text-xs text-slate-500">{e.endLogradouro} — {e.endBairro} · {e.quantidadeVolumes} vol</div>
+                        <div className="flex items-center gap-1 text-[11px] text-slate-400" title="Hora do lançamento da entrega (compra)">
+                          <Clock className="h-3 w-3" /> {new Date(e.criadoEm).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          {e.horario ? ` · prefere ${e.horario}` : ''}
+                        </div>
                       </div>
                       <a href={`/entregas/etiquetas/entrega/${e.id}`} target="_blank" rel="noopener" title="Etiqueta"
                         className="text-slate-300 hover:text-sky-600"><Printer className="h-4 w-4" /></a>
