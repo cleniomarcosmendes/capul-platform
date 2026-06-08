@@ -88,7 +88,20 @@ export class EntregaService {
     dto: CreateEntregaDto,
     snap: { endLogradouro: string; endNumero: string | null; endComplemento: string | null; endBairro: string | null; endCidade: string | null; endUf: string | null; endCep: string | null; endReferencia: string | null },
   ) {
-    if (dto.enderecoEntregaId) return; // veio de um endereço já salvo
+    const telefone = dto.telefone ? onlyDigits(dto.telefone) : null;
+
+    // Caso 1: veio de um endereço JÁ SALVO (o operador escolheu um card). Se
+    // informou um telefone novo, ATUALIZA o cadastro existente com ele.
+    if (dto.enderecoEntregaId) {
+      if (telefone) {
+        await this.prisma.enderecoEntrega.updateMany({
+          where: { id: dto.enderecoEntregaId, NOT: { telefone } },
+          data: { telefone },
+        });
+      }
+      return;
+    }
+
     const matricula = dto.matricula?.trim() || null;
     const clienteLocalId = dto.clienteLocalId || null;
     if (!matricula && !clienteLocalId) return; // eventual — não cadastra
@@ -98,17 +111,27 @@ export class EntregaService {
     // Dedup escopado por filial: o mesmo endereço noutra filial é registro à parte.
     const existentes = await this.prisma.enderecoEntrega.findMany({
       where: { ativo: true, filialId: dto.filialId, ...dono },
-      select: { logradouro: true, cidade: true },
+      select: { id: true, logradouro: true, cidade: true, telefone: true },
     });
     const chave = this.chaveEndereco(snap.endLogradouro, snap.endCidade);
-    if (existentes.some((e) => this.chaveEndereco(e.logradouro, e.cidade) === chave)) return; // já existe
+    const match = existentes.find((e) => this.chaveEndereco(e.logradouro, e.cidade) === chave);
 
+    // Caso 2: o endereço digitado bate com um já cadastrado. Não duplica; mas
+    // se veio telefone novo (diferente), atualiza o cadastro existente.
+    if (match) {
+      if (telefone && match.telefone !== telefone) {
+        await this.prisma.enderecoEntrega.update({ where: { id: match.id }, data: { telefone } });
+      }
+      return;
+    }
+
+    // Caso 3: endereço novo → cria (com o telefone, se houver).
     await this.prisma.enderecoEntrega.create({
       data: {
         filialId: dto.filialId,
         ...dono,
         // Telefone DESTE endereço (contato que o entregador liga ao chegar).
-        telefone: dto.telefone ? onlyDigits(dto.telefone) : null,
+        telefone,
         logradouro: snap.endLogradouro,
         numero: snap.endNumero,
         complemento: snap.endComplemento,
