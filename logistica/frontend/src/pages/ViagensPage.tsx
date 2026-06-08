@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Truck, Send, Trash2, Printer, CheckCircle2, FileText } from 'lucide-react';
+import { Loader2, Truck, Send, Trash2, Printer, CheckCircle2, FileText, Camera } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { BaixaDialog } from '../components/BaixaDialog';
 
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
 interface Veiculo { id: string; placa: string; modelo?: string | null; situacao: string }
@@ -14,7 +15,7 @@ interface Viagem {
 }
 interface ParadaDet {
   id: string; sequencia: number;
-  entrega?: { id: string; numero: number; destinatarioNome: string; endLogradouro: string; endNumero?: string | null; endBairro?: string | null; endCidade?: string | null; quantidadeVolumes: number } | null;
+  entrega?: { id: string; numero: number; destinatarioNome: string; endLogradouro: string; endNumero?: string | null; endBairro?: string | null; endCidade?: string | null; quantidadeVolumes: number; status: string; temComprovante?: boolean } | null;
 }
 interface ViagemDet { id: string; numero: number; situacao: string; paradas: ParadaDet[] }
 
@@ -37,6 +38,7 @@ export function ViagensPage() {
   const [busy, setBusy] = useState(false);
   const [detalhe, setDetalhe] = useState<ViagemDet | null>(null); // viagem expandida (ver entregas)
   const [confirmacao, setConfirmacao] = useState<{ titulo: string; mensagem: string; acao: () => Promise<void> } | null>(null);
+  const [baixaAlvo, setBaixaAlvo] = useState<{ id: string; numero: number; destinatarioNome: string } | null>(null);
 
   async function carregar() {
     setLoading(true);
@@ -236,6 +238,18 @@ export function ViagensPage() {
                                   <button onClick={() => setConfirmacao({ titulo: 'Remover entrega', mensagem: `Remover a entrega #${p.entrega!.numero} (${p.entrega!.destinatarioNome}) desta viagem? Ela volta para a fila de pendentes.`, acao: () => removerEntrega(v.id, p.entrega!.id) })} disabled={busy} title="Remover da viagem"
                                     className="shrink-0 text-slate-400 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
                                 )}
+                                {v.situacao === 'EM_CURSO' && p.entrega && p.entrega.status === 'EM_VIAGEM' && (
+                                  <button onClick={() => setBaixaAlvo({ id: p.entrega!.id, numero: p.entrega!.numero, destinatarioNome: p.entrega!.destinatarioNome })} disabled={busy} title="Dar baixa (prova de entrega)"
+                                    className="flex shrink-0 items-center gap-1 rounded-lg bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"><Camera className="h-3.5 w-3.5" /> Baixa</button>
+                                )}
+                                {p.entrega && p.entrega.status === 'ENTREGUE' && (
+                                  <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700" title={p.entrega.temComprovante ? 'Com comprovante' : 'Sem comprovante'}>
+                                    ✓ Entregue{p.entrega.temComprovante ? ' 📎' : ''}
+                                  </span>
+                                )}
+                                {p.entrega && p.entrega.status === 'NAO_ENTREGUE' && (
+                                  <span className="shrink-0 rounded bg-rose-100 px-1.5 py-0.5 text-[11px] font-medium text-rose-700">✗ Não entregue</span>
+                                )}
                               </li>
                             ))}
                           </ul>
@@ -257,6 +271,20 @@ export function ViagensPage() {
         onCancel={() => setConfirmacao(null)}
         onConfirm={async () => { if (confirmacao) { await confirmacao.acao(); setConfirmacao(null); } }}
       />
+
+      {baixaAlvo && detalhe && (
+        <BaixaDialog
+          entrega={baixaAlvo}
+          onClose={() => setBaixaAlvo(null)}
+          onBaixado={async () => {
+            setBaixaAlvo(null);
+            setMsg({ tipo: 'ok', texto: `Baixa registrada para a entrega #${baixaAlvo.numero}.` });
+            // Atualiza o detalhe aberto (status das paradas) e a lista (auto-conclusão).
+            try { const { data } = await logisticaApi.get<ViagemDet>(`/viagens/${detalhe.id}`); setDetalhe(data); } catch { /* noop */ }
+            void carregar();
+          }}
+        />
+      )}
     </div>
   );
 }

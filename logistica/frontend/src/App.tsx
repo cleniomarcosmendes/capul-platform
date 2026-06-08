@@ -9,6 +9,7 @@ import { VeiculosPage } from './pages/VeiculosPage';
 import { ViagensPage } from './pages/ViagensPage';
 import { EtiquetasPage } from './pages/EtiquetasPage';
 import { RomaneioPage } from './pages/RomaneioPage';
+import { ComprovantesPage } from './pages/ComprovantesPage';
 
 function Protected() {
   const { loading, logisticaRole } = useAuth();
@@ -39,6 +40,7 @@ function Protected() {
               <Route path="/entregas/nova" element={<EntregaNovaPage />} />
               <Route path="/veiculos" element={<VeiculosPage />} />
               <Route path="/viagens" element={<ViagensPage />} />
+              <Route path="/comprovantes" element={<ComprovantesPage />} />
             </Routes>
           </Layout>
         }
