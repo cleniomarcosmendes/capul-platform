@@ -90,15 +90,26 @@ export class EntregaService {
   ) {
     const telefone = dto.telefone ? onlyDigits(dto.telefone) : null;
 
-    // Caso 1: veio de um endereço JÁ SALVO (o operador escolheu um card). Se
-    // informou um telefone novo, ATUALIZA o cadastro existente com ele.
+    // Caso 1: veio de um endereço JÁ SALVO da NOSSA base (o operador escolheu um
+    // card e pode ter CORRIGIDO os campos). Atualiza o cadastro com o snapshot
+    // (endereço corrigido) + telefone (se informado — não apaga o existente).
+    // Endereços do Protheus NÃO chegam aqui: suas sugestões não têm
+    // enderecoEntregaId (a correção do Protheus é feita no Protheus).
     if (dto.enderecoEntregaId) {
-      if (telefone) {
-        await this.prisma.enderecoEntrega.updateMany({
-          where: { id: dto.enderecoEntregaId, NOT: { telefone } },
-          data: { telefone },
-        });
-      }
+      await this.prisma.enderecoEntrega.updateMany({
+        where: { id: dto.enderecoEntregaId, filialId: dto.filialId },
+        data: {
+          logradouro: snap.endLogradouro,
+          numero: snap.endNumero,
+          complemento: snap.endComplemento,
+          bairro: snap.endBairro,
+          cidade: snap.endCidade,
+          uf: snap.endUf,
+          cep: snap.endCep,
+          pontoReferencia: snap.endReferencia,
+          ...(telefone ? { telefone } : {}),
+        },
+      });
       return;
     }
 
@@ -358,6 +369,21 @@ export class EntregaService {
 
   // ---------- helpers ----------
   private async resolverSnapshotEndereco(dto: CreateEntregaDto) {
+    // Prefere os campos informados — refletem o que está na TELA, inclusive
+    // correções feitas sobre um endereço salvo (o front sempre os envia). Só
+    // cai no DB se o cliente referenciou um endereço sem reenviar os campos.
+    if (dto.endLogradouro?.trim()) {
+      return {
+        endLogradouro: dto.endLogradouro.trim(),
+        endNumero: dto.endNumero?.trim() || null,
+        endComplemento: dto.endComplemento?.trim() || null,
+        endBairro: dto.endBairro?.trim() || null,
+        endCidade: dto.endCidade?.trim() || null,
+        endUf: dto.endUf?.trim().toUpperCase() || null,
+        endCep: dto.endCep ? onlyDigits(dto.endCep) : null,
+        endReferencia: dto.endReferencia?.trim() || null,
+      };
+    }
     if (dto.enderecoEntregaId) {
       const end = await this.prisma.enderecoEntrega.findUnique({
         where: { id: dto.enderecoEntregaId },
@@ -374,19 +400,7 @@ export class EntregaService {
         endReferencia: end.pontoReferencia,
       };
     }
-    if (!dto.endLogradouro?.trim()) {
-      throw new BadRequestException('Informe enderecoEntregaId ou os campos de endereço (endLogradouro).');
-    }
-    return {
-      endLogradouro: dto.endLogradouro.trim(),
-      endNumero: dto.endNumero?.trim() || null,
-      endComplemento: dto.endComplemento?.trim() || null,
-      endBairro: dto.endBairro?.trim() || null,
-      endCidade: dto.endCidade?.trim() || null,
-      endUf: dto.endUf?.trim().toUpperCase() || null,
-      endCep: dto.endCep ? onlyDigits(dto.endCep) : null,
-      endReferencia: dto.endReferencia?.trim() || null,
-    };
+    throw new BadRequestException('Informe enderecoEntregaId ou os campos de endereço (endLogradouro).');
   }
 
   private comTotal<T extends { cupons: { valor: Prisma.Decimal | null }[] }>(entrega: T) {

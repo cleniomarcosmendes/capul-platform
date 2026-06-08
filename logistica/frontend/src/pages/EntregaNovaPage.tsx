@@ -134,11 +134,13 @@ export function EntregaNovaPage() {
     return () => clearTimeout(t);
   }, [telefone, identificado]);
 
-  // Setter de campo de endereço que desfaz o vínculo com cadastro (o operador
-  // está editando à mão → snapshot passa a ser o que está na tela) e marca o
-  // seletor como "novo/manual".
+  // Setter de campo de endereço. MANTÉM o vínculo com o endereço salvo: editar
+  // os campos CORRIGE esse cadastro (da nossa base) na próxima gravação — útil
+  // quando o 1º cadastro saiu errado. Para um endereço DIFERENTE, o operador usa
+  // "+ Novo endereço" (enderecoNovo limpa o vínculo). Endereços do Protheus não
+  // têm vínculo (enderecoEntregaId vazio) → editar cria uma cópia na nossa base.
   function editEndereco<T>(setter: (v: T) => void) {
-    return (v: T) => { setter(v); setEnderecoEntregaId(''); setEnderecoSelIdx(-1); };
+    return (v: T) => { setter(v); };
   }
 
   // Normaliza endereço pra dedupe (APTO/AP + sem pontuação/espaços).
@@ -441,6 +443,11 @@ export function EntregaNovaPage() {
           </div>
         )}
 
+        {enderecoEntregaId && (
+          <p className="-mb-1 text-xs text-amber-600">
+            ✎ Editar os campos abaixo <strong>corrige este endereço salvo</strong>. Para um endereço diferente, use “+ Novo endereço”.
+          </p>
+        )}
         <div className="grid grid-cols-6 gap-3">
           <div className="col-span-4">
             <label className={lbl}>Endereço de Entrega *</label>
