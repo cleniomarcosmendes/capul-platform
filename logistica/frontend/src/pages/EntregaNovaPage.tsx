@@ -113,11 +113,11 @@ export function EntregaNovaPage() {
   }
   useEffect(() => { void carregarPendentes(); }, [filialId]);
 
-  // Busca por telefone (debounce 400ms; só com >= 4 dígitos). NÃO roda na aba
-  // "Com matrícula" (lá o telefone vem do Protheus), nem quando o telefone foi
-  // preenchido por autofill (evita reabrir o dropdown por cima do form).
+  // Busca por telefone (debounce 400ms; só com >= 4 dígitos). Roda nas 3 abas —
+  // inclusive "Com matrícula" (agora o telefone também acha o cliente no
+  // Protheus e preenche a matrícula). Pula quando o telefone foi preenchido por
+  // autofill (evita reabrir o dropdown por cima do form).
   useEffect(() => {
-    if (identificado) { setSugestoes(null); setMostrarSug(false); return; }
     if (pularBuscaTelRef.current) { pularBuscaTelRef.current = false; return; }
     const digits = onlyDigits(telefone);
     if (digits.length < 4) { setSugestoes(null); setMostrarSug(false); return; }
@@ -132,7 +132,7 @@ export function EntregaNovaPage() {
       finally { setBuscando(false); }
     }, 400);
     return () => clearTimeout(t);
-  }, [telefone, identificado]);
+  }, [telefone]);
 
   // Setter de campo de endereço. MANTÉM o vínculo com o endereço salvo: editar
   // os campos CORRIGE esse cadastro (da nossa base) na próxima gravação — útil
