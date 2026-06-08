@@ -114,6 +114,60 @@ services:
     mem_reservation: 512m
     cpus: 1.5
 
+  # ============================================================
+  # COFRE de comprovante de entrega (Logística Fase 1b)
+  # ------------------------------------------------------------
+  # Banco Postgres ISOLADO — espelha o conceito do postgres-rfb, mas com uma
+  # diferença CRÍTICA: o RFB é reimportável (backup opcional); o cofre é
+  # INSUBSTITUÍVEL (a prova lastreia a cobrança a prazo) → backup OBRIGATÓRIO
+  # + retenção 5 anos. Guarda só METADADOS da prova; os binários (foto/
+  # assinatura) ficam no object store `minio`. Em PROD vira máquina dedicada
+  # provisionada pela infra (Douglas/Marco); aqui em DEV é container local.
+  # ============================================================
+  postgres-cofre:
+    image: postgres:16-alpine
+    container_name: capul-db-cofre
+    environment:
+      POSTGRES_USER: ${COFRE_DB_USER:-${DB_USER:?DB_USER obrigatorio no .env}}
+      POSTGRES_PASSWORD: ${COFRE_DB_PASSWORD:-${DB_PASSWORD:?DB_PASSWORD obrigatorio no .env}}
+      POSTGRES_DB: ${COFRE_DB_NAME:-capul_cofre}
+    # Porta NAO exposta externamente — acesso só pela rede Docker interna.
+    # (Em DEV, docker-compose.override.yml publica 5434 p/ rodar migrations.)
+    volumes:
+      - postgres_cofre_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${COFRE_DB_USER:-${DB_USER}}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 512m
+    mem_reservation: 128m
+
+  # Object store S3-compatível p/ os binários da prova (foto/assinatura).
+  # Isolado do banco — incha não o Postgres, e em PROD pode virar S3/MinIO real.
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    container_name: capul-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-${DB_USER:?DB_USER obrigatorio no .env}}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-${DB_PASSWORD:?DB_PASSWORD obrigatorio no .env}}
+    # Portas NAO expostas externamente — só rede Docker interna.
+    # (Em DEV, docker-compose.override.yml publica 9000/9001 p/ console+API.)
+    volumes:
+      - minio_cofre_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 512m
+    mem_reservation: 128m
+
   redis:
     image: redis:7-alpine
     container_name: capul-redis
@@ -546,11 +600,31 @@ services:
     restart: "no"
     logging: *default-logging
 
+  # Migra o COFRE (banco isolado) — schema próprio prisma/cofre/schema.prisma.
+  logistica-cofre-migrate:
+    build: ./logistica/backend
+    container_name: capul-logistica-cofre-migrate
+    command: ["sh", "-c", "npx prisma migrate deploy --schema=prisma/cofre/schema.prisma"]
+    environment:
+      COFRE_DATABASE_URL: postgresql://${COFRE_DB_USER:-${DB_USER}}:${COFRE_DB_PASSWORD:-${DB_PASSWORD}}@postgres-cofre:5432/${COFRE_DB_NAME:-capul_cofre}?schema=cofre&connection_limit=5
+    depends_on:
+      postgres-cofre:
+        condition: service_healthy
+    restart: "no"
+    logging: *default-logging
+
   logistica-backend:
     build: ./logistica/backend
     container_name: capul-logistica-api
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public&connection_limit=10
+      # Cofre de comprovante (banco isolado + object store). Se indisponível no
+      # boot, o backend NÃO cai — o cofre é degradável (reconexão lazy).
+      COFRE_DATABASE_URL: postgresql://${COFRE_DB_USER:-${DB_USER}}:${COFRE_DB_PASSWORD:-${DB_PASSWORD}}@postgres-cofre:5432/${COFRE_DB_NAME:-capul_cofre}?schema=cofre&connection_limit=10
+      COFRE_S3_ENDPOINT: ${COFRE_S3_ENDPOINT:-http://minio:9000}
+      COFRE_S3_BUCKET: ${COFRE_S3_BUCKET:-comprovantes}
+      COFRE_S3_ACCESS_KEY: ${MINIO_ROOT_USER:-${DB_USER}}
+      COFRE_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-${DB_PASSWORD}}
       JWT_SECRET: ${JWT_SECRET}
       NODE_ENV: production
       PORT: 3003
@@ -560,6 +634,10 @@ services:
         condition: service_healthy
       logistica-migrate:
         condition: service_completed_successfully
+      logistica-cofre-migrate:
+        condition: service_completed_successfully
+      minio:
+        condition: service_healthy
     restart: unless-stopped
     logging: *default-logging
 
@@ -574,6 +652,8 @@ services:
 volumes:
   postgres_data:
   postgres_rfb_data:
+  postgres_cofre_data:
+  minio_cofre_data:
   redis_data:
   uploads_data:
   fiscal_xmls:

@@ -13,6 +13,9 @@ RUN npm ci
 COPY tsconfig*.json nest-cli.json ./
 COPY src ./src/
 RUN npx prisma generate
+# Segundo cliente Prisma — COFRE de comprovante (banco isolado). Gera em
+# node_modules/@prisma-cofre/client; o runtime copia node_modules do builder.
+RUN npx prisma generate --schema=prisma/cofre/schema.prisma
 RUN npm run build
 
 # ---------- Stage 2: runtime ----------

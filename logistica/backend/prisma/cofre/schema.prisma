@@ -1,0 +1,77 @@
+// ============================================================
+// Cliente Prisma DEDICADO — COFRE de comprovante de entrega (Fase 1b)
+// Banco SEPARADO e ISOLADO (capul-db-cofre / COFRE_DATABASE_URL).
+//
+// Por que separado (decisão 08/06, espelha o padrão RFB):
+//   A prova de entrega LASTREIA a cobrança (venda a prazo). É um ativo
+//   jurídico/financeiro insubstituível — retenção 5 anos, backup OBRIGATÓRIO.
+//   Por isso vive em banco próprio (não no `logistica` operacional, que é
+//   reconstruível). O `logistica` guarda só a referência leve
+//   (entrega.temComprovante + entrega.comprovanteId).
+//
+// IMUTÁVEL: o cofre é APPEND-ONLY. Não há update nem delete de comprovante —
+// uma prova só é criada e consultada. Correções viram um NOVO comprovante.
+//
+// Os BINÁRIOS (foto/assinatura) NÃO ficam aqui: ficam no object store próprio
+// (MinIO/S3). Aqui guardamos só os metadados + o `objectKey` que aponta pro
+// arquivo no store + o `hash` (SHA-256) que prova a integridade do binário.
+//
+// Sem relação cruzada com logistica/core — o vínculo entrega↔comprovante é
+// resolvido no app (join em memória), ZERO JOIN SQL cross-DB.
+//
+// Gera um client independente em node_modules/@prisma-cofre/client.
+// ============================================================
+
+generator clientCofre {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/@prisma-cofre/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("COFRE_DATABASE_URL")
+  schemas  = ["cofre"]
+}
+
+enum TipoComprovante {
+  FOTO
+  ASSINATURA
+  @@schema("cofre")
+}
+
+/// Comprovante de entrega — registro IMUTÁVEL (append-only).
+/// Uma linha = uma prova capturada na baixa de uma entrega.
+model Comprovante {
+  id            String          @id @default(uuid())
+  // Referência LÓGICA à entrega no schema `logistica` (sem FK — outro banco).
+  entregaId     String          @map("entrega_id")
+  entregaNumero Int?            @map("entrega_numero") // nº legível p/ a consulta do financeiro
+  filialId      String          @map("filial_id")
+  matricula     String?         // chave de cobrança quando cliente identificado
+  cupom         String?         // nº do cupom/venda (lastro)
+
+  tipo          TipoComprovante
+  // Caminho do binário no object store (MinIO/S3). O binário em si NÃO está aqui.
+  objectKey     String          @map("object_key")
+  // SHA-256 do binário — prova de integridade (o arquivo não foi adulterado).
+  hash          String
+  mimeType      String?         @map("mime_type")
+  tamanhoBytes  Int?            @map("tamanho_bytes")
+
+  // GPS POR EVENTO (capturado no momento da baixa, não contínuo — LGPD).
+  geoLat        Decimal?        @map("geo_lat") @db.Decimal(10, 7)
+  geoLng        Decimal?        @map("geo_lng") @db.Decimal(10, 7)
+
+  // Quem capturou (usuarioId do entregador) e quando.
+  entregadorId  String          @map("entregador_id")
+  capturadoEm   DateTime        @default(now()) @map("capturado_em")
+  // Trilha de auditoria livre (device, app version, recebedor, etc.).
+  trilha        Json?
+
+  @@index([entregaId])
+  @@index([filialId, capturadoEm])
+  @@index([matricula])
+  @@index([cupom])
+  @@map("comprovante")
+  @@schema("cofre")
+}
