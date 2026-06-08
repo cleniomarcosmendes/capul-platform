@@ -1,18 +1,29 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, StatusEntrega } from '@prisma/client';
+import { Prisma, SituacaoVeiculo, StatusEntrega, StatusViagem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
+import { CofreService } from '../cofre/cofre.service.js';
 import { assertPodeVerRegistro } from '../common/filial-scope.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
-import { CreateEntregaDto } from './dto.js';
+import { BaixarEntregaDto, CreateEntregaDto } from './dto.js';
 
 const onlyDigits = (s?: string | null) => (s ?? '').replace(/\D/g, '');
+
+/** Estados terminais de baixa — entrega já resolvida no campo. */
+const TERMINAIS: StatusEntrega[] = [StatusEntrega.ENTREGUE, StatusEntrega.NAO_ENTREGUE];
+
+export interface ProvaBinaria {
+  buffer: Buffer;
+  mimetype: string;
+  size: number;
+}
 
 @Injectable()
 export class EntregaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly core: CoreLookupService,
+    private readonly cofre: CofreService,
   ) {}
 
   /**
@@ -170,6 +181,122 @@ export class EntregaService {
       include: { cupons: true },
     });
     return this.comTotal(atualizada);
+  }
+
+  /**
+   * Baixa de entrega no campo (Fase 1b). A entrega precisa estar EM_VIAGEM
+   * (numa viagem despachada). Resultado terminal:
+   *  - ENTREGUE: opcionalmente com PROVA (foto/assinatura) → grava no cofre
+   *    isolado e seta temComprovante/comprovanteId.
+   *  - NAO_ENTREGUE: exige motivo (sem prova).
+   * GPS por evento + dataHoraEntrega registrados na própria entrega.
+   *
+   * IDEMPOTENTE: se a entrega já está em estado terminal (reenvio offline do
+   * app), devolve o estado atual sem reprocessar nem duplicar comprovante.
+   *
+   * Após a baixa, se TODAS as entregas da viagem ficaram terminais, a viagem
+   * é concluída (EM_CURSO → CONCLUIDA) e o veículo liberado (→ DISPONIVEL).
+   */
+  async baixar(id: string, dto: BaixarEntregaDto, prova: ProvaBinaria | undefined, user: JwtPayload) {
+    const e = await this.prisma.entrega.findUnique({
+      where: { id },
+      include: { cupons: true, parada: { select: { viagemId: true } } },
+    });
+    if (!e) throw new NotFoundException('Entrega não encontrada.');
+    assertPodeVerRegistro(user, e.filialId);
+
+    // Idempotência: já baixada → devolve o estado atual (reenvio do app é no-op).
+    if (TERMINAIS.includes(e.status)) {
+      return this.comTotal(e);
+    }
+    if (e.status !== StatusEntrega.EM_VIAGEM) {
+      throw new BadRequestException(
+        `Só é possível dar baixa em entrega EM_VIAGEM (status atual: ${e.status}). ` +
+          'A entrega precisa estar numa viagem despachada.',
+      );
+    }
+    const entregue = dto.resultado === 'ENTREGUE';
+    if (!entregue && !dto.motivo?.trim()) {
+      throw new BadRequestException('Informe o motivo da não-entrega.');
+    }
+
+    // Grava a prova no COFRE (banco isolado + object store) ANTES de fechar a
+    // baixa — se o cofre falhar, a baixa não acontece (a prova é o ativo).
+    let comprovanteId: string | null = null;
+    let temComprovante = false;
+    if (entregue && prova) {
+      const cupom = e.cupons.find((c) => c.numeroCupom)?.numeroCupom ?? null;
+      const { comprovanteId: cid } = await this.cofre.gravar({
+        entregaId: e.id,
+        entregaNumero: e.numero,
+        filialId: e.filialId,
+        matricula: e.matricula,
+        cupom,
+        tipo: dto.tipoProva === 'ASSINATURA' ? 'ASSINATURA' : 'FOTO',
+        binario: prova.buffer,
+        mimeType: prova.mimetype,
+        geoLat: dto.geoLat ?? null,
+        geoLng: dto.geoLng ?? null,
+        entregadorId: user.sub,
+        trilha: {
+          recebedorNome: dto.recebedorNome?.trim() || null,
+          idempotencyKey: dto.idempotencyKey ?? null,
+          viagemId: e.parada?.viagemId ?? null,
+        },
+      });
+      comprovanteId = cid;
+      temComprovante = true;
+    }
+
+    const novoStatus = entregue ? StatusEntrega.ENTREGUE : StatusEntrega.NAO_ENTREGUE;
+    const viagemId = e.parada?.viagemId ?? null;
+
+    const atualizada = await this.prisma.$transaction(async (tx) => {
+      const upd = await tx.entrega.update({
+        where: { id },
+        data: {
+          status: novoStatus,
+          dataHoraEntrega: new Date(),
+          motivoNaoEntrega: entregue ? null : dto.motivo!.trim(),
+          baixadoPorId: user.sub,
+          geoLat: dto.geoLat != null ? new Prisma.Decimal(dto.geoLat) : null,
+          geoLng: dto.geoLng != null ? new Prisma.Decimal(dto.geoLng) : null,
+          temComprovante,
+          comprovanteId,
+        },
+        include: { cupons: true },
+      });
+
+      if (viagemId) await this.concluirViagemSeTudoBaixado(tx, viagemId);
+      return upd;
+    });
+
+    return this.comTotal(atualizada);
+  }
+
+  /**
+   * Se todas as entregas das paradas de uma viagem EM_CURSO ficaram terminais,
+   * conclui a viagem e libera o veículo. Roda dentro da transação da baixa.
+   */
+  private async concluirViagemSeTudoBaixado(tx: Prisma.TransactionClient, viagemId: string) {
+    const viagem = await tx.viagem.findUnique({
+      where: { id: viagemId },
+      select: {
+        situacao: true,
+        veiculoId: true,
+        paradas: { select: { entrega: { select: { status: true } } } },
+      },
+    });
+    if (!viagem || viagem.situacao !== StatusViagem.EM_CURSO) return;
+    const entregas = viagem.paradas.map((p) => p.entrega).filter((x): x is { status: StatusEntrega } => !!x);
+    const todasBaixadas = entregas.length > 0 && entregas.every((e) => TERMINAIS.includes(e.status));
+    if (!todasBaixadas) return;
+
+    await tx.viagem.update({
+      where: { id: viagemId },
+      data: { situacao: StatusViagem.CONCLUIDA, dataHoraChegada: new Date() },
+    });
+    await tx.veiculo.update({ where: { id: viagem.veiculoId }, data: { situacao: SituacaoVeiculo.DISPONIVEL } });
   }
 
   // ---------- helpers ----------

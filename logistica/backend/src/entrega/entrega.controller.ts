@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { StatusEntrega } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { assertMesmaFilial, resolverFilialLeitura } from '../common/filial-scope.js';
-import { EntregaService } from './entrega.service.js';
-import { CancelarEntregaDto, CreateEntregaDto } from './dto.js';
+import { EntregaService, type ProvaBinaria } from './entrega.service.js';
+import { BaixarEntregaDto, CancelarEntregaDto, CreateEntregaDto } from './dto.js';
 
 @Controller('entregas')
 @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
@@ -36,5 +37,24 @@ export class EntregaController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.entregas.cancelar(id, dto.motivo, user.sub, user.filialId);
+  }
+
+  /**
+   * Baixa de entrega no campo (Fase 1b). multipart/form-data: campo `prova`
+   * (foto/assinatura, opcional) + campos da baixa. A prova vai pro cofre
+   * isolado. Quem dá baixa é o entregador (app) ou o operador (web).
+   */
+  @Post(':id/baixar')
+  @UseInterceptors(FileInterceptor('prova', { limits: { fileSize: 15 * 1024 * 1024 } }))
+  baixar(
+    @Param('id') id: string,
+    @Body() dto: BaixarEntregaDto,
+    @CurrentUser() user: JwtPayload,
+    @UploadedFile() prova?: Express.Multer.File,
+  ) {
+    const binario: ProvaBinaria | undefined = prova
+      ? { buffer: prova.buffer, mimetype: prova.mimetype, size: prova.size }
+      : undefined;
+    return this.entregas.baixar(id, dto, binario, user);
   }
 }

@@ -72,3 +72,39 @@ export class CancelarEntregaDto {
   @IsOptional() @IsString() @MaxLength(255)
   motivo?: string;
 }
+
+/**
+ * Baixa de entrega no campo (Fase 1b). Chega via multipart/form-data quando há
+ * prova (foto/assinatura) — por isso os números chegam como string e são
+ * convertidos com @Type(() => Number).
+ */
+export class BaixarEntregaDto {
+  // Resultado terminal da baixa. ENTREGUE espera prova; NAO_ENTREGUE exige
+  // motivo. Enum explícito (string) — evita a ambiguidade de boolean em
+  // multipart com enableImplicitConversion ('false' viraria true).
+  @IsEnum(['ENTREGUE', 'NAO_ENTREGUE'])
+  resultado!: 'ENTREGUE' | 'NAO_ENTREGUE';
+
+  // Motivo obrigatório quando NÃO entregue (ausente/recusado/endereço errado…).
+  @IsOptional() @IsString() @MaxLength(255)
+  motivo?: string;
+
+  // Tipo da prova quando há binário. Default FOTO.
+  @IsOptional() @IsEnum(['FOTO', 'ASSINATURA'])
+  tipoProva?: 'FOTO' | 'ASSINATURA';
+
+  // Quem recebeu (nome de quem assinou/recebeu) — vai pra trilha do comprovante.
+  @IsOptional() @IsString() @MaxLength(120)
+  recebedorNome?: string;
+
+  // GPS POR EVENTO capturado na baixa (graus decimais).
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(-90) @Max(90)
+  geoLat?: number;
+
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(-180) @Max(180)
+  geoLng?: number;
+
+  // Chave de idempotência do app (reenvio offline não duplica a baixa).
+  @IsOptional() @IsString() @MaxLength(80)
+  idempotencyKey?: string;
+}

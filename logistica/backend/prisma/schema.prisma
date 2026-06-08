@@ -202,6 +202,13 @@ model Entrega {
   // (baixa/foto/assinatura/hash/gps) NÃO mora aqui; mora no cofre. Cross-DB, sem FK.
   temComprovante    Boolean            @default(false) @map("tem_comprovante")
   comprovanteId     String?            @map("comprovante_id")
+  // Baixa de entrega (Fase 1b). ENTREGUE/NAO_ENTREGUE são estados terminais.
+  dataHoraEntrega   DateTime?          @map("data_hora_entrega")
+  motivoNaoEntrega  String?            @map("motivo_nao_entrega")
+  baixadoPorId      String?            @map("baixado_por_id")
+  // GPS POR EVENTO capturado na baixa (pontual — LGPD; não é rastreio contínuo).
+  geoLat            Decimal?           @map("geo_lat") @db.Decimal(10, 7)
+  geoLng            Decimal?           @map("geo_lng") @db.Decimal(10, 7)
   cupons            EntregaCupom[]
   parada            Parada?
 
