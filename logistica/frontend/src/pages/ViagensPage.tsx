@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Truck, Send, Trash2, Printer, CheckCircle2, FileText, Camera, Phone, Clock } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -40,6 +40,42 @@ export function ViagensPage() {
   const [detalhe, setDetalhe] = useState<ViagemDet | null>(null); // viagem expandida (ver entregas)
   const [confirmacao, setConfirmacao] = useState<{ titulo: string; mensagem: string; acao: () => Promise<void> } | null>(null);
   const [baixaAlvo, setBaixaAlvo] = useState<{ id: string; numero: number; destinatarioNome: string } | null>(null);
+  // Filtro inteligente por BAIRRO: o operador conhece os bairros (não as
+  // distâncias). Agrupa as pendentes por bairro p/ montar a rota por região,
+  // sem geolocalização. Tudo no cliente (instantâneo). [] = todos os bairros.
+  const [bairrosSel, setBairrosSel] = useState<string[]>([]);
+
+  const SEM_BAIRRO = '__SEM__';
+  const keyBairro = (b?: string | null) => (b ?? '').trim().toUpperCase() || SEM_BAIRRO;
+
+  // Bairros com pendentes + contagem, ordenados por volume (mais entregas 1º).
+  const bairros = useMemo(() => {
+    const m = new Map<string, { label: string; count: number }>();
+    for (const e of pendentes) {
+      const k = keyBairro(e.endBairro);
+      const label = (e.endBairro ?? '').trim() || 'Sem bairro';
+      const cur = m.get(k);
+      if (cur) cur.count++; else m.set(k, { label, count: 1 });
+    }
+    return [...m.entries()]
+      .map(([key, v]) => ({ key, ...v }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [pendentes]);
+
+  const pendentesFiltrados = useMemo(() => {
+    if (bairrosSel.length === 0) return pendentes;
+    const set = new Set(bairrosSel);
+    return pendentes.filter((e) => set.has(keyBairro(e.endBairro)));
+  }, [pendentes, bairrosSel]);
+
+  function toggleBairro(key: string) {
+    setBairrosSel((p) => (p.includes(key) ? p.filter((x) => x !== key) : [...p, key]));
+  }
+  // Adiciona à rota (na ordem da lista) todas as pendentes visíveis ainda não
+  // selecionadas — monta a rota de um bairro de uma vez.
+  function selecionarVisiveis() {
+    setSelecao((p) => [...p, ...pendentesFiltrados.filter((e) => !p.includes(e.id)).map((e) => e.id)]);
+  }
 
   async function carregar() {
     setLoading(true);
@@ -153,11 +189,36 @@ export function ViagensPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Pendentes */}
         <div className="rounded-xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Pendentes ({pendentes.length})</div>
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
+            <span>Pendentes ({pendentesFiltrados.length}{bairrosSel.length > 0 ? ` de ${pendentes.length}` : ''})</span>
+            {pendentesFiltrados.length > 0 && (
+              <button onClick={selecionarVisiveis} className="text-xs font-medium text-sky-700 hover:underline">
+                + Selecionar {bairrosSel.length > 0 ? 'do bairro' : 'todas'} ({pendentesFiltrados.length})
+              </button>
+            )}
+          </div>
+
+          {/* Filtro por bairro — o operador monta a rota por região que conhece. */}
+          {bairros.length > 1 && (
+            <div className="flex flex-wrap gap-1.5 border-b border-slate-100 px-4 py-2.5">
+              <button onClick={() => setBairrosSel([])}
+                className={`rounded-full px-2.5 py-1 text-xs font-medium ${bairrosSel.length === 0 ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                Todos ({pendentes.length})
+              </button>
+              {bairros.map((b) => (
+                <button key={b.key} onClick={() => toggleBairro(b.key)}
+                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${bairrosSel.includes(b.key) ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                  {b.label} ({b.count})
+                </button>
+              ))}
+            </div>
+          )}
+
           {loading ? <div className="p-6 text-sm text-slate-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Carregando…</div>
             : pendentes.length === 0 ? <div className="p-6 text-sm text-slate-500">Nenhuma entrega pendente.</div>
+            : pendentesFiltrados.length === 0 ? <div className="p-6 text-sm text-slate-500">Nenhuma pendente neste bairro.</div>
             : <ul className="divide-y divide-slate-100 max-h-[420px] overflow-auto">
-                {pendentes.map((e) => {
+                {pendentesFiltrados.map((e) => {
                   const idx = selecao.indexOf(e.id);
                   return (
                     <li key={e.id} className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-50">
