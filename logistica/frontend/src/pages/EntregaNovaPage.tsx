@@ -31,7 +31,7 @@ interface HistoricoBusca {
 }
 interface ClienteProtheus {
   matricula: string; nome: string; cpfCnpj: string | null; telefone: string | null;
-  enderecos: { logradouro: string; bairro: string | null; cidade: string | null; uf: string | null; cep: string | null; rotulo: string }[];
+  enderecos: { logradouro: string; complemento?: string | null; bairro: string | null; cidade: string | null; uf: string | null; cep: string | null; rotulo: string }[];
 }
 /** Candidato de endereço apresentado no seletor (de qualquer fonte). */
 interface EnderecoSug {
@@ -45,7 +45,7 @@ interface BuscaResp {
   clientesLocais: ClienteBusca[];
   enderecosPorMatricula?: EnderecoBusca[]; // EnderecoEntrega salvos por matrícula
   historicoEntregas: HistoricoBusca[];
-  protheus?: { cliente: ClienteProtheus | null };
+  protheus?: { clientes: ClienteProtheus[] };
 }
 
 const TIPOS: { v: TipoCliente; label: string }[] = [
@@ -125,7 +125,7 @@ export function EntregaNovaPage() {
     const t = setTimeout(async () => {
       try {
         const { data } = await logisticaApi.get<BuscaResp>('/cadastro/busca', { params: { termo: digits } });
-        const temAlgo = data.clientesLocais.length > 0 || data.historicoEntregas.length > 0;
+        const temAlgo = data.clientesLocais.length > 0 || data.historicoEntregas.length > 0 || (data.protheus?.clientes?.length ?? 0) > 0;
         setSugestoes(data);
         setMostrarSug(temAlgo);
       } catch { setSugestoes(null); }
@@ -152,8 +152,8 @@ export function EntregaNovaPage() {
   // seletor de cards — usado igual nas 3 abas.
   function coletarEnderecos(data: BuscaResp): EnderecoSug[] {
     const sug: EnderecoSug[] = [];
-    const c = data.protheus?.cliente;
-    if (c) sug.push(...c.enderecos.map((e) => ({ rotulo: e.rotulo, logradouro: e.logradouro, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep, telefone: c.telefone })));
+    for (const c of data.protheus?.clientes ?? [])
+      sug.push(...c.enderecos.map((e) => ({ rotulo: e.rotulo, logradouro: e.logradouro, complemento: e.complemento, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep, telefone: c.telefone })));
     for (const e of data.enderecosPorMatricula ?? [])
       sug.push({ rotulo: e.apelido || 'Salvo', logradouro: e.logradouro, numero: e.numero, complemento: e.complemento, bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep, referencia: e.pontoReferencia, telefone: e.telefone, enderecoEntregaId: e.id });
     for (const cl of data.clientesLocais)
@@ -190,6 +190,25 @@ export function EntregaNovaPage() {
     aplicarSugestaoTelefone(h.destinatarioNome, h.telefone, '', { rotulo: 'Histórico', logradouro: h.endLogradouro ?? '', cidade: h.endCidade });
   }
 
+  // Escolheu um cliente do PROTHEUS no dropdown (achado por telefone/nome). Tem
+  // matrícula (SA1) → vira IDENTIFICADO; preenche nome/telefone + endereço(s) do
+  // cliente. Operador pode trocar de endereço/card ou digitar um novo.
+  function aplicarClienteProtheus(p: ClienteProtheus) {
+    pularBuscaTelRef.current = true;
+    setTipoCliente('IDENTIFICADO');
+    setMatricula(p.matricula);
+    setDestinatarioNome(p.nome);
+    if (p.telefone) setTelefone(maskTelefone(p.telefone));
+    setClienteLocalId('');
+    const cards: EnderecoSug[] = p.enderecos.map((e) => ({
+      rotulo: e.rotulo, logradouro: e.logradouro, complemento: e.complemento,
+      bairro: e.bairro, cidade: e.cidade, uf: e.uf, cep: e.cep, telefone: p.telefone,
+    }));
+    setEnderecosSugeridos(cards);
+    if (cards.length > 0) aplicarEndereco(cards[0], 0); else enderecoNovo();
+    setMostrarSug(false);
+  }
+
   /** Preenche os campos de endereço a partir de um candidato escolhido no seletor. */
   function aplicarEndereco(e: EnderecoSug, idx: number) {
     setEnderecoSelIdx(idx);
@@ -219,7 +238,7 @@ export function EntregaNovaPage() {
   // as fontes do cliente: Protheus + endereços já salvos pra essa matrícula +
   // histórico de entregas (assim um "novo endereço" usado antes reaparece).
   function montarSeletorMatricula(data: BuscaResp, mat: string) {
-    const c = data.protheus?.cliente;
+    const c = data.protheus?.clientes?.[0];
     const cards = coletarEnderecos(data);
     const nome = c?.nome ?? data.historicoEntregas[0]?.destinatarioNome ?? '';
     const tel = c?.telefone ?? data.historicoEntregas.find((h) => h.telefone)?.telefone ?? null;
@@ -409,6 +428,14 @@ export function EntregaNovaPage() {
                     className="block w-full border-t border-slate-50 px-3 py-2 text-left text-sm hover:bg-sky-50">
                     <div className="font-medium text-slate-700">{h.destinatarioNome} <span className="text-[11px] text-slate-400">(do histórico)</span></div>
                     <div className="text-xs text-slate-500">{h.endLogradouro}{h.endNumero ? `, ${h.endNumero}` : ''}{h.endBairro ? ` — ${h.endBairro}` : ''}</div>
+                  </button>
+                ))}
+                {(sugestoes.protheus?.clientes ?? []).map((p, i) => (
+                  <button type="button" key={`p-${p.matricula}-${i}`} onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => aplicarClienteProtheus(p)}
+                    className="block w-full border-t border-slate-50 px-3 py-2 text-left text-sm hover:bg-sky-50">
+                    <div className="font-medium text-slate-700">{p.nome} <span className="text-[11px] text-emerald-600">(Protheus · {p.matricula})</span>{p.telefone ? <span className="text-xs text-slate-400"> · {maskTelefone(p.telefone)}</span> : null}</div>
+                    {p.enderecos[0] && <div className="text-xs text-slate-500">{p.enderecos[0].logradouro}{p.enderecos[0].bairro ? ` — ${p.enderecos[0].bairro}` : ''}{p.enderecos[0].cidade ? `, ${p.enderecos[0].cidade}` : ''}</div>}
                   </button>
                 ))}
               </div>

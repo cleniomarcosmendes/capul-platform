@@ -308,12 +308,11 @@ async function main() {
     url: ep.url.replace(BASE_PRD, BASE_HLG),
   }));
 
-  // LOGISTICA — cliente (SA1) por matrícula p/ autofill de endereço na entrega.
-  // INTERINO: aponta para `getLimite` (já devolve nome+endereço+telefone+CPF do
-  // cliente). Troca-se a URL quando o Protheus entregar endpoint dedicado
-  // (docs/SOLICITACAO_PROTHEUS_enderecos_SA1.md). Só leitura, sem SEFAZ.
+  // LOGISTICA — cliente (SA1) p/ autofill de endereço na entrega. Endpoint
+  // DEDICADO entregue pelo Protheus (06/2026): busca por MATRICULA/TELEFONE/NOME,
+  // devolve endereço + contatos de clientes ATIVOS da SA1. Só leitura, sem SEFAZ.
   const endpointsLogisticaPrd = [
-    { modulo: 'LOGISTICA' as const, ambiente: 'PRODUCAO' as const, operacao: 'clienteEndereco', url: `${BASE_PRD}/getLimite`, metodo: 'GET' as const, timeoutMs: 10000 },
+    { modulo: 'LOGISTICA' as const, ambiente: 'PRODUCAO' as const, operacao: 'clienteEndereco', url: `${BASE_PRD}/LOGISTICA/clienteEndereco`, metodo: 'GET' as const, timeoutMs: 10000 },
   ];
 
   const endpointsLogisticaHlg = endpointsLogisticaPrd.map((ep) => ({

@@ -19,7 +19,7 @@ interface ProtheusCliente {
 interface BuscaResp {
   clientesLocais: ClienteLocal[];
   historicoEntregas: Historico[];
-  protheus?: { cliente: ProtheusCliente | null };
+  protheus?: { clientes: ProtheusCliente[] };
 }
 
 type Origem = 'Cliente local' | 'Histórico' | 'Protheus';
@@ -63,8 +63,7 @@ export function ClientesPage() {
         cidadeUf: h.endCidade ?? '', origem: 'Histórico',
       });
     }
-    const p = d.protheus?.cliente;
-    if (p) {
+    for (const p of d.protheus?.clientes ?? []) {
       for (const e of p.enderecos) {
         out.push({
           nome: p.nome, telefone: p.telefone,

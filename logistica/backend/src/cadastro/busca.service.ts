@@ -27,7 +27,17 @@ export class BuscaService {
     // Escopo por filial (cidades diferentes → não misturar endereços homônimos).
     const escopo = filialId ? { filialId } : {};
 
-    const [clientesLocais, enderecosPorMatricula, historicoEntregas, clienteProtheus] = await Promise.all([
+    // Protheus (SA1) pelo formato do termo: matrícula exata, telefone (>=8
+    // dígitos p/ não inundar) ou nome (>=3 chars). Endpoint dedicado, leitura.
+    const protheusBusca = pareceMatricula
+      ? this.protheus.buscar({ matricula: matriculaNorm })
+      : digits.length >= 8
+        ? this.protheus.buscar({ telefone: digits })
+        : termo.length >= 3
+          ? this.protheus.buscar({ nome: termo })
+          : Promise.resolve([]);
+
+    const [clientesLocais, enderecosPorMatricula, historicoEntregas, clientesProtheus] = await Promise.all([
       // ClienteLocal por nome/telefone (da filial)
       termo
         ? this.prisma.clienteLocal.findMany({
@@ -78,8 +88,8 @@ export class BuscaService {
             take: 20,
           })
         : Promise.resolve([]),
-      // Protheus (SA1) por matrícula — só quando o termo é matrícula.
-      pareceMatricula ? this.protheus.porMatricula(matriculaNorm) : Promise.resolve(null),
+      // Protheus (SA1) — matrícula/telefone/nome conforme o termo.
+      protheusBusca,
     ]);
 
     return {
@@ -88,7 +98,7 @@ export class BuscaService {
       clientesLocais,
       enderecosPorMatricula,
       historicoEntregas,
-      protheus: { cliente: clienteProtheus },
+      protheus: { clientes: clientesProtheus },
     };
   }
 }

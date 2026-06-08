@@ -1,38 +1,55 @@
 import { ProtheusClienteService } from './protheus-cliente.service';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-describe('ProtheusClienteService.mapGetLimite', () => {
+describe('ProtheusClienteService.mapItens (clienteEndereco SA1)', () => {
   const svc = new ProtheusClienteService();
-  const map = (j: any, mat: string) => (svc as any).mapGetLimite(j, mat) as any;
+  const map = (j: any) => (svc as any).mapItens(j) as any[];
 
-  it('retorna null quando a matrícula echo diverge (cai no CLIENTE PADRÃO)', () => {
-    const r = map({ matricula: '000001', nome: 'CLIENTE PADRAO', cadastrosativos: [] }, 'E01047');
-    expect(r).toBeNull();
+  it('lista vazia quando total=0', () => {
+    expect(map({ total: 0, itens: [] })).toEqual([]);
   });
 
-  it('mapeia nome, telefone (sem zero do DDD), CPF e endereço deduplicado', () => {
-    const r = map(
-      {
-        matricula: 'E01047',
-        nome: 'FULANO  ',
-        manutencaocompartilhada: { ddd: '038', tel: '999990000', endcob: 'RUA X 10 APTO 1', bairroc: 'CENTRO', munc: 'UNAI', estc: 'MG', cepc: '38600000' },
-        cadastrosativos: [{ loja: '0001', endereco: 'RUA X, 10 AP 1', cgc: '11122233344', municipio: 'UNAI', estado: 'MG' }],
-      },
-      'E01047',
-    );
-    expect(r).not.toBeNull();
-    expect(r.nome).toBe('FULANO');
-    expect(r.telefone).toBe('38999990000'); // "038" perde o zero de discagem
-    expect(r.cpfCnpj).toBe('11122233344');
-    // cobrança "RUA X 10 APTO 1" e loja "RUA X, 10 AP 1" são o MESMO endereço → dedup p/ 1
-    expect(r.enderecos).toHaveLength(1);
-    expect(r.enderecos[0].bairro).toBe('CENTRO'); // cobrança (mais completa) vence
-    expect(r.enderecos[0].cep).toBe('38600000');
+  it('mapeia matrícula, nome, CPF, endereço e telefone (1º contato)', () => {
+    const r = map({
+      total: 1,
+      itens: [
+        {
+          matricula: 'E01047',
+          loja: '01',
+          nome: 'FULANO DE TAL',
+          cpfcnpj: '12345678901',
+          endereco: { logrado: 'RUA EXEMPLO, 100', complem: 'APTO 1', bairro: 'CENTRO', municip: 'ITUIUTABA', munIBGE: '3134400', uf: 'MG', cep: '38300000' },
+          contatos: [{ numero: '34999990000' }, { numero: '34988881111' }],
+        },
+      ],
+    });
+    expect(r).toHaveLength(1);
+    expect(r[0].matricula).toBe('E01047');
+    expect(r[0].nome).toBe('FULANO DE TAL');
+    expect(r[0].cpfCnpj).toBe('12345678901');
+    expect(r[0].telefone).toBe('34999990000'); // 1º contato não-vazio
+    expect(r[0].enderecos).toHaveLength(1);
+    expect(r[0].enderecos[0]).toMatchObject({
+      logradouro: 'RUA EXEMPLO, 100', complemento: 'APTO 1', bairro: 'CENTRO', cidade: 'ITUIUTABA', uf: 'MG', cep: '38300000',
+    });
   });
 
-  it('aceita matrícula echo com case/espaços diferentes', () => {
-    const r = map({ matricula: ' e01047 ', nome: 'F', cadastrosativos: [] }, 'E01047');
-    expect(r).not.toBeNull();
-    expect(r.matricula).toBe('e01047');
+  it('múltiplos itens (busca por telefone/nome) viram vários clientes', () => {
+    const r = map({
+      total: 2,
+      itens: [
+        { matricula: 'E01', nome: 'A', endereco: { logrado: 'RUA A' }, contatos: [] },
+        { matricula: 'E02', nome: 'B', endereco: { logrado: 'RUA B' }, contatos: [{ numero: '3499' }] },
+      ],
+    });
+    expect(r).toHaveLength(2);
+    expect(r[0].telefone).toBeNull(); // contatos vazio
+    expect(r[1].telefone).toBe('3499');
+    expect(r[1].enderecos[0].logradouro).toBe('RUA B');
+  });
+
+  it('sem endereço (logrado vazio) → enderecos vazio, sem quebrar', () => {
+    const r = map({ total: 1, itens: [{ matricula: 'E09', nome: 'SEM END', endereco: {}, contatos: [] }] });
+    expect(r[0].enderecos).toEqual([]);
   });
 });

@@ -9,11 +9,12 @@ interface ProtheusConfig { ambiente: string; tipoAuth: string; authConfig: strin
 
 export interface EnderecoCliente {
   logradouro: string;
+  complemento: string | null;
   bairro: string | null;
   cidade: string | null;
   uf: string | null;
   cep: string | null;
-  rotulo: string; // origem: "Cobrança", "Loja 0001"...
+  rotulo: string; // origem do endereço (SA1 = "Cadastro")
 }
 
 export interface ClienteProtheus {
@@ -21,7 +22,7 @@ export interface ClienteProtheus {
   nome: string;
   cpfCnpj: string | null;
   telefone: string | null;
-  enderecos: EnderecoCliente[]; // pode ter mais de um — operador escolhe (ou digita novo)
+  enderecos: EnderecoCliente[]; // endereço do SA1 (operador escolhe ou digita novo)
 }
 
 // Cache de config (TTL 5 min) — igual ao gestao-ti.
@@ -31,13 +32,13 @@ const CACHE_TTL = 300_000;
 const trim = (v: unknown) => String(v ?? '').trim();
 
 /**
- * Consulta de cliente (SA1) no Protheus por MATRÍCULA (CODCLIENTE), via a
- * operação `clienteEndereco` (resolvida dinamicamente no Configurador, módulo
- * LOGISTICA). Hoje aponta para `getLimite`, que já devolve nome + endereço +
- * telefone + CPF do cliente. INTERINO: quando o Protheus entregar um endpoint
- * dedicado (ver docs/SOLICITACAO_PROTHEUS_enderecos_SA1.md), troca-se só a
- * operação no Configurador — o mapeamento abaixo é o ponto único de ajuste.
- * Somente LEITURA, sem SEFAZ.
+ * Consulta de cliente (SA1) no Protheus via a operação `clienteEndereco`
+ * (resolvida dinamicamente no Configurador, módulo LOGISTICA). Endpoint
+ * DEDICADO entregue pela equipe Protheus (06/2026):
+ *   GET /api/INFOCLIENTES/LOGISTICA/clienteEndereco?MATRICULA|TELEFONE|NOME=...
+ * Busca clientes ATIVOS da SA1 (bloqueados A1_MSBLQL='1' nunca aparecem),
+ * por matrícula (exata), telefone (parcial) ou nome (parcial), devolvendo
+ * endereço + contatos. Máx. 200 registros. Somente LEITURA, sem SEFAZ.
  */
 @Injectable()
 export class ProtheusClienteService {
@@ -94,88 +95,73 @@ export class ProtheusClienteService {
     });
   }
 
-  /** Mapeia a resposta do getLimite (clientes/SA1) para o formato normalizado. */
-  private mapGetLimite(j: Record<string, unknown>, matriculaBusca: string): ClienteProtheus | null {
-    const matricula = trim((j as { matricula?: unknown }).matricula);
-    // Não encontrado: getLimite cai no CLIENTE PADRÃO (000001) quando o código
-    // não casa — guardamos pela divergência de matrícula echo.
-    if (!matricula || matricula.toUpperCase() !== matriculaBusca.trim().toUpperCase()) return null;
+  /** Mapeia a resposta `{ total, itens: [...] }` do clienteEndereco (SA1). */
+  private mapItens(j: Record<string, unknown>): ClienteProtheus[] {
+    const itens = (((j.itens ?? []) as unknown[]).filter(Boolean)) as Record<string, unknown>[];
+    return itens.map((it) => this.mapItem(it)).filter((c): c is ClienteProtheus => !!c);
+  }
 
-    const mc = ((j.manutencaocompartilhada ?? {}) as Record<string, unknown>);
-    const cads = (((j.cadastrosativos ?? []) as unknown[]).filter(Boolean)) as Record<string, unknown>[];
-    // DDD vem com zero de discagem ("038") — o DDD real é 2 dígitos. Limpa não
-    // dígitos e tira o zero à esquerda antes de juntar com o número.
-    const ddd = trim(mc.ddd).replace(/\D/g, '').replace(/^0+/, '');
-    const num = trim(mc.tel).replace(/\D/g, '');
-    const tel = `${ddd}${num}`;
+  private mapItem(it: Record<string, unknown>): ClienteProtheus | null {
+    const matricula = trim(it.matricula);
+    const nome = trim(it.nome);
+    if (!matricula && !nome) return null;
 
-    // Monta a lista de endereços: o de COBRANÇA (mais completo — tem bairro/CEP)
-    // + cada cadastro/loja. Dedupe por logradouro+cidade. O operador escolhe um
-    // ou digita um novo no cadastro da entrega.
-    // Chave de dedupe tolerante: o mesmo endereço aparece no bloco de cobrança
-    // ("475 APTO 108") e no cadastro/loja ("475 AP 108") com formatações
-    // diferentes. Normaliza abreviações comuns + remove pontuação/espaços.
-    const chaveDedupe = (logradouro: string, cidade: string | null) =>
-      `${logradouro} ${cidade ?? ''}`
-        .toUpperCase()
-        .replace(/APARTAMENTO|APTO/g, 'AP')
-        .replace(/[^A-Z0-9]/g, '');
+    const end = ((it.endereco ?? {}) as Record<string, unknown>);
+    const logradouro = trim(end.logrado);
+    const enderecos: EnderecoCliente[] = logradouro
+      ? [{
+          logradouro,
+          complemento: trim(end.complem) || null,
+          bairro: trim(end.bairro) || null,
+          cidade: trim(end.municip) || null,
+          uf: trim(end.uf) || null,
+          cep: trim(end.cep) || null,
+          rotulo: 'Cadastro',
+        }]
+      : [];
 
-    const enderecos: EnderecoCliente[] = [];
-    // Cobrança primeiro (mais completo: tem bairro/CEP) → vence no dedupe.
-    const logCob = trim(mc.endcob);
-    if (logCob) {
-      enderecos.push({
-        logradouro: logCob,
-        bairro: trim(mc.bairroc) || null,
-        cidade: trim(mc.munc) || null,
-        uf: trim(mc.estc) || null,
-        cep: trim(mc.cepc) || null,
-        rotulo: 'Cadastro',
-      });
-    }
-    for (const c of cads) {
-      const log = trim(c.endereco);
-      if (!log) continue;
-      enderecos.push({
-        logradouro: log,
-        bairro: null,
-        cidade: trim(c.municipio) || null,
-        uf: trim(c.estado) || null,
-        cep: null,
-        rotulo: cads.length > 1 ? `Loja ${trim(c.loja)}`.trim() : 'Cadastro',
-      });
-    }
-    const vistos = new Set<string>();
-    const enderecosUnicos = enderecos.filter((e) => {
-      const k = chaveDedupe(e.logradouro, e.cidade);
-      if (vistos.has(k)) return false;
-      vistos.add(k);
-      return true;
-    });
+    // contatos = lista de números já normalizados (DDD+número), sem duplicatas.
+    const contatos = (((it.contatos ?? []) as unknown[]).filter(Boolean)) as Record<string, unknown>[];
+    const telefone = contatos.map((c) => trim(c.numero)).find((n) => n) ?? null;
 
     return {
       matricula,
-      nome: trim(j.nome),
-      cpfCnpj: trim((cads[0] ?? {}).cgc) || null,
-      telefone: tel || null,
-      enderecos: enderecosUnicos,
+      nome,
+      cpfCnpj: trim(it.cpfcnpj) || null,
+      telefone,
+      enderecos,
     };
   }
 
-  /** Busca cliente por matrícula (CODCLIENTE). Retorna null se config ausente / não encontrado. */
+  /**
+   * Busca clientes (SA1) por UM de: matrícula (exata), telefone (parcial) ou
+   * nome (parcial). Retorna lista (até 200). [] se config ausente / nada achado.
+   */
+  async buscar(params: { matricula?: string; telefone?: string; nome?: string }): Promise<ClienteProtheus[]> {
+    const config = await this.getConfig();
+    if (!config) { this.logger.warn('Config Protheus LOGISTICA indisponível'); return []; }
+    const ep = config.endpoints.find((e) => e.operacao === 'clienteEndereco');
+    if (!ep) { this.logger.warn('Operação clienteEndereco não cadastrada (LOGISTICA)'); return []; }
+
+    let qs = '';
+    let alvo = '';
+    if (params.matricula?.trim()) { alvo = `matrícula ${params.matricula.trim()}`; qs = `MATRICULA=${encodeURIComponent(params.matricula.trim())}`; }
+    else if (params.telefone?.trim()) { const t = params.telefone.replace(/\D/g, ''); alvo = `telefone ${t}`; qs = `TELEFONE=${encodeURIComponent(t)}`; }
+    else if (params.nome?.trim()) { alvo = `nome ${params.nome.trim()}`; qs = `NOME=${encodeURIComponent(params.nome.trim())}`; }
+    else return [];
+
+    const url = `${ep.url}?${qs}`;
+    this.logger.log(`Consultando cliente por ${alvo} (ambiente ${config.ambiente})`);
+    const data = await this.requestJson(url, this.auth(config), ep.timeoutMs || 5000);
+    if (!data) return [];
+    return this.mapItens(data);
+  }
+
+  /** Busca cliente por matrícula (exata). Retorna null se não encontrado. */
   async porMatricula(matricula: string): Promise<ClienteProtheus | null> {
     const mat = trim(matricula);
     if (!mat) return null;
-    const config = await this.getConfig();
-    if (!config) { this.logger.warn('Config Protheus LOGISTICA indisponível'); return null; }
-    const ep = config.endpoints.find((e) => e.operacao === 'clienteEndereco');
-    if (!ep) { this.logger.warn('Operação clienteEndereco não cadastrada (LOGISTICA)'); return null; }
-
-    const url = `${ep.url}?CODCLIENTE=${encodeURIComponent(mat)}`;
-    this.logger.log(`Consultando cliente ${mat} (ambiente ${config.ambiente})`);
-    const data = await this.requestJson(url, this.auth(config), ep.timeoutMs || 5000);
-    if (!data) return null;
-    return this.mapGetLimite(data, mat);
+    const list = await this.buscar({ matricula: mat });
+    return list.find((c) => c.matricula.toUpperCase() === mat.toUpperCase()) ?? list[0] ?? null;
   }
 }
