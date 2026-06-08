@@ -137,6 +137,38 @@ export class EntregaService {
     return entregas.map((e) => this.comTotal(e));
   }
 
+  /**
+   * Busca de entregas JÁ BAIXADAS (ENTREGUE/NAO_ENTREGUE) p/ a consulta do
+   * comprovante (financeiro). Espelha a busca da Nova Entrega: um termo livre
+   * casa por nome OU telefone OU matrícula; cupom e nº de entrega são filtros
+   * adicionais. Escopada por filial. Devolve a ref leve ao cofre
+   * (temComprovante/comprovanteId) p/ a tela abrir a prova.
+   */
+  async buscarBaixadas(params: { termo?: string; cupom?: string; numero?: number; filialId?: string }) {
+    const termo = params.termo?.trim();
+    const cupom = params.cupom?.trim();
+    const orTermo: Prisma.EntregaWhereInput[] = [];
+    if (termo) {
+      orTermo.push({ destinatarioNome: { contains: termo, mode: 'insensitive' } });
+      orTermo.push({ matricula: { contains: termo, mode: 'insensitive' } });
+      const tel = onlyDigits(termo);
+      if (tel) orTermo.push({ telefone: { contains: tel } });
+    }
+    const entregas = await this.prisma.entrega.findMany({
+      where: {
+        status: { in: TERMINAIS },
+        ...(params.filialId ? { filialId: params.filialId } : {}),
+        ...(params.numero != null && !Number.isNaN(params.numero) ? { numero: params.numero } : {}),
+        ...(orTermo.length ? { OR: orTermo } : {}),
+        ...(cupom ? { cupons: { some: { numeroCupom: { contains: cupom, mode: 'insensitive' } } } } : {}),
+      },
+      include: { cupons: true },
+      orderBy: { dataHoraEntrega: 'desc' },
+      take: 200,
+    });
+    return entregas.map((e) => this.comTotal(e));
+  }
+
   async findOne(id: string, user?: JwtPayload) {
     const e = await this.prisma.entrega.findUnique({ where: { id }, include: { cupons: true } });
     if (!e) throw new NotFoundException('Entrega não encontrada.');

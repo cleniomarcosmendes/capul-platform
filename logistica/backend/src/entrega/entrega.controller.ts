@@ -24,6 +24,27 @@ export class EntregaController {
     return this.entregas.list({ filialId: resolverFilialLeitura(user, filialId), status });
   }
 
+  /**
+   * Busca de entregas baixadas p/ a consulta de comprovante (financeiro).
+   * `termo` casa nome/telefone/matrícula; cupom e numero são filtros extras.
+   * Declarado ANTES de :id pra não ser capturado pela rota param.
+   */
+  @Get('baixadas')
+  baixadas(
+    @CurrentUser() user: JwtPayload,
+    @Query('termo') termo?: string,
+    @Query('cupom') cupom?: string,
+    @Query('numero') numero?: string,
+    @Query('filialId') filialId?: string,
+  ) {
+    return this.entregas.buscarBaixadas({
+      termo,
+      cupom,
+      numero: numero ? Number(numero) : undefined,
+      filialId: resolverFilialLeitura(user, filialId),
+    });
+  }
+
   @Get(':id')
   obter(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.entregas.findOne(id, user);

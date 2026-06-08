@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Truck, Send, Trash2, Printer, CheckCircle2, FileText, Camera } from 'lucide-react';
+import { Loader2, Truck, Send, Trash2, Printer, CheckCircle2, FileText, Camera, Phone } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BaixaDialog } from '../components/BaixaDialog';
+import { maskTelefone } from '../utils/format';
 
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
 interface Veiculo { id: string; placa: string; modelo?: string | null; situacao: string }
@@ -15,7 +16,7 @@ interface Viagem {
 }
 interface ParadaDet {
   id: string; sequencia: number;
-  entrega?: { id: string; numero: number; destinatarioNome: string; endLogradouro: string; endNumero?: string | null; endBairro?: string | null; endCidade?: string | null; quantidadeVolumes: number; status: string; temComprovante?: boolean } | null;
+  entrega?: { id: string; numero: number; destinatarioNome: string; telefone?: string | null; endLogradouro: string; endNumero?: string | null; endBairro?: string | null; endCidade?: string | null; quantidadeVolumes: number; status: string; temComprovante?: boolean } | null;
 }
 interface ViagemDet { id: string; numero: number; situacao: string; paradas: ParadaDet[] }
 
@@ -233,6 +234,11 @@ export function ViagensPage() {
                                   <div className="truncate text-slate-500">
                                     {p.entrega?.endLogradouro}{p.entrega?.endNumero ? `, ${p.entrega.endNumero}` : ''}{p.entrega?.endBairro ? ` — ${p.entrega.endBairro}` : ''} · {p.entrega?.quantidadeVolumes} vol
                                   </div>
+                                  {p.entrega?.telefone && (
+                                    <a href={`tel:${p.entrega.telefone}`} className="inline-flex items-center gap-1 text-sky-700 hover:underline" title="Ligar para o destinatário">
+                                      <Phone className="h-3 w-3" /> {maskTelefone(p.entrega.telefone)}
+                                    </a>
+                                  )}
                                 </div>
                                 {v.situacao === 'RASCUNHO' && p.entrega && (
                                   <button onClick={() => setConfirmacao({ titulo: 'Remover entrega', mensagem: `Remover a entrega #${p.entrega!.numero} (${p.entrega!.destinatarioNome}) desta viagem? Ela volta para a fila de pendentes.`, acao: () => removerEntrega(v.id, p.entrega!.id) })} disabled={busy} title="Remover da viagem"
