@@ -736,11 +736,12 @@ export function UsuarioFormPage() {
                             className="w-full px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
                           >
                             <option value="">— escolher —</option>
-                            {/* Departamentos da FILIAL principal do usuário (decisão 09/06):
-                                a matriz de permissões usa os deptos da filial do user
-                                (igual a aba Dados), não a lista global de "workspaces" —
-                                assim o depto bate com o cadastro do usuário. */}
-                            {departamentos.map((d) => (
+                            {/* Workspace Onda 2 C2.8 — deptos-workspace (lista global,
+                                independe da filial principal do user). NÃO é o depto do
+                                cadastro: é o WORKSPACE que o usuário pode acessar (ex.:
+                                atribuir "Tecnologia da Informação" deixa o user abrir
+                                chamado pro T.I.). Por isso a lista é global, não por filial. */}
+                            {departamentosWorkspace.map((d) => (
                               <option key={d.id} value={d.id}>{d.nome}</option>
                             ))}
                           </select>
@@ -808,10 +809,7 @@ export function UsuarioFormPage() {
                 </p>
 
                 {perfisWorkspace.map((perfil, idx) => {
-                  // Nome do depto: prioriza a lista da filial (nova fonte da matriz);
-                  // cai na global p/ permissões antigas em deptos-workspace de outra filial.
-                  const depto = departamentos.find((d) => d.id === perfil.departamentoId)
-                    ?? departamentosWorkspace.find((d) => d.id === perfil.departamentoId);
+                  const depto = departamentosWorkspace.find((d) => d.id === perfil.departamentoId);
                   const roleObj = moduloWorkspace?.rolesDisponiveis.find((r) => r.id === perfil.roleModuloId);
                   const roleCodigo = roleObj?.codigo ?? '';
                   const funcs = funcionalidadesPorDepto[perfil.departamentoId] ?? new Set<string>();
