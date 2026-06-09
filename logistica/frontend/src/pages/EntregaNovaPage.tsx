@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { Loader2, Plus, Trash2, Package, X, Search, MapPin } from 'lucide-react';
+import { Loader2, Plus, Trash2, Package, X, Search, MapPin, Eraser } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { maskTelefone, maskCep, onlyDigits, UFS } from '../utils/format';
@@ -351,13 +351,18 @@ export function EntregaNovaPage() {
       <form onSubmit={submit} onKeyDown={bloquearEnterSubmit} className="lg:col-span-2 space-y-4 rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-lg font-semibold text-slate-800">Nova entrega</h2>
 
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           {TIPOS.map((t) => (
             <button type="button" key={t.v} onClick={() => { setTipoCliente(t.v); setMsgMat(null); }}
               className={`rounded-lg border px-3 py-1.5 text-sm ${tipoCliente === t.v ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-300 text-slate-600'}`}>
               {t.label}
             </button>
           ))}
+          {/* Limpar os dados carregados (busca/autofill) sem precisar apagar campo a campo. */}
+          <button type="button" onClick={() => { resetForm(); matriculaRef.current?.focus(); }} title="Limpar os dados do formulário"
+            className="ml-auto flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700">
+            <Eraser className="h-4 w-4" /> Limpar
+          </button>
         </div>
 
         {/* Sempre presente (mesma posição/tamanho nas 3 tabs); só ativo em
