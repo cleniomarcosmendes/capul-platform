@@ -736,9 +736,11 @@ export function UsuarioFormPage() {
                             className="w-full px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
                           >
                             <option value="">— escolher —</option>
-                            {/* Workspace Onda 2 C2.8 — deptos-workspace (lista global,
-                                independe da filial principal do user). */}
-                            {departamentosWorkspace.map((d) => (
+                            {/* Departamentos da FILIAL principal do usuário (decisão 09/06):
+                                a matriz de permissões usa os deptos da filial do user
+                                (igual a aba Dados), não a lista global de "workspaces" —
+                                assim o depto bate com o cadastro do usuário. */}
+                            {departamentos.map((d) => (
                               <option key={d.id} value={d.id}>{d.nome}</option>
                             ))}
                           </select>
@@ -806,7 +808,10 @@ export function UsuarioFormPage() {
                 </p>
 
                 {perfisWorkspace.map((perfil, idx) => {
-                  const depto = departamentosWorkspace.find((d) => d.id === perfil.departamentoId);
+                  // Nome do depto: prioriza a lista da filial (nova fonte da matriz);
+                  // cai na global p/ permissões antigas em deptos-workspace de outra filial.
+                  const depto = departamentos.find((d) => d.id === perfil.departamentoId)
+                    ?? departamentosWorkspace.find((d) => d.id === perfil.departamentoId);
                   const roleObj = moduloWorkspace?.rolesDisponiveis.find((r) => r.id === perfil.roleModuloId);
                   const roleCodigo = roleObj?.codigo ?? '';
                   const funcs = funcionalidadesPorDepto[perfil.departamentoId] ?? new Set<string>();
