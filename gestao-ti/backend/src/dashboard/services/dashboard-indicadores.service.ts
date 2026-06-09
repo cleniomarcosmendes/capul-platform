@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ChamadoExternoService } from '../../chamado-externo/chamado-externo.service.js';
-import { getDeptoIdsDoUser, applyDepartamentoFilter } from '../../common/helpers/departamento-filter.helper.js';
+import { getDeptoIdsDoUser, applyDepartamentoFilter, applyDepartamentoLancamentoFilterCadastroOpStaff } from '../../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
@@ -602,9 +602,13 @@ export class DashboardIndicadoresService {
       categoria: { select: { id: true, nome: true } },
     };
 
-    // Workspace Onda 2 C2.7 — licenças e softwares filtram por depto-dono.
-    const licDeptoWhere = applyDepartamentoFilter({}, user, role);
-    const swDeptoWhere = applyDepartamentoFilter({}, user, role);
+    // Workspace — licenças e softwares filtram por depto-LANÇAMENTO (quem
+    // lançou), igual às telas de Software/Licença (alocação livre, 05/06,
+    // db2603f). Antes usava applyDepartamentoFilter (departamentoId = "onde é
+    // usado", agora LIVRE) → o indicador divergia das telas p/ usuário escopado
+    // por depto. Bypass por capability OVERSIGHT (não por role ADMIN).
+    const licDeptoWhere = applyDepartamentoLancamentoFilterCadastroOpStaff({}, user ?? null);
+    const swDeptoWhere = applyDepartamentoLancamentoFilterCadastroOpStaff({}, user ?? null);
 
     const [licencasAtivasList, softwaresAtivosList, licencasVencendo30List, licencasVencendo60List, licencasVencendo90List] = await Promise.all([
       this.prisma.softwareLicenca.findMany({
