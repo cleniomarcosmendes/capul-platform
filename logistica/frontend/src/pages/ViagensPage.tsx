@@ -12,7 +12,7 @@ interface Entrega { id: string; numero: number; destinatarioNome: string; endLog
 interface Viagem {
   id: string; numero: number; situacao: string;
   veiculo?: { placa: string } | null; _count?: { paradas: number };
-  motoristaNome?: string | null;
+  motoristaNome?: string | null; totalVolumes?: number;
 }
 interface ParadaDet {
   id: string; sequencia: number;
@@ -266,7 +266,7 @@ export function ViagensPage() {
                           <span className={`rounded px-1.5 py-0.5 ${v.situacao === 'EM_CURSO' ? 'bg-amber-100 text-amber-700' : v.situacao === 'CONCLUIDA' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{v.situacao}</span>
                           {' '}·{' '}
                           <button type="button" onClick={() => verDetalhe(v.id)} className="font-medium text-sky-700 underline-offset-2 hover:underline">
-                            {v._count?.paradas ?? 0} entregas {detalhe?.id === v.id ? '▲' : '▼'}
+                            {v._count?.paradas ?? 0} entregas · {v.totalVolumes ?? 0} vol {detalhe?.id === v.id ? '▲' : '▼'}
                           </button>
                         </div>
                       </div>

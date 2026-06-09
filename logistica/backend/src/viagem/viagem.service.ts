@@ -63,13 +63,22 @@ export class ViagemService {
         ...(params.situacao ? { situacao: params.situacao } : {}),
         ...(params.veiculoId ? { veiculoId: params.veiculoId } : {}),
       },
-      include: { veiculo: { select: { placa: true } }, _count: { select: { paradas: true } } },
+      include: {
+        veiculo: { select: { placa: true } },
+        _count: { select: { paradas: true } },
+        // Volumes das entregas da viagem (soma exibida no card, sem expandir).
+        paradas: { select: { entrega: { select: { quantidadeVolumes: true } } } },
+      },
       orderBy: { criadoEm: 'desc' },
       take: 200,
     });
     // Nome do motorista (core) em cada viagem — evita o front resolver à parte.
     const motoristas = await this.core.nomesUsuarios(viagens.map((v) => v.motoristaId));
-    return viagens.map((v) => ({ ...v, motoristaNome: motoristas.get(v.motoristaId) ?? null }));
+    return viagens.map(({ paradas, ...v }) => ({
+      ...v,
+      motoristaNome: motoristas.get(v.motoristaId) ?? null,
+      totalVolumes: paradas.reduce((s, p) => s + (p.entrega?.quantidadeVolumes ?? 0), 0),
+    }));
   }
 
   async findOne(id: string, user?: JwtPayload) {
