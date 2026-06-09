@@ -131,6 +131,8 @@ export function IndicadoresPage() {
   const [loading, setLoading] = useState(true);
   const [detalhe, setDetalhe] = useState<Detalhe>(null);
   const [subDetalhe, setSubDetalhe] = useState<string | null>(null);
+  // Chamados: status selecionado no detalhamento por status (dos abertos no período).
+  const [statusCh, setStatusCh] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -246,16 +248,16 @@ export function IndicadoresPage() {
                 </div>
               </button>
 
-              {/* 4. Chamados */}
-              <button onClick={() => { setDetalhe(detalhe === 'chamados' ? null : 'chamados'); setSubDetalhe(null); }}
+              {/* 4. Chamados — manchete = total ABERTO no período (clique abre a quebra por status) */}
+              <button onClick={() => { setDetalhe(detalhe === 'chamados' ? null : 'chamados'); setSubDetalhe(null); setStatusCh(null); }}
                 className={`bg-white rounded-xl border p-5 text-left transition-all hover:shadow-md ${detalhe === 'chamados' ? 'border-capul-500 ring-2 ring-capul-200' : 'border-slate-200'}`}>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="p-2 rounded-lg bg-orange-100"><Ticket className="w-4 h-4 text-orange-600" /></div>
                   <span className="text-xs font-medium text-slate-500 uppercase">Chamados Internos</span>
                 </div>
-                <p className="text-xl font-bold text-slate-800">{data.chamados.resolvidosNoPeriodo}</p>
+                <p className="text-xl font-bold text-slate-800">{data.chamados.abertosNoPeriodo}</p>
                 <div className="mt-2 text-xs text-slate-500">
-                  <span>resolvidos | {data.chamados.emAbertoAtual} em aberto</span>
+                  <span>abertos no período · {data.chamados.resolvidosNoPeriodo} resolvidos</span>
                 </div>
               </button>
 
@@ -514,87 +516,103 @@ export function IndicadoresPage() {
               </div>
             )}
 
-            {detalhe === 'chamados' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-6">
-                <h3 className="text-sm font-semibold text-slate-700 uppercase mb-4">Detalhamento - Chamados Internos</h3>
-                <div className="grid grid-cols-4 gap-4 mb-4">
-                  <button onClick={() => setSubDetalhe(subDetalhe === 'ch-abertos' ? null : 'ch-abertos')}
-                    className={`rounded-lg p-4 text-center transition-all hover:shadow-md ${subDetalhe === 'ch-abertos' ? 'bg-blue-100 ring-2 ring-blue-300' : 'bg-blue-50'}`}>
-                    <p className="text-2xl font-bold text-blue-800">{data.chamados.abertosNoPeriodo}</p>
-                    <p className="text-xs text-blue-600 mt-1">Abertos no Periodo</p>
-                  </button>
-                  <button onClick={() => setSubDetalhe(subDetalhe === 'ch-resolvidos' ? null : 'ch-resolvidos')}
-                    className={`rounded-lg p-4 text-center transition-all hover:shadow-md ${subDetalhe === 'ch-resolvidos' ? 'bg-green-100 ring-2 ring-green-300' : 'bg-green-50'}`}>
-                    <p className="text-2xl font-bold text-green-800">{data.chamados.resolvidosNoPeriodo}</p>
-                    <p className="text-xs text-green-600 mt-1">Resolvidos no Periodo</p>
-                  </button>
-                  <button onClick={() => setSubDetalhe(subDetalhe === 'ch-aberto' ? null : 'ch-aberto')}
-                    className={`rounded-lg p-4 text-center transition-all hover:shadow-md ${subDetalhe === 'ch-aberto' ? 'ring-2 ring-amber-300 bg-amber-100' : data.chamados.emAbertoAtual > 10 ? 'bg-amber-50' : 'bg-slate-50'}`}>
-                    <p className="text-2xl font-bold text-slate-800">{data.chamados.emAbertoAtual}</p>
-                    <p className="text-xs text-slate-600 mt-1">Em Aberto (atual)</p>
-                  </button>
-                  <div className="bg-slate-50 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-slate-800">{data.chamados.tempoMedioResolucaoHoras}h</p>
-                    <p className="text-xs text-slate-600 mt-1">Tempo Medio Resolucao</p>
-                  </div>
-                </div>
-                {(subDetalhe === 'ch-abertos' || subDetalhe === 'ch-resolvidos' || subDetalhe === 'ch-aberto') && (() => {
-                  const lista = subDetalhe === 'ch-abertos' ? data.chamados.detalheAbertos
-                    : subDetalhe === 'ch-resolvidos' ? data.chamados.detalheResolvidos
-                    : data.chamados.detalheEmAberto;
-                  const titulo = subDetalhe === 'ch-abertos' ? 'Abertos no Periodo' : subDetalhe === 'ch-resolvidos' ? 'Resolvidos no Periodo' : 'Em Aberto (atual)';
-                  const prioridadeCores: Record<string, string> = {
-                    CRITICA: 'bg-red-100 text-red-700', ALTA: 'bg-orange-100 text-orange-700',
-                    MEDIA: 'bg-yellow-100 text-yellow-700', BAIXA: 'bg-green-100 text-green-700',
-                  };
-                  const statusCoresCh: Record<string, string> = {
-                    ABERTO: 'bg-blue-100 text-blue-700', EM_ATENDIMENTO: 'bg-yellow-100 text-yellow-700',
-                    PENDENTE: 'bg-orange-100 text-orange-700', RESOLVIDO: 'bg-green-100 text-green-700',
-                    FECHADO: 'bg-slate-100 text-slate-600', CANCELADO: 'bg-red-100 text-red-600',
-                    REABERTO: 'bg-purple-100 text-purple-700',
-                  };
-                  return (
-                    <div className="mt-2">
-                      <h4 className="text-xs font-medium text-slate-500 mb-2 uppercase">{titulo} ({lista.length})</h4>
-                      {lista.length === 0 ? <p className="text-sm text-slate-400">Nenhum chamado</p> : (
-                        <div className="border border-slate-200 rounded-lg overflow-hidden">
-                          <table className="w-full text-sm">
-                            <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
-                              <tr>
-                                <th className="px-4 py-2 text-left">#</th>
-                                <th className="px-4 py-2 text-left">Titulo</th>
-                                <th className="px-4 py-2 text-left">Equipe</th>
-                                <th className="px-4 py-2 text-left">Tecnico</th>
-                                <th className="px-4 py-2 text-center">Prioridade</th>
-                                <th className="px-4 py-2 text-center">Status</th>
-                                <th className="px-4 py-2 text-left">Data</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {lista.map((ch) => (
-                                <tr key={ch.id} className="hover:bg-slate-50">
-                                  <td className="px-4 py-2 text-slate-500">{ch.numero}</td>
-                                  <td className="px-4 py-2 font-medium text-slate-700 max-w-[300px] truncate">{ch.titulo}</td>
-                                  <td className="px-4 py-2 text-slate-600">{ch.equipeAtual?.sigla || '-'}</td>
-                                  <td className="px-4 py-2 text-slate-600">{ch.tecnico?.nome || '-'}</td>
-                                  <td className="px-4 py-2 text-center">
-                                    <span className={`text-xs px-2 py-0.5 rounded-full ${prioridadeCores[ch.prioridade] || 'bg-slate-100 text-slate-600'}`}>{ch.prioridade}</span>
-                                  </td>
-                                  <td className="px-4 py-2 text-center">
-                                    <span className={`text-xs px-2 py-0.5 rounded-full ${statusCoresCh[ch.status] || 'bg-slate-100 text-slate-600'}`}>{ch.status}</span>
-                                  </td>
-                                  <td className="px-4 py-2 text-xs text-slate-500">{formatDateBR(ch.createdAt)}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
+            {detalhe === 'chamados' && (() => {
+              const abertos = data.chamados.detalheAbertos;
+              // Quebra por STATUS atual dos chamados ABERTOS no período.
+              const porStatus = abertos.reduce((m, ch) => { m[ch.status] = (m[ch.status] || 0) + 1; return m; }, {} as Record<string, number>);
+              const ordemStatus = ['ABERTO', 'EM_ATENDIMENTO', 'PENDENTE', 'REABERTO', 'RESOLVIDO', 'FECHADO', 'CANCELADO'];
+              const statusPresentes = [
+                ...ordemStatus.filter((s) => porStatus[s]),
+                ...Object.keys(porStatus).filter((s) => !ordemStatus.includes(s)),
+              ];
+              const prioridadeCores: Record<string, string> = {
+                CRITICA: 'bg-red-100 text-red-700', ALTA: 'bg-orange-100 text-orange-700',
+                MEDIA: 'bg-yellow-100 text-yellow-700', BAIXA: 'bg-green-100 text-green-700',
+              };
+              const statusCoresCh: Record<string, string> = {
+                ABERTO: 'bg-blue-100 text-blue-700', EM_ATENDIMENTO: 'bg-yellow-100 text-yellow-700',
+                PENDENTE: 'bg-orange-100 text-orange-700', RESOLVIDO: 'bg-green-100 text-green-700',
+                FECHADO: 'bg-slate-100 text-slate-600', CANCELADO: 'bg-red-100 text-red-600',
+                REABERTO: 'bg-purple-100 text-purple-700',
+              };
+              const lista = statusCh ? abertos.filter((c) => c.status === statusCh) : abertos;
+              return (
+                <div className="bg-white rounded-xl border border-slate-200 p-6">
+                  <h3 className="text-sm font-semibold text-slate-700 uppercase mb-4">Detalhamento — Chamados abertos no período</h3>
+
+                  {/* Métricas de contexto (somente leitura) */}
+                  <div className="grid grid-cols-4 gap-4 mb-5">
+                    <div className="bg-blue-50 rounded-lg p-4 text-center">
+                      <p className="text-2xl font-bold text-blue-800">{data.chamados.abertosNoPeriodo}</p>
+                      <p className="text-xs text-blue-600 mt-1">Abertos no Período</p>
                     </div>
-                  );
-                })()}
-              </div>
-            )}
+                    <div className="bg-green-50 rounded-lg p-4 text-center">
+                      <p className="text-2xl font-bold text-green-800">{data.chamados.resolvidosNoPeriodo}</p>
+                      <p className="text-xs text-green-600 mt-1">Resolvidos no Período</p>
+                    </div>
+                    <div className={`rounded-lg p-4 text-center ${data.chamados.emAbertoAtual > 10 ? 'bg-amber-50' : 'bg-slate-50'}`}>
+                      <p className="text-2xl font-bold text-slate-800">{data.chamados.emAbertoAtual}</p>
+                      <p className="text-xs text-slate-600 mt-1">Em Aberto (atual)</p>
+                    </div>
+                    <div className="bg-slate-50 rounded-lg p-4 text-center">
+                      <p className="text-2xl font-bold text-slate-800">{data.chamados.tempoMedioResolucaoHoras}h</p>
+                      <p className="text-xs text-slate-600 mt-1">Tempo Médio Resolução</p>
+                    </div>
+                  </div>
+
+                  {/* Quebra por STATUS — clique para filtrar a lista de abertos no período */}
+                  <p className="text-xs font-medium text-slate-500 uppercase mb-2">Por status (dos {abertos.length} abertos no período)</p>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <button onClick={() => setStatusCh(null)}
+                      className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${!statusCh ? 'bg-capul-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                      Todos ({abertos.length})
+                    </button>
+                    {statusPresentes.map((s) => (
+                      <button key={s} onClick={() => setStatusCh(statusCh === s ? null : s)}
+                        className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${statusCh === s ? 'ring-2 ring-offset-1 ring-capul-400 ' : ''}${statusCoresCh[s] || 'bg-slate-100 text-slate-600'}`}>
+                        {s} ({porStatus[s]})
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Lista (abertos no período, filtrada pelo status escolhido) */}
+                  {lista.length === 0 ? <p className="text-sm text-slate-400">Nenhum chamado</p> : (
+                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                          <tr>
+                            <th className="px-4 py-2 text-left">#</th>
+                            <th className="px-4 py-2 text-left">Título</th>
+                            <th className="px-4 py-2 text-left">Equipe</th>
+                            <th className="px-4 py-2 text-left">Técnico</th>
+                            <th className="px-4 py-2 text-center">Prioridade</th>
+                            <th className="px-4 py-2 text-center">Status</th>
+                            <th className="px-4 py-2 text-left">Data</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {lista.map((ch) => (
+                            <tr key={ch.id} className="hover:bg-slate-50">
+                              <td className="px-4 py-2 text-slate-500">{ch.numero}</td>
+                              <td className="px-4 py-2 font-medium text-slate-700 max-w-[300px] truncate">{ch.titulo}</td>
+                              <td className="px-4 py-2 text-slate-600">{ch.equipeAtual?.sigla || '-'}</td>
+                              <td className="px-4 py-2 text-slate-600">{ch.tecnico?.nome || '-'}</td>
+                              <td className="px-4 py-2 text-center">
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${prioridadeCores[ch.prioridade] || 'bg-slate-100 text-slate-600'}`}>{ch.prioridade}</span>
+                              </td>
+                              <td className="px-4 py-2 text-center">
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${statusCoresCh[ch.status] || 'bg-slate-100 text-slate-600'}`}>{ch.status}</span>
+                              </td>
+                              <td className="px-4 py-2 text-xs text-slate-500">{formatDateBR(ch.createdAt)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {detalhe === 'chamadosExternos' && (() => {
               const tendencia = data.chamadosExternos.tendencia12Meses;
