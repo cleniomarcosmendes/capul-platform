@@ -32,13 +32,15 @@ interface PermissaoForm {
 // silenciosamente — daí a obrigatoriedade contextual aqui.
 const ROLES_FISCAIS_COM_EMAIL = ['GESTOR_FISCAL', 'ADMIN_TI'];
 const MODULO_FISCAL_CODIGO = 'FISCAL';
-// Módulos que NÃO usam o conceito de workspace/departamento p/ acesso (ex.:
-// Logística escopa por FILIAL + presença do módulo). Nesses, a matriz de
-// permissões esconde a coluna Departamento e auto-atribui o departamento do
-// PRÓPRIO usuário (departamento_id é NOT NULL no banco). Conservador de
-// propósito: só entram módulos comprovadamente sem departamento — TI/Fiscal/
-// Workspace continuam exigindo a escolha do workspace.
-const MODULOS_SEM_DEPARTAMENTO = ['LOGISTICA'];
+// ÚNICO módulo que usa o conceito de WORKSPACE/departamento p/ acesso: o
+// WORKSPACE (o gestao-ti.guard lê `codigo==='WORKSPACE'` + seus departamentos[]).
+// Verificado 09/06: Fiscal (FiscalGuard só role), Inventário (não lê depto),
+// Configurador (guard só role) e Logística (escopa por filial) NÃO usam o
+// departamento; o módulo GESTAO_TI não é lido por ninguém (0 usuários — acesso
+// é via WORKSPACE). Só p/ WORKSPACE a matriz mostra a coluna Departamento; nos
+// demais ela é escondida e o depto do PRÓPRIO usuário é atribuído no save
+// (departamento_id é NOT NULL no banco).
+const MODULOS_COM_DEPARTAMENTO = ['WORKSPACE'];
 
 export function UsuarioFormPage() {
   const navigate = useNavigate();
@@ -276,11 +278,11 @@ export function UsuarioFormPage() {
         if (campo === 'moduloId') {
           const mod = modulos.find((m) => m.id === valor);
           atualizada.roleModuloId = mod?.rolesDisponiveis[0]?.id || '';
-          // Módulo SEM departamento (ex.: Logística): auto-atribui o depto do
-          // próprio usuário (escondemos a coluna). Módulo COM workspace: limpa
-          // pra o operador escolher o workspace.
-          const semDepto = !!mod && MODULOS_SEM_DEPARTAMENTO.includes(mod.codigo);
-          atualizada.departamentoId = semDepto ? departamentoId : '';
+          // Só WORKSPACE usa departamento → limpa pra o operador escolher o
+          // workspace. Demais módulos: auto-atribui o depto do próprio usuário
+          // (a coluna fica escondida).
+          const usaDepto = !!mod && MODULOS_COM_DEPARTAMENTO.includes(mod.codigo);
+          atualizada.departamentoId = usaDepto ? '' : departamentoId;
         }
         return atualizada;
       }),
@@ -357,7 +359,8 @@ export function UsuarioFormPage() {
       // no banco). Robusto contra a ordem em que o operador preencheu os campos.
       const resolverDepto = (p: PermissaoForm) => {
         const mod = modulos.find((m) => m.id === p.moduloId);
-        return mod && MODULOS_SEM_DEPARTAMENTO.includes(mod.codigo) ? { ...p, departamentoId } : p;
+        // Só WORKSPACE mantém o depto escolhido; os demais usam o depto do usuário.
+        return mod && MODULOS_COM_DEPARTAMENTO.includes(mod.codigo) ? p : { ...p, departamentoId };
       };
       const permsHabilitadas = permissoes.map(resolverDepto).filter((p) => p.moduloId && p.departamentoId && p.roleModuloId);
 
@@ -734,10 +737,10 @@ export function UsuarioFormPage() {
                   {permissoes.map((perm, idx) => {
                     const moduloAtual = modulos.find((m) => m.id === perm.moduloId);
                     const rolesDisp = moduloAtual?.rolesDisponiveis || [];
-                    // Módulo sem workspace (ex.: Logística) → esconde Departamento
-                    // (auto-atribuído ao depto do usuário). Sem módulo escolhido,
+                    // Só WORKSPACE usa Departamento; os demais escondem a coluna
+                    // (depto auto-atribuído ao do usuário). Sem módulo escolhido,
                     // mostra o seletor (neutro).
-                    const usaDepartamento = !moduloAtual || !MODULOS_SEM_DEPARTAMENTO.includes(moduloAtual.codigo);
+                    const usaDepartamento = !moduloAtual || MODULOS_COM_DEPARTAMENTO.includes(moduloAtual.codigo);
                     return (
                       <tr key={idx} className="hover:bg-slate-50">
                         <td className="px-3 py-2">
@@ -783,9 +786,9 @@ export function UsuarioFormPage() {
                               ))}
                             </select>
                           ) : (
-                            // Módulo sem workspace (Logística): não usa departamento —
-                            // o acesso é por filial. Depto do usuário é atribuído nos bastidores.
-                            <span className="text-xs italic text-slate-400">não se aplica (acesso por filial)</span>
+                            // Só o módulo WORKSPACE usa departamento. Nos demais a coluna
+                            // não se aplica; o depto do próprio usuário é atribuído no save.
+                            <span className="text-xs italic text-slate-400">não se aplica</span>
                           )}
                         </td>
                         <td className="px-3 py-2 text-center">
