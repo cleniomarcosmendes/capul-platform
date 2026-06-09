@@ -32,6 +32,13 @@ interface PermissaoForm {
 // silenciosamente — daí a obrigatoriedade contextual aqui.
 const ROLES_FISCAIS_COM_EMAIL = ['GESTOR_FISCAL', 'ADMIN_TI'];
 const MODULO_FISCAL_CODIGO = 'FISCAL';
+// Módulos que NÃO usam o conceito de workspace/departamento p/ acesso (ex.:
+// Logística escopa por FILIAL + presença do módulo). Nesses, a matriz de
+// permissões esconde a coluna Departamento e auto-atribui o departamento do
+// PRÓPRIO usuário (departamento_id é NOT NULL no banco). Conservador de
+// propósito: só entram módulos comprovadamente sem departamento — TI/Fiscal/
+// Workspace continuam exigindo a escolha do workspace.
+const MODULOS_SEM_DEPARTAMENTO = ['LOGISTICA'];
 
 export function UsuarioFormPage() {
   const navigate = useNavigate();
@@ -269,6 +276,11 @@ export function UsuarioFormPage() {
         if (campo === 'moduloId') {
           const mod = modulos.find((m) => m.id === valor);
           atualizada.roleModuloId = mod?.rolesDisponiveis[0]?.id || '';
+          // Módulo SEM departamento (ex.: Logística): auto-atribui o depto do
+          // próprio usuário (escondemos a coluna). Módulo COM workspace: limpa
+          // pra o operador escolher o workspace.
+          const semDepto = !!mod && MODULOS_SEM_DEPARTAMENTO.includes(mod.codigo);
+          atualizada.departamentoId = semDepto ? departamentoId : '';
         }
         return atualizada;
       }),
@@ -340,7 +352,14 @@ export function UsuarioFormPage() {
     setSaving(true);
 
     try {
-      const permsHabilitadas = permissoes.filter((p) => p.moduloId && p.departamentoId && p.roleModuloId);
+      // Módulos sem workspace (Logística): a coluna Departamento fica escondida,
+      // então resolvemos o depto no save = o depto do PRÓPRIO usuário (NOT NULL
+      // no banco). Robusto contra a ordem em que o operador preencheu os campos.
+      const resolverDepto = (p: PermissaoForm) => {
+        const mod = modulos.find((m) => m.id === p.moduloId);
+        return mod && MODULOS_SEM_DEPARTAMENTO.includes(mod.codigo) ? { ...p, departamentoId } : p;
+      };
+      const permsHabilitadas = permissoes.map(resolverDepto).filter((p) => p.moduloId && p.departamentoId && p.roleModuloId);
 
       if (isEdicao) {
         await usuarioService.atualizar(id!, {
@@ -356,7 +375,7 @@ export function UsuarioFormPage() {
         });
 
         // Onda 2 C2.2 — diff por (moduloId, departamentoId)
-        const atuaisValidas = permissoes.filter((p) => p.moduloId && p.departamentoId && p.roleModuloId);
+        const atuaisValidas = permissoes.map(resolverDepto).filter((p) => p.moduloId && p.departamentoId && p.roleModuloId);
 
         for (const perm of atuaisValidas) {
           const original = permissoesOriginais.find(
@@ -699,8 +718,8 @@ export function UsuarioFormPage() {
                 <thead className="bg-slate-50 text-xs text-slate-500">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium w-1/3">Módulo</th>
-                    <th className="px-3 py-2 text-left font-medium w-1/3">Departamento</th>
                     <th className="px-3 py-2 text-left font-medium w-1/4">Role</th>
+                    <th className="px-3 py-2 text-left font-medium w-1/3">Departamento</th>
                     <th className="px-3 py-2 text-center font-medium w-12">Ações</th>
                   </tr>
                 </thead>
@@ -715,6 +734,10 @@ export function UsuarioFormPage() {
                   {permissoes.map((perm, idx) => {
                     const moduloAtual = modulos.find((m) => m.id === perm.moduloId);
                     const rolesDisp = moduloAtual?.rolesDisponiveis || [];
+                    // Módulo sem workspace (ex.: Logística) → esconde Departamento
+                    // (auto-atribuído ao depto do usuário). Sem módulo escolhido,
+                    // mostra o seletor (neutro).
+                    const usaDepartamento = !moduloAtual || !MODULOS_SEM_DEPARTAMENTO.includes(moduloAtual.codigo);
                     return (
                       <tr key={idx} className="hover:bg-slate-50">
                         <td className="px-3 py-2">
@@ -731,23 +754,6 @@ export function UsuarioFormPage() {
                         </td>
                         <td className="px-3 py-2">
                           <select
-                            value={perm.departamentoId}
-                            onChange={(e) => atualizarPerfil(idx, 'departamentoId', e.target.value)}
-                            className="w-full px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
-                          >
-                            <option value="">— escolher —</option>
-                            {/* Workspace Onda 2 C2.8 — deptos-workspace (lista global,
-                                independe da filial principal do user). NÃO é o depto do
-                                cadastro: é o WORKSPACE que o usuário pode acessar (ex.:
-                                atribuir "Tecnologia da Informação" deixa o user abrir
-                                chamado pro T.I.). Por isso a lista é global, não por filial. */}
-                            {departamentosWorkspace.map((d) => (
-                              <option key={d.id} value={d.id}>{d.nome}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="px-3 py-2">
-                          <select
                             value={perm.roleModuloId}
                             onChange={(e) => atualizarPerfil(idx, 'roleModuloId', e.target.value)}
                             disabled={!perm.moduloId}
@@ -758,6 +764,29 @@ export function UsuarioFormPage() {
                               <option key={r.id} value={r.id}>{r.nome}</option>
                             ))}
                           </select>
+                        </td>
+                        <td className="px-3 py-2">
+                          {usaDepartamento ? (
+                            <select
+                              value={perm.departamentoId}
+                              onChange={(e) => atualizarPerfil(idx, 'departamentoId', e.target.value)}
+                              className="w-full px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                            >
+                              <option value="">— escolher —</option>
+                              {/* Workspace Onda 2 C2.8 — deptos-workspace (lista global,
+                                  independe da filial principal do user). NÃO é o depto do
+                                  cadastro: é o WORKSPACE que o usuário pode acessar (ex.:
+                                  atribuir "Tecnologia da Informação" deixa o user abrir
+                                  chamado pro T.I.). Por isso a lista é global, não por filial. */}
+                              {departamentosWorkspace.map((d) => (
+                                <option key={d.id} value={d.id}>{d.nome}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            // Módulo sem workspace (Logística): não usa departamento —
+                            // o acesso é por filial. Depto do usuário é atribuído nos bastidores.
+                            <span className="text-xs italic text-slate-400">não se aplica (acesso por filial)</span>
+                          )}
                         </td>
                         <td className="px-3 py-2 text-center">
                           <button
