@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Truck, Send, Trash2, Printer, CheckCircle2, FileText, Camera, Phone, Clock } from 'lucide-react';
-import { coreApi, logisticaApi } from '../services/api';
+import { logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BaixaDialog } from '../components/BaixaDialog';
@@ -88,7 +88,8 @@ export function ViagensPage() {
     try {
       const [v, u, e, vg] = await Promise.all([
         logisticaApi.get<Veiculo[]>('/veiculos', { params: filialId ? { filialId, situacao: 'DISPONIVEL' } : { situacao: 'DISPONIVEL' } }),
-        coreApi.get<CoreItem[]>('/usuarios').catch(() => ({ data: [] })),
+        // Só motoristas com acesso ao módulo Logística da filial (não a base toda).
+        logisticaApi.get<CoreItem[]>('/motoristas', { params: filialId ? { filialId } : undefined }).catch(() => ({ data: [] })),
         logisticaApi.get<Entrega[]>('/entregas', { params: filialId ? { filialId } : undefined }),
         logisticaApi.get<Viagem[]>('/viagens', { params: filialId ? { filialId } : undefined }),
       ]);

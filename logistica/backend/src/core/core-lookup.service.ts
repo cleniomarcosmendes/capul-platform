@@ -61,4 +61,20 @@ export class CoreLookupService {
       SELECT id, TRIM(nome) AS label FROM "core"."usuarios" WHERE id IN (${Prisma.join(u)})`);
     return new Map(rows.map((r) => [r.id, r.label]));
   }
+
+  /**
+   * Usuários elegíveis a MOTORISTA: ATIVOS, com permissão ATIVA no módulo
+   * LOGISTICA (Configurador) e da FILIAL informada (filial principal). Evita
+   * listar a base inteira de colaboradores no seletor de motorista.
+   */
+  async motoristasLogistica(filialId: string): Promise<{ id: string; nome: string }[]> {
+    if (!filialId) return [];
+    return this.prisma.$queryRaw<{ id: string; nome: string }[]>(Prisma.sql`
+      SELECT DISTINCT u.id, TRIM(u.nome) AS nome
+      FROM "core"."usuarios" u
+      JOIN "core"."permissoes_modulo" pm ON pm.usuario_id = u.id AND pm.status = 'ATIVO'
+      JOIN "core"."modulos_sistema" m ON m.id = pm.modulo_id AND m.codigo = 'LOGISTICA'
+      WHERE u.status = 'ATIVO' AND u.filial_principal_id = ${filialId}
+      ORDER BY nome`);
+  }
 }
