@@ -52,4 +52,21 @@ describe('ProtheusClienteService.mapItens (clienteEndereco SA1)', () => {
     const r = map({ total: 1, itens: [{ matricula: 'E09', nome: 'SEM END', endereco: {}, contatos: [] }] });
     expect(r[0].enderecos).toEqual([]);
   });
+
+  it('AGRUPA a mesma matrícula com vários endereços/lojas em 1 cliente', () => {
+    const r = map({
+      total: 4,
+      itens: [
+        { matricula: 'A00086', nome: 'HUMBERTO', endereco: { logrado: 'FAZ. CAPAO, SN', municip: 'UNAI', uf: 'MG' }, contatos: [{ numero: '3499' }] },
+        { matricula: 'A00086', nome: 'HUMBERTO', endereco: { logrado: 'FAZ. BOQUEIRAO, SN', municip: 'UNAI', uf: 'MG' }, contatos: [] },
+        { matricula: 'A00086', nome: 'HUMBERTO', endereco: { logrado: 'FAZENDA RIO GRANDE, SN', municip: 'ITUPIRANGA', uf: 'PA' }, contatos: [] },
+        // duplicado exato (mesmo logradouro/cidade/cep) → não repete
+        { matricula: 'A00086', nome: 'HUMBERTO', endereco: { logrado: 'FAZ. CAPAO, SN', municip: 'UNAI', uf: 'MG' }, contatos: [] },
+      ],
+    });
+    expect(r).toHaveLength(1); // 1 cliente, não 4
+    expect(r[0].matricula).toBe('A00086');
+    expect(r[0].telefone).toBe('3499'); // herda do 1º contato não-vazio
+    expect(r[0].enderecos).toHaveLength(3); // 3 endereços distintos (o 4º é duplicado)
+  });
 });

@@ -95,10 +95,41 @@ export class ProtheusClienteService {
     });
   }
 
-  /** Mapeia a resposta `{ total, itens: [...] }` do clienteEndereco (SA1). */
+  /**
+   * Mapeia a resposta `{ total, itens: [...] }` do clienteEndereco (SA1).
+   * O endpoint devolve UM item por endereço/loja, então a MESMA matrícula pode
+   * vir em vários itens. Agrupamos por matrícula → 1 cliente com N endereços
+   * (evita listar o mesmo cliente repetido). Endereços deduplicados dentro do
+   * cliente por logradouro+complemento+cidade+cep.
+   */
   private mapItens(j: Record<string, unknown>): ClienteProtheus[] {
     const itens = (((j.itens ?? []) as unknown[]).filter(Boolean)) as Record<string, unknown>[];
-    return itens.map((it) => this.mapItem(it)).filter((c): c is ClienteProtheus => !!c);
+    const porMatricula = new Map<string, ClienteProtheus>();
+    for (const it of itens) {
+      const c = this.mapItem(it);
+      if (!c) continue;
+      const chave = (c.matricula || c.nome).toUpperCase();
+      const existente = porMatricula.get(chave);
+      if (existente) {
+        existente.enderecos.push(...c.enderecos);
+        if (!existente.telefone && c.telefone) existente.telefone = c.telefone;
+        if (!existente.cpfCnpj && c.cpfCnpj) existente.cpfCnpj = c.cpfCnpj;
+      } else {
+        porMatricula.set(chave, c);
+      }
+    }
+    const chaveEnd = (e: EnderecoCliente) =>
+      `${e.logradouro}|${e.complemento ?? ''}|${e.cidade ?? ''}|${e.cep ?? ''}`.toUpperCase();
+    for (const c of porMatricula.values()) {
+      const vistos = new Set<string>();
+      c.enderecos = c.enderecos.filter((e) => {
+        const k = chaveEnd(e);
+        if (vistos.has(k)) return false;
+        vistos.add(k);
+        return true;
+      });
+    }
+    return [...porMatricula.values()];
   }
 
   private mapItem(it: Record<string, unknown>): ClienteProtheus | null {
