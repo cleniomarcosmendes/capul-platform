@@ -424,7 +424,8 @@ export function UsuarioFormPage() {
 
   return (
     <>
-      <Header title={isEdicao ? 'Editar Usuario' : 'Novo Usuario'} />
+      {/* Mostra o nome do usuário em edição no título (antes só dizia "Editar Usuario"). */}
+      <Header title={isEdicao ? (nome ? `Editar usuário — ${nome}` : 'Editar Usuario') : 'Novo Usuario'} />
       <div className="p-6 max-w-6xl">
         {/* Barra topo: voltar à esquerda, ações à direita (Salvar salva todas as abas) */}
         <div className="flex items-center justify-between mb-5">
@@ -442,6 +443,15 @@ export function UsuarioFormPage() {
             </button>
           </div>
         </div>
+
+        {/* Identificação do usuário em edição — visível em qualquer aba (antes,
+            ao abrir noutra aba, não dava pra saber qual usuário estava aberto). */}
+        {isEdicao && nome && (
+          <div className="mb-5 flex items-center gap-2 text-sm text-slate-600">
+            <Shield className="w-4 h-4 text-slate-400" />
+            <span>Editando: <strong className="text-slate-800">{nome}</strong>{username ? <span className="text-slate-400"> · @{username}</span> : null}</span>
+          </div>
+        )}
 
         {/* Nav de abas — escala com novas seções sem virar "linguiça" */}
         <nav className="flex gap-1 border-b border-slate-200 mb-6">
