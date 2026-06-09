@@ -234,9 +234,9 @@ export function EntregaNovaPage() {
     setCidade('Unaí'); setUf('MG'); setCep(''); setReferencia('');
   }
 
-  // Cliente identificado: matrícula (E#####). Monta o seletor agregando TODAS
-  // as fontes do cliente: Protheus + endereços já salvos pra essa matrícula +
-  // histórico de entregas (assim um "novo endereço" usado antes reaparece).
+  // Cliente identificado: matrícula (A/C/E/F + dígitos). Monta o seletor
+  // agregando TODAS as fontes do cliente: Protheus + endereços já salvos pra
+  // essa matrícula + histórico (assim um "novo endereço" usado antes reaparece).
   function montarSeletorMatricula(data: BuscaResp, mat: string) {
     const c = data.protheus?.clientes?.[0];
     const cards = coletarEnderecos(data);
@@ -255,7 +255,7 @@ export function EntregaNovaPage() {
   async function buscarPorMatricula() {
     const mat = matricula.trim().toUpperCase();
     setMsgMat(null);
-    if (!/^E\d{1,14}$/.test(mat)) return; // formato do balcão: E#####
+    if (!/^[ACEF]\d{1,14}$/.test(mat)) return; // formato do balcão: A/C/E/F + dígitos
     setBuscandoMat(true);
     try {
       const { data } = await logisticaApi.get<BuscaResp>('/cadastro/busca', { params: { termo: mat } });

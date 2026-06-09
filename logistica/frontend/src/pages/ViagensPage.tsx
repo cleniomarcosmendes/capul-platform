@@ -76,6 +76,12 @@ export function ViagensPage() {
   function selecionarVisiveis() {
     setSelecao((p) => [...p, ...pendentesFiltrados.filter((e) => !p.includes(e.id)).map((e) => e.id)]);
   }
+  // Soma dos volumes das entregas selecionadas (atualiza a cada clique) — ajuda
+  // a dimensionar a carga do veículo antes de montar.
+  const volumesSelecionados = useMemo(
+    () => selecao.reduce((s, id) => s + (pendentes.find((e) => e.id === id)?.quantidadeVolumes ?? 0), 0),
+    [selecao, pendentes],
+  );
 
   async function carregar() {
     setLoading(true);
@@ -180,7 +186,7 @@ export function ViagensPage() {
         </div>
         <button onClick={montar} disabled={busy}
           className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
-          <Truck className="h-4 w-4" /> Montar viagem ({selecao.length})
+          <Truck className="h-4 w-4" /> Montar viagem ({selecao.length} {selecao.length === 1 ? 'entrega' : 'entregas'} · {volumesSelecionados} {volumesSelecionados === 1 ? 'volume' : 'volumes'})
         </button>
       </div>
 

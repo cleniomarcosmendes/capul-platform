@@ -3,8 +3,9 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ProtheusClienteService } from '../protheus/protheus-cliente.service.js';
 
 const onlyDigits = (s?: string) => (s ?? '').replace(/\D/g, '');
-// Matrícula de cliente (SA1) = E + dígitos (ex.: E01047) — formato do balcão.
-const MATRICULA_RE = /^E\d{1,14}$/i;
+// Matrícula de cliente (SA1) = letra A/C/E/F + dígitos (ex.: E01047, A03551,
+// C52374) — prefixos de cliente usados no balcão.
+const MATRICULA_RE = /^[ACEF]\d{1,14}$/i;
 
 /**
  * Busca unificada do operador: um termo (matrícula, telefone ou nome) varre as
