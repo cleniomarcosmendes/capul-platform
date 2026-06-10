@@ -42,8 +42,9 @@ export class ProtheusController {
     if (!r.valida) {
       return { valida: false, motivo: r.motivo, encontrado: false, nome: null };
     }
-    // Credencial OK — busca o nome (formato E-prefixado que o infoFuncionario aceita).
-    const colaborador = await this.service.buscarColaborador(dto.matricula);
+    // Credencial OK — busca o nome usando a matrícula numérica validada (chapa
+    // que o loginPortal confirmou), mesmo formato esperado pelo infoFuncionario.
+    const colaborador = await this.service.buscarColaborador(r.matricula);
     return {
       valida: true,
       encontrado: !!colaborador,

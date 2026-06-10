@@ -90,7 +90,6 @@ export function ChamadoCreatePage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successRedirectUrl, setSuccessRedirectUrl] = useState('');
 
-  const [erroMatricula, setErroMatricula] = useState('');
   const [erroValidacao, setErroValidacao] = useState(''); // senha/matricula invalida
   const [mensagemFallback, setMensagemFallback] = useState('');
   const nomeColaboradorRef = useRef<HTMLInputElement>(null);
@@ -126,11 +125,6 @@ export function ChamadoCreatePage() {
     const mat = matriculaColaborador.trim();
     const sen = senhaColaborador;
     if (!mat || !sen) return;
-    if (!mat.startsWith('E')) {
-      setErroMatricula('Matricula deve iniciar com a letra E');
-      return;
-    }
-    setErroMatricula('');
     setValidando(true);
     setCredOk(false);
     setProtheusForaFallback(false);
@@ -398,28 +392,19 @@ export function ChamadoCreatePage() {
                   <input
                     value={matriculaColaborador}
                     onChange={(e) => {
-                      const val = e.target.value.toUpperCase();
-                      setMatriculaColaborador(val);
+                      // Matricula = somente numeros (definicao do projeto, sem letra).
+                      setMatriculaColaborador(e.target.value.replace(/\D/g, ''));
                       resetValidacao();
-                      if (val && !val.startsWith('E')) {
-                        setErroMatricula('Matricula deve iniciar com a letra E');
-                      } else {
-                        setErroMatricula('');
-                      }
                     }}
-                    placeholder="Ex: E05111"
+                    placeholder="Ex: 001047"
+                    inputMode="numeric"
                     autoComplete="off"
                     className={`w-full border rounded-lg px-3 py-2 text-sm ${
-                      erroMatricula
-                        ? 'border-red-400 bg-red-50'
-                        : credOk
-                          ? 'border-green-400 bg-green-50'
-                          : 'border-slate-300'
+                      credOk ? 'border-green-400 bg-green-50' : 'border-slate-300'
                     }`}
                     required
                     maxLength={10}
                   />
-                  {erroMatricula && <p className="text-xs text-red-600 mt-1">{erroMatricula}</p>}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Senha *</label>
@@ -438,7 +423,7 @@ export function ChamadoCreatePage() {
                     <button
                       type="button"
                       onClick={validarColaborador}
-                      disabled={validando || credOk || !matriculaColaborador.trim() || !senhaColaborador || !!erroMatricula}
+                      disabled={validando || credOk || !matriculaColaborador.trim() || !senhaColaborador}
                       className="shrink-0 px-3 py-2 rounded-lg text-sm font-medium border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {validando ? 'Validando...' : credOk ? 'Validado' : 'Validar'}
