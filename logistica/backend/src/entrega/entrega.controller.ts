@@ -66,6 +66,7 @@ export class EntregaController {
    * isolado. Quem dá baixa é o entregador (app) ou o operador (web).
    */
   @Post(':id/baixar')
+  @Roles('ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
   @UseInterceptors(FileInterceptor('prova', { limits: { fileSize: 15 * 1024 * 1024 } }))
   baixar(
     @Param('id') id: string,
