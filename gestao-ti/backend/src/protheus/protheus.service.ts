@@ -59,6 +59,16 @@ export class ProtheusService {
   }
 
   /**
+   * Converte a matrícula digitada (só números, ex.: 001047) para a chapa
+   * E-prefixada que o portal RH (loginPortal/infoPortal) usa: 'E' + 5 dígitos
+   * com zero-pad → E01047. Idempotente p/ entrada já E-prefixada (E01047→E01047).
+   * Validado E2E: a numérica pura volta como "não encontrada" no portal.
+   */
+  private toChapaPortal(matricula: string): string {
+    return 'E' + (matricula || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
+  }
+
+  /**
    * Resolve uma operação Protheus (GESTAO_TI) pela `operacao`: base URL + auth +
    * timeout + método. Default 3s de timeout (configurável por endpoint no
    * Configurador). Retorna null se a config ou o endpoint não existirem.
@@ -184,11 +194,7 @@ export class ProtheusService {
     const ep = await this.resolveEndpoint('loginPortal');
     if (!ep) return { valida: false, motivo: 'INDISPONIVEL' };
 
-    // O portal RH autentica pela matrícula E-prefixada (ex.: E01047) — o mesmo
-    // formato que o infoPortal retorna. O usuário digita só números (definição
-    // do projeto), então montamos a chapa: 'E' + 5 dígitos com zero-pad.
-    // Ex.: 1047 / 01047 / 001047 → E01047. Validado E2E contra o portal PROD.
-    const chapa = 'E' + matricula.replace(/\D/g, '').slice(-5).padStart(5, '0');
+    const chapa = this.toChapaPortal(matricula);
     const url = `${ep.baseUrl}?MATRICULA=${encodeURIComponent(chapa)}&SENHA=${encodeURIComponent(senha)}`;
     // Label redigido: a query string acima carrega a SENHA — não pode ir pro log.
     const logLabel = `loginPortal MATRICULA=${chapa} (senha omitida)`;
@@ -240,8 +246,10 @@ export class ProtheusService {
     const ep = await this.resolveInfoFuncionario();
     if (!ep) return null;
 
-    const url = `${ep.baseUrl}?MATRICULA=${encodeURIComponent(matricula)}`;
-    this.logger.log(`Buscando colaborador ${matricula} (ambiente: ${ep.ambiente})`);
+    // Mesma chapa E-prefixada do loginPortal: a numérica pura não é encontrada.
+    const chapa = this.toChapaPortal(matricula);
+    const url = `${ep.baseUrl}?MATRICULA=${encodeURIComponent(chapa)}`;
+    this.logger.log(`Buscando colaborador ${chapa} (ambiente: ${ep.ambiente})`);
 
     const data = await this.requestJson(url, ep.authHeader, ep.timeoutMs);
     if (!data) return null;
@@ -259,10 +267,10 @@ export class ProtheusService {
     // caímos no 1º como fallback (prefixo 'E'/zero-padding diverge por ambiente).
     const norm = (v: unknown) => String(v ?? '').trim();
     const escolhido =
-      candidatos.find((f) => norm(f.matricula) === norm(matricula)) ?? candidatos[0];
+      candidatos.find((f) => norm(f.matricula) === norm(chapa)) ?? candidatos[0];
     const alvo = this.mapFuncionario(escolhido);
     if (!alvo) {
-      if (data.mensagem) this.logger.warn(`Protheus infoFuncionario: ${String(data.mensagem)} (matricula ${matricula})`);
+      if (data.mensagem) this.logger.warn(`Protheus infoFuncionario: ${String(data.mensagem)} (matricula ${chapa})`);
       return null;
     }
     return alvo;

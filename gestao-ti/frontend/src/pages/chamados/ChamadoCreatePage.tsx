@@ -80,6 +80,7 @@ export function ChamadoCreatePage() {
   const [matriculaColaborador, setMatriculaColaborador] = useState('');
   const [senhaColaborador, setSenhaColaborador] = useState('');
   const [nomeColaborador, setNomeColaborador] = useState('');
+  const [buscandoNome, setBuscandoNome] = useState(false); // lookup do nome pela matricula
   const [validando, setValidando] = useState(false);
   const [credOk, setCredOk] = useState(false); // loginPortal confirmou matricula+senha
   const [protheusForaFallback, setProtheusForaFallback] = useState(false); // Protheus fora -> libera prosseguir
@@ -94,19 +95,24 @@ export function ChamadoCreatePage() {
   const [mensagemFallback, setMensagemFallback] = useState('');
   const nomeColaboradorRef = useRef<HTMLInputElement>(null);
 
-  // Qualquer mudanca em matricula/senha invalida uma validacao anterior — forca
-  // revalidar (evita validar e depois trocar a matricula).
-  function resetValidacao() {
+  // So a SENHA mudou: invalida a validacao anterior (mantem o nome ja resolvido
+  // pela matricula). Forca revalidar a senha antes de enviar.
+  function resetValidacaoSenha() {
     setCredOk(false);
     setProtheusForaFallback(false);
+    setErroValidacao('');
+  }
+
+  // A MATRICULA mudou: reseta tudo (nome + senha) — e outra pessoa.
+  function resetMatricula() {
+    resetValidacaoSenha();
     setNomeColaborador('');
     setNomeEditavel(false);
-    setErroValidacao('');
     setMensagemFallback('');
   }
 
-  // Usuario PADRAO so pode enviar apos validar a credencial (ou apos o fallback
-  // de Protheus fora). credOk = senha conferida; protheusForaFallback = nao deu
+  // Usuario PADRAO so pode enviar apos validar a SENHA (ou apos o fallback de
+  // Protheus fora). credOk = senha conferida; protheusForaFallback = nao deu
   // pra validar agora mas liberamos prosseguir (backend revalida).
   const padraoLiberado = !isUsuarioPadrao || credOk || protheusForaFallback;
 
@@ -118,9 +124,31 @@ export function ChamadoCreatePage() {
     }
   }, [nomeEditavel]);
 
-  // Valida matricula+senha no portal RH (loginPortal). So apos validar a tela
-  // revela o nome (senha-primeiro). Senha invalida bloqueia; Protheus fora libera
-  // prosseguir com nome manual (o backend revalida no envio).
+  // Passo 1 (nome-primeiro): ao sair da matricula, busca o NOME no portal RH
+  // (infoPortal). O usuario confere que é ele ANTES de digitar a senha.
+  // Nao encontrado / Protheus fora → libera digitar o nome manualmente.
+  async function buscarNome() {
+    const mat = matriculaColaborador.trim();
+    if (!mat) return;
+    setBuscandoNome(true);
+    setNomeColaborador('');
+    setNomeEditavel(false);
+    setMensagemFallback('');
+    try {
+      const r = await protheusService.buscarColaborador(mat);
+      if (r.encontrado && r.nome) {
+        setNomeColaborador(r.nome);
+      } else {
+        setNomeEditavel(true);
+        setMensagemFallback('Matricula nao encontrada no portal RH. Confira o numero ou digite o nome.');
+      }
+    } finally {
+      setBuscandoNome(false);
+    }
+  }
+
+  // Passo 2: valida a SENHA da matricula no portal RH (loginPortal). O nome ja
+  // foi resolvido no passo 1 — aqui so confirmamos a identidade pela senha.
   async function validarColaborador() {
     const mat = matriculaColaborador.trim();
     const sen = senhaColaborador;
@@ -128,27 +156,20 @@ export function ChamadoCreatePage() {
     setValidando(true);
     setCredOk(false);
     setProtheusForaFallback(false);
-    setNomeColaborador('');
-    setNomeEditavel(false);
     setErroValidacao('');
-    setMensagemFallback('');
     try {
       const r = await protheusService.validarColaborador(mat, sen);
       if (r.valida) {
         setCredOk(true);
-        setNomeColaborador(r.nome || '');
-        if (!r.nome) {
-          // Senha conferiu mas o nome nao veio (sem acesso ao infoFuncionario) — digita.
-          setNomeEditavel(true);
-          setMensagemFallback('Identidade confirmada, mas o nome nao veio do Protheus. Digite o nome.');
-        }
+        // Garante o nome caso o passo 1 nao tenha trazido (ex.: pulou o blur).
+        if (r.nome && !nomeColaborador) setNomeColaborador(r.nome);
       } else if (r.motivo === 'CREDENCIAIS_INVALIDAS') {
-        setErroValidacao('Matricula ou senha invalida.');
+        setErroValidacao('Senha invalida para esta matricula.');
       } else {
         // INDISPONIVEL — Protheus fora: nao trava o atendimento.
         setProtheusForaFallback(true);
-        setNomeEditavel(true);
-        setMensagemFallback('Protheus indisponivel no momento — nao foi possivel validar. Voce pode prosseguir; o T.I. confirmara a identidade.');
+        if (!nomeColaborador) setNomeEditavel(true);
+        setMensagemFallback('Protheus indisponivel no momento — nao foi possivel validar a senha. Voce pode prosseguir; o T.I. confirmara a identidade.');
       }
     } finally {
       setValidando(false);
@@ -383,9 +404,10 @@ export function ChamadoCreatePage() {
               <div>
                 <p className="text-sm font-medium text-amber-800">Identificacao do Colaborador</p>
                 <p className="text-xs text-amber-700/80 mt-0.5">
-                  Informe sua matricula e a senha do portal RH para abrir o chamado em seu nome.
+                  Digite sua matricula para conferir seu nome e, em seguida, valide com a senha do portal RH.
                 </p>
               </div>
+              {/* Passo 1 — matricula -> nome */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Matricula *</label>
@@ -394,29 +416,48 @@ export function ChamadoCreatePage() {
                     onChange={(e) => {
                       // Matricula = somente numeros (definicao do projeto, sem letra).
                       setMatriculaColaborador(e.target.value.replace(/\D/g, ''));
-                      resetValidacao();
+                      resetMatricula();
                     }}
+                    onBlur={buscarNome}
                     placeholder="Ex: 001047"
                     inputMode="numeric"
                     autoComplete="off"
-                    className={`w-full border rounded-lg px-3 py-2 text-sm ${
-                      credOk ? 'border-green-400 bg-green-50' : 'border-slate-300'
-                    }`}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                     required
                     maxLength={10}
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Nome do Colaborador {nomeEditavel && '*'}
+                  </label>
+                  <input
+                    ref={nomeColaboradorRef}
+                    value={nomeColaborador}
+                    onChange={(e) => setNomeColaborador(e.target.value)}
+                    readOnly={!nomeEditavel}
+                    required={nomeEditavel}
+                    maxLength={100}
+                    placeholder={buscandoNome ? 'Buscando...' : nomeEditavel ? 'Digite o nome' : 'Preenchido pela matricula'}
+                    className={`w-full border border-slate-300 rounded-lg px-3 py-2 text-sm ${!nomeEditavel ? 'bg-slate-50 text-slate-700' : ''}`}
+                  />
+                </div>
+              </div>
+              {/* Passo 2 — senha -> validar */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Senha *</label>
                   <div className="flex gap-2">
                     <input
                       type="password"
                       value={senhaColaborador}
-                      onChange={(e) => { setSenhaColaborador(e.target.value); resetValidacao(); }}
+                      onChange={(e) => { setSenhaColaborador(e.target.value); resetValidacaoSenha(); }}
                       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); validarColaborador(); } }}
                       placeholder="Senha do portal RH"
                       autoComplete="off"
-                      className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                      className={`flex-1 border rounded-lg px-3 py-2 text-sm ${
+                        credOk ? 'border-green-400 bg-green-50' : 'border-slate-300'
+                      }`}
                       required
                       maxLength={60}
                     />
@@ -430,34 +471,18 @@ export function ChamadoCreatePage() {
                     </button>
                   </div>
                 </div>
-              </div>
-
-              {erroValidacao && <p className="text-xs text-red-600 font-medium">{erroValidacao}</p>}
-              {credOk && (
-                <p className="text-xs text-green-700 flex items-center gap-1">
-                  <CheckCircle className="w-3.5 h-3.5" /> Identidade confirmada.
-                </p>
-              )}
-
-              {(credOk || protheusForaFallback) && (
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Nome do Colaborador {nomeEditavel && '*'}
-                  </label>
-                  <input
-                    ref={nomeColaboradorRef}
-                    value={nomeColaborador}
-                    onChange={(e) => setNomeColaborador(e.target.value)}
-                    readOnly={!nomeEditavel}
-                    required={nomeEditavel}
-                    maxLength={100}
-                    placeholder={nomeEditavel ? 'Digite o nome' : 'Confirmado pelo portal RH'}
-                    className={`w-full border border-slate-300 rounded-lg px-3 py-2 text-sm ${!nomeEditavel ? 'bg-slate-50 text-slate-700' : ''}`}
-                  />
-                  {mensagemFallback && (
-                    <p className="text-xs text-amber-700 mt-1 italic">{mensagemFallback}</p>
+                <div className="flex items-end pb-1">
+                  {erroValidacao && <p className="text-xs text-red-600 font-medium">{erroValidacao}</p>}
+                  {credOk && (
+                    <p className="text-xs text-green-700 flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5" /> Senha confirmada.
+                    </p>
                   )}
                 </div>
+              </div>
+
+              {mensagemFallback && (
+                <p className="text-xs text-amber-700 italic">{mensagemFallback}</p>
               )}
             </div>
           )}
