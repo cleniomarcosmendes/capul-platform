@@ -9,9 +9,10 @@ import { ChamadoAnexoService } from './services/chamado-anexo.service.js';
 import { ChamadoAgrupamentoService } from './services/chamado-agrupamento.service.js';
 import { NotificacaoModule } from '../notificacao/notificacao.module.js';
 import { EmailEnvolvidosModule } from '../email/email-envolvidos.module.js';
+import { ProtheusModule } from '../protheus/protheus.module.js';
 
 @Module({
-  imports: [NotificacaoModule, EmailEnvolvidosModule],
+  imports: [NotificacaoModule, EmailEnvolvidosModule, ProtheusModule],
   controllers: [ChamadoController],
   providers: [
     ChamadoHelpersService,

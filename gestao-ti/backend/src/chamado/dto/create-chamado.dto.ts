@@ -78,6 +78,16 @@ export class CreateChamadoDto {
   nomeColaborador?: string;
 
   /**
+   * Senha do colaborador no portal RH — usada SÓ para revalidar a matrícula no
+   * loginPortal (defesa em profundidade: a tela já valida, mas o backend não
+   * confia no cliente). TRANSIENTE: nunca é persistida nem logada.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  senhaColaborador?: string;
+
+  /**
    * IDs dos usuarios a adicionar em copia no chamado.
    * Validacao no service: nao pode incluir membro ativo de equipe
    * (impede contornar designacao de tecnico via "em copia").

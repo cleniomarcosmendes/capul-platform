@@ -1,5 +1,6 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ProtheusService } from './protheus.service.js';
+import { ValidarColaboradorDto } from './dto/validar-colaborador.dto.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { GestaoTiGuard } from '../common/guards/gestao-ti.guard.js';
 
@@ -26,5 +27,29 @@ export class ProtheusController {
     const resultado = await this.service.buscarColaborador(matricula);
     if (!resultado) return { encontrado: false, matricula, nome: null };
     return { encontrado: true, ...resultado };
+  }
+
+  /**
+   * Valida matrícula+senha no portal RH (loginPortal). Usado na abertura de
+   * Chamado por usuário PADRAO. Quando válida, já devolve o nome do colaborador
+   * (busca o `infoFuncionario` na sequência) — assim a tela só revela o nome
+   * APÓS a senha conferir (senha-primeiro). `motivo` distingue credencial
+   * inválida de Protheus indisponível, pra UX dar a mensagem certa.
+   */
+  @Post('colaborador/validar')
+  async validarColaborador(@Body() dto: ValidarColaboradorDto) {
+    const r = await this.service.validarCredencialPortal(dto.matricula, dto.senha);
+    if (!r.valida) {
+      return { valida: false, motivo: r.motivo, encontrado: false, nome: null };
+    }
+    // Credencial OK — busca o nome (formato E-prefixado que o infoFuncionario aceita).
+    const colaborador = await this.service.buscarColaborador(dto.matricula);
+    return {
+      valida: true,
+      encontrado: !!colaborador,
+      matricula: colaborador?.matricula ?? dto.matricula,
+      nome: colaborador?.nome ?? null,
+      cc: colaborador?.cc ?? null,
+    };
   }
 }

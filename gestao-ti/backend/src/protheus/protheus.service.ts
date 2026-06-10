@@ -59,25 +59,25 @@ export class ProtheusService {
   }
 
   /**
-   * Resolve a operação `infoFuncionario` (portal RH): base URL + auth + timeout.
-   * GET ?MATRICULA= → {matricula,nome,cc} | GET ?NOME= → {funcionarios:[...]}.
-   * Distinta de `INFOCLIENTES` (getLimite), que é cadastro de CLIENTES (SA1).
-   * Default 3s de timeout (configurável por endpoint no Configurador).
+   * Resolve uma operação Protheus (GESTAO_TI) pela `operacao`: base URL + auth +
+   * timeout + método. Default 3s de timeout (configurável por endpoint no
+   * Configurador). Retorna null se a config ou o endpoint não existirem.
    */
-  private async resolveInfoFuncionario(): Promise<{
+  private async resolveEndpoint(operacao: string): Promise<{
     baseUrl: string;
     authHeader: string;
     timeoutMs: number;
     ambiente: string;
+    metodo: string;
   } | null> {
     const config = await this.getConfig();
     if (!config) {
       this.logger.warn('Config Protheus indisponivel');
       return null;
     }
-    const ep = config.endpoints.find((e) => e.operacao === 'infoFuncionario');
+    const ep = config.endpoints.find((e) => e.operacao === operacao);
     if (!ep) {
-      this.logger.warn('Endpoint infoFuncionario nao encontrado na config Protheus (GESTAO_TI)');
+      this.logger.warn(`Endpoint ${operacao} nao encontrado na config Protheus (GESTAO_TI)`);
       return null;
     }
     return {
@@ -85,25 +85,42 @@ export class ProtheusService {
       authHeader: this.buildAuthHeader(config),
       timeoutMs: ep.timeoutMs || 3000,
       ambiente: config.ambiente,
+      metodo: ep.metodo || 'GET',
     };
   }
 
-  /** GET genérico que devolve o JSON parseado (ou null em erro/timeout/status>=400). */
+  /**
+   * Resolve a operação `infoFuncionario` (portal RH): base URL + auth + timeout.
+   * GET ?MATRICULA= → {matricula,nome,cc} | GET ?NOME= → {funcionarios:[...]}.
+   * Distinta de `INFOCLIENTES` (getLimite), que é cadastro de CLIENTES (SA1).
+   */
+  private resolveInfoFuncionario() {
+    return this.resolveEndpoint('infoFuncionario');
+  }
+
+  /**
+   * Requisição genérica que devolve o JSON parseado (ou null em
+   * erro/timeout/status>=400). Default GET. `logLabel` substitui a URL nas
+   * mensagens de log — OBRIGATÓRIO quando a query string carrega segredo
+   * (ex.: SENHA do loginPortal), pra nunca vazar credencial em log.
+   */
   private requestJson(
     url: string,
     authHeader: string,
     timeoutMs: number,
+    opts: { method?: string; logLabel?: string } = {},
   ): Promise<Record<string, unknown> | null> {
     return new Promise((resolve) => {
       const urlObj = new URL(url);
       const isHttps = urlObj.protocol === 'https:';
       const transport = isHttps ? https : http;
+      const label = opts.logLabel ?? `${urlObj.pathname}${urlObj.search}`;
 
       const options: https.RequestOptions = {
         hostname: urlObj.hostname,
         port: urlObj.port || (isHttps ? 443 : 80),
         path: urlObj.pathname + urlObj.search,
-        method: 'GET',
+        method: opts.method ?? 'GET',
         headers: {
           'Authorization': authHeader,
           'Content-Type': 'application/json',
@@ -117,14 +134,14 @@ export class ProtheusService {
         res.on('data', (chunk) => { body += chunk; });
         res.on('end', () => {
           if (!res.statusCode || res.statusCode >= 400) {
-            this.logger.warn(`Protheus retornou status ${res.statusCode} para ${urlObj.pathname}${urlObj.search}`);
+            this.logger.warn(`Protheus retornou status ${res.statusCode} para ${label}`);
             resolve(null);
             return;
           }
           try {
             resolve(JSON.parse(body));
           } catch {
-            this.logger.error(`Erro ao parsear resposta Protheus de ${urlObj.pathname}`);
+            this.logger.error(`Erro ao parsear resposta Protheus de ${label}`);
             resolve(null);
           }
         });
@@ -132,15 +149,69 @@ export class ProtheusService {
 
       req.on('timeout', () => {
         req.destroy();
-        this.logger.error(`Timeout ao consultar Protheus ${urlObj.pathname}${urlObj.search}`);
+        this.logger.error(`Timeout ao consultar Protheus ${label}`);
         resolve(null);
       });
       req.on('error', (err) => {
-        this.logger.error(`Erro ao consultar Protheus: ${err.message}`);
+        this.logger.error(`Erro ao consultar Protheus (${label}): ${err.message}`);
         resolve(null);
       });
       req.end();
     });
+  }
+
+  /**
+   * Valida matrícula+senha do colaborador no portal RH (operação `loginPortal`,
+   * POST). Usado na abertura de Chamado por usuário de perfil PADRAO: prova que
+   * quem está abrindo é mesmo o dono da matrícula (a conta logada é genérica).
+   *
+   * O portal autentica pela CHAPA numérica (ex.: 002873), não pela matrícula
+   * E-prefixada que o usuário digita (ex.: E05111) — normalizamos pra dígitos +
+   * zero-pad 6 (o 'E' ocupa o lugar do zero à esquerda: E05111 → 005111).
+   *
+   * Resposta: { autenticacao: "Credenciais válidas!" | "Credenciais inválidas!" }.
+   * Distingue INDISPONIVEL (Protheus fora / endpoint não cadastrado / resposta
+   * inesperada) de CREDENCIAIS_INVALIDAS — o chamador decide o que fazer com
+   * cada caso (bloquear vs. permitir com ressalva). NUNCA loga a senha.
+   */
+  async validarCredencialPortal(
+    matricula: string,
+    senha: string,
+  ): Promise<
+    | { valida: true; matricula: string }
+    | { valida: false; motivo: 'CREDENCIAIS_INVALIDAS' | 'INDISPONIVEL' }
+  > {
+    const ep = await this.resolveEndpoint('loginPortal');
+    if (!ep) return { valida: false, motivo: 'INDISPONIVEL' };
+
+    const chapa = matricula.replace(/\D/g, '').padStart(6, '0');
+    const url = `${ep.baseUrl}?MATRICULA=${encodeURIComponent(chapa)}&SENHA=${encodeURIComponent(senha)}`;
+    // Label redigido: a query string acima carrega a SENHA — não pode ir pro log.
+    const logLabel = `loginPortal MATRICULA=${chapa} (senha omitida)`;
+    this.logger.log(`Validando credencial portal (chapa ${chapa}, ambiente: ${ep.ambiente})`);
+
+    const data = await this.requestJson(url, ep.authHeader, ep.timeoutMs, {
+      method: ep.metodo || 'POST',
+      logLabel,
+    });
+    if (!data) return { valida: false, motivo: 'INDISPONIVEL' };
+
+    // Normaliza acento + caixa. Atenção: "invalidas" CONTÉM "validas" — testar
+    // 'invalid' ANTES de 'valid'.
+    const auth = String(data.autenticacao ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    if (auth.includes('invalid')) {
+      return { valida: false, motivo: 'CREDENCIAIS_INVALIDAS' };
+    }
+    if (auth.includes('valid')) {
+      return { valida: true, matricula: String(data.matricula ?? chapa).trim() };
+    }
+    this.logger.warn(
+      `loginPortal resposta inesperada (chapa ${chapa}): ${JSON.stringify(data).slice(0, 120)}`,
+    );
+    return { valida: false, motivo: 'INDISPONIVEL' };
   }
 
   /**

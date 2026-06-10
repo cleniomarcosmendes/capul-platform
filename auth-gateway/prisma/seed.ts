@@ -287,6 +287,11 @@ async function main() {
     // { matricula, nome, cc }. Operação separada do getLimite (esse é CLIENTES).
     // Consumido por protheus.service.buscarColaborador (autofill do vínculo de licença).
     { modulo: 'GESTAO_TI' as const, ambiente: 'PRODUCAO' as const, operacao: 'infoFuncionario', url: `${BASE_PRD}/infoPortal`, metodo: 'GET' as const, timeoutMs: 60000 },
+    // 10/06/2026 — AUTENTICAÇÃO matrícula+senha do portal RH: POST ?MATRICULA=&SENHA=
+    // → { matricula, autenticacao: "Credenciais válidas!|inválidas!" }. Usado na
+    // abertura de Chamado por usuário PADRAO (prova de identidade). A matrícula é a
+    // CHAPA numérica (ex.: 002873) — o backend normaliza a E-prefixada antes de enviar.
+    { modulo: 'GESTAO_TI' as const, ambiente: 'PRODUCAO' as const, operacao: 'loginPortal', url: `${BASE_PRD}/loginPortal`, metodo: 'POST' as const, timeoutMs: 15000 },
   ];
 
   const endpointsGestaoTiHlg = endpointsGestaoTiPrd.map((ep) => ({

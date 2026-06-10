@@ -18,6 +18,7 @@ import * as emailTpl from '../../email/email-templates.js';
 import { ChamadoHelpersService } from './chamado-helpers.service.js';
 import { ChamadoAgrupamentoService } from './chamado-agrupamento.service.js';
 import { ChamadoTempoService } from './chamado-tempo.service.js';
+import { ProtheusService } from '../../protheus/protheus.service.js';
 import { chamadoInclude } from './chamado.constants.js';
 import { isGestor, isTI, hasStaffPerfilEmTI, getDeptosOndeStaff, getRoleNoDepto } from '../../common/constants/roles.constant.js';
 import { hasCapability } from '../../common/helpers/capability.helper.js';
@@ -55,6 +56,7 @@ export class ChamadoCoreService {
     private readonly helpers: ChamadoHelpersService,
     private readonly tempo: ChamadoTempoService,
     private readonly agrupamento: ChamadoAgrupamentoService,
+    private readonly protheus: ProtheusService,
   ) {}
 
   // ─── Coletar todos os envolvidos no chamado (para notificacoes) ───
@@ -601,6 +603,26 @@ export class ChamadoCoreService {
   }
 
   async create(dto: CreateChamadoDto, user: JwtPayload, role: string) {
+    // Identificação do colaborador (perfil PADRAO): a matrícula só é aceita se
+    // a senha do portal RH conferir. Defesa em profundidade — a tela já valida,
+    // mas o backend não confia no cliente (request manipulado poderia abrir
+    // chamado em nome de outra matrícula). A senha é transiente: validada aqui
+    // e descartada, NUNCA persistida. Se o Protheus estiver fora, não bloqueia
+    // o atendimento (libera, igual ao fallback do autofill de nome).
+    if (dto.matriculaColaborador) {
+      if (!dto.senhaColaborador) {
+        throw new BadRequestException('Informe a senha do colaborador para validar a matrícula.');
+      }
+      const r = await this.protheus.validarCredencialPortal(
+        dto.matriculaColaborador,
+        dto.senhaColaborador,
+      );
+      if (!r.valida && r.motivo === 'CREDENCIAIS_INVALIDAS') {
+        throw new BadRequestException('Matrícula ou senha inválida.');
+      }
+      // r.motivo === 'INDISPONIVEL' → Protheus fora: segue sem bloquear.
+    }
+
     const equipe = await this.prisma.equipe.findUnique({
       where: { id: dto.equipeAtualId },
     });
