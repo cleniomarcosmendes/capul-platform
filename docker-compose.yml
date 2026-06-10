@@ -227,6 +227,9 @@ services:
       JWT_MFA_SECRET: ${JWT_MFA_SECRET:?JWT_MFA_SECRET obrigatorio no .env (gerar com openssl rand -hex 64; deve ser DIFERENTE de JWT_SECRET)}
       JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-60m}
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-7d}
+      # App entregador (Logística Fase 1b): access mobile curto + sessão deslizante.
+      JWT_MOBILE_EXPIRATION: ${JWT_MOBILE_EXPIRATION:-15m}
+      JWT_MOBILE_REFRESH_EXPIRATION: ${JWT_MOBILE_REFRESH_EXPIRATION:-30d}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       NODE_ENV: production
       # Auditoria 10/05/2026 #B3 — CORS_ORIGINS obrigatório (fallback localhost removido)

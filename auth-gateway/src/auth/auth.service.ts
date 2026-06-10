@@ -115,7 +115,8 @@ export class AuthService {
     const isMobile = !!dto.deviceId;
     let sessaoId: string | undefined;
     if (isMobile) {
-      const refreshDays = parseInt(this.config.get('JWT_REFRESH_EXPIRATION', '7d')) || 7;
+      // Sessão mobile usa janela própria (sliding 30d), separada do refresh web (7d).
+      const refreshDays = parseInt(this.config.get('JWT_MOBILE_REFRESH_EXPIRATION', '30d')) || 30;
       const expiraEm = new Date();
       expiraEm.setDate(expiraEm.getDate() + refreshDays);
       const sessao = await this.dispositivos.criar({
@@ -227,7 +228,14 @@ export class AuthService {
     });
 
     const newRefreshToken = await this.createRefreshToken(usuario.id, sessaoId);
-    if (sessaoId) await this.dispositivos.tocar(sessaoId); // atualiza ultimoUso
+    if (sessaoId) {
+      // Sliding: cada refresh empurra a janela da sessão (30d a partir de agora),
+      // então entregador ativo nunca reloga; só expira após 30d SEM uso.
+      const refreshDays = parseInt(this.config.get('JWT_MOBILE_REFRESH_EXPIRATION', '30d')) || 30;
+      const novoExpiraEm = new Date();
+      novoExpiraEm.setDate(novoExpiraEm.getDate() + refreshDays);
+      await this.dispositivos.renovar(sessaoId, novoExpiraEm);
+    }
 
     return {
       accessToken,
@@ -544,8 +552,11 @@ export class AuthService {
 
   private async createRefreshToken(usuarioId: string, dispositivoSessaoId?: string) {
     const token = randomUUID();
-    const expiresIn = this.config.get('JWT_REFRESH_EXPIRATION', '7d');
-    const days = parseInt(expiresIn) || 7;
+    // Mobile (sessão de dispositivo) usa janela maior (sliding 30d); web mantém 7d.
+    const expiresIn = dispositivoSessaoId
+      ? this.config.get('JWT_MOBILE_REFRESH_EXPIRATION', '30d')
+      : this.config.get('JWT_REFRESH_EXPIRATION', '7d');
+    const days = parseInt(expiresIn) || (dispositivoSessaoId ? 30 : 7);
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + days);
 

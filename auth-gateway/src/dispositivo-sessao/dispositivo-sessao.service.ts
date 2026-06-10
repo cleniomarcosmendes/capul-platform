@@ -91,4 +91,15 @@ export class DispositivoSessaoService {
   async tocar(id: string) {
     await this.prisma.dispositivoSessao.update({ where: { id }, data: { ultimoUso: new Date() } }).catch(() => undefined);
   }
+
+  /**
+   * Renova a janela da sessão (sliding) + marca último uso — chamado no refresh.
+   * Cada refresh empurra o `expiraEm` pra frente, então o entregador ATIVO nunca
+   * precisa relogar; a sessão só expira após a janela inteira SEM uso. Best-effort.
+   */
+  async renovar(id: string, expiraEm: Date) {
+    await this.prisma.dispositivoSessao
+      .update({ where: { id }, data: { ultimoUso: new Date(), expiraEm } })
+      .catch(() => undefined);
+  }
 }
