@@ -27,6 +27,13 @@ export class ViagemController {
     return this.viagens.list({ filialId: resolverFilialLeitura(user, filialId), situacao, veiculoId });
   }
 
+  // Viagens do próprio entregador (app — Fase 1b). DEVE vir antes de @Get(':id')
+  // senão o Nest casa "minhas" como :id. Sem situacao → só acionáveis.
+  @Get('minhas')
+  minhas(@CurrentUser() user: JwtPayload, @Query('situacao') situacao?: StatusViagem) {
+    return this.viagens.listMinhas(user.sub, situacao);
+  }
+
   @Get(':id')
   obter(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.viagens.findOne(id, user);

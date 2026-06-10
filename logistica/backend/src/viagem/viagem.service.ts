@@ -81,6 +81,31 @@ export class ViagemService {
     }));
   }
 
+  /**
+   * Viagens DO entregador logado (app — Fase 1b). Filtra por motoristaId; sem
+   * `situacao` traz só as EM_CURSO (despachadas, que ele tem pra rodar agora —
+   * RASCUNHO ainda está em montagem no balcão). Inclui paradas+entrega pro app
+   * montar a rota sem um round-trip por viagem.
+   */
+  async listMinhas(motoristaId: string, situacao?: StatusViagem) {
+    const viagens = await this.prisma.viagem.findMany({
+      where: {
+        motoristaId,
+        situacao: situacao ?? StatusViagem.EM_CURSO,
+      },
+      include: {
+        veiculo: { select: { placa: true, modelo: true } },
+        paradas: { include: { entrega: true }, orderBy: { sequencia: 'asc' } },
+      },
+      orderBy: { criadoEm: 'desc' },
+      take: 100,
+    });
+    return viagens.map((v) => ({
+      ...v,
+      totalVolumes: v.paradas.reduce((s, p) => s + (p.entrega?.quantidadeVolumes ?? 0), 0),
+    }));
+  }
+
   async findOne(id: string, user?: JwtPayload) {
     const v = await this.prisma.viagem.findUnique({
       where: { id },
