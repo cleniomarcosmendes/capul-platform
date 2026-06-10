@@ -4,6 +4,7 @@ import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { chamadoService } from '../../services/chamado.service';
+import { protheusService } from '../../services/protheus.service';
 import { equipeService } from '../../services/equipe.service';
 import { catalogoService } from '../../services/catalogo.service';
 import { softwareService } from '../../services/software.service';
@@ -73,11 +74,15 @@ export function ChamadoCreatePage() {
   // IP da maquina
   const [ipMaquina, setIpMaquina] = useState('');
 
-  // Usuario padrao — matricula/nome colaborador
+  // Usuario padrao — identificacao por matricula + senha (portal RH).
+  // A conta logada e generica; a senha prova quem esta abrindo o chamado.
   const isUsuarioPadrao = usuario?.tipo === 'PADRAO';
   const [matriculaColaborador, setMatriculaColaborador] = useState('');
+  const [senhaColaborador, setSenhaColaborador] = useState('');
   const [nomeColaborador, setNomeColaborador] = useState('');
-  const [buscandoColaborador, setBuscandoColaborador] = useState(false);
+  const [validando, setValidando] = useState(false);
+  const [credOk, setCredOk] = useState(false); // loginPortal confirmou matricula+senha
+  const [protheusForaFallback, setProtheusForaFallback] = useState(false); // Protheus fora -> libera prosseguir
   const [nomeEditavel, setNomeEditavel] = useState(false);
 
   const [dirty, setDirty] = useState(false);
@@ -86,8 +91,25 @@ export function ChamadoCreatePage() {
   const [successRedirectUrl, setSuccessRedirectUrl] = useState('');
 
   const [erroMatricula, setErroMatricula] = useState('');
+  const [erroValidacao, setErroValidacao] = useState(''); // senha/matricula invalida
   const [mensagemFallback, setMensagemFallback] = useState('');
   const nomeColaboradorRef = useRef<HTMLInputElement>(null);
+
+  // Qualquer mudanca em matricula/senha invalida uma validacao anterior — forca
+  // revalidar (evita validar e depois trocar a matricula).
+  function resetValidacao() {
+    setCredOk(false);
+    setProtheusForaFallback(false);
+    setNomeColaborador('');
+    setNomeEditavel(false);
+    setErroValidacao('');
+    setMensagemFallback('');
+  }
+
+  // Usuario PADRAO so pode enviar apos validar a credencial (ou apos o fallback
+  // de Protheus fora). credOk = senha conferida; protheusForaFallback = nao deu
+  // pra validar agora mas liberamos prosseguir (backend revalida).
+  const padraoLiberado = !isUsuarioPadrao || credOk || protheusForaFallback;
 
   // Quando o input do nome libera (Protheus offline ou matrícula inválida),
   // foca automaticamente — é o "posicionar para o usuário" pedido em UX.
@@ -97,34 +119,46 @@ export function ChamadoCreatePage() {
     }
   }, [nomeEditavel]);
 
-  async function buscarColaborador() {
-    const valor = matriculaColaborador.trim();
-    if (!valor) return;
-    if (!valor.startsWith('E')) {
+  // Valida matricula+senha no portal RH (loginPortal). So apos validar a tela
+  // revela o nome (senha-primeiro). Senha invalida bloqueia; Protheus fora libera
+  // prosseguir com nome manual (o backend revalida no envio).
+  async function validarColaborador() {
+    const mat = matriculaColaborador.trim();
+    const sen = senhaColaborador;
+    if (!mat || !sen) return;
+    if (!mat.startsWith('E')) {
       setErroMatricula('Matricula deve iniciar com a letra E');
-      setNomeColaborador('');
       return;
     }
     setErroMatricula('');
-    setBuscandoColaborador(true);
+    setValidando(true);
+    setCredOk(false);
+    setProtheusForaFallback(false);
     setNomeColaborador('');
     setNomeEditavel(false);
+    setErroValidacao('');
     setMensagemFallback('');
     try {
-      const { data } = await (await import('../../services/api')).gestaoApi.get(`/protheus/colaborador/${matriculaColaborador.trim()}`);
-      if (data.encontrado && data.nome) {
-        setNomeColaborador(data.nome);
+      const r = await protheusService.validarColaborador(mat, sen);
+      if (r.valida) {
+        setCredOk(true);
+        setNomeColaborador(r.nome || '');
+        if (!r.nome) {
+          // Senha conferiu mas o nome nao veio (sem acesso ao infoFuncionario) — digita.
+          setNomeEditavel(true);
+          setMensagemFallback('Identidade confirmada, mas o nome nao veio do Protheus. Digite o nome.');
+        }
+      } else if (r.motivo === 'CREDENCIAIS_INVALIDAS') {
+        setErroValidacao('Matricula ou senha invalida.');
       } else {
-        // Matrícula consultada mas Protheus não retornou nome — pode ser matrícula inválida
+        // INDISPONIVEL — Protheus fora: nao trava o atendimento.
+        setProtheusForaFallback(true);
         setNomeEditavel(true);
-        setMensagemFallback('Matricula nao localizada no Protheus. Digite o nome manualmente.');
+        setMensagemFallback('Protheus indisponivel no momento — nao foi possivel validar. Voce pode prosseguir; o T.I. confirmara a identidade.');
       }
-    } catch {
-      // Erro de rede / timeout — Protheus pode estar offline
-      setNomeEditavel(true);
-      setMensagemFallback('Protheus indisponivel no momento. Digite o nome manualmente.');
+    } finally {
+      setValidando(false);
     }
-    setBuscandoColaborador(false);
   }
 
 
@@ -244,6 +278,14 @@ export function ChamadoCreatePage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    // PADRAO: exige validar matricula+senha antes de enviar (ou fallback de
+    // Protheus fora). Reforco de UX — o backend revalida de qualquer forma.
+    if (isUsuarioPadrao && !padraoLiberado) {
+      setError('Valide sua matricula e senha antes de abrir o chamado.');
+      return;
+    }
+
     setSaving(true);
     setError('');
 
@@ -266,6 +308,7 @@ export function ChamadoCreatePage() {
         ativoId: ativoId || undefined,
         matriculaColaborador: isUsuarioPadrao && matriculaColaborador ? matriculaColaborador.trim() : undefined,
         nomeColaborador: isUsuarioPadrao && nomeColaborador ? nomeColaborador.trim() : undefined,
+        senhaColaborador: isUsuarioPadrao && matriculaColaborador && senhaColaborador ? senhaColaborador : undefined,
         copiasUsuariosIds: copiasIds.length > 0 ? copiasIds : undefined,
       });
 
@@ -343,40 +386,79 @@ export function ChamadoCreatePage() {
         <form onSubmit={handleSubmit} className="space-y-5">
           {isUsuarioPadrao && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
-              <p className="text-sm font-medium text-amber-800">Identificacao do Colaborador</p>
+              <div>
+                <p className="text-sm font-medium text-amber-800">Identificacao do Colaborador</p>
+                <p className="text-xs text-amber-700/80 mt-0.5">
+                  Informe sua matricula e a senha do portal RH para abrir o chamado em seu nome.
+                </p>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Matricula *</label>
-                  <div className="flex gap-2">
-                    <input
-                      value={matriculaColaborador}
-                      onChange={(e) => {
-                        const val = e.target.value.toUpperCase();
-                        setMatriculaColaborador(val);
-                        if (val && !val.startsWith('E')) {
-                          setErroMatricula('Matricula deve iniciar com a letra E');
-                        } else {
-                          setErroMatricula('');
-                        }
-                      }}
-                      onBlur={buscarColaborador}
-                      placeholder="Ex: E05111"
-                      className={`flex-1 border rounded-lg px-3 py-2 text-sm ${
-                        erroMatricula
-                          ? 'border-red-400 bg-red-50'
-                          : buscandoColaborador
-                            ? 'border-amber-400 bg-amber-50'
-                            : 'border-slate-300'
-                      }`}
-                      required
-                      maxLength={10}
-                    />
-                    {buscandoColaborador && <span className="text-xs text-slate-400 self-center">Buscando...</span>}
-                  </div>
+                  <input
+                    value={matriculaColaborador}
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase();
+                      setMatriculaColaborador(val);
+                      resetValidacao();
+                      if (val && !val.startsWith('E')) {
+                        setErroMatricula('Matricula deve iniciar com a letra E');
+                      } else {
+                        setErroMatricula('');
+                      }
+                    }}
+                    placeholder="Ex: E05111"
+                    autoComplete="off"
+                    className={`w-full border rounded-lg px-3 py-2 text-sm ${
+                      erroMatricula
+                        ? 'border-red-400 bg-red-50'
+                        : credOk
+                          ? 'border-green-400 bg-green-50'
+                          : 'border-slate-300'
+                    }`}
+                    required
+                    maxLength={10}
+                  />
                   {erroMatricula && <p className="text-xs text-red-600 mt-1">{erroMatricula}</p>}
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Nome do Colaborador {nomeEditavel && '*'}</label>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Senha *</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={senhaColaborador}
+                      onChange={(e) => { setSenhaColaborador(e.target.value); resetValidacao(); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); validarColaborador(); } }}
+                      placeholder="Senha do portal RH"
+                      autoComplete="off"
+                      className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                      required
+                      maxLength={60}
+                    />
+                    <button
+                      type="button"
+                      onClick={validarColaborador}
+                      disabled={validando || credOk || !matriculaColaborador.trim() || !senhaColaborador || !!erroMatricula}
+                      className="shrink-0 px-3 py-2 rounded-lg text-sm font-medium border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {validando ? 'Validando...' : credOk ? 'Validado' : 'Validar'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {erroValidacao && <p className="text-xs text-red-600 font-medium">{erroValidacao}</p>}
+              {credOk && (
+                <p className="text-xs text-green-700 flex items-center gap-1">
+                  <CheckCircle className="w-3.5 h-3.5" /> Identidade confirmada.
+                </p>
+              )}
+
+              {(credOk || protheusForaFallback) && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Nome do Colaborador {nomeEditavel && '*'}
+                  </label>
                   <input
                     ref={nomeColaboradorRef}
                     value={nomeColaborador}
@@ -384,14 +466,14 @@ export function ChamadoCreatePage() {
                     readOnly={!nomeEditavel}
                     required={nomeEditavel}
                     maxLength={100}
-                    placeholder={nomeEditavel ? 'Digite o nome' : 'Preenchido automaticamente'}
+                    placeholder={nomeEditavel ? 'Digite o nome' : 'Confirmado pelo portal RH'}
                     className={`w-full border border-slate-300 rounded-lg px-3 py-2 text-sm ${!nomeEditavel ? 'bg-slate-50 text-slate-700' : ''}`}
                   />
-                  {mensagemFallback && nomeEditavel && (
+                  {mensagemFallback && (
                     <p className="text-xs text-amber-700 mt-1 italic">{mensagemFallback}</p>
                   )}
                 </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -769,13 +851,14 @@ export function ChamadoCreatePage() {
           <div className="pt-2">
             <button
               type="submit"
-              disabled={saving || buscandoColaborador}
+              disabled={saving || validando || !padraoLiberado}
+              title={!padraoLiberado ? 'Valide sua matricula e senha primeiro' : undefined}
               className="bg-capul-600 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {saving
                 ? 'Criando...'
-                : buscandoColaborador
-                  ? 'Aguardando matricula...'
+                : validando
+                  ? 'Validando...'
                   : 'Abrir Chamado'}
             </button>
           </div>

@@ -48,6 +48,8 @@ interface CreateChamadoPayload {
   ativoId?: string;
   matriculaColaborador?: string;
   nomeColaborador?: string;
+  /** Senha do portal RH — revalidada no backend (loginPortal). Transiente. */
+  senhaColaborador?: string;
   /** IDs de usuarios a colocar em copia. Backend rejeita membros de Equipe. */
   copiasUsuariosIds?: string[];
 }

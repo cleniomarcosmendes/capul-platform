@@ -13,6 +13,16 @@ export interface FuncionarioProtheus {
   cc: string | null;
 }
 
+export interface ValidacaoColaborador {
+  valida: boolean;
+  /** Só quando inválida: por quê. INDISPONIVEL = Protheus fora / não conferiu. */
+  motivo?: 'CREDENCIAIS_INVALIDAS' | 'INDISPONIVEL';
+  encontrado: boolean;
+  matricula?: string;
+  nome: string | null;
+  cc?: string | null;
+}
+
 export const protheusService = {
   /**
    * Busca o funcionário (nome + centro de custo) por matrícula no Protheus
@@ -49,6 +59,24 @@ export const protheusService = {
       return data?.funcionarios ?? [];
     } catch {
       return [];
+    }
+  },
+
+  /**
+   * Valida matrícula+senha no portal RH (loginPortal). Quando válida, já volta
+   * com o nome do colaborador — a tela só revela o nome após a senha conferir.
+   * Nunca lança: erro de rede no nosso backend vira `motivo:'INDISPONIVEL'`.
+   */
+  async validarColaborador(matricula: string, senha: string): Promise<ValidacaoColaborador> {
+    const m = (matricula || '').trim();
+    try {
+      const { data } = await gestaoApi.post<ValidacaoColaborador>(
+        `/protheus/colaborador/validar`,
+        { matricula: m, senha },
+      );
+      return data;
+    } catch {
+      return { valida: false, motivo: 'INDISPONIVEL', encontrado: false, nome: null };
     }
   },
 };
