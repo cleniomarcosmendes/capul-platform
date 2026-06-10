@@ -165,9 +165,9 @@ export class ProtheusService {
    * POST). Usado na abertura de Chamado por usuário de perfil PADRAO: prova que
    * quem está abrindo é mesmo o dono da matrícula (a conta logada é genérica).
    *
-   * O portal autentica pela CHAPA numérica (ex.: 002873), não pela matrícula
-   * E-prefixada que o usuário digita (ex.: E05111) — normalizamos pra dígitos +
-   * zero-pad 6 (o 'E' ocupa o lugar do zero à esquerda: E05111 → 005111).
+   * O portal autentica pela matrícula E-prefixada (ex.: E01047) — mesmo formato
+   * do infoPortal. O usuário digita só números (definição do projeto) e o
+   * backend monta a chapa 'E' + 5 dígitos (ex.: 001047 → E01047).
    *
    * Resposta: { autenticacao: "Credenciais válidas!" | "Credenciais inválidas!" }.
    * Distingue INDISPONIVEL (Protheus fora / endpoint não cadastrado / resposta
@@ -184,7 +184,11 @@ export class ProtheusService {
     const ep = await this.resolveEndpoint('loginPortal');
     if (!ep) return { valida: false, motivo: 'INDISPONIVEL' };
 
-    const chapa = matricula.replace(/\D/g, '').padStart(6, '0');
+    // O portal RH autentica pela matrícula E-prefixada (ex.: E01047) — o mesmo
+    // formato que o infoPortal retorna. O usuário digita só números (definição
+    // do projeto), então montamos a chapa: 'E' + 5 dígitos com zero-pad.
+    // Ex.: 1047 / 01047 / 001047 → E01047. Validado E2E contra o portal PROD.
+    const chapa = 'E' + matricula.replace(/\D/g, '').slice(-5).padStart(5, '0');
     const url = `${ep.baseUrl}?MATRICULA=${encodeURIComponent(chapa)}&SENHA=${encodeURIComponent(senha)}`;
     // Label redigido: a query string acima carrega a SENHA — não pode ir pro log.
     const logLabel = `loginPortal MATRICULA=${chapa} (senha omitida)`;
