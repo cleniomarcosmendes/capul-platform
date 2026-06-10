@@ -12,6 +12,7 @@ import { AddAtivoSoftwareDto } from './dto/add-ativo-software.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
+import { ROLES_TI } from '../common/constants/roles.constant.js';
 import { GestaoTiRole } from '../common/decorators/gestao-ti-role.decorator.js';
 import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
 import { RequiresFuncionalidade } from '../common/decorators/requires-funcionalidade.decorator.js';
@@ -48,24 +49,26 @@ export class AtivoController {
     const ativo = await this.service.findOne(id);
     // S15.7 (27/05) — gate STAFF do depto (bypass OVERSIGHT). Sem isso o
     // detalhe vazava cross-depto via URL direta.
-    assertStaffEmDepto(user, ativo.departamentoId);
+    // 05/06 — alocação livre: gate pelo depto de LANÇAMENTO (dono), não o de
+    // alocação (que aqui é metadado livre).
+    assertStaffEmDepto(user, ativo.departamentoLancamentoId);
     return ativo;
   }
 
   @Post()
-  @Roles('ADMIN', 'GESTOR')
+  @Roles(...ROLES_TI)
   create(@Body() dto: CreateAtivoDto, @CurrentUser() user: JwtPayload) {
     return this.service.create(dto, user);
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles(...ROLES_TI)
   update(@Param('id') id: string, @Body() dto: UpdateAtivoDto, @CurrentUser() user: JwtPayload) {
     return this.service.update(id, dto, user);
   }
 
   @Patch(':id/status')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles(...ROLES_TI)
   updateStatus(
     @Param('id') id: string,
     @Body() dto: UpdateStatusAtivoDto,
@@ -75,7 +78,7 @@ export class AtivoController {
   }
 
   @Delete(':id')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles(...ROLES_TI)
   delete(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.service.delete(id, user);
   }
@@ -86,13 +89,13 @@ export class AtivoController {
   }
 
   @Post(':id/softwares')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles(...ROLES_TI)
   addSoftware(@Param('id') id: string, @Body() dto: AddAtivoSoftwareDto) {
     return this.service.addSoftware(id, dto);
   }
 
   @Delete(':id/softwares/:softwareId')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles(...ROLES_TI)
   removeSoftware(@Param('id') id: string, @Param('softwareId') softwareId: string) {
     return this.service.removeSoftware(id, softwareId);
   }

@@ -88,8 +88,8 @@ export const NFE_CONSULTA_PROTOCOLO: Partial<Record<string, Record<AmbienteSefaz
     HOMOLOGACAO: 'https://hnfe.fazenda.mg.gov.br/nfe2/services/NFeConsultaProtocolo4',
   },
   MS: {
-    PRODUCAO: 'https://nfe.fazenda.ms.gov.br/ws/NFeConsultaProtocolo4',
-    HOMOLOGACAO: 'https://hom.nfe.fazenda.ms.gov.br/ws/NFeConsultaProtocolo4',
+    PRODUCAO: 'https://nfe.sefaz.ms.gov.br/ws/NFeConsultaProtocolo4',
+    HOMOLOGACAO: 'https://hom.nfe.sefaz.ms.gov.br/ws/NFeConsultaProtocolo4',
   },
   MT: {
     PRODUCAO: 'https://nfe.sefaz.mt.gov.br/nfews/v2/services/NfeConsulta4',
@@ -178,8 +178,8 @@ export const CCC_CAD_CONSULTA_CADASTRO: Partial<
     HOMOLOGACAO: 'https://hnfe.fazenda.mg.gov.br/nfe2/services/CadConsultaCadastro4',
   },
   MS: {
-    PRODUCAO: 'https://nfe.fazenda.ms.gov.br/ws/CadConsultaCadastro4',
-    HOMOLOGACAO: 'https://hom.nfe.fazenda.ms.gov.br/ws/CadConsultaCadastro4',
+    PRODUCAO: 'https://nfe.sefaz.ms.gov.br/ws/CadConsultaCadastro4',
+    HOMOLOGACAO: 'https://hom.nfe.sefaz.ms.gov.br/ws/CadConsultaCadastro4',
   },
   MT: {
     PRODUCAO: 'https://nfe.sefaz.mt.gov.br/nfews/v2/services/CadConsultaCadastro4',

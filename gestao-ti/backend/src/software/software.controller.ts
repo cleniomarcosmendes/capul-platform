@@ -52,7 +52,8 @@ export class SoftwareController {
   async findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     const software = await this.service.findOne(id);
     // S15.7 (27/05) — gate STAFF do depto (bypass OVERSIGHT).
-    assertStaffEmDepto(user, software.departamentoId);
+    // 05/06 — alocação livre: gate pelo depto de LANÇAMENTO (dono).
+    assertStaffEmDepto(user, software.departamentoLancamentoId);
     return software;
   }
 

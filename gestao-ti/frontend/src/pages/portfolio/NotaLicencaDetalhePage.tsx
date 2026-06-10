@@ -3,10 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/Toast';
-import { ArrowLeft, Trash2, Users, UserPlus, UserMinus, KeyRound } from 'lucide-react';
+import { ArrowLeft, Trash2, Users, UserPlus, UserMinus, KeyRound, Search } from 'lucide-react';
 import { licencaCompraService } from '../../services/licencaCompra.service';
 import { licencaService } from '../../services/licenca.service';
-import { protheusService } from '../../services/protheus.service';
+import { protheusService, type FuncionarioProtheus } from '../../services/protheus.service';
 import type { LicencaCompra, LicencaFuncionario, SoftwareLicenca } from '../../types';
 
 const modeloLabel: Record<string, string> = {
@@ -32,23 +32,29 @@ export function NotaLicencaDetalhePage() {
   const [mat, setMat] = useState('');
   const [nomeFunc, setNomeFunc] = useState('');
   const [savingFunc, setSavingFunc] = useState(false);
-  const [buscandoNome, setBuscandoNome] = useState(false);
-  // null = ainda não buscou; true = nome veio do Protheus; false = não achou (manual)
-  const [nomeAuto, setNomeAuto] = useState<boolean | null>(null);
+  // Busca de funcionário por NOME (portal RH) — única forma de alocação.
+  const [buscaNome, setBuscaNome] = useState('');
+  const [resultados, setResultados] = useState<FuncionarioProtheus[]>([]);
+  const [buscandoLista, setBuscandoLista] = useState(false);
 
-  // Autofill do nome pela matrícula (Protheus / portal RH). Se não encontrar,
-  // mantém edição manual. Não bloqueia o fluxo se o Protheus estiver fora.
-  async function buscarNome() {
-    const m = mat.trim();
-    if (!m) { setNomeAuto(null); return; }
-    setBuscandoNome(true);
-    try {
-      const r = await protheusService.buscarColaborador(m);
-      if (r.encontrado && r.nome) { setNomeFunc(r.nome); setNomeAuto(true); }
-      else setNomeAuto(false);
-    } finally {
-      setBuscandoNome(false);
-    }
+  // Debounce (350ms) + mín. 3 chars — não martela o Protheus a cada tecla.
+  useEffect(() => {
+    const q = buscaNome.trim();
+    if (q.length < 3) { setResultados([]); setBuscandoLista(false); return; }
+    setBuscandoLista(true);
+    const t = setTimeout(() => {
+      protheusService.buscarPorNome(q)
+        .then(setResultados)
+        .finally(() => setBuscandoLista(false));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [buscaNome]);
+
+  function selecionarFuncionario(f: FuncionarioProtheus) {
+    setMat(f.matricula);
+    setNomeFunc(f.nome);
+    setBuscaNome('');
+    setResultados([]);
   }
 
   const carregar = useCallback(async () => {
@@ -61,7 +67,7 @@ export function NotaLicencaDetalhePage() {
 
   async function toggleFunc(licId: string) {
     if (expandLic === licId) { setExpandLic(null); return; }
-    setExpandLic(licId); setMat(''); setNomeFunc(''); setNomeAuto(null);
+    setExpandLic(licId); setMat(''); setNomeFunc(''); setBuscaNome(''); setResultados([]);
     try { setFuncs(await licencaService.listarFuncionarios(licId)); } catch { setFuncs([]); }
   }
   async function atribuir(licId: string) {
@@ -71,7 +77,7 @@ export function NotaLicencaDetalhePage() {
     try {
       await licencaService.atribuirFuncionario(licId, m, nm);
       setFuncs(await licencaService.listarFuncionarios(licId));
-      setMat(''); setNomeFunc(''); setNomeAuto(null);
+      setMat(''); setNomeFunc(''); setBuscaNome(''); setResultados([]);
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast('error', msg || 'Erro ao atribuir funcionário');
@@ -159,18 +165,35 @@ export function NotaLicencaDetalhePage() {
                       <div className="border border-slate-200 rounded-lg bg-white p-4">
                         {isAdmin && l.status === 'ATIVA' && (
                           <>
-                            <div className="flex flex-wrap gap-2 mb-1">
-                              <input value={mat} onChange={(e) => { setMat(e.target.value); setNomeAuto(null); setNomeFunc(''); }} onBlur={buscarNome} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscarNome(); } }} placeholder="Matrícula" className="w-32 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" />
-                              <input value={nomeFunc} readOnly placeholder={buscandoNome ? 'Buscando nome…' : 'Nome (do Protheus)'} title="Nome vem do Protheus pela matrícula — não editável" className="flex-1 min-w-[160px] border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-slate-50 text-slate-700 cursor-default focus:outline-none" />
-                              <button onClick={() => atribuir(l.id)} disabled={!mat.trim() || !nomeFunc.trim() || savingFunc || buscandoNome || (l.quantidade != null && funcs.length >= l.quantidade)} className="flex items-center gap-1 bg-capul-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
+                            {/* Busca principal: por NOME (autocomplete, portal RH) */}
+                            <div className="relative mb-2 max-w-md">
+                              <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-[9px]" />
+                              <input value={buscaNome} onChange={(e) => setBuscaNome(e.target.value)} placeholder="Buscar funcionário por nome (mín. 3 letras)…" className="w-full border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" />
+                              {buscaNome.trim().length >= 3 && (
+                                <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+                                  {buscandoLista ? (
+                                    <div className="px-3 py-2 text-sm text-slate-400">Buscando no Protheus…</div>
+                                  ) : resultados.length === 0 ? (
+                                    <div className="px-3 py-2 text-sm text-slate-400">Nenhum funcionário encontrado (ou sem acesso ao portal RH).</div>
+                                  ) : resultados.map((f) => (
+                                    <button key={f.matricula} type="button" onClick={() => selecionarFuncionario(f)} className="w-full text-left px-3 py-2 hover:bg-slate-50 border-b border-slate-100 last:border-0">
+                                      <span className="text-sm font-medium text-slate-800">{f.nome}</span>
+                                      <span className="text-xs text-slate-400 ml-2">mat. {f.matricula}{f.cc ? ` · cc ${f.cc}` : ''}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                              <input value={nomeFunc} readOnly placeholder="Selecione um funcionário na busca acima" className="flex-1 min-w-[200px] border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-slate-50 text-slate-700 cursor-default focus:outline-none" />
+                              <button onClick={() => atribuir(l.id)} disabled={!mat.trim() || !nomeFunc.trim() || savingFunc || (l.quantidade != null && funcs.length >= l.quantidade)} className="flex items-center gap-1 bg-capul-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
                                 <UserPlus className="w-3.5 h-3.5" />{savingFunc ? 'Atribuindo...' : 'Atribuir'}
                               </button>
                             </div>
                             <p className="text-xs mb-3">
-                              {buscandoNome ? <span className="text-slate-400">Buscando funcionário no Protheus…</span>
-                                : nomeAuto === true ? <span className="text-green-600">✓ Funcionário identificado no Protheus.</span>
-                                : nomeAuto === false ? <span className="text-amber-600">Matrícula não encontrada no Protheus — não é possível atribuir.</span>
-                                : <span className="text-slate-400">Informe a matrícula — o nome é buscado no Protheus (não editável).</span>}
+                              {mat.trim() && nomeFunc.trim()
+                                ? <span className="text-green-600">✓ {nomeFunc} (mat. {mat}) — clique em Atribuir.</span>
+                                : <span className="text-slate-400">Busque o funcionário pelo nome e selecione na lista.</span>}
                             </p>
                           </>
                         )}

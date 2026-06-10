@@ -30,6 +30,14 @@ interface Props {
   onChange: (departamentoId: string) => void;
   /** Funcionalidade Workspace que filtra os deptos elegíveis. */
   funcionalidade?: string;
+  /**
+   * Cadastros de ALOCAÇÃO LIVRE (Software/Licença/Ativo) — 05/06. Quando true,
+   * o dropdown lista TODOS os departamentos da empresa para qualquer membro do
+   * workspace (não só os do user), pois o depto aqui é "onde a coisa é usada"
+   * (qualquer depto), não uma fronteira de acesso. Robusto a token antigo —
+   * busca a lista do backend em vez de depender do JWT.
+   */
+  escopoLivre?: boolean;
   /** Quando true, desabilita o select (edição não permitida). */
   disabled?: boolean;
   /** Label visível acima do campo. Default: "Departamento *". */
@@ -44,6 +52,7 @@ export function DepartamentoField({
   value,
   onChange,
   funcionalidade,
+  escopoLivre = false,
   disabled = false,
   label = 'Departamento *',
   help,
@@ -57,6 +66,10 @@ export function DepartamentoField({
     [usuario],
   );
 
+  // Lista todos os deptos da empresa quando OVERSIGHT (auditor) OU quando o
+  // campo é de alocação livre (Software/Licença/Ativo).
+  const usaCatalogoCompleto = isOversight || escopoLivre;
+
   // Deptos do user no módulo Workspace, filtrados pela funcionalidade.
   const deptosDoUser = useMemo(() => {
     if (!usuario) return [];
@@ -66,19 +79,19 @@ export function DepartamentoField({
     return deptos.filter((d) => d.funcionalidades?.includes(funcionalidade));
   }, [usuario, funcionalidade]);
 
-  // OVERSIGHT busca catálogo completo da plataforma (1 vez por mount).
+  // Busca catálogo completo da plataforma (1 vez por mount) quando necessário.
   useEffect(() => {
-    if (!isOversight) return;
+    if (!usaCatalogoCompleto) return;
     setLoadingTodos(true);
     coreService
       .listarDepartamentos(funcionalidade ? { funcionalidade } : undefined)
       .then(setTodosDeptos)
       .catch(() => setTodosDeptos([]))
       .finally(() => setLoadingTodos(false));
-  }, [isOversight, funcionalidade]);
+  }, [usaCatalogoCompleto, funcionalidade]);
 
   // ─── Lista efetiva pra renderizar dropdown ─────────────────────
-  const opcoes = isOversight ? todosDeptos : deptosDoUser;
+  const opcoes = usaCatalogoCompleto ? todosDeptos : deptosDoUser;
 
   // ─── Default = depto do cadastro do user (se estiver na lista) ─
   // Pre-seleciona quando: value vazio + opcoes carregadas + cadastro elegível.
@@ -86,7 +99,7 @@ export function DepartamentoField({
   useEffect(() => {
     if (value) return;
     if (opcoes.length === 0) return;
-    if (isOversight && loadingTodos) return;
+    if (usaCatalogoCompleto && loadingTodos) return;
     const cadastroId = usuario?.departamento?.id;
     const cadastroNaLista = cadastroId && opcoes.some((d) => d.id === cadastroId);
     onChange(cadastroNaLista ? cadastroId! : opcoes[0].id);
@@ -94,8 +107,8 @@ export function DepartamentoField({
 
   // ─── Render ─────────────────────────────────────────────────────
 
-  // 0 deptos elegíveis (sem OVERSIGHT) — erro.
-  if (!isOversight && deptosDoUser.length === 0) {
+  // 0 deptos elegíveis (sem catálogo completo) — erro.
+  if (!usaCatalogoCompleto && deptosDoUser.length === 0) {
     return (
       <div>
         <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
@@ -113,7 +126,7 @@ export function DepartamentoField({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        disabled={disabled || (isOversight && loadingTodos)}
+        disabled={disabled || (usaCatalogoCompleto && loadingTodos)}
         required
         className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-slate-50 disabled:text-slate-500"
       >
