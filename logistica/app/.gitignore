@@ -1,0 +1,18 @@
+# Expo / RN
+node_modules/
+.expo/
+dist/
+web-build/
+*.log
+
+# Native
+android/
+ios/
+
+# Env / secrets
+.env
+.env.local
+
+# EAS
+*.keystore
+google-services.json

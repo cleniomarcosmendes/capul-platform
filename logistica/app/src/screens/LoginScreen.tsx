@@ -1,0 +1,106 @@
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useAuth } from '../auth/AuthContext';
+
+const CAPUL = '#1e7d3a';
+
+export function LoginScreen() {
+  const { login } = useAuth();
+  const [usuario, setUsuario] = useState('');
+  const [senha, setSenha] = useState('');
+  const [erro, setErro] = useState('');
+  const [entrando, setEntrando] = useState(false);
+
+  async function entrar() {
+    if (!usuario.trim() || !senha) return;
+    setErro('');
+    setEntrando(true);
+    try {
+      await login(usuario, senha);
+    } catch (e: unknown) {
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      setErro(status === 401 ? 'Usuário ou senha inválidos.' : 'Não foi possível entrar. Verifique a conexão.');
+    } finally {
+      setEntrando(false);
+    }
+  }
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <View style={styles.box}>
+        <Text style={styles.titulo}>CAPUL Entregas</Text>
+        <Text style={styles.sub}>Acesso do entregador</Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Usuário"
+          autoCapitalize="none"
+          autoCorrect={false}
+          value={usuario}
+          onChangeText={setUsuario}
+          editable={!entrando}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Senha"
+          secureTextEntry
+          value={senha}
+          onChangeText={setSenha}
+          editable={!entrando}
+          onSubmitEditing={entrar}
+        />
+
+        {erro ? <Text style={styles.erro}>{erro}</Text> : null}
+
+        <TouchableOpacity
+          style={[styles.botao, (entrando || !usuario.trim() || !senha) && styles.botaoOff]}
+          onPress={entrar}
+          disabled={entrando || !usuario.trim() || !senha}
+        >
+          {entrando ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.botaoTxt}>Entrar</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: CAPUL, justifyContent: 'center', padding: 24 },
+  box: { backgroundColor: '#fff', borderRadius: 16, padding: 24, gap: 12 },
+  titulo: { fontSize: 24, fontWeight: '700', color: CAPUL, textAlign: 'center' },
+  sub: { fontSize: 14, color: '#555', textAlign: 'center', marginBottom: 8 },
+  input: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+  },
+  erro: { color: '#dc2626', fontSize: 13 },
+  botao: {
+    backgroundColor: CAPUL,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  botaoOff: { opacity: 0.5 },
+  botaoTxt: { color: '#fff', fontSize: 16, fontWeight: '600' },
+});
