@@ -27,12 +27,15 @@ Role necessária: **ENTREGADOR** (módulo LOGISTICA). Conta de teste em DEV:
 ## Rodar (DEV)
 1. `cd logistica/app && npm install`
 2. Reconciliar libs nativas do Expo: `npx expo install --fix`
-3. **Apontar a API**: o celular NÃO alcança `localhost`. Use o IP da LAN da
-   máquina que roda o nginx:
-   - `EXPO_PUBLIC_API_URL=https://192.168.x.x npx expo start`
-   - ou edite `app.json` → `expo.extra.apiUrl`.
-   - O certificado é self-signed: em DEV, o jeito limpo é apontar pro **HOM/PROD**
-     (cert válido) ou usar um túnel. (Android não confia em self-signed por padrão.)
+3. **Apontar a API**: o celular NÃO alcança `localhost`. Em DEV use o listener
+   **HTTP :8085** (o Android rejeita o cert self-signed do 443; o 8085 é um
+   server nginx só-DEV com auth+logistica — `nginx/dev/app-http-dev.conf`,
+   montado pelo docker-compose.override.yml local):
+   - `EXPO_PUBLIC_API_URL=http://<IP-da-LAN>:8085 npx expo start`
+   - Em HOM/PROD (cert válido) use HTTPS normal: `EXPO_PUBLIC_API_URL=https://...`
+4. **Windows/WSL**: rode o Metro pelo **PowerShell do Windows** (não pelo WSL —
+   o `/mnt/c` trava o Metro e a rede NAT do WSL esconde a 8081 do celular).
+   `node_modules` instalado pelo Windows (`npm ci`); não rodar npm pelo WSL aqui.
 4. Abrir no **Expo Go** (Android) lendo o QR, ou gerar APK: `npm run build:apk` (EAS).
 
 ## Notas
