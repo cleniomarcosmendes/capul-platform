@@ -6,6 +6,8 @@ import { maskTelefone, maskCep, onlyDigits, UFS } from '../utils/format';
 
 type TipoCliente = 'IDENTIFICADO' | 'RECORRENTE_LOCAL' | 'EVENTUAL';
 
+const TRAVA_CEP_OFF = { logradouro: false, bairro: false, cidade: false, uf: false };
+
 interface Cupom { numeroCupom: string; valor: string }
 interface EntregaItem {
   id: string;
@@ -76,6 +78,10 @@ export function EntregaNovaPage() {
   // a cada entrega pra não enviesar o indicador.
   const [origemVenda, setOrigemVenda] = useState<'' | 'PRESENCIAL' | 'TELE_VENDA' | 'OUTRO'>('');
   const [buscandoCep, setBuscandoCep] = useState(false);
+  // Campos preenchidos pelo CEP ficam TRAVADOS (base oficial > digitação) —
+  // só os que a API realmente trouxe. "Corrigir manualmente" destrava (base
+  // dos Correios às vezes diverge do uso local — escape necessário).
+  const [travaCep, setTravaCep] = useState(TRAVA_CEP_OFF);
   const [cupons, setCupons] = useState<Cupom[]>([{ numeroCupom: '', valor: '' }]);
   // Quando o endereço veio de um cadastro existente, guardamos a referência
   // (snapshot tirado dela no backend). Editar qualquer campo de endereço limpa.
@@ -173,6 +179,13 @@ export function EntregaNovaPage() {
       if (data.bairro) editEndereco(setBairro)(data.bairro);
       if (data.cidade) editEndereco(setCidade)(data.cidade);
       if (data.uf) editEndereco(setUf)(data.uf);
+      // Trava SÓ o que a API trouxe (CEP geral pode vir sem rua/bairro).
+      setTravaCep({
+        logradouro: !!data.logradouro,
+        bairro: !!data.bairro,
+        cidade: !!data.cidade,
+        uf: !!data.uf,
+      });
       // Fluxo do operador: endereço veio do CEP → próximo passo é o número.
       if (data.logradouro) setTimeout(() => numeroRef.current?.focus(), 0);
     } catch {
@@ -260,6 +273,7 @@ export function EntregaNovaPage() {
     setUf((e.uf ?? 'MG').toUpperCase());
     setCep(e.cep ? maskCep(e.cep) : '');
     setReferencia(e.referencia ?? '');
+    setTravaCep(TRAVA_CEP_OFF); // endereço salvo: editável (corrigir cadastro)
     // Telefone do endereço = contato que o entregador liga ao chegar. Quando o
     // endereço escolhido tem o seu, prevalece (ex.: casa de parente ≠ tel. do cliente).
     if (e.telefone) { pularBuscaTelRef.current = true; setTelefone(maskTelefone(e.telefone)); }
@@ -271,6 +285,7 @@ export function EntregaNovaPage() {
     setEnderecoEntregaId('');
     setLogradouro(''); setNumero(''); setComplemento(''); setBairro('');
     setCidade('Unaí'); setUf('MG'); setCep(''); setReferencia('');
+    setTravaCep(TRAVA_CEP_OFF);
   }
 
   // Cliente identificado: matrícula (A/C/E/F + dígitos). Monta o seletor
@@ -319,6 +334,7 @@ export function EntregaNovaPage() {
     setOrigemVenda(''); // escolha consciente a cada entrega (indicador)
     setEnderecoEntregaId(''); setClienteLocalId(''); setSugestoes(null); setMostrarSug(false);
     setEnderecosSugeridos([]); setEnderecoSelIdx(-1); setMsgMat(null);
+    setTravaCep(TRAVA_CEP_OFF);
   }
 
   // Bloqueia Enter de submeter o form acidentalmente — só o botão Registrar grava.
@@ -532,6 +548,7 @@ export function EntregaNovaPage() {
               onChange={(e) => {
                 const v = maskCep(e.target.value);
                 editEndereco(setCep)(v);
+                setTravaCep(TRAVA_CEP_OFF); // editou o CEP → destrava até a nova busca
                 if (onlyDigits(v).length === 8) void buscarCep(v);
               }}
               className={inp}
@@ -546,7 +563,9 @@ export function EntregaNovaPage() {
           </div>
           <div className="col-span-4">
             <label className={lbl}>Endereço de Entrega *</label>
-            <input value={logradouro} onChange={(e) => editEndereco(setLogradouro)(e.target.value)} required className={inp} placeholder="Rua / Avenida" />
+            <input value={logradouro} onChange={(e) => editEndereco(setLogradouro)(e.target.value)} required
+              readOnly={travaCep.logradouro}
+              className={`${inp} ${travaCep.logradouro ? 'bg-slate-50 text-slate-600' : ''}`} placeholder="Rua / Avenida" />
           </div>
           <div className="col-span-2">
             <label className={lbl}>Número</label>
@@ -558,19 +577,33 @@ export function EntregaNovaPage() {
           </div>
           <div className="col-span-3">
             <label className={lbl}>Bairro</label>
-            <input value={bairro} onChange={(e) => editEndereco(setBairro)(e.target.value)} className={inp} />
+            <input value={bairro} onChange={(e) => editEndereco(setBairro)(e.target.value)}
+              readOnly={travaCep.bairro}
+              className={`${inp} ${travaCep.bairro ? 'bg-slate-50 text-slate-600' : ''}`} />
           </div>
           <div className="col-span-2">
             <label className={lbl}>Cidade</label>
-            <input value={cidade} onChange={(e) => editEndereco(setCidade)(e.target.value)} className={inp} />
+            <input value={cidade} onChange={(e) => editEndereco(setCidade)(e.target.value)}
+              readOnly={travaCep.cidade}
+              className={`${inp} ${travaCep.cidade ? 'bg-slate-50 text-slate-600' : ''}`} />
           </div>
           <div className="col-span-1">
             <label className={lbl}>UF</label>
-            <select value={uf} onChange={(e) => editEndereco(setUf)(e.target.value)} className={inp}>
+            <select value={uf} onChange={(e) => editEndereco(setUf)(e.target.value)} disabled={travaCep.uf}
+              className={`${inp} ${travaCep.uf ? 'bg-slate-50 text-slate-600' : ''}`}>
               {UFS.map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
         </div>
+
+        {(travaCep.logradouro || travaCep.bairro || travaCep.cidade || travaCep.uf) && (
+          <p className="-mt-2 text-xs text-slate-500">
+            Endereço preenchido pelo CEP (base dos Correios) — complete número/complemento.{' '}
+            <button type="button" onClick={() => setTravaCep(TRAVA_CEP_OFF)} className="font-medium text-sky-700 hover:underline">
+              ✎ Corrigir manualmente
+            </button>
+          </p>
+        )}
 
         <div>
           <label className={lbl}>Ponto de referência</label>
