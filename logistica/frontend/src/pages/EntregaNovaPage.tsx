@@ -98,6 +98,7 @@ export function EntregaNovaPage() {
   const [pendentes, setPendentes] = useState<EntregaItem[]>([]);
   const ultimoCupomRef = useRef<HTMLInputElement>(null);
   const matriculaRef = useRef<HTMLInputElement>(null);
+  const numeroRef = useRef<HTMLInputElement>(null);
   // Quando o telefone é preenchido por autofill, pula a próxima busca/dropdown.
   const pularBuscaTelRef = useRef(false);
 
@@ -160,10 +161,20 @@ export function EntregaNovaPage() {
         encontrado: boolean; logradouro?: string; bairro?: string; cidade?: string; uf?: string;
       }>(`/cadastro/cep/${dig}`);
       if (!data.encontrado) return;
+      // CEP de OUTRA rua = endereço novo: número/complemento do anterior não
+      // valem mais (bug reportado 11/06: número antigo ficava pendurado).
+      const ruaNova = (data.logradouro ?? '').trim().toUpperCase();
+      const trocouRua = !!ruaNova && ruaNova !== logradouro.trim().toUpperCase();
+      if (trocouRua) {
+        editEndereco(setNumero)('');
+        editEndereco(setComplemento)('');
+      }
       if (data.logradouro) editEndereco(setLogradouro)(data.logradouro);
       if (data.bairro) editEndereco(setBairro)(data.bairro);
       if (data.cidade) editEndereco(setCidade)(data.cidade);
       if (data.uf) editEndereco(setUf)(data.uf);
+      // Fluxo do operador: endereço veio do CEP → próximo passo é o número.
+      if (data.logradouro) setTimeout(() => numeroRef.current?.focus(), 0);
     } catch {
       /* indisponível — segue digitação manual */
     } finally {
@@ -539,7 +550,7 @@ export function EntregaNovaPage() {
           </div>
           <div className="col-span-2">
             <label className={lbl}>Número</label>
-            <input value={numero} onChange={(e) => editEndereco(setNumero)(e.target.value)} className={inp} />
+            <input ref={numeroRef} value={numero} onChange={(e) => editEndereco(setNumero)(e.target.value)} className={inp} />
           </div>
           <div className="col-span-4">
             <label className={lbl}>Complemento</label>
