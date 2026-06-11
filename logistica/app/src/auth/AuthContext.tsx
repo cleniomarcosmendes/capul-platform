@@ -17,7 +17,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
 
   const logout = useCallback(async () => {
-    await clearTokens();
+    // Mesmo que o SecureStore falhe, o estado SEMPRE vira unauthenticated —
+    // "Sair" não pode ficar mudo.
+    try {
+      await clearTokens();
+    } catch {
+      /* segue */
+    }
     setAccessToken(null);
     setStatus('unauthenticated');
   }, []);

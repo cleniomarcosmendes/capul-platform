@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -86,10 +87,16 @@ export function MinhasViagensScreen({ navigation }: Props) {
 
   useLayoutEffect(() => {
     navigation.setOptions({
+      // Pressable + hitSlop: TouchableOpacity dentro do header da native-stack
+      // não registra o toque no Android (bug conhecido) — "Sair" ficava mudo.
       headerRight: () => (
-        <TouchableOpacity onPress={() => void logout()}>
+        <Pressable
+          onPress={() => void logout()}
+          hitSlop={14}
+          style={{ paddingHorizontal: 10, paddingVertical: 6 }}
+        >
           <Text style={styles.sair}>Sair</Text>
-        </TouchableOpacity>
+        </Pressable>
       ),
     });
   }, [navigation, logout]);
