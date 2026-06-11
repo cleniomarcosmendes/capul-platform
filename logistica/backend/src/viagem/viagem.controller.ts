@@ -4,17 +4,32 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { assertMesmaFilial, resolverFilialLeitura } from '../common/filial-scope.js';
 import { ViagemService } from './viagem.service.js';
-import { CreateViagemDto, DespacharViagemDto } from './dto.js';
+import { RotaService } from '../rota/rota.service.js';
+import { CreateViagemDto, DespacharViagemDto, SugerirOrdemDto } from './dto.js';
 
 @Controller('viagens')
 @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
 export class ViagemController {
-  constructor(private readonly viagens: ViagemService) {}
+  constructor(
+    private readonly viagens: ViagemService,
+    private readonly rota: RotaService,
+  ) {}
 
   @Post()
   criar(@Body() dto: CreateViagemDto, @CurrentUser() user: JwtPayload) {
     assertMesmaFilial(user, dto.filialId);
     return this.viagens.create(dto, user.sub);
+  }
+
+  /**
+   * Sugere a MELHOR ORDEM das entregas selecionadas (Fase 1c): geocodifica e
+   * ordena por distância a partir da filial (nearest-neighbor + 2-opt).
+   * Sugestão — o operador revisa; sem coordenada vai pro fim da lista.
+   */
+  @Post('sugerir-ordem')
+  sugerirOrdem(@Body() dto: SugerirOrdemDto, @CurrentUser() user: JwtPayload) {
+    assertMesmaFilial(user, dto.filialId);
+    return this.rota.sugerirOrdem(dto.filialId, dto.entregaIds);
   }
 
   @Get()

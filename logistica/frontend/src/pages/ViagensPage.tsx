@@ -35,6 +35,7 @@ export function ViagensPage() {
   const [veiculoId, setVeiculoId] = useState('');
   const [motoristaId, setMotoristaId] = useState('');
   const [selecao, setSelecao] = useState<string[]>([]); // ordem = ordem de clique
+  const [sugerindo, setSugerindo] = useState(false); // "Sugerir ordem" (Fase 1c)
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [detalhe, setDetalhe] = useState<ViagemDet | null>(null); // viagem expandida (ver entregas)
@@ -100,6 +101,30 @@ export function ViagensPage() {
 
   function toggle(id: string) {
     setSelecao((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  }
+
+  // Fase 1c: reordena a SELEÇÃO pela melhor rota (geocodifica + distância a
+  // partir da filial). Sugestão — o operador segue podendo clicar pra reordenar.
+  async function sugerirOrdem() {
+    setMsg(null);
+    if (selecao.length < 2) { setMsg({ tipo: 'erro', texto: 'Selecione ao menos 2 entregas para sugerir a ordem.' }); return; }
+    setSugerindo(true);
+    try {
+      const { data } = await logisticaApi.post<{
+        ordem: string[]; semCoordenada: string[]; geocodificadas: number; distanciaKm: number | null;
+      }>('/viagens/sugerir-ordem', { filialId, entregaIds: selecao });
+      setSelecao(data.ordem);
+      const aviso = data.semCoordenada.length
+        ? ` ${data.semCoordenada.length} sem localização foram para o fim — confira.`
+        : '';
+      setMsg({
+        tipo: 'ok',
+        texto: `Ordem sugerida pela distância (${data.geocodificadas} localizadas${data.distanciaKm != null ? `, ~${data.distanciaKm} km` : ''}).${aviso} Revise e ajuste se precisar.`,
+      });
+    } catch (err) {
+      const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+      setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao sugerir a ordem.' });
+    } finally { setSugerindo(false); }
   }
 
   async function montar() {
@@ -185,6 +210,11 @@ export function ViagensPage() {
             {motoristas.map((u) => <option key={u.id} value={u.id}>{labelCore(u)}</option>)}
           </select>
         </div>
+        <button onClick={sugerirOrdem} disabled={busy || sugerindo || selecao.length < 2}
+          title="Geocodifica as entregas e ordena pela menor distância a partir da filial"
+          className="flex items-center gap-2 rounded-lg border border-sky-600 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50">
+          {sugerindo ? 'Calculando rota…' : '⇅ Sugerir ordem'}
+        </button>
         <button onClick={montar} disabled={busy}
           className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
           <Truck className="h-4 w-4" /> Montar viagem ({selecao.length} {selecao.length === 1 ? 'entrega' : 'entregas'} · {volumesSelecionados} {volumesSelecionados === 1 ? 'volume' : 'volumes'})

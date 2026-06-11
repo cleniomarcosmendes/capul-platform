@@ -297,3 +297,20 @@ model Parada {
   @@map("parada")
   @@schema("logistica")
 }
+
+// Cache de geocodificação (Fase 1c): endereço normalizado → lat/lng.
+// MISS também é gravado (lat/lng null) pra não martelar os provedores com
+// endereço que não resolve; limpar a linha força re-tentativa.
+model GeocodeCache {
+  id       String   @id @default(uuid())
+  chave    String   @unique // hash do endereço normalizado
+  endereco String // texto enviado ao provedor (debug/auditoria)
+  lat      Decimal? @db.Decimal(10, 7)
+  lng      Decimal? @db.Decimal(10, 7)
+  fonte    String? // BRASILAPI_CEP | NOMINATIM
+  precisao String? // CEP | LOGRADOURO
+  criadoEm DateTime @default(now()) @map("criado_em")
+
+  @@map("geocode_cache")
+  @@schema("logistica")
+}

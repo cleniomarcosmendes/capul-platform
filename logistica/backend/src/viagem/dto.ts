@@ -20,3 +20,12 @@ export class DespacharViagemDto {
   @IsOptional() @IsString() @MaxLength(120) localSaida?: string;
   @IsOptional() @IsString() @MaxLength(255) observacoesSaida?: string;
 }
+
+/** Payload da sugestão de ordem de rota (Fase 1c). */
+export class SugerirOrdemDto {
+  @IsString() @MaxLength(40)
+  filialId!: string;
+
+  @IsArray() @IsString({ each: true })
+  entregaIds!: string[];
+}
