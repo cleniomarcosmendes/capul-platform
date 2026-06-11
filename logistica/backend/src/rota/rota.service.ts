@@ -40,7 +40,11 @@ export class RotaService {
   ) {}
 
   async sugerirOrdem(filialId: string, entregaIds: string[]) {
-    if (!entregaIds?.length) throw new BadRequestException('Informe as entregas da rota.');
+    // Mínimo 2: com 0/1 entrega não há ordem a sugerir. Defesa em profundidade —
+    // o frontend já desabilita o botão; aqui barra chamada direta à API.
+    if (!entregaIds || entregaIds.length < 2) {
+      throw new BadRequestException('Selecione ao menos 2 entregas para sugerir a ordem da rota.');
+    }
     if (entregaIds.length > 60) {
       throw new BadRequestException('Máximo de 60 entregas por sugestão de rota.');
     }

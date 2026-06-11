@@ -211,7 +211,9 @@ export function ViagensPage() {
           </select>
         </div>
         <button onClick={sugerirOrdem} disabled={busy || sugerindo || selecao.length < 2}
-          title="Geocodifica as entregas e ordena pela menor distância a partir da filial"
+          title={selecao.length < 2
+            ? 'Selecione ao menos 2 entregas para sugerir a ordem'
+            : 'Geocodifica as entregas e ordena pela menor distância a partir da filial'}
           className="flex items-center gap-2 rounded-lg border border-sky-600 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50">
           {sugerindo ? 'Calculando rota…' : '⇅ Sugerir ordem'}
         </button>
