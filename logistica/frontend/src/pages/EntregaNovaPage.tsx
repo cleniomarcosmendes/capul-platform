@@ -528,6 +528,11 @@ export function EntregaNovaPage() {
               placeholder="00000-000"
               inputMode="numeric"
             />
+            {cep !== '' && onlyDigits(cep).length < 8 && (
+              <p className="mt-0.5 text-[11px] text-amber-600">
+                CEP incompleto ({onlyDigits(cep).length}/8 dígitos) — a busca preenche o endereço ao completar.
+              </p>
+            )}
           </div>
           <div className="col-span-4">
             <label className={lbl}>Endereço de Entrega *</label>
