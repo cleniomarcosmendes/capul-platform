@@ -103,38 +103,48 @@ export class GeocodeService {
   }
 
   private async viaNominatim(e: EnderecoGeo): Promise<(Coordenada & { fonte: string }) | null> {
-    const partes = [
-      [e.logradouro, e.numero].filter(Boolean).join(' '),
-      e.bairro,
-      e.cidade,
-      e.uf,
-    ].filter((p) => (p ?? '').toString().trim());
-    if (partes.length < 2) return null; // texto pobre demais — não adianta
+    // Cadastro de balcão vem com ruído no logradouro ("RUA X, 475 AP 108") —
+    // corta no 1º separador: a RUA é o que importa pro Nominatim.
+    const ruaLimpa = (e.logradouro ?? '').split(/[,;–-]/)[0].trim();
+    const rua = [ruaLimpa, (e.numero ?? '').trim()].filter(Boolean).join(' ');
+    const bairro = (e.bairro ?? '').trim();
+    const base = [e.cidade, e.uf].map((p) => (p ?? '').toString().trim()).filter(Boolean);
+    if (!rua || base.length === 0) return null; // texto pobre demais — não adianta
 
-    const q = encodeURIComponent(partes.join(', ') + ', Brasil');
+    // Tentativa 1 com bairro; bairro divergente do OSM derruba o match → 2ª
+    // tentativa sem ele (rua+cidade costuma bastar).
+    const consultas = [
+      [rua, bairro, ...base].filter(Boolean).join(', ') + ', Brasil',
+      ...(bairro ? [[rua, ...base].join(', ') + ', Brasil'] : []),
+    ];
+
     // Entra na fila serializada (1 req/s) e devolve o resultado desta chamada.
     const run = async (): Promise<(Coordenada & { fonte: string }) | null> => {
-      try {
-        const resp = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${q}`,
-          {
-            headers: { 'User-Agent': 'capul-platform-logistica/1.0 (TI CAPUL)' },
-            signal: AbortSignal.timeout(8000),
-          },
-        );
-        if (!resp.ok) return null;
-        const data = (await resp.json()) as Array<{ lat?: string; lon?: string }>;
-        const lat = Number(data[0]?.lat);
-        const lng = Number(data[0]?.lon);
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-        return { lat, lng, precisao: 'LOGRADOURO', fonte: 'NOMINATIM' };
-      } catch (err) {
-        this.logger.warn(`Nominatim falhou: ${(err as Error).message}`);
-        return null;
-      } finally {
-        // espaçamento da política pública (1 req/s) antes da próxima da fila
-        await new Promise((r) => setTimeout(r, 1100));
+      for (const consulta of consultas) {
+        try {
+          const resp = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(consulta)}`,
+            {
+              headers: { 'User-Agent': 'capul-platform-logistica/1.0 (TI CAPUL)' },
+              signal: AbortSignal.timeout(8000),
+            },
+          );
+          if (resp.ok) {
+            const data = (await resp.json()) as Array<{ lat?: string; lon?: string }>;
+            const lat = Number(data[0]?.lat);
+            const lng = Number(data[0]?.lon);
+            if (Number.isFinite(lat) && Number.isFinite(lng)) {
+              return { lat, lng, precisao: 'LOGRADOURO', fonte: 'NOMINATIM' };
+            }
+          }
+        } catch (err) {
+          this.logger.warn(`Nominatim falhou: ${(err as Error).message}`);
+        } finally {
+          // espaçamento da política pública (1 req/s) entre TODAS as chamadas
+          await new Promise((r) => setTimeout(r, 1100));
+        }
       }
+      return null;
     };
     const resultado = this.nominatimChain.then(run, run);
     this.nominatimChain = resultado;
