@@ -1,6 +1,7 @@
-import React, { useCallback, useLayoutEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -13,6 +14,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { useAuth } from '../auth/AuthContext';
 import { minhasViagens } from '../api/viagens';
+import { contarPendentes, onFilaChange, processarFila } from '../offline/filaBaixas';
 import type { Viagem } from '../types/api';
 
 const CAPUL = '#1e7d3a';
@@ -24,6 +26,8 @@ export function MinhasViagensScreen({ navigation }: Props) {
   const [carregando, setCarregando] = useState(true);
   const [atualizando, setAtualizando] = useState(false);
   const [erro, setErro] = useState('');
+  const [pendentes, setPendentes] = useState(0);
+  const [reenviando, setReenviando] = useState(false);
 
   const carregar = useCallback(async () => {
     setErro('');
@@ -34,7 +38,31 @@ export function MinhasViagensScreen({ navigation }: Props) {
     }
   }, []);
 
-  // Recarrega ao focar a tela (volta do detalhe, etc.).
+  // Tenta esvaziar a fila offline; avisa o que o servidor rejeitou em definitivo.
+  const reenviarFila = useCallback(async () => {
+    if ((await contarPendentes()) === 0) return;
+    setReenviando(true);
+    try {
+      const r = await processarFila();
+      if (r.descartadas.length > 0) {
+        Alert.alert(
+          'Baixas rejeitadas pelo servidor',
+          r.descartadas.map((d) => `#${d.entregaNumero}: ${d.motivo}`).join('\n'),
+        );
+      }
+      if (r.enviadas > 0) await carregar();
+    } finally {
+      setReenviando(false);
+    }
+  }, [carregar]);
+
+  // Contador da fila ao vivo (banner).
+  useEffect(() => {
+    void contarPendentes().then(setPendentes);
+    return onFilaChange(setPendentes);
+  }, []);
+
+  // Recarrega ao focar a tela (volta do detalhe/baixa) e tenta reenviar a fila.
   useFocusEffect(
     useCallback(() => {
       let ativo = true;
@@ -42,11 +70,12 @@ export function MinhasViagensScreen({ navigation }: Props) {
         setCarregando(true);
         await carregar();
         if (ativo) setCarregando(false);
+        void reenviarFila();
       })();
       return () => {
         ativo = false;
       };
-    }, [carregar]),
+    }, [carregar, reenviarFila]),
   );
 
   const onRefresh = useCallback(async () => {
@@ -74,7 +103,17 @@ export function MinhasViagensScreen({ navigation }: Props) {
   }
 
   return (
-    <FlatList
+    <View style={{ flex: 1 }}>
+      {pendentes > 0 && (
+        <TouchableOpacity style={styles.fila} onPress={() => void reenviarFila()} disabled={reenviando}>
+          <Text style={styles.filaTxt}>
+            {reenviando
+              ? 'Reenviando baixas pendentes…'
+              : `${pendentes} baixa${pendentes === 1 ? '' : 's'} aguardando sinal — toque para reenviar`}
+          </Text>
+        </TouchableOpacity>
+      )}
+      <FlatList
       contentContainerStyle={viagens.length === 0 ? styles.vazioWrap : styles.lista}
       data={viagens}
       keyExtractor={(v) => v.id}
@@ -102,7 +141,8 @@ export function MinhasViagensScreen({ navigation }: Props) {
           </TouchableOpacity>
         );
       }}
-    />
+      />
+    </View>
   );
 }
 
@@ -131,5 +171,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   cardInfo: { color: '#475569', fontSize: 14, marginTop: 6 },
+  fila: {
+    backgroundColor: '#f59e0b',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  filaTxt: { color: '#fff', fontWeight: '700', fontSize: 13, textAlign: 'center' },
   sair: { color: '#fff', fontSize: 15, fontWeight: '600' },
 });

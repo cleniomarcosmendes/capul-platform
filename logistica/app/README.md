@@ -1,9 +1,12 @@
 # CAPUL Entregas — App do Entregador (Fase 1b)
 
-App **Android** (Expo / React Native) do entregador. PR **1b.5**: login por
-device-session + lista "minhas viagens" + detalhe com navegação (Waze/Maps) e
-ligação. A captura de prova/baixa (foto/assinatura/GPS + fila offline) é o
-**PR 1b.6** (próximo).
+App **Android** (Expo / React Native) do entregador.
+- **PR 1b.5**: login por device-session + lista "minhas viagens" + detalhe com
+  navegação (Waze/Maps) e ligação.
+- **PR 1b.6**: baixa com prova — foto obrigatória (ENTREGUE), motivo (NÃO
+  ENTREGUE), GPS por evento (best-effort, 6s), **fila offline** (sem sinal a
+  baixa fica no aparelho e reenvia sozinha; `idempotencyKey` fixa = reenvio não
+  duplica) + banner "N baixas aguardando sinal".
 
 ## Stack
 - Expo SDK 52 (managed) + React Native 0.76 + TypeScript
@@ -15,6 +18,8 @@ ligação. A captura de prova/baixa (foto/assinatura/GPS + fila offline) é o
 - `POST /api/v1/auth/refresh` (renova silenciosamente; o interceptor trata 401)
 - `GET /api/v1/logistica/viagens/minhas` (viagens EM_CURSO do motorista)
 - `GET /api/v1/logistica/viagens/:id` (paradas + entregas)
+- `POST /api/v1/logistica/entregas/:id/baixar` (multipart `prova` + resultado/
+  motivo/geo/`idempotencyKey`; idempotente — entrega terminal = no-op)
 
 Role necessária: **ENTREGADOR** (módulo LOGISTICA). Conta de teste em DEV:
 `entregador_teste` / `Entrega123`.

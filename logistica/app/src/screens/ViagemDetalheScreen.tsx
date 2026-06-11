@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { obterViagem } from '../api/viagens';
@@ -16,7 +17,7 @@ import type { Parada, Viagem } from '../types/api';
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'ViagemDetalhe'>;
 
-export function ViagemDetalheScreen({ route }: Props) {
+export function ViagemDetalheScreen({ route, navigation }: Props) {
   const { viagemId } = route.params;
   const [viagem, setViagem] = useState<Viagem | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -32,9 +33,12 @@ export function ViagemDetalheScreen({ route }: Props) {
     }
   }, [viagemId]);
 
-  useEffect(() => {
-    void carregar();
-  }, [carregar]);
+  // Ao focar (inclusive voltando da Baixa) recarrega — status da parada atualiza.
+  useFocusEffect(
+    useCallback(() => {
+      void carregar();
+    }, [carregar]),
+  );
 
   if (carregando) {
     return (
@@ -65,12 +69,29 @@ export function ViagemDetalheScreen({ route }: Props) {
         </Text>
       }
       ListEmptyComponent={<Text style={styles.vazio}>Esta viagem não tem paradas.</Text>}
-      renderItem={({ item }) => <ParadaCard parada={item} />}
+      renderItem={({ item }) => (
+        <ParadaCard
+          parada={item}
+          onBaixar={(e) =>
+            navigation.navigate('Baixa', {
+              entregaId: e.id,
+              entregaNumero: e.numero,
+              destinatario: e.destinatarioNome,
+            })
+          }
+        />
+      )}
     />
   );
 }
 
-function ParadaCard({ parada }: { parada: Parada }) {
+function ParadaCard({
+  parada,
+  onBaixar,
+}: {
+  parada: Parada;
+  onBaixar: (e: NonNullable<Parada['entrega']>) => void;
+}) {
   const e = parada.entrega;
   if (!e) {
     return (
@@ -111,6 +132,12 @@ function ParadaCard({ parada }: { parada: Parada }) {
           </TouchableOpacity>
         ) : null}
       </View>
+
+      {e.status === 'EM_VIAGEM' ? (
+        <TouchableOpacity style={styles.btnBaixa} onPress={() => onBaixar(e)}>
+          <Text style={styles.btnBaixaTxt}>✓ Dar baixa</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -144,4 +171,12 @@ const styles = StyleSheet.create({
   btnMaps: { backgroundColor: '#4285F4' },
   btnTel: { backgroundColor: CAPUL },
   btnTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  btnBaixa: {
+    marginTop: 10,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: '#0f172a',
+  },
+  btnBaixaTxt: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });

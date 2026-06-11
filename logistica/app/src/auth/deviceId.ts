@@ -1,15 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
+import { uuid } from '../lib/uuid';
 
 const DEVICE_ID = 'capul_device_id';
-
-/** UUID v4 sem dependência externa (suficiente p/ identificar o aparelho). */
-function uuid(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
 
 /**
  * deviceId estável por instalação — gerado uma vez e guardado no SecureStore.

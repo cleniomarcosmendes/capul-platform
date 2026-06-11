@@ -6,11 +6,13 @@ import { useAuth } from '../auth/AuthContext';
 import { LoginScreen } from '../screens/LoginScreen';
 import { MinhasViagensScreen } from '../screens/MinhasViagensScreen';
 import { ViagemDetalheScreen } from '../screens/ViagemDetalheScreen';
+import { BaixaScreen } from '../screens/BaixaScreen';
 
 export type RootStackParamList = {
   Login: undefined;
   MinhasViagens: undefined;
   ViagemDetalhe: { viagemId: string; numero: number };
+  Baixa: { entregaId: string; entregaNumero: number; destinatario: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -48,6 +50,11 @@ export function RootNavigator() {
               name="ViagemDetalhe"
               component={ViagemDetalheScreen}
               options={({ route }) => ({ title: `Viagem #${route.params.numero}` })}
+            />
+            <Stack.Screen
+              name="Baixa"
+              component={BaixaScreen}
+              options={{ title: 'Baixa de entrega' }}
             />
           </>
         ) : (
