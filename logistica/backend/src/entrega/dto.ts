@@ -12,7 +12,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { TipoClienteEntrega } from '@prisma/client';
+import { OrigemVenda, TipoClienteEntrega } from '@prisma/client';
 
 export class CupomDto {
   @IsOptional() @IsString() @MaxLength(60)
@@ -63,6 +63,11 @@ export class CreateEntregaDto {
 
   @IsInt() @Min(1) @Max(999)
   quantidadeVolumes!: number;
+
+  // Como a venda foi feita (indicador de canal balcão × remoto). Obrigatório
+  // nas novas entregas — sem default pra não enviesar o indicador.
+  @IsEnum(OrigemVenda)
+  origemVenda!: OrigemVenda;
 
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => CupomDto)
   cupons?: CupomDto[];

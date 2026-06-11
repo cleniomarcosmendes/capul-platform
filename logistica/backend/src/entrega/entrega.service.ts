@@ -58,6 +58,7 @@ export class EntregaService {
           horario: dto.horario?.trim() || null,
           observacoes: dto.observacoes?.trim() || null,
           quantidadeVolumes: dto.quantidadeVolumes,
+          origemVenda: dto.origemVenda,
           status: StatusEntrega.PENDENTE,
           criadoPorId,
           cupons: {

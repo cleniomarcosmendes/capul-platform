@@ -72,6 +72,10 @@ export function EntregaNovaPage() {
   const [referencia, setReferencia] = useState('');
   const [volumes, setVolumes] = useState(1);
   const [observacoes, setObservacoes] = useState('');
+  // Origem da venda (indicador de canal). Sem default — o operador escolhe
+  // a cada entrega pra não enviesar o indicador.
+  const [origemVenda, setOrigemVenda] = useState<'' | 'PRESENCIAL' | 'TELE_VENDA' | 'OUTRO'>('');
+  const [buscandoCep, setBuscandoCep] = useState(false);
   const [cupons, setCupons] = useState<Cupom[]>([{ numeroCupom: '', valor: '' }]);
   // Quando o endereço veio de um cadastro existente, guardamos a referência
   // (snapshot tirado dela no backend). Editar qualquer campo de endereço limpa.
@@ -141,6 +145,31 @@ export function EntregaNovaPage() {
   // têm vínculo (enderecoEntregaId vazio) → editar cria uma cópia na nossa base.
   function editEndereco<T>(setter: (v: T) => void) {
     return (v: T) => { setter(v); };
+  }
+
+  // Autofill por CEP (ViaCEP — API pública, sem chave, CORS liberado).
+  // Preenche logradouro/bairro/cidade/UF e o operador completa número.
+  // CEP "geral" de cidade pequena (ex.: 38610-000) vem sem logradouro/bairro —
+  // só não sobrescrevemos com vazio. Falha de rede é silenciosa (digita à mão).
+  async function buscarCep(valor: string) {
+    const dig = onlyDigits(valor);
+    if (dig.length !== 8) return;
+    setBuscandoCep(true);
+    try {
+      const resp = await fetch(`https://viacep.com.br/ws/${dig}/json/`);
+      const data = (await resp.json()) as {
+        erro?: boolean; logradouro?: string; bairro?: string; localidade?: string; uf?: string;
+      };
+      if (data.erro) return;
+      if (data.logradouro) editEndereco(setLogradouro)(data.logradouro);
+      if (data.bairro) editEndereco(setBairro)(data.bairro);
+      if (data.localidade) editEndereco(setCidade)(data.localidade);
+      if (data.uf) editEndereco(setUf)(data.uf);
+    } catch {
+      /* offline/indisponível — segue digitação manual */
+    } finally {
+      setBuscandoCep(false);
+    }
   }
 
   // Normaliza endereço pra dedupe (APTO/AP + sem pontuação/espaços).
@@ -277,6 +306,7 @@ export function EntregaNovaPage() {
     setLogradouro(''); setNumero(''); setComplemento(''); setBairro('');
     setCidade('Unaí'); setUf('MG'); setCep(''); setReferencia('');
     setVolumes(1); setObservacoes(''); setCupons([{ numeroCupom: '', valor: '' }]);
+    setOrigemVenda(''); // escolha consciente a cada entrega (indicador)
     setEnderecoEntregaId(''); setClienteLocalId(''); setSugestoes(null); setMostrarSug(false);
     setEnderecosSugeridos([]); setEnderecoSelIdx(-1); setMsgMat(null);
   }
@@ -297,6 +327,7 @@ export function EntregaNovaPage() {
     e.preventDefault();
     setMsg(null);
     if (!filialId) { setMsg({ tipo: 'erro', texto: 'Sem filial no perfil — selecione uma filial no Hub.' }); return; }
+    if (!origemVenda) { setMsg({ tipo: 'erro', texto: 'Informe a origem da venda (presencial, tele-venda ou outro).' }); return; }
     setSalvando(true);
     try {
       const { data } = await logisticaApi.post('/entregas', {
@@ -316,6 +347,7 @@ export function EntregaNovaPage() {
         endCep: cep ? onlyDigits(cep) : undefined,
         endReferencia: referencia || undefined,
         quantidadeVolumes: volumes,
+        origemVenda,
         observacoes: observacoes || undefined,
         cupons: cupons
           .filter((c) => c.numeroCupom || c.valor)
@@ -481,6 +513,22 @@ export function EntregaNovaPage() {
           </p>
         )}
         <div className="grid grid-cols-6 gap-3">
+          {/* CEP primeiro: ao completar 8 dígitos o ViaCEP preenche o endereço
+              e o operador só completa o número. */}
+          <div className="col-span-2">
+            <label className={lbl}>CEP {buscandoCep && <span className="text-sky-600">(buscando…)</span>}</label>
+            <input
+              value={cep}
+              onChange={(e) => {
+                const v = maskCep(e.target.value);
+                editEndereco(setCep)(v);
+                if (onlyDigits(v).length === 8) void buscarCep(v);
+              }}
+              className={inp}
+              placeholder="00000-000"
+              inputMode="numeric"
+            />
+          </div>
           <div className="col-span-4">
             <label className={lbl}>Endereço de Entrega *</label>
             <input value={logradouro} onChange={(e) => editEndereco(setLogradouro)(e.target.value)} required className={inp} placeholder="Rua / Avenida" />
@@ -489,7 +537,7 @@ export function EntregaNovaPage() {
             <label className={lbl}>Número</label>
             <input value={numero} onChange={(e) => editEndereco(setNumero)(e.target.value)} className={inp} />
           </div>
-          <div className="col-span-3">
+          <div className="col-span-4">
             <label className={lbl}>Complemento</label>
             <input value={complemento} onChange={(e) => editEndereco(setComplemento)(e.target.value)} className={inp} placeholder="Apto, bloco, casa…" />
           </div>
@@ -497,7 +545,7 @@ export function EntregaNovaPage() {
             <label className={lbl}>Bairro</label>
             <input value={bairro} onChange={(e) => editEndereco(setBairro)(e.target.value)} className={inp} />
           </div>
-          <div className="col-span-3">
+          <div className="col-span-2">
             <label className={lbl}>Cidade</label>
             <input value={cidade} onChange={(e) => editEndereco(setCidade)(e.target.value)} className={inp} />
           </div>
@@ -506,10 +554,6 @@ export function EntregaNovaPage() {
             <select value={uf} onChange={(e) => editEndereco(setUf)(e.target.value)} className={inp}>
               {UFS.map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
-          </div>
-          <div className="col-span-2">
-            <label className={lbl}>CEP</label>
-            <input value={cep} onChange={(e) => editEndereco(setCep)(maskCep(e.target.value))} className={inp} placeholder="00000-000" inputMode="numeric" />
           </div>
         </div>
 
@@ -550,6 +594,26 @@ export function EntregaNovaPage() {
             <div className="text-sm text-slate-600">Total: <strong>R$ {totalCupons.toFixed(2)}</strong></div>
           </div>
           <p className="mt-1 text-[11px] text-slate-400">Enter adiciona outro cupom; o cadastro só é gravado no botão “Salvar entrega”.</p>
+        </div>
+
+        <div>
+          <label className={lbl}>Origem da venda *</label>
+          <div className="mt-1 flex items-center gap-2">
+            {([
+              { v: 'PRESENCIAL', label: 'Presencial' },
+              { v: 'TELE_VENDA', label: 'Tele-venda' },
+              { v: 'OUTRO', label: 'Outro' },
+            ] as const).map((o) => (
+              <button
+                type="button"
+                key={o.v}
+                onClick={() => setOrigemVenda(o.v)}
+                className={`rounded-lg border px-3 py-1.5 text-sm ${origemVenda === o.v ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-300 text-slate-600'}`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex gap-3">

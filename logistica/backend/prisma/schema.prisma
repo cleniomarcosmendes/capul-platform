@@ -27,6 +27,15 @@ enum TipoClienteEntrega {
   @@schema("logistica")
 }
 
+// Como a venda foi feita — indicador de canal (balcão vs remoto).
+// Nullable na Entrega: registros anteriores à feature ficam "desconhecido".
+enum OrigemVenda {
+  PRESENCIAL
+  TELE_VENDA
+  OUTRO
+  @@schema("logistica")
+}
+
 enum StatusEntrega {
   PENDENTE
   EM_VIAGEM
@@ -196,6 +205,7 @@ model Entrega {
   horario           String?
   observacoes       String?
   quantidadeVolumes Int                @default(1) @map("quantidade_volumes")
+  origemVenda       OrigemVenda?       @map("origem_venda")
   status            StatusEntrega      @default(PENDENTE)
   criadoEm          DateTime           @default(now()) @map("criado_em")
   criadoPorId       String             @map("criado_por_id")
