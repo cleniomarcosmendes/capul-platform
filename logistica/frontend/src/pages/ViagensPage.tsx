@@ -253,6 +253,26 @@ export function ViagensPage() {
             </div>
           )}
 
+          {/* Ordem da rota (seleção atual) — espelha o que vira a sequência das
+              paradas; após "Sugerir ordem" mostra a rota calculada na ordem. */}
+          {selecao.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 bg-sky-50/60 px-4 py-2 text-xs text-slate-600">
+              <span className="font-semibold text-sky-700">Rota:</span>
+              {selecao.map((id, i) => {
+                const e = pendentes.find((p) => p.id === id);
+                if (!e) return null;
+                return (
+                  <span key={id} className="flex items-center gap-1">
+                    {i > 0 && <span className="text-slate-400">→</span>}
+                    <span className="rounded bg-white px-1.5 py-0.5 ring-1 ring-slate-200">
+                      <strong>{i + 1}</strong> · #{e.numero} {e.endBairro ? `(${e.endBairro})` : ''}
+                    </span>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
           {loading ? <div className="p-6 text-sm text-slate-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Carregando…</div>
             : pendentes.length === 0 ? <div className="p-6 text-sm text-slate-500">Nenhuma entrega pendente.</div>
             : pendentesFiltrados.length === 0 ? <div className="p-6 text-sm text-slate-500">Nenhuma pendente neste bairro.</div>
