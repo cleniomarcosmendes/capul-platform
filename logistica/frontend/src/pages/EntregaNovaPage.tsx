@@ -147,26 +147,25 @@ export function EntregaNovaPage() {
     return (v: T) => { setter(v); };
   }
 
-  // Autofill por CEP (ViaCEP — API pública, sem chave, CORS liberado).
-  // Preenche logradouro/bairro/cidade/UF e o operador completa número.
-  // CEP "geral" de cidade pequena (ex.: 38610-000) vem sem logradouro/bairro —
-  // só não sobrescrevemos com vazio. Falha de rede é silenciosa (digita à mão).
+  // Autofill por CEP via NOSSO backend (que proxia o ViaCEP) — o CSP da
+  // plataforma é connect-src 'self', então o navegador não chama domínio
+  // externo direto. Preenche logradouro/bairro/cidade/UF; o operador completa
+  // o número. CEP "geral"/não encontrado → segue digitação manual.
   async function buscarCep(valor: string) {
     const dig = onlyDigits(valor);
     if (dig.length !== 8) return;
     setBuscandoCep(true);
     try {
-      const resp = await fetch(`https://viacep.com.br/ws/${dig}/json/`);
-      const data = (await resp.json()) as {
-        erro?: boolean; logradouro?: string; bairro?: string; localidade?: string; uf?: string;
-      };
-      if (data.erro) return;
+      const { data } = await logisticaApi.get<{
+        encontrado: boolean; logradouro?: string; bairro?: string; cidade?: string; uf?: string;
+      }>(`/cadastro/cep/${dig}`);
+      if (!data.encontrado) return;
       if (data.logradouro) editEndereco(setLogradouro)(data.logradouro);
       if (data.bairro) editEndereco(setBairro)(data.bairro);
-      if (data.localidade) editEndereco(setCidade)(data.localidade);
+      if (data.cidade) editEndereco(setCidade)(data.cidade);
       if (data.uf) editEndereco(setUf)(data.uf);
     } catch {
-      /* offline/indisponível — segue digitação manual */
+      /* indisponível — segue digitação manual */
     } finally {
       setBuscandoCep(false);
     }

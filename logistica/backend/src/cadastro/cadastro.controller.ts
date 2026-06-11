@@ -14,6 +14,7 @@ import { filialDoUsuario } from '../common/filial-scope.js';
 import { ClienteLocalService } from './cliente-local.service.js';
 import { EnderecoService } from './endereco.service.js';
 import { BuscaService } from './busca.service.js';
+import { CepService } from './cep.service.js';
 import {
   CreateClienteLocalDto,
   CreateEnderecoDto,
@@ -33,12 +34,19 @@ export class CadastroController {
     private readonly clientes: ClienteLocalService,
     private readonly enderecos: EnderecoService,
     private readonly busca: BuscaService,
+    private readonly cepService: CepService,
   ) {}
 
   // ---------- Busca unificada ----------
   @Get('busca')
   buscaUnificada(@Query('termo') termo: string, @CurrentUser() user: JwtPayload) {
     return this.busca.buscaUnificada(termo ?? '', filialDoUsuario(user));
+  }
+
+  // ---------- CEP (ViaCEP proxiado — CSP da plataforma é connect-src 'self') ----------
+  @Get('cep/:cep')
+  buscarCep(@Param('cep') cep: string) {
+    return this.cepService.buscar(cep);
   }
 
   // ---------- Clientes locais ----------
