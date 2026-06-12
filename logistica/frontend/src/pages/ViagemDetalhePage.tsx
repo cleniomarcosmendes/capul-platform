@@ -180,7 +180,7 @@ export function ViagemDetalhePage() {
   const pendentesFora = pendentesAdd.filter((e) => !idsNaViagem.has(e.id));
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
+    <div className="space-y-4">
       <Link to="/viagens" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
         <ArrowLeft className="h-4 w-4" /> Voltar para Viagens
       </Link>
