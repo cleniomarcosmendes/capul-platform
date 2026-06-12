@@ -81,9 +81,9 @@ export function EntregaNovaPage() {
   const [referencia, setReferencia] = useState('');
   const [volumes, setVolumes] = useState(1);
   const [observacoes, setObservacoes] = useState('');
-  // Origem da venda (indicador de canal). Sem default — o operador escolhe
-  // a cada entrega pra não enviesar o indicador.
-  const [origemVenda, setOrigemVenda] = useState<'' | 'PRESENCIAL' | 'TELE_VENDA' | 'OUTRO'>('');
+  // Origem da venda (indicador de canal). Default PRESENCIAL (decisão do
+  // Clenio 12/06: balcão é o caso dominante; tele-venda/outro o operador troca).
+  const [origemVenda, setOrigemVenda] = useState<'' | 'PRESENCIAL' | 'TELE_VENDA' | 'OUTRO'>('PRESENCIAL');
   const [buscandoCep, setBuscandoCep] = useState(false);
   // Campos preenchidos pelo CEP ficam TRAVADOS (base oficial > digitação) —
   // só os que a API realmente trouxe. "Corrigir manualmente" destrava (base
@@ -206,6 +206,44 @@ export function EntregaNovaPage() {
   // base na 1ª entrega, substitui o do Protheus nas próximas compras (a
   // dependência do Protheus diminui com o tempo — pedido do Clenio 12/06).
   async function normalizarEnderecoExterno(sug: EnderecoSug) {
+    // PASSO 1 — SEMPRE (não depende do CEP): extrai NÚMERO e complemento do
+    // texto livre do Protheus ("RUA X, 475 AP 108" → rua + 475 + AP 108).
+    // Com vírgula: número = trecho após a ÚLTIMA vírgula (cobre
+    // "RUA 7 DE SETEMBRO, 120"). Sem vírgula: primeiro número com 2+ dígitos
+    // (não captura o "7" de "RUA 7 DE SETEMBRO 120").
+    const texto = (sug.logradouro ?? '').trim();
+    let rua = texto;
+    let numeroExtraido = '';
+    let resto = '';
+    const jaTemNumero = !!(sug.numero ?? '').trim(); // fonte já separa? respeita
+    if (!jaTemNumero && texto.includes(',')) {
+      const idx = texto.lastIndexOf(',');
+      const m = /(\d{1,6})\s*(.*)$/.exec(texto.slice(idx + 1));
+      if (m) {
+        rua = texto.slice(0, idx);
+        numeroExtraido = m[1];
+        resto = m[2] ?? '';
+      }
+    } else if (!jaTemNumero) {
+      const m = /(\d{2,6})\s*(.*)$/.exec(texto);
+      if (m && m.index > 0) {
+        rua = texto.slice(0, m.index);
+        numeroExtraido = m[1];
+        resto = m[2] ?? '';
+      }
+    }
+    if (numeroExtraido) {
+      rua = rua.replace(/[\s,.–-]+$/, '').trim();
+      if (rua) editEndereco(setLogradouro)(rua);
+      editEndereco(setNumero)(numeroExtraido);
+      const compl = [resto.replace(/^[\s,.–-]+/, '').trim(), (sug.complemento ?? '').trim()]
+        .filter(Boolean).join(' ').trim();
+      if (compl) editEndereco(setComplemento)(compl);
+    }
+
+    // PASSO 2 — SE o CEP resolver no ViaCEP: rua/bairro/cidade/UF oficiais e
+    // travados. CEP "geral" (ex.: 38610-000 não existe na base — Unaí tem CEP
+    // por rua) → fica o texto extraído acima, tudo editável.
     const dig = onlyDigits(sug.cep ?? '');
     if (dig.length !== 8) return;
     setBuscandoCep(true);
@@ -213,25 +251,15 @@ export function EntregaNovaPage() {
       const { data } = await logisticaApi.get<{
         encontrado: boolean; logradouro?: string; bairro?: string; cidade?: string; uf?: string;
       }>(`/cadastro/cep/${dig}`);
-      if (!data.encontrado || !data.logradouro) return; // CEP geral — fica o texto do Protheus
-      // Número: trecho após a última vírgula (cobre "RUA 7 DE SETEMBRO, 120");
-      // sem vírgula, primeiro número do texto ("AV JK 1455 AP 102").
-      const texto = sug.logradouro ?? '';
-      const cauda = texto.includes(',') ? texto.slice(texto.lastIndexOf(',') + 1) : texto;
-      const m = cauda.match(/(\d{1,6})\s*(.*)$/);
-      const numeroExtraido = m?.[1] ?? '';
-      const resto = (m?.[2] ?? '').replace(/^[\s,.–-]+/, '').trim();
+      if (!data.encontrado || !data.logradouro) return;
       editEndereco(setLogradouro)(data.logradouro);
       if (data.bairro) editEndereco(setBairro)(data.bairro);
       if (data.cidade) editEndereco(setCidade)(data.cidade);
       if (data.uf) editEndereco(setUf)(data.uf);
-      if (numeroExtraido) editEndereco(setNumero)(numeroExtraido);
-      const compl = [resto, (sug.complemento ?? '').trim()].filter(Boolean).join(' ').trim();
-      if (compl) editEndereco(setComplemento)(compl);
       setTravaCep({ logradouro: true, bairro: !!data.bairro, cidade: !!data.cidade, uf: !!data.uf });
       if (!numeroExtraido) setTimeout(() => numeroRef.current?.focus(), 0);
     } catch {
-      /* indisponível — fica o texto do Protheus como veio */
+      /* indisponível — fica o texto extraído como está */
     } finally {
       setBuscandoCep(false);
     }
@@ -360,9 +388,10 @@ export function EntregaNovaPage() {
     // Telefone do endereço = contato que o entregador liga ao chegar. Quando o
     // endereço escolhido tem o seu, prevalece (ex.: casa de parente ≠ tel. do cliente).
     if (e.telefone) { pularBuscaTelRef.current = true; setTelefone(maskTelefone(e.telefone)); }
-    // Endereço EXTERNO (Protheus: sem vínculo na nossa base, com CEP) →
-    // normaliza: rua oficial do CEP + número extraído do texto livre.
-    if (!e.enderecoEntregaId && e.cep) void normalizarEnderecoExterno(e);
+    // Endereço EXTERNO (sem vínculo na nossa base — Protheus/histórico) →
+    // normaliza: número extraído do texto livre SEMPRE; rua oficial do CEP
+    // quando ele resolver.
+    if (!e.enderecoEntregaId) void normalizarEnderecoExterno(e);
   }
 
   /** "Novo endereço": limpa os campos pra digitação manual (não desfaz o cliente). */
@@ -417,7 +446,7 @@ export function EntregaNovaPage() {
     setLogradouro(''); setNumero(''); setComplemento(''); setBairro('');
     setCidade('Unaí'); setUf('MG'); setCep(''); setReferencia('');
     setVolumes(1); setObservacoes(''); setCupons([{ numeroCupom: '', valor: '' }]);
-    setOrigemVenda(''); // escolha consciente a cada entrega (indicador)
+    setOrigemVenda('PRESENCIAL'); // default do balcão (decisão 12/06)
     setEnderecoEntregaId(''); setClienteLocalId(''); setSugestoes(null); setMostrarSug(false);
     setEnderecosSugeridos([]); setEnderecoSelIdx(-1); setMsgMat(null);
     setTravaCep(TRAVA_CEP_OFF);
