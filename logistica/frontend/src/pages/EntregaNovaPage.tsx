@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Loader2, Plus, Trash2, Package, X, Search, MapPin, Eraser } from 'lucide-react';
+import { Loader2, Plus, Trash2, Package, Search, MapPin, Eraser } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { maskTelefone, maskCep, onlyDigits, UFS } from '../utils/format';
@@ -10,16 +10,6 @@ type TipoCliente = 'IDENTIFICADO' | 'RECORRENTE_LOCAL' | 'EVENTUAL';
 const TRAVA_CEP_OFF = { logradouro: false, bairro: false, cidade: false, uf: false };
 
 interface Cupom { numeroCupom: string; valor: string }
-interface EntregaItem {
-  id: string;
-  numero: number;
-  destinatarioNome: string;
-  endLogradouro: string;
-  endNumero?: string | null;
-  endBairro?: string | null;
-  quantidadeVolumes: number;
-  totalCupons: number;
-}
 
 // Busca unificada (GET /cadastro/busca) — fontes locais.
 interface EnderecoBusca {
@@ -108,7 +98,6 @@ export function EntregaNovaPage() {
 
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
-  const [pendentes, setPendentes] = useState<EntregaItem[]>([]);
   const ultimoCupomRef = useRef<HTMLInputElement>(null);
   const matriculaRef = useRef<HTMLInputElement>(null);
   const numeroRef = useRef<HTMLInputElement>(null);
@@ -159,15 +148,6 @@ export function EntregaNovaPage() {
   const totalCupons = cupons.reduce((acc, c) => acc + (parseFloat(c.valor) || 0), 0);
   const identificado = tipoCliente === 'IDENTIFICADO';
 
-  async function carregarPendentes() {
-    try {
-      const { data } = await logisticaApi.get<EntregaItem[]>('/entregas', {
-        params: filialId ? { filialId } : undefined,
-      });
-      setPendentes(data);
-    } catch { /* lista vazia em caso de erro */ }
-  }
-  useEffect(() => { void carregarPendentes(); }, [filialId]);
 
   // Busca por telefone (debounce 400ms; só com >= 4 dígitos). Roda nas 3 abas —
   // inclusive "Com matrícula" (agora o telefone também acha o cliente no
@@ -522,7 +502,6 @@ export function EntregaNovaPage() {
       });
       setMsg({ tipo: 'ok', texto: `Entrega nº ${data.numero} registrada.` });
       resetForm();
-      void carregarPendentes();
     } catch {
       setMsg({ tipo: 'erro', texto: 'Falha ao registrar entrega.' });
     } finally {
@@ -530,24 +509,14 @@ export function EntregaNovaPage() {
     }
   }
 
-  async function cancelar(id: string) {
-    setMsg(null);
-    try {
-      await logisticaApi.post(`/entregas/${id}/cancelar`, { motivo: 'Cancelada no balcão' });
-      void carregarPendentes();
-    } catch (err) {
-      const m = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao cancelar entrega.' });
-    }
-  }
 
   const inp = 'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none';
   const lbl = 'block text-xs font-medium text-slate-500';
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+    <div className="max-w-4xl">
       {/* Formulário */}
-      <form onSubmit={submit} onKeyDown={bloquearEnterSubmit} className="lg:col-span-2 space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+      <form onSubmit={submit} onKeyDown={bloquearEnterSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-lg font-semibold text-slate-800">
           {modoEdicao ? `Editar entrega${numeroEdicao ? ` #${numeroEdicao}` : ''}` : 'Nova entrega'}
         </h2>
@@ -834,29 +803,6 @@ export function EntregaNovaPage() {
           {modoEdicao ? 'Salvar alterações' : 'Salvar entrega'}
         </button>
       </form>
-
-      {/* Pendentes — só no modo criação (em edição a lateral não faz sentido) */}
-      {!modoEdicao && (
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h3 className="mb-3 text-sm font-semibold text-slate-700">Pendentes ({pendentes.length})</h3>
-        {pendentes.length === 0 ? (
-          <p className="text-sm text-slate-500">Nenhuma entrega pendente.</p>
-        ) : (
-          <ul className="space-y-2">
-            {pendentes.map((e) => (
-              <li key={e.id} className="rounded-lg border border-slate-100 p-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-700">#{e.numero} · {e.destinatarioNome}</span>
-                  <button onClick={() => cancelar(e.id)} className="text-slate-400 hover:text-red-600" title="Cancelar"><X className="h-3.5 w-3.5" /></button>
-                </div>
-                <div className="text-slate-500">{e.endLogradouro}{e.endNumero ? `, ${e.endNumero}` : ''} — {e.endBairro}</div>
-                <div className="text-slate-400">{e.quantidadeVolumes} vol · R$ {e.totalCupons.toFixed(2)}</div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      )}
     </div>
   );
 }
