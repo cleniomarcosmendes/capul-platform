@@ -103,6 +103,19 @@ export function ViagensPage() {
     setSelecao((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   }
 
+  // Reordenação MANUAL na faixa Rota: a decisão final é do operador — inclusive
+  // pra posicionar entregas que o cálculo não conseguiu localizar (sem coordenada).
+  function moverNaRota(id: string, dir: -1 | 1) {
+    setSelecao((p) => {
+      const i = p.indexOf(id);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= p.length) return p;
+      const novo = [...p];
+      [novo[i], novo[j]] = [novo[j], novo[i]];
+      return novo;
+    });
+  }
+
   // Fase 1c: reordena a SELEÇÃO pela melhor rota (geocodifica + distância a
   // partir da filial). Sugestão — o operador segue podendo clicar pra reordenar.
   async function sugerirOrdem() {
@@ -195,41 +208,15 @@ export function ViagensPage() {
         <p className="text-sm text-slate-500">Selecione veículo, motorista e as entregas (na ordem da rota). Despache ao carregar.</p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
-        <div>
-          <label className="block text-xs font-medium text-slate-500">Veículo (disponível) *</label>
-          <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} className={`mt-1 ${sel}`}>
-            <option value="">—</option>
-            {veiculos.map((v) => <option key={v.id} value={v.id}>{v.placa} {v.modelo ? `· ${v.modelo}` : ''}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-500">Motorista *</label>
-          <select value={motoristaId} onChange={(e) => setMotoristaId(e.target.value)} className={`mt-1 ${sel}`}>
-            <option value="">—</option>
-            {motoristas.map((u) => <option key={u.id} value={u.id}>{labelCore(u)}</option>)}
-          </select>
-        </div>
-        <button onClick={sugerirOrdem} disabled={busy || sugerindo || selecao.length < 2}
-          title={selecao.length < 2
-            ? 'Selecione ao menos 2 entregas para sugerir a ordem'
-            : 'Geocodifica as entregas e ordena pela menor distância a partir da filial'}
-          className="flex items-center gap-2 rounded-lg border border-sky-600 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50">
-          {sugerindo ? 'Calculando rota…' : '⇅ Sugerir ordem'}
-        </button>
-        <button onClick={montar} disabled={busy}
-          className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
-          <Truck className="h-4 w-4" /> Montar viagem ({selecao.length} {selecao.length === 1 ? 'entrega' : 'entregas'} · {volumesSelecionados} {volumesSelecionados === 1 ? 'volume' : 'volumes'})
-        </button>
-      </div>
-
       {msg && <div className={`rounded-lg px-4 py-2 text-sm ${msg.tipo === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.texto}</div>}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Coluna da montagem: 1) carga → 2) veículo/motorista (fluxo invertido 12/06) */}
+        <div className="space-y-4">
         {/* Pendentes */}
         <div className="rounded-xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
-            <span>Pendentes ({pendentesFiltrados.length}{bairrosSel.length > 0 ? ` de ${pendentes.length}` : ''})</span>
+            <span><span className="mr-1.5 rounded bg-sky-600 px-1.5 py-0.5 text-xs text-white">1</span> Carga — pendentes ({pendentesFiltrados.length}{bairrosSel.length > 0 ? ` de ${pendentes.length}` : ''})</span>
             {pendentesFiltrados.length > 0 && (
               <button onClick={selecionarVisiveis} className="text-xs font-medium text-sky-700 hover:underline">
                 + Selecionar {bairrosSel.length > 0 ? 'do bairro' : 'todas'} ({pendentesFiltrados.length})
@@ -254,22 +241,39 @@ export function ViagensPage() {
           )}
 
           {/* Ordem da rota (seleção atual) — espelha o que vira a sequência das
-              paradas; após "Sugerir ordem" mostra a rota calculada na ordem. */}
+              paradas. "Sugerir ordem" calcula; as setas ◀▶ deixam o operador
+              posicionar manualmente (decisão final é dele — inclusive pras
+              entregas sem coordenada). */}
           {selecao.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 bg-sky-50/60 px-4 py-2 text-xs text-slate-600">
-              <span className="font-semibold text-sky-700">Rota:</span>
-              {selecao.map((id, i) => {
-                const e = pendentes.find((p) => p.id === id);
-                if (!e) return null;
-                return (
-                  <span key={id} className="flex items-center gap-1">
-                    {i > 0 && <span className="text-slate-400">→</span>}
-                    <span className="rounded bg-white px-1.5 py-0.5 ring-1 ring-slate-200">
-                      <strong>{i + 1}</strong> · #{e.numero} {e.endBairro ? `(${e.endBairro})` : ''}
+            <div className="space-y-1.5 border-b border-slate-100 bg-sky-50/60 px-4 py-2 text-xs text-slate-600">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-sky-700">Rota ({selecao.length})</span>
+                <button onClick={sugerirOrdem} disabled={busy || sugerindo || selecao.length < 2}
+                  title={selecao.length < 2
+                    ? 'Selecione ao menos 2 entregas para sugerir a ordem'
+                    : 'Geocodifica as entregas e ordena pela menor distância a partir da filial'}
+                  className="rounded-lg border border-sky-600 px-2.5 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50">
+                  {sugerindo ? 'Calculando rota…' : '⇅ Sugerir ordem'}
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-1">
+                {selecao.map((id, i) => {
+                  const e = pendentes.find((p) => p.id === id);
+                  if (!e) return null;
+                  return (
+                    <span key={id} className="flex items-center gap-1">
+                      {i > 0 && <span className="text-slate-400">→</span>}
+                      <span className="flex items-center gap-0.5 rounded bg-white px-1 py-0.5 ring-1 ring-slate-200">
+                        <button onClick={() => moverNaRota(id, -1)} disabled={i === 0}
+                          className="px-0.5 text-slate-400 hover:text-sky-700 disabled:opacity-30" title="Mover pra trás">◀</button>
+                        <span><strong>{i + 1}</strong> · #{e.numero} {e.endBairro ? `(${e.endBairro})` : ''}</span>
+                        <button onClick={() => moverNaRota(id, 1)} disabled={i === selecao.length - 1}
+                          className="px-0.5 text-slate-400 hover:text-sky-700 disabled:opacity-30" title="Mover pra frente">▶</button>
+                      </span>
                     </span>
-                  </span>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -306,6 +310,35 @@ export function ViagensPage() {
                   );
                 })}
               </ul>}
+        </div>
+
+        {/* Passo 2 — depois da carga montada, escolhe quem leva */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="mb-3 text-sm font-semibold text-slate-700">
+            <span className="mr-1.5 rounded bg-sky-600 px-1.5 py-0.5 text-xs text-white">2</span> Veículo e motorista
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-500">Veículo (disponível) *</label>
+              <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} className={`mt-1 ${sel}`}>
+                <option value="">—</option>
+                {veiculos.map((v) => <option key={v.id} value={v.id}>{v.placa} {v.modelo ? `· ${v.modelo}` : ''}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500">Motorista *</label>
+              <select value={motoristaId} onChange={(e) => setMotoristaId(e.target.value)} className={`mt-1 ${sel}`}>
+                <option value="">—</option>
+                {motoristas.map((u) => <option key={u.id} value={u.id}>{labelCore(u)}</option>)}
+              </select>
+            </div>
+            <button onClick={montar} disabled={busy || selecao.length === 0}
+              title={selecao.length === 0 ? 'Selecione as entregas da carga primeiro (passo 1)' : undefined}
+              className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+              <Truck className="h-4 w-4" /> Montar viagem ({selecao.length} {selecao.length === 1 ? 'entrega' : 'entregas'} · {volumesSelecionados} {volumesSelecionados === 1 ? 'volume' : 'volumes'})
+            </button>
+          </div>
+        </div>
         </div>
 
         {/* Viagens */}
