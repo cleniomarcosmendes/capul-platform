@@ -4,6 +4,6 @@ import { RotaService } from './rota.service.js';
 
 @Module({
   providers: [GeocodeService, RotaService],
-  exports: [RotaService],
+  exports: [RotaService, GeocodeService],
 })
 export class RotaModule {}

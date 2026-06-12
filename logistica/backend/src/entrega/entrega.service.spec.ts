@@ -5,6 +5,7 @@ import { createPrismaMock } from '../common/testing/prisma-mock';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const coreMock = () => ({ validarFilial: jest.fn().mockResolvedValue(undefined) }) as any;
 const cofreMock = () => ({ gravar: jest.fn().mockResolvedValue({ comprovanteId: 'cmp1', objectKey: 'k', hash: 'h' }) }) as any;
+const geocodeMock = () => ({ geocodificar: jest.fn().mockResolvedValue(null), statusCacheLote: jest.fn().mockResolvedValue([]) }) as any;
 // Operador da filial f1 (não vê outras filiais) — exercita o escopo por filial.
 const userF1 = { sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'OPERADOR_ENTREGA' }] } as any;
 
@@ -18,7 +19,7 @@ describe('EntregaService', () => {
     prisma = createPrismaMock();
     core = coreMock();
     cofre = cofreMock();
-    svc = new EntregaService(prisma, core, cofre);
+    svc = new EntregaService(prisma, core, cofre, geocodeMock());
   });
 
   describe('create', () => {

@@ -3,6 +3,7 @@ import { Prisma, SituacaoVeiculo, StatusEntrega, StatusViagem } from '@prisma/cl
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import { CofreService } from '../cofre/cofre.service.js';
+import { GeocodeService } from '../rota/geocode.service.js';
 import { assertPodeVerRegistro } from '../common/filial-scope.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { BaixarEntregaDto, CreateEntregaDto } from './dto.js';
@@ -24,6 +25,7 @@ export class EntregaService {
     private readonly prisma: PrismaService,
     private readonly core: CoreLookupService,
     private readonly cofre: CofreService,
+    private readonly geocode: GeocodeService,
   ) {}
 
   /**
@@ -76,6 +78,20 @@ export class EntregaService {
     // pra aparecer no seletor da próxima entrega. Best-effort (não derruba a
     // entrega se falhar). EVENTUAL (sem matrícula/cliente) não persiste.
     await this.persistirEnderecoReutilizavel(dto, snap).catch(() => {});
+
+    // Warm da geocodificação em BACKGROUND (não bloqueia a resposta): popula o
+    // cache pra (1) o badge "entra na rota?" da fila e (2) o "Sugerir ordem"
+    // sair instantâneo na montagem.
+    void this.geocode
+      .geocodificar({
+        logradouro: snap.endLogradouro,
+        numero: snap.endNumero,
+        bairro: snap.endBairro,
+        cidade: snap.endCidade,
+        uf: snap.endUf,
+        cep: snap.endCep,
+      })
+      .catch(() => undefined);
 
     return this.comTotal(entrega);
   }
@@ -171,7 +187,24 @@ export class EntregaService {
       orderBy: { criadoEm: 'asc' }, // quem comprou primeiro tende a sair primeiro
       take: 200,
     });
-    return entregas.map((e) => this.comTotal(e));
+    // Badge "entra na rota automática?" — consulta SÓ o cache de geocodificação
+    // (instantâneo). null = ainda não tentado (warm roda na criação).
+    let geo: (boolean | null)[] = [];
+    if (status === StatusEntrega.PENDENTE && entregas.length) {
+      geo = await this.geocode
+        .statusCacheLote(
+          entregas.map((e) => ({
+            logradouro: e.endLogradouro,
+            numero: e.endNumero,
+            bairro: e.endBairro,
+            cidade: e.endCidade,
+            uf: e.endUf,
+            cep: e.endCep,
+          })),
+        )
+        .catch(() => []);
+    }
+    return entregas.map((e, i) => ({ ...this.comTotal(e), geocodificavel: geo[i] ?? null }));
   }
 
   /**

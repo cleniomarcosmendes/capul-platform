@@ -44,6 +44,22 @@ export class GeocodeService {
     return { chave: createHash('sha256').update(texto).digest('hex'), texto };
   }
 
+  /**
+   * Consulta SÓ o cache, em lote (sem bater em provedor — instantâneo):
+   * true = geocodificável, false = já tentou e não resolveu, null = nunca
+   * tentado. Pro badge de "entra na rota automática?" nas listas.
+   */
+  async statusCacheLote(enderecos: EnderecoGeo[]): Promise<(boolean | null)[]> {
+    if (!enderecos.length) return [];
+    const chaves = enderecos.map((e) => this.chaveDe(e).chave);
+    const rows = await this.prisma.geocodeCache.findMany({
+      where: { chave: { in: [...new Set(chaves)] } },
+      select: { chave: true, lat: true },
+    });
+    const m = new Map(rows.map((r) => [r.chave, r.lat != null]));
+    return chaves.map((c) => (m.has(c) ? (m.get(c) as boolean) : null));
+  }
+
   /** Geocodifica com cache. null = não foi possível resolver (segue sem coordenada). */
   async geocodificar(e: EnderecoGeo): Promise<Coordenada | null> {
     const { chave, texto } = this.chaveDe(e);

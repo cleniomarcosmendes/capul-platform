@@ -8,7 +8,7 @@ import { maskTelefone } from '../utils/format';
 
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
 interface Veiculo { id: string; placa: string; modelo?: string | null; situacao: string }
-interface Entrega { id: string; numero: number; destinatarioNome: string; endLogradouro: string; endBairro?: string | null; quantidadeVolumes: number; criadoEm: string; horario?: string | null; tentativas?: number }
+interface Entrega { id: string; numero: number; destinatarioNome: string; endLogradouro: string; endBairro?: string | null; quantidadeVolumes: number; criadoEm: string; horario?: string | null; tentativas?: number; geocodificavel?: boolean | null }
 interface Viagem {
   id: string; numero: number; situacao: string;
   veiculo?: { placa: string } | null; _count?: { paradas: number };
@@ -292,6 +292,12 @@ export function ViagensPage() {
                       <div className="flex-1">
                         <div className="font-medium text-slate-700">
                           #{e.numero} · {e.destinatarioNome}
+                          {e.geocodificavel === false && (
+                            <span className="ml-1.5 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700"
+                              title="Endereço não localizado no mapa — não entra no cálculo automático da rota; posicione manualmente (setas na faixa Rota)">
+                              ⚠ fora da rota automática
+                            </span>
+                          )}
                           {(e.tentativas ?? 1) > 1 && (
                             <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700" title="Entrega devolvida pra fila — nova tentativa">
                               ♻ {e.tentativas}ª tentativa

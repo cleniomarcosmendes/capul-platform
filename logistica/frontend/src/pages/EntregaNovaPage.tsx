@@ -154,6 +154,43 @@ export function EntregaNovaPage() {
     return (v: T) => { setter(v); };
   }
 
+  // Normaliza endereço EXTERNO (Protheus/SA1 — texto livre tipo "RUA X, 123
+  // AP 4"): a rua oficial vem do CEP, o NÚMERO é extraído do texto e o resto
+  // vira complemento. O endereço já nasce geocodificável e, salvo na nossa
+  // base na 1ª entrega, substitui o do Protheus nas próximas compras (a
+  // dependência do Protheus diminui com o tempo — pedido do Clenio 12/06).
+  async function normalizarEnderecoExterno(sug: EnderecoSug) {
+    const dig = onlyDigits(sug.cep ?? '');
+    if (dig.length !== 8) return;
+    setBuscandoCep(true);
+    try {
+      const { data } = await logisticaApi.get<{
+        encontrado: boolean; logradouro?: string; bairro?: string; cidade?: string; uf?: string;
+      }>(`/cadastro/cep/${dig}`);
+      if (!data.encontrado || !data.logradouro) return; // CEP geral — fica o texto do Protheus
+      // Número: trecho após a última vírgula (cobre "RUA 7 DE SETEMBRO, 120");
+      // sem vírgula, primeiro número do texto ("AV JK 1455 AP 102").
+      const texto = sug.logradouro ?? '';
+      const cauda = texto.includes(',') ? texto.slice(texto.lastIndexOf(',') + 1) : texto;
+      const m = cauda.match(/(\d{1,6})\s*(.*)$/);
+      const numeroExtraido = m?.[1] ?? '';
+      const resto = (m?.[2] ?? '').replace(/^[\s,.–-]+/, '').trim();
+      editEndereco(setLogradouro)(data.logradouro);
+      if (data.bairro) editEndereco(setBairro)(data.bairro);
+      if (data.cidade) editEndereco(setCidade)(data.cidade);
+      if (data.uf) editEndereco(setUf)(data.uf);
+      if (numeroExtraido) editEndereco(setNumero)(numeroExtraido);
+      const compl = [resto, (sug.complemento ?? '').trim()].filter(Boolean).join(' ').trim();
+      if (compl) editEndereco(setComplemento)(compl);
+      setTravaCep({ logradouro: true, bairro: !!data.bairro, cidade: !!data.cidade, uf: !!data.uf });
+      if (!numeroExtraido) setTimeout(() => numeroRef.current?.focus(), 0);
+    } catch {
+      /* indisponível — fica o texto do Protheus como veio */
+    } finally {
+      setBuscandoCep(false);
+    }
+  }
+
   // Autofill por CEP via NOSSO backend (que proxia o ViaCEP) — o CSP da
   // plataforma é connect-src 'self', então o navegador não chama domínio
   // externo direto. Preenche logradouro/bairro/cidade/UF; o operador completa
@@ -277,6 +314,9 @@ export function EntregaNovaPage() {
     // Telefone do endereço = contato que o entregador liga ao chegar. Quando o
     // endereço escolhido tem o seu, prevalece (ex.: casa de parente ≠ tel. do cliente).
     if (e.telefone) { pularBuscaTelRef.current = true; setTelefone(maskTelefone(e.telefone)); }
+    // Endereço EXTERNO (Protheus: sem vínculo na nossa base, com CEP) →
+    // normaliza: rua oficial do CEP + número extraído do texto livre.
+    if (!e.enderecoEntregaId && e.cep) void normalizarEnderecoExterno(e);
   }
 
   /** "Novo endereço": limpa os campos pra digitação manual (não desfaz o cliente). */
