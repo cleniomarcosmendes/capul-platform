@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowLeft, ArrowUp, Loader2, Plus, Truck, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 
 // Montagem de viagem (página dedicada — redesenho 12/06 a pedido do Clenio):
 // modelo "carrinho": fila de pendentes à esquerda → rota em construção à
@@ -40,6 +41,9 @@ export function MontarViagemPage() {
   const [busca, setBusca] = useState('');
   const [sugerindo, setSugerindo] = useState(false);
   const [montando, setMontando] = useState(false);
+  const [salvou, setSalvou] = useState(false);
+  // Rota em construcao nao salva = trabalho a perder (padrao workspace).
+  const { ConfirmDialog: DirtyDialog, guardedNavigate } = useUnsavedChanges(rota.length > 0 && !salvou);
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
 
   useEffect(() => {
@@ -119,12 +123,15 @@ export function MontarViagemPage() {
   async function montar() {
     setMsg(null);
     if (rota.length === 0) { setMsg({ tipo: 'erro', texto: 'Adicione ao menos uma entrega à rota.' }); return; }
-    if (!veiculoId || !motoristaId) { setMsg({ tipo: 'erro', texto: 'Escolha veículo e motorista.' }); return; }
     setMontando(true);
     try {
       const { data } = await logisticaApi.post<{ id: string; numero: number }>('/viagens', {
-        filialId, veiculoId, motoristaId, entregaIds: rota,
+        filialId,
+        veiculoId: veiculoId || undefined,
+        motoristaId: motoristaId || undefined,
+        entregaIds: rota,
       });
+      setSalvou(true);
       navigate(`/viagens/${data.id}`);
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
@@ -138,6 +145,7 @@ export function MontarViagemPage() {
 
   return (
     <div className="space-y-4">
+      {DirtyDialog}
       <Link to="/viagens" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
         <ArrowLeft className="h-4 w-4" /> Voltar para Viagens
       </Link>
@@ -258,29 +266,37 @@ export function MontarViagemPage() {
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="mb-3 text-sm font-semibold text-slate-700">Veículo e motorista</div>
+            <div className="mb-1 text-sm font-semibold text-slate-700">Veículo e motorista</div>
+            <p className="mb-3 text-xs text-slate-500">Opcionais agora — a viagem salva como rascunho e você define depois; o <strong>despacho</strong> exige os dois.</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={lbl}>Veículo (disponível) *</label>
+                <label className={lbl}>Veículo (disponível)</label>
                 <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} className={sel}>
                   <option value="">—</option>
                   {veiculos.map((v) => <option key={v.id} value={v.id}>{v.placa} {v.modelo ? `· ${v.modelo}` : ''}</option>)}
                 </select>
               </div>
               <div>
-                <label className={lbl}>Motorista *</label>
+                <label className={lbl}>Motorista</label>
                 <select value={motoristaId} onChange={(e) => setMotoristaId(e.target.value)} className={sel}>
                   <option value="">—</option>
                   {motoristas.map((u) => <option key={u.id} value={u.id}>{labelCore(u)}</option>)}
                 </select>
               </div>
             </div>
-            <button onClick={() => void montar()} disabled={montando || rota.length === 0 || !veiculoId || !motoristaId}
-              title={rota.length === 0 ? 'Monte a rota primeiro' : !veiculoId || !motoristaId ? 'Escolha veículo e motorista' : undefined}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
-              {montando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
-              Montar viagem ({rota.length} {rota.length === 1 ? 'entrega' : 'entregas'} · {volumesRota} vol)
-            </button>
+            <div className="mt-3 flex items-center gap-2">
+              <button onClick={() => guardedNavigate('/viagens')} type="button"
+                title="Desistir da montagem — nada é salvo"
+                className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50">
+                Cancelar
+              </button>
+              <button onClick={() => void montar()} disabled={montando || rota.length === 0}
+                title={rota.length === 0 ? 'Monte a rota primeiro' : undefined}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+                {montando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+                Salvar montagem ({rota.length} {rota.length === 1 ? 'entrega' : 'entregas'} · {volumesRota} vol)
+              </button>
+            </div>
           </div>
         </div>
       </div>

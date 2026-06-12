@@ -256,9 +256,11 @@ model Viagem {
   numero                    Int
   filialId                  String       @map("filial_id")
   tipo                      TipoViagem   @default(ENTREGA)
-  veiculoId                 String       @map("veiculo_id")
-  veiculo                   Veiculo      @relation(fields: [veiculoId], references: [id])
-  motoristaId               String       @map("motorista_id")
+  // Nullable (12/06): o RASCUNHO pode nascer só com a carga — veículo e
+  // motorista são definidos depois; o DESPACHO é que exige os dois.
+  veiculoId                 String?      @map("veiculo_id")
+  veiculo                   Veiculo?     @relation(fields: [veiculoId], references: [id])
+  motoristaId               String?      @map("motorista_id")
   departamentoSolicitanteId String?      @map("departamento_solicitante_id")
   kmInicial                 Int?         @map("km_inicial")
   kmFinal                   Int?         @map("km_final")

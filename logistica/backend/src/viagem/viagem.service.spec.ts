@@ -31,13 +31,17 @@ describe('ViagemService', () => {
       prisma.viagem.findUnique.mockResolvedValue({ id: 'v1', filialId: 'f1', situacao: 'RASCUNHO', paradas: [] });
       await expect(svc.despachar('v1', {} as any, 'f1')).rejects.toThrow(BadRequestException);
     });
+    it('400 se rascunho ainda não tem veículo/motorista (12/06)', async () => {
+      prisma.viagem.findUnique.mockResolvedValue({ id: 'v1', filialId: 'f1', veiculoId: null, motoristaId: null, situacao: 'RASCUNHO', paradas: [{ entregaId: 'e1' }] });
+      await expect(svc.despachar('v1', {} as any, 'f1')).rejects.toThrow('Defina veículo e motorista');
+    });
     it('400 se o veículo não está DISPONIVEL', async () => {
-      prisma.viagem.findUnique.mockResolvedValue({ id: 'v1', filialId: 'f1', veiculoId: 'vc1', situacao: 'RASCUNHO', paradas: [{ entregaId: 'e1' }] });
+      prisma.viagem.findUnique.mockResolvedValue({ id: 'v1', filialId: 'f1', veiculoId: 'vc1', motoristaId: 'm1', situacao: 'RASCUNHO', paradas: [{ entregaId: 'e1' }] });
       prisma.veiculo.findUnique.mockResolvedValue({ id: 'vc1', situacao: 'EM_USO' });
       await expect(svc.despachar('v1', {} as any, 'f1')).rejects.toThrow(BadRequestException);
     });
     it('happy path: entregas→EM_VIAGEM, veículo→EM_USO, viagem→EM_CURSO', async () => {
-      prisma.viagem.findUnique.mockResolvedValue({ id: 'v1', filialId: 'f1', veiculoId: 'vc1', situacao: 'RASCUNHO', paradas: [{ entregaId: 'e1' }, { entregaId: 'e2' }] });
+      prisma.viagem.findUnique.mockResolvedValue({ id: 'v1', filialId: 'f1', veiculoId: 'vc1', motoristaId: 'm1', situacao: 'RASCUNHO', paradas: [{ entregaId: 'e1' }, { entregaId: 'e2' }] });
       prisma.veiculo.findUnique.mockResolvedValue({ id: 'vc1', situacao: 'DISPONIVEL' });
       prisma.viagem.update.mockResolvedValue({ id: 'v1', situacao: 'EM_CURSO' });
       await svc.despachar('v1', {} as any, 'f1');

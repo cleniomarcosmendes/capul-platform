@@ -1,11 +1,11 @@
-import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { StatusViagem } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { assertMesmaFilial, resolverFilialLeitura } from '../common/filial-scope.js';
 import { ViagemService } from './viagem.service.js';
 import { RotaService } from '../rota/rota.service.js';
-import { CreateViagemDto, DespacharViagemDto, SugerirOrdemDto } from './dto.js';
+import { AdicionarEntregasDto, CreateViagemDto, DespacharViagemDto, ReordenarViagemDto, SugerirOrdemDto, UpdateViagemDto } from './dto.js';
 
 @Controller('viagens')
 @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
@@ -56,6 +56,24 @@ export class ViagemController {
   @Roles('ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
   obter(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.viagens.findOne(id, user);
+  }
+
+  /** Edição do RASCUNHO: define/troca veículo e motorista (12/06). */
+  @Patch(':id')
+  atualizar(@Param('id') id: string, @Body() dto: UpdateViagemDto, @CurrentUser() user: JwtPayload) {
+    return this.viagens.atualizar(id, dto, user.filialId);
+  }
+
+  /** Adiciona entregas PENDENTES ao fim da rota do rascunho (12/06). */
+  @Post(':id/entregas')
+  adicionarEntregas(@Param('id') id: string, @Body() dto: AdicionarEntregasDto, @CurrentUser() user: JwtPayload) {
+    return this.viagens.adicionarEntregas(id, dto.entregaIds, user.filialId);
+  }
+
+  /** Re-sequencia as paradas do rascunho (setas/Sugerir ordem no detalhe). */
+  @Patch(':id/ordem')
+  reordenar(@Param('id') id: string, @Body() dto: ReordenarViagemDto, @CurrentUser() user: JwtPayload) {
+    return this.viagens.reordenar(id, dto.entregaIds, user.filialId);
   }
 
   @Post(':id/despachar')

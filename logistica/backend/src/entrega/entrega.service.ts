@@ -592,7 +592,9 @@ export class EntregaService {
       where: { id: viagemId },
       data: { situacao: StatusViagem.CONCLUIDA, dataHoraChegada: new Date() },
     });
-    await tx.veiculo.update({ where: { id: viagem.veiculoId }, data: { situacao: SituacaoVeiculo.DISPONIVEL } });
+    if (viagem.veiculoId) {
+      await tx.veiculo.update({ where: { id: viagem.veiculoId }, data: { situacao: SituacaoVeiculo.DISPONIVEL } });
+    }
   }
 
   // ---------- helpers ----------

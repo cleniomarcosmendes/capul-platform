@@ -19,13 +19,10 @@ export class ViagemService {
    * (Fase 1). Não despacha — isso é um passo explícito.
    */
   async create(dto: CreateViagemDto, criadoPorId: string) {
-    const veiculo = await this.prisma.veiculo.findUnique({ where: { id: dto.veiculoId } });
-    if (!veiculo || !veiculo.ativo) throw new BadRequestException('Veículo inválido.');
-    if (veiculo.filialId !== dto.filialId) {
-      throw new BadRequestException('Veículo é de outra filial.');
-    }
-    // Motorista é colaborador do core — valida que existe (evita ID órfão).
-    await this.core.validarUsuario(dto.motoristaId, 'Motorista');
+    // 12/06: rascunho pode nascer SÓ com a carga — veículo/motorista são
+    // opcionais aqui e obrigatórios no DESPACHO.
+    if (dto.veiculoId) await this.validarVeiculoDaFilial(dto.veiculoId, dto.filialId);
+    if (dto.motoristaId) await this.core.validarUsuario(dto.motoristaId, 'Motorista');
 
     const entregaIds = dto.entregaIds ?? [];
     if (entregaIds.length) {
@@ -43,8 +40,8 @@ export class ViagemService {
           numero: contador.ultimoNumero,
           filialId: dto.filialId,
           tipo: 'ENTREGA',
-          veiculoId: dto.veiculoId,
-          motoristaId: dto.motoristaId,
+          veiculoId: dto.veiculoId || null,
+          motoristaId: dto.motoristaId || null,
           situacao: StatusViagem.RASCUNHO,
           criadoPorId,
           paradas: {
@@ -54,6 +51,75 @@ export class ViagemService {
         include: { paradas: { include: { entrega: true }, orderBy: { sequencia: 'asc' } } },
       });
     });
+  }
+
+  private async validarVeiculoDaFilial(veiculoId: string, filialId: string) {
+    const veiculo = await this.prisma.veiculo.findUnique({ where: { id: veiculoId } });
+    if (!veiculo || !veiculo.ativo) throw new BadRequestException('Veículo inválido.');
+    if (veiculo.filialId !== filialId) throw new BadRequestException('Veículo é de outra filial.');
+  }
+
+  /** Carrega viagem exigindo RASCUNHO (edição de montagem) + escopo de filial. */
+  private async rascunhoOuErro(id: string, userFilialId?: string) {
+    const v = await this.prisma.viagem.findUnique({ where: { id } });
+    if (!v) throw new NotFoundException('Viagem não encontrada.');
+    if (userFilialId && v.filialId !== userFilialId) {
+      throw new BadRequestException('Viagem de outra filial.');
+    }
+    if (v.situacao !== StatusViagem.RASCUNHO) {
+      throw new BadRequestException(`Só viagem em RASCUNHO pode ser editada (situação: ${v.situacao}).`);
+    }
+    return v;
+  }
+
+  /** Define/troca veículo e/ou motorista do RASCUNHO (12/06). */
+  async atualizar(id: string, dto: { veiculoId?: string | null; motoristaId?: string | null }, userFilialId?: string) {
+    const v = await this.rascunhoOuErro(id, userFilialId);
+    if (dto.veiculoId) await this.validarVeiculoDaFilial(dto.veiculoId, v.filialId);
+    if (dto.motoristaId) await this.core.validarUsuario(dto.motoristaId, 'Motorista');
+    await this.prisma.viagem.update({
+      where: { id },
+      data: {
+        ...(dto.veiculoId !== undefined ? { veiculoId: dto.veiculoId || null } : {}),
+        ...(dto.motoristaId !== undefined ? { motoristaId: dto.motoristaId || null } : {}),
+      },
+    });
+    return this.findOne(id);
+  }
+
+  /** Adiciona entregas PENDENTES ao fim da rota do RASCUNHO (12/06). */
+  async adicionarEntregas(id: string, entregaIds: string[], userFilialId?: string) {
+    const v = await this.rascunhoOuErro(id, userFilialId);
+    if (!entregaIds?.length) throw new BadRequestException('Informe as entregas a adicionar.');
+    await this.validarEntregasParaParada(entregaIds, v.filialId);
+    const max = await this.prisma.parada.aggregate({ where: { viagemId: id }, _max: { sequencia: true } });
+    let seq = max._max.sequencia ?? 0;
+    await this.prisma.parada.createMany({
+      data: entregaIds.map((entregaId) => ({ viagemId: id, entregaId, sequencia: ++seq })),
+    });
+    return this.findOne(id);
+  }
+
+  /**
+   * Re-sequencia as paradas do RASCUNHO conforme a ordem de entregaIds
+   * (12/06 — usado pelas setas ↑↓ e pelo "Sugerir ordem" no detalhe).
+   * Duas passadas (offset) evitam colisão de sequência única durante o swap.
+   */
+  async reordenar(id: string, entregaIds: string[], userFilialId?: string) {
+    await this.rascunhoOuErro(id, userFilialId);
+    const paradas = await this.prisma.parada.findMany({ where: { viagemId: id }, select: { id: true, entregaId: true } });
+    const porEntrega = new Map(paradas.map((p) => [p.entregaId, p.id]));
+    const ids = entregaIds.filter((e) => porEntrega.has(e));
+    if (ids.length !== paradas.length) {
+      throw new BadRequestException('A nova ordem precisa conter exatamente as entregas da viagem.');
+    }
+    await this.prisma.$transaction([
+      ...ids.map((e, i) =>
+        this.prisma.parada.update({ where: { id: porEntrega.get(e)! }, data: { sequencia: 1000 + i } })),
+      ...ids.map((e, i) =>
+        this.prisma.parada.update({ where: { id: porEntrega.get(e)! }, data: { sequencia: i + 1 } })),
+    ]);
+    return this.findOne(id);
   }
 
   async list(params: { filialId?: string; situacao?: StatusViagem; veiculoId?: string }) {
@@ -73,10 +139,10 @@ export class ViagemService {
       take: 200,
     });
     // Nome do motorista (core) em cada viagem — evita o front resolver à parte.
-    const motoristas = await this.core.nomesUsuarios(viagens.map((v) => v.motoristaId));
+    const motoristas = await this.core.nomesUsuarios(viagens.map((v) => v.motoristaId).filter((x): x is string => !!x));
     return viagens.map(({ paradas, ...v }) => ({
       ...v,
-      motoristaNome: motoristas.get(v.motoristaId) ?? null,
+      motoristaNome: (v.motoristaId && motoristas.get(v.motoristaId)) || null,
       totalVolumes: paradas.reduce((s, p) => s + (p.entrega?.quantidadeVolumes ?? 0), 0),
     }));
   }
@@ -118,8 +184,8 @@ export class ViagemService {
     if (user) assertPodeVerRegistro(user, v.filialId);
     // Nome do motorista (core) — a lista já enriquece; o detalhe também precisa
     // (a tela de detalhe mostrava "—"; reporte do Clenio 12/06).
-    const nomes = await this.core.nomesUsuarios([v.motoristaId]);
-    return { ...v, motoristaNome: nomes.get(v.motoristaId) ?? null };
+    const nomes = v.motoristaId ? await this.core.nomesUsuarios([v.motoristaId]) : new Map<string, string>();
+    return { ...v, motoristaNome: (v.motoristaId && nomes.get(v.motoristaId)) || null };
   }
 
   /**
@@ -137,8 +203,13 @@ export class ViagemService {
       throw new BadRequestException(`Só despacha viagem em RASCUNHO (atual: ${v.situacao}).`);
     }
     if (v.paradas.length === 0) throw new BadRequestException('Viagem sem entregas — adicione paradas antes de despachar.');
+    // Rascunho pode nascer sem veículo/motorista — o DESPACHO exige os dois.
+    if (!v.veiculoId || !v.motoristaId) {
+      throw new BadRequestException('Defina veículo e motorista antes de despachar.');
+    }
+    const veiculoId = v.veiculoId; // narrow estável p/ dentro da transaction
 
-    const veiculo = await this.prisma.veiculo.findUnique({ where: { id: v.veiculoId } });
+    const veiculo = await this.prisma.veiculo.findUnique({ where: { id: veiculoId } });
     if (!veiculo) throw new BadRequestException('Veículo não encontrado.');
     if (veiculo.situacao !== SituacaoVeiculo.DISPONIVEL) {
       throw new BadRequestException(`Veículo não está disponível (situação: ${veiculo.situacao}).`);
@@ -151,7 +222,7 @@ export class ViagemService {
         where: { id: { in: entregaIds }, status: StatusEntrega.PENDENTE },
         data: { status: StatusEntrega.EM_VIAGEM },
       });
-      await tx.veiculo.update({ where: { id: v.veiculoId }, data: { situacao: SituacaoVeiculo.EM_USO } });
+      await tx.veiculo.update({ where: { id: veiculoId }, data: { situacao: SituacaoVeiculo.EM_USO } });
       return tx.viagem.update({
         where: { id },
         data: {
@@ -188,7 +259,9 @@ export class ViagemService {
         where: { id: { in: entregaIds }, status: StatusEntrega.EM_VIAGEM },
         data: { status: StatusEntrega.ENTREGUE },
       });
-      await tx.veiculo.update({ where: { id: v.veiculoId }, data: { situacao: SituacaoVeiculo.DISPONIVEL } });
+      if (v.veiculoId) {
+        await tx.veiculo.update({ where: { id: v.veiculoId }, data: { situacao: SituacaoVeiculo.DISPONIVEL } });
+      }
       return tx.viagem.update({
         where: { id },
         data: { situacao: StatusViagem.CONCLUIDA, dataHoraChegada: new Date() },
