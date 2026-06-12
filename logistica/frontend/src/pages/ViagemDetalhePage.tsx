@@ -55,6 +55,8 @@ export function ViagemDetalhePage() {
   const [veiculos, setVeiculos] = useState<{ id: string; placa: string; modelo?: string | null }[]>([]);
   const [motoristas, setMotoristas] = useState<CoreItem[]>([]);
   const [pendentesAdd, setPendentesAdd] = useState<EntregaPend[]>([]);
+  const [buscaFila, setBuscaFila] = useState('');
+  const [bairrosSel, setBairrosSel] = useState<string[]>([]);
   const [sugerindo, setSugerindo] = useState(false);
 
   const carregar = useCallback(async () => {
@@ -126,6 +128,9 @@ export function ViagemDetalhePage() {
       setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao recalcular.' });
     } finally { setSugerindo(false); }
   }
+
+  const SEM_BAIRRO = '__SEM__';
+  const keyBairro = (b?: string | null) => (b ?? '').trim().toUpperCase() || SEM_BAIRRO;
 
   const adicionarEntrega = (entregaId: string) =>
     acao(async () => {
@@ -230,56 +235,83 @@ export function ViagemDetalhePage() {
 
       {msg && <div className={`rounded-lg px-4 py-2 text-sm ${msg.tipo === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.texto}</div>}
 
-      {/* Resumo */}
+      {ehRascunho && (!v.veiculoId || !v.motoristaId) && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Montagem salva sem {!v.veiculoId && !v.motoristaId ? 'veículo e motorista' : !v.veiculoId ? 'veículo' : 'motorista'} — defina no card abaixo da rota para poder despachar.
+        </p>
+      )}
+      {!ehRascunho && (
       <div className="rounded-xl border border-slate-200 bg-white p-5">
-        {ehRascunho && (!v.veiculoId || !v.motoristaId) && (
-          <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            Montagem salva sem {!v.veiculoId && !v.motoristaId ? 'veículo e motorista' : !v.veiculoId ? 'veículo' : 'motorista'} — defina abaixo para poder despachar.
-          </p>
-        )}
         <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
           <div><span className="block text-xs font-medium text-slate-500">Veículo</span>
-            {ehRascunho ? (
-              <select value={v.veiculoId ?? ''} disabled={busy} onChange={(e) => void definir('veiculoId', e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none">
-                <option value="">—</option>
-                {/* mantém o veículo atual na lista mesmo que não esteja mais DISPONIVEL */}
-                {v.veiculoId && !veiculos.some((x) => x.id === v.veiculoId) && (
-                  <option value={v.veiculoId}>{v.veiculo?.placa ?? 'atual'}</option>
-                )}
-                {veiculos.map((x) => <option key={x.id} value={x.id}>{x.placa}{x.modelo ? ` · ${x.modelo}` : ''}</option>)}
-              </select>
-            ) : (
-              <div className="text-slate-700">{v.veiculo?.placa ?? '—'}{v.veiculo?.modelo ? ` · ${v.veiculo.modelo}` : ''}</div>
-            )}</div>
+            <div className="text-slate-700">{v.veiculo?.placa ?? '—'}{v.veiculo?.modelo ? ` · ${v.veiculo.modelo}` : ''}</div></div>
           <div><span className="block text-xs font-medium text-slate-500">Motorista</span>
-            {ehRascunho ? (
-              <select value={v.motoristaId ?? ''} disabled={busy} onChange={(e) => void definir('motoristaId', e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none">
-                <option value="">—</option>
-                {motoristas.map((x) => <option key={x.id} value={x.id}>{labelCore(x)}</option>)}
-              </select>
-            ) : (
-              <div className="text-slate-700">{v.motoristaNome ?? '—'}</div>
-            )}</div>
+            <div className="text-slate-700">{v.motoristaNome ?? '—'}</div></div>
           <div><span className="block text-xs font-medium text-slate-500">Paradas</span>
             <div className="text-slate-700">{v.paradas.length}</div></div>
           <div><span className="block text-xs font-medium text-slate-500">Volumes</span>
             <div className="text-slate-700">{volumes}</div></div>
         </div>
       </div>
+      )}
 
       <div className={ehRascunho ? 'grid grid-cols-1 items-start gap-6 lg:grid-cols-2' : ''}>
-      {ehRascunho && (
-        <div className="rounded-xl border border-slate-200 bg-white ">
-          <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
-            Fila de pendentes ({pendentesFora.length}) — clique no + para adicionar à rota
+      {ehRascunho && (() => {
+        const bairros = (() => {
+          const m = new Map<string, { label: string; count: number }>();
+          for (const e of pendentesFora) {
+            const k = keyBairro(e.endBairro);
+            const label = (e.endBairro ?? '').trim() || 'Sem bairro';
+            const cur = m.get(k);
+            if (cur) cur.count++; else m.set(k, { label, count: 1 });
+          }
+          return [...m.entries()].map(([key, val]) => ({ key, ...val }))
+            .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+        })();
+        const q = buscaFila.trim().toLowerCase();
+        const filaFiltrada = pendentesFora.filter((e) => {
+          if (bairrosSel.length > 0 && !bairrosSel.includes(keyBairro(e.endBairro))) return false;
+          if (q && !(`#${e.numero} ${e.destinatarioNome} ${e.endLogradouro} ${e.endBairro ?? ''}`.toLowerCase().includes(q))) return false;
+          return true;
+        });
+        const adicionarTodas = () =>
+          acao(async () => {
+            await logisticaApi.post(`/viagens/${id}/entregas`, { entregaIds: filaFiltrada.map((e) => e.id) });
+            setPendentesAdd((p) => p.filter((e) => !filaFiltrada.some((f) => f.id === e.id)));
+          }, 'Falha ao adicionar entregas.');
+        return (
+        <div className="rounded-xl border border-slate-200 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
+            <span>Fila de pendentes ({filaFiltrada.length})</span>
+            {filaFiltrada.length > 0 && (
+              <button onClick={() => void adicionarTodas()} disabled={busy} className="text-xs font-medium text-sky-700 hover:underline">
+                + Adicionar {bairrosSel.length > 0 || q ? 'as filtradas' : 'todas'} ({filaFiltrada.length})
+              </button>
+            )}
           </div>
-          {pendentesFora.length === 0 ? (
-            <div className="p-4 text-sm text-slate-500">Nenhuma entrega pendente fora desta viagem.</div>
+          <div className="space-y-2 border-b border-slate-100 px-4 py-2.5">
+            <input value={buscaFila} onChange={(e) => setBuscaFila(e.target.value)} placeholder="Buscar por nome, rua, bairro ou nº…"
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-sky-500 focus:outline-none" />
+            {bairros.length > 1 && (
+              <div className="flex flex-wrap gap-1.5">
+                <button onClick={() => setBairrosSel([])}
+                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${bairrosSel.length === 0 ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                  Todos
+                </button>
+                {bairros.map((b) => (
+                  <button key={b.key} onClick={() => setBairrosSel((p) => (p.includes(b.key) ? p.filter((x) => x !== b.key) : [...p, b.key]))}
+                    className={`rounded-full px-2.5 py-1 text-xs font-medium ${bairrosSel.includes(b.key) ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                    {b.label} ({b.count})
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {filaFiltrada.length === 0 ? (
+            <div className="p-4 text-sm text-slate-500">{pendentesFora.length === 0 ? 'Nenhuma entrega pendente fora desta viagem.' : 'Tudo que casa com o filtro já está na rota.'}</div>
           ) : (
             <ul className="divide-y divide-slate-100">
-              {pendentesFora.map((e) => (
+              {filaFiltrada.map((e) => (
                 <li key={e.id} className="flex items-center gap-3 px-4 py-2 text-sm">
                   <button onClick={() => void adicionarEntrega(e.id)} disabled={busy} title="Adicionar ao fim da rota"
                     className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-sky-500 text-sky-600 hover:bg-sky-50 disabled:opacity-50">
@@ -296,12 +328,13 @@ export function ViagemDetalhePage() {
             </ul>
           )}
         </div>
-      )}
-      <div>
+        );
+      })()}
+      <div className="space-y-4">
       {/* Paradas na ordem da rota */}
       <div className="rounded-xl border border-slate-200 bg-white">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
-          <span>Rota ({v.paradas.length} paradas)</span>
+          <span>Rota ({v.paradas.length} paradas · {volumes} vol)</span>
           {ehRascunho && v.paradas.length >= 2 && (
             <button onClick={() => void sugerirOrdemRascunho()} disabled={busy || sugerindo}
               title="Geocodifica e reordena pela menor distância a partir da filial"
@@ -378,6 +411,34 @@ export function ViagemDetalhePage() {
           </ul>
         )}
       </div>
+
+      {ehRascunho && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="mb-1 text-sm font-semibold text-slate-700">Veículo e motorista</div>
+          <p className="mb-3 text-xs text-slate-500">O <strong>despacho</strong> exige os dois — salvam na hora ao escolher.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-500">Veículo (disponível)</label>
+              <select value={v.veiculoId ?? ''} disabled={busy} onChange={(e) => void definir('veiculoId', e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none">
+                <option value="">—</option>
+                {v.veiculoId && !veiculos.some((x) => x.id === v.veiculoId) && (
+                  <option value={v.veiculoId}>{v.veiculo?.placa ?? 'atual'}</option>
+                )}
+                {veiculos.map((x) => <option key={x.id} value={x.id}>{x.placa}{x.modelo ? ` · ${x.modelo}` : ''}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500">Motorista</label>
+              <select value={v.motoristaId ?? ''} disabled={busy} onChange={(e) => void definir('motoristaId', e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none">
+                <option value="">—</option>
+                {motoristas.map((x) => <option key={x.id} value={x.id}>{labelCore(x)}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
       </div>
 
