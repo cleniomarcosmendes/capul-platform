@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Package, Truck, CheckCircle2, XCircle, Route, Car } from 'lucide-react';
+import { Loader2, Package, Truck, CheckCircle2, XCircle, Route, Car, Timer } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
@@ -16,9 +16,16 @@ interface Painel {
   porVeiculo: { veiculoId: string; placa: string; viagens: number }[];
   porMotorista: { motoristaId: string; nomeMotorista?: string | null; viagens: number }[];
   porOrigem?: { origem: string; total: number }[];
+  prazoMedio?: { horas: number | null; amostra: number };
 }
 
 const labelCore = (i?: CoreItem) => (i ? i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8) : '—');
+const fmtPrazo = (horas: number | null | undefined) => {
+  if (horas == null) return '—';
+  if (horas < 1) return `${Math.round(horas * 60)} min`;
+  if (horas < 48) return `${Math.floor(horas)}h ${Math.round((horas % 1) * 60)}m`;
+  return `${Math.floor(horas / 24)}d ${Math.round(horas % 24)}h`;
+};
 const diaCurto = (iso: string) => {
   const [, m, d] = iso.split('-');
   return `${d}/${m}`;
@@ -86,7 +93,7 @@ export function PainelPage() {
       ) : (
         <>
           {/* Cards */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
             <Stat icon={Package} cor="text-amber-600" bg="bg-amber-50" valor={c.entregasPendentes} rotulo="Pendentes" />
             <Stat icon={Truck} cor="text-sky-600" bg="bg-sky-50" valor={c.entregasEmViagem} rotulo="Em viagem" />
             <Stat icon={CheckCircle2} cor="text-emerald-600" bg="bg-emerald-50" valor={c.entregasEntregues} rotulo="Entregues" />
@@ -94,6 +101,9 @@ export function PainelPage() {
             <Stat icon={XCircle} cor="text-slate-500" bg="bg-slate-100" valor={c.entregasCanceladas} rotulo="Canceladas" />
             <Stat icon={Route} cor="text-indigo-600" bg="bg-indigo-50" valor={c.viagensEmCurso} rotulo="Viagens em curso" />
             <Stat icon={Car} cor="text-slate-600" bg="bg-slate-100" valor={c.veiculosEmUso} rotulo="Veíc. em uso" sub={`${c.veiculosDisponiveis} disp.`} />
+            <StatTexto icon={Timer} cor="text-violet-600" bg="bg-violet-50"
+              valor={fmtPrazo(data.prazoMedio?.horas)} rotulo="Prazo médio de entrega"
+              sub={data.prazoMedio?.amostra ? `${data.prazoMedio.amostra} entregas no período` : 'sem entregas no período'} />
           </div>
 
           {/* Por dia */}
@@ -157,6 +167,19 @@ function Stat({ icon: Icon, cor, bg, valor, rotulo, sub }: {
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className={`mb-2 inline-flex rounded-lg ${bg} p-1.5`}><Icon className={`h-4 w-4 ${cor}`} /></div>
       <div className="text-2xl font-semibold text-slate-800">{valor}</div>
+      <div className="text-xs text-slate-500">{rotulo}</div>
+      {sub && <div className="text-[11px] text-slate-400">{sub}</div>}
+    </div>
+  );
+}
+
+function StatTexto({ icon: Icon, cor, bg, valor, rotulo, sub }: {
+  icon: typeof Package; cor: string; bg: string; valor: string; rotulo: string; sub?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className={`mb-2 inline-flex rounded-lg ${bg} p-1.5`}><Icon className={`h-4 w-4 ${cor}`} /></div>
+      <div className="text-xl font-semibold text-slate-800">{valor}</div>
       <div className="text-xs text-slate-500">{rotulo}</div>
       {sub && <div className="text-[11px] text-slate-400">{sub}</div>}
     </div>

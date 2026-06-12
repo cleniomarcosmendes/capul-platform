@@ -19,12 +19,13 @@ export class PainelService {
   async resumo(filialId?: string, dias = 14) {
     const janela = Math.min(Math.max(Number(dias) || 14, 1), 90);
     const escopo = filialId ? { filialId } : {};
+    const inicioJanela = new Date(Date.now() - janela * 24 * 60 * 60 * 1000);
 
     const [
       entPendentes, entEmViagem, entEntregues, entNaoEntregues, entCanceladas,
       vgRascunho, vgEmCurso, vgConcluidas,
       veicDisponiveis, veicEmUso, veicManutencao,
-      porFilialRaw, porVeiculoRaw, porMotoristaRaw, porOrigemRaw,
+      porFilialRaw, porVeiculoRaw, porMotoristaRaw, porOrigemRaw, prazoRaw,
     ] = await Promise.all([
       this.prisma.entrega.count({ where: { ...escopo, status: StatusEntrega.PENDENTE } }),
       this.prisma.entrega.count({ where: { ...escopo, status: StatusEntrega.EM_VIAGEM } }),
@@ -55,6 +56,16 @@ export class PainelService {
         where: { ...escopo, status: { not: StatusEntrega.CANCELADA } },
         _count: { _all: true },
       }),
+      // Prazo médio de ENTREGA (pedido 12/06): lançamento (criado_em) → baixa
+      // entregue (data_hora_entrega), na mesma janela de dias do painel.
+      this.prisma.$queryRaw<{ media_horas: number | null; total: number }[]>(Prisma.sql`
+        SELECT avg(EXTRACT(EPOCH FROM (data_hora_entrega - criado_em)))/3600 AS media_horas,
+               count(*)::int AS total
+        FROM "logistica"."entrega"
+        WHERE status = 'ENTREGUE'
+          AND data_hora_entrega IS NOT NULL
+          AND data_hora_entrega >= ${inicioJanela}
+          ${filialId ? Prisma.sql`AND filial_id = ${filialId}` : Prisma.empty}`),
     ]);
 
     // ── Por filial: agrega os status de entrega por filial ──
@@ -70,18 +81,20 @@ export class PainelService {
     }
 
     // ── Por veículo: junta a placa (local) ──
-    const veiculoIds = porVeiculoRaw.map((v) => v.veiculoId);
+    const veiculoIds = porVeiculoRaw.map((v) => v.veiculoId).filter((x): x is string => !!x);
     const veiculos = veiculoIds.length
       ? await this.prisma.veiculo.findMany({ where: { id: { in: veiculoIds } }, select: { id: true, placa: true } })
       : [];
     const placaPorId = new Map(veiculos.map((v) => [v.id, v.placa]));
     const porVeiculo = porVeiculoRaw
-      .map((v) => ({ veiculoId: v.veiculoId, placa: placaPorId.get(v.veiculoId) ?? '—', viagens: v._count._all }))
+      .filter((v) => !!v.veiculoId)
+      .map((v) => ({ veiculoId: v.veiculoId as string, placa: placaPorId.get(v.veiculoId as string) ?? '—', viagens: v._count._all }))
       .sort((a, b) => b.viagens - a.viagens);
 
     // Nomes de motorista/filial são resolvidos no frontend (core) — aqui só IDs+contagem.
     const porMotorista = porMotoristaRaw
-      .map((m) => ({ motoristaId: m.motoristaId, viagens: m._count._all }))
+      .filter((m) => !!m.motoristaId)
+      .map((m) => ({ motoristaId: m.motoristaId as string, viagens: m._count._all }))
       .sort((a, b) => b.viagens - a.viagens);
 
     // ── Por dia (série contínua via generate_series — TZ-consistente, sem buracos):
@@ -138,6 +151,10 @@ export class PainelService {
       porFilial: filiaisOrden.map((f) => ({ ...f, nomeFilial: nomesFil.get(f.filialId) ?? null })),
       porVeiculo,
       porMotorista: porMotorista.map((m) => ({ ...m, nomeMotorista: nomesMot.get(m.motoristaId) ?? null })),
+      prazoMedio: {
+        horas: prazoRaw[0]?.media_horas != null ? Number(prazoRaw[0].media_horas) : null,
+        amostra: prazoRaw[0]?.total ?? 0,
+      },
       porOrigem: porOrigemRaw
         .map((o) => ({ origem: o.origemVenda ?? 'NAO_INFORMADO', total: o._count._all }))
         .sort((a, b) => b.total - a.total),
