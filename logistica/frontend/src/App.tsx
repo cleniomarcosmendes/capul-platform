@@ -9,6 +9,8 @@ import { EntregasPage } from './pages/EntregasPage';
 import { EntregaDetalhePage } from './pages/EntregaDetalhePage';
 import { VeiculosPage } from './pages/VeiculosPage';
 import { ViagensPage } from './pages/ViagensPage';
+import { MontarViagemPage } from './pages/MontarViagemPage';
+import { ViagemDetalhePage } from './pages/ViagemDetalhePage';
 import { EtiquetasPage } from './pages/EtiquetasPage';
 import { RomaneioPage } from './pages/RomaneioPage';
 import { ComprovantesPage } from './pages/ComprovantesPage';
@@ -45,6 +47,8 @@ function Protected() {
               <Route path="/entregas/:id/editar" element={<EntregaNovaPage />} />
               <Route path="/veiculos" element={<VeiculosPage />} />
               <Route path="/viagens" element={<ViagensPage />} />
+              <Route path="/viagens/montar" element={<MontarViagemPage />} />
+              <Route path="/viagens/:id" element={<ViagemDetalhePage />} />
               <Route path="/comprovantes" element={<ComprovantesPage />} />
             </Routes>
           </Layout>
