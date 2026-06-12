@@ -6,7 +6,7 @@ import { CofreService } from '../cofre/cofre.service.js';
 import { GeocodeService } from '../rota/geocode.service.js';
 import { assertPodeVerRegistro } from '../common/filial-scope.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
-import { BaixarEntregaDto, CreateEntregaDto } from './dto.js';
+import { BaixarEntregaDto, CreateEntregaDto, UpdateEntregaDto } from './dto.js';
 
 const onlyDigits = (s?: string | null) => (s ?? '').replace(/\D/g, '');
 
@@ -250,6 +250,119 @@ export class EntregaService {
    * Cancelamento LOCAL — só permitido enquanto PENDENTE. Regra do negócio:
    * nunca se cancela com o veículo na rua (entrega já EM_VIAGEM não cancela aqui).
    */
+  /**
+   * GRID (padrão workspace): listagem completa com filtros — status opcional
+   * (sem = todas), termo livre (nome/telefone/matrícula/nº), período. Devolve
+   * nº da viagem (quando montada) pro grid linkar. Ordenação é no cliente.
+   */
+  async grid(params: {
+    filialId?: string;
+    status?: StatusEntrega;
+    termo?: string;
+    de?: string;
+    ate?: string;
+  }) {
+    const termo = params.termo?.trim();
+    const num = termo && /^\d{1,9}$/.test(termo) ? Number(termo) : undefined;
+    const entregas = await this.prisma.entrega.findMany({
+      where: {
+        ...(params.filialId ? { filialId: params.filialId } : {}),
+        ...(params.status ? { status: params.status } : {}),
+        ...(params.de ? { criadoEm: { gte: new Date(params.de) } } : {}),
+        ...(params.ate ? { criadoEm: { ...(params.de ? { gte: new Date(params.de) } : {}), lte: new Date(`${params.ate}T23:59:59`) } } : {}),
+        ...(termo
+          ? {
+              OR: [
+                { destinatarioNome: { contains: termo, mode: 'insensitive' as const } },
+                { matricula: { contains: termo, mode: 'insensitive' as const } },
+                { telefone: { contains: onlyDigits(termo) || termo } },
+                { endBairro: { contains: termo, mode: 'insensitive' as const } },
+                ...(num !== undefined ? [{ numero: num }] : []),
+              ],
+            }
+          : {}),
+      },
+      include: { cupons: true, parada: { select: { viagem: { select: { numero: true, situacao: true } } } } },
+      orderBy: { criadoEm: 'desc' },
+      take: 500,
+    });
+    return entregas.map(({ parada, ...e }) => ({
+      ...this.comTotal(e),
+      viagemNumero: parada?.viagem?.numero ?? null,
+    }));
+  }
+
+  /**
+   * Edição (grid padrão workspace): só PENDENTE e FORA de viagem — endereço de
+   * carga montada mudaria a rota por baixo do operador. Cupons substituem o
+   * conjunto. Re-aquece a geocodificação se o endereço mudou.
+   */
+  async update(id: string, dto: UpdateEntregaDto, userFilialId?: string) {
+    const e = await this.prisma.entrega.findUnique({
+      where: { id },
+      select: { status: true, filialId: true, parada: { select: { viagem: { select: { numero: true } } } } },
+    });
+    if (!e) throw new NotFoundException('Entrega não encontrada.');
+    if (userFilialId && e.filialId !== userFilialId) {
+      throw new ForbiddenException('Entrega de outra filial — operação não permitida.');
+    }
+    if (e.status !== StatusEntrega.PENDENTE) {
+      throw new BadRequestException(`Só entrega PENDENTE pode ser editada (status atual: ${e.status}).`);
+    }
+    if (e.parada) {
+      throw new BadRequestException(
+        `Entrega está na viagem #${e.parada.viagem?.numero ?? '?'} — remova-a da viagem antes de editar.`,
+      );
+    }
+
+    const cupons = dto.cupons?.filter((c) => c.numeroCupom || c.valor != null);
+    const atualizada = await this.prisma.entrega.update({
+      where: { id },
+      data: {
+        ...(dto.destinatarioNome !== undefined ? { destinatarioNome: dto.destinatarioNome.trim() } : {}),
+        ...(dto.telefone !== undefined ? { telefone: onlyDigits(dto.telefone) || null } : {}),
+        ...(dto.endLogradouro !== undefined ? { endLogradouro: dto.endLogradouro.trim() } : {}),
+        ...(dto.endNumero !== undefined ? { endNumero: dto.endNumero.trim() || null } : {}),
+        ...(dto.endComplemento !== undefined ? { endComplemento: dto.endComplemento.trim() || null } : {}),
+        ...(dto.endBairro !== undefined ? { endBairro: dto.endBairro.trim() || null } : {}),
+        ...(dto.endCidade !== undefined ? { endCidade: dto.endCidade.trim() || null } : {}),
+        ...(dto.endUf !== undefined ? { endUf: dto.endUf.trim().toUpperCase() || null } : {}),
+        ...(dto.endCep !== undefined ? { endCep: onlyDigits(dto.endCep) || null } : {}),
+        ...(dto.endReferencia !== undefined ? { endReferencia: dto.endReferencia.trim() || null } : {}),
+        ...(dto.horario !== undefined ? { horario: dto.horario.trim() || null } : {}),
+        ...(dto.observacoes !== undefined ? { observacoes: dto.observacoes.trim() || null } : {}),
+        ...(dto.quantidadeVolumes !== undefined ? { quantidadeVolumes: dto.quantidadeVolumes } : {}),
+        ...(dto.origemVenda !== undefined ? { origemVenda: dto.origemVenda } : {}),
+        ...(cupons
+          ? {
+              cupons: {
+                deleteMany: {},
+                create: cupons.map((c) => ({
+                  numeroCupom: c.numeroCupom?.trim() || null,
+                  valor: c.valor != null ? new Prisma.Decimal(c.valor) : null,
+                })),
+              },
+            }
+          : {}),
+      },
+      include: { cupons: true },
+    });
+
+    // Endereço pode ter mudado — re-aquece o cache de geocodificação.
+    void this.geocode
+      .geocodificar({
+        logradouro: atualizada.endLogradouro,
+        numero: atualizada.endNumero,
+        bairro: atualizada.endBairro,
+        cidade: atualizada.endCidade,
+        uf: atualizada.endUf,
+        cep: atualizada.endCep,
+      })
+      .catch(() => undefined);
+
+    return this.comTotal(atualizada);
+  }
+
   /**
    * NOVA TENTATIVA (re-entrega — decisão 12/06, opção A): entrega NÃO ENTREGUE
    * (ex.: cliente ausente) volta pra FILA (PENDENTE) pra ser montada numa nova

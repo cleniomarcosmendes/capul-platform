@@ -113,3 +113,40 @@ export class BaixarEntregaDto {
   @IsOptional() @IsString() @MaxLength(80)
   idempotencyKey?: string;
 }
+
+/**
+ * Edição de entrega no GRID (padrão workspace). Só PENDENTE e fora de viagem —
+ * editar endereço de carga já montada mudaria a rota por baixo do operador.
+ */
+export class UpdateEntregaDto {
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(120)
+  destinatarioNome?: string;
+
+  @IsOptional() @IsString() @MaxLength(20)
+  telefone?: string;
+
+  @IsOptional() @IsString() @MaxLength(150) endLogradouro?: string;
+  @IsOptional() @IsString() @MaxLength(20) endNumero?: string;
+  @IsOptional() @IsString() @MaxLength(80) endComplemento?: string;
+  @IsOptional() @IsString() @MaxLength(80) endBairro?: string;
+  @IsOptional() @IsString() @MaxLength(80) endCidade?: string;
+  @IsOptional() @IsString() @MaxLength(2) endUf?: string;
+  @IsOptional() @IsString() @MaxLength(9) endCep?: string;
+  @IsOptional() @IsString() @MaxLength(150) endReferencia?: string;
+
+  @IsOptional() @IsString() @MaxLength(60)
+  horario?: string;
+
+  @IsOptional() @IsString() @MaxLength(500)
+  observacoes?: string;
+
+  @IsOptional() @IsInt() @Min(1) @Max(999)
+  quantidadeVolumes?: number;
+
+  @IsOptional() @IsEnum(OrigemVenda)
+  origemVenda?: OrigemVenda;
+
+  /** Substitui o conjunto de cupons (edição completa da lista). */
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => CupomDto)
+  cupons?: CupomDto[];
+}

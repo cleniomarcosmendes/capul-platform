@@ -5,6 +5,7 @@ import { HomePage } from './pages/HomePage';
 import { PainelPage } from './pages/PainelPage';
 import { ClientesPage } from './pages/ClientesPage';
 import { EntregaNovaPage } from './pages/EntregaNovaPage';
+import { EntregasPage } from './pages/EntregasPage';
 import { VeiculosPage } from './pages/VeiculosPage';
 import { ViagensPage } from './pages/ViagensPage';
 import { EtiquetasPage } from './pages/EtiquetasPage';
@@ -37,6 +38,7 @@ function Protected() {
               <Route path="/" element={<HomePage />} />
               <Route path="/painel" element={<PainelPage />} />
               <Route path="/clientes" element={<ClientesPage />} />
+              <Route path="/entregas" element={<EntregasPage />} />
               <Route path="/entregas/nova" element={<EntregaNovaPage />} />
               <Route path="/veiculos" element={<VeiculosPage />} />
               <Route path="/viagens" element={<ViagensPage />} />

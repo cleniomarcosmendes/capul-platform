@@ -1,11 +1,11 @@
-import { Body, Controller, Get, Param, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { StatusEntrega } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { assertMesmaFilial, resolverFilialLeitura } from '../common/filial-scope.js';
 import { EntregaService, type ProvaBinaria } from './entrega.service.js';
-import { BaixarEntregaDto, CancelarEntregaDto, CreateEntregaDto } from './dto.js';
+import { BaixarEntregaDto, CancelarEntregaDto, CreateEntregaDto, UpdateEntregaDto } from './dto.js';
 
 @Controller('entregas')
 @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
@@ -29,6 +29,19 @@ export class EntregaController {
    * `termo` casa nome/telefone/matrícula; cupom e numero são filtros extras.
    * Declarado ANTES de :id pra não ser capturado pela rota param.
    */
+  /** GRID (padrão workspace): todas as entregas com filtros; ordenação no cliente. */
+  @Get('grid')
+  grid(
+    @CurrentUser() user: JwtPayload,
+    @Query('status') status?: StatusEntrega,
+    @Query('termo') termo?: string,
+    @Query('de') de?: string,
+    @Query('ate') ate?: string,
+    @Query('filialId') filialId?: string,
+  ) {
+    return this.entregas.grid({ filialId: resolverFilialLeitura(user, filialId), status, termo, de, ate });
+  }
+
   @Get('baixadas')
   baixadas(
     @CurrentUser() user: JwtPayload,
@@ -48,6 +61,12 @@ export class EntregaController {
   @Get(':id')
   obter(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.entregas.findOne(id, user);
+  }
+
+  /** Edição (grid): só PENDENTE fora de viagem. */
+  @Patch(':id')
+  atualizar(@Param('id') id: string, @Body() dto: UpdateEntregaDto, @CurrentUser() user: JwtPayload) {
+    return this.entregas.update(id, dto, user.filialId);
   }
 
   /** Nova tentativa: NÃO ENTREGUE volta pra fila (PENDENTE) p/ nova viagem. */
