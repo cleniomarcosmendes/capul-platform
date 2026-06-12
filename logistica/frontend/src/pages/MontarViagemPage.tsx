@@ -190,7 +190,7 @@ export function MontarViagemPage() {
           ) : fila.length === 0 ? (
             <div className="p-6 text-sm text-slate-500">{pendentes.length === 0 ? 'Nenhuma entrega pendente.' : 'Tudo que casa com o filtro já está na rota.'}</div>
           ) : (
-            <ul className="max-h-[480px] divide-y divide-slate-100 overflow-auto">
+            <ul className="divide-y divide-slate-100">
               {fila.map((e) => (
                 <li key={e.id} className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-50">
                   <button onClick={() => adicionar(e.id)} title="Adicionar à rota"
@@ -231,7 +231,7 @@ export function MontarViagemPage() {
             {rota.length === 0 ? (
               <div className="p-6 text-sm text-slate-500">Adicione entregas da fila ao lado — a ordem daqui vira a sequência das paradas.</div>
             ) : (
-              <ul className="max-h-[420px] divide-y divide-slate-100 overflow-auto">
+              <ul className="divide-y divide-slate-100">
                 {rota.map((id, i) => {
                   const e = porId.get(id);
                   if (!e) return null;

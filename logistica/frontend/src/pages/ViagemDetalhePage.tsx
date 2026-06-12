@@ -230,8 +230,6 @@ export function ViagemDetalhePage() {
 
       {msg && <div className={`rounded-lg px-4 py-2 text-sm ${msg.tipo === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.texto}</div>}
 
-      <div className={ehRascunho ? 'grid grid-cols-1 items-start gap-6 lg:grid-cols-5' : ''}>
-      <div className={ehRascunho ? 'space-y-4 lg:col-span-3' : 'space-y-4'}>
       {/* Resumo */}
       <div className="rounded-xl border border-slate-200 bg-white p-5">
         {ehRascunho && (!v.veiculoId || !v.motoristaId) && (
@@ -271,6 +269,8 @@ export function ViagemDetalhePage() {
         </div>
       </div>
 
+      <div className={ehRascunho ? 'grid grid-cols-1 items-start gap-6 lg:grid-cols-5' : ''}>
+      <div className={ehRascunho ? 'lg:col-span-3' : ''}>
       {/* Paradas na ordem da rota */}
       <div className="rounded-xl border border-slate-200 bg-white">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
@@ -362,7 +362,7 @@ export function ViagemDetalhePage() {
           {pendentesFora.length === 0 ? (
             <div className="p-4 text-sm text-slate-500">Nenhuma entrega pendente fora desta viagem.</div>
           ) : (
-            <ul className="max-h-[480px] divide-y divide-slate-100 overflow-auto">
+            <ul className="divide-y divide-slate-100">
               {pendentesFora.map((e) => (
                 <li key={e.id} className="flex items-center gap-3 px-4 py-2 text-sm">
                   <button onClick={() => void adicionarEntrega(e.id)} disabled={busy} title="Adicionar ao fim da rota"
