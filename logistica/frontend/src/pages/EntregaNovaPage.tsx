@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Loader2, Plus, Trash2, Package, Search, MapPin, Eraser } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { maskTelefone, maskCep, onlyDigits, UFS } from '../utils/format';
 
 type TipoCliente = 'IDENTIFICADO' | 'RECORRENTE_LOCAL' | 'EVENTUAL';
@@ -97,6 +98,9 @@ export function EntregaNovaPage() {
   const [msgMat, setMsgMat] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
 
   const [salvando, setSalvando] = useState(false);
+  // Protecao contra perda de dados (padrao workspace/chamado).
+  const [dirty, setDirty] = useState(false);
+  const { ConfirmDialog: DirtyDialog, guardedNavigate } = useUnsavedChanges(dirty);
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
   const ultimoCupomRef = useRef<HTMLInputElement>(null);
   const matriculaRef = useRef<HTMLInputElement>(null);
@@ -467,6 +471,7 @@ export function EntregaNovaPage() {
             .filter((c) => c.numeroCupom || c.valor)
             .map((c) => ({ numeroCupom: c.numeroCupom || undefined, valor: c.valor ? parseFloat(c.valor) : undefined })),
         });
+        setDirty(false);
         navigate(`/entregas/${edicaoId}`);
       } catch (err) {
         const m = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -502,6 +507,7 @@ export function EntregaNovaPage() {
       });
       setMsg({ tipo: 'ok', texto: `Entrega nº ${data.numero} registrada.` });
       resetForm();
+      setDirty(false);
     } catch {
       setMsg({ tipo: 'erro', texto: 'Falha ao registrar entrega.' });
     } finally {
@@ -514,14 +520,15 @@ export function EntregaNovaPage() {
   const lbl = 'block text-xs font-medium text-slate-500';
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-6xl" onChange={() => setDirty(true)}>
+      {DirtyDialog}
       {/* Formulário */}
       <form onSubmit={submit} onKeyDown={bloquearEnterSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-lg font-semibold text-slate-800">
           {modoEdicao ? `Editar entrega${numeroEdicao ? ` #${numeroEdicao}` : ''}` : 'Nova entrega'}
         </h2>
         {modoEdicao && (
-          <button type="button" onClick={() => navigate(`/entregas/${edicaoId}`)}
+          <button type="button" onClick={() => guardedNavigate(`/entregas/${edicaoId}`)}
             className="-mt-1 text-xs text-slate-500 hover:text-slate-700 hover:underline">← Voltar pro detalhe (sem salvar)</button>
         )}
 
@@ -772,7 +779,7 @@ export function EntregaNovaPage() {
               <button
                 type="button"
                 key={o.v}
-                onClick={() => setOrigemVenda(o.v)}
+                onClick={() => { setOrigemVenda(o.v); setDirty(true); }}
                 className={`rounded-lg border px-3 py-1.5 text-sm ${origemVenda === o.v ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-300 text-slate-600'}`}
               >
                 {o.label}

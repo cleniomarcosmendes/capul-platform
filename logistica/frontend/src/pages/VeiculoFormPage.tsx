@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Loader2, Truck } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { maskPlaca } from '../utils/format';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 
 // Form de veículo (padrão FormPage do workspace): /veiculos/novo e
 // /veiculos/:id/editar no MESMO componente.
@@ -34,6 +35,8 @@ export function VeiculoFormPage() {
   const [situacao, setSituacao] = useState('DISPONIVEL');
   const [carregando, setCarregando] = useState(modoEdicao);
   const [salvando, setSalvando] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const { ConfirmDialog: DirtyDialog } = useUnsavedChanges(dirty);
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
 
   useEffect(() => {
@@ -89,6 +92,7 @@ export function VeiculoFormPage() {
     try {
       if (modoEdicao) await logisticaApi.patch(`/veiculos/${id}`, payload);
       else await logisticaApi.post('/veiculos', payload);
+      setDirty(false);
       navigate('/veiculos');
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
@@ -103,7 +107,8 @@ export function VeiculoFormPage() {
   if (carregando) return <div className="p-6 text-sm text-slate-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Carregando…</div>;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="mx-auto max-w-3xl space-y-4" onChange={() => setDirty(true)}>
+      {DirtyDialog}
       <Link to="/veiculos" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
         <ArrowLeft className="h-4 w-4" /> Voltar para Frota
       </Link>
