@@ -55,7 +55,6 @@ export function ViagemDetalhePage() {
   const [veiculos, setVeiculos] = useState<{ id: string; placa: string; modelo?: string | null }[]>([]);
   const [motoristas, setMotoristas] = useState<CoreItem[]>([]);
   const [pendentesAdd, setPendentesAdd] = useState<EntregaPend[]>([]);
-  const [mostrarAdicionar, setMostrarAdicionar] = useState(false);
   const [sugerindo, setSugerindo] = useState(false);
 
   const carregar = useCallback(async () => {
@@ -176,7 +175,7 @@ export function ViagemDetalhePage() {
   const pendentesFora = pendentesAdd.filter((e) => !idsNaViagem.has(e.id));
 
   return (
-    <div className="max-w-3xl space-y-4">
+    <div className="mx-auto max-w-6xl space-y-4">
       <Link to="/viagens" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
         <ArrowLeft className="h-4 w-4" /> Voltar para Viagens
       </Link>
@@ -231,6 +230,8 @@ export function ViagemDetalhePage() {
 
       {msg && <div className={`rounded-lg px-4 py-2 text-sm ${msg.tipo === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.texto}</div>}
 
+      <div className={ehRascunho ? 'grid grid-cols-1 items-start gap-6 lg:grid-cols-5' : ''}>
+      <div className={ehRascunho ? 'space-y-4 lg:col-span-3' : 'space-y-4'}>
       {/* Resumo */}
       <div className="rounded-xl border border-slate-200 bg-white p-5">
         {ehRascunho && (!v.veiculoId || !v.motoristaId) && (
@@ -351,37 +352,36 @@ export function ViagemDetalhePage() {
         )}
       </div>
 
+      </div>
+
       {ehRascunho && (
-        <div className="rounded-xl border border-slate-200 bg-white">
-          <button onClick={() => setMostrarAdicionar((x) => !x)}
-            className="flex w-full items-center justify-between px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-            <span>+ Adicionar entregas pendentes ({pendentesFora.length} na fila)</span>
-            <span className="text-slate-400">{mostrarAdicionar ? '▲' : '▼'}</span>
-          </button>
-          {mostrarAdicionar && (
-            pendentesFora.length === 0 ? (
-              <div className="border-t border-slate-100 p-4 text-sm text-slate-500">Nenhuma entrega pendente fora desta viagem.</div>
-            ) : (
-              <ul className="max-h-72 divide-y divide-slate-100 overflow-auto border-t border-slate-100">
-                {pendentesFora.map((e) => (
-                  <li key={e.id} className="flex items-center gap-3 px-4 py-2 text-sm">
-                    <button onClick={() => void adicionarEntrega(e.id)} disabled={busy} title="Adicionar ao fim da rota"
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-sky-500 text-sky-600 hover:bg-sky-50 disabled:opacity-50">
-                      <Plus className="h-4 w-4" />
-                    </button>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium text-slate-700">#{e.numero} · {e.destinatarioNome}</div>
-                      <div className="truncate text-xs text-slate-500">
-                        {e.endLogradouro}{e.endNumero ? `, ${e.endNumero}` : ''} — {(e.endBairro ?? '').trim() || 'sem bairro'} · {e.quantidadeVolumes} vol
-                      </div>
+        <div className="rounded-xl border border-slate-200 bg-white lg:col-span-2">
+          <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
+            Fila de pendentes ({pendentesFora.length}) — clique no + para adicionar à rota
+          </div>
+          {pendentesFora.length === 0 ? (
+            <div className="p-4 text-sm text-slate-500">Nenhuma entrega pendente fora desta viagem.</div>
+          ) : (
+            <ul className="max-h-[480px] divide-y divide-slate-100 overflow-auto">
+              {pendentesFora.map((e) => (
+                <li key={e.id} className="flex items-center gap-3 px-4 py-2 text-sm">
+                  <button onClick={() => void adicionarEntrega(e.id)} disabled={busy} title="Adicionar ao fim da rota"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-sky-500 text-sky-600 hover:bg-sky-50 disabled:opacity-50">
+                    <Plus className="h-4 w-4" />
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-slate-700">#{e.numero} · {e.destinatarioNome}</div>
+                    <div className="truncate text-xs text-slate-500">
+                      {e.endLogradouro}{e.endNumero ? `, ${e.endNumero}` : ''} — {(e.endBairro ?? '').trim() || 'sem bairro'} · {e.quantidadeVolumes} vol
                     </div>
-                  </li>
-                ))}
-              </ul>
-            )
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}
+      </div>
 
       <ConfirmDialog
         open={!!confirmacao}
