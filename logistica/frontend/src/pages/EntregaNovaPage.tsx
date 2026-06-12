@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Loader2, Plus, Trash2, Package, X, Search, MapPin, Eraser } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -59,6 +60,12 @@ const TIPOS: { v: TipoCliente; label: string }[] = [
 export function EntregaNovaPage() {
   const { usuario } = useAuth();
   const filialId = usuario?.filialAtual?.id ?? usuario?.filiais?.[0]?.id ?? '';
+  // Modo EDIÇÃO (padrão FormPage do workspace: criar e editar na mesma página).
+  // Com :id na rota, carrega a entrega, pré-preenche e o salvar vira PATCH.
+  const { id: edicaoId } = useParams<{ id: string }>();
+  const modoEdicao = !!edicaoId;
+  const navigate = useNavigate();
+  const [numeroEdicao, setNumeroEdicao] = useState<number | null>(null);
 
   const [tipoCliente, setTipoCliente] = useState<TipoCliente>('IDENTIFICADO');
   const [matricula, setMatricula] = useState('');
@@ -109,7 +116,45 @@ export function EntregaNovaPage() {
   const pularBuscaTelRef = useRef(false);
 
   // Ao carregar a página, foca o primeiro campo (matrícula) — pronto pra digitar.
-  useEffect(() => { matriculaRef.current?.focus(); }, []);
+  useEffect(() => { if (!modoEdicao) matriculaRef.current?.focus(); }, [modoEdicao]);
+
+  // Edição: carrega a entrega e pré-preenche. Só PENDENTE fora de viagem é
+  // editável — senão volta pro detalhe (que explica o porquê).
+  useEffect(() => {
+    if (!edicaoId) return;
+    (async () => {
+      try {
+        const { data: e } = await logisticaApi.get<{
+          numero: number; status: string; viagemNumero?: number | null;
+          tipoCliente: TipoCliente; matricula?: string | null; destinatarioNome: string; telefone?: string | null;
+          endLogradouro: string; endNumero?: string | null; endComplemento?: string | null; endBairro?: string | null;
+          endCidade?: string | null; endUf?: string | null; endCep?: string | null; endReferencia?: string | null;
+          observacoes?: string | null; quantidadeVolumes: number; origemVenda?: 'PRESENCIAL' | 'TELE_VENDA' | 'OUTRO' | null;
+          cupons: { numeroCupom?: string | null; valor?: string | number | null }[];
+        }>(`/entregas/${edicaoId}`);
+        if (e.status !== 'PENDENTE' || e.viagemNumero != null) {
+          navigate(`/entregas/${edicaoId}`, { replace: true });
+          return;
+        }
+        setNumeroEdicao(e.numero);
+        setTipoCliente(e.tipoCliente);
+        setMatricula(e.matricula ?? '');
+        setDestinatarioNome(e.destinatarioNome);
+        if (e.telefone) { pularBuscaTelRef.current = true; setTelefone(maskTelefone(e.telefone)); }
+        setLogradouro(e.endLogradouro); setNumero(e.endNumero ?? ''); setComplemento(e.endComplemento ?? '');
+        setBairro(e.endBairro ?? ''); setCidade(e.endCidade ?? 'Unaí'); setUf(e.endUf ?? 'MG');
+        setCep(e.endCep ? maskCep(e.endCep) : ''); setReferencia(e.endReferencia ?? '');
+        setVolumes(e.quantidadeVolumes); setObservacoes(e.observacoes ?? '');
+        setOrigemVenda(e.origemVenda ?? '');
+        setCupons(e.cupons.length
+          ? e.cupons.map((c) => ({ numeroCupom: c.numeroCupom ?? '', valor: c.valor != null ? String(c.valor) : '' }))
+          : [{ numeroCupom: '', valor: '' }]);
+      } catch {
+        setMsg({ tipo: 'erro', texto: 'Entrega não encontrada.' });
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edicaoId]);
 
   const totalCupons = cupons.reduce((acc, c) => acc + (parseFloat(c.valor) || 0), 0);
   const identificado = tipoCliente === 'IDENTIFICADO';
@@ -129,6 +174,7 @@ export function EntregaNovaPage() {
   // Protheus e preenche a matrícula). Pula quando o telefone foi preenchido por
   // autofill (evita reabrir o dropdown por cima do form).
   useEffect(() => {
+    if (modoEdicao) return; // edição não requalifica cliente — só corrige dados
     if (pularBuscaTelRef.current) { pularBuscaTelRef.current = false; return; }
     const digits = onlyDigits(telefone);
     if (digits.length < 4) { setSugestoes(null); setMostrarSug(false); return; }
@@ -395,6 +441,32 @@ export function EntregaNovaPage() {
     if (!filialId) { setMsg({ tipo: 'erro', texto: 'Sem filial no perfil — selecione uma filial no Hub.' }); return; }
     if (!origemVenda) { setMsg({ tipo: 'erro', texto: 'Informe a origem da venda (presencial, tele-venda ou outro).' }); return; }
     setSalvando(true);
+    if (modoEdicao) {
+      // Edição (PATCH): só os campos editáveis; cupons substituem o conjunto.
+      try {
+        await logisticaApi.patch(`/entregas/${edicaoId}`, {
+          destinatarioNome,
+          telefone: telefone ? onlyDigits(telefone) : '',
+          endLogradouro: logradouro,
+          endNumero: numero, endComplemento: complemento, endBairro: bairro,
+          endCidade: cidade, endUf: uf, endCep: cep ? onlyDigits(cep) : '',
+          endReferencia: referencia,
+          quantidadeVolumes: volumes,
+          origemVenda,
+          observacoes,
+          cupons: cupons
+            .filter((c) => c.numeroCupom || c.valor)
+            .map((c) => ({ numeroCupom: c.numeroCupom || undefined, valor: c.valor ? parseFloat(c.valor) : undefined })),
+        });
+        navigate(`/entregas/${edicaoId}`);
+      } catch (err) {
+        const m = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+        setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao salvar as alterações.' });
+      } finally {
+        setSalvando(false);
+      }
+      return;
+    }
     try {
       const { data } = await logisticaApi.post('/entregas', {
         filialId,
@@ -447,11 +519,17 @@ export function EntregaNovaPage() {
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* Formulário */}
       <form onSubmit={submit} onKeyDown={bloquearEnterSubmit} className="lg:col-span-2 space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="text-lg font-semibold text-slate-800">Nova entrega</h2>
+        <h2 className="text-lg font-semibold text-slate-800">
+          {modoEdicao ? `Editar entrega${numeroEdicao ? ` #${numeroEdicao}` : ''}` : 'Nova entrega'}
+        </h2>
+        {modoEdicao && (
+          <button type="button" onClick={() => navigate(`/entregas/${edicaoId}`)}
+            className="-mt-1 text-xs text-slate-500 hover:text-slate-700 hover:underline">← Voltar pro detalhe (sem salvar)</button>
+        )}
 
         <div className="flex items-center gap-2">
           {TIPOS.map((t) => (
-            <button type="button" key={t.v} onClick={() => { setTipoCliente(t.v); setMsgMat(null); }}
+            <button type="button" key={t.v} disabled={modoEdicao} onClick={() => { setTipoCliente(t.v); setMsgMat(null); }}
               className={`rounded-lg border px-3 py-1.5 text-sm ${tipoCliente === t.v ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-300 text-slate-600'}`}>
               {t.label}
             </button>
@@ -724,11 +802,12 @@ export function EntregaNovaPage() {
         <button type="submit" disabled={salvando}
           className="flex items-center gap-2 rounded-lg bg-sky-600 px-5 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
           {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
-          Salvar entrega
+          {modoEdicao ? 'Salvar alterações' : 'Salvar entrega'}
         </button>
       </form>
 
-      {/* Pendentes */}
+      {/* Pendentes — só no modo criação (em edição a lateral não faz sentido) */}
+      {!modoEdicao && (
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <h3 className="mb-3 text-sm font-semibold text-slate-700">Pendentes ({pendentes.length})</h3>
         {pendentes.length === 0 ? (
@@ -748,6 +827,7 @@ export function EntregaNovaPage() {
           </ul>
         )}
       </div>
+      )}
     </div>
   );
 }

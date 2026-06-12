@@ -240,10 +240,18 @@ export class EntregaService {
   }
 
   async findOne(id: string, user?: JwtPayload) {
-    const e = await this.prisma.entrega.findUnique({ where: { id }, include: { cupons: true } });
+    const e = await this.prisma.entrega.findUnique({
+      where: { id },
+      include: { cupons: true, parada: { select: { viagem: { select: { numero: true, situacao: true } } } } },
+    });
     if (!e) throw new NotFoundException('Entrega não encontrada.');
     if (user) assertPodeVerRegistro(user, e.filialId);
-    return this.comTotal(e);
+    const { parada, ...resto } = e;
+    return {
+      ...this.comTotal(resto),
+      viagemNumero: parada?.viagem?.numero ?? null,
+      viagemSituacao: parada?.viagem?.situacao ?? null,
+    };
   }
 
   /**

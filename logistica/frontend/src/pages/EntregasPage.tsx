@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import {
-  ArrowUpDown, ArrowUp, ArrowDown, Loader2, Plus, Printer, Search, X, Pencil, Phone,
-} from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowUpDown, ArrowUp, ArrowDown, Loader2, Plus, Printer, Search } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { maskTelefone, maskCep, onlyDigits } from '../utils/format';
+
 
 // Grid de Entregas (padrão workspace — ref. Contrato/NF/Parada do gestão-TI):
 // colunas ordenáveis por clique, filtros, status em chip, clique abre/edita.
@@ -13,7 +11,6 @@ import { maskTelefone, maskCep, onlyDigits } from '../utils/format';
 type Status = 'PENDENTE' | 'EM_VIAGEM' | 'ENTREGUE' | 'NAO_ENTREGUE' | 'CANCELADA';
 type Origem = 'PRESENCIAL' | 'TELE_VENDA' | 'OUTRO';
 
-interface Cupom { numeroCupom?: string | null; valor?: string | number | null }
 interface EntregaG {
   id: string; numero: number; criadoEm: string;
   destinatarioNome: string; telefone?: string | null; matricula?: string | null;
@@ -21,7 +18,7 @@ interface EntregaG {
   endBairro?: string | null; endCidade?: string | null; endUf?: string | null; endCep?: string | null;
   endReferencia?: string | null; horario?: string | null; observacoes?: string | null;
   quantidadeVolumes: number; origemVenda?: Origem | null; tentativas?: number;
-  status: Status; totalCupons: number; cupons: Cupom[];
+  status: Status; totalCupons: number;
   viagemNumero?: number | null; motivoNaoEntrega?: string | null; dataHoraEntrega?: string | null;
 }
 
@@ -57,13 +54,8 @@ export function EntregasPage() {
   const [sortKey, setSortKey] = useState<SortKey>('numero');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
-  // Detalhe/edição
-  const [aberta, setAberta] = useState<EntregaG | null>(null);
-  const [editando, setEditando] = useState(false);
-  const [form, setForm] = useState<Partial<EntregaG>>({});
-  const [cuponsForm, setCuponsForm] = useState<{ numeroCupom: string; valor: string }[]>([]);
-  const [salvando, setSalvando] = useState(false);
   const [reabrindo, setReabrindo] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   async function carregar() {
     setLoading(true);
@@ -81,6 +73,7 @@ export function EntregasPage() {
       setMsg({ tipo: 'erro', texto: 'Falha ao carregar as entregas.' });
     } finally { setLoading(false); }
   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void carregar(); }, [filialId, statusSel]); // termo/datas via botão Buscar
 
   function toggleSort(key: SortKey) {
@@ -104,60 +97,12 @@ export function EntregasPage() {
     return arr;
   }, [itens, sortKey, sortDir]);
 
-  const editavel = (e: EntregaG) => e.status === 'PENDENTE' && e.viagemNumero == null;
-
-  function abrir(e: EntregaG) {
-    setAberta(e);
-    setEditando(false);
-    setForm({});
-    setCuponsForm(e.cupons.map((c) => ({ numeroCupom: c.numeroCupom ?? '', valor: c.valor != null ? String(c.valor) : '' })));
-  }
-
-  function iniciarEdicao() {
-    if (!aberta) return;
-    setForm({
-      destinatarioNome: aberta.destinatarioNome,
-      telefone: aberta.telefone ? maskTelefone(aberta.telefone) : '',
-      endLogradouro: aberta.endLogradouro, endNumero: aberta.endNumero ?? '',
-      endComplemento: aberta.endComplemento ?? '', endBairro: aberta.endBairro ?? '',
-      endCidade: aberta.endCidade ?? '', endUf: aberta.endUf ?? 'MG',
-      endCep: aberta.endCep ? maskCep(aberta.endCep) : '', endReferencia: aberta.endReferencia ?? '',
-      horario: aberta.horario ?? '', observacoes: aberta.observacoes ?? '',
-      quantidadeVolumes: aberta.quantidadeVolumes, origemVenda: aberta.origemVenda ?? undefined,
-    });
-    setEditando(true);
-  }
-
-  async function salvar() {
-    if (!aberta) return;
-    setSalvando(true);
-    setMsg(null);
-    try {
-      const payload: Record<string, unknown> = {
-        ...form,
-        telefone: form.telefone ? onlyDigits(String(form.telefone)) : '',
-        endCep: form.endCep ? onlyDigits(String(form.endCep)) : '',
-        cupons: cuponsForm
-          .filter((c) => c.numeroCupom || c.valor)
-          .map((c) => ({ numeroCupom: c.numeroCupom || undefined, valor: c.valor ? parseFloat(c.valor) : undefined })),
-      };
-      const { data } = await logisticaApi.patch<EntregaG>(`/entregas/${aberta.id}`, payload);
-      setItens((p) => p.map((x) => (x.id === aberta.id ? { ...x, ...data } : x)));
-      setAberta(null);
-      setMsg({ tipo: 'ok', texto: `Entrega #${aberta.numero} atualizada.` });
-    } catch (err) {
-      const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao salvar.' });
-    } finally { setSalvando(false); }
-  }
-
   async function novaTentativa(e: EntregaG) {
     setReabrindo(e.id);
     setMsg(null);
     try {
       await logisticaApi.post(`/entregas/${e.id}/nova-tentativa`, {});
       setMsg({ tipo: 'ok', texto: `Entrega #${e.numero} voltou pra fila (nova tentativa).` });
-      setAberta(null);
       void carregar();
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
@@ -244,7 +189,7 @@ export function EntregasPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {ordenadas.map((e) => (
-                <tr key={e.id} onClick={() => abrir(e)} className="cursor-pointer hover:bg-slate-50">
+                <tr key={e.id} onClick={() => navigate(`/entregas/${e.id}`)} className="cursor-pointer hover:bg-slate-50">
                   <td className="px-3 py-2 font-medium text-slate-700">
                     #{e.numero}
                     {(e.tentativas ?? 1) > 1 && <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-700">♻{e.tentativas}ª</span>}
@@ -282,143 +227,6 @@ export function EntregasPage() {
       </div>
       <p className="text-xs text-slate-400">{ordenadas.length} entrega{ordenadas.length === 1 ? '' : 's'} · clique no cabeçalho para ordenar</p>
 
-      {/* Modal detalhe/edição */}
-      {aberta && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" onClick={() => setAberta(null)}>
-          <div className="max-h-[92vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
-              <div className="text-base font-semibold text-slate-800">
-                Entrega #{aberta.numero}
-                <span className={`ml-2 rounded px-1.5 py-0.5 text-xs font-medium ${STATUS_META[aberta.status].cls}`}>{STATUS_META[aberta.status].label}</span>
-                {(aberta.tentativas ?? 1) > 1 && <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">♻ {aberta.tentativas}ª tentativa</span>}
-              </div>
-              <button onClick={() => setAberta(null)} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
-            </div>
-
-            {!editando ? (
-              <div className="space-y-3 text-sm">
-                <div className="grid grid-cols-2 gap-3">
-                  <div><span className={lbl}>Destinatário</span><div className="text-slate-700">{aberta.destinatarioNome}</div></div>
-                  <div><span className={lbl}>Telefone</span><div className="text-slate-700">{aberta.telefone ? <a className="inline-flex items-center gap-1 text-sky-700 hover:underline" href={`tel:${aberta.telefone}`}><Phone className="h-3 w-3" />{maskTelefone(aberta.telefone)}</a> : '—'}</div></div>
-                  <div className="col-span-2"><span className={lbl}>Endereço</span>
-                    <div className="text-slate-700">
-                      {aberta.endLogradouro}{aberta.endNumero ? `, ${aberta.endNumero}` : ''}{aberta.endComplemento ? ` (${aberta.endComplemento})` : ''}
-                      {aberta.endBairro ? ` — ${aberta.endBairro}` : ''} · {aberta.endCidade}/{aberta.endUf}{aberta.endCep ? ` · CEP ${maskCep(aberta.endCep)}` : ''}
-                    </div>
-                    {aberta.endReferencia && <div className="text-xs text-slate-500">Ref.: {aberta.endReferencia}</div>}
-                  </div>
-                  <div><span className={lbl}>Volumes</span><div className="text-slate-700">{aberta.quantidadeVolumes}</div></div>
-                  <div><span className={lbl}>Origem da venda</span><div className="text-slate-700">{aberta.origemVenda ? ORIGEM_LABEL[aberta.origemVenda] : '—'}</div></div>
-                  <div><span className={lbl}>Matrícula</span><div className="text-slate-700">{aberta.matricula ?? '—'}</div></div>
-                  <div><span className={lbl}>Viagem</span><div className="text-slate-700">{aberta.viagemNumero ? `#${aberta.viagemNumero}` : '—'}</div></div>
-                  {aberta.horario && <div><span className={lbl}>Horário preferido</span><div className="text-slate-700">{aberta.horario}</div></div>}
-                  {aberta.observacoes && <div className="col-span-2"><span className={lbl}>Observações</span><div className="text-slate-700">{aberta.observacoes}</div></div>}
-                  {aberta.motivoNaoEntrega && <div className="col-span-2"><span className={lbl}>Motivo da não-entrega</span><div className="text-rose-700">{aberta.motivoNaoEntrega}</div></div>}
-                </div>
-                <div>
-                  <span className={lbl}>Cupons / Notas</span>
-                  {aberta.cupons.length === 0 ? <div className="text-slate-500">—</div> : (
-                    <ul className="mt-1 space-y-0.5">
-                      {aberta.cupons.map((c, i) => (
-                        <li key={i} className="text-slate-700">{c.numeroCupom || 's/ nº'}{c.valor != null ? ` · R$ ${Number(c.valor).toFixed(2)}` : ''}</li>
-                      ))}
-                    </ul>
-                  )}
-                  {aberta.totalCupons > 0 && <div className="mt-1 text-slate-600">Total: <strong>R$ {Number(aberta.totalCupons).toFixed(2)}</strong></div>}
-                </div>
-                <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
-                  {aberta.status === 'NAO_ENTREGUE' && (
-                    <button onClick={() => void novaTentativa(aberta)} disabled={reabrindo === aberta.id}
-                      className="rounded-lg border border-amber-400 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50">
-                      ♻ Nova tentativa
-                    </button>
-                  )}
-                  {editavel(aberta) ? (
-                    <button onClick={iniciarEdicao}
-                      className="flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700">
-                      <Pencil className="h-3.5 w-3.5" /> Editar
-                    </button>
-                  ) : (
-                    <span className="text-xs text-slate-400">
-                      {aberta.status === 'PENDENTE' ? 'Em viagem montada — remova da viagem para editar.' : 'Somente entregas pendentes podem ser editadas.'}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3 text-sm">
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className={lbl}>Destinatário *</label>
-                    <input value={String(form.destinatarioNome ?? '')} onChange={(e) => setForm((f) => ({ ...f, destinatarioNome: e.target.value }))} className={inp} /></div>
-                  <div><label className={lbl}>Telefone</label>
-                    <input value={String(form.telefone ?? '')} onChange={(e) => setForm((f) => ({ ...f, telefone: maskTelefone(e.target.value) }))} className={inp} /></div>
-                  <div className="col-span-2 grid grid-cols-6 gap-2">
-                    <div className="col-span-2"><label className={lbl}>CEP</label>
-                      <input value={String(form.endCep ?? '')} onChange={(e) => setForm((f) => ({ ...f, endCep: maskCep(e.target.value) }))} className={inp} inputMode="numeric" /></div>
-                    <div className="col-span-4"><label className={lbl}>Endereço *</label>
-                      <input value={String(form.endLogradouro ?? '')} onChange={(e) => setForm((f) => ({ ...f, endLogradouro: e.target.value }))} className={inp} /></div>
-                    <div className="col-span-2"><label className={lbl}>Número</label>
-                      <input value={String(form.endNumero ?? '')} onChange={(e) => setForm((f) => ({ ...f, endNumero: e.target.value }))} className={inp} /></div>
-                    <div className="col-span-4"><label className={lbl}>Complemento</label>
-                      <input value={String(form.endComplemento ?? '')} onChange={(e) => setForm((f) => ({ ...f, endComplemento: e.target.value }))} className={inp} /></div>
-                    <div className="col-span-3"><label className={lbl}>Bairro</label>
-                      <input value={String(form.endBairro ?? '')} onChange={(e) => setForm((f) => ({ ...f, endBairro: e.target.value }))} className={inp} /></div>
-                    <div className="col-span-2"><label className={lbl}>Cidade</label>
-                      <input value={String(form.endCidade ?? '')} onChange={(e) => setForm((f) => ({ ...f, endCidade: e.target.value }))} className={inp} /></div>
-                    <div className="col-span-1"><label className={lbl}>UF</label>
-                      <input value={String(form.endUf ?? '')} maxLength={2} onChange={(e) => setForm((f) => ({ ...f, endUf: e.target.value.toUpperCase() }))} className={inp} /></div>
-                    <div className="col-span-6"><label className={lbl}>Ponto de referência</label>
-                      <input value={String(form.endReferencia ?? '')} onChange={(e) => setForm((f) => ({ ...f, endReferencia: e.target.value }))} className={inp} /></div>
-                  </div>
-                  <div><label className={lbl}>Volumes</label>
-                    <input type="number" min={1} value={Number(form.quantidadeVolumes ?? 1)} onChange={(e) => setForm((f) => ({ ...f, quantidadeVolumes: Math.max(1, parseInt(e.target.value) || 1) }))} className={inp} /></div>
-                  <div><label className={lbl}>Horário preferido</label>
-                    <input value={String(form.horario ?? '')} onChange={(e) => setForm((f) => ({ ...f, horario: e.target.value }))} className={inp} /></div>
-                  <div className="col-span-2"><label className={lbl}>Observações</label>
-                    <input value={String(form.observacoes ?? '')} onChange={(e) => setForm((f) => ({ ...f, observacoes: e.target.value }))} className={inp} /></div>
-                  <div className="col-span-2">
-                    <label className={lbl}>Origem da venda</label>
-                    <div className="mt-1 flex gap-2">
-                      {(['PRESENCIAL', 'TELE_VENDA', 'OUTRO'] as Origem[]).map((o) => (
-                        <button type="button" key={o} onClick={() => setForm((f) => ({ ...f, origemVenda: o }))}
-                          className={`rounded-lg border px-3 py-1.5 text-sm ${form.origemVenda === o ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-300 text-slate-600'}`}>
-                          {ORIGEM_LABEL[o]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <label className={lbl}>Cupons / Notas</label>
-                  <div className="mt-1 space-y-2">
-                    {cuponsForm.map((c, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <input placeholder="Nº cupom / nota" value={c.numeroCupom}
-                          onChange={(e) => setCuponsForm((p) => p.map((x, j) => (j === i ? { ...x, numeroCupom: e.target.value } : x)))}
-                          className="w-44 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none" />
-                        <input placeholder="Valor" type="number" step="0.01" value={c.valor}
-                          onChange={(e) => setCuponsForm((p) => p.map((x, j) => (j === i ? { ...x, valor: e.target.value } : x)))}
-                          className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none" />
-                        <button type="button" onClick={() => setCuponsForm((p) => (p.length > 1 ? p.filter((_, j) => j !== i) : [{ numeroCupom: '', valor: '' }]))}
-                          className="text-slate-400 hover:text-red-600"><X className="h-4 w-4" /></button>
-                      </div>
-                    ))}
-                    <button type="button" onClick={() => setCuponsForm((p) => [...p, { numeroCupom: '', valor: '' }])}
-                      className="text-xs font-medium text-sky-700 hover:underline">+ Adicionar cupom</button>
-                  </div>
-                </div>
-                <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
-                  <button onClick={() => setEditando(false)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">Cancelar</button>
-                  <button onClick={() => void salvar()} disabled={salvando || !String(form.destinatarioNome ?? '').trim() || !String(form.endLogradouro ?? '').trim()}
-                    className="rounded-lg bg-sky-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
-                    {salvando ? 'Salvando…' : 'Salvar alterações'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
