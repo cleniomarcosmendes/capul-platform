@@ -217,6 +217,79 @@ export class EntregaService {
    * Cancelamento LOCAL — só permitido enquanto PENDENTE. Regra do negócio:
    * nunca se cancela com o veículo na rua (entrega já EM_VIAGEM não cancela aqui).
    */
+  /**
+   * NOVA TENTATIVA (re-entrega — decisão 12/06, opção A): entrega NÃO ENTREGUE
+   * (ex.: cliente ausente) volta pra FILA (PENDENTE) pra ser montada numa nova
+   * viagem com rota recalculada — em vez de o entregador ter 2 viagens ativas
+   * (quebraria auto-conclusão, frota e o app). A trilha da tentativa anterior
+   * (motivo/quando/quem/viagem) é preservada em `historicoTentativas`, e a
+   * parada da viagem antiga guarda referência legível antes de desvincular
+   * (parada.entregaId é @unique — a entrega só pode estar em 1 parada).
+   */
+  async novaTentativa(id: string, userFilialId?: string) {
+    const e = await this.prisma.entrega.findUnique({
+      where: { id },
+      include: { parada: { include: { viagem: { select: { numero: true, situacao: true } } } } },
+    });
+    if (!e) throw new NotFoundException('Entrega não encontrada.');
+    if (userFilialId && e.filialId !== userFilialId) {
+      throw new ForbiddenException('Entrega de outra filial — operação não permitida.');
+    }
+    if (e.status !== StatusEntrega.NAO_ENTREGUE) {
+      throw new BadRequestException(
+        `Só entrega NÃO ENTREGUE volta pra fila (status atual: ${e.status}).`,
+      );
+    }
+    if (e.parada && !['CONCLUIDA', 'CANCELADA'].includes(e.parada.viagem.situacao)) {
+      throw new BadRequestException(
+        `A viagem #${e.parada.viagem.numero} ainda está em curso — conclua-a antes da nova tentativa.`,
+      );
+    }
+
+    const historico = Array.isArray(e.historicoTentativas)
+      ? (e.historicoTentativas as unknown[])
+      : [];
+    historico.push({
+      tentativa: e.tentativas,
+      motivo: e.motivoNaoEntrega,
+      dataHora: e.dataHoraEntrega,
+      baixadoPorId: e.baixadoPorId,
+      viagemNumero: e.parada?.viagem.numero ?? null,
+    });
+
+    const ops = [];
+    if (e.parada) {
+      ops.push(
+        this.prisma.parada.update({
+          where: { id: e.parada.id },
+          data: {
+            entregaId: null,
+            local: e.parada.local ?? `Entrega #${e.numero} — ${e.destinatarioNome}`,
+            observacao: `Não entregue (tentativa ${e.tentativas}): ${e.motivoNaoEntrega ?? 'sem motivo'}`,
+          },
+        }),
+      );
+    }
+    ops.push(
+      this.prisma.entrega.update({
+        where: { id },
+        data: {
+          status: StatusEntrega.PENDENTE,
+          tentativas: { increment: 1 },
+          historicoTentativas: historico as Prisma.InputJsonValue,
+          dataHoraEntrega: null,
+          motivoNaoEntrega: null,
+          baixadoPorId: null,
+          geoLat: null,
+          geoLng: null,
+        },
+        include: { cupons: true },
+      }),
+    );
+    const resultados = await this.prisma.$transaction(ops);
+    return this.comTotal(resultados[resultados.length - 1] as Parameters<typeof this.comTotal>[0]);
+  }
+
   async cancelar(id: string, motivo: string | undefined, canceladaPorId: string, userFilialId?: string) {
     const e = await this.prisma.entrega.findUnique({
       where: { id },

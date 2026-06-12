@@ -50,6 +50,12 @@ export class EntregaController {
     return this.entregas.findOne(id, user);
   }
 
+  /** Nova tentativa: NÃO ENTREGUE volta pra fila (PENDENTE) p/ nova viagem. */
+  @Post(':id/nova-tentativa')
+  novaTentativa(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.entregas.novaTentativa(id, user.filialId);
+  }
+
   /** Cancelamento local (só PENDENTE). */
   @Post(':id/cancelar')
   cancelar(

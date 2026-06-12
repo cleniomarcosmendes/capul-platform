@@ -8,7 +8,7 @@ import { maskTelefone } from '../utils/format';
 
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
 interface Veiculo { id: string; placa: string; modelo?: string | null; situacao: string }
-interface Entrega { id: string; numero: number; destinatarioNome: string; endLogradouro: string; endBairro?: string | null; quantidadeVolumes: number; criadoEm: string; horario?: string | null }
+interface Entrega { id: string; numero: number; destinatarioNome: string; endLogradouro: string; endBairro?: string | null; quantidadeVolumes: number; criadoEm: string; horario?: string | null; tentativas?: number }
 interface Viagem {
   id: string; numero: number; situacao: string;
   veiculo?: { placa: string } | null; _count?: { paradas: number };
@@ -286,7 +286,14 @@ export function ViagensPage() {
                         {idx >= 0 ? idx + 1 : ''}
                       </button>
                       <div className="flex-1">
-                        <div className="font-medium text-slate-700">#{e.numero} · {e.destinatarioNome}</div>
+                        <div className="font-medium text-slate-700">
+                          #{e.numero} · {e.destinatarioNome}
+                          {(e.tentativas ?? 1) > 1 && (
+                            <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700" title="Entrega devolvida pra fila — nova tentativa">
+                              ♻ {e.tentativas}ª tentativa
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-slate-500">{e.endLogradouro} — {e.endBairro} · {e.quantidadeVolumes} vol</div>
                         <div className="flex items-center gap-1 text-[11px] text-slate-400" title="Hora do lançamento da entrega (compra)">
                           <Clock className="h-3 w-3" /> {new Date(e.criadoEm).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}

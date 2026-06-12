@@ -206,6 +206,10 @@ model Entrega {
   observacoes       String?
   quantidadeVolumes Int                @default(1) @map("quantidade_volumes")
   origemVenda       OrigemVenda?       @map("origem_venda")
+  // Re-entrega (cliente ausente etc.): nº da tentativa atual + trilha das
+  // tentativas anteriores (motivo/quando/quem) preservada ao voltar pra fila.
+  tentativas        Int                @default(1)
+  historicoTentativas Json?            @map("historico_tentativas")
   status            StatusEntrega      @default(PENDENTE)
   criadoEm          DateTime           @default(now()) @map("criado_em")
   criadoPorId       String             @map("criado_por_id")

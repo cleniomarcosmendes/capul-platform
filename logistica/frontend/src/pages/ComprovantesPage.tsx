@@ -41,6 +41,21 @@ export function ComprovantesPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [imagem, setImagem] = useState<{ url: string; meta: ComprovanteMeta; entrega: EntregaBaixada } | null>(null);
   const [imgBusy, setImgBusy] = useState<string | null>(null);
+  const [reabrindo, setReabrindo] = useState<string | null>(null);
+
+  // Re-entrega (cliente ausente etc.): volta a entrega pra fila de pendentes —
+  // será montada numa nova viagem com rota recalculada.
+  async function novaTentativa(e: EntregaBaixada) {
+    setErro(null);
+    setReabrindo(e.id);
+    try {
+      await logisticaApi.post(`/entregas/${e.id}/nova-tentativa`, {});
+      setItens((p) => p.filter((x) => x.id !== e.id));
+    } catch (err) {
+      const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+      setErro(Array.isArray(m) ? m.join(', ') : m || 'Falha ao reabrir a entrega.');
+    } finally { setReabrindo(null); }
+  }
 
   async function buscar() {
     setErro(null); setLoading(true); setBuscou(true);
@@ -120,12 +135,21 @@ export function ComprovantesPage() {
                     </td>
                     <td className="px-4 py-2 text-slate-600">{e.dataHoraEntrega ? new Date(e.dataHoraEntrega).toLocaleString('pt-BR') : '—'}</td>
                     <td className="px-4 py-2 text-right">
-                      {e.temComprovante && e.comprovanteId
-                        ? <button onClick={() => verProva(e)} disabled={imgBusy === e.id}
-                            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">
-                            {imgBusy === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5" />} Ver prova
+                      <div className="flex items-center justify-end gap-2">
+                        {e.temComprovante && e.comprovanteId
+                          ? <button onClick={() => verProva(e)} disabled={imgBusy === e.id}
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+                              {imgBusy === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5" />} Ver prova
+                            </button>
+                          : <span className="text-xs text-slate-400">sem prova</span>}
+                        {e.status === 'NAO_ENTREGUE' && (
+                          <button onClick={() => void novaTentativa(e)} disabled={reabrindo === e.id}
+                            title="Volta a entrega pra fila de pendentes para montar nova viagem"
+                            className="inline-flex items-center gap-1 rounded-lg border border-amber-400 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50">
+                            {reabrindo === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '♻'} Nova tentativa
                           </button>
-                        : <span className="text-xs text-slate-400">sem prova</span>}
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
