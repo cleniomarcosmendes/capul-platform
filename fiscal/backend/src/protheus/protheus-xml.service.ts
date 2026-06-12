@@ -114,6 +114,56 @@ export class ProtheusXmlService {
   }
 
   /**
+   * Filial de DESTINO de nota de SAÍDA Capul via `GET /xmlFilDestino?CHAVENFEE=`
+   * (SPED050 — endpoint entregue 12/06/2026). Pra transferência entre filiais:
+   * o NFeDistribuicaoDFe só entrega o XML pra parte com interesse (destinatária)
+   * — com o CNPJ dela fazemos UMA consulta SEFAZ direcionada em vez do 641 da
+   * emitente + varredura de filiais.
+   *
+   * Best-effort: 404 = chave não é saída Capul na SPED050 (ex.: nota de
+   * fornecedor) → `{found:false}` e o fluxo segue normal. Erros técnicos
+   * também viram `{found:false}` (não derrubam a consulta).
+   */
+  async buscarFilialDestino(chave: string): Promise<{
+    found: boolean;
+    cnpjDestino?: string;
+    codFilial?: string;
+    numeroNF?: string;
+  }> {
+    if (this.mockMode) return { found: false };
+
+    try {
+      const resp = await this.http.request<{
+        chave: string;
+        cnpjOrigem: string;
+        cnpjDestino: string;
+        numeroNF: string;
+        serie: string;
+        codFilial: string;
+      }>({
+        operacao: 'xmlFilDestino',
+        method: 'GET',
+        query: { CHAVENFEE: chave },
+      });
+      const cnpj = (resp.cnpjDestino ?? '').replace(/\D/g, '');
+      if (cnpj.length !== 14) return { found: false };
+      return {
+        found: true,
+        cnpjDestino: cnpj,
+        codFilial: (resp.codFilial ?? '').trim() || undefined,
+        numeroNF: (resp.numeroNF ?? '').trim() || undefined,
+      };
+    } catch (err) {
+      if (!(err instanceof ProtheusHttpError && err.statusCode === 404)) {
+        this.logger.warn(
+          `xmlFilDestino falhou para chave ${chave.slice(0, 6)}…: ${(err as Error).message} — seguindo fluxo normal.`,
+        );
+      }
+      return { found: false };
+    }
+  }
+
+  /**
    * Grava XML em SZR010 (cabeçalho) + SZQ010 (itens) via `POST /grvXML`
    * (contrato simplificado 08/05/2026).
    *

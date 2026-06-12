@@ -300,6 +300,10 @@ async function main() {
     { modulo: 'FISCAL' as const, ambiente: 'PRODUCAO' as const, operacao: 'grvXML', url: `${BASE_PRD}/FISCAL/grvXML`, metodo: 'POST' as const, timeoutMs: 60000 },
     { modulo: 'FISCAL' as const, ambiente: 'PRODUCAO' as const, operacao: 'eventosNfe', url: `${BASE_PRD}/FISCAL/eventosNfe`, metodo: 'GET' as const, timeoutMs: 60000 },
     { modulo: 'FISCAL' as const, ambiente: 'PRODUCAO' as const, operacao: 'cadastroFiscal', url: `${BASE_PRD}/FISCAL/cadastroFiscal`, metodo: 'GET' as const, timeoutMs: 60000 },
+    // 12/06/2026 — filial de DESTINO de nota de saída (SPED050): GET ?CHAVENFEE=
+    // → { chave, cnpjDestino, codFilial, ... }. Consulta SEFAZ direcionada pra
+    // transferência entre filiais (emitente não baixa o próprio XML — 641).
+    { modulo: 'FISCAL' as const, ambiente: 'PRODUCAO' as const, operacao: 'xmlFilDestino', url: `${BASE_PRD}/FISCAL/xmlFilDestino`, metodo: 'GET' as const, timeoutMs: 15000 },
   ];
 
   const endpointsFiscalHlg = endpointsFiscalPrd.map((ep) => ({
