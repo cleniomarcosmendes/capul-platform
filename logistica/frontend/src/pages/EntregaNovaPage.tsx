@@ -514,7 +514,7 @@ export function EntregaNovaPage() {
   const lbl = 'block text-xs font-medium text-slate-500';
 
   return (
-    <div className="max-w-4xl">
+    <div className="mx-auto max-w-6xl">
       {/* Formulário */}
       <form onSubmit={submit} onKeyDown={bloquearEnterSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-lg font-semibold text-slate-800">
@@ -654,7 +654,7 @@ export function EntregaNovaPage() {
             ✎ Editar os campos abaixo <strong>corrige este endereço salvo</strong>. Para um endereço diferente, use “+ Novo endereço”.
           </p>
         )}
-        <div className="grid grid-cols-6 gap-3">
+        <div className="grid grid-cols-6 gap-3 lg:grid-cols-12">
           {/* CEP primeiro: ao completar 8 dígitos o ViaCEP preenche o endereço
               e o operador só completa o número. */}
           <div className="col-span-2">
@@ -677,27 +677,27 @@ export function EntregaNovaPage() {
               </p>
             )}
           </div>
-          <div className="col-span-4">
+          <div className="col-span-4 lg:col-span-5">
             <label className={lbl}>Endereço de Entrega *</label>
             <input value={logradouro} onChange={(e) => editEndereco(setLogradouro)(e.target.value)} required
               readOnly={travaCep.logradouro}
               className={`${inp} ${travaCep.logradouro ? 'bg-slate-50 text-slate-600' : ''}`} placeholder="Rua / Avenida" />
           </div>
-          <div className="col-span-2">
+          <div className="col-span-2 lg:col-span-1">
             <label className={lbl}>Número</label>
             <input ref={numeroRef} value={numero} onChange={(e) => editEndereco(setNumero)(e.target.value)} className={inp} />
           </div>
-          <div className="col-span-4">
+          <div className="col-span-4 lg:col-span-4">
             <label className={lbl}>Complemento</label>
             <input value={complemento} onChange={(e) => editEndereco(setComplemento)(e.target.value)} className={inp} placeholder="Apto, bloco, casa…" />
           </div>
-          <div className="col-span-3">
+          <div className="col-span-3 lg:col-span-4">
             <label className={lbl}>Bairro</label>
             <input value={bairro} onChange={(e) => editEndereco(setBairro)(e.target.value)}
               readOnly={travaCep.bairro}
               className={`${inp} ${travaCep.bairro ? 'bg-slate-50 text-slate-600' : ''}`} />
           </div>
-          <div className="col-span-2">
+          <div className="col-span-2 lg:col-span-3">
             <label className={lbl}>Cidade</label>
             <input value={cidade} onChange={(e) => editEndereco(setCidade)(e.target.value)}
               readOnly={travaCep.cidade}
@@ -710,6 +710,10 @@ export function EntregaNovaPage() {
               {UFS.map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
+          <div className="col-span-6 lg:col-span-4">
+            <label className={lbl}>Ponto de referência</label>
+            <input value={referencia} onChange={(e) => setReferencia(e.target.value)} className={inp} placeholder="Perto de…" />
+          </div>
         </div>
 
         {(travaCep.logradouro || travaCep.bairro || travaCep.cidade || travaCep.uf) && (
@@ -721,11 +725,7 @@ export function EntregaNovaPage() {
           </p>
         )}
 
-        <div>
-          <label className={lbl}>Ponto de referência</label>
-          <input value={referencia} onChange={(e) => setReferencia(e.target.value)} className={inp} placeholder="Perto de…" />
-        </div>
-
+        <div className="grid grid-cols-1 gap-x-6 gap-y-4 lg:grid-cols-2">
         {/* Cupons / Notas */}
         <div>
           <label className={lbl}>Cupons / Notas</label>
@@ -760,6 +760,7 @@ export function EntregaNovaPage() {
           <p className="mt-1 text-[11px] text-slate-400">Enter adiciona outro cupom; o cadastro só é gravado no botão “Salvar entrega”.</p>
         </div>
 
+        <div className="space-y-4">
         <div>
           <label className={lbl}>Origem da venda *</label>
           <div className="mt-1 flex items-center gap-2">
@@ -789,6 +790,8 @@ export function EntregaNovaPage() {
             <label className={lbl}>Observações</label>
             <input value={observacoes} onChange={(e) => setObservacoes(e.target.value)} className={inp} />
           </div>
+        </div>
+        </div>
         </div>
 
         {msg && (
