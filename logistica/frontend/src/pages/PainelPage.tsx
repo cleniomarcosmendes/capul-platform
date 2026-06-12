@@ -15,6 +15,7 @@ interface Painel {
   porFilial: { filialId: string; nomeFilial?: string | null; pendentes: number; emViagem: number; entregues: number; total: number }[];
   porVeiculo: { veiculoId: string; placa: string; viagens: number }[];
   porMotorista: { motoristaId: string; nomeMotorista?: string | null; viagens: number }[];
+  porOrigem?: { origem: string; total: number }[];
 }
 
 const labelCore = (i?: CoreItem) => (i ? i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8) : '—');
@@ -85,11 +86,12 @@ export function PainelPage() {
       ) : (
         <>
           {/* Cards */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
             <Stat icon={Package} cor="text-amber-600" bg="bg-amber-50" valor={c.entregasPendentes} rotulo="Pendentes" />
             <Stat icon={Truck} cor="text-sky-600" bg="bg-sky-50" valor={c.entregasEmViagem} rotulo="Em viagem" />
             <Stat icon={CheckCircle2} cor="text-emerald-600" bg="bg-emerald-50" valor={c.entregasEntregues} rotulo="Entregues" />
-            <Stat icon={XCircle} cor="text-rose-600" bg="bg-rose-50" valor={c.entregasCanceladas} rotulo="Canceladas" />
+            <Stat icon={XCircle} cor="text-rose-600" bg="bg-rose-50" valor={c.entregasNaoEntregues} rotulo="Não entregues" />
+            <Stat icon={XCircle} cor="text-slate-500" bg="bg-slate-100" valor={c.entregasCanceladas} rotulo="Canceladas" />
             <Stat icon={Route} cor="text-indigo-600" bg="bg-indigo-50" valor={c.viagensEmCurso} rotulo="Viagens em curso" />
             <Stat icon={Car} cor="text-slate-600" bg="bg-slate-100" valor={c.veiculosEmUso} rotulo="Veíc. em uso" sub={`${c.veiculosDisponiveis} disp.`} />
           </div>
@@ -117,7 +119,7 @@ export function PainelPage() {
           </div>
 
           {/* Tabelas */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-4">
             <Tabela titulo="Por filial">
               {data.porFilial.length === 0 ? <Vazio /> : data.porFilial.map((f) => (
                 <Linha key={f.filialId} esq={f.nomeFilial || nomeFilial(f.filialId)}
@@ -127,6 +129,13 @@ export function PainelPage() {
             <Tabela titulo="Viagens por veículo">
               {data.porVeiculo.length === 0 ? <Vazio /> : data.porVeiculo.map((v) => (
                 <Linha key={v.veiculoId} esq={<span className="font-mono">{v.placa}</span>} dir={<b>{v.viagens}</b>} />
+              ))}
+            </Tabela>
+            <Tabela titulo="Origem da venda">
+              {(data.porOrigem?.length ?? 0) === 0 ? <Vazio /> : data.porOrigem!.map((o) => (
+                <Linha key={o.origem}
+                  esq={{ PRESENCIAL: 'Presencial', TELE_VENDA: 'Tele-venda', OUTRO: 'Outro', NAO_INFORMADO: 'Não informado' }[o.origem] ?? o.origem}
+                  dir={<b>{o.total}</b>} />
               ))}
             </Tabela>
             <Tabela titulo="Viagens por motorista">

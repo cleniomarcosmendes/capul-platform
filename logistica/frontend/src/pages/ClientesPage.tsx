@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import { Search, Loader2, MapPin } from 'lucide-react';
+import { useMemo, useState, type FormEvent } from 'react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Search, Loader2 } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { maskTelefone } from '../utils/format';
 
@@ -42,6 +42,8 @@ const COR: Record<Origem, string> = {
 export function ClientesPage() {
   const [termo, setTermo] = useState('');
   const [linhas, setLinhas] = useState<Linha[] | null>(null);
+  const [sortKey, setSortKey] = useState<keyof Linha>('nome');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -97,6 +99,26 @@ export function ClientesPage() {
     }
   }
 
+  function toggleSort(key: keyof Linha) {
+    if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('asc'); }
+  }
+  const SortIcon = ({ col }: { col: keyof Linha }) => {
+    if (sortKey !== col) return <ArrowUpDown className="h-3 w-3 text-slate-300" />;
+    return sortDir === 'asc' ? <ArrowUp className="h-3 w-3 text-sky-600" /> : <ArrowDown className="h-3 w-3 text-sky-600" />;
+  };
+  const ordenadas = useMemo(() => {
+    const arr = [...(linhas ?? [])];
+    arr.sort((a, b) => {
+      const cmp = String(a[sortKey] ?? '').localeCompare(String(b[sortKey] ?? ''), 'pt-BR');
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return arr;
+  }, [linhas, sortKey, sortDir]);
+
+  const th = 'px-3 py-2.5';
+  const btnSort = 'flex items-center gap-1 hover:text-slate-700';
+
   return (
     <div className="space-y-6">
       <div>
@@ -126,25 +148,32 @@ export function ClientesPage() {
       {erro && <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{erro}</div>}
 
       {linhas !== null && (
-        <div className="rounded-xl border border-slate-200 bg-white">
-          {linhas.length === 0 ? (
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+          {ordenadas.length === 0 ? (
             <div className="p-6 text-sm text-slate-500">Nenhum endereço encontrado para “{termo}”.</div>
           ) : (
-            <ul className="divide-y divide-slate-100">
-              {linhas.map((l, i) => (
-                <li key={i} className="flex items-start gap-3 px-4 py-3">
-                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-slate-800">{l.nome}</span>
-                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${COR[l.origem]}`}>{l.origem}</span>
-                    </div>
-                    <div className="text-sm text-slate-600">{l.endereco}{l.cidadeUf ? ` · ${l.cidadeUf}` : ''}</div>
-                    <div className="text-xs text-slate-400">{l.telefone ? maskTelefone(l.telefone) : 'sem telefone'}</div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <table className="w-full text-sm">
+              <thead className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
+                <tr>
+                  <th className={th}><button onClick={() => toggleSort('nome')} className={btnSort}>Nome <SortIcon col="nome" /></button></th>
+                  <th className={th}><button onClick={() => toggleSort('endereco')} className={btnSort}>Endereço <SortIcon col="endereco" /></button></th>
+                  <th className={th}><button onClick={() => toggleSort('cidadeUf')} className={btnSort}>Cidade <SortIcon col="cidadeUf" /></button></th>
+                  <th className={th}><button onClick={() => toggleSort('telefone')} className={btnSort}>Telefone <SortIcon col="telefone" /></button></th>
+                  <th className={th}><button onClick={() => toggleSort('origem')} className={btnSort}>Origem <SortIcon col="origem" /></button></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {ordenadas.map((l, i) => (
+                  <tr key={i} className="hover:bg-slate-50">
+                    <td className="px-3 py-2 font-medium text-slate-700">{l.nome}</td>
+                    <td className="px-3 py-2 text-slate-600">{l.endereco}</td>
+                    <td className="px-3 py-2 text-slate-500">{l.cidadeUf || '—'}</td>
+                    <td className="px-3 py-2 text-slate-600">{l.telefone ? maskTelefone(l.telefone) : '—'}</td>
+                    <td className="px-3 py-2"><span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${COR[l.origem]}`}>{l.origem}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       )}

@@ -1,192 +1,147 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { Loader2, Truck, Plus, Pencil } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, Plus } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
-import { maskPlaca } from '../utils/format';
+
+// Frota (padrão workspace): LISTA em grid ordenável + chips de situação;
+// clique na linha abre o form de edição (/veiculos/:id/editar).
 
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
 interface Veiculo {
-  id: string;
-  placa: string;
-  modelo?: string | null;
-  marca?: string | null;
-  ano?: number | null;
-  tipo: string;
-  situacao: string;
-  kmAtual: number;
-  filialId: string;
-  departamentoLotacaoId: string;
-  supervisorId: string;
+  id: string; placa: string; modelo?: string | null; marca?: string | null;
+  ano?: number | null; tipo: string; situacao: string; kmAtual: number;
+  filialId: string; supervisorId: string;
 }
 
-const TIPOS = ['CARRO', 'UTILITARIO', 'CAMINHAO', 'OUTRO'];
-const SITUACOES = ['DISPONIVEL', 'EM_USO', 'EM_MANUTENCAO', 'BAIXADO'];
-const labelCore = (i: CoreItem) => i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8);
+const labelCore = (i?: CoreItem) => (i ? i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8) : '—');
+
+const SIT_META: Record<string, { label: string; cls: string }> = {
+  DISPONIVEL: { label: 'Disponível', cls: 'bg-emerald-100 text-emerald-700' },
+  EM_USO: { label: 'Em uso', cls: 'bg-sky-100 text-sky-700' },
+  EM_MANUTENCAO: { label: 'Em manutenção', cls: 'bg-amber-100 text-amber-700' },
+  BAIXADO: { label: 'Baixado', cls: 'bg-rose-100 text-rose-700' },
+};
+
+type SortKey = 'placa' | 'modelo' | 'tipo' | 'situacao' | 'supervisor' | 'kmAtual';
+type SortDir = 'asc' | 'desc';
 
 export function VeiculosPage() {
+  const navigate = useNavigate();
   const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
-  const [filiais, setFiliais] = useState<CoreItem[]>([]);
-  const [departamentos, setDepartamentos] = useState<CoreItem[]>([]);
   const [usuarios, setUsuarios] = useState<CoreItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [situacaoSel, setSituacaoSel] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('placa');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
 
-  const [placa, setPlaca] = useState('');
-  const [modelo, setModelo] = useState('');
-  const [marca, setMarca] = useState('');
-  const [ano, setAno] = useState('');
-  const [tipo, setTipo] = useState('CARRO');
-  const [kmAtual, setKmAtual] = useState('0');
-  const [filialId, setFilialId] = useState('');
-  const [departamentoLotacaoId, setDepartamentoId] = useState('');
-  const [supervisorId, setSupervisorId] = useState('');
-  const [situacao, setSituacao] = useState('DISPONIVEL');
-  const [editId, setEditId] = useState<string | null>(null); // null = novo cadastro
-  const [salvando, setSalvando] = useState(false);
-  const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
+  useEffect(() => {
+    void (async () => {
+      setLoading(true);
+      try {
+        const [v, u] = await Promise.all([
+          logisticaApi.get<Veiculo[]>('/veiculos', { params: situacaoSel ? { situacao: situacaoSel } : undefined }),
+          coreApi.get<CoreItem[]>('/usuarios').catch(() => ({ data: [] })),
+        ]);
+        setVeiculos(v.data); setUsuarios(u.data);
+      } finally { setLoading(false); }
+    })();
+  }, [situacaoSel]);
 
-  async function carregar() {
-    setLoading(true);
-    try {
-      const [v, f, d, u] = await Promise.all([
-        logisticaApi.get<Veiculo[]>('/veiculos'),
-        coreApi.get<CoreItem[]>('/filiais').catch(() => ({ data: [] })),
-        coreApi.get<CoreItem[]>('/departamentos').catch(() => ({ data: [] })),
-        coreApi.get<CoreItem[]>('/usuarios').catch(() => ({ data: [] })),
-      ]);
-      setVeiculos(v.data);
-      setFiliais(f.data);
-      setDepartamentos(d.data);
-      setUsuarios(u.data);
-    } finally {
-      setLoading(false);
-    }
+  const nomeSupervisor = (id: string) => labelCore(usuarios.find((x) => x.id === id));
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('asc'); }
   }
-  useEffect(() => { void carregar(); }, []);
-
-  const nomePorId = (lista: CoreItem[], id: string) => {
-    const i = lista.find((x) => x.id === id);
-    return i ? labelCore(i) : id.slice(0, 8);
+  const SortIcon = ({ col }: { col: SortKey }) => {
+    if (sortKey !== col) return <ArrowUpDown className="h-3 w-3 text-slate-300" />;
+    return sortDir === 'asc' ? <ArrowUp className="h-3 w-3 text-sky-600" /> : <ArrowDown className="h-3 w-3 text-sky-600" />;
   };
 
-  function novoVeiculo() {
-    setEditId(null); setMsg(null);
-    setPlaca(''); setModelo(''); setMarca(''); setAno(''); setTipo('CARRO'); setKmAtual('0');
-    setFilialId(''); setDepartamentoId(''); setSupervisorId(''); setSituacao('DISPONIVEL');
-  }
-
-  function editarVeiculo(v: Veiculo) {
-    setEditId(v.id); setMsg(null);
-    setPlaca(v.placa); setModelo(v.modelo ?? ''); setMarca(v.marca ?? '');
-    setAno(v.ano ? String(v.ano) : ''); setTipo(v.tipo); setKmAtual(String(v.kmAtual ?? 0));
-    setFilialId(v.filialId); setDepartamentoId(v.departamentoLotacaoId); setSupervisorId(v.supervisorId);
-    setSituacao(v.situacao);
-  }
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    setMsg(null);
-    if (!filialId || !departamentoLotacaoId || !supervisorId) {
-      setMsg({ tipo: 'erro', texto: 'Filial, departamento e supervisor são obrigatórios.' });
-      return;
-    }
-    setSalvando(true);
-    const payload = {
-      filialId,
-      placa,
-      modelo: modelo || undefined,
-      marca: marca || undefined,
-      ano: ano ? parseInt(ano) : undefined,
-      tipo,
-      kmAtual: kmAtual ? parseInt(kmAtual) : 0,
-      departamentoLotacaoId,
-      supervisorId,
-      ...(editId ? { situacao } : {}),
-    };
-    try {
-      if (editId) {
-        await logisticaApi.patch(`/veiculos/${editId}`, payload);
-        setMsg({ tipo: 'ok', texto: `Veículo ${placa.toUpperCase()} atualizado.` });
-        novoVeiculo();
-      } else {
-        await logisticaApi.post('/veiculos', payload);
-        setMsg({ tipo: 'ok', texto: `Veículo ${placa.toUpperCase()} cadastrado.` });
-        setPlaca(''); setModelo(''); setMarca(''); setAno(''); setKmAtual('0');
+  const ordenados = useMemo(() => {
+    const val = (v: Veiculo, k: SortKey): string | number => {
+      switch (k) {
+        case 'modelo': return `${v.marca ?? ''} ${v.modelo ?? ''}`.trim();
+        case 'supervisor': return nomeSupervisor(v.supervisorId);
+        default: return (v[k] as string | number) ?? '';
       }
-      void carregar();
-    } catch (err) {
-      const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao salvar veículo.' });
-    } finally {
-      setSalvando(false);
-    }
-  }
+    };
+    const arr = [...veiculos];
+    arr.sort((a, b) => {
+      const va = val(a, sortKey); const vb = val(b, sortKey);
+      const cmp = typeof va === 'number' || typeof vb === 'number'
+        ? Number(va) - Number(vb)
+        : String(va).localeCompare(String(vb), 'pt-BR');
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return arr;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [veiculos, sortKey, sortDir, usuarios]);
 
-  const inp = 'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none';
+  const th = 'px-3 py-2.5';
+  const btnSort = 'flex items-center gap-1 hover:text-slate-700';
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-      <form onSubmit={submit} className="lg:col-span-1 space-y-3 rounded-xl border border-slate-200 bg-white p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800"><Truck className="h-5 w-5 text-sky-600" /> {editId ? 'Editar veículo' : 'Novo veículo'}</h2>
-          {editId && <button type="button" onClick={novoVeiculo} className="flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline"><Plus className="h-3 w-3" /> Novo</button>}
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-800">Frota</h2>
+          <p className="text-sm text-slate-500">Veículos da logística — clique numa linha para editar.</p>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div><label className="block text-xs font-medium text-slate-500">Placa *</label><input value={placa} onChange={(e) => setPlaca(maskPlaca(e.target.value))} required placeholder="ABC1D23" maxLength={7} className={`${inp} font-mono uppercase`} /></div>
-          <div><label className="block text-xs font-medium text-slate-500">Tipo</label>
-            <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={inp}>{TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}</select>
-          </div>
-          <div><label className="block text-xs font-medium text-slate-500">Modelo</label><input value={modelo} onChange={(e) => setModelo(e.target.value)} className={inp} /></div>
-          <div><label className="block text-xs font-medium text-slate-500">Marca</label><input value={marca} onChange={(e) => setMarca(e.target.value)} className={inp} /></div>
-          <div><label className="block text-xs font-medium text-slate-500">Ano</label><input type="number" value={ano} onChange={(e) => setAno(e.target.value)} className={inp} /></div>
-          <div><label className="block text-xs font-medium text-slate-500">KM atual</label><input type="number" value={kmAtual} onChange={(e) => setKmAtual(e.target.value)} className={inp} /></div>
-        </div>
-        <div><label className="block text-xs font-medium text-slate-500">Filial *</label>
-          <select value={filialId} onChange={(e) => setFilialId(e.target.value)} className={inp}><option value="">—</option>{filiais.map((f) => <option key={f.id} value={f.id}>{labelCore(f)}</option>)}</select>
-        </div>
-        <div><label className="block text-xs font-medium text-slate-500">Departamento de lotação *</label>
-          <select value={departamentoLotacaoId} onChange={(e) => setDepartamentoId(e.target.value)} className={inp}><option value="">—</option>{departamentos.map((d) => <option key={d.id} value={d.id}>{labelCore(d)}</option>)}</select>
-        </div>
-        <div><label className="block text-xs font-medium text-slate-500">Supervisor responsável *</label>
-          <select value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)} className={inp}><option value="">—</option>{usuarios.map((u) => <option key={u.id} value={u.id}>{labelCore(u)}</option>)}</select>
-        </div>
-        {editId && (
-          <div><label className="block text-xs font-medium text-slate-500">Situação</label>
-            <select value={situacao} onChange={(e) => setSituacao(e.target.value)} className={inp}>{SITUACOES.map((s) => <option key={s} value={s}>{s}</option>)}</select>
-          </div>
-        )}
-        {msg && <div className={`rounded-lg px-3 py-2 text-sm ${msg.tipo === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.texto}</div>}
-        <button type="submit" disabled={salvando} className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
-          {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Salvar
-        </button>
-      </form>
+        <Link to="/veiculos/novo" className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700">
+          <Plus className="h-4 w-4" /> Novo veículo
+        </Link>
+      </div>
 
-      <div className="lg:col-span-2 rounded-xl border border-slate-200 bg-white">
-        <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Frota ({veiculos.length})</div>
+      <div className="flex flex-wrap gap-1.5 rounded-xl border border-slate-200 bg-white p-4">
+        <button onClick={() => setSituacaoSel('')}
+          className={`rounded-full px-3 py-1 text-xs font-medium ${situacaoSel === '' ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+          Todos
+        </button>
+        {Object.entries(SIT_META).map(([k, m]) => (
+          <button key={k} onClick={() => setSituacaoSel(k)}
+            className={`rounded-full px-3 py-1 text-xs font-medium ${situacaoSel === k ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         {loading ? (
-          <div className="flex items-center gap-2 p-6 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
-        ) : veiculos.length === 0 ? (
-          <div className="p-6 text-sm text-slate-500">Nenhum veículo cadastrado.</div>
+          <div className="p-6 text-sm text-slate-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Carregando…</div>
+        ) : ordenados.length === 0 ? (
+          <div className="p-6 text-sm text-slate-500">Nenhum veículo{situacaoSel ? ' nessa situação' : ' cadastrado'}.</div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr><th className="px-4 py-2 text-left">Placa</th><th className="px-4 py-2 text-left">Modelo</th><th className="px-4 py-2 text-left">Situação</th><th className="px-4 py-2 text-left">Supervisor</th><th className="px-4 py-2 text-right">KM</th><th className="px-4 py-2 text-right">Ações</th></tr>
+            <thead className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
+              <tr>
+                <th className={th}><button onClick={() => toggleSort('placa')} className={btnSort}>Placa <SortIcon col="placa" /></button></th>
+                <th className={th}><button onClick={() => toggleSort('modelo')} className={btnSort}>Veículo <SortIcon col="modelo" /></button></th>
+                <th className={th}><button onClick={() => toggleSort('tipo')} className={btnSort}>Tipo <SortIcon col="tipo" /></button></th>
+                <th className={th}><button onClick={() => toggleSort('situacao')} className={btnSort}>Situação <SortIcon col="situacao" /></button></th>
+                <th className={th}><button onClick={() => toggleSort('supervisor')} className={btnSort}>Supervisor <SortIcon col="supervisor" /></button></th>
+                <th className={`${th} text-right`}><button onClick={() => toggleSort('kmAtual')} className={`${btnSort} ml-auto`}>KM <SortIcon col="kmAtual" /></button></th>
+              </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {veiculos.map((v) => (
-                <tr key={v.id} className={`hover:bg-slate-50 ${editId === v.id ? 'bg-sky-50' : ''}`}>
-                  <td className="px-4 py-2 font-mono font-medium">{v.placa}</td>
-                  <td className="px-4 py-2">{v.marca} {v.modelo}</td>
-                  <td className="px-4 py-2"><span className={`rounded px-2 py-0.5 text-xs ${v.situacao === 'EM_MANUTENCAO' ? 'bg-amber-100 text-amber-700' : v.situacao === 'BAIXADO' ? 'bg-rose-100 text-rose-700' : v.situacao === 'EM_USO' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-600'}`}>{v.situacao}</span></td>
-                  <td className="px-4 py-2 text-slate-600">{nomePorId(usuarios, v.supervisorId)}</td>
-                  <td className="px-4 py-2 text-right font-mono">{v.kmAtual}</td>
-                  <td className="px-4 py-2 text-right">
-                    <button onClick={() => editarVeiculo(v)} title="Editar" className="text-slate-400 hover:text-sky-600"><Pencil className="h-4 w-4" /></button>
-                  </td>
-                </tr>
-              ))}
+              {ordenados.map((v) => {
+                const sit = SIT_META[v.situacao] ?? { label: v.situacao, cls: 'bg-slate-100 text-slate-600' };
+                return (
+                  <tr key={v.id} onClick={() => navigate(`/veiculos/${v.id}/editar`)} className="cursor-pointer hover:bg-slate-50">
+                    <td className="px-3 py-2 font-mono font-medium text-slate-700">{v.placa}</td>
+                    <td className="px-3 py-2 text-slate-600">{[v.marca, v.modelo].filter(Boolean).join(' ') || '—'}{v.ano ? ` · ${v.ano}` : ''}</td>
+                    <td className="px-3 py-2 text-slate-500">{v.tipo}</td>
+                    <td className="px-3 py-2"><span className={`rounded px-1.5 py-0.5 text-xs font-medium ${sit.cls}`}>{sit.label}</span></td>
+                    <td className="px-3 py-2 text-slate-600">{nomeSupervisor(v.supervisorId)}</td>
+                    <td className="px-3 py-2 text-right font-mono text-slate-600">{v.kmAtual}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
       </div>
+      <p className="text-xs text-slate-400">{ordenados.length} veículo{ordenados.length === 1 ? '' : 's'} · clique no cabeçalho para ordenar</p>
     </div>
   );
 }

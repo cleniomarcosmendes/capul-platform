@@ -24,7 +24,7 @@ export class PainelService {
       entPendentes, entEmViagem, entEntregues, entNaoEntregues, entCanceladas,
       vgRascunho, vgEmCurso, vgConcluidas,
       veicDisponiveis, veicEmUso, veicManutencao,
-      porFilialRaw, porVeiculoRaw, porMotoristaRaw,
+      porFilialRaw, porVeiculoRaw, porMotoristaRaw, porOrigemRaw,
     ] = await Promise.all([
       this.prisma.entrega.count({ where: { ...escopo, status: StatusEntrega.PENDENTE } }),
       this.prisma.entrega.count({ where: { ...escopo, status: StatusEntrega.EM_VIAGEM } }),
@@ -46,6 +46,13 @@ export class PainelService {
       this.prisma.viagem.groupBy({
         by: ['motoristaId'],
         where: { ...escopo, situacao: { not: StatusViagem.CANCELADA } },
+        _count: { _all: true },
+      }),
+      // Indicador de CANAL (pedido 11/06): presencial × tele-venda × outro.
+      // null = entregas anteriores à feature (mostrado como "não informado").
+      this.prisma.entrega.groupBy({
+        by: ['origemVenda'],
+        where: { ...escopo, status: { not: StatusEntrega.CANCELADA } },
         _count: { _all: true },
       }),
     ]);
@@ -131,6 +138,9 @@ export class PainelService {
       porFilial: filiaisOrden.map((f) => ({ ...f, nomeFilial: nomesFil.get(f.filialId) ?? null })),
       porVeiculo,
       porMotorista: porMotorista.map((m) => ({ ...m, nomeMotorista: nomesMot.get(m.motoristaId) ?? null })),
+      porOrigem: porOrigemRaw
+        .map((o) => ({ origem: o.origemVenda ?? 'NAO_INFORMADO', total: o._count._all }))
+        .sort((a, b) => b.total - a.total),
     };
   }
 }

@@ -8,6 +8,7 @@ import { EntregaNovaPage } from './pages/EntregaNovaPage';
 import { EntregasPage } from './pages/EntregasPage';
 import { EntregaDetalhePage } from './pages/EntregaDetalhePage';
 import { VeiculosPage } from './pages/VeiculosPage';
+import { VeiculoFormPage } from './pages/VeiculoFormPage';
 import { ViagensPage } from './pages/ViagensPage';
 import { MontarViagemPage } from './pages/MontarViagemPage';
 import { ViagemDetalhePage } from './pages/ViagemDetalhePage';
@@ -46,6 +47,8 @@ function Protected() {
               <Route path="/entregas/:id" element={<EntregaDetalhePage />} />
               <Route path="/entregas/:id/editar" element={<EntregaNovaPage />} />
               <Route path="/veiculos" element={<VeiculosPage />} />
+              <Route path="/veiculos/novo" element={<VeiculoFormPage />} />
+              <Route path="/veiculos/:id/editar" element={<VeiculoFormPage />} />
               <Route path="/viagens" element={<ViagensPage />} />
               <Route path="/viagens/montar" element={<MontarViagemPage />} />
               <Route path="/viagens/:id" element={<ViagemDetalhePage />} />

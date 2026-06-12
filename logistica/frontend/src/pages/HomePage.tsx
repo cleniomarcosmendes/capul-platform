@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { MapPin, Package, Truck, Route, BarChart3 } from 'lucide-react';
+import { MapPin, Package, Truck, Route, BarChart3, ClipboardList, FileCheck } from 'lucide-react';
 
 export function HomePage() {
   return (
@@ -7,7 +7,7 @@ export function HomePage() {
       <div>
         <h2 className="text-lg font-semibold text-slate-800">Bem-vindo à Logística</h2>
         <p className="text-sm text-slate-500">
-          Gestão de entregas domiciliares e frota — Plataforma Capul (Fase 1a).
+          Gestão de entregas domiciliares e frota — Plataforma Capul.
         </p>
       </div>
 
@@ -36,7 +36,25 @@ export function HomePage() {
         >
           <Package className="h-7 w-7 text-sky-600" />
           <div className="mt-3 font-medium text-slate-800">Nova Entrega</div>
-          <div className="text-xs text-slate-500">Cadastro + fila de pendentes</div>
+          <div className="text-xs text-slate-500">Cadastro com CEP e Protheus</div>
+        </Link>
+
+        <Link
+          to="/entregas"
+          className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+        >
+          <ClipboardList className="h-7 w-7 text-sky-600" />
+          <div className="mt-3 font-medium text-slate-800">Entregas</div>
+          <div className="text-xs text-slate-500">Todas as entregas — filtros e edição</div>
+        </Link>
+
+        <Link
+          to="/comprovantes"
+          className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+        >
+          <FileCheck className="h-7 w-7 text-sky-600" />
+          <div className="mt-3 font-medium text-slate-800">Comprovantes</div>
+          <div className="text-xs text-slate-500">Provas de entrega (financeiro)</div>
         </Link>
 
         <Link
@@ -54,7 +72,7 @@ export function HomePage() {
         >
           <Route className="h-7 w-7 text-sky-600" />
           <div className="mt-3 font-medium text-slate-800">Viagens</div>
-          <div className="text-xs text-slate-500">Montar e despachar</div>
+          <div className="text-xs text-slate-500">Montar rota, despachar e baixar</div>
         </Link>
       </div>
     </div>
