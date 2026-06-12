@@ -116,7 +116,10 @@ export class ViagemService {
     });
     if (!v) throw new NotFoundException('Viagem não encontrada.');
     if (user) assertPodeVerRegistro(user, v.filialId);
-    return v;
+    // Nome do motorista (core) — a lista já enriquece; o detalhe também precisa
+    // (a tela de detalhe mostrava "—"; reporte do Clenio 12/06).
+    const nomes = await this.core.nomesUsuarios([v.motoristaId]);
+    return { ...v, motoristaNome: nomes.get(v.motoristaId) ?? null };
   }
 
   /**
