@@ -683,11 +683,11 @@ export function EntregaNovaPage() {
               readOnly={travaCep.logradouro}
               className={`${inp} ${travaCep.logradouro ? 'bg-slate-50 text-slate-600' : ''}`} placeholder="Rua / Avenida" />
           </div>
-          <div className="col-span-2 lg:col-span-1">
+          <div className="col-span-2 lg:col-span-2">
             <label className={lbl}>Número</label>
             <input ref={numeroRef} value={numero} onChange={(e) => editEndereco(setNumero)(e.target.value)} className={inp} />
           </div>
-          <div className="col-span-4 lg:col-span-4">
+          <div className="col-span-4 lg:col-span-3">
             <label className={lbl}>Complemento</label>
             <input value={complemento} onChange={(e) => editEndereco(setComplemento)(e.target.value)} className={inp} placeholder="Apto, bloco, casa…" />
           </div>
