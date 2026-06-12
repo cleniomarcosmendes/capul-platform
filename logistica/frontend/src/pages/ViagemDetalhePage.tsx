@@ -269,8 +269,35 @@ export function ViagemDetalhePage() {
         </div>
       </div>
 
-      <div className={ehRascunho ? 'grid grid-cols-1 items-start gap-6 lg:grid-cols-5' : ''}>
-      <div className={ehRascunho ? 'lg:col-span-3' : ''}>
+      <div className={ehRascunho ? 'grid grid-cols-1 items-start gap-6 lg:grid-cols-2' : ''}>
+      {ehRascunho && (
+        <div className="rounded-xl border border-slate-200 bg-white ">
+          <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
+            Fila de pendentes ({pendentesFora.length}) — clique no + para adicionar à rota
+          </div>
+          {pendentesFora.length === 0 ? (
+            <div className="p-4 text-sm text-slate-500">Nenhuma entrega pendente fora desta viagem.</div>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {pendentesFora.map((e) => (
+                <li key={e.id} className="flex items-center gap-3 px-4 py-2 text-sm">
+                  <button onClick={() => void adicionarEntrega(e.id)} disabled={busy} title="Adicionar ao fim da rota"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-sky-500 text-sky-600 hover:bg-sky-50 disabled:opacity-50">
+                    <Plus className="h-4 w-4" />
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-slate-700">#{e.numero} · {e.destinatarioNome}</div>
+                    <div className="truncate text-xs text-slate-500">
+                      {e.endLogradouro}{e.endNumero ? `, ${e.endNumero}` : ''} — {(e.endBairro ?? '').trim() || 'sem bairro'} · {e.quantidadeVolumes} vol
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      <div>
       {/* Paradas na ordem da rota */}
       <div className="rounded-xl border border-slate-200 bg-white">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
@@ -354,33 +381,6 @@ export function ViagemDetalhePage() {
 
       </div>
 
-      {ehRascunho && (
-        <div className="rounded-xl border border-slate-200 bg-white lg:col-span-2">
-          <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
-            Fila de pendentes ({pendentesFora.length}) — clique no + para adicionar à rota
-          </div>
-          {pendentesFora.length === 0 ? (
-            <div className="p-4 text-sm text-slate-500">Nenhuma entrega pendente fora desta viagem.</div>
-          ) : (
-            <ul className="divide-y divide-slate-100">
-              {pendentesFora.map((e) => (
-                <li key={e.id} className="flex items-center gap-3 px-4 py-2 text-sm">
-                  <button onClick={() => void adicionarEntrega(e.id)} disabled={busy} title="Adicionar ao fim da rota"
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-sky-500 text-sky-600 hover:bg-sky-50 disabled:opacity-50">
-                    <Plus className="h-4 w-4" />
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-slate-700">#{e.numero} · {e.destinatarioNome}</div>
-                    <div className="truncate text-xs text-slate-500">
-                      {e.endLogradouro}{e.endNumero ? `, ${e.endNumero}` : ''} — {(e.endBairro ?? '').trim() || 'sem bairro'} · {e.quantidadeVolumes} vol
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
       </div>
 
       <ConfirmDialog
