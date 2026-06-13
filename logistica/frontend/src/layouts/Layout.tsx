@@ -1,22 +1,50 @@
 import { type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, MapPin, Truck, LogOut, ExternalLink, Package, Car, Route, BarChart3, TrendingUp, FileCheck, ClipboardList } from 'lucide-react';
+import { Home, MapPin, Truck, LogOut, ExternalLink, Package, Car, Route, BarChart3, TrendingUp, FileCheck, ClipboardList, Fuel } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
-const navItems = [
+// Grupos de role para gatear o menu (o backend é a fonte da verdade do RBAC;
+// aqui é só visual). ADMIN vê tudo (tratado no filtro). Espelha a matriz de
+// acessos da Fase 2: condutor opera por matrícula+senha no terminal de frota.
+const ENTREGA = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];
+const FROTA_OP = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA'];
+const GESTORES = ['GESTOR_ENTREGA', 'GESTOR_FROTA'];
+
+type NavEntry =
+  | { section: string; roles?: string[] }
+  | { to: string; label: string; icon: typeof Home; end?: boolean; roles?: string[] };
+
+const navItems: NavEntry[] = [
   { to: '/', label: 'Início', icon: Home, end: true },
-  { to: '/painel', label: 'Painel', icon: BarChart3, end: false },
-  { to: '/indicadores', label: 'Indicadores', icon: TrendingUp, end: false },
-  { to: '/entregas/nova', label: 'Nova Entrega', icon: Package, end: false },
-  { to: '/entregas', label: 'Entregas', icon: ClipboardList, end: true },
-  { to: '/viagens', label: 'Viagens', icon: Route, end: false },
-  { to: '/comprovantes', label: 'Comprovantes', icon: FileCheck, end: false },
-  { to: '/clientes', label: 'Endereços', icon: MapPin, end: false },
-  { to: '/veiculos', label: 'Frota', icon: Car, end: false },
+
+  { section: 'ENTREGAS', roles: ENTREGA },
+  { to: '/entregas/nova', label: 'Nova Entrega', icon: Package, roles: ENTREGA },
+  { to: '/entregas', label: 'Entregas', icon: ClipboardList, end: true, roles: ENTREGA },
+  { to: '/viagens', label: 'Viagens', icon: Route, roles: ENTREGA },
+  { to: '/comprovantes', label: 'Comprovantes', icon: FileCheck, roles: ENTREGA },
+
+  { section: 'FROTA', roles: FROTA_OP },
+  { to: '/frota', label: 'Controle de Frota', icon: Fuel, roles: FROTA_OP },
+  { to: '/veiculos', label: 'Veículos', icon: Car, roles: GESTORES },
+
+  { section: 'GESTÃO', roles: GESTORES },
+  { to: '/painel', label: 'Painel', icon: BarChart3, roles: GESTORES },
+  { to: '/indicadores', label: 'Indicadores', icon: TrendingUp, roles: GESTORES },
+  { to: '/clientes', label: 'Endereços', icon: MapPin },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {
   const { usuario, logisticaRole, logout } = useAuth();
+
+  const isAdmin = logisticaRole === 'ADMIN';
+  const can = (roles?: string[]) => isAdmin || !roles || (logisticaRole != null && roles.includes(logisticaRole));
+
+  // Filtra por role e remove cabeçalhos de seção que ficaram órfãos (sem item logo abaixo).
+  const visible = navItems.filter((item) => can(item.roles)).filter((item, idx, arr) => {
+    if (!('section' in item)) return true;
+    const next = arr[idx + 1];
+    return next != null && !('section' in next);
+  });
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-800">
@@ -28,22 +56,34 @@ export function Layout({ children }: { children: ReactNode }) {
             <div className="text-[11px] text-slate-400">Entregas &amp; Frota</div>
           </div>
         </div>
-        <nav className="flex-1 px-2 py-3 space-y-1">
-          {navItems.map(({ to, label, icon: Icon, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                  isActive ? 'bg-sky-600/20 text-sky-300 font-medium' : 'text-slate-300 hover:bg-slate-800'
-                }`
-              }
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </NavLink>
-          ))}
+        <nav className="flex-1 px-2 py-3 space-y-1 overflow-y-auto">
+          {visible.map((item, idx) => {
+            if ('section' in item) {
+              return (
+                <div key={`s-${item.section}`} className={`px-3 pb-1 ${idx > 0 ? 'mt-4 pt-2 border-t border-slate-700/60' : ''}`}>
+                  <p className="text-[10px] font-bold uppercase text-slate-500" style={{ letterSpacing: '0.12em' }}>
+                    {item.section}
+                  </p>
+                </div>
+              );
+            }
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                    isActive ? 'bg-sky-600/20 text-sky-300 font-medium' : 'text-slate-300 hover:bg-slate-800'
+                  }`
+                }
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </NavLink>
+            );
+          })}
         </nav>
         <a
           href="/"
