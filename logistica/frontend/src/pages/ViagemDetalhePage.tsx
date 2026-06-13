@@ -6,6 +6,7 @@ import {
 import { logisticaApi } from '../services/api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BaixaDialog } from '../components/BaixaDialog';
+import { useToast } from '../components/Toast';
 import { maskTelefone } from '../utils/format';
 
 // Detalhe da viagem (padrão workspace): paradas na ordem da rota + ações por
@@ -54,7 +55,8 @@ export function ViagemDetalhePage() {
   const [v, setV] = useState<Viagem | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
+  const { toast } = useToast();
+  const [naoEncontrada, setNaoEncontrada] = useState(false);
   const [confirmacao, setConfirmacao] = useState<{ titulo: string; mensagem: string; acao: () => Promise<void> } | null>(null);
   const [baixaAlvo, setBaixaAlvo] = useState<{ id: string; numero: number; destinatarioNome: string } | null>(null);
   // Edição de RASCUNHO (12/06): veículo/motorista, adicionar entregas, reordenar.
@@ -74,7 +76,7 @@ export function ViagemDetalhePage() {
       const { data } = await logisticaApi.get<Viagem>(`/viagens/${id}`);
       setV(data);
     } catch {
-      setMsg({ tipo: 'erro', texto: 'Viagem não encontrada.' });
+      setNaoEncontrada(true);
     } finally { setLoading(false); }
   }, [id]);
   useEffect(() => { void carregar(); }, [carregar]);
@@ -100,17 +102,16 @@ export function ViagemDetalhePage() {
   const vmAlterado = veiculoSel !== (v?.veiculoId ?? '') || motoristaSel !== (v?.motoristaId ?? '');
   async function salvarVeiculoMotorista() {
     setSalvandoVm(true);
-    setMsg(null);
     try {
       await logisticaApi.patch(`/viagens/${id}`, {
         veiculoId: veiculoSel || undefined,
         motoristaId: motoristaSel || undefined,
       });
       await carregar();
-      setMsg({ tipo: 'ok', texto: 'Veículo e motorista salvos.' });
+      toast('success', 'Veículo e motorista salvos.');
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao salvar.' });
+      toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao salvar.');
     } finally { setSalvandoVm(false); }
   }
 
@@ -135,16 +136,15 @@ export function ViagemDetalhePage() {
     const ordem = ordemAtual();
     if (ordem.length < 2) return;
     setSugerindo(true);
-    setMsg(null);
     try {
       const { data } = await logisticaApi.post<{ ordem: string[]; semCoordenada: string[]; geocodificadas: number; distanciaKm: number | null }>(
         '/viagens/sugerir-ordem', { filialId: v?.filialId, entregaIds: ordem });
       await aplicarOrdem(data.ordem);
       const aviso = data.semCoordenada.length ? ` ${data.semCoordenada.length} sem localização foram pro fim.` : '';
-      setMsg({ tipo: 'ok', texto: `Ordem recalculada (${data.geocodificadas} localizadas${data.distanciaKm != null ? `, ~${data.distanciaKm} km` : ''}).${aviso}` });
+      toast('success', `Ordem recalculada (${data.geocodificadas} localizadas${data.distanciaKm != null ? `, ~${data.distanciaKm} km` : ''}).${aviso}`);
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao recalcular.' });
+      toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao recalcular.');
     } finally { setSugerindo(false); }
   }
 
@@ -159,11 +159,10 @@ export function ViagemDetalhePage() {
 
   async function acao(fn: () => Promise<unknown>, erro: string) {
     setBusy(true);
-    setMsg(null);
     try { await fn(); await carregar(); }
     catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || erro });
+      toast('error', Array.isArray(m) ? m.join(', ') : m || erro);
     } finally { setBusy(false); }
   }
 
@@ -178,7 +177,7 @@ export function ViagemDetalhePage() {
       navigate('/viagens');
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao descartar.' });
+      toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao descartar.');
       setBusy(false);
     }
   }
@@ -186,7 +185,7 @@ export function ViagemDetalhePage() {
   if (loading) return <div className="p-6 text-sm text-slate-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Carregando…</div>;
   if (!v) return (
     <div className="space-y-4">
-      {msg && <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{msg.texto}</div>}
+      {naoEncontrada && <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">Viagem não encontrada.</div>}
       <Link to="/viagens" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"><ArrowLeft className="h-4 w-4" /> Voltar</Link>
     </div>
   );
@@ -252,7 +251,6 @@ export function ViagemDetalhePage() {
         </div>
       </div>
 
-      {msg && <div className={`rounded-lg px-4 py-2 text-sm ${msg.tipo === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.texto}</div>}
 
       {ehRascunho && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -569,7 +567,7 @@ export function ViagemDetalhePage() {
           onClose={() => setBaixaAlvo(null)}
           onBaixado={async () => {
             setBaixaAlvo(null);
-            setMsg({ tipo: 'ok', texto: `Baixa registrada para a entrega #${baixaAlvo.numero}.` });
+            toast('success', `Baixa registrada para a entrega #${baixaAlvo.numero}.`);
             await carregar();
           }}
         />

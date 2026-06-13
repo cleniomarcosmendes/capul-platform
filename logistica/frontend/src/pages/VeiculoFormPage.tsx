@@ -4,6 +4,7 @@ import { ArrowLeft, Loader2, Truck } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { maskPlaca } from '../utils/format';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useToast } from '../components/Toast';
 
 // Form de veículo (padrão FormPage do workspace): /veiculos/novo e
 // /veiculos/:id/editar no MESMO componente.
@@ -37,7 +38,7 @@ export function VeiculoFormPage() {
   const [salvando, setSalvando] = useState(false);
   const [dirty, setDirty] = useState(false);
   const { ConfirmDialog: DirtyDialog } = useUnsavedChanges(dirty);
-  const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     void (async () => {
@@ -64,16 +65,15 @@ export function VeiculoFormPage() {
         setFilialId(v.filialId); setDepartamentoId(v.departamentoLotacaoId);
         setSupervisorId(v.supervisorId); setSituacao(v.situacao);
       } catch {
-        setMsg({ tipo: 'erro', texto: 'Veículo não encontrado.' });
+        toast('error', 'Veículo não encontrado.');
       } finally { setCarregando(false); }
     })();
   }, [id]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    setMsg(null);
     if (!filialId || !departamentoLotacaoId || !supervisorId) {
-      setMsg({ tipo: 'erro', texto: 'Filial, departamento e supervisor são obrigatórios.' });
+      toast('warning', 'Filial, departamento e supervisor são obrigatórios.');
       return;
     }
     setSalvando(true);
@@ -93,10 +93,11 @@ export function VeiculoFormPage() {
       if (modoEdicao) await logisticaApi.patch(`/veiculos/${id}`, payload);
       else await logisticaApi.post('/veiculos', payload);
       setDirty(false);
+      toast('success', modoEdicao ? 'Veículo atualizado.' : 'Veículo cadastrado.');
       navigate('/veiculos');
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao salvar veículo.' });
+      toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao salvar veículo.');
       setSalvando(false);
     }
   }
@@ -141,8 +142,6 @@ export function VeiculoFormPage() {
           <div><label className={lbl}>Supervisor responsável *</label>
             <select value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)} className={inp}><option value="">—</option>{usuarios.map((u) => <option key={u.id} value={u.id}>{labelCore(u)}</option>)}</select></div>
         </div>
-
-        {msg && <div className={`rounded-lg px-3 py-2 text-sm ${msg.tipo === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.texto}</div>}
 
         <div className="flex items-center justify-end gap-2">
           <Link to="/veiculos" className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancelar</Link>

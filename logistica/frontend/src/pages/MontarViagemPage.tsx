@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowLeft, ArrowUp, Loader2, Plus, Truck, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
+import { useToast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 
@@ -44,7 +45,7 @@ export function MontarViagemPage() {
   const [salvou, setSalvou] = useState(false);
   // Rota em construcao nao salva = trabalho a perder (padrao workspace).
   const { ConfirmDialog: DirtyDialog, guardedNavigate } = useUnsavedChanges(rota.length > 0 && !salvou);
-  const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     (async () => {
@@ -103,7 +104,6 @@ export function MontarViagemPage() {
   }
 
   async function sugerirOrdem() {
-    setMsg(null);
     setSugerindo(true);
     try {
       const { data } = await logisticaApi.post<{
@@ -113,16 +113,15 @@ export function MontarViagemPage() {
       const aviso = data.semCoordenada.length
         ? ` ${data.semCoordenada.length} sem localização foram pro fim — posicione com as setas.`
         : '';
-      setMsg({ tipo: 'ok', texto: `Ordem sugerida pela distância (${data.geocodificadas} localizadas${data.distanciaKm != null ? `, ~${data.distanciaKm} km` : ''}).${aviso}` });
+      toast('success', `Ordem sugerida pela distância (${data.geocodificadas} localizadas${data.distanciaKm != null ? `, ~${data.distanciaKm} km` : ''}).${aviso}`);
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao sugerir a ordem.' });
+      toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao sugerir a ordem.');
     } finally { setSugerindo(false); }
   }
 
   async function montar() {
-    setMsg(null);
-    if (rota.length === 0) { setMsg({ tipo: 'erro', texto: 'Adicione ao menos uma entrega à rota.' }); return; }
+    if (rota.length === 0) { toast('warning', 'Adicione ao menos uma entrega à rota.'); return; }
     setMontando(true);
     try {
       const { data } = await logisticaApi.post<{ id: string; numero: number }>('/viagens', {
@@ -135,7 +134,7 @@ export function MontarViagemPage() {
       navigate(`/viagens/${data.id}`);
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao montar viagem.' });
+      toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao montar viagem.');
       setMontando(false);
     }
   }
@@ -153,8 +152,6 @@ export function MontarViagemPage() {
         <h2 className="text-lg font-semibold text-slate-800">Montar viagem</h2>
         <p className="text-sm text-slate-500">Adicione as entregas à rota, ordene (sugestão ou manual) e escolha quem leva.</p>
       </div>
-
-      {msg && <div className={`rounded-lg px-4 py-2 text-sm ${msg.tipo === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.texto}</div>}
 
       {/* Veículo e motorista no TOPO (pedido 12/06 — com rota longa o card de
           baixo afundava; aqui fica sempre visível, igual ao detalhe). */}

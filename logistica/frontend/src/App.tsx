@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ToastProvider } from './components/Toast';
 import { Layout } from './layouts/Layout';
 import { HomePage } from './pages/HomePage';
 import { PainelPage } from './pages/PainelPage';
@@ -65,7 +66,9 @@ export function App() {
   return (
     <BrowserRouter basename="/entregas">
       <AuthProvider>
-        <Protected />
+        <ToastProvider>
+          <Protected />
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );

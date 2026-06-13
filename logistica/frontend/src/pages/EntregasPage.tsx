@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowUpDown, ArrowUp, ArrowDown, Loader2, Plus, Printer, Search } from 'lucide-react';
 import { logisticaApi } from '../services/api';
+import { useToast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
 
 
@@ -42,7 +43,7 @@ export function EntregasPage() {
 
   const [itens, setItens] = useState<EntregaG[]>([]);
   const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
+  const { toast } = useToast();
 
   // Filtros
   const [statusSel, setStatusSel] = useState<Status | ''>('');
@@ -59,7 +60,6 @@ export function EntregasPage() {
 
   async function carregar() {
     setLoading(true);
-    setMsg(null);
     try {
       const params: Record<string, string> = {};
       if (filialId) params.filialId = filialId;
@@ -70,7 +70,7 @@ export function EntregasPage() {
       const { data } = await logisticaApi.get<EntregaG[]>('/entregas/grid', { params });
       setItens(data);
     } catch {
-      setMsg({ tipo: 'erro', texto: 'Falha ao carregar as entregas.' });
+      toast('error', 'Falha ao carregar as entregas.');
     } finally { setLoading(false); }
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -99,14 +99,13 @@ export function EntregasPage() {
 
   async function novaTentativa(e: EntregaG) {
     setReabrindo(e.id);
-    setMsg(null);
     try {
       await logisticaApi.post(`/entregas/${e.id}/nova-tentativa`, {});
-      setMsg({ tipo: 'ok', texto: `Entrega #${e.numero} voltou pra fila (nova tentativa).` });
+      toast('success', `Entrega #${e.numero} voltou pra fila (nova tentativa).`);
       void carregar();
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao reabrir.' });
+      toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao reabrir.');
     } finally { setReabrindo(null); }
   }
 
@@ -163,7 +162,6 @@ export function EntregasPage() {
         </div>
       </div>
 
-      {msg && <div className={`rounded-lg px-4 py-2 text-sm ${msg.tipo === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.texto}</div>}
 
       {/* Grid */}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">

@@ -4,6 +4,7 @@ import { Loader2, Plus, Trash2, Package, Search, MapPin, Eraser } from 'lucide-r
 import { logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useToast } from '../components/Toast';
 import { maskTelefone, maskCep, onlyDigits, UFS } from '../utils/format';
 
 type TipoCliente = 'IDENTIFICADO' | 'RECORRENTE_LOCAL' | 'EVENTUAL';
@@ -101,7 +102,7 @@ export function EntregaNovaPage() {
   // Protecao contra perda de dados (padrao workspace/chamado).
   const [dirty, setDirty] = useState(false);
   const { ConfirmDialog: DirtyDialog, guardedNavigate } = useUnsavedChanges(dirty);
-  const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
+  const { toast } = useToast();
   const ultimoCupomRef = useRef<HTMLInputElement>(null);
   const matriculaRef = useRef<HTMLInputElement>(null);
   const numeroRef = useRef<HTMLInputElement>(null);
@@ -143,7 +144,7 @@ export function EntregaNovaPage() {
           ? e.cupons.map((c) => ({ numeroCupom: c.numeroCupom ?? '', valor: c.valor != null ? String(c.valor) : '' }))
           : [{ numeroCupom: '', valor: '' }]);
       } catch {
-        setMsg({ tipo: 'erro', texto: 'Entrega não encontrada.' });
+        toast('error', 'Entrega não encontrada.');
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -450,9 +451,8 @@ export function EntregaNovaPage() {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    setMsg(null);
-    if (!filialId) { setMsg({ tipo: 'erro', texto: 'Sem filial no perfil — selecione uma filial no Hub.' }); return; }
-    if (!origemVenda) { setMsg({ tipo: 'erro', texto: 'Informe a origem da venda (presencial, tele-venda ou outro).' }); return; }
+    if (!filialId) { toast('warning', 'Sem filial no perfil — selecione uma filial no Hub.'); return; }
+    if (!origemVenda) { toast('warning', 'Informe a origem da venda (presencial, tele-venda ou outro).'); return; }
     setSalvando(true);
     if (modoEdicao) {
       // Edição (PATCH): só os campos editáveis; cupons substituem o conjunto.
@@ -475,7 +475,7 @@ export function EntregaNovaPage() {
         navigate(`/entregas/${edicaoId}`);
       } catch (err) {
         const m = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-        setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao salvar as alterações.' });
+        toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao salvar as alterações.');
       } finally {
         setSalvando(false);
       }
@@ -505,11 +505,11 @@ export function EntregaNovaPage() {
           .filter((c) => c.numeroCupom || c.valor)
           .map((c) => ({ numeroCupom: c.numeroCupom || undefined, valor: c.valor ? parseFloat(c.valor) : undefined })),
       });
-      setMsg({ tipo: 'ok', texto: `Entrega nº ${data.numero} registrada.` });
+      toast('success', `Entrega nº ${data.numero} registrada.`);
       resetForm();
       setDirty(false);
     } catch {
-      setMsg({ tipo: 'erro', texto: 'Falha ao registrar entrega.' });
+      toast('error', 'Falha ao registrar entrega.');
     } finally {
       setSalvando(false);
     }
@@ -800,12 +800,6 @@ export function EntregaNovaPage() {
         </div>
         </div>
         </div>
-
-        {msg && (
-          <div className={`rounded-lg px-4 py-2 text-sm ${msg.tipo === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-            {msg.texto}
-          </div>
-        )}
 
         <button type="submit" disabled={salvando}
           className="flex items-center gap-2 rounded-lg bg-sky-600 px-5 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">

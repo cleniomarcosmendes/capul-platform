@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Loader2, Pencil, Phone, Printer } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { useToast } from '../components/Toast';
 import { maskTelefone, maskCep } from '../utils/format';
 
 // Detalhe da Entrega (padrão workspace — página, não modal): seções de
@@ -44,7 +45,8 @@ export function EntregaDetalhePage() {
   const navigate = useNavigate();
   const [e, setE] = useState<Entrega | null>(null);
   const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
+  const { toast } = useToast();
+  const [naoEncontrado, setNaoEncontrado] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmacao, setConfirmacao] = useState<{ titulo: string; mensagem: string; acao: () => Promise<void> } | null>(null);
 
@@ -54,7 +56,7 @@ export function EntregaDetalhePage() {
       const { data } = await logisticaApi.get<Entrega>(`/entregas/${id}`);
       setE(data);
     } catch {
-      setMsg({ tipo: 'erro', texto: 'Entrega não encontrada.' });
+      setNaoEncontrado(true);
     } finally { setLoading(false); }
   }, [id]);
   useEffect(() => { void carregar(); }, [carregar]);
@@ -64,27 +66,25 @@ export function EntregaDetalhePage() {
   async function novaTentativa() {
     if (!e) return;
     setBusy(true);
-    setMsg(null);
     try {
       await logisticaApi.post(`/entregas/${e.id}/nova-tentativa`, {});
-      setMsg({ tipo: 'ok', texto: 'Entrega voltou pra fila de pendentes (nova tentativa).' });
+      toast('success', 'Entrega voltou pra fila de pendentes (nova tentativa).');
       void carregar();
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao reabrir.' });
+      toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao reabrir.');
     } finally { setBusy(false); }
   }
 
   async function cancelar() {
     if (!e) return;
     setBusy(true);
-    setMsg(null);
     try {
       await logisticaApi.post(`/entregas/${e.id}/cancelar`, { motivo: 'Cancelada no balcão' });
       void carregar();
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao cancelar.' });
+      toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao cancelar.');
     } finally { setBusy(false); }
   }
 
@@ -94,7 +94,7 @@ export function EntregaDetalhePage() {
   if (loading) return <div className="p-6 text-sm text-slate-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Carregando…</div>;
   if (!e) return (
     <div className="space-y-4">
-      {msg && <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{msg.texto}</div>}
+      {naoEncontrado && <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">Entrega não encontrada.</div>}
       <Link to="/entregas" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"><ArrowLeft className="h-4 w-4" /> Voltar</Link>
     </div>
   );
@@ -143,7 +143,6 @@ export function EntregaDetalhePage() {
         </div>
       </div>
 
-      {msg && <div className={`rounded-lg px-4 py-2 text-sm ${msg.tipo === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.texto}</div>}
       {e.status === 'PENDENTE' && e.viagemNumero != null && (
         <div className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
           Esta entrega está na viagem #{e.viagemNumero} (em montagem) — remova-a da viagem para editar ou cancelar.
