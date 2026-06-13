@@ -843,3 +843,19 @@ módulos — não é deficiência. O gap real eram abstrações de acabamento.
    tem refresh sofisticado.) Avaliar se vale, dado que o Hub centraliza login.
 
 **Esforço estimado:** algumas sessões de refactor. Não bloqueia a Fase 1b/deploy.
+
+---
+
+## [Logística] KM rodados — captura de hodômetro (adiado 12/06)
+
+**Contexto:** ao criar os Indicadores do mês (valor/origem, motorista, demanda,
+re-entregas), o KM rodados por motorista/veículo ficou de fora — os campos
+`viagem.kmInicial`/`kmFinal` existem no schema mas **nada os preenche hoje**.
+
+**Decisão (Clenio, 12/06):** adiar. Demais indicadores entregues.
+
+**Quando retomar — solução recomendada (robusta):** capturar hodômetro no fluxo
+da viagem: KM na **saída** (despachar → kmInicial) e na **chegada** (concluir →
+kmFinal). Benefícios: KM real por motorista/veículo + mantém `veiculo.kmAtual`
+atualizado de quebra. Custo: 2 inputs no despachar/concluir + 2 indicadores no
+Painel (KM por motorista, KM por veículo, e KM/entrega como eficiência de rota).

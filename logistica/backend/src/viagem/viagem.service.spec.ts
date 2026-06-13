@@ -56,11 +56,14 @@ describe('ViagemService', () => {
       prisma.viagem.findUnique.mockResolvedValue({ id: 'v1', filialId: 'f1', situacao: 'RASCUNHO', paradas: [] });
       await expect(svc.concluir('v1', 'f1')).rejects.toThrow(BadRequestException);
     });
-    it('happy path: entregas→ENTREGUE, veículo→DISPONIVEL', async () => {
+    it('happy path: entregas→ENTREGUE (com carimbo de hora/autor), veículo→DISPONIVEL', async () => {
       prisma.viagem.findUnique.mockResolvedValue({ id: 'v1', filialId: 'f1', veiculoId: 'vc1', situacao: 'EM_CURSO', paradas: [{ entregaId: 'e1' }] });
       prisma.viagem.update.mockResolvedValue({ id: 'v1', situacao: 'CONCLUIDA' });
-      await svc.concluir('v1', 'f1');
-      expect(prisma.entrega.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { status: 'ENTREGUE' } }));
+      await svc.concluir('v1', 'f1', 'u9');
+      // Conclusão manual carimba dataHoraEntrega + baixadoPorId (rastreabilidade).
+      expect(prisma.entrega.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ status: 'ENTREGUE', baixadoPorId: 'u9', dataHoraEntrega: expect.any(Date) }),
+      }));
       expect(prisma.veiculo.update).toHaveBeenCalledWith(expect.objectContaining({ data: { situacao: 'DISPONIVEL' } }));
     });
   });
