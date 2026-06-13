@@ -517,6 +517,14 @@ export class EntregaService {
     if (!entregue && !dto.motivo?.trim()) {
       throw new BadRequestException('Informe o motivo da não-entrega.');
     }
+    // Prova flexível (meio-termo): ENTREGUE exige AO MENOS UMA prova — arquivo
+    // (foto/assinatura) OU quem recebeu. A foto deixou de ser obrigatória, mas
+    // não se baixa "no vazio": preserva o lastro de cobrança (cofre, 5 anos).
+    if (entregue && !prova && !dto.recebedorNome?.trim()) {
+      throw new BadRequestException(
+        'Informe uma prova de entrega: foto, assinatura ou quem recebeu.',
+      );
+    }
 
     // Grava a prova no COFRE (banco isolado + object store) ANTES de fechar a
     // baixa — se o cofre falhar, a baixa não acontece (a prova é o ativo).

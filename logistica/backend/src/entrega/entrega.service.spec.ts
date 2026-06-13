@@ -105,9 +105,24 @@ describe('EntregaService', () => {
       prisma.entrega.findUnique.mockResolvedValue({ id: 'e1', status: 'EM_VIAGEM', filialId: 'f1', numero: 9, cupons: [], parada: { viagemId: 'v1' } });
       prisma.viagem.findUnique.mockResolvedValue({ situacao: 'EM_CURSO', veiculoId: 'vc1', paradas: [{ entrega: { status: 'ENTREGUE' } }, { entrega: { status: 'EM_VIAGEM' } }] });
       prisma.entrega.update.mockResolvedValue({ id: 'e1', status: 'ENTREGUE', cupons: [] });
-      await svc.baixar('e1', { resultado: 'ENTREGUE' } as any, undefined, userF1);
+      await svc.baixar('e1', { resultado: 'ENTREGUE', recebedorNome: 'Maria' } as any, undefined, userF1);
       expect(prisma.viagem.update).not.toHaveBeenCalled();
       expect(prisma.veiculo.update).not.toHaveBeenCalled();
+    });
+
+    // ── Prova flexível (meio-termo): foto opcional, mas exige ALGUMA prova ──
+    it('400 ENTREGUE sem prova (foto/assinatura) e sem recebedor', async () => {
+      prisma.entrega.findUnique.mockResolvedValue({ id: 'e1', status: 'EM_VIAGEM', filialId: 'f1', numero: 9, cupons: [], parada: { viagemId: 'v1' } });
+      await expect(svc.baixar('e1', { resultado: 'ENTREGUE' } as any, undefined, userF1)).rejects.toThrow(BadRequestException);
+    });
+
+    it('ENTREGUE só com recebedor (sem arquivo) baixa sem tocar o cofre', async () => {
+      prisma.entrega.findUnique.mockResolvedValue({ id: 'e1', status: 'EM_VIAGEM', filialId: 'f1', numero: 9, cupons: [], parada: { viagemId: 'v1' } });
+      prisma.viagem.findUnique.mockResolvedValue({ situacao: 'EM_CURSO', veiculoId: 'vc1', paradas: [{ entrega: { status: 'EM_VIAGEM' } }] });
+      prisma.entrega.update.mockResolvedValue({ id: 'e1', status: 'ENTREGUE', temComprovante: false, cupons: [] });
+      const r = await svc.baixar('e1', { resultado: 'ENTREGUE', recebedorNome: 'João Portaria' } as any, undefined, userF1);
+      expect(cofre.gravar).not.toHaveBeenCalled();
+      expect(r.status).toBe('ENTREGUE');
     });
   });
 });

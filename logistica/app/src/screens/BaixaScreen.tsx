@@ -49,7 +49,10 @@ export function BaixaScreen({ route, navigation }: Props) {
   const idempotencyKey = useRef(uuid()).current;
 
   const entregue = resultado === 'ENTREGUE';
-  const podeConfirmar = !enviando && (entregue ? !!fotoUri : !!motivo.trim());
+  // Prova flexível (meio-termo): a foto é OPCIONAL, mas a entrega precisa de
+  // ao menos UMA prova — foto OU quem recebeu (preserva o lastro de cobrança).
+  const temProva = !!fotoUri || !!recebedor.trim();
+  const podeConfirmar = !enviando && (entregue ? temProva : !!motivo.trim());
 
   async function tirarFoto() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -68,7 +71,10 @@ export function BaixaScreen({ route, navigation }: Props) {
       resultado,
       idempotencyKey,
       ...(entregue
-        ? { tipoProva: 'FOTO' as const, recebedorNome: recebedor.trim() || undefined }
+        ? {
+            ...(fotoUri ? { tipoProva: 'FOTO' as const } : {}),
+            recebedorNome: recebedor.trim() || undefined,
+          }
         : { motivo: motivo.trim() }),
       ...geo,
     };
@@ -132,7 +138,8 @@ export function BaixaScreen({ route, navigation }: Props) {
 
       {entregue ? (
         <>
-          <Text style={styles.label}>Foto da entrega *</Text>
+          <Text style={styles.dica}>Registre ao menos uma prova: foto ou quem recebeu.</Text>
+          <Text style={styles.label}>Foto da entrega (opcional)</Text>
           {fotoUri ? (
             <View>
               <Image source={{ uri: fotoUri }} style={styles.foto} resizeMode="cover" />
@@ -209,6 +216,7 @@ const styles = StyleSheet.create({
   toggleTxt: { fontSize: 15, fontWeight: '600', color: '#334155' },
   toggleTxtOn: { color: '#fff' },
   label: { fontSize: 13, fontWeight: '600', color: '#475569', marginTop: 4 },
+  dica: { fontSize: 12, color: '#64748b', backgroundColor: '#f1f5f9', borderRadius: 8, padding: 8 },
   btnFoto: {
     borderWidth: 2,
     borderColor: CAPUL,
