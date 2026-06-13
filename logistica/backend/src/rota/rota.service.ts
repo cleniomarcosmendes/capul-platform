@@ -2,12 +2,18 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GeocodeService } from './geocode.service.js';
+import { OsrmService } from './osrm.service.js';
 
 interface Ponto {
   id: string;
   lat: number;
   lng: number;
+  /** Índice na matriz OSRM (0 = origem). Atribuído antes de ordenar. */
+  mi?: number;
 }
+
+/** Custo entre dois pontos — abstrai matriz OSRM (rua) × haversine (linha reta). */
+type Custo = (a: Ponto, b: Ponto) => number;
 
 /** Distância haversine em km (linha reta — suficiente p/ ORDENAR paradas na cidade). */
 function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -37,6 +43,7 @@ export class RotaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly geocode: GeocodeService,
+    private readonly osrm: OsrmService,
   ) {}
 
   async sugerirOrdem(filialId: string, entregaIds: string[]) {
@@ -90,22 +97,35 @@ export class RotaService {
     const origem = await this.origemDaFilial(filialId);
     const partida = origem ?? pontos[0];
 
-    const rota = this.duasOpt(this.vizinhoMaisProximo(partida, pontos), partida);
+    // Matriz de distância de RUA (OSRM) sobre [partida, ...pontos]; null = OSRM
+    // off/indisponível → cai no haversine. Índices da matriz vão em `mi`.
+    const coords = [partida, ...pontos];
+    const matriz = await this.osrm.matrizDistancia(coords.map((p) => ({ lat: p.lat, lng: p.lng })));
+    coords.forEach((p, i) => { p.mi = i; });
+    // custo em METROS (OSRM) ou KM (haversine) — unidade consistente dentro da
+    // mesma execução (nunca se misturam); só converte no total exibido.
+    const custo: Custo = matriz
+      ? (a, b) => matriz[a.mi ?? 0][b.mi ?? 0]
+      : (a, b) => haversineKm(a, b);
+
+    const rota = this.duasOpt(this.vizinhoMaisProximo(partida, pontos, custo), partida, custo);
     const ordemGeo = rota.map((p) => p.id);
 
     let dist = 0;
-    let ant: { lat: number; lng: number } = partida;
+    let ant: Ponto = partida;
     for (const p of rota) {
-      dist += haversineKm(ant, p);
+      dist += custo(ant, p);
       ant = p;
     }
+    const distanciaKm = matriz ? dist / 1000 : dist; // OSRM vem em metros
 
     return {
       ordem: [...ordemGeo, ...semCoordenada],
       semCoordenada,
       geocodificadas: pontos.length,
       origemRota: origem ? 'FILIAL' : 'PRIMEIRA_ENTREGA',
-      distanciaKm: Math.round(dist * 10) / 10,
+      fonteDistancia: matriz ? 'OSRM' : 'HAVERSINE',
+      distanciaKm: Math.round(distanciaKm * 10) / 10,
     };
   }
 
@@ -125,7 +145,7 @@ export class RotaService {
   }
 
   /** Heurística construtiva: sempre vai pra entrega mais próxima ainda não visitada. */
-  private vizinhoMaisProximo(partida: { lat: number; lng: number }, pontos: Ponto[]): Ponto[] {
+  private vizinhoMaisProximo(partida: Ponto, pontos: Ponto[], custo: Custo): Ponto[] {
     const restantes = [...pontos];
     const rota: Ponto[] = [];
     let atual = partida;
@@ -133,7 +153,7 @@ export class RotaService {
       let melhor = 0;
       let melhorD = Infinity;
       for (let i = 0; i < restantes.length; i++) {
-        const d = haversineKm(atual, restantes[i]);
+        const d = custo(atual, restantes[i]);
         if (d < melhorD) {
           melhorD = d;
           melhor = i;
@@ -147,7 +167,7 @@ export class RotaService {
   }
 
   /** Refinamento 2-opt: desfaz cruzamentos invertendo trechos enquanto melhorar. */
-  private duasOpt(rota: Ponto[], partida: { lat: number; lng: number }): Ponto[] {
+  private duasOpt(rota: Ponto[], partida: Ponto, custo: Custo): Ponto[] {
     const r = [...rota];
     const dist = (i: number) => (i < 0 ? partida : r[i]);
     let melhorou = true;
@@ -156,8 +176,8 @@ export class RotaService {
       melhorou = false;
       for (let i = -1; i < r.length - 2; i++) {
         for (let j = i + 2; j < r.length - 1; j++) {
-          const atual = haversineKm(dist(i), r[i + 1]) + haversineKm(r[j], r[j + 1]);
-          const trocado = haversineKm(dist(i), r[j]) + haversineKm(r[i + 1], r[j + 1]);
+          const atual = custo(dist(i), r[i + 1]) + custo(r[j], r[j + 1]);
+          const trocado = custo(dist(i), r[j]) + custo(r[i + 1], r[j + 1]);
           if (trocado < atual - 1e-9) {
             // inverte o trecho i+1..j
             let a = i + 1;

@@ -107,13 +107,14 @@ export function MontarViagemPage() {
     setSugerindo(true);
     try {
       const { data } = await logisticaApi.post<{
-        ordem: string[]; semCoordenada: string[]; geocodificadas: number; distanciaKm: number | null;
+        ordem: string[]; semCoordenada: string[]; geocodificadas: number; distanciaKm: number | null; fonteDistancia?: 'OSRM' | 'HAVERSINE';
       }>('/viagens/sugerir-ordem', { filialId, entregaIds: rota });
       setRota(data.ordem);
       const aviso = data.semCoordenada.length
         ? ` ${data.semCoordenada.length} sem localização foram pro fim — posicione com as setas.`
         : '';
-      toast('success', `Ordem sugerida pela distância (${data.geocodificadas} localizadas${data.distanciaKm != null ? `, ~${data.distanciaKm} km` : ''}).${aviso}`);
+      const via = data.fonteDistancia === 'OSRM' ? ' por rua' : data.distanciaKm != null ? ' em linha reta' : '';
+      toast('success', `Ordem sugerida pela distância (${data.geocodificadas} localizadas${data.distanciaKm != null ? `, ~${data.distanciaKm} km${via}` : ''}).${aviso}`);
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
       toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao sugerir a ordem.');

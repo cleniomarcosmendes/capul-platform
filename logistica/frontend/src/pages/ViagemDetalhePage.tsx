@@ -137,11 +137,12 @@ export function ViagemDetalhePage() {
     if (ordem.length < 2) return;
     setSugerindo(true);
     try {
-      const { data } = await logisticaApi.post<{ ordem: string[]; semCoordenada: string[]; geocodificadas: number; distanciaKm: number | null }>(
+      const { data } = await logisticaApi.post<{ ordem: string[]; semCoordenada: string[]; geocodificadas: number; distanciaKm: number | null; fonteDistancia?: 'OSRM' | 'HAVERSINE' }>(
         '/viagens/sugerir-ordem', { filialId: v?.filialId, entregaIds: ordem });
       await aplicarOrdem(data.ordem);
       const aviso = data.semCoordenada.length ? ` ${data.semCoordenada.length} sem localização foram pro fim.` : '';
-      toast('success', `Ordem recalculada (${data.geocodificadas} localizadas${data.distanciaKm != null ? `, ~${data.distanciaKm} km` : ''}).${aviso}`);
+      const via = data.fonteDistancia === 'OSRM' ? ' por rua' : data.distanciaKm != null ? ' em linha reta' : '';
+      toast('success', `Ordem recalculada (${data.geocodificadas} localizadas${data.distanciaKm != null ? `, ~${data.distanciaKm} km${via}` : ''}).${aviso}`);
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
       toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao recalcular.');
