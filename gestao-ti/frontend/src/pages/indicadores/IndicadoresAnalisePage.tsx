@@ -136,7 +136,7 @@ function DrillModal({ sel, docs, loading, onClose }: {
   const soma = docs ? docs.reduce((s, d) => s + d.valor, 0) : 0;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
-      <div className="max-h-[85vh] w-full max-w-3xl overflow-auto rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[85vh] w-full max-w-5xl overflow-auto rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-400">{sel.titulo}</p>
@@ -163,15 +163,15 @@ function DrillModal({ sel, docs, loading, onClose }: {
               <tbody className="divide-y divide-slate-50">
                 {docs.map((d) => (
                   <tr key={`${d.tipo}-${d.id}`} className="hover:bg-slate-50">
-                    <td className="px-5 py-2">
+                    <td className="whitespace-nowrap px-5 py-2">
                       <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
-                        {d.tipo === 'NF' ? <FileText className="h-3.5 w-3.5 text-sky-600" /> : <Receipt className="h-3.5 w-3.5 text-indigo-600" />}
+                        {d.tipo === 'NF' ? <FileText className="h-3.5 w-3.5 shrink-0 text-sky-600" /> : <Receipt className="h-3.5 w-3.5 shrink-0 text-indigo-600" />}
                         {d.tipo === 'NF' ? `NF ${d.numero}` : d.numero}
                       </span>
                     </td>
-                    <td className="px-5 py-2 text-slate-600">{d.descricao}</td>
-                    <td className="px-5 py-2 text-slate-500">{d.data ? new Date(d.data).toLocaleDateString('pt-BR') : '—'}</td>
-                    <td className="px-5 py-2 text-right font-semibold text-slate-800">{brl(d.valor)}</td>
+                    <td className="whitespace-nowrap px-5 py-2 text-slate-600">{d.descricao}</td>
+                    <td className="whitespace-nowrap px-5 py-2 text-slate-500">{d.data ? new Date(d.data).toLocaleDateString('pt-BR') : '—'}</td>
+                    <td className="whitespace-nowrap px-5 py-2 text-right font-semibold text-slate-800">{brl(d.valor)}</td>
                   </tr>
                 ))}
               </tbody>
