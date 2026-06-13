@@ -156,6 +156,41 @@ export function MontarViagemPage() {
 
       {msg && <div className={`rounded-lg px-4 py-2 text-sm ${msg.tipo === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.texto}</div>}
 
+      {/* Veículo e motorista no TOPO (pedido 12/06 — com rota longa o card de
+          baixo afundava; aqui fica sempre visível, igual ao detalhe). */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <p className="mb-3 text-xs text-slate-500">Veículo e motorista são <strong>opcionais agora</strong> — a viagem salva em preparação e você define depois; o <strong>despacho</strong> exige os dois.</p>
+        <div className="grid grid-cols-2 items-end gap-3 lg:grid-cols-12">
+          <div className="lg:col-span-4">
+            <label className={lbl}>Veículo (disponível)</label>
+            <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} className={sel}>
+              <option value="">—</option>
+              {veiculos.map((v) => <option key={v.id} value={v.id}>{v.placa} {v.modelo ? `· ${v.modelo}` : ''}</option>)}
+            </select>
+          </div>
+          <div className="lg:col-span-4">
+            <label className={lbl}>Motorista</label>
+            <select value={motoristaId} onChange={(e) => setMotoristaId(e.target.value)} className={sel}>
+              <option value="">—</option>
+              {motoristas.map((u) => <option key={u.id} value={u.id}>{labelCore(u)}</option>)}
+            </select>
+          </div>
+          <div className="flex gap-2 lg:col-span-4">
+            <button onClick={() => guardedNavigate('/viagens')} type="button"
+              title="Desistir da montagem — nada é salvo"
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">
+              Cancelar
+            </button>
+            <button onClick={() => void montar()} disabled={montando || rota.length === 0}
+              title={rota.length === 0 ? 'Monte a rota primeiro' : undefined}
+              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+              {montando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+              Salvar montagem ({rota.length} {rota.length === 1 ? 'entrega' : 'entregas'} · {volumesRota} vol)
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Fila de pendentes */}
         <div className="rounded-xl border border-slate-200 bg-white">
@@ -265,39 +300,6 @@ export function MontarViagemPage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="mb-1 text-sm font-semibold text-slate-700">Veículo e motorista</div>
-            <p className="mb-3 text-xs text-slate-500">Opcionais agora — a viagem salva como rascunho e você define depois; o <strong>despacho</strong> exige os dois.</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={lbl}>Veículo (disponível)</label>
-                <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} className={sel}>
-                  <option value="">—</option>
-                  {veiculos.map((v) => <option key={v.id} value={v.id}>{v.placa} {v.modelo ? `· ${v.modelo}` : ''}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className={lbl}>Motorista</label>
-                <select value={motoristaId} onChange={(e) => setMotoristaId(e.target.value)} className={sel}>
-                  <option value="">—</option>
-                  {motoristas.map((u) => <option key={u.id} value={u.id}>{labelCore(u)}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center gap-2">
-              <button onClick={() => guardedNavigate('/viagens')} type="button"
-                title="Desistir da montagem — nada é salvo"
-                className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50">
-                Cancelar
-              </button>
-              <button onClick={() => void montar()} disabled={montando || rota.length === 0}
-                title={rota.length === 0 ? 'Monte a rota primeiro' : undefined}
-                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
-                {montando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
-                Salvar montagem ({rota.length} {rota.length === 1 ? 'entrega' : 'entregas'} · {volumesRota} vol)
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>
