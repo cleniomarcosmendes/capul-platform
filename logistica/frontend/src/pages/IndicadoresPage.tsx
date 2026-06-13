@@ -22,6 +22,8 @@ interface Indicadores {
 
 const labelCore = (i?: CoreItem) => (i ? i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8) : '—');
 const ORIGEM_LABEL: Record<string, string> = { PRESENCIAL: 'Presencial', TELE_VENDA: 'Tele-venda', OUTRO: 'Outro', NAO_INFORMADO: 'Não informado' };
+const ORIGEM_COR: Record<string, string> = { PRESENCIAL: '#10b981', TELE_VENDA: '#0ea5e9', OUTRO: '#f59e0b', NAO_INFORMADO: '#94a3b8' };
+const corOrigem = (o: string) => ORIGEM_COR[o] ?? '#94a3b8';
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtPct = (v: number | null | undefined) => (v == null ? '—' : `${Math.round(v * 100)}%`);
@@ -111,23 +113,29 @@ export function IndicadoresPage() {
             <div className="rounded-xl border border-slate-200 bg-white">
               <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Valor por tipo de venda</div>
               {ind.porOrigem.length === 0 ? <Vazio /> : (
-                <ul className="divide-y divide-slate-100">
-                  {ind.porOrigem.map((o) => {
-                    const pct = ind.totais.valorTotal > 0 ? (o.valor / ind.totais.valorTotal) * 100 : 0;
-                    return (
-                      <li key={o.origem} className="px-4 py-2.5">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-slate-700">{ORIGEM_LABEL[o.origem] ?? o.origem}</span>
-                          <span className="font-semibold text-slate-800">{fmtBRL(o.valor)}</span>
-                        </div>
-                        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                          <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
-                        </div>
-                        <div className="mt-1 text-xs text-slate-400">{o.entregas} entregas · {o.volumes} vol · ticket {fmtBRL(o.ticketMedio)}</div>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <>
+                  <DonutOrigem itens={ind.porOrigem} total={ind.totais.valorTotal} />
+                  <ul className="divide-y divide-slate-100 border-t border-slate-100">
+                    {ind.porOrigem.map((o) => {
+                      const pct = ind.totais.valorTotal > 0 ? (o.valor / ind.totais.valorTotal) * 100 : 0;
+                      return (
+                        <li key={o.origem} className="px-4 py-2.5">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="flex items-center gap-2 text-slate-700">
+                              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: corOrigem(o.origem) }} />
+                              {ORIGEM_LABEL[o.origem] ?? o.origem}
+                            </span>
+                            <span className="font-semibold text-slate-800">{fmtBRL(o.valor)}</span>
+                          </div>
+                          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                            <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: corOrigem(o.origem) }} />
+                          </div>
+                          <div className="mt-1 text-xs text-slate-400">{o.entregas} entregas · {o.volumes} vol · ticket {fmtBRL(o.ticketMedio)} · {Math.round(pct)}%</div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
               )}
             </div>
 
@@ -232,3 +240,52 @@ function StatTexto({ icon: Icon, cor, bg, valor, rotulo, sub }: {
 }
 
 const Vazio = () => <li className="px-4 py-3 text-sm text-slate-400">Sem dados.</li>;
+
+/** Rosca (donut) SVG da participação do VALOR por origem — sem lib externa. */
+function DonutOrigem({ itens, total }: { itens: OrigemInd[]; total: number }) {
+  const r = 52;
+  const c = 2 * Math.PI * r;
+  // Só origens com valor > 0; se o total for 0, donut cinza neutro.
+  const fatias = itens.filter((o) => o.valor > 0);
+  let acc = 0;
+  const maior = [...itens].sort((a, b) => b.valor - a.valor)[0];
+  const pctMaior = total > 0 && maior ? Math.round((maior.valor / total) * 100) : 0;
+
+  return (
+    <div className="flex items-center gap-5 px-4 py-4">
+      <svg width={130} height={130} viewBox="0 0 130 130" className="shrink-0">
+        <g transform="rotate(-90 65 65)">
+          <circle cx={65} cy={65} r={r} fill="none" stroke="#f1f5f9" strokeWidth={16} />
+          {total > 0 && fatias.map((o) => {
+            const frac = o.valor / total;
+            const seg = <circle
+              key={o.origem}
+              cx={65} cy={65} r={r} fill="none"
+              stroke={corOrigem(o.origem)} strokeWidth={16}
+              strokeDasharray={`${frac * c} ${c}`}
+              strokeDashoffset={-acc * c}
+            />;
+            acc += frac;
+            return seg;
+          })}
+        </g>
+        <text x={65} y={61} textAnchor="middle" className="fill-slate-800" style={{ fontSize: 20, fontWeight: 700 }}>{pctMaior}%</text>
+        <text x={65} y={78} textAnchor="middle" className="fill-slate-400" style={{ fontSize: 9 }}>
+          {maior ? (ORIGEM_LABEL[maior.origem] ?? maior.origem) : '—'}
+        </text>
+      </svg>
+      <div className="flex flex-col gap-1.5">
+        {itens.map((o) => {
+          const pct = total > 0 ? Math.round((o.valor / total) * 100) : 0;
+          return (
+            <div key={o.origem} className="flex items-center gap-2 text-xs">
+              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: corOrigem(o.origem) }} />
+              <span className="text-slate-600">{ORIGEM_LABEL[o.origem] ?? o.origem}</span>
+              <span className="font-medium text-slate-800">{pct}%</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
