@@ -47,14 +47,10 @@ export class LancarDespesaDto {
   observacao?: string;
 }
 
-// ---- Lançamento pelo condutor durante a viagem (matrícula+senha) → PENDENTE ----
-export class LancarDespesaCondutorDto {
-  @IsString() @IsNotEmpty() @MaxLength(20)
-  matricula!: string;
-
-  @IsString() @IsNotEmpty()
-  senha!: string;
-
+// ---- Lançamento na viagem em curso → PENDENTE ----
+// A viagem já foi aberta pelo condutor autenticado (senha na saída); a despesa
+// contextualizada herda o condutor da viagem — NÃO pede senha de novo.
+export class LancarDespesaViagemDto {
   @IsString() @IsNotEmpty()
   viagemId!: string;
 

@@ -487,11 +487,10 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
   );
 }
 
-// Lançamento de despesa pelo condutor durante a viagem (matrícula+senha) → PENDENTE.
+// Lançamento de despesa NA viagem em curso → PENDENTE. A viagem já foi aberta
+// pelo condutor autenticado na saída — herda o condutor, NÃO pede senha de novo.
 function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFrota; tipos: TipoDespesa[]; onClose: () => void; onDone: () => void }) {
   const { toast } = useToast();
-  const [matricula, setMatricula] = useState(v.condutorMatricula ?? '');
-  const [senha, setSenha] = useState('');
   const [tipoDespesaId, setTipoDespesaId] = useState('');
   const [valor, setValor] = useState('');
   const [fornecedor, setFornecedor] = useState('');
@@ -499,13 +498,12 @@ function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFrota; ti
   const [salvando, setSalvando] = useState(false);
 
   const lancar = async () => {
-    if (!senha) { toast('warning', 'Informe a senha do condutor.'); return; }
     if (!tipoDespesaId) { toast('warning', 'Selecione o tipo de despesa.'); return; }
     if (valor === '' || Number(valor) <= 0) { toast('warning', 'Informe um valor válido.'); return; }
     setSalvando(true);
     try {
       await logisticaApi.post('/despesas/viagem', {
-        matricula: matricula.trim(), senha, viagemId: v.id, tipoDespesaId, valor: Number(valor),
+        viagemId: v.id, tipoDespesaId, valor: Number(valor),
         fornecedor: fornecedor.trim() || undefined, observacao: obs.trim() || undefined,
       });
       toast('success', 'Despesa lançada (pendente de validação do supervisor).');
@@ -519,10 +517,8 @@ function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFrota; ti
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-500">Despesa da viagem #{v.numero} — o condutor confirma com matrícula+senha; entra como <b>pendente</b> até o supervisor validar.</p>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <input value={matricula} onChange={(e) => setMatricula(e.target.value)} placeholder="Matrícula" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Senha" autoComplete="off" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+      <p className="text-xs text-slate-500">Despesa da viagem #{v.numero} — condutor <b>{v.condutorNome ?? '—'}</b> (da saída); entra como <b>pendente</b> até o supervisor validar.</p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <select value={tipoDespesaId} onChange={(e) => setTipoDespesaId(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
           <option value="">Tipo de despesa…</option>
           {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}

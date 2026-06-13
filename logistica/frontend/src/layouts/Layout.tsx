@@ -17,6 +17,11 @@ type NavEntry =
 const navItems: NavEntry[] = [
   { to: '/', label: 'Início', icon: Home, end: true },
 
+  { section: 'GESTÃO', roles: GESTORES },
+  { to: '/painel', label: 'Painel', icon: BarChart3, roles: GESTORES },
+  { to: '/indicadores', label: 'Indicadores', icon: TrendingUp, roles: GESTORES },
+  { to: '/clientes', label: 'Endereços', icon: MapPin },
+
   { section: 'ENTREGAS', roles: ENTREGA },
   { to: '/entregas/nova', label: 'Nova Entrega', icon: Package, roles: ENTREGA },
   { to: '/entregas', label: 'Entregas', icon: ClipboardList, end: true, roles: ENTREGA },
@@ -28,11 +33,6 @@ const navItems: NavEntry[] = [
   { to: '/frota/painel', label: 'Monitor da Frota', icon: CircleDot, roles: GESTORES },
   { to: '/despesas', label: 'Despesas', icon: Banknote, roles: FROTA_OP },
   { to: '/veiculos', label: 'Veículos', icon: Car, roles: GESTORES },
-
-  { section: 'GESTÃO', roles: GESTORES },
-  { to: '/painel', label: 'Painel', icon: BarChart3, roles: GESTORES },
-  { to: '/indicadores', label: 'Indicadores', icon: TrendingUp, roles: GESTORES },
-  { to: '/clientes', label: 'Endereços', icon: MapPin },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {

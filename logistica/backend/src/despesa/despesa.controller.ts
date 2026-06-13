@@ -4,7 +4,7 @@ import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.
 import { DespesaService } from './despesa.service.js';
 import {
   CriarTipoDespesaDto, AtualizarTipoDespesaDto, LancarDespesaDto,
-  LancarDespesaCondutorDto, ContestarDespesaDto, ListarDespesasQuery,
+  LancarDespesaViagemDto, ContestarDespesaDto, ListarDespesasQuery,
 } from './dto.js';
 
 const roleLogistica = (user: JwtPayload) => user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
@@ -52,10 +52,10 @@ export class DespesaController {
     return this.despesas.lancarDireto(dto, user, roleLogistica(user));
   }
 
-  /** Lançamento pelo condutor durante a viagem (matrícula+senha) → PENDENTE. */
+  /** Lançamento na viagem em curso → PENDENTE (herda o condutor da viagem). */
   @Post('viagem')
-  lancarPorCondutor(@Body() dto: LancarDespesaCondutorDto, @CurrentUser() user: JwtPayload) {
-    return this.despesas.lancarPorCondutor(dto, user);
+  lancarNaViagem(@Body() dto: LancarDespesaViagemDto, @CurrentUser() user: JwtPayload) {
+    return this.despesas.lancarNaViagem(dto, user);
   }
 
   @Patch(':id/aprovar')

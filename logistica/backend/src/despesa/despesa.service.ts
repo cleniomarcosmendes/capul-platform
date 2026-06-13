@@ -1,14 +1,12 @@
 import {
   BadRequestException, ForbiddenException, Injectable, NotFoundException,
-  ServiceUnavailableException, UnauthorizedException,
 } from '@nestjs/common';
-import { Prisma, StatusDespesa, TipoViagem } from '@prisma/client';
+import { Prisma, StatusDespesa, StatusViagem, TipoViagem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import {
   CriarTipoDespesaDto, AtualizarTipoDespesaDto, LancarDespesaDto,
-  LancarDespesaCondutorDto, ContestarDespesaDto, ListarDespesasQuery,
+  LancarDespesaViagemDto, ContestarDespesaDto, ListarDespesasQuery,
 } from './dto.js';
 
 const ehGestor = (role?: string) => role === 'GESTOR_FROTA' || role === 'ADMIN';
@@ -22,10 +20,7 @@ const ehGestor = (role?: string) => role === 'GESTOR_FROTA' || role === 'ADMIN';
  */
 @Injectable()
 export class DespesaService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly condutor: ProtheusCondutorService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   // ---------- Tipos de despesa ----------
   listarTipos(somenteAtivos?: boolean) {
@@ -136,16 +131,17 @@ export class DespesaService {
     });
   }
 
-  /** Lançamento pelo condutor durante a viagem (matrícula+senha) → PENDENTE. */
-  async lancarPorCondutor(dto: LancarDespesaCondutorDto, user: JwtPayload) {
+  /**
+   * Lançamento de despesa na viagem em curso → PENDENTE. A viagem já foi aberta
+   * pelo condutor autenticado na saída (senha) — a despesa herda o condutor da
+   * viagem, sem pedir senha de novo. Continua exigindo validação do supervisor.
+   */
+  async lancarNaViagem(dto: LancarDespesaViagemDto, user: JwtPayload) {
     const v = await this.prisma.viagem.findUnique({ where: { id: dto.viagemId } });
     if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Viagem de frota não encontrada.');
     if (v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
+    if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('Só dá pra lançar despesa em viagem em curso.');
     if (!v.veiculoId) throw new BadRequestException('Viagem sem veículo.');
-
-    const r = await this.condutor.validar(dto.matricula, dto.senha);
-    if (r.status === 'INDISPONIVEL') throw new ServiceUnavailableException('Portal do RH indisponível. Tente novamente em instantes.');
-    if (r.status !== 'VALIDO') throw new UnauthorizedException('Matrícula ou senha inválidas.');
 
     const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
     if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
@@ -161,8 +157,8 @@ export class DespesaService {
         fornecedor: dto.fornecedor?.trim() || null,
         observacao: dto.observacao?.trim() || null,
         situacao: StatusDespesa.PENDENTE,
-        autorMatricula: r.matricula,
-        autorNome: r.nome,
+        autorMatricula: v.condutorMatricula,
+        autorNome: v.condutorNome,
         criadoPorId: user.sub,
       },
     });
