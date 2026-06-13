@@ -60,6 +60,7 @@ import { TiposProdutoPage } from './pages/cadastros/TiposProdutoPage';
 import { TiposProjetoPage } from './pages/cadastros/TiposProjetoPage';
 import { ChamadosExternosPage } from './pages/cadastros/ChamadosExternosPage';
 import { IndicadoresPage } from './pages/indicadores/IndicadoresPage';
+import { IndicadoresAnalisePage } from './pages/indicadores/IndicadoresAnalisePage';
 import { NotasFiscaisListPage } from './pages/compras/NotasFiscaisListPage';
 import { NotaFiscalFormPage } from './pages/compras/NotaFiscalFormPage';
 import { NotaFiscalDetalhePage } from './pages/compras/NotaFiscalDetalhePage';
@@ -112,6 +113,7 @@ function AppRoutes() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="indicadores" element={<IndicadoresPage />} />
+        <Route path="indicadores-analise" element={<IndicadoresAnalisePage />} />
         <Route path="monitor" element={<MonitorPlayerPage />} />
         <Route path="acompanhamento" element={<AcompanhamentoPage />} />
         <Route path="acompanhamento-item" element={<AcompanhamentoItemPage />} />

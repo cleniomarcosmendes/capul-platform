@@ -294,4 +294,19 @@ export class DashboardController {
     const tipos = tiposParada ? tiposParada.split(',') : undefined;
     return this.service.getIndicadores(m, a, tipos, user, role);
   }
+
+  // Indicadores — Análise: investimento do mês agrupado (centro de custo, tipo
+  // de produto, departamento). Total reconcilia com o KPI manchete.
+  @Get('investimento-analitico')
+  @Roles(...MANAGERS)
+  getInvestimentoAnalitico(
+    @Query('mes') mes: string,
+    @Query('ano') ano: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
+  ) {
+    const m = parseInt(mes, 10) || new Date().getMonth() + 1;
+    const a = parseInt(ano, 10) || new Date().getFullYear();
+    return this.service.getInvestimentoAnalitico(m, a, user, role);
+  }
 }

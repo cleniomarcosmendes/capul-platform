@@ -103,6 +103,112 @@ export class DashboardIndicadoresService {
     };
   }
 
+  /**
+   * Investimento do mês AGRUPADO (tela "Indicadores — Análise"). Espelha EXATO
+   * os filtros de getInvestimentos (período + status + escopo workspace) para o
+   * total reconciliar com o KPI manchete. Cada agrupamento SOMA ao total via
+   * baldes de resíduo — nada some, nada conta duas vezes:
+   *  - por Centro de Custo: itens da NF + rateio das parcelas (+ resíduos)
+   *  - por Tipo de Produto: itens da NF (Não classificado p/ vazio) + contratos
+   *  - por Departamento: header da NF + departamento do contrato (reconcilia 100%)
+   */
+  async getInvestimentoAnalitico(mes: number, ano: number, user?: JwtPayload, role?: string) {
+    const dataInicio = new Date(ano, mes - 1, 1);
+    const dataFim = new Date(ano, mes, 0, 23, 59, 59, 999);
+    const deptoIds = getDeptoIdsDoUser(user, role);
+    const parcelaDeptoWhere =
+      deptoIds === null ? {} : { contrato: { departamentoId: { in: deptoIds } } };
+    const nfDeptoWhere = applyDepartamentoFilter({}, user, role);
+
+    const [parcelas, nfs] = await Promise.all([
+      this.prisma.parcelaContrato.findMany({
+        where: { status: 'PAGA', dataPagamento: { gte: dataInicio, lte: dataFim }, ...parcelaDeptoWhere },
+        include: {
+          contrato: { select: { departamentoId: true, departamento: { select: { nome: true } } } },
+          rateioItens: { include: { centroCusto: { select: { id: true, codigo: true, nome: true } } } },
+        },
+      }),
+      this.prisma.notaFiscal.findMany({
+        where: { status: { not: 'CANCELADA' }, dataLancamento: { gte: dataInicio, lte: dataFim }, ...nfDeptoWhere },
+        include: {
+          departamento: { select: { id: true, nome: true } },
+          itens: {
+            include: {
+              produto: { include: { tipoProduto: { select: { id: true, descricao: true } } } },
+              centroCusto: { select: { id: true, codigo: true, nome: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    type Bucket = Map<string, { label: string; valor: number; qtd: number }>;
+    const add = (m: Bucket, key: string, label: string, valor: number) => {
+      const cur = m.get(key) ?? { label, valor: 0, qtd: 0 };
+      cur.valor += valor;
+      cur.qtd += 1;
+      m.set(key, cur);
+    };
+    const cents = (n: number) => Math.round(n * 100) / 100;
+    const arr = (m: Bucket) =>
+      [...m.entries()].map(([id, v]) => ({ id, label: v.label, valor: cents(v.valor), qtd: v.qtd }))
+        .sort((a, b) => b.valor - a.valor);
+
+    const cc: Bucket = new Map();
+    const tipo: Bucket = new Map();
+    const depto: Bucket = new Map();
+    let totalNFs = 0;
+    let totalParcelas = 0;
+
+    for (const nf of nfs) {
+      const v = Number(nf.valorTotal);
+      totalNFs += v;
+      add(depto, nf.departamento?.id ?? '__sd', nf.departamento?.nome ?? 'Sem departamento', v);
+      let somaItens = 0;
+      for (const it of nf.itens) {
+        const iv = Number(it.valorTotal);
+        somaItens += iv;
+        add(cc, it.centroCustoId, `${it.centroCusto.codigo} · ${it.centroCusto.nome}`, iv);
+        const t = it.produto.tipoProduto;
+        add(tipo, t?.id ?? '__nc', t?.descricao ?? 'Não classificado', iv);
+      }
+      const resid = cents(v - somaItens);
+      if (Math.abs(resid) >= 0.01) {
+        add(cc, '__nf_resid', 'NFs — valor não detalhado em itens', resid);
+        add(tipo, '__nf_resid', 'NFs — valor não detalhado em itens', resid);
+      }
+    }
+
+    for (const p of parcelas) {
+      const v = Number(p.valor);
+      totalParcelas += v;
+      add(depto, p.contrato.departamentoId ?? '__sd', p.contrato.departamento?.nome ?? 'Sem departamento', v);
+      add(tipo, '__contrato', 'Contratos/serviços (sem produto)', v);
+      if (p.rateioItens.length) {
+        let somaR = 0;
+        for (const ri of p.rateioItens) {
+          const rv = Number(ri.valorCalculado);
+          somaR += rv;
+          add(cc, ri.centroCustoId, `${ri.centroCusto.codigo} · ${ri.centroCusto.nome}`, rv);
+        }
+        const residR = cents(v - somaR);
+        if (Math.abs(residR) >= 0.01) add(cc, '__parc_resid', 'Contratos — rateio incompleto', residR);
+      } else {
+        add(cc, '__parc_norateio', 'Contratos — sem rateio de centro de custo', v);
+      }
+    }
+
+    return {
+      periodo: { mes, ano, dataInicio, dataFim },
+      totalInvestimento: cents(totalNFs + totalParcelas),
+      totalNFs: cents(totalNFs),
+      totalParcelas: cents(totalParcelas),
+      porCentroCusto: arr(cc),
+      porTipoProduto: arr(tipo),
+      porDepartamento: arr(depto),
+    };
+  }
+
   private async getLicencas(user?: JwtPayload, role?: string) {
     const licSelect = {
       id: true, nome: true, modeloLicenca: true, quantidade: true, dataVencimento: true, status: true,

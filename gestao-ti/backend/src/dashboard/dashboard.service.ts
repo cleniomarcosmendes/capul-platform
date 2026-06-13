@@ -157,4 +157,8 @@ export class DashboardService {
   getIndicadores(mes: number, ano: number, tiposParada?: string[], user?: JwtPayload, role?: string) {
     return this.indicadores.getIndicadores(mes, ano, tiposParada, user, role);
   }
+
+  getInvestimentoAnalitico(mes: number, ano: number, user?: JwtPayload, role?: string) {
+    return this.indicadores.getInvestimentoAnalitico(mes, ano, user, role);
+  }
 }

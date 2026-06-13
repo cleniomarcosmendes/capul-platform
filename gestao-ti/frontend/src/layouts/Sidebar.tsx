@@ -33,6 +33,7 @@ import {
   ListChecks,
   Receipt,
   BarChart3,
+  PieChart,
   Globe2,
   Flame,
   X,
@@ -59,6 +60,7 @@ const CONTRATO_ROLES_DYNAMIC = ['ADMIN', 'GESTOR', 'SUPORTE'];
 const menuItems: MenuItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/gestao-ti/', funcionalidade: 'DASHBOARD' },
   { label: 'Indicadores', icon: BarChart3, path: '/gestao-ti/indicadores', roles: MANAGERS, funcionalidade: 'INDICADOR_OPERACIONAL' },
+  { label: 'Indicadores — Análise', icon: PieChart, path: '/gestao-ti/indicadores-analise', roles: MANAGERS, funcionalidade: 'INDICADOR_OPERACIONAL' },
   { label: 'Monitor', icon: Gauge, path: '/gestao-ti/monitor', roles: STAFF, funcionalidade: 'MONITOR' },
   { label: 'Acompanhamento', icon: Timer, path: '/gestao-ti/acompanhamento', roles: STAFF, funcionalidade: 'ACOMPANHAMENTO' },
   { label: 'Acomp. por Item', icon: Search, path: '/gestao-ti/acompanhamento-item', roles: STAFF, funcionalidade: 'ACOMPANHAMENTO_ITEM' },
