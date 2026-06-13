@@ -169,4 +169,16 @@ export class DashboardService {
   ) {
     return this.indicadores.getInvestimentoDocumentos(mes, ano, dimensao, chave, user, role);
   }
+
+  getChamadosAnalitico(mes: number, ano: number, user?: JwtPayload, role?: string) {
+    return this.indicadores.getChamadosAnalitico(mes, ano, user, role);
+  }
+
+  getChamadosDocumentos(
+    mes: number, ano: number,
+    dimensao: 'setor' | 'prioridade' | 'equipe', chave: string,
+    user?: JwtPayload, role?: string,
+  ) {
+    return this.indicadores.getChamadosDocumentos(mes, ano, dimensao, chave, user, role);
+  }
 }

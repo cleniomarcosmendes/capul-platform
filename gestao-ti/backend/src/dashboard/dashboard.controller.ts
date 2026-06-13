@@ -325,4 +325,28 @@ export class DashboardController {
     const a = parseInt(ano, 10) || new Date().getFullYear();
     return this.service.getInvestimentoDocumentos(m, a, dimensao, chave, user, role);
   }
+
+  @Get('chamados-analitico')
+  @Roles(...MANAGERS)
+  getChamadosAnalitico(
+    @Query('mes') mes: string, @Query('ano') ano: string,
+    @CurrentUser() user?: JwtPayload, @GestaoTiRole() role?: string,
+  ) {
+    const m = parseInt(mes, 10) || new Date().getMonth() + 1;
+    const a = parseInt(ano, 10) || new Date().getFullYear();
+    return this.service.getChamadosAnalitico(m, a, user, role);
+  }
+
+  @Get('chamados-analitico/documentos')
+  @Roles(...MANAGERS)
+  getChamadosDocumentos(
+    @Query('mes') mes: string, @Query('ano') ano: string,
+    @Query('dimensao') dimensao: 'setor' | 'prioridade' | 'equipe',
+    @Query('chave') chave: string,
+    @CurrentUser() user?: JwtPayload, @GestaoTiRole() role?: string,
+  ) {
+    const m = parseInt(mes, 10) || new Date().getMonth() + 1;
+    const a = parseInt(ano, 10) || new Date().getFullYear();
+    return this.service.getChamadosDocumentos(m, a, dimensao, chave, user, role);
+  }
 }

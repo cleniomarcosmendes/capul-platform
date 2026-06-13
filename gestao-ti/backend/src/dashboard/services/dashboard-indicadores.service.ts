@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ChamadoExternoService } from '../../chamado-externo/chamado-externo.service.js';
 import { getDeptoIdsDoUser, applyDepartamentoFilter } from '../../common/helpers/departamento-filter.helper.js';
@@ -299,6 +300,99 @@ export class DashboardIndicadoresService {
     }
 
     return docs.sort((a, b) => b.valor - a.valor);
+  }
+
+  /** Escopo workspace dos chamados (solicitante OU depto OU equipe-membro). null = sem recorte. */
+  private async chamadoEscopoOr(user?: JwtPayload, role?: string) {
+    const deptoIds = getDeptoIdsDoUser(user, role);
+    if (deptoIds === null) return null;
+    let equipeIds: string[] = [];
+    if (user?.sub) {
+      const eq = await this.prisma.membroEquipe.findMany({
+        where: { usuarioId: user.sub, status: 'ATIVO' }, select: { equipeId: true },
+      });
+      equipeIds = eq.map((m) => m.equipeId);
+    }
+    return {
+      OR: [
+        { solicitanteId: user?.sub ?? '' },
+        { departamentoId: { in: deptoIds } },
+        ...(equipeIds.length ? [{ equipeAtualId: { in: equipeIds } }] : []),
+      ],
+    };
+  }
+
+  /**
+   * Chamados ABERTOS no mês AGRUPADOS (Indicadores — Análise). Métrica = contagem.
+   * Reconcilia com o total de abertos no período. Dimensões: setor (departamento),
+   * prioridade, equipe.
+   */
+  async getChamadosAnalitico(mes: number, ano: number, user?: JwtPayload, role?: string) {
+    const dataInicio = new Date(ano, mes - 1, 1);
+    const dataFim = new Date(ano, mes, 0, 23, 59, 59, 999);
+    const escopo = await this.chamadoEscopoOr(user, role);
+    const chamados = await this.prisma.chamado.findMany({
+      where: { createdAt: { gte: dataInicio, lte: dataFim }, ...(escopo ?? {}) },
+      select: {
+        departamentoId: true, departamento: { select: { nome: true } },
+        prioridade: true,
+        equipeAtualId: true, equipeAtual: { select: { sigla: true, nome: true } },
+      },
+    });
+
+    type Bucket = Map<string, { label: string; valor: number; qtd: number }>;
+    const add = (m: Bucket, key: string, label: string) => {
+      const cur = m.get(key) ?? { label, valor: 0, qtd: 0 };
+      cur.valor += 1; cur.qtd += 1; m.set(key, cur);
+    };
+    const arr = (m: Bucket) => [...m.entries()].map(([id, v]) => ({ id, ...v })).sort((a, b) => b.valor - a.valor);
+    const PRIO: Record<string, string> = { BAIXA: 'Baixa', MEDIA: 'Média', ALTA: 'Alta', CRITICA: 'Crítica' };
+
+    const setor: Bucket = new Map();
+    const prioridade: Bucket = new Map();
+    const equipe: Bucket = new Map();
+    for (const c of chamados) {
+      add(setor, c.departamentoId ?? '__sd', c.departamento?.nome ?? 'Sem setor');
+      add(prioridade, c.prioridade, PRIO[c.prioridade] ?? c.prioridade);
+      add(equipe, c.equipeAtualId ?? '__se', c.equipeAtual?.sigla || c.equipeAtual?.nome || 'Sem equipe');
+    }
+
+    return {
+      periodo: { mes, ano },
+      totalAbertos: chamados.length,
+      porSetor: arr(setor),
+      porPrioridade: arr(prioridade),
+      porEquipe: arr(equipe),
+    };
+  }
+
+  /** Drill: chamados de um grupo (setor/prioridade/equipe) abertos no mês. */
+  async getChamadosDocumentos(
+    mes: number, ano: number,
+    dimensao: 'setor' | 'prioridade' | 'equipe', chave: string,
+    user?: JwtPayload, role?: string,
+  ) {
+    const dataInicio = new Date(ano, mes - 1, 1);
+    const dataFim = new Date(ano, mes, 0, 23, 59, 59, 999);
+    const escopo = await this.chamadoEscopoOr(user, role);
+    const campo = (
+      dimensao === 'prioridade' ? { prioridade: chave }
+      : dimensao === 'equipe' ? (chave === '__se' ? { equipeAtualId: null } : { equipeAtualId: chave })
+      : (chave === '__sd' ? { departamentoId: null } : { departamentoId: chave })
+    ) as Prisma.ChamadoWhereInput;
+
+    const chamados = await this.prisma.chamado.findMany({
+      where: { createdAt: { gte: dataInicio, lte: dataFim }, ...(escopo ?? {}), ...campo },
+      select: {
+        id: true, numero: true, titulo: true, status: true, prioridade: true, createdAt: true,
+        solicitante: { select: { nome: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return chamados.map((c) => ({
+      id: c.id, numero: c.numero, titulo: c.titulo, status: c.status,
+      prioridade: c.prioridade, solicitante: c.solicitante?.nome ?? '—', data: c.createdAt,
+    }));
   }
 
   private async getLicencas(user?: JwtPayload, role?: string) {
