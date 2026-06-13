@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowDown, ArrowLeft, ArrowUp, Loader2, Plus, Truck, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUp, Loader2, Plus, Sparkles, Truck, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
@@ -256,9 +256,10 @@ export function MontarViagemPage() {
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
               <span>Rota da viagem ({rota.length} {rota.length === 1 ? 'entrega' : 'entregas'} · {volumesRota} vol)</span>
               <button onClick={() => void sugerirOrdem()} disabled={sugerindo || rota.length < 2}
-                title={rota.length < 2 ? 'Adicione ao menos 2 entregas' : 'Geocodifica e ordena pela menor distância a partir da filial'}
-                className="rounded-lg border border-sky-600 px-2.5 py-1 text-xs font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50">
-                {sugerindo ? 'Calculando…' : '⇅ Sugerir ordem'}
+                title={rota.length < 2 ? 'Adicione ao menos 2 entregas' : 'Calcula o melhor percurso a partir da filial'}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300">
+                {sugerindo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {sugerindo ? 'Calculando…' : 'Sugerir melhor rota'}
               </button>
             </div>
             {rota.length === 0 ? (
