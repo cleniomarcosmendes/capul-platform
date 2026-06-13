@@ -18,6 +18,7 @@ import { EtiquetasPage } from './pages/EtiquetasPage';
 import { RomaneioPage } from './pages/RomaneioPage';
 import { ComprovantesPage } from './pages/ComprovantesPage';
 import { FrotaPage } from './pages/FrotaPage';
+import { DespesasPage } from './pages/DespesasPage';
 
 function Protected() {
   const { loading, logisticaRole } = useAuth();
@@ -51,6 +52,7 @@ function Protected() {
               <Route path="/entregas/:id" element={<EntregaDetalhePage />} />
               <Route path="/entregas/:id/editar" element={<EntregaNovaPage />} />
               <Route path="/frota" element={<FrotaPage />} />
+              <Route path="/despesas" element={<DespesasPage />} />
               <Route path="/veiculos" element={<VeiculosPage />} />
               <Route path="/veiculos/novo" element={<VeiculoFormPage />} />
               <Route path="/veiculos/:id/editar" element={<VeiculoFormPage />} />

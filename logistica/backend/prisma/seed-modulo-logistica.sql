@@ -31,3 +31,19 @@ FROM (VALUES
 CROSS JOIN core.modulos_sistema m
 WHERE m.codigo = 'LOGISTICA'
 ON CONFLICT (modulo_id, codigo) DO NOTHING;
+
+-- Tipos de despesa padrão da frota (Fase 2) — o gestor de frota pode adicionar
+-- outros pela tela. Idempotente (nome é UNIQUE no schema logistica).
+INSERT INTO logistica.tipo_despesa (id, nome, descricao, ativo, criado_em)
+SELECT gen_random_uuid()::text, t.nome, t.descricao, true, now()
+FROM (VALUES
+  ('Combustível',     'Abastecimento (gasolina, etanol, diesel)'),
+  ('Manutenção',      'Oficina mecânica, peças e serviços'),
+  ('Pneu',            'Compra/troca de pneus'),
+  ('Pedágio',         'Pedágios da viagem'),
+  ('Multa',           'Infrações de trânsito'),
+  ('IPVA',            'Imposto anual do veículo'),
+  ('Seguro',          'Seguro do veículo'),
+  ('Outros',          'Despesas diversas')
+) AS t(nome, descricao)
+ON CONFLICT (nome) DO NOTHING;

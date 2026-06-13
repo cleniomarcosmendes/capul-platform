@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Fuel, Loader2, LogIn, LogOut, MapPin, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
+import { Banknote, Fuel, Loader2, LogIn, LogOut, MapPin, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
@@ -20,6 +20,7 @@ interface ViagemFrota {
 }
 interface ParadaFrota { id: string; sequencia: number; local: string; km?: number | null; dataHora?: string | null; observacao?: string | null }
 interface VeiculoDisp { id: string; placa: string; modelo?: string | null; situacao: string; kmAtual: number }
+interface TipoDespesa { id: string; nome: string }
 
 const SIT_META: Record<string, { label: string; cls: string }> = {
   EM_CURSO: { label: 'Em curso', cls: 'bg-sky-100 text-sky-700' },
@@ -42,18 +43,21 @@ export function FrotaPage() {
 
   const [viagens, setViagens] = useState<ViagemFrota[]>([]);
   const [veiculos, setVeiculos] = useState<VeiculoDisp[]>([]);
+  const [tipos, setTipos] = useState<TipoDespesa[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState('');
 
   const carregar = async () => {
     setLoading(true);
     try {
-      const [v, frota] = await Promise.all([
+      const [v, frota, t] = await Promise.all([
         logisticaApi.get<ViagemFrota[]>('/frota/viagens', { params: filtro ? { situacao: filtro } : {} }),
         logisticaApi.get<VeiculoDisp[]>('/veiculos'),
+        logisticaApi.get<TipoDespesa[]>('/despesas/tipos', { params: { ativos: 'true' } }),
       ]);
       setViagens(v.data);
       setVeiculos(frota.data.filter((x) => x.situacao === 'DISPONIVEL'));
+      setTipos(t.data);
     } catch (e) {
       toast('error', errMsg(e, 'Falha ao carregar viagens de frota.'));
     } finally {
@@ -111,7 +115,7 @@ export function FrotaPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {viagens.map((v) => (
-                <LinhaViagem key={v.id} v={v} podeAjustar={podeAjustar} onDone={carregar} />
+                <LinhaViagem key={v.id} v={v} podeAjustar={podeAjustar} tipos={tipos} onDone={carregar} />
               ))}
             </tbody>
           </table>
@@ -282,9 +286,9 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
 }
 
 // ---- Linha da viagem + ações de retorno / ajuste ----
-function LinhaViagem({ v, podeAjustar, onDone }: { v: ViagemFrota; podeAjustar: boolean; onDone: () => void }) {
+function LinhaViagem({ v, podeAjustar, tipos, onDone }: { v: ViagemFrota; podeAjustar: boolean; tipos: TipoDespesa[]; onDone: () => void }) {
   const sit = SIT_META[v.situacao] ?? { label: v.situacao, cls: 'bg-slate-100 text-slate-600' };
-  const [acao, setAcao] = useState<'retorno' | 'ajuste' | 'paradas' | null>(null);
+  const [acao, setAcao] = useState<'retorno' | 'ajuste' | 'paradas' | 'despesa' | null>(null);
   const ativa = v.situacao !== 'CANCELADA';
 
   return (
@@ -313,6 +317,9 @@ function LinhaViagem({ v, podeAjustar, onDone }: { v: ViagemFrota; podeAjustar: 
         <td className="px-4 py-2 text-right">
           {v.situacao === 'EM_CURSO' && (
             <div className="flex justify-end gap-2">
+              <button onClick={() => setAcao(acao === 'despesa' ? null : 'despesa')} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50">
+                <Banknote className="h-3.5 w-3.5" /> Despesa
+              </button>
               <button onClick={() => setAcao(acao === 'retorno' ? null : 'retorno')} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50">
                 <LogIn className="h-3.5 w-3.5" /> Retorno
               </button>
@@ -331,6 +338,7 @@ function LinhaViagem({ v, podeAjustar, onDone }: { v: ViagemFrota; podeAjustar: 
             {acao === 'retorno' && <RetornoForm v={v} onClose={() => setAcao(null)} onDone={() => { setAcao(null); onDone(); }} />}
             {acao === 'ajuste' && <AjusteForm v={v} onClose={() => setAcao(null)} onDone={() => { setAcao(null); onDone(); }} />}
             {acao === 'paradas' && <ParadasPanel v={v} onChanged={onDone} />}
+            {acao === 'despesa' && <DespesaCondutorForm v={v} tipos={tipos} onClose={() => setAcao(null)} onDone={() => { setAcao(null); onDone(); }} />}
           </td>
         </tr>
       )}
@@ -473,6 +481,60 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
         <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-white">Cancelar</button>
         <button onClick={() => void registrar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
           {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} Registrar retorno
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Lançamento de despesa pelo condutor durante a viagem (matrícula+senha) → PENDENTE.
+function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFrota; tipos: TipoDespesa[]; onClose: () => void; onDone: () => void }) {
+  const { toast } = useToast();
+  const [matricula, setMatricula] = useState(v.condutorMatricula ?? '');
+  const [senha, setSenha] = useState('');
+  const [tipoDespesaId, setTipoDespesaId] = useState('');
+  const [valor, setValor] = useState('');
+  const [fornecedor, setFornecedor] = useState('');
+  const [obs, setObs] = useState('');
+  const [salvando, setSalvando] = useState(false);
+
+  const lancar = async () => {
+    if (!senha) { toast('warning', 'Informe a senha do condutor.'); return; }
+    if (!tipoDespesaId) { toast('warning', 'Selecione o tipo de despesa.'); return; }
+    if (valor === '' || Number(valor) <= 0) { toast('warning', 'Informe um valor válido.'); return; }
+    setSalvando(true);
+    try {
+      await logisticaApi.post('/despesas/viagem', {
+        matricula: matricula.trim(), senha, viagemId: v.id, tipoDespesaId, valor: Number(valor),
+        fornecedor: fornecedor.trim() || undefined, observacao: obs.trim() || undefined,
+      });
+      toast('success', 'Despesa lançada (pendente de validação do supervisor).');
+      onDone();
+    } catch (e) {
+      toast('error', errMsg(e, 'Falha ao lançar despesa.'));
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-slate-500">Despesa da viagem #{v.numero} — o condutor confirma com matrícula+senha; entra como <b>pendente</b> até o supervisor validar.</p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <input value={matricula} onChange={(e) => setMatricula(e.target.value)} placeholder="Matrícula" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Senha" autoComplete="off" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        <select value={tipoDespesaId} onChange={(e) => setTipoDespesaId(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          <option value="">Tipo de despesa…</option>
+          {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+        </select>
+        <input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="Valor (R$)" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        <input value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} placeholder="Fornecedor (opcional)" maxLength={120} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observação (opcional)" maxLength={255} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+      </div>
+      <div className="flex justify-end gap-2">
+        <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-white">Cancelar</button>
+        <button onClick={() => void lancar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+          {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />} Lançar despesa
         </button>
       </div>
     </div>

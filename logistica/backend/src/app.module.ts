@@ -17,6 +17,7 @@ import { EntregaModule } from './entrega/entrega.module.js';
 import { VeiculoModule } from './veiculo/veiculo.module.js';
 import { ViagemModule } from './viagem/viagem.module.js';
 import { FrotaModule } from './frota/frota.module.js';
+import { DespesaModule } from './despesa/despesa.module.js';
 import { PainelModule } from './painel/painel.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
@@ -68,6 +69,7 @@ import { RolesGuard } from './common/guards/roles.guard.js';
     VeiculoModule,
     ViagemModule,
     FrotaModule,
+    DespesaModule,
     PainelModule,
   ],
   providers: [
