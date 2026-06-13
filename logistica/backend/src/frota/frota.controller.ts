@@ -42,6 +42,18 @@ export class FrotaController {
     return this.frota.ajustarPorGestor(id, dto, user, roleLogistica(user));
   }
 
+  /** Painel tempo real da frota (monitoramento) — gestores. */
+  @Get('painel')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  painel(@CurrentUser() user: JwtPayload, @Query('mes') mes?: string, @Query('ano') ano?: string) {
+    const agora = new Date();
+    return this.frota.painelFrota(
+      user, roleLogistica(user),
+      mes ? parseInt(mes, 10) : agora.getUTCMonth() + 1,
+      ano ? parseInt(ano, 10) : agora.getUTCFullYear(),
+    );
+  }
+
   /** Paradas (pontos de rota / "caderno" da viagem). */
   @Get('viagens/:id/paradas')
   listarParadas(@Param('id') id: string, @CurrentUser() user: JwtPayload) {

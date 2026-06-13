@@ -2,9 +2,10 @@ import {
   BadRequestException, ForbiddenException, Injectable, NotFoundException,
   ServiceUnavailableException, UnauthorizedException,
 } from '@nestjs/common';
-import { StatusViagem, TipoViagem, SituacaoVeiculo } from '@prisma/client';
+import { StatusViagem, TipoViagem, SituacaoVeiculo, StatusDespesa } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
+import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { SaidaFrotaDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto } from './dto.js';
 
@@ -21,6 +22,7 @@ export class FrotaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly condutor: ProtheusCondutorService,
+    private readonly core: CoreLookupService,
   ) {}
 
   /** Passo 1 da saída: identifica o condutor pelo nome (antes da senha). */
@@ -154,6 +156,100 @@ export class FrotaService {
       }
       return viagem;
     });
+  }
+
+  // ---- Painel tempo real da frota (monitoramento com recorte interno) ----
+  async painelFrota(user: JwtPayload, role: string | undefined, mes: number, ano: number) {
+    const filialId = user.filialId;
+    if (!filialId) throw new BadRequestException('Usuário sem filial definida.');
+    const ehGestor = role === 'GESTOR_FROTA' || role === 'ADMIN';
+    const ini = new Date(Date.UTC(ano, mes - 1, 1));
+    const fimExcl = new Date(Date.UTC(ano, mes, 1));
+
+    // Despesas pendentes: gestor vê a filial; supervisor só os veículos dele.
+    const veicSupervisor = ehGestor
+      ? null
+      : (await this.prisma.veiculo.findMany({ where: { filialId, supervisorId: user.sub }, select: { id: true } })).map((v) => v.id);
+    const despesaScope = veicSupervisor ? { veiculoId: { in: veicSupervisor } } : {};
+
+    const [
+      veicDisponiveis, veicEmUso, veicManutencao, veicBaixados,
+      emCurso, manutencaoLista, despesasPendentes,
+      concluidasMes, despesasMes, viagensMes,
+    ] = await Promise.all([
+      this.prisma.veiculo.count({ where: { filialId, ativo: true, situacao: SituacaoVeiculo.DISPONIVEL } }),
+      this.prisma.veiculo.count({ where: { filialId, ativo: true, situacao: SituacaoVeiculo.EM_USO } }),
+      this.prisma.veiculo.count({ where: { filialId, ativo: true, situacao: SituacaoVeiculo.EM_MANUTENCAO } }),
+      this.prisma.veiculo.count({ where: { filialId, ativo: true, situacao: SituacaoVeiculo.BAIXADO } }),
+      this.prisma.viagem.findMany({
+        where: { filialId, tipo: TipoViagem.FROTA, situacao: StatusViagem.EM_CURSO },
+        include: { veiculo: { select: { placa: true, modelo: true } }, _count: { select: { paradas: true } } },
+        orderBy: { dataHoraSaida: 'asc' },
+      }),
+      this.prisma.veiculo.findMany({
+        where: { filialId, ativo: true, situacao: SituacaoVeiculo.EM_MANUTENCAO },
+        select: { placa: true, modelo: true },
+      }),
+      this.prisma.despesaVeiculo.count({ where: { filialId, situacao: StatusDespesa.PENDENTE, ...despesaScope } }),
+      // Concluídas no mês (km rodado) — janela pela chegada.
+      this.prisma.viagem.findMany({
+        where: { filialId, tipo: TipoViagem.FROTA, situacao: StatusViagem.CONCLUIDA, dataHoraChegada: { gte: ini, lt: fimExcl } },
+        select: { kmInicial: true, kmFinal: true, veiculoId: true, veiculo: { select: { placa: true } } },
+      }),
+      this.prisma.despesaVeiculo.findMany({
+        where: { filialId, situacao: StatusDespesa.APROVADA, dataDespesa: { gte: ini, lt: fimExcl } },
+        select: { valor: true },
+      }),
+      // Viagens de frota do mês p/ ranking por departamento solicitante (pela saída).
+      this.prisma.viagem.findMany({
+        where: { filialId, tipo: TipoViagem.FROTA, dataHoraSaida: { gte: ini, lt: fimExcl } },
+        select: { departamentoSolicitanteId: true },
+      }),
+    ]);
+
+    const kmRodadoMes = concluidasMes.reduce((s, v) => s + ((v.kmFinal ?? 0) - (v.kmInicial ?? 0)), 0);
+    const custoTotalMes = despesasMes.reduce((s, d) => s + Number(d.valor), 0);
+
+    // Ranking de uso por veículo (km rodado no mês).
+    const kmPorVeiculo = new Map<string, number>();
+    for (const v of concluidasMes) {
+      const placa = v.veiculo?.placa ?? '—';
+      kmPorVeiculo.set(placa, (kmPorVeiculo.get(placa) ?? 0) + ((v.kmFinal ?? 0) - (v.kmInicial ?? 0)));
+    }
+    const rankingVeiculo = [...kmPorVeiculo.entries()]
+      .map(([placa, km]) => ({ placa, km })).sort((a, b) => b.km - a.km).slice(0, 5);
+
+    // Ranking por departamento solicitante (nº de viagens) — resolve nome via core.
+    const porDepto = new Map<string, number>();
+    for (const v of viagensMes) {
+      if (!v.departamentoSolicitanteId) continue;
+      porDepto.set(v.departamentoSolicitanteId, (porDepto.get(v.departamentoSolicitanteId) ?? 0) + 1);
+    }
+    const nomesDepto = await this.core.nomesDepartamentos([...porDepto.keys()]);
+    const rankingDepartamento = [...porDepto.entries()]
+      .map(([id, viagens]) => ({ departamento: nomesDepto.get(id) ?? id.slice(0, 8), viagens }))
+      .sort((a, b) => b.viagens - a.viagens).slice(0, 5);
+
+    return {
+      veiculos: {
+        disponivel: veicDisponiveis, emUso: veicEmUso, manutencao: veicManutencao, baixado: veicBaixados,
+        total: veicDisponiveis + veicEmUso + veicManutencao + veicBaixados,
+      },
+      emCurso: emCurso.map((v) => ({
+        id: v.id, numero: v.numero, placa: v.veiculo?.placa ?? '—', modelo: v.veiculo?.modelo ?? null,
+        condutorNome: v.condutorNome, dataHoraSaida: v.dataHoraSaida, finalidade: v.observacoesSaida,
+        kmInicial: v.kmInicial, paradas: v._count.paradas,
+      })),
+      alertas: {
+        veiculosManutencao: manutencaoLista.map((v) => v.placa + (v.modelo ? ` (${v.modelo})` : '')),
+        despesasPendentes,
+      },
+      indicadores: {
+        custoTotalMes, kmRodadoMes,
+        custoPorKm: kmRodadoMes > 0 ? custoTotalMes / kmRodadoMes : null,
+        rankingVeiculo, rankingDepartamento,
+      },
+    };
   }
 
   // ---- Paradas (pontos de rota / "caderno" da viagem de frota) ----

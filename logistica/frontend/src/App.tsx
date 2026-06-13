@@ -19,6 +19,7 @@ import { RomaneioPage } from './pages/RomaneioPage';
 import { ComprovantesPage } from './pages/ComprovantesPage';
 import { FrotaPage } from './pages/FrotaPage';
 import { DespesasPage } from './pages/DespesasPage';
+import { PainelFrotaPage } from './pages/PainelFrotaPage';
 
 function Protected() {
   const { loading, logisticaRole } = useAuth();
@@ -53,6 +54,7 @@ function Protected() {
               <Route path="/entregas/:id/editar" element={<EntregaNovaPage />} />
               <Route path="/frota" element={<FrotaPage />} />
               <Route path="/despesas" element={<DespesasPage />} />
+              <Route path="/frota/painel" element={<PainelFrotaPage />} />
               <Route path="/veiculos" element={<VeiculosPage />} />
               <Route path="/veiculos/novo" element={<VeiculoFormPage />} />
               <Route path="/veiculos/:id/editar" element={<VeiculoFormPage />} />
