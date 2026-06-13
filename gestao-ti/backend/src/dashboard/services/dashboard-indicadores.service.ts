@@ -302,24 +302,16 @@ export class DashboardIndicadoresService {
     return docs.sort((a, b) => b.valor - a.valor);
   }
 
-  /** Escopo workspace dos chamados (solicitante OU depto OU equipe-membro). null = sem recorte. */
-  private async chamadoEscopoOr(user?: JwtPayload, role?: string) {
+  /**
+   * Escopo de WORKSPACE para os INDICADORES de chamado: PURO por departamento
+   * (departamentoId ∈ deptos do workspace), null = ADMIN (todos). Diferente do
+   * escopo OPERACIONAL do KPI (solicitante OU depto OU equipe-membro), que
+   * traz chamados de OUTROS workspaces (ex.: que eu abri pro Fiscal) — errado
+   * para um indicador "do workspace T.I.". Aqui o workspace é o recorte.
+   */
+  private chamadoWorkspaceWhere(user?: JwtPayload, role?: string): { departamentoId?: { in: string[] } } {
     const deptoIds = getDeptoIdsDoUser(user, role);
-    if (deptoIds === null) return null;
-    let equipeIds: string[] = [];
-    if (user?.sub) {
-      const eq = await this.prisma.membroEquipe.findMany({
-        where: { usuarioId: user.sub, status: 'ATIVO' }, select: { equipeId: true },
-      });
-      equipeIds = eq.map((m) => m.equipeId);
-    }
-    return {
-      OR: [
-        { solicitanteId: user?.sub ?? '' },
-        { departamentoId: { in: deptoIds } },
-        ...(equipeIds.length ? [{ equipeAtualId: { in: equipeIds } }] : []),
-      ],
-    };
+    return deptoIds === null ? {} : { departamentoId: { in: deptoIds } };
   }
 
   /**
@@ -330,9 +322,9 @@ export class DashboardIndicadoresService {
   async getChamadosAnalitico(mes: number, ano: number, user?: JwtPayload, role?: string) {
     const dataInicio = new Date(ano, mes - 1, 1);
     const dataFim = new Date(ano, mes, 0, 23, 59, 59, 999);
-    const escopo = await this.chamadoEscopoOr(user, role);
+    const wsWhere = this.chamadoWorkspaceWhere(user, role);
     const chamados = await this.prisma.chamado.findMany({
-      where: { createdAt: { gte: dataInicio, lte: dataFim }, ...(escopo ?? {}) },
+      where: { createdAt: { gte: dataInicio, lte: dataFim }, ...wsWhere },
       select: {
         prioridade: true,
         equipeAtualId: true, equipeAtual: { select: { sigla: true, nome: true } },
@@ -387,7 +379,7 @@ export class DashboardIndicadoresService {
   ) {
     const dataInicio = new Date(ano, mes - 1, 1);
     const dataFim = new Date(ano, mes, 0, 23, 59, 59, 999);
-    const escopo = await this.chamadoEscopoOr(user, role);
+    const wsWhere = this.chamadoWorkspaceWhere(user, role);
     let campo: Prisma.ChamadoWhereInput;
     if (dimensao === 'prioridade') {
       campo = { prioridade: chave } as Prisma.ChamadoWhereInput;
@@ -401,7 +393,7 @@ export class DashboardIndicadoresService {
     }
 
     const chamados = await this.prisma.chamado.findMany({
-      where: { createdAt: { gte: dataInicio, lte: dataFim }, ...(escopo ?? {}), ...campo },
+      where: { createdAt: { gte: dataInicio, lte: dataFim }, ...wsWhere, ...campo },
       select: {
         id: true, numero: true, titulo: true, status: true, prioridade: true, createdAt: true,
         solicitante: { select: { nome: true } },
