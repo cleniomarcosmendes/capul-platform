@@ -161,4 +161,12 @@ export class DashboardService {
   getInvestimentoAnalitico(mes: number, ano: number, user?: JwtPayload, role?: string) {
     return this.indicadores.getInvestimentoAnalitico(mes, ano, user, role);
   }
+
+  getInvestimentoDocumentos(
+    mes: number, ano: number,
+    dimensao: 'centroCusto' | 'tipoProduto' | 'departamento',
+    chave: string, user?: JwtPayload, role?: string,
+  ) {
+    return this.indicadores.getInvestimentoDocumentos(mes, ano, dimensao, chave, user, role);
+  }
 }

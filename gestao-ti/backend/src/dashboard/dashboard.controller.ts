@@ -309,4 +309,20 @@ export class DashboardController {
     const a = parseInt(ano, 10) || new Date().getFullYear();
     return this.service.getInvestimentoAnalitico(m, a, user, role);
   }
+
+  // Drill-down: documentos (NFs/parcelas) que compõem um grupo do analítico.
+  @Get('investimento-analitico/documentos')
+  @Roles(...MANAGERS)
+  getInvestimentoDocumentos(
+    @Query('mes') mes: string,
+    @Query('ano') ano: string,
+    @Query('dimensao') dimensao: 'centroCusto' | 'tipoProduto' | 'departamento',
+    @Query('chave') chave: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
+  ) {
+    const m = parseInt(mes, 10) || new Date().getMonth() + 1;
+    const a = parseInt(ano, 10) || new Date().getFullYear();
+    return this.service.getInvestimentoDocumentos(m, a, dimensao, chave, user, role);
+  }
 }

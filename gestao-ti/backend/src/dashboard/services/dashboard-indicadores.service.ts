@@ -209,6 +209,98 @@ export class DashboardIndicadoresService {
     };
   }
 
+  /**
+   * Drill-down: os DOCUMENTOS (NFs/parcelas de contrato) que compõem um grupo
+   * específico do investimento analítico. `valor` é a parcela do documento
+   * ATRIBUÍDA àquele grupo — mesma regra de atribuição do agrupamento, então a
+   * soma dos documentos reconcilia com o valor do grupo.
+   */
+  async getInvestimentoDocumentos(
+    mes: number, ano: number,
+    dimensao: 'centroCusto' | 'tipoProduto' | 'departamento',
+    chave: string,
+    user?: JwtPayload, role?: string,
+  ) {
+    const dataInicio = new Date(ano, mes - 1, 1);
+    const dataFim = new Date(ano, mes, 0, 23, 59, 59, 999);
+    const deptoIds = getDeptoIdsDoUser(user, role);
+    const parcelaDeptoWhere = deptoIds === null ? {} : { contrato: { departamentoId: { in: deptoIds } } };
+    const nfDeptoWhere = applyDepartamentoFilter({}, user, role);
+
+    const [parcelas, nfs] = await Promise.all([
+      this.prisma.parcelaContrato.findMany({
+        where: { status: 'PAGA', dataPagamento: { gte: dataInicio, lte: dataFim }, ...parcelaDeptoWhere },
+        include: {
+          contrato: { select: { numero: true, titulo: true, departamentoId: true } },
+          rateioItens: { select: { centroCustoId: true, valorCalculado: true } },
+        },
+        orderBy: { dataPagamento: 'asc' },
+      }),
+      this.prisma.notaFiscal.findMany({
+        where: { status: { not: 'CANCELADA' }, dataLancamento: { gte: dataInicio, lte: dataFim }, ...nfDeptoWhere },
+        include: {
+          fornecedor: { select: { codigo: true, nome: true } },
+          departamento: { select: { id: true } },
+          itens: { select: { valorTotal: true, centroCustoId: true, produto: { select: { tipoProdutoId: true } } } },
+        },
+        orderBy: { dataLancamento: 'asc' },
+      }),
+    ]);
+
+    const cents = (n: number) => Math.round(n * 100) / 100;
+    type Doc = { tipo: 'NF' | 'PARCELA'; id: string; numero: string; descricao: string; data: Date | null; valor: number };
+    const docs: Doc[] = [];
+    const nfDoc = (nf: typeof nfs[number], valor: number): Doc => ({
+      tipo: 'NF', id: nf.id, numero: String(nf.numero),
+      descricao: `${nf.fornecedor.codigo} - ${nf.fornecedor.nome}`, data: nf.dataLancamento, valor: cents(valor),
+    });
+    const parcDoc = (p: typeof parcelas[number], valor: number): Doc => ({
+      tipo: 'PARCELA', id: p.id, numero: `Parcela ${p.numero}`,
+      descricao: `${p.contrato.numero} - ${p.contrato.titulo}`, data: p.dataPagamento, valor: cents(valor),
+    });
+
+    if (dimensao === 'centroCusto') {
+      for (const nf of nfs) {
+        if (chave === '__nf_resid') {
+          const resid = cents(Number(nf.valorTotal) - nf.itens.reduce((s, i) => s + Number(i.valorTotal), 0));
+          if (Math.abs(resid) >= 0.01) docs.push(nfDoc(nf, resid));
+        } else {
+          const v = nf.itens.filter((i) => i.centroCustoId === chave).reduce((s, i) => s + Number(i.valorTotal), 0);
+          if (v > 0) docs.push(nfDoc(nf, v));
+        }
+      }
+      for (const p of parcelas) {
+        if (chave === '__parc_norateio') {
+          if (!p.rateioItens.length) docs.push(parcDoc(p, Number(p.valor)));
+        } else if (chave === '__parc_resid') {
+          if (p.rateioItens.length) {
+            const resid = cents(Number(p.valor) - p.rateioItens.reduce((s, r) => s + Number(r.valorCalculado), 0));
+            if (Math.abs(resid) >= 0.01) docs.push(parcDoc(p, resid));
+          }
+        } else {
+          const v = p.rateioItens.filter((r) => r.centroCustoId === chave).reduce((s, r) => s + Number(r.valorCalculado), 0);
+          if (v > 0) docs.push(parcDoc(p, v));
+        }
+      }
+    } else if (dimensao === 'tipoProduto') {
+      for (const nf of nfs) {
+        if (chave === '__nf_resid') {
+          const resid = cents(Number(nf.valorTotal) - nf.itens.reduce((s, i) => s + Number(i.valorTotal), 0));
+          if (Math.abs(resid) >= 0.01) docs.push(nfDoc(nf, resid));
+        } else {
+          const v = nf.itens.filter((i) => (i.produto.tipoProdutoId ?? '__nc') === chave).reduce((s, i) => s + Number(i.valorTotal), 0);
+          if (v > 0) docs.push(nfDoc(nf, v));
+        }
+      }
+      if (chave === '__contrato') for (const p of parcelas) docs.push(parcDoc(p, Number(p.valor)));
+    } else {
+      for (const nf of nfs) if ((nf.departamento?.id ?? '__sd') === chave) docs.push(nfDoc(nf, Number(nf.valorTotal)));
+      for (const p of parcelas) if ((p.contrato.departamentoId ?? '__sd') === chave) docs.push(parcDoc(p, Number(p.valor)));
+    }
+
+    return docs.sort((a, b) => b.valor - a.valor);
+  }
+
   private async getLicencas(user?: JwtPayload, role?: string) {
     const licSelect = {
       id: true, nome: true, modeloLicenca: true, quantidade: true, dataVencimento: true, status: true,
