@@ -28,7 +28,11 @@ export function LoginScreen() {
       await login(usuario, senha);
     } catch (e: unknown) {
       const status = (e as { response?: { status?: number } })?.response?.status;
-      setErro(status === 401 ? 'Usuário ou senha inválidos.' : 'Não foi possível entrar. Verifique a conexão.');
+      setErro(
+        status === 401 ? 'Matrícula ou senha inválidas.'
+        : status === 503 ? 'Portal do RH indisponível. Tente novamente em instantes.'
+        : 'Não foi possível entrar. Verifique a conexão.',
+      );
     } finally {
       setEntrando(false);
     }
@@ -45,7 +49,8 @@ export function LoginScreen() {
 
         <TextInput
           style={styles.input}
-          placeholder="Usuário"
+          placeholder="Matrícula"
+          keyboardType="number-pad"
           autoCapitalize="none"
           autoCorrect={false}
           value={usuario}
@@ -54,7 +59,7 @@ export function LoginScreen() {
         />
         <TextInput
           style={styles.input}
-          placeholder="Senha"
+          placeholder="Senha do portal RH"
           secureTextEntry
           value={senha}
           onChangeText={setSenha}

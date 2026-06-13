@@ -113,6 +113,8 @@ export interface UsuarioListItem {
   email: string | null;
   telefone: string | null;
   cargo: string | null;
+  matricula?: string | null;
+  autenticaPortal?: boolean;
   tipo: 'INDIVIDUAL' | 'PADRAO';
   status: 'ATIVO' | 'INATIVO';
   primeiroAcesso: boolean;

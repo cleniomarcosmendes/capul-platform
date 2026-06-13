@@ -16,7 +16,9 @@ export const usuarioService = {
   async criar(dto: {
     username: string;
     nome: string;
-    senha: string;
+    senha?: string;
+    matricula?: string;
+    autenticaPortal?: boolean;
     email?: string;
     telefone?: string;
     cargo?: string;
@@ -33,6 +35,8 @@ export const usuarioService = {
   async atualizar(id: string, dto: {
     username?: string;
     nome?: string;
+    matricula?: string;
+    autenticaPortal?: boolean;
     email?: string;
     telefone?: string;
     cargo?: string;

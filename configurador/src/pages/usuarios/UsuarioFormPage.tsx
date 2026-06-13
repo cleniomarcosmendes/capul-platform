@@ -62,6 +62,9 @@ export function UsuarioFormPage() {
   const [username, setUsername] = useState('');
   const [nome, setNome] = useState('');
   const [senha, setSenha] = useState('');
+  // Login pelo portal RH (app do entregador): matrícula + senha do portal.
+  const [matricula, setMatricula] = useState('');
+  const [autenticaPortal, setAutenticaPortal] = useState(false);
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
   const [cargo, setCargo] = useState('');
@@ -213,6 +216,8 @@ export function UsuarioFormPage() {
         setTelefone(usuario.telefone || '');
         setCargo(usuario.cargo || '');
         setTipo(usuario.tipo || 'INDIVIDUAL');
+        setMatricula(usuario.matricula || '');
+        setAutenticaPortal(!!usuario.autenticaPortal);
         setFilialPrincipalId(usuario.filialPrincipal?.id || '');
         setDepartamentoId(usuario.departamento?.id || '');
         setFilialIds(usuario.filiais.map((f) => f.filial.id));
@@ -316,9 +321,14 @@ export function UsuarioFormPage() {
     const abas = new Set<TabId>();
     let mensagem = '';
 
-    if (!username.trim() || !nome.trim() || (!isEdicao && !senha.trim())) {
+    // Senha só é exigida na criação de usuário SEM login do portal.
+    if (!username.trim() || !nome.trim() || (!isEdicao && !autenticaPortal && !senha.trim())) {
       abas.add('dados');
       mensagem = 'Preencha os campos obrigatórios em Dados Básicos.';
+    }
+    if (autenticaPortal && !matricula.trim()) {
+      abas.add('dados');
+      mensagem = 'Login pelo portal RH exige a matrícula.';
     }
 
     const fiscalCheck = exigeEmailFiscal();
@@ -372,6 +382,8 @@ export function UsuarioFormPage() {
           telefone: telefone || undefined,
           cargo: cargo || undefined,
           tipo,
+          matricula: matricula.trim() || undefined,
+          autenticaPortal,
           filialPrincipalId: filialPrincipalId || undefined,
           departamentoId: departamentoId || undefined,
           filialIds,
@@ -413,7 +425,10 @@ export function UsuarioFormPage() {
         await usuarioService.criar({
           username,
           nome,
-          senha,
+          // Portal RH: sem senha local (o backend gera hash inutilizável).
+          senha: autenticaPortal ? undefined : senha,
+          matricula: matricula.trim() || undefined,
+          autenticaPortal,
           email: email || undefined,
           telefone: telefone || undefined,
           cargo: cargo || undefined,
@@ -515,10 +530,25 @@ export function UsuarioFormPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Nome Completo *</label>
                 <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} required className={inputClass} />
               </div>
-              {!isEdicao && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Matrícula {autenticaPortal && '*'}
+                </label>
+                <input type="text" value={matricula} onChange={(e) => setMatricula(e.target.value)} className={inputClass} placeholder="Ex.: 001047" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={autenticaPortal} onChange={(e) => setAutenticaPortal(e.target.checked)} className="rounded border-slate-300" />
+                  Autenticar pelo portal RH (login por matrícula + senha do portal — usado pelo app do entregador)
+                </label>
+                {autenticaPortal && (
+                  <p className="text-xs text-slate-400 mt-1">A senha é validada no portal RH; não há senha local. Exige a matrícula.</p>
+                )}
+              </div>
+              {!isEdicao && !autenticaPortal && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Senha *</label>
-                  <PasswordInput value={senha} onChange={(e) => setSenha(e.target.value)} required minLength={8} className={inputClass} autoComplete="new-password" />
+                  <PasswordInput value={senha} onChange={(e) => setSenha(e.target.value)} minLength={8} className={inputClass} autoComplete="new-password" />
                   <p className="text-xs text-slate-400 mt-1">Min. 8 caracteres, 1 maiuscula, 1 minuscula, 1 numero</p>
                 </div>
               )}
