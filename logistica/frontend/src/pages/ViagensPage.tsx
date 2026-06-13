@@ -15,7 +15,7 @@ interface Viagem {
 }
 
 const SIT_META: Record<string, { label: string; cls: string }> = {
-  RASCUNHO: { label: 'Rascunho', cls: 'bg-sky-100 text-sky-700' },
+  RASCUNHO: { label: 'Em preparação', cls: 'bg-sky-100 text-sky-700' },
   EM_CURSO: { label: 'Em curso', cls: 'bg-amber-100 text-amber-700' },
   CONCLUIDA: { label: 'Concluída', cls: 'bg-emerald-100 text-emerald-700' },
   CANCELADA: { label: 'Cancelada', cls: 'bg-slate-100 text-slate-500' },

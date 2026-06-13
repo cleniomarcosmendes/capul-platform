@@ -36,7 +36,7 @@ interface EntregaPend {
 const labelCore = (i: CoreItem) => i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8);
 
 const SIT_META: Record<string, { label: string; cls: string }> = {
-  RASCUNHO: { label: 'Rascunho (em montagem)', cls: 'bg-sky-100 text-sky-700' },
+  RASCUNHO: { label: 'Em preparação', cls: 'bg-sky-100 text-sky-700' },
   EM_CURSO: { label: 'Em curso', cls: 'bg-amber-100 text-amber-700' },
   CONCLUIDA: { label: 'Concluída', cls: 'bg-emerald-100 text-emerald-700' },
   CANCELADA: { label: 'Cancelada', cls: 'bg-slate-100 text-slate-500' },
@@ -56,6 +56,10 @@ export function ViagemDetalhePage() {
   const [motoristas, setMotoristas] = useState<CoreItem[]>([]);
   const [pendentesAdd, setPendentesAdd] = useState<EntregaPend[]>([]);
   const [buscaFila, setBuscaFila] = useState('');
+  // Seleção local de veículo/motorista — salva no botão SALVAR (pedido 12/06).
+  const [veiculoSel, setVeiculoSel] = useState('');
+  const [motoristaSel, setMotoristaSel] = useState('');
+  const [salvandoVm, setSalvandoVm] = useState(false);
   const [bairrosSel, setBairrosSel] = useState<string[]>([]);
   const [sugerindo, setSugerindo] = useState(false);
 
@@ -68,6 +72,10 @@ export function ViagemDetalhePage() {
     } finally { setLoading(false); }
   }, [id]);
   useEffect(() => { void carregar(); }, [carregar]);
+  useEffect(() => {
+    setVeiculoSel(v?.veiculoId ?? '');
+    setMotoristaSel(v?.motoristaId ?? '');
+  }, [v?.veiculoId, v?.motoristaId]);
 
   // Listas de apoio do RASCUNHO (veículos disponíveis, motoristas, pendentes).
   useEffect(() => {
@@ -82,17 +90,22 @@ export function ViagemDetalhePage() {
     })();
   }, [v?.situacao, v?.filialId]);
 
-  // PATCH imediato ao trocar veículo/motorista do rascunho.
-  async function definir(campo: 'veiculoId' | 'motoristaId', valor: string) {
-    setBusy(true);
+  // Salvar explícito (botão) de veículo + motorista do rascunho.
+  const vmAlterado = veiculoSel !== (v?.veiculoId ?? '') || motoristaSel !== (v?.motoristaId ?? '');
+  async function salvarVeiculoMotorista() {
+    setSalvandoVm(true);
     setMsg(null);
     try {
-      await logisticaApi.patch(`/viagens/${id}`, { [campo]: valor || undefined });
+      await logisticaApi.patch(`/viagens/${id}`, {
+        veiculoId: veiculoSel || undefined,
+        motoristaId: motoristaSel || undefined,
+      });
       await carregar();
+      setMsg({ tipo: 'ok', texto: 'Veículo e motorista salvos.' });
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
       setMsg({ tipo: 'erro', texto: Array.isArray(m) ? m.join(', ') : m || 'Falha ao salvar.' });
-    } finally { setBusy(false); }
+    } finally { setSalvandoVm(false); }
   }
 
   const ordemAtual = () =>
@@ -235,10 +248,50 @@ export function ViagemDetalhePage() {
 
       {msg && <div className={`rounded-lg px-4 py-2 text-sm ${msg.tipo === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.texto}</div>}
 
-      {ehRascunho && (!v.veiculoId || !v.motoristaId) && (
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Montagem salva sem {!v.veiculoId && !v.motoristaId ? 'veículo e motorista' : !v.veiculoId ? 'veículo' : 'motorista'} — defina no card abaixo da rota para poder despachar.
-        </p>
+      {ehRascunho && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          {(!v.veiculoId || !v.motoristaId) && (
+            <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Viagem salva sem {!v.veiculoId && !v.motoristaId ? 'veículo e motorista' : !v.veiculoId ? 'veículo' : 'motorista'} — defina e salve para poder despachar.
+            </p>
+          )}
+          <div className="grid grid-cols-2 items-end gap-3 lg:grid-cols-12">
+            <div className="lg:col-span-4">
+              <label className="block text-xs font-medium text-slate-500">Veículo (disponível)</label>
+              <select value={veiculoSel} disabled={salvandoVm} onChange={(e) => setVeiculoSel(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none">
+                <option value="">—</option>
+                {v.veiculoId && !veiculos.some((x) => x.id === v.veiculoId) && (
+                  <option value={v.veiculoId}>{v.veiculo?.placa ?? 'atual'}</option>
+                )}
+                {veiculos.map((x) => <option key={x.id} value={x.id}>{x.placa}{x.modelo ? ` · ${x.modelo}` : ''}</option>)}
+              </select>
+            </div>
+            <div className="lg:col-span-4">
+              <label className="block text-xs font-medium text-slate-500">Motorista</label>
+              <select value={motoristaSel} disabled={salvandoVm} onChange={(e) => setMotoristaSel(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none">
+                <option value="">—</option>
+                {motoristas.map((x) => <option key={x.id} value={x.id}>{labelCore(x)}</option>)}
+              </select>
+            </div>
+            <div className="lg:col-span-1">
+              <span className="block text-xs font-medium text-slate-500">Paradas</span>
+              <div className="py-2 text-sm text-slate-700">{v.paradas.length}</div>
+            </div>
+            <div className="lg:col-span-1">
+              <span className="block text-xs font-medium text-slate-500">Volumes</span>
+              <div className="py-2 text-sm text-slate-700">{volumes}</div>
+            </div>
+            <div className="lg:col-span-2">
+              <button onClick={() => void salvarVeiculoMotorista()} disabled={salvandoVm || !vmAlterado}
+                title={!vmAlterado ? 'Nada alterado para salvar' : undefined}
+                className="w-full rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+                {salvandoVm ? 'Salvando…' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {!ehRascunho && (
       <div className="rounded-xl border border-slate-200 bg-white p-5">
@@ -412,33 +465,6 @@ export function ViagemDetalhePage() {
         )}
       </div>
 
-      {ehRascunho && (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="mb-1 text-sm font-semibold text-slate-700">Veículo e motorista</div>
-          <p className="mb-3 text-xs text-slate-500">O <strong>despacho</strong> exige os dois — salvam na hora ao escolher.</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-500">Veículo (disponível)</label>
-              <select value={v.veiculoId ?? ''} disabled={busy} onChange={(e) => void definir('veiculoId', e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none">
-                <option value="">—</option>
-                {v.veiculoId && !veiculos.some((x) => x.id === v.veiculoId) && (
-                  <option value={v.veiculoId}>{v.veiculo?.placa ?? 'atual'}</option>
-                )}
-                {veiculos.map((x) => <option key={x.id} value={x.id}>{x.placa}{x.modelo ? ` · ${x.modelo}` : ''}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500">Motorista</label>
-              <select value={v.motoristaId ?? ''} disabled={busy} onChange={(e) => void definir('motoristaId', e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none">
-                <option value="">—</option>
-                {motoristas.map((x) => <option key={x.id} value={x.id}>{labelCore(x)}</option>)}
-              </select>
-            </div>
-          </div>
-        </div>
-      )}
 
       </div>
 
