@@ -33,10 +33,12 @@ export async function baixarEntrega(
   if (payload.geoLng !== undefined) form.append('geoLng', String(payload.geoLng));
   if (fotoUri) {
     // RN/Expo: arquivo em FormData = { uri, name, type } (não Blob).
+    // Assinatura é PNG; foto é JPG — o mimetype certo é gravado no cofre.
+    const isPng = fotoUri.toLowerCase().endsWith('.png');
     form.append('prova', {
       uri: fotoUri,
-      name: 'prova.jpg',
-      type: 'image/jpeg',
+      name: isPng ? 'prova.png' : 'prova.jpg',
+      type: isPng ? 'image/png' : 'image/jpeg',
     } as unknown as Blob);
   }
 

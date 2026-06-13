@@ -12,11 +12,13 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import * as FileSystem from 'expo-file-system';
 import { isAxiosError } from 'axios';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { baixarEntrega, type BaixaPayload } from '../api/baixa';
 import { enfileirar } from '../offline/filaBaixas';
+import { SignaturePad } from '../components/SignaturePad';
 import { uuid } from '../lib/uuid';
 
 const CAPUL = '#1e7d3a';
@@ -44,14 +46,23 @@ export function BaixaScreen({ route, navigation }: Props) {
   const [motivo, setMotivo] = useState('');
   const [recebedor, setRecebedor] = useState('');
   const [fotoUri, setFotoUri] = useState<string | null>(null);
+  const [assinaturaUri, setAssinaturaUri] = useState<string | null>(null);
+  const [mostrarAssinatura, setMostrarAssinatura] = useState(false);
   const [enviando, setEnviando] = useState(false);
   // Chave fixa da PRIMEIRA tentativa — reenvio (online ou da fila) não duplica.
   const idempotencyKey = useRef(uuid()).current;
 
   const entregue = resultado === 'ENTREGUE';
-  // Prova flexível (meio-termo): a foto é OPCIONAL, mas a entrega precisa de
-  // ao menos UMA prova — foto OU quem recebeu (preserva o lastro de cobrança).
-  const temProva = !!fotoUri || !!recebedor.trim();
+  // A prova binária é ÚNICA por baixa: foto OU assinatura.
+  const provaUri = fotoUri ?? assinaturaUri;
+  const tipoProva: 'FOTO' | 'ASSINATURA' | undefined = fotoUri
+    ? 'FOTO'
+    : assinaturaUri
+      ? 'ASSINATURA'
+      : undefined;
+  // Prova flexível (meio-termo): foto/assinatura OPCIONAIS, mas a entrega
+  // precisa de ao menos UMA prova — binária OU quem recebeu (lastro de cobrança).
+  const temProva = !!provaUri || !!recebedor.trim();
   const podeConfirmar = !enviando && (entregue ? temProva : !!motivo.trim());
 
   async function tirarFoto() {
@@ -61,7 +72,26 @@ export function BaixaScreen({ route, navigation }: Props) {
       return;
     }
     const r = await ImagePicker.launchCameraAsync({ quality: 0.6, base64: false });
-    if (!r.canceled && r.assets[0]?.uri) setFotoUri(r.assets[0].uri);
+    if (!r.canceled && r.assets[0]?.uri) {
+      setFotoUri(r.assets[0].uri);
+      setAssinaturaUri(null); // prova binária única
+    }
+  }
+
+  // Recebe a assinatura como data URL base64, salva como PNG em file:// e usa
+  // como prova (mesmo fluxo da foto, inclusive offline). Limpa a foto.
+  async function salvarAssinatura(dataUrl: string) {
+    try {
+      const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+      const path = `${FileSystem.cacheDirectory}assinatura-${idempotencyKey}.png`;
+      await FileSystem.writeAsStringAsync(path, base64, { encoding: FileSystem.EncodingType.Base64 });
+      setAssinaturaUri(path);
+      setFotoUri(null);
+    } catch {
+      Alert.alert('Assinatura', 'Não foi possível salvar a assinatura. Tente novamente.');
+    } finally {
+      setMostrarAssinatura(false);
+    }
   }
 
   async function confirmar() {
@@ -72,14 +102,14 @@ export function BaixaScreen({ route, navigation }: Props) {
       idempotencyKey,
       ...(entregue
         ? {
-            ...(fotoUri ? { tipoProva: 'FOTO' as const } : {}),
+            ...(tipoProva ? { tipoProva } : {}),
             recebedorNome: recebedor.trim() || undefined,
           }
         : { motivo: motivo.trim() }),
       ...geo,
     };
     try {
-      await baixarEntrega(entregaId, payload, entregue ? fotoUri ?? undefined : undefined);
+      await baixarEntrega(entregaId, payload, entregue ? provaUri ?? undefined : undefined);
       Alert.alert('Baixa registrada', `Entrega #${entregaNumero} — ${destinatario}.`, [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
@@ -100,7 +130,7 @@ export function BaixaScreen({ route, navigation }: Props) {
           entregaNumero,
           destinatario,
           payload,
-          fotoUri: entregue ? fotoUri ?? undefined : undefined,
+          fotoUri: entregue ? provaUri ?? undefined : undefined,
         });
         Alert.alert(
           'Sem conexão — baixa guardada',
@@ -138,19 +168,32 @@ export function BaixaScreen({ route, navigation }: Props) {
 
       {entregue ? (
         <>
-          <Text style={styles.dica}>Registre ao menos uma prova: foto ou quem recebeu.</Text>
-          <Text style={styles.label}>Foto da entrega (opcional)</Text>
-          {fotoUri ? (
+          <Text style={styles.dica}>Registre ao menos uma prova: foto, assinatura ou quem recebeu.</Text>
+          <Text style={styles.label}>Prova (opcional)</Text>
+          {provaUri ? (
             <View>
-              <Image source={{ uri: fotoUri }} style={styles.foto} resizeMode="cover" />
-              <TouchableOpacity style={styles.refazer} onPress={tirarFoto} disabled={enviando}>
-                <Text style={styles.refazerTxt}>Tirar outra foto</Text>
+              <Image
+                source={{ uri: provaUri }}
+                style={tipoProva === 'ASSINATURA' ? styles.assinatura : styles.foto}
+                resizeMode={tipoProva === 'ASSINATURA' ? 'contain' : 'cover'}
+              />
+              <TouchableOpacity
+                style={styles.refazer}
+                onPress={() => { setFotoUri(null); setAssinaturaUri(null); }}
+                disabled={enviando}
+              >
+                <Text style={styles.refazerTxt}>Remover {tipoProva === 'ASSINATURA' ? 'assinatura' : 'foto'}</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity style={styles.btnFoto} onPress={tirarFoto} disabled={enviando}>
-              <Text style={styles.btnFotoTxt}>📷 Tirar foto</Text>
-            </TouchableOpacity>
+            <View style={styles.provaBotoes}>
+              <TouchableOpacity style={styles.btnProva} onPress={tirarFoto} disabled={enviando}>
+                <Text style={styles.btnFotoTxt}>📷 Tirar foto</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.btnProva} onPress={() => setMostrarAssinatura(true)} disabled={enviando}>
+                <Text style={styles.btnFotoTxt}>✍️ Assinatura</Text>
+              </TouchableOpacity>
+            </View>
           )}
 
           <Text style={styles.label}>Quem recebeu (opcional)</Text>
@@ -193,6 +236,12 @@ export function BaixaScreen({ route, navigation }: Props) {
           </Text>
         )}
       </TouchableOpacity>
+
+      <SignaturePad
+        visible={mostrarAssinatura}
+        onOK={salvarAssinatura}
+        onCancel={() => setMostrarAssinatura(false)}
+      />
     </ScrollView>
   );
 }
@@ -227,7 +276,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   btnFotoTxt: { color: CAPUL, fontSize: 16, fontWeight: '700' },
+  provaBotoes: { flexDirection: 'row', gap: 8 },
+  btnProva: {
+    flex: 1,
+    borderWidth: 2,
+    borderColor: CAPUL,
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    paddingVertical: 28,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
   foto: { width: '100%', height: 280, borderRadius: 12, backgroundColor: '#e2e8f0' },
+  assinatura: { width: '100%', height: 180, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0' },
   refazer: { alignSelf: 'center', marginTop: 8 },
   refazerTxt: { color: CAPUL, fontWeight: '600' },
   input: {
