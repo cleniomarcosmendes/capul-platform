@@ -4,6 +4,7 @@ import { ToastProvider } from './components/Toast';
 import { Layout } from './layouts/Layout';
 import { HomePage } from './pages/HomePage';
 import { PainelPage } from './pages/PainelPage';
+import { IndicadoresPage } from './pages/IndicadoresPage';
 import { ClientesPage } from './pages/ClientesPage';
 import { EntregaNovaPage } from './pages/EntregaNovaPage';
 import { EntregasPage } from './pages/EntregasPage';
@@ -42,6 +43,7 @@ function Protected() {
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/painel" element={<PainelPage />} />
+              <Route path="/indicadores" element={<IndicadoresPage />} />
               <Route path="/clientes" element={<ClientesPage />} />
               <Route path="/entregas" element={<EntregasPage />} />
               <Route path="/entregas/nova" element={<EntregaNovaPage />} />

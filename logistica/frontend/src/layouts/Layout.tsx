@@ -1,11 +1,12 @@
 import { type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, MapPin, Truck, LogOut, ExternalLink, Package, Car, Route, BarChart3, FileCheck, ClipboardList } from 'lucide-react';
+import { Home, MapPin, Truck, LogOut, ExternalLink, Package, Car, Route, BarChart3, TrendingUp, FileCheck, ClipboardList } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const navItems = [
   { to: '/', label: 'Início', icon: Home, end: true },
   { to: '/painel', label: 'Painel', icon: BarChart3, end: false },
+  { to: '/indicadores', label: 'Indicadores', icon: TrendingUp, end: false },
   { to: '/entregas/nova', label: 'Nova Entrega', icon: Package, end: false },
   { to: '/entregas', label: 'Entregas', icon: ClipboardList, end: true },
   { to: '/viagens', label: 'Viagens', icon: Route, end: false },
