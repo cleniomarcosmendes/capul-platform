@@ -10,8 +10,16 @@ export class PainelController {
   constructor(private readonly painel: PainelService) {}
 
   @Get()
-  resumo(@CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string, @Query('dias') dias?: string) {
-    return this.painel.resumo(resolverFilialLeitura(user, filialId), dias ? parseInt(dias, 10) : 14);
+  resumo(
+    @CurrentUser() user: JwtPayload,
+    @Query('filialId') filialId?: string,
+    @Query('mes') mes?: string,
+    @Query('ano') ano?: string,
+  ) {
+    const agora = new Date();
+    const m = mes ? parseInt(mes, 10) : agora.getUTCMonth() + 1;
+    const a = ano ? parseInt(ano, 10) : agora.getUTCFullYear();
+    return this.painel.resumo(resolverFilialLeitura(user, filialId), m, a);
   }
 
   // Indicadores analíticos por mês (valor/origem, motorista, demanda, re-entregas).

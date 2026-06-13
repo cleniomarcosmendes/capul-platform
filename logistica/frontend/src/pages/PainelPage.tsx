@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Package, Truck, CheckCircle2, XCircle, Route, Car, Timer } from 'lucide-react';
+import { Loader2, Package, Truck, CheckCircle2, XCircle, Route, Car, Timer, ChevronLeft, ChevronRight } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
 interface Painel {
-  filtros: { filialId: string | null; dias: number };
+  filtros: { filialId: string | null; mes: number; ano: number };
   cards: {
     entregasPendentes: number; entregasEmViagem: number; entregasEntregues: number;
     entregasNaoEntregues: number; entregasCanceladas: number;
@@ -30,14 +30,24 @@ const diaCurto = (iso: string) => {
   const [, m, d] = iso.split('-');
   return `${d}/${m}`;
 };
+const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 export function PainelPage() {
   const [data, setData] = useState<Painel | null>(null);
   const [filiais, setFiliais] = useState<CoreItem[]>([]);
   const [usuarios, setUsuarios] = useState<CoreItem[]>([]);
   const [filialId, setFilialId] = useState('');
-  const [dias, setDias] = useState(14);
   const [loading, setLoading] = useState(true);
+
+  const agora = new Date();
+  const [mes, setMes] = useState(agora.getMonth() + 1);
+  const [ano, setAno] = useState(agora.getFullYear());
+  const noMesAtual = ano === agora.getFullYear() && mes === agora.getMonth() + 1;
+  const passoMes = (delta: number) => {
+    const d = new Date(ano, mes - 1 + delta, 1);
+    setMes(d.getMonth() + 1);
+    setAno(d.getFullYear());
+  };
 
   useEffect(() => {
     void (async () => {
@@ -52,10 +62,10 @@ export function PainelPage() {
   useEffect(() => {
     setLoading(true);
     logisticaApi
-      .get<Painel>('/painel', { params: { ...(filialId ? { filialId } : {}), dias } })
+      .get<Painel>('/painel', { params: { ...(filialId ? { filialId } : {}), mes, ano } })
       .then((r) => setData(r.data))
       .finally(() => setLoading(false));
-  }, [filialId, dias]);
+  }, [filialId, mes, ano]);
 
   const nomeFilial = (id: string) => labelCore(filiais.find((x) => x.id === id));
   const nomeUsuario = (id: string) => labelCore(usuarios.find((x) => x.id === id));
@@ -73,18 +83,22 @@ export function PainelPage() {
           <h2 className="text-lg font-semibold text-slate-800">Painel</h2>
           <p className="text-sm text-slate-500">Indicadores operacionais de entregas e frota.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <select value={filialId} onChange={(e) => setFilialId(e.target.value)}
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none">
             <option value="">Todas as filiais</option>
             {filiais.map((f) => <option key={f.id} value={f.id}>{labelCore(f)}</option>)}
           </select>
-          <select value={dias} onChange={(e) => setDias(Number(e.target.value))}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none">
-            <option value={7}>Últimos 7 dias</option>
-            <option value={14}>Últimos 14 dias</option>
-            <option value={30}>Últimos 30 dias</option>
-          </select>
+          <div className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white p-1">
+            <button onClick={() => passoMes(-1)} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Mês anterior">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="min-w-[130px] text-center text-sm font-medium text-slate-700">{MESES[mes - 1]} {ano}</span>
+            <button onClick={() => passoMes(1)} disabled={noMesAtual}
+              className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30" title="Próximo mês">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -92,24 +106,34 @@ export function PainelPage() {
         <div className="flex items-center gap-2 p-6 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
       ) : (
         <>
-          {/* Cards */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-            <Stat icon={Package} cor="text-amber-600" bg="bg-amber-50" valor={c.entregasPendentes} rotulo="Pendentes" />
-            <Stat icon={Truck} cor="text-sky-600" bg="bg-sky-50" valor={c.entregasEmViagem} rotulo="Em viagem" />
-            <Stat icon={CheckCircle2} cor="text-emerald-600" bg="bg-emerald-50" valor={c.entregasEntregues} rotulo="Entregues" />
-            <Stat icon={XCircle} cor="text-rose-600" bg="bg-rose-50" valor={c.entregasNaoEntregues} rotulo="Não entregues" />
-            <Stat icon={XCircle} cor="text-slate-500" bg="bg-slate-100" valor={c.entregasCanceladas} rotulo="Canceladas" />
-            <Stat icon={Route} cor="text-indigo-600" bg="bg-indigo-50" valor={c.viagensEmCurso} rotulo="Viagens em curso" />
-            <Stat icon={Car} cor="text-slate-600" bg="bg-slate-100" valor={c.veiculosEmUso} rotulo="Veíc. em uso" sub={`${c.veiculosDisponiveis} disp.`} />
-            <StatTexto icon={Timer} cor="text-violet-600" bg="bg-violet-50"
-              valor={fmtPrazo(data.prazoMedio?.horas)} rotulo="Prazo médio de entrega"
-              sub={data.prazoMedio?.amostra ? `${data.prazoMedio.amostra} entregas no período` : 'sem entregas no período'} />
+          {/* Fila / frota — estado AGORA (não muda com o mês) */}
+          <div>
+            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Agora · estado operacional</div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Stat icon={Package} cor="text-amber-600" bg="bg-amber-50" valor={c.entregasPendentes} rotulo="Pendentes" />
+              <Stat icon={Truck} cor="text-sky-600" bg="bg-sky-50" valor={c.entregasEmViagem} rotulo="Em viagem" />
+              <Stat icon={Route} cor="text-indigo-600" bg="bg-indigo-50" valor={c.viagensEmCurso} rotulo="Viagens em curso" />
+              <Stat icon={Car} cor="text-slate-600" bg="bg-slate-100" valor={c.veiculosEmUso} rotulo="Veíc. em uso" sub={`${c.veiculosDisponiveis} disp.`} />
+            </div>
+          </div>
+
+          {/* Fluxo do MÊS selecionado */}
+          <div>
+            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">{MESES[mes - 1]} {ano}</div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Stat icon={CheckCircle2} cor="text-emerald-600" bg="bg-emerald-50" valor={c.entregasEntregues} rotulo="Entregues no mês" />
+              <Stat icon={XCircle} cor="text-rose-600" bg="bg-rose-50" valor={c.entregasNaoEntregues} rotulo="Não entregues" />
+              <Stat icon={XCircle} cor="text-slate-500" bg="bg-slate-100" valor={c.entregasCanceladas} rotulo="Canceladas" />
+              <StatTexto icon={Timer} cor="text-violet-600" bg="bg-violet-50"
+                valor={fmtPrazo(data.prazoMedio?.horas)} rotulo="Prazo médio de entrega"
+                sub={data.prazoMedio?.amostra ? `${data.prazoMedio.amostra} entregas no mês` : 'sem entregas no mês'} />
+            </div>
           </div>
 
           {/* Por dia */}
           <div className="rounded-xl border border-slate-200 bg-white p-5">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-700">Movimento por dia</h3>
+              <h3 className="text-sm font-semibold text-slate-700">Movimento por dia · {MESES[mes - 1]} {ano}</h3>
               <div className="flex gap-3 text-xs text-slate-500">
                 <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-sky-500" /> Criadas</span>
                 <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-emerald-500" /> Despachadas</span>

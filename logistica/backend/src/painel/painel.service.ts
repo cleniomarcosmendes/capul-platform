@@ -16,10 +16,13 @@ export class PainelService {
     private readonly core: CoreLookupService,
   ) {}
 
-  async resumo(filialId?: string, dias = 14) {
-    const janela = Math.min(Math.max(Number(dias) || 14, 1), 90);
+  async resumo(filialId: string | undefined, mes: number, ano: number) {
     const escopo = filialId ? { filialId } : {};
-    const inicioJanela = new Date(Date.now() - janela * 24 * 60 * 60 * 1000);
+    // Janela do MÊS [1º, 1º do mês seguinte) em UTC — consistente com o storage.
+    const ini = new Date(Date.UTC(ano, mes - 1, 1));
+    const fimExcl = new Date(Date.UTC(ano, mes, 1));
+    // Cartões de FILA são "agora" (sem recorte); tabelas/movimento seguem o mês.
+    const periodo = { criadoEm: { gte: ini, lt: fimExcl } };
 
     const [
       entPendentes, entEmViagem, entEntregues, entNaoEntregues, entCanceladas,
@@ -27,44 +30,46 @@ export class PainelService {
       veicDisponiveis, veicEmUso, veicManutencao,
       porFilialRaw, porVeiculoRaw, porMotoristaRaw, porOrigemRaw, prazoRaw,
     ] = await Promise.all([
+      // FILA agora (sem recorte de mês — estado operacional corrente).
       this.prisma.entrega.count({ where: { ...escopo, status: StatusEntrega.PENDENTE } }),
       this.prisma.entrega.count({ where: { ...escopo, status: StatusEntrega.EM_VIAGEM } }),
-      this.prisma.entrega.count({ where: { ...escopo, status: StatusEntrega.ENTREGUE } }),
-      this.prisma.entrega.count({ where: { ...escopo, status: StatusEntrega.NAO_ENTREGUE } }),
-      this.prisma.entrega.count({ where: { ...escopo, status: StatusEntrega.CANCELADA } }),
+      // FLUXO do mês (entregues/não entregues/canceladas no mês selecionado).
+      this.prisma.entrega.count({ where: { ...escopo, ...periodo, status: StatusEntrega.ENTREGUE } }),
+      this.prisma.entrega.count({ where: { ...escopo, ...periodo, status: StatusEntrega.NAO_ENTREGUE } }),
+      this.prisma.entrega.count({ where: { ...escopo, ...periodo, status: StatusEntrega.CANCELADA } }),
       this.prisma.viagem.count({ where: { ...escopo, situacao: StatusViagem.RASCUNHO } }),
       this.prisma.viagem.count({ where: { ...escopo, situacao: StatusViagem.EM_CURSO } }),
       this.prisma.viagem.count({ where: { ...escopo, situacao: StatusViagem.CONCLUIDA } }),
       this.prisma.veiculo.count({ where: { ...escopo, situacao: SituacaoVeiculo.DISPONIVEL } }),
       this.prisma.veiculo.count({ where: { ...escopo, situacao: SituacaoVeiculo.EM_USO } }),
       this.prisma.veiculo.count({ where: { ...escopo, situacao: SituacaoVeiculo.EM_MANUTENCAO } }),
-      this.prisma.entrega.groupBy({ by: ['filialId', 'status'], where: escopo, _count: { _all: true } }),
+      this.prisma.entrega.groupBy({ by: ['filialId', 'status'], where: { ...escopo, ...periodo }, _count: { _all: true } }),
       this.prisma.viagem.groupBy({
         by: ['veiculoId'],
-        where: { ...escopo, situacao: { not: StatusViagem.CANCELADA } },
+        where: { ...escopo, ...periodo, situacao: { not: StatusViagem.CANCELADA } },
         _count: { _all: true },
       }),
       this.prisma.viagem.groupBy({
         by: ['motoristaId'],
-        where: { ...escopo, situacao: { not: StatusViagem.CANCELADA } },
+        where: { ...escopo, ...periodo, situacao: { not: StatusViagem.CANCELADA } },
         _count: { _all: true },
       }),
       // Indicador de CANAL (pedido 11/06): presencial × tele-venda × outro.
       // null = entregas anteriores à feature (mostrado como "não informado").
       this.prisma.entrega.groupBy({
         by: ['origemVenda'],
-        where: { ...escopo, status: { not: StatusEntrega.CANCELADA } },
+        where: { ...escopo, ...periodo, status: { not: StatusEntrega.CANCELADA } },
         _count: { _all: true },
       }),
       // Prazo médio de ENTREGA (pedido 12/06): lançamento (criado_em) → baixa
-      // entregue (data_hora_entrega), na mesma janela de dias do painel.
+      // entregue (data_hora_entrega), recortado pelo MÊS selecionado.
       this.prisma.$queryRaw<{ media_horas: number | null; total: number }[]>(Prisma.sql`
         SELECT avg(EXTRACT(EPOCH FROM (data_hora_entrega - criado_em)))/3600 AS media_horas,
                count(*)::int AS total
         FROM "logistica"."entrega"
         WHERE status = 'ENTREGUE'
           AND data_hora_entrega IS NOT NULL
-          AND data_hora_entrega >= ${inicioJanela}
+          AND data_hora_entrega >= ${ini} AND data_hora_entrega < ${fimExcl}
           ${filialId ? Prisma.sql`AND filial_id = ${filialId}` : Prisma.empty}`),
     ]);
 
@@ -101,26 +106,28 @@ export class PainelService {
     // entregas criadas (criado_em) × viagens despachadas (data_hora_saida). ──
     const fEnt = filialId ? Prisma.sql`AND filial_id = ${filialId}` : Prisma.empty;
     const fVg = filialId ? Prisma.sql`AND filial_id = ${filialId}` : Prisma.empty;
+    // Série dos dias do MÊS: do 1º até o último dia (ou até hoje, no mês corrente
+    // — evita uma cauda de dias vazios). criadas (criado_em) × despachadas (saída).
     const porDia = await this.prisma.$queryRaw<{ dia: string; criadas: number; despachadas: number }[]>(Prisma.sql`
       SELECT to_char(d, 'YYYY-MM-DD') AS dia,
              coalesce(c.n, 0)::int AS criadas,
              coalesce(v.n, 0)::int AS despachadas
       FROM generate_series(
-             date_trunc('day', now()) - make_interval(days => ${janela - 1}::int),
-             date_trunc('day', now()),
+             ${ini}::timestamptz,
+             LEAST(${fimExcl}::timestamptz - interval '1 day', date_trunc('day', now())),
              interval '1 day'
            ) AS d
       LEFT JOIN (
         SELECT date_trunc('day', criado_em) AS dd, count(*) AS n
         FROM "logistica"."entrega"
-        WHERE criado_em >= date_trunc('day', now()) - make_interval(days => ${janela - 1}::int) ${fEnt}
+        WHERE criado_em >= ${ini} AND criado_em < ${fimExcl} ${fEnt}
         GROUP BY 1
       ) c ON c.dd = d
       LEFT JOIN (
         SELECT date_trunc('day', data_hora_saida) AS dd, count(*) AS n
         FROM "logistica"."viagem"
         WHERE data_hora_saida IS NOT NULL
-          AND data_hora_saida >= date_trunc('day', now()) - make_interval(days => ${janela - 1}::int) ${fVg}
+          AND data_hora_saida >= ${ini} AND data_hora_saida < ${fimExcl} ${fVg}
         GROUP BY 1
       ) v ON v.dd = d
       ORDER BY d`);
@@ -133,7 +140,7 @@ export class PainelService {
     ]);
 
     return {
-      filtros: { filialId: filialId ?? null, dias: janela },
+      filtros: { filialId: filialId ?? null, mes, ano },
       cards: {
         entregasPendentes: entPendentes,
         entregasEmViagem: entEmViagem,
