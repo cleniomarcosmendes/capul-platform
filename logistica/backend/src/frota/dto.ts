@@ -43,6 +43,18 @@ export class RetornoFrotaDto {
   observacoes?: string;
 }
 
+/** Registro de uma parada (ponto de rota) da viagem de frota — log do "caderno". */
+export class AddParadaDto {
+  @IsString() @IsNotEmpty() @MaxLength(120)
+  local!: string;
+
+  @IsOptional() @IsInt() @Min(0)
+  km?: number;
+
+  @IsOptional() @IsString() @MaxLength(255)
+  observacao?: string;
+}
+
 /** Ajuste/fechamento por GESTOR_FROTA ou supervisor do veículo (sem senha do condutor). */
 export class AjusteGestorDto {
   @IsOptional() @IsInt() @Min(0)

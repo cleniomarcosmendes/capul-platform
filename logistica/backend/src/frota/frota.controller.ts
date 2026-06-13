@@ -1,9 +1,9 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { StatusViagem } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { FrotaService } from './frota.service.js';
-import { BuscarCondutorDto, SaidaFrotaDto, RetornoFrotaDto, AjusteGestorDto } from './dto.js';
+import { BuscarCondutorDto, SaidaFrotaDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto } from './dto.js';
 
 const roleLogistica = (user: JwtPayload) => user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
 
@@ -40,5 +40,21 @@ export class FrotaController {
   @Patch('viagens/:id')
   ajustar(@Param('id') id: string, @Body() dto: AjusteGestorDto, @CurrentUser() user: JwtPayload) {
     return this.frota.ajustarPorGestor(id, dto, user, roleLogistica(user));
+  }
+
+  /** Paradas (pontos de rota / "caderno" da viagem). */
+  @Get('viagens/:id/paradas')
+  listarParadas(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.frota.listarParadas(id, user);
+  }
+
+  @Post('viagens/:id/paradas')
+  adicionarParada(@Param('id') id: string, @Body() dto: AddParadaDto, @CurrentUser() user: JwtPayload) {
+    return this.frota.adicionarParada(id, dto, user);
+  }
+
+  @Delete('viagens/:id/paradas/:paradaId')
+  removerParada(@Param('id') id: string, @Param('paradaId') paradaId: string, @CurrentUser() user: JwtPayload) {
+    return this.frota.removerParada(id, paradaId, user);
   }
 }

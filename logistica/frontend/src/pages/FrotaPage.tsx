@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Fuel, Loader2, LogIn, LogOut, Search, Settings2, X } from 'lucide-react';
+import { Fuel, Loader2, LogIn, LogOut, MapPin, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
@@ -16,7 +16,9 @@ interface ViagemFrota {
   kmInicial?: number | null; kmFinal?: number | null; kmRodado?: number | null;
   finalidade?: string | null; localSaida?: string | null;
   dataHoraSaida?: string | null; dataHoraChegada?: string | null;
+  paradas?: number;
 }
+interface ParadaFrota { id: string; sequencia: number; local: string; km?: number | null; dataHora?: string | null; observacao?: string | null }
 interface VeiculoDisp { id: string; placa: string; modelo?: string | null; situacao: string; kmAtual: number }
 
 const SIT_META: Record<string, { label: string; cls: string }> = {
@@ -102,6 +104,7 @@ export function FrotaPage() {
                 <th className="px-4 py-2">Saída</th>
                 <th className="px-4 py-2">Retorno</th>
                 <th className="px-4 py-2 text-right">KM</th>
+                <th className="px-4 py-2 text-center">Paradas</th>
                 <th className="px-4 py-2">Situação</th>
                 <th className="px-4 py-2"></th>
               </tr>
@@ -281,7 +284,8 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
 // ---- Linha da viagem + ações de retorno / ajuste ----
 function LinhaViagem({ v, podeAjustar, onDone }: { v: ViagemFrota; podeAjustar: boolean; onDone: () => void }) {
   const sit = SIT_META[v.situacao] ?? { label: v.situacao, cls: 'bg-slate-100 text-slate-600' };
-  const [acao, setAcao] = useState<'retorno' | 'ajuste' | null>(null);
+  const [acao, setAcao] = useState<'retorno' | 'ajuste' | 'paradas' | null>(null);
+  const ativa = v.situacao !== 'CANCELADA';
 
   return (
     <>
@@ -293,6 +297,17 @@ function LinhaViagem({ v, podeAjustar, onDone }: { v: ViagemFrota; podeAjustar: 
         <td className="px-4 py-2 text-slate-600">{fmtDateTime(v.dataHoraChegada)}</td>
         <td className="px-4 py-2 text-right tabular-nums">
           {v.kmRodado != null ? `${v.kmRodado} km` : v.kmInicial != null ? `${v.kmInicial} →` : '—'}
+        </td>
+        <td className="px-4 py-2 text-center">
+          {ativa ? (
+            <button
+              onClick={() => setAcao(acao === 'paradas' ? null : 'paradas')}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${acao === 'paradas' ? 'bg-sky-100 text-sky-700' : 'text-slate-500 hover:bg-slate-100'}`}
+              title="Ver/registrar paradas"
+            >
+              <MapPin className="h-3.5 w-3.5" /> {v.paradas ?? 0}
+            </button>
+          ) : <span className="text-slate-400">{v.paradas ?? 0}</span>}
         </td>
         <td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${sit.cls}`}>{sit.label}</span></td>
         <td className="px-4 py-2 text-right">
@@ -312,14 +327,111 @@ function LinhaViagem({ v, podeAjustar, onDone }: { v: ViagemFrota; podeAjustar: 
       </tr>
       {acao && (
         <tr>
-          <td colSpan={8} className="bg-slate-50 px-4 py-3">
-            {acao === 'retorno'
-              ? <RetornoForm v={v} onClose={() => setAcao(null)} onDone={() => { setAcao(null); onDone(); }} />
-              : <AjusteForm v={v} onClose={() => setAcao(null)} onDone={() => { setAcao(null); onDone(); }} />}
+          <td colSpan={9} className="bg-slate-50 px-4 py-3">
+            {acao === 'retorno' && <RetornoForm v={v} onClose={() => setAcao(null)} onDone={() => { setAcao(null); onDone(); }} />}
+            {acao === 'ajuste' && <AjusteForm v={v} onClose={() => setAcao(null)} onDone={() => { setAcao(null); onDone(); }} />}
+            {acao === 'paradas' && <ParadasPanel v={v} onChanged={onDone} />}
           </td>
         </tr>
       )}
     </>
+  );
+}
+
+// ---- Grid de paradas (pontos de rota / "caderno" da viagem) ----
+function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () => void }) {
+  const { toast } = useToast();
+  const [paradas, setParadas] = useState<ParadaFrota[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [local, setLocal] = useState('');
+  const [km, setKm] = useState('');
+  const [obs, setObs] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const editavel = v.situacao !== 'CANCELADA';
+
+  const carregar = async () => {
+    setLoading(true);
+    try {
+      const { data } = await logisticaApi.get<ParadaFrota[]>(`/frota/viagens/${v.id}/paradas`);
+      setParadas(data);
+    } catch (e) {
+      toast('error', errMsg(e, 'Falha ao carregar paradas.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { void carregar(); /* eslint-disable-next-line */ }, [v.id]);
+
+  const adicionar = async () => {
+    if (!local.trim()) { toast('warning', 'Informe o local da parada.'); return; }
+    setSalvando(true);
+    try {
+      await logisticaApi.post(`/frota/viagens/${v.id}/paradas`, {
+        local: local.trim(), km: km === '' ? undefined : Number(km), observacao: obs.trim() || undefined,
+      });
+      setLocal(''); setKm(''); setObs('');
+      await carregar(); onChanged();
+    } catch (e) {
+      toast('error', errMsg(e, 'Falha ao adicionar parada.'));
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const remover = async (pid: string) => {
+    try {
+      await logisticaApi.delete(`/frota/viagens/${v.id}/paradas/${pid}`);
+      await carregar(); onChanged();
+    } catch (e) {
+      toast('error', errMsg(e, 'Falha ao remover parada.'));
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-slate-500">Paradas da viagem #{v.numero} — registro dos pontos de rota (o caderno digital da frota).</p>
+
+      {loading ? (
+        <div className="flex items-center gap-2 py-3 text-sm text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
+      ) : paradas.length === 0 ? (
+        <p className="py-2 text-sm text-slate-400">Nenhuma parada registrada.</p>
+      ) : (
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs uppercase text-slate-400">
+            <tr><th className="py-1 pr-3">#</th><th className="py-1 pr-3">Local</th><th className="py-1 pr-3">KM</th><th className="py-1 pr-3">Hora</th><th className="py-1 pr-3">Observação</th><th></th></tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {paradas.map((p) => (
+              <tr key={p.id}>
+                <td className="py-1 pr-3 font-mono text-slate-400">{p.sequencia}</td>
+                <td className="py-1 pr-3">{p.local}</td>
+                <td className="py-1 pr-3 tabular-nums">{p.km ?? '—'}</td>
+                <td className="py-1 pr-3 text-slate-500">{fmtDateTime(p.dataHora)}</td>
+                <td className="py-1 pr-3 text-slate-500">{p.observacao ?? '—'}</td>
+                <td className="py-1 text-right">
+                  {editavel && (
+                    <button onClick={() => void remover(p.id)} className="text-slate-400 hover:text-rose-600" title="Remover">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {editavel && (
+        <div className="flex flex-wrap items-end gap-2 border-t border-slate-200 pt-3">
+          <input value={local} onChange={(e) => setLocal(e.target.value)} placeholder="Local da parada" maxLength={120} className="min-w-[12rem] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+          <input type="number" value={km} onChange={(e) => setKm(e.target.value)} placeholder="KM" className="w-24 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+          <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observação" maxLength={255} className="min-w-[10rem] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+          <button onClick={() => void adicionar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Adicionar
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

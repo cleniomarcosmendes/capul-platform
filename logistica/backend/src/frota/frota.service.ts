@@ -6,7 +6,7 @@ import { StatusViagem, TipoViagem, SituacaoVeiculo } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
-import { SaidaFrotaDto, RetornoFrotaDto, AjusteGestorDto } from './dto.js';
+import { SaidaFrotaDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto } from './dto.js';
 
 // Mesma normalização do toChapaPortal pra comparar matrículas com segurança.
 const chapa = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
@@ -156,11 +156,60 @@ export class FrotaService {
     });
   }
 
+  // ---- Paradas (pontos de rota / "caderno" da viagem de frota) ----
+
+  /** Garante que a viagem existe, é de frota e da filial do usuário. */
+  private async viagemDaFilial(id: string, user: JwtPayload) {
+    const v = await this.prisma.viagem.findUnique({ where: { id } });
+    if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Viagem de frota não encontrada.');
+    if (v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
+    return v;
+  }
+
+  /** Lista as paradas da viagem (ordem da rota). */
+  async listarParadas(id: string, user: JwtPayload) {
+    await this.viagemDaFilial(id, user);
+    return this.prisma.parada.findMany({
+      where: { viagemId: id },
+      orderBy: { sequencia: 'asc' },
+      select: { id: true, sequencia: true, local: true, km: true, dataHora: true, observacao: true },
+    });
+  }
+
+  /** Adiciona uma parada ao log da viagem (não permitido em viagem cancelada). */
+  async adicionarParada(id: string, dto: AddParadaDto, user: JwtPayload) {
+    const v = await this.viagemDaFilial(id, user);
+    if (v.situacao === StatusViagem.CANCELADA) throw new BadRequestException('Viagem cancelada não recebe paradas.');
+    const ultima = await this.prisma.parada.findFirst({
+      where: { viagemId: id }, orderBy: { sequencia: 'desc' }, select: { sequencia: true },
+    });
+    return this.prisma.parada.create({
+      data: {
+        viagemId: id,
+        sequencia: (ultima?.sequencia ?? 0) + 1,
+        local: dto.local,
+        km: dto.km ?? null,
+        observacao: dto.observacao ?? null,
+        dataHora: new Date(),
+      },
+      select: { id: true, sequencia: true, local: true, km: true, dataHora: true, observacao: true },
+    });
+  }
+
+  /** Remove uma parada do log da viagem. */
+  async removerParada(id: string, paradaId: string, user: JwtPayload) {
+    await this.viagemDaFilial(id, user);
+    const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
+    if (!p || p.viagemId !== id) throw new NotFoundException('Parada não encontrada nesta viagem.');
+    await this.prisma.parada.delete({ where: { id: paradaId } });
+    return { ok: true };
+  }
+
   /** Lista as viagens de FROTA da filial (com nome do veículo). */
   async listar(filialId: string, situacao?: StatusViagem) {
     const viagens = await this.prisma.viagem.findMany({
       where: { tipo: TipoViagem.FROTA, filialId, ...(situacao ? { situacao } : {}) },
-      include: { veiculo: { select: { placa: true, modelo: true } } },
+      include: { veiculo: { select: { placa: true, modelo: true } }, _count: { select: { paradas: true } } },
       orderBy: { criadoEm: 'desc' },
       take: 200,
     });
@@ -172,6 +221,7 @@ export class FrotaService {
       kmRodado: v.kmFinal != null && v.kmInicial != null ? v.kmFinal - v.kmInicial : null,
       finalidade: v.observacoesSaida, localSaida: v.localSaida,
       dataHoraSaida: v.dataHoraSaida, dataHoraChegada: v.dataHoraChegada,
+      paradas: v._count.paradas,
     }));
   }
 }
