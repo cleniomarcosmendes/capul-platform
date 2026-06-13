@@ -25,6 +25,7 @@ export enum ModuloConsumidor {
   FISCAL = 'FISCAL',
   GESTAO_TI = 'GESTAO_TI',
   INVENTARIO = 'INVENTARIO',
+  LOGISTICA = 'LOGISTICA',
 }
 
 // --- Endpoint DTOs ---

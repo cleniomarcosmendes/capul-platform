@@ -16,6 +16,11 @@ export interface JwtPayload {
    * pra cache de performance em capabilities operacionais.
    */
   capabilities: string[];
+  /**
+   * Sessão de dispositivo (login mobile, Fase 1b). Presente só em tokens
+   * mobile; identifica a DispositivoSessao p/ revogação/auditoria. Web não usa.
+   */
+  sid?: string;
 }
 
 export interface ModuloDepartamentoPayload {

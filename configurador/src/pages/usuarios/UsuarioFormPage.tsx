@@ -32,6 +32,15 @@ interface PermissaoForm {
 // silenciosamente — daí a obrigatoriedade contextual aqui.
 const ROLES_FISCAIS_COM_EMAIL = ['GESTOR_FISCAL', 'ADMIN_TI'];
 const MODULO_FISCAL_CODIGO = 'FISCAL';
+// ÚNICO módulo que usa o conceito de WORKSPACE/departamento p/ acesso: o
+// WORKSPACE (o gestao-ti.guard lê `codigo==='WORKSPACE'` + seus departamentos[]).
+// Verificado 09/06: Fiscal (FiscalGuard só role), Inventário (não lê depto),
+// Configurador (guard só role) e Logística (escopa por filial) NÃO usam o
+// departamento; o módulo GESTAO_TI não é lido por ninguém (0 usuários — acesso
+// é via WORKSPACE). Só p/ WORKSPACE a matriz mostra a coluna Departamento; nos
+// demais ela é escondida e o depto do PRÓPRIO usuário é atribuído no save
+// (departamento_id é NOT NULL no banco).
+const MODULOS_COM_DEPARTAMENTO = ['WORKSPACE'];
 
 export function UsuarioFormPage() {
   const navigate = useNavigate();
@@ -269,6 +278,11 @@ export function UsuarioFormPage() {
         if (campo === 'moduloId') {
           const mod = modulos.find((m) => m.id === valor);
           atualizada.roleModuloId = mod?.rolesDisponiveis[0]?.id || '';
+          // Só WORKSPACE usa departamento → limpa pra o operador escolher o
+          // workspace. Demais módulos: auto-atribui o depto do próprio usuário
+          // (a coluna fica escondida).
+          const usaDepto = !!mod && MODULOS_COM_DEPARTAMENTO.includes(mod.codigo);
+          atualizada.departamentoId = usaDepto ? '' : departamentoId;
         }
         return atualizada;
       }),
@@ -340,7 +354,15 @@ export function UsuarioFormPage() {
     setSaving(true);
 
     try {
-      const permsHabilitadas = permissoes.filter((p) => p.moduloId && p.departamentoId && p.roleModuloId);
+      // Módulos sem workspace (Logística): a coluna Departamento fica escondida,
+      // então resolvemos o depto no save = o depto do PRÓPRIO usuário (NOT NULL
+      // no banco). Robusto contra a ordem em que o operador preencheu os campos.
+      const resolverDepto = (p: PermissaoForm) => {
+        const mod = modulos.find((m) => m.id === p.moduloId);
+        // Só WORKSPACE mantém o depto escolhido; os demais usam o depto do usuário.
+        return mod && MODULOS_COM_DEPARTAMENTO.includes(mod.codigo) ? p : { ...p, departamentoId };
+      };
+      const permsHabilitadas = permissoes.map(resolverDepto).filter((p) => p.moduloId && p.departamentoId && p.roleModuloId);
 
       if (isEdicao) {
         await usuarioService.atualizar(id!, {
@@ -356,7 +378,7 @@ export function UsuarioFormPage() {
         });
 
         // Onda 2 C2.2 — diff por (moduloId, departamentoId)
-        const atuaisValidas = permissoes.filter((p) => p.moduloId && p.departamentoId && p.roleModuloId);
+        const atuaisValidas = permissoes.map(resolverDepto).filter((p) => p.moduloId && p.departamentoId && p.roleModuloId);
 
         for (const perm of atuaisValidas) {
           const original = permissoesOriginais.find(
@@ -424,7 +446,8 @@ export function UsuarioFormPage() {
 
   return (
     <>
-      <Header title={isEdicao ? 'Editar Usuario' : 'Novo Usuario'} />
+      {/* Mostra o nome do usuário em edição no título (antes só dizia "Editar Usuario"). */}
+      <Header title={isEdicao ? (nome ? `Editar usuário — ${nome}` : 'Editar Usuario') : 'Novo Usuario'} />
       <div className="p-6 max-w-6xl">
         {/* Barra topo: voltar à esquerda, ações à direita (Salvar salva todas as abas) */}
         <div className="flex items-center justify-between mb-5">
@@ -442,6 +465,15 @@ export function UsuarioFormPage() {
             </button>
           </div>
         </div>
+
+        {/* Identificação do usuário em edição — visível em qualquer aba (antes,
+            ao abrir noutra aba, não dava pra saber qual usuário estava aberto). */}
+        {isEdicao && nome && (
+          <div className="mb-5 flex items-center gap-2 text-sm text-slate-600">
+            <Shield className="w-4 h-4 text-slate-400" />
+            <span>Editando: <strong className="text-slate-800">{nome}</strong>{username ? <span className="text-slate-400"> · @{username}</span> : null}</span>
+          </div>
+        )}
 
         {/* Nav de abas — escala com novas seções sem virar "linguiça" */}
         <nav className="flex gap-1 border-b border-slate-200 mb-6">
@@ -689,8 +721,8 @@ export function UsuarioFormPage() {
                 <thead className="bg-slate-50 text-xs text-slate-500">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium w-1/3">Módulo</th>
-                    <th className="px-3 py-2 text-left font-medium w-1/3">Departamento</th>
                     <th className="px-3 py-2 text-left font-medium w-1/4">Role</th>
+                    <th className="px-3 py-2 text-left font-medium w-1/3">Departamento</th>
                     <th className="px-3 py-2 text-center font-medium w-12">Ações</th>
                   </tr>
                 </thead>
@@ -705,6 +737,10 @@ export function UsuarioFormPage() {
                   {permissoes.map((perm, idx) => {
                     const moduloAtual = modulos.find((m) => m.id === perm.moduloId);
                     const rolesDisp = moduloAtual?.rolesDisponiveis || [];
+                    // Só WORKSPACE usa Departamento; os demais escondem a coluna
+                    // (depto auto-atribuído ao do usuário). Sem módulo escolhido,
+                    // mostra o seletor (neutro).
+                    const usaDepartamento = !moduloAtual || MODULOS_COM_DEPARTAMENTO.includes(moduloAtual.codigo);
                     return (
                       <tr key={idx} className="hover:bg-slate-50">
                         <td className="px-3 py-2">
@@ -721,20 +757,6 @@ export function UsuarioFormPage() {
                         </td>
                         <td className="px-3 py-2">
                           <select
-                            value={perm.departamentoId}
-                            onChange={(e) => atualizarPerfil(idx, 'departamentoId', e.target.value)}
-                            className="w-full px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
-                          >
-                            <option value="">— escolher —</option>
-                            {/* Workspace Onda 2 C2.8 — deptos-workspace (lista global,
-                                independe da filial principal do user). */}
-                            {departamentosWorkspace.map((d) => (
-                              <option key={d.id} value={d.id}>{d.nome}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="px-3 py-2">
-                          <select
                             value={perm.roleModuloId}
                             onChange={(e) => atualizarPerfil(idx, 'roleModuloId', e.target.value)}
                             disabled={!perm.moduloId}
@@ -745,6 +767,29 @@ export function UsuarioFormPage() {
                               <option key={r.id} value={r.id}>{r.nome}</option>
                             ))}
                           </select>
+                        </td>
+                        <td className="px-3 py-2">
+                          {usaDepartamento ? (
+                            <select
+                              value={perm.departamentoId}
+                              onChange={(e) => atualizarPerfil(idx, 'departamentoId', e.target.value)}
+                              className="w-full px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                            >
+                              <option value="">— escolher —</option>
+                              {/* Workspace Onda 2 C2.8 — deptos-workspace (lista global,
+                                  independe da filial principal do user). NÃO é o depto do
+                                  cadastro: é o WORKSPACE que o usuário pode acessar (ex.:
+                                  atribuir "Tecnologia da Informação" deixa o user abrir
+                                  chamado pro T.I.). Por isso a lista é global, não por filial. */}
+                              {departamentosWorkspace.map((d) => (
+                                <option key={d.id} value={d.id}>{d.nome}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            // Só o módulo WORKSPACE usa departamento. Nos demais a coluna
+                            // não se aplica; o depto do próprio usuário é atribuído no save.
+                            <span className="text-xs italic text-slate-400">não se aplica</span>
+                          )}
                         </td>
                         <td className="px-3 py-2 text-center">
                           <button

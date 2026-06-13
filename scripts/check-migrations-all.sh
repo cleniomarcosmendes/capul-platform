@@ -1,7 +1,7 @@
 #!/bin/bash
 # scripts/check-migrations-all.sh
 #
-# Audit: roda check-prisma-migrations.mjs nos 3 backends Prisma e agrega
+# Audit: roda check-prisma-migrations.mjs nos backends Prisma e agrega
 # resultado. Ideal para rodar antes de cada deploy ou em CI.
 #
 # Uso:
@@ -14,7 +14,7 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
-declare -a BACKENDS=("auth-gateway" "fiscal/backend" "gestao-ti/backend")
+declare -a BACKENDS=("auth-gateway" "fiscal/backend" "gestao-ti/backend" "logistica/backend")
 declare -a FAILED=()
 
 for backend in "${BACKENDS[@]}"; do

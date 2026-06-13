@@ -23,6 +23,7 @@ import { EmailModule } from './email/email.module';
 import { AuditLogRetentionModule } from './audit-log-retention/audit-log-retention.module';
 import { RedisModule } from './redis/redis.module';
 import { PresencaModule } from './presenca/presenca.module';
+import { DispositivoSessaoModule } from './dispositivo-sessao/dispositivo-sessao.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 
 @Injectable()
@@ -110,6 +111,7 @@ class ProxyAwareThrottlerGuard extends ThrottlerGuard {
     AuditLogRetentionModule,
     RedisModule,
     PresencaModule,
+    DispositivoSessaoModule,
   ],
   providers: [
     // Ordem: Throttler primeiro (rate limit antes de auth) → JwtAuthGuard depois.

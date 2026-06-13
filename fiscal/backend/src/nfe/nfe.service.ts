@@ -1085,6 +1085,28 @@ export class NfeService {
     const tentativas: Array<{ codigo: string; cnpj: string | null; isFallback: boolean }> = [
       { codigo: filial, cnpj: cnpjConsulenteOverride, isFallback: false },
     ];
+
+    // ── FILIAL DESTINO via Protheus (xmlFilDestino/SPED050, 12/06/2026) ──
+    // Nota de SAÍDA Capul (ex.: transferência entre filiais): o SEFAZ só
+    // entrega o XML pra DESTINATÁRIA — a emitente toma 641. Consultamos a
+    // SPED050 e, se ela apontar o CNPJ destino, ele vira a PRIMEIRA tentativa
+    // (uma chamada SEFAZ certeira; o grvXML grava a SZR na sequência, como em
+    // qualquer download). Best-effort: 404/erro → fluxo normal inalterado.
+    let cnpjDestinoSped: string | null = null;
+    const destino = await this.protheusXml.buscarFilialDestino(chave).catch(() => ({ found: false as const }));
+    if (destino.found && destino.cnpjDestino && destino.cnpjDestino !== cnpjConsulenteOverride) {
+      cnpjDestinoSped = destino.cnpjDestino;
+      tentativas.unshift({
+        codigo: destino.codFilial ?? filial,
+        cnpj: destino.cnpjDestino,
+        isFallback: false,
+      });
+      this.logger.log(
+        `[FILIAL_DESTINO] chave=${chave.slice(0, 6)}… SPED050 aponta destinatária ` +
+          `CNPJ=${destino.cnpjDestino.slice(0, 8)}…/${destino.cnpjDestino.slice(8, 12)} ` +
+          `(filial ${destino.codFilial ?? '?'}) — consulta SEFAZ direcionada.`,
+      );
+    }
     // Carrega fallbacks só se necessário (lazy) — evita query DB extra
     // na maioria das chamadas (caso feliz: filial original responde).
     let fallbacksCarregados = false;
@@ -1143,8 +1165,10 @@ export class NfeService {
             }
             // 641 e terminal SO em modo padrao. Em modo "tentar todas" (botao
             // do usuario), entra na fila — caso CAPUL→CAPUL transferencia
-            // interna onde outra filial e destinataria.
-            if (err.cStat === '641' && !tentarTodasFiliais) {
+            // interna onde outra filial e destinataria. Exceção: se o 641 veio
+            // da tentativa DIRECIONADA (SPED050), nao e terminal — segue pro
+            // fluxo normal (filial do usuario + fallbacks).
+            if (err.cStat === '641' && !tentarTodasFiliais && tent.cnpj !== cnpjDestinoSped) {
               throw err;
             }
             if (err.cStat === '641' && !tent.isFallback) {

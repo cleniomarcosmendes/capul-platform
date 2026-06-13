@@ -1,10 +1,10 @@
 # Roteiro de Finalizacao - Capul Platform
 
-**Versao**: 1.4
-**Data**: 05/05/2026
+**Versao**: 1.5
+**Data**: 06/06/2026
 **Objetivo**: Procedimento padrao apos finalizar ajustes no sistema
 
-**Modulos cobertos**: auth-gateway, hub, gestao-ti, inventario, configurador, **fiscal**
+**Modulos cobertos**: auth-gateway, hub, gestao-ti, inventario, configurador, **fiscal**, **logistica**
 
 ---
 
@@ -77,6 +77,8 @@ Agrupar mudancas por modulo:
 - `gestao-ti/frontend/` → commits separados
 - `fiscal/backend/` → commits separados
 - `fiscal/frontend/` → commits separados
+- `logistica/backend/` → commits separados
+- `logistica/frontend/` → commits separados
 - `hub/` → commits separados
 - `configurador/` → commits separados
 - `inventario/` → commits separados
@@ -127,15 +129,38 @@ cd fiscal/backend && npx tsc --noEmit
 
 # Frontend fiscal (React + Vite)
 cd fiscal/frontend && npx tsc --noEmit
+
+# Backend logistica (NestJS 11 + Prisma 6)
+cd logistica/backend && npx tsc --noEmit
+
+# Frontend logistica (React + Vite)
+cd logistica/frontend && npx tsc --noEmit
 ```
 
-### 2.2 Verificacao de Containers
+### 2.1.1 Testes Automatizados (OBRIGATORIO se mexeu em logica)
+
+`tsc --noEmit` so checa tipos — **nao roda os testes**. Se a sessao tocou regra de
+negocio/guard/parser, rodar as suites. **Falha em teste = NAO finalizar.**
+
+```bash
+# Backends NestJS com Jest (specs em src/**/*.spec.ts)
+cd gestao-ti/backend && npm test
+cd fiscal/backend    && npm test
+cd logistica/backend && npm test
+
+# Inventario (FastAPI/pytest)
+cd inventario/backend && python -m pytest -q
+```
+
+> Se criou regra nova sem teste, **adicione o teste** (padrao: `createPrismaMock`
+> nos NestJS). Cobertura minima esperada: guards de RBAC/filial, FSM de status,
+> parsers e calculos.
 ```bash
 # Status dos containers
 docker compose ps
 
 # Verificar logs de erro (todos os backends)
-docker compose logs --tail 5 auth-gateway gestao-ti-backend fiscal-backend 2>&1 | grep -i error
+docker compose logs --tail 5 auth-gateway gestao-ti-backend fiscal-backend logistica-backend 2>&1 | grep -i error
 
 # Verificar uso de disco
 docker system df
@@ -159,14 +184,20 @@ pelos init jobs `*-migrate` no `docker compose up -d`. Esta verificacao serve
 como **auditoria pos-deploy**, nao como passo de aplicacao.
 
 ```bash
+# Auditoria agregada schema x migrations (todos os backends Prisma de uma vez)
+./scripts/check-migrations-all.sh
+# Cobre: auth-gateway, fiscal/backend, gestao-ti/backend, logistica/backend.
+# Esperado: "✓ Todos os N backends estao consistentes (schema vs migrations)."
+
 # Auditoria dos init jobs (devem ter saido com exit 0)
-docker compose ps --all | grep -E "auth-migrate|gestao-ti-migrate|fiscal-migrate"
+docker compose ps --all | grep -E "auth-migrate|gestao-ti-migrate|fiscal-migrate|logistica-migrate"
 # Esperado: cada um em "Exited (0)"
 
 # Status detalhado por backend (deve mostrar "Database schema is up to date")
 docker compose exec auth-gateway npx prisma migrate status
 docker compose exec gestao-ti-backend npx prisma migrate status
 docker compose exec fiscal-backend npx prisma migrate status
+docker compose exec logistica-backend npx prisma migrate status
 ```
 
 **Se algum init job aparecer "Exited (1)":**
@@ -309,7 +340,26 @@ Cenarios que exigem atualizacao:
 - Nova migration SQL no inventario
 - Mudanca na estrategia de deploy
 
-### 2.8 Relatorio Final
+### 2.8 Revisao de Codigo (gate antes do push)
+
+Para features grandes ou que tocam **seguranca/RBAC/dados**, passar uma revisao
+antes de o Clenio fazer o push:
+
+```
+# Revisao cloud multi-agente da branch (acionada pelo Clenio — billed)
+/code-review ultra            # branch local atual vs main
+/code-review ultra <PR#>      # PR do GitHub
+
+# Se a ultrareview falhar (rate limit) ou para diffs menores:
+# revisao manual do diff (Claude le os arquivos criticos e tria por severidade)
+git diff --stat main...HEAD
+```
+
+Triar achados por severidade (bug/seguranca > consistencia > estilo); corrigir
+em sub-fases verificadas (os testes da 2.1.1 pegam regressao). **Falso-positivo
+e decisao de design devem ser explicitados, nao silenciados.**
+
+### 2.9 Relatorio Final
 Ao concluir, apresentar:
 
 ```
@@ -359,11 +409,13 @@ ALERTA MIGRACAO:
 
 ### ETAPA 2: Verificacao e Limpeza
 - [ ] Builds OK (tsc --noEmit)
+- [ ] **Testes automatizados passando** (npm test / pytest) — se mexeu em logica
 - [ ] Containers saudaveis
-- [ ] Migrations em dia
+- [ ] Migrations em dia (`./scripts/check-migrations-all.sh`)
 - [ ] Arquivos orfaos analisados
 - [ ] Limpeza Docker (se necessario)
 - [ ] Impacto em migracao verificado (schema, docker-compose, Dockerfile)
+- [ ] **Revisao de codigo** (feature grande / toca seguranca) — gate antes do push
 - [ ] Relatorio apresentado
 
 ---
@@ -432,11 +484,17 @@ Aplicar este checklist **sempre que houver alteracoes em `fiscal/`**:
 
 ---
 
-**Ultima Atualizacao**: 05/05/2026
-**Versao**: 1.4
+**Ultima Atualizacao**: 06/06/2026
+**Versao**: 1.5
 
 ## Changelog
 
+- **1.5 (06/06/2026)**: Modulo **logistica** incluido (builds, logs, migrations,
+  commits). Nova secao **2.1.1 Testes Automatizados** (`npm test`/pytest — antes
+  o roteiro so checava `tsc`, nao rodava as suites). Secao 2.3 passa a usar
+  `scripts/check-migrations-all.sh` (auditoria agregada, agora cobrindo logistica).
+  Nova secao **2.8 Revisao de Codigo** (gate `/code-review ultra` ou revisao
+  manual antes do push). Derivado do hardening + revisao da Fase 1a da logistica.
 - **1.4 (05/05/2026)**: Secao 2.3 "Verificacao de Migrations" reescrita —
   init jobs `*-migrate` aplicam automaticamente no `docker compose up -d`,
   o passo agora e auditoria pos-deploy + diagnostico de falha. Pos-incidente

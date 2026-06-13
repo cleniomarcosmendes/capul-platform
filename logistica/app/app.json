@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "CAPUL Entregas",
+    "slug": "capul-entregas",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "capulentregas",
+    "userInterfaceStyle": "light",
+    "platforms": [
+      "android"
+    ],
+    "android": {
+      "package": "br.com.capul.entregas",
+      "versionCode": 1,
+      "permissions": [
+        "INTERNET",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA"
+      ]
+    },
+    "extra": {
+      "//": "API_URL — apontar pro nginx alcançável pelo celular. Em DEV use o IP da LAN da máquina (ex.: https://192.168.x.x). Sobrescreve via env EXPO_PUBLIC_API_URL.",
+      "apiUrl": "https://platform.capul.com.br"
+    },
+    "plugins": [
+      "expo-asset"
+    ]
+  }
+}

@@ -39,6 +39,8 @@ Plataforma corporativa modular com microservicos independentes:
 | **Gestao TI Frontend** | React 19 + Vite 7 + Tailwind v4 | 5173 | - |
 | **Inventario Backend** | FastAPI + Python 3.11 | 8000 | `inventario` |
 | **Inventario Frontend** | React 19 + Vite 7 + Tailwind v4 | 5174 | - |
+| **Logistica Backend** | NestJS 11 + Prisma 6 | 3003 | `logistica` (+ `core` RO) |
+| **Logistica Frontend** | React 19 + Vite 7 + Tailwind v4 | 5177 | - |
 | **PostgreSQL** | PostgreSQL 16 | 5432 | Multi-schema |
 | **Redis** | Redis 7 | 6379 | Cache/sessoes |
 
@@ -86,6 +88,16 @@ Plataforma corporativa modular com microservicos independentes:
 - Docs: `docs/PLANO_MODULO_FISCAL_v2.0.md` (plano mestre), `docs/PENDENCIAS_PROTHEUS_18ABR2026.md` (formais)
 - **Regra critica**: NUNCA disparar consultas SEFAZ em loop ou cron nao supervisionado — risco de bloqueio do CNPJ da CAPUL (ver `memory/feedback_sefaz_nunca_em_loop.md`)
 
+### 7. Logistica / Entregas (`/entregas`) *(em desenvolvimento — Fase 1a completa; Fase 1b iniciada Jun/2026)*
+- Entregas domiciliares do supermercado (Unaí/MG): cadastro de entrega (balcao), montagem de viagem, frota, romaneio/etiquetas, painel
+- Backend NestJS 11 + Prisma 6 (schema `logistica` + `core` read-only via `$queryRaw`), porta 3003, prefixo `/api/v1/logistica`
+- Frontend React 19 + Vite 7, base `/entregas/`, porta 5177
+- Escopo por **filial** (entregas/veiculos/viagens/cadastros — filiais sao cidades diferentes); RBAC `OPERADOR_ENTREGA`/`GESTOR_ENTREGA` (ADMIN sempre)
+- Cliente Protheus (SA1) por matricula/telefone/nome via `core.integracoes_api_endpoints` (interino reusa `getLimite`; ver `docs/SOLICITACAO_PROTHEUS_enderecos_SA1.md`)
+- Suite Jest + logging pino + auditoria de migrations (hardening da Fase 1a)
+- **Fase 1b** (app entregador + prova de entrega/cofre + device-sessions): plano em `C:\Arquivos-de-projeto\clenio\Sistema de Rota\007_Fase1b_Plano_PRs.md`. PR 1b.1 (device-sessions no auth-gateway) feito em branch `feat/device-sessions`
+- Docs/decisoes: `C:\Arquivos-de-projeto\clenio\Sistema de Rota\` (002 spec, 003 adendo, 004 Fase1a, 007 Fase1b) + `memory/project_modulo_entregas_proximo.md`
+
 ---
 
 ## Comandos Essenciais
@@ -116,6 +128,7 @@ docker compose exec auth-gateway npx prisma db seed
 | Gestao TI | https://localhost/gestao-ti/ | admin |
 | Inventario | https://localhost/inventario/ | admin/admin123 |
 | Fiscal | https://localhost/fiscal/ | admin (role ADMIN_TI) |
+| Logistica | https://localhost/entregas/ | role OPERADOR_ENTREGA/GESTOR_ENTREGA |
 | PgAdmin | http://localhost:5050 | Ver .env |
 | API Docs (Inventario) | http://localhost:8000/docs | - |
 
@@ -250,4 +263,4 @@ Este arquivo serve como ponto de entrada para o Claude Code entender a estrutura
 
 ---
 
-*Ultima atualizacao: 03/06/2026*
+*Ultima atualizacao: 12/06/2026*

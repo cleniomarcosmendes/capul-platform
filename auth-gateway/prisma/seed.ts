@@ -305,9 +305,26 @@ async function main() {
     { modulo: 'FISCAL' as const, ambiente: 'PRODUCAO' as const, operacao: 'grvXML', url: `${BASE_PRD}/FISCAL/grvXML`, metodo: 'POST' as const, timeoutMs: 60000 },
     { modulo: 'FISCAL' as const, ambiente: 'PRODUCAO' as const, operacao: 'eventosNfe', url: `${BASE_PRD}/FISCAL/eventosNfe`, metodo: 'GET' as const, timeoutMs: 60000 },
     { modulo: 'FISCAL' as const, ambiente: 'PRODUCAO' as const, operacao: 'cadastroFiscal', url: `${BASE_PRD}/FISCAL/cadastroFiscal`, metodo: 'GET' as const, timeoutMs: 60000 },
+    // 12/06/2026 — filial de DESTINO de nota de saída (SPED050): GET ?CHAVENFEE=
+    // → { chave, cnpjDestino, codFilial, ... }. Consulta SEFAZ direcionada pra
+    // transferência entre filiais (emitente não baixa o próprio XML — 641).
+    { modulo: 'FISCAL' as const, ambiente: 'PRODUCAO' as const, operacao: 'xmlFilDestino', url: `${BASE_PRD}/FISCAL/xmlFilDestino`, metodo: 'GET' as const, timeoutMs: 15000 },
   ];
 
   const endpointsFiscalHlg = endpointsFiscalPrd.map((ep) => ({
+    ...ep,
+    ambiente: 'HOMOLOGACAO' as const,
+    url: ep.url.replace(BASE_PRD, BASE_HLG),
+  }));
+
+  // LOGISTICA — cliente (SA1) p/ autofill de endereço na entrega. Endpoint
+  // DEDICADO entregue pelo Protheus (06/2026): busca por MATRICULA/TELEFONE/NOME,
+  // devolve endereço + contatos de clientes ATIVOS da SA1. Só leitura, sem SEFAZ.
+  const endpointsLogisticaPrd = [
+    { modulo: 'LOGISTICA' as const, ambiente: 'PRODUCAO' as const, operacao: 'clienteEndereco', url: `${BASE_PRD}/LOGISTICA/clienteEndereco`, metodo: 'GET' as const, timeoutMs: 10000 },
+  ];
+
+  const endpointsLogisticaHlg = endpointsLogisticaPrd.map((ep) => ({
     ...ep,
     ambiente: 'HOMOLOGACAO' as const,
     url: ep.url.replace(BASE_PRD, BASE_HLG),
@@ -317,6 +334,7 @@ async function main() {
     ...endpointsInventarioPrd, ...endpointsInventarioHlg,
     ...endpointsGestaoTiPrd, ...endpointsGestaoTiHlg,
     ...endpointsFiscalPrd, ...endpointsFiscalHlg,
+    ...endpointsLogisticaPrd, ...endpointsLogisticaHlg,
   ];
 
   let integracao = await prisma.integracaoApi.findUnique({

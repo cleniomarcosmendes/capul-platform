@@ -160,6 +160,7 @@ model Usuario {
   permissoes    PermissaoModulo[]
   refreshTokens RefreshToken[]
   capabilities  UsuarioCapability[]
+  dispositivoSessoes DispositivoSessao[]
 
   @@map("usuarios")
   @@schema("core")
@@ -358,7 +359,36 @@ model RefreshToken {
   usuarioId String  @map("usuario_id")
   usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
+  // Sessão de dispositivo (login mobile). Web não usa → nullable.
+  dispositivoSessaoId String?            @map("dispositivo_sessao_id")
+  dispositivoSessao   DispositivoSessao? @relation(fields: [dispositivoSessaoId], references: [id], onDelete: Cascade)
+
+  @@index([dispositivoSessaoId])
   @@map("refresh_tokens")
+  @@schema("core")
+}
+
+/// Sessão de um dispositivo logado (app mobile). Estável entre rotações do
+/// refresh token. Revogação em 3 níveis: sessão (esta), dispositivo (deviceId)
+/// ou usuário (todas). O refresh valida que a sessão não está revogada/expirada
+/// (Opção B — efeito em ≤ TTL do access mobile, 15m). Web não cria sessão.
+model DispositivoSessao {
+  id            String         @id @default(uuid())
+  usuarioId     String         @map("usuario_id")
+  usuario       Usuario        @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  deviceId      String         @map("device_id") // id estável do aparelho (gerado no app)
+  deviceInfo    String?        @map("device_info") // modelo/SO legível
+  plataforma    String? // ANDROID | IOS
+  criadoEm      DateTime       @default(now()) @map("criado_em")
+  ultimoUso     DateTime       @default(now()) @map("ultimo_uso")
+  expiraEm      DateTime       @map("expira_em")
+  revogadoEm    DateTime?      @map("revogado_em")
+  revogadoPorId String?        @map("revogado_por_id") // quem revogou (admin ou o próprio)
+  refreshTokens RefreshToken[]
+
+  @@index([usuarioId])
+  @@index([deviceId])
+  @@map("dispositivo_sessao")
   @@schema("core")
 }
 
@@ -392,6 +422,7 @@ enum ModuloConsumidor {
   FISCAL
   GESTAO_TI
   INVENTARIO
+  LOGISTICA
 
   @@schema("core")
 }
