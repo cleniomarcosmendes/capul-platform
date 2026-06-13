@@ -140,10 +140,10 @@ export function ProdutosPage() {
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" placeholder="Servico de Licenciamento" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Produto</label>
-                <select value={tipoProdutoId} onChange={(e) => setTipoProdutoId(e.target.value)}
+                <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Produto *</label>
+                <select value={tipoProdutoId} onChange={(e) => setTipoProdutoId(e.target.value)} required
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600">
-                  <option value="">Sem tipo</option>
+                  <option value="">Selecione o tipo…</option>
                   {tiposProduto.map((tp) => (
                     <option key={tp.id} value={tp.id}>{tp.descricao}</option>
                   ))}
@@ -193,9 +193,9 @@ export function ProdutosPage() {
                             className="w-full border border-slate-300 rounded px-2 py-1 text-sm" />
                         </td>
                         <td className="px-6 py-3">
-                          <select value={editTipoProdutoId} onChange={(e) => setEditTipoProdutoId(e.target.value)}
+                          <select value={editTipoProdutoId} onChange={(e) => setEditTipoProdutoId(e.target.value)} required
                             className="w-full border border-slate-300 rounded px-2 py-1 text-sm">
-                            <option value="">Sem tipo</option>
+                            <option value="">Selecione o tipo…</option>
                             {tiposProduto.map((tp) => (
                               <option key={tp.id} value={tp.id}>{tp.descricao}</option>
                             ))}

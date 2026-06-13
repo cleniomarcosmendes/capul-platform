@@ -11,9 +11,12 @@ export class CreateProdutoDto {
   @MaxLength(50)
   descricao: string;
 
-  @IsOptional()
+  // Obrigatório no cadastro (decisão 13/06) — habilita os agrupamentos por tipo
+  // nos Indicadores. Produtos antigos sem tipo seguem como "Não classificado"
+  // até serem editados (sem migration NOT NULL, que quebraria com os nulos atuais).
   @IsString()
-  tipoProdutoId?: string;
+  @IsNotEmpty({ message: 'Informe o tipo de produto.' })
+  tipoProdutoId: string;
 }
 
 export class UpdateProdutoDto {
