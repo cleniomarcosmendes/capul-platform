@@ -247,10 +247,12 @@ export class EntregaService {
     if (!e) throw new NotFoundException('Entrega não encontrada.');
     if (user) assertPodeVerRegistro(user, e.filialId);
     const { parada, ...resto } = e;
+    const nomes = e.baixadoPorId ? await this.core.nomesUsuarios([e.baixadoPorId]) : new Map<string, string>();
     return {
       ...this.comTotal(resto),
       viagemNumero: parada?.viagem?.numero ?? null,
       viagemSituacao: parada?.viagem?.situacao ?? null,
+      baixadoPorNome: (e.baixadoPorId && nomes.get(e.baixadoPorId)) || null,
     };
   }
 
@@ -553,6 +555,7 @@ export class EntregaService {
         data: {
           status: novoStatus,
           dataHoraEntrega: new Date(),
+          recebedorNome: entregue ? dto.recebedorNome?.trim() || null : null,
           motivoNaoEntrega: entregue ? null : dto.motivo!.trim(),
           baixadoPorId: user.sub,
           geoLat: dto.geoLat != null ? new Prisma.Decimal(dto.geoLat) : null,

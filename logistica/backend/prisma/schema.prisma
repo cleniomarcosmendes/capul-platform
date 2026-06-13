@@ -224,6 +224,9 @@ model Entrega {
   dataHoraEntrega   DateTime?          @map("data_hora_entrega")
   motivoNaoEntrega  String?            @map("motivo_nao_entrega")
   baixadoPorId      String?            @map("baixado_por_id")
+  // Quem recebeu a mercadoria (informado na baixa) — resposta rápida ao
+  // cliente sem precisar abrir a trilha do cofre.
+  recebedorNome     String?            @map("recebedor_nome")
   // GPS POR EVENTO capturado na baixa (pontual — LGPD; não é rastreio contínuo).
   geoLat            Decimal?           @map("geo_lat") @db.Decimal(10, 7)
   geoLng            Decimal?           @map("geo_lng") @db.Decimal(10, 7)

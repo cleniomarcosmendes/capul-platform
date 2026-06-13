@@ -17,6 +17,9 @@ interface ParadaDet {
     id: string; numero: number; destinatarioNome: string; telefone?: string | null;
     endLogradouro: string; endNumero?: string | null; endBairro?: string | null; endCidade?: string | null;
     quantidadeVolumes: number; status: string; temComprovante?: boolean;
+    criadoEm?: string; dataHoraEntrega?: string | null;
+    baixadoPorNome?: string | null; recebedorNome?: string | null;
+    motivoNaoEntrega?: string | null;
   } | null;
   local?: string | null; observacao?: string | null;
 }
@@ -34,6 +37,9 @@ interface EntregaPend {
   quantidadeVolumes: number; geocodificavel?: boolean | null; tentativas?: number;
 }
 const labelCore = (i: CoreItem) => i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8);
+
+const dh = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
 
 const SIT_META: Record<string, { label: string; cls: string }> = {
   RASCUNHO: { label: 'Em preparação', cls: 'bg-sky-100 text-sky-700' },
@@ -410,6 +416,8 @@ export function ViagemDetalhePage() {
                 <th className="px-3 py-2.5">Endereço</th>
                 <th className="px-3 py-2.5">Telefone</th>
                 <th className="px-3 py-2.5 text-right">Vol.</th>
+                <th className="px-3 py-2.5">Lançada</th>
+                <th className="px-3 py-2.5">Entrega</th>
                 <th className="px-3 py-2.5 text-right">Situação</th>
               </tr>
             </thead>
@@ -435,6 +443,17 @@ export function ViagemDetalhePage() {
                         ) : <span className="text-slate-400">—</span>}
                       </td>
                       <td className="px-3 py-2 text-right text-slate-600">{p.entrega.quantidadeVolumes}</td>
+                      <td className="px-3 py-2 text-slate-500" title="Hora do lançamento da entrega (compra no balcão)">{dh(p.entrega.criadoEm)}</td>
+                      <td className="px-3 py-2">
+                        {p.entrega.dataHoraEntrega ? (
+                          <div className="text-xs leading-snug">
+                            <div className="font-medium text-slate-700">{dh(p.entrega.dataHoraEntrega)}</div>
+                            {p.entrega.baixadoPorNome && <div className="text-slate-500">por {p.entrega.baixadoPorNome}</div>}
+                            {p.entrega.recebedorNome && <div className="text-slate-500">recebeu: {p.entrega.recebedorNome}</div>}
+                            {p.entrega.motivoNaoEntrega && <div className="text-rose-600">{p.entrega.motivoNaoEntrega}</div>}
+                          </div>
+                        ) : <span className="text-slate-400">—</span>}
+                      </td>
                       <td className="px-3 py-2 text-right">
                         {v.situacao === 'EM_CURSO' && p.entrega.status === 'EM_VIAGEM' ? (
                           <button onClick={() => setBaixaAlvo({ id: p.entrega!.id, numero: p.entrega!.numero, destinatarioNome: p.entrega!.destinatarioNome })}
@@ -455,7 +474,7 @@ export function ViagemDetalhePage() {
                       </td>
                     </>
                   ) : (
-                    <td colSpan={5} className="px-3 py-2 text-xs text-slate-500">{p.local ?? 'Parada sem entrega'}{p.observacao ? ` — ${p.observacao}` : ''}</td>
+                    <td colSpan={7} className="px-3 py-2 text-xs text-slate-500">{p.local ?? 'Parada sem entrega'}{p.observacao ? ` — ${p.observacao}` : ''}</td>
                   )}
                 </tr>
               ))}

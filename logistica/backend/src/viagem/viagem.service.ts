@@ -184,8 +184,23 @@ export class ViagemService {
     if (user) assertPodeVerRegistro(user, v.filialId);
     // Nome do motorista (core) — a lista já enriquece; o detalhe também precisa
     // (a tela de detalhe mostrava "—"; reporte do Clenio 12/06).
-    const nomes = v.motoristaId ? await this.core.nomesUsuarios([v.motoristaId]) : new Map<string, string>();
-    return { ...v, motoristaNome: (v.motoristaId && nomes.get(v.motoristaId)) || null };
+    // Nomes (core): motorista + quem deu cada baixa — respostas prontas pro
+    // cliente sem resolver IDs no front.
+    const ids = [
+      ...(v.motoristaId ? [v.motoristaId] : []),
+      ...v.paradas.map((p) => p.entrega?.baixadoPorId).filter((x): x is string => !!x),
+    ];
+    const nomes = ids.length ? await this.core.nomesUsuarios(ids) : new Map<string, string>();
+    return {
+      ...v,
+      motoristaNome: (v.motoristaId && nomes.get(v.motoristaId)) || null,
+      paradas: v.paradas.map((p) => ({
+        ...p,
+        entrega: p.entrega
+          ? { ...p.entrega, baixadoPorNome: (p.entrega.baixadoPorId && nomes.get(p.entrega.baixadoPorId)) || null }
+          : p.entrega,
+      })),
+    };
   }
 
   /**
@@ -242,7 +257,7 @@ export class ViagemService {
    * de entrega real (foto/assinatura/GPS) é da Fase 1b — aqui é baixa manual no
    * balcão pra fechar o ciclo operacional. Exige viagem EM_CURSO.
    */
-  async concluir(id: string, userFilialId?: string) {
+  async concluir(id: string, userFilialId?: string, userId?: string) {
     const v = await this.prisma.viagem.findUnique({
       where: { id },
       include: { paradas: { select: { entregaId: true } } },
@@ -257,7 +272,9 @@ export class ViagemService {
     return this.prisma.$transaction(async (tx) => {
       await tx.entrega.updateMany({
         where: { id: { in: entregaIds }, status: StatusEntrega.EM_VIAGEM },
-        data: { status: StatusEntrega.ENTREGUE },
+        // Conclusão manual também carimba QUANDO e QUEM — rastreabilidade pra
+        // responder o cliente (sem isso a hora da entrega ficava vazia).
+        data: { status: StatusEntrega.ENTREGUE, dataHoraEntrega: new Date(), baixadoPorId: userId ?? null },
       });
       if (v.veiculoId) {
         await tx.veiculo.update({ where: { id: v.veiculoId }, data: { situacao: SituacaoVeiculo.DISPONIVEL } });

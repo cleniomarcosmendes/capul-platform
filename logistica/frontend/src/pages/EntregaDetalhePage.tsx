@@ -25,6 +25,7 @@ interface Entrega {
   totalCupons: number; cupons: Cupom[];
   viagemNumero?: number | null; viagemSituacao?: string | null;
   motivoNaoEntrega?: string | null; dataHoraEntrega?: string | null;
+  baixadoPorNome?: string | null; recebedorNome?: string | null;
   motivoCancelamento?: string | null;
 }
 
@@ -209,7 +210,9 @@ export function EntregaDetalhePage() {
                   {e.viagemSituacao ? ` · ${e.viagemSituacao}` : ''}
                 </div></div>
             )}
-            {e.dataHoraEntrega && <div><span className={lbl}>Baixada em</span><div className="text-slate-700">{new Date(e.dataHoraEntrega).toLocaleString('pt-BR')}</div></div>}
+            {e.dataHoraEntrega && <div><span className={lbl}>Entregue em</span><div className="text-slate-700">{new Date(e.dataHoraEntrega).toLocaleString('pt-BR')}</div></div>}
+            {e.baixadoPorNome && <div><span className={lbl}>Entregue por</span><div className="text-slate-700">{e.baixadoPorNome}</div></div>}
+            {e.recebedorNome && <div><span className={lbl}>Recebido por</span><div className="text-slate-700">{e.recebedorNome}</div></div>}
             {e.motivoNaoEntrega && <div className="col-span-2"><span className={lbl}>Motivo da não-entrega</span><div className="text-rose-700">{e.motivoNaoEntrega}</div></div>}
             {e.motivoCancelamento && <div className="col-span-2"><span className={lbl}>Motivo do cancelamento</span><div className="text-slate-600">{e.motivoCancelamento}</div></div>}
           </div>

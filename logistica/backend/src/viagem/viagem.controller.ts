@@ -83,7 +83,7 @@ export class ViagemController {
 
   @Post(':id/concluir')
   concluir(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.viagens.concluir(id, user.filialId);
+    return this.viagens.concluir(id, user.filialId, user.sub);
   }
 
   @Delete(':id/entregas/:entregaId')
