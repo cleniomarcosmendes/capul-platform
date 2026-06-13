@@ -349,4 +349,46 @@ export class DashboardController {
     const a = parseInt(ano, 10) || new Date().getFullYear();
     return this.service.getChamadosDocumentos(m, a, dimensao, chave, user, role);
   }
+
+  // ── Operacionais (Análise): Licenças / Disponibilidade / Horas Dev ──
+  @Get('licencas-analitico')
+  @Roles(...MANAGERS)
+  getLicencasAnalitico(@CurrentUser() user?: JwtPayload, @GestaoTiRole() role?: string) {
+    return this.service.getLicencasAnalitico(user, role);
+  }
+  @Get('licencas-analitico/documentos')
+  @Roles(...MANAGERS)
+  getLicencasDocumentos(@Query('dimensao') dimensao: 'fornecedor' | 'software' | 'categoria', @Query('chave') chave: string, @CurrentUser() user?: JwtPayload, @GestaoTiRole() role?: string) {
+    return this.service.getLicencasDocumentos(dimensao, chave, user, role);
+  }
+
+  @Get('disponibilidade-analitico')
+  @Roles(...MANAGERS)
+  getDisponibilidadeAnalitico(@Query('mes') mes: string, @Query('ano') ano: string, @CurrentUser() user?: JwtPayload, @GestaoTiRole() role?: string) {
+    const m = parseInt(mes, 10) || new Date().getMonth() + 1;
+    const a = parseInt(ano, 10) || new Date().getFullYear();
+    return this.service.getDisponibilidadeAnalitico(m, a, user, role);
+  }
+  @Get('disponibilidade-analitico/documentos')
+  @Roles(...MANAGERS)
+  getDisponibilidadeDocumentos(@Query('mes') mes: string, @Query('ano') ano: string, @Query('dimensao') dimensao: 'software' | 'tipo' | 'motivo', @Query('chave') chave: string, @CurrentUser() user?: JwtPayload, @GestaoTiRole() role?: string) {
+    const m = parseInt(mes, 10) || new Date().getMonth() + 1;
+    const a = parseInt(ano, 10) || new Date().getFullYear();
+    return this.service.getDisponibilidadeDocumentos(m, a, dimensao, chave, user, role);
+  }
+
+  @Get('horas-dev-analitico')
+  @Roles(...MANAGERS)
+  getHorasDevAnalitico(@Query('mes') mes: string, @Query('ano') ano: string, @CurrentUser() user?: JwtPayload, @GestaoTiRole() role?: string) {
+    const m = parseInt(mes, 10) || new Date().getMonth() + 1;
+    const a = parseInt(ano, 10) || new Date().getFullYear();
+    return this.service.getHorasDevAnalitico(m, a, user, role);
+  }
+  @Get('horas-dev-analitico/documentos')
+  @Roles(...MANAGERS)
+  getHorasDevDocumentos(@Query('mes') mes: string, @Query('ano') ano: string, @Query('dimensao') dimensao: 'projeto' | 'analista', @Query('chave') chave: string, @CurrentUser() user?: JwtPayload, @GestaoTiRole() role?: string) {
+    const m = parseInt(mes, 10) || new Date().getMonth() + 1;
+    const a = parseInt(ano, 10) || new Date().getFullYear();
+    return this.service.getHorasDevDocumentos(m, a, dimensao, chave, user, role);
+  }
 }

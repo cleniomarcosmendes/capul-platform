@@ -406,6 +406,195 @@ export class DashboardIndicadoresService {
     }));
   }
 
+  // ───────── Operacionais (Análise): Licenças / Disponibilidade / Horas Dev ─────────
+  // Shape genérico: { total, metrica, titulo, grupos[] }. Cada grupo reconcilia
+  // com o total (sem baldes, pois aqui não há item-level a residualizar).
+
+  /** Licenças ATIVAS agrupadas — contagem. Snapshot (independe do mês). Escopo workspace. */
+  async getLicencasAnalitico(user?: JwtPayload, role?: string) {
+    const where = applyDepartamentoFilter({ status: 'ATIVA' as const }, user, role);
+    const lics = await this.prisma.softwareLicenca.findMany({
+      where,
+      select: {
+        fornecedor: true,
+        software: { select: { id: true, nome: true } },
+        categoria: { select: { id: true, nome: true } },
+        departamento: { select: { id: true, nome: true } },
+      },
+    });
+    type B = Map<string, { label: string; valor: number; qtd: number }>;
+    const add = (m: B, k: string, l: string) => { const c = m.get(k) ?? { label: l, valor: 0, qtd: 0 }; c.valor += 1; c.qtd += 1; m.set(k, c); };
+    const arr = (m: B) => [...m.entries()].map(([id, v]) => ({ id, ...v })).sort((a, b) => b.valor - a.valor);
+    const forn: B = new Map(); const soft: B = new Map(); const cat: B = new Map();
+    for (const l of lics) {
+      add(forn, l.fornecedor?.trim() || '__sf', l.fornecedor?.trim() || 'Sem fornecedor');
+      add(soft, l.software?.id ?? '__ss', l.software?.nome ?? 'Sem software');
+      add(cat, l.categoria?.id ?? '__sc', l.categoria?.nome ?? 'Sem categoria');
+    }
+    return {
+      total: lics.length, metrica: 'contagem' as const, titulo: 'Licenças ativas',
+      grupos: [
+        { dimensao: 'fornecedor', titulo: 'Por fornecedor', itens: arr(forn) },
+        { dimensao: 'software', titulo: 'Por software', itens: arr(soft) },
+        { dimensao: 'categoria', titulo: 'Por categoria', itens: arr(cat) },
+      ],
+    };
+  }
+
+  async getLicencasDocumentos(dimensao: 'fornecedor' | 'software' | 'categoria', chave: string, user?: JwtPayload, role?: string) {
+    const base = applyDepartamentoFilter({ status: 'ATIVA' as const }, user, role) as Prisma.SoftwareLicencaWhereInput;
+    const f: Prisma.SoftwareLicencaWhereInput =
+      dimensao === 'fornecedor' ? (chave === '__sf' ? { fornecedor: null } : { fornecedor: chave })
+      : dimensao === 'software' ? (chave === '__ss' ? { softwareId: null } : { softwareId: chave })
+      : (chave === '__sc' ? { categoriaId: null } : { categoriaId: chave });
+    const lics = await this.prisma.softwareLicenca.findMany({
+      where: { ...base, ...f },
+      select: {
+        id: true, nome: true, fornecedor: true, dataVencimento: true,
+        software: { select: { nome: true } }, departamento: { select: { nome: true } },
+      },
+      orderBy: { dataVencimento: 'asc' },
+    });
+    return lics.map((l) => ({
+      id: l.id,
+      principal: l.software?.nome || l.nome || 'Licença',
+      secundario: l.fornecedor || '—',
+      terciario: l.departamento?.nome ?? '',
+      data: l.dataVencimento,
+      valor: 0,
+    }));
+  }
+
+  /** Horas de PARADA no mês agrupadas (todos os tipos). Escopo workspace. */
+  async getDisponibilidadeAnalitico(mes: number, ano: number, user?: JwtPayload, role?: string) {
+    const dataInicio = new Date(ano, mes - 1, 1);
+    const dataFim = new Date(ano, mes, 0, 23, 59, 59, 999);
+    const where = applyDepartamentoFilter(
+      { inicio: { lte: dataFim }, OR: [{ fim: { gte: dataInicio } }, { fim: null }] },
+      user, role,
+    ) as Prisma.RegistroParadaWhereInput;
+    const paradas = await this.prisma.registroParada.findMany({
+      where,
+      select: {
+        id: true, tipo: true, inicio: true, fim: true,
+        software: { select: { id: true, nome: true } },
+        motivoParada: { select: { id: true, nome: true } },
+      },
+    });
+    const TIPO: Record<string, string> = { PARADA_PROGRAMADA: 'Programada', PARADA_NAO_PROGRAMADA: 'Não programada', MANUTENCAO_PREVENTIVA: 'Manut. preventiva' };
+    type B = Map<string, { label: string; valor: number; qtd: number }>;
+    const add = (m: B, k: string, l: string, h: number) => { const c = m.get(k) ?? { label: l, valor: 0, qtd: 0 }; c.valor += h; c.qtd += 1; m.set(k, c); };
+    const h1 = (n: number) => Math.round(n * 10) / 10;
+    const arr = (m: B) => [...m.entries()].map(([id, v]) => ({ id, label: v.label, valor: h1(v.valor), qtd: v.qtd })).sort((a, b) => b.valor - a.valor);
+    const soft: B = new Map(); const tipo: B = new Map(); const motivo: B = new Map();
+    let total = 0;
+    for (const p of paradas) {
+      const ini = p.inicio < dataInicio ? dataInicio : p.inicio;
+      const fim = p.fim ? (p.fim > dataFim ? dataFim : p.fim) : dataFim;
+      const horas = Math.max(0, (fim.getTime() - ini.getTime()) / 3600000);
+      total += horas;
+      add(soft, p.software?.id ?? '__ss', p.software?.nome ?? 'Sem software', horas);
+      add(tipo, p.tipo, TIPO[p.tipo] ?? p.tipo, horas);
+      add(motivo, p.motivoParada?.id ?? '__sm', p.motivoParada?.nome ?? 'Sem motivo', horas);
+    }
+    return {
+      total: h1(total), metrica: 'horas' as const, titulo: 'Horas de parada',
+      grupos: [
+        { dimensao: 'software', titulo: 'Por software', itens: arr(soft) },
+        { dimensao: 'tipo', titulo: 'Por tipo de parada', itens: arr(tipo) },
+        { dimensao: 'motivo', titulo: 'Por motivo', itens: arr(motivo) },
+      ],
+    };
+  }
+
+  async getDisponibilidadeDocumentos(mes: number, ano: number, dimensao: 'software' | 'tipo' | 'motivo', chave: string, user?: JwtPayload, role?: string) {
+    const dataInicio = new Date(ano, mes - 1, 1);
+    const dataFim = new Date(ano, mes, 0, 23, 59, 59, 999);
+    const base = applyDepartamentoFilter(
+      { inicio: { lte: dataFim }, OR: [{ fim: { gte: dataInicio } }, { fim: null }] },
+      user, role,
+    ) as Prisma.RegistroParadaWhereInput;
+    const f: Prisma.RegistroParadaWhereInput =
+      dimensao === 'software' ? { softwareId: chave }
+      : dimensao === 'tipo' ? { tipo: chave as never }
+      : (chave === '__sm' ? { motivoParadaId: null } : { motivoParadaId: chave });
+    const paradas = await this.prisma.registroParada.findMany({
+      where: { ...base, ...f },
+      select: { id: true, tipo: true, inicio: true, fim: true, software: { select: { nome: true } }, motivoParada: { select: { nome: true } } },
+      orderBy: { inicio: 'desc' },
+    });
+    return paradas.map((p) => {
+      const ini = p.inicio < dataInicio ? dataInicio : p.inicio;
+      const fim = p.fim ? (p.fim > dataFim ? dataFim : p.fim) : dataFim;
+      return {
+        id: p.id,
+        principal: p.software?.nome ?? 'Sem software',
+        secundario: p.motivoParada?.nome ?? '—',
+        terciario: '',
+        data: p.inicio,
+        valor: Math.round(Math.max(0, (fim.getTime() - ini.getTime()) / 3600000) * 10) / 10,
+      };
+    });
+  }
+
+  /** Horas de DESENVOLVIMENTO INTERNO no mês agrupadas. Escopo workspace pelo
+   *  departamento do PROJETO (honra "indicadores por workspace"). */
+  async getHorasDevAnalitico(mes: number, ano: number, user?: JwtPayload, role?: string) {
+    const dataInicio = new Date(ano, mes - 1, 1);
+    const dataFim = new Date(ano, mes, 0, 23, 59, 59, 999);
+    const tipoDesenv = await this.prisma.tipoProjetoConfig.findFirst({ where: { codigo: 'DESENVOLVIMENTO_INTERNO' }, select: { id: true } });
+    if (!tipoDesenv) return { total: 0, metrica: 'horas' as const, titulo: 'Horas de desenvolvimento', grupos: [] };
+    const deptoIds = getDeptoIdsDoUser(user, role);
+    const projetoWhere = { tipoProjetoId: tipoDesenv.id, ...(deptoIds === null ? {} : { departamentoId: { in: deptoIds } }) };
+    const regs = await this.prisma.registroTempo.findMany({
+      where: { horaInicio: { gte: dataInicio, lte: dataFim }, duracaoMinutos: { not: null, gt: 0 }, atividade: { projeto: projetoWhere } },
+      select: { duracaoMinutos: true, usuario: { select: { id: true, nome: true } }, atividade: { select: { projeto: { select: { id: true, numero: true, nome: true } } } } },
+    });
+    type B = Map<string, { label: string; valor: number; qtd: number }>;
+    const add = (m: B, k: string, l: string, h: number) => { const c = m.get(k) ?? { label: l, valor: 0, qtd: 0 }; c.valor += h; c.qtd += 1; m.set(k, c); };
+    const h1 = (n: number) => Math.round(n * 10) / 10;
+    const arr = (m: B) => [...m.entries()].map(([id, v]) => ({ id, label: v.label, valor: h1(v.valor), qtd: v.qtd })).sort((a, b) => b.valor - a.valor);
+    const proj: B = new Map(); const analista: B = new Map();
+    let total = 0;
+    for (const r of regs) {
+      const h = (r.duracaoMinutos ?? 0) / 60;
+      total += h;
+      const p = r.atividade.projeto;
+      add(proj, p.id, `#${p.numero} ${p.nome}`, h);
+      add(analista, r.usuario.id, r.usuario.nome, h);
+    }
+    return {
+      total: h1(total), metrica: 'horas' as const, titulo: 'Horas de desenvolvimento',
+      grupos: [
+        { dimensao: 'projeto', titulo: 'Por projeto', itens: arr(proj) },
+        { dimensao: 'analista', titulo: 'Por analista', itens: arr(analista) },
+      ],
+    };
+  }
+
+  async getHorasDevDocumentos(mes: number, ano: number, dimensao: 'projeto' | 'analista', chave: string, user?: JwtPayload, role?: string) {
+    const dataInicio = new Date(ano, mes - 1, 1);
+    const dataFim = new Date(ano, mes, 0, 23, 59, 59, 999);
+    const tipoDesenv = await this.prisma.tipoProjetoConfig.findFirst({ where: { codigo: 'DESENVOLVIMENTO_INTERNO' }, select: { id: true } });
+    if (!tipoDesenv) return [];
+    const deptoIds = getDeptoIdsDoUser(user, role);
+    const projetoWhere = { tipoProjetoId: tipoDesenv.id, ...(deptoIds === null ? {} : { departamentoId: { in: deptoIds } }) };
+    const f: Prisma.RegistroTempoWhereInput = dimensao === 'analista' ? { usuarioId: chave } : { atividade: { projetoId: chave } };
+    const regs = await this.prisma.registroTempo.findMany({
+      where: { horaInicio: { gte: dataInicio, lte: dataFim }, duracaoMinutos: { not: null, gt: 0 }, atividade: { projeto: projetoWhere }, ...f },
+      select: { id: true, horaInicio: true, duracaoMinutos: true, usuario: { select: { nome: true } }, atividade: { select: { projeto: { select: { numero: true, nome: true } } } } },
+      orderBy: { horaInicio: 'desc' },
+    });
+    return regs.map((r) => ({
+      id: r.id,
+      principal: dimensao === 'projeto' ? r.usuario.nome : `#${r.atividade.projeto.numero} ${r.atividade.projeto.nome}`,
+      secundario: dimensao === 'projeto' ? `#${r.atividade.projeto.numero} ${r.atividade.projeto.nome}` : r.usuario.nome,
+      terciario: '',
+      data: r.horaInicio,
+      valor: Math.round(((r.duracaoMinutos ?? 0) / 60) * 10) / 10,
+    }));
+  }
+
   private async getLicencas(user?: JwtPayload, role?: string) {
     const licSelect = {
       id: true, nome: true, modeloLicenca: true, quantidade: true, dataVencimento: true, status: true,

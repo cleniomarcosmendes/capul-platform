@@ -3,36 +3,53 @@ import { Header } from '../../layouts/Header';
 import { gestaoApi } from '../../services/api';
 import {
   DollarSign, ChevronLeft, ChevronRight, Building2, Package, Layers, Loader2, X,
-  FileText, Receipt, Ticket, AlertTriangle, Users,
+  FileText, Receipt, Ticket, AlertTriangle, Users, KeyRound, Activity, Clock,
 } from 'lucide-react';
 
 // Indicadores — Análise (apresentação à direção). Cada indicador mostra o valor
-// do mês AGRUPADO por dimensões, reconciliando com o total; clicar num grupo
-// abre os documentos/registros que o compõem (drill-down sob demanda).
+// do mês AGRUPADO por dimensões (reconciliando com o total); clicar num grupo
+// abre os documentos/registros que o compõem (drill-down sob demanda). TODOS por
+// WORKSPACE (escopo por departamento, igual aos indicadores estratégicos).
 
 interface Grupo { id: string; label: string; valor: number; qtd: number }
 interface AnaliticoInvest {
   totalInvestimento: number; totalNFs: number; totalParcelas: number;
   porCentroCusto: Grupo[]; porTipoProduto: Grupo[]; porDepartamento: Grupo[];
 }
-interface AnaliticoChamados {
-  totalAbertos: number; porSetor: Grupo[]; porPrioridade: Grupo[]; porEquipe: Grupo[];
+interface AnaliticoChamados { totalAbertos: number; porSetor: Grupo[]; porPrioridade: Grupo[]; porEquipe: Grupo[] }
+interface AnaliticoGenerico {
+  total: number; metrica: 'contagem' | 'horas'; titulo: string;
+  grupos: { dimensao: string; titulo: string; itens: Grupo[] }[];
 }
 interface DocInvest { tipo: 'NF' | 'PARCELA'; id: string; numero: string; descricao: string; data: string | null; valor: number }
 interface DocChamado { id: string; numero: number; titulo: string; status: string; prioridade: string; solicitante: string; data: string | null }
-type DrillRow = DocInvest | DocChamado;
+interface DocGenerico { id: string; principal: string; secundario: string; terciario?: string; data: string | null; valor: number }
+type DrillRow = DocInvest | DocChamado | DocGenerico;
 
-type Indicador = 'investimento' | 'chamados';
-interface DrillSel { indicador: Indicador; dimensao: string; titulo: string; grupo: Grupo }
+type Indicador = 'investimento' | 'chamados' | 'licencas' | 'disponibilidade' | 'horasDev';
+interface DrillSel { indicador: Indicador; metrica: 'contagem' | 'horas' | 'moeda'; dimensao: string; titulo: string; grupo: Grupo }
 
 const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const num = (v: number) => v.toLocaleString('pt-BR');
-const RESIDUO = new Set(['__nf_resid', '__parc_resid', '__parc_norateio', '__contrato', '__nc', '__sd', '__se']);
+const hrs = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}h`;
+const RESIDUO = new Set(['__nf_resid', '__parc_resid', '__parc_norateio', '__contrato', '__nc', '__sd', '__se', '__sf', '__ss', '__sc', '__sm']);
 const CORES = ['#0ea5e9', '#10b981', '#6366f1', '#f59e0b', '#ec4899', '#14b8a6', '#8b5cf6', '#ef4444', '#22c55e', '#eab308'];
 const PRIO_CLS: Record<string, string> = {
   CRITICA: 'bg-rose-100 text-rose-700', ALTA: 'bg-amber-100 text-amber-700',
   MEDIA: 'bg-sky-100 text-sky-700', BAIXA: 'bg-slate-100 text-slate-600',
+};
+// Config dos indicadores GENÉRICOS (shape {total,metrica,titulo,grupos}).
+const GEN: Record<'licencas' | 'disponibilidade' | 'horasDev', { label: string; icone: typeof KeyRound; endpoint: string; semMes?: boolean }> = {
+  licencas: { label: 'Licenças', icone: KeyRound, endpoint: 'licencas-analitico', semMes: true },
+  disponibilidade: { label: 'Disponibilidade', icone: Activity, endpoint: 'disponibilidade-analitico' },
+  horasDev: { label: 'Horas Dev', icone: Clock, endpoint: 'horas-dev-analitico' },
+};
+const ICONE_GRUPO: Record<string, typeof Building2> = {
+  centroCusto: Building2, tipoProduto: Package, departamento: Layers,
+  setor: Building2, prioridade: AlertTriangle, equipe: Users,
+  fornecedor: Building2, software: Package, categoria: Layers,
+  tipo: AlertTriangle, motivo: AlertTriangle, projeto: Package, analista: Users,
 };
 
 export function IndicadoresAnalisePage() {
@@ -42,18 +59,25 @@ export function IndicadoresAnalisePage() {
   const [ano, setAno] = useState(now.getFullYear());
   const [invest, setInvest] = useState<AnaliticoInvest | null>(null);
   const [cham, setCham] = useState<AnaliticoChamados | null>(null);
+  const [gen, setGen] = useState<AnaliticoGenerico | null>(null);
   const [loading, setLoading] = useState(true);
   const [drill, setDrill] = useState<DrillSel | null>(null);
   const [rows, setRows] = useState<DrillRow[] | null>(null);
   const [rowsLoading, setRowsLoading] = useState(false);
 
+  const ehGenerico = indicador !== 'investimento' && indicador !== 'chamados';
+
   useEffect(() => {
     setLoading(true);
     const params = { mes: String(mes), ano: String(ano) };
-    const url = indicador === 'investimento' ? '/dashboard/investimento-analitico' : '/dashboard/chamados-analitico';
-    gestaoApi.get(url, { params })
-      .then((r) => (indicador === 'investimento' ? setInvest(r.data) : setCham(r.data)))
-      .finally(() => setLoading(false));
+    if (indicador === 'investimento') {
+      gestaoApi.get('/dashboard/investimento-analitico', { params }).then((r) => setInvest(r.data)).finally(() => setLoading(false));
+    } else if (indicador === 'chamados') {
+      gestaoApi.get('/dashboard/chamados-analitico', { params }).then((r) => setCham(r.data)).finally(() => setLoading(false));
+    } else {
+      const cfg = GEN[indicador];
+      gestaoApi.get(`/dashboard/${cfg.endpoint}`, { params }).then((r) => setGen(r.data)).finally(() => setLoading(false));
+    }
   }, [indicador, mes, ano]);
 
   const prevMes = () => (mes === 1 ? (setMes(12), setAno(ano - 1)) : setMes(mes - 1));
@@ -61,83 +85,79 @@ export function IndicadoresAnalisePage() {
   const noMesAtual = ano === now.getFullYear() && mes === now.getMonth() + 1;
 
   function abrirDrill(dimensao: string, titulo: string, grupo: Grupo) {
-    setDrill({ indicador, dimensao, titulo, grupo });
+    const metrica: DrillSel['metrica'] = indicador === 'investimento' ? 'moeda' : indicador === 'chamados' ? 'contagem' : (gen?.metrica ?? 'contagem');
+    setDrill({ indicador, metrica, dimensao, titulo, grupo });
     setRows(null);
     setRowsLoading(true);
-    const base = indicador === 'investimento'
-      ? '/dashboard/investimento-analitico/documentos'
-      : '/dashboard/chamados-analitico/documentos';
+    const base =
+      indicador === 'investimento' ? '/dashboard/investimento-analitico/documentos'
+      : indicador === 'chamados' ? '/dashboard/chamados-analitico/documentos'
+      : `/dashboard/${GEN[indicador].endpoint}/documentos`;
     gestaoApi.get<DrillRow[]>(base, { params: { mes: String(mes), ano: String(ano), dimensao, chave: grupo.id } })
-      .then((r) => setRows(r.data))
-      .finally(() => setRowsLoading(false));
+      .then((r) => setRows(r.data)).finally(() => setRowsLoading(false));
   }
 
-  const dadosVazios = indicador === 'investimento'
-    ? !invest || invest.totalInvestimento === 0
-    : !cham || cham.totalAbertos === 0;
+  const vazio = indicador === 'investimento' ? (!invest || invest.totalInvestimento === 0)
+    : indicador === 'chamados' ? (!cham || cham.totalAbertos === 0)
+    : (!gen || gen.total === 0);
 
   return (
     <>
       <Header title="Indicadores — Análise" />
       <div className="p-6">
-        {/* Seletor de indicador */}
         <div className="mb-5 flex flex-wrap gap-2">
           <TabBtn ativo={indicador === 'investimento'} onClick={() => setIndicador('investimento')} icone={DollarSign} label="Investimento" />
           <TabBtn ativo={indicador === 'chamados'} onClick={() => setIndicador('chamados')} icone={Ticket} label="Chamados" />
+          {(['licencas', 'disponibilidade', 'horasDev'] as const).map((k) => (
+            <TabBtn key={k} ativo={indicador === k} onClick={() => setIndicador(k)} icone={GEN[k].icone} label={GEN[k].label} />
+          ))}
         </div>
 
-        {/* Seletor de mês */}
         <div className="flex items-center gap-3 mb-6">
           <button onClick={prevMes} className="p-1.5 rounded-lg border border-slate-300 hover:bg-slate-50"><ChevronLeft className="w-4 h-4" /></button>
           <div className="text-center min-w-[160px]">
             <p className="text-lg font-bold text-slate-800">{meses[mes - 1]} {ano}</p>
-            <p className="text-xs text-slate-500">{indicador === 'investimento' ? 'Investimento agrupado' : 'Chamados abertos no mês'}</p>
+            <p className="text-xs text-slate-500">{ehGenerico && GEN[indicador as 'licencas'].semMes ? 'Situação atual' : 'Indicador por workspace'}</p>
           </div>
           <button onClick={nextMes} disabled={noMesAtual} className="p-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
         </div>
 
         {loading ? (
           <div className="flex items-center gap-2 p-8 text-sm text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Carregando…</div>
-        ) : dadosVazios ? (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-400">
-            Sem {indicador === 'investimento' ? 'investimento lançado' : 'chamados abertos'} em {meses[mes - 1]} {ano}.
-          </div>
+        ) : vazio ? (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-400">Sem dados em {meses[mes - 1]} {ano}.</div>
         ) : indicador === 'investimento' && invest ? (
           <div className="space-y-5">
-            <div className="rounded-2xl border border-capul-200 bg-capul-50 p-5">
-              <div className="flex items-center gap-3">
-                <div className="rounded-xl bg-capul-600 p-2.5"><DollarSign className="w-6 h-6 text-white" /></div>
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-capul-700">Investimento total no mês</p>
-                  <p className="text-3xl font-bold text-slate-800">{brl(invest.totalInvestimento)}</p>
-                  <p className="text-xs text-slate-500">Notas fiscais {brl(invest.totalNFs)} · Contratos/parcelas {brl(invest.totalParcelas)}</p>
-                </div>
-              </div>
-            </div>
+            <Manchete icone={DollarSign} rotulo="Investimento total no mês" valor={brl(invest.totalInvestimento)}
+              sub={`Notas fiscais ${brl(invest.totalNFs)} · Contratos/parcelas ${brl(invest.totalParcelas)}`} />
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
               <CardGrupo titulo="Por centro de custo" dimensao="centroCusto" icone={Building2} itens={invest.porCentroCusto} total={invest.totalInvestimento} fmt={brl} sufixoQtd="docs" onSelect={abrirDrill} />
               <CardGrupo titulo="Por tipo de produto" dimensao="tipoProduto" icone={Package} itens={invest.porTipoProduto} total={invest.totalInvestimento} fmt={brl} sufixoQtd="docs" onSelect={abrirDrill} />
               <CardGrupo titulo="Por departamento" dimensao="departamento" icone={Layers} itens={invest.porDepartamento} total={invest.totalInvestimento} fmt={brl} sufixoQtd="docs" onSelect={abrirDrill} />
             </div>
-            <p className="text-xs text-slate-400">Clique num item para ver os documentos (notas/contratos). A soma de cada agrupamento reconcilia com o total; linhas em cinza são valores ainda não detalhados na origem.</p>
+            <Nota>Clique num item para ver os documentos (notas/contratos). A soma reconcilia com o total; linhas em cinza são valores não detalhados na origem.</Nota>
           </div>
-        ) : cham ? (
+        ) : indicador === 'chamados' && cham ? (
           <div className="space-y-5">
-            <div className="rounded-2xl border border-capul-200 bg-capul-50 p-5">
-              <div className="flex items-center gap-3">
-                <div className="rounded-xl bg-capul-600 p-2.5"><Ticket className="w-6 h-6 text-white" /></div>
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-capul-700">Chamados abertos no mês</p>
-                  <p className="text-3xl font-bold text-slate-800">{num(cham.totalAbertos)}</p>
-                </div>
-              </div>
-            </div>
+            <Manchete icone={Ticket} rotulo="Chamados abertos no mês" valor={num(cham.totalAbertos)} />
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
               <CardGrupo titulo="Por setor" dimensao="setor" icone={Building2} itens={cham.porSetor} total={cham.totalAbertos} fmt={num} sufixoQtd="" onSelect={abrirDrill} />
               <CardGrupo titulo="Por prioridade" dimensao="prioridade" icone={AlertTriangle} itens={cham.porPrioridade} total={cham.totalAbertos} fmt={num} sufixoQtd="" onSelect={abrirDrill} />
               <CardGrupo titulo="Por equipe" dimensao="equipe" icone={Users} itens={cham.porEquipe} total={cham.totalAbertos} fmt={num} sufixoQtd="" onSelect={abrirDrill} />
             </div>
-            <p className="text-xs text-slate-400">Clique num item para ver os chamados que o compõem. A soma de cada agrupamento é igual ao total de chamados abertos no mês.</p>
+            <Nota>Setor = departamento de quem abriu; escopo restrito ao workspace. Clique num item para ver os chamados.</Nota>
+          </div>
+        ) : gen ? (
+          <div className="space-y-5">
+            <Manchete icone={GEN[indicador as 'licencas'].icone} rotulo={gen.titulo}
+              valor={gen.metrica === 'horas' ? hrs(gen.total) : num(gen.total)} />
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+              {gen.grupos.map((g) => (
+                <CardGrupo key={g.dimensao} titulo={g.titulo} dimensao={g.dimensao} icone={ICONE_GRUPO[g.dimensao] ?? Layers}
+                  itens={g.itens} total={gen.total} fmt={gen.metrica === 'horas' ? hrs : num} sufixoQtd="" onSelect={abrirDrill} />
+              ))}
+            </div>
+            <Nota>Clique num item para ver os registros. Escopo restrito ao workspace.</Nota>
           </div>
         ) : null}
       </div>
@@ -146,6 +166,23 @@ export function IndicadoresAnalisePage() {
     </>
   );
 }
+
+function Manchete({ icone: Icone, rotulo, valor, sub }: { icone: typeof DollarSign; rotulo: string; valor: string; sub?: string }) {
+  return (
+    <div className="rounded-2xl border border-capul-200 bg-capul-50 p-5">
+      <div className="flex items-center gap-3">
+        <div className="rounded-xl bg-capul-600 p-2.5"><Icone className="w-6 h-6 text-white" /></div>
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-capul-700">{rotulo}</p>
+          <p className="text-3xl font-bold text-slate-800">{valor}</p>
+          {sub && <p className="text-xs text-slate-500">{sub}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const Nota = ({ children }: { children: React.ReactNode }) => <p className="text-xs text-slate-400">{children}</p>;
 
 function TabBtn({ ativo, onClick, icone: Icone, label }: { ativo: boolean; onClick: () => void; icone: typeof DollarSign; label: string }) {
   return (
@@ -167,6 +204,7 @@ function CardGrupo({ titulo, dimensao, icone: Icone, itens, total, fmt, sufixoQt
         <Icone className="w-4 h-4 text-capul-600" /> {titulo}
       </div>
       <ul className="divide-y divide-slate-50 p-2">
+        {itens.length === 0 && <li className="px-2 py-3 text-sm text-slate-400">Sem dados.</li>}
         {itens.map((g) => {
           const pct = total > 0 ? (g.valor / total) * 100 : 0;
           const residuo = RESIDUO.has(g.id);
@@ -196,7 +234,12 @@ function CardGrupo({ titulo, dimensao, icone: Icone, itens, total, fmt, sufixoQt
 
 function DrillModal({ sel, rows, loading, onClose }: { sel: DrillSel; rows: DrillRow[] | null; loading: boolean; onClose: () => void }) {
   const ehInvest = sel.indicador === 'investimento';
-  const soma = ehInvest && rows ? (rows as DocInvest[]).reduce((s, d) => s + d.valor, 0) : 0;
+  const ehChamado = sel.indicador === 'chamados';
+  const mostraValor = sel.metrica === 'moeda' || sel.metrica === 'horas';
+  const fmtVal = sel.metrica === 'moeda' ? brl : sel.metrica === 'horas' ? hrs : num;
+  const soma = mostraValor && rows ? (rows as { valor: number }[]).reduce((s, d) => s + d.valor, 0) : 0;
+  const valLabel = ehInvest ? brl(sel.grupo.valor) : sel.metrica === 'horas' ? hrs(sel.grupo.valor) : `${num(sel.grupo.valor)} ${ehChamado ? 'chamado(s)' : 'registro(s)'}`;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
       <div className="max-h-[85vh] w-full max-w-5xl overflow-auto rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -204,7 +247,7 @@ function DrillModal({ sel, rows, loading, onClose }: { sel: DrillSel; rows: Dril
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-400">{sel.titulo}</p>
             <p className="text-base font-semibold text-slate-800">{sel.grupo.label}</p>
-            <p className="text-sm text-slate-500">{ehInvest ? brl(sel.grupo.valor) : `${num(sel.grupo.valor)} chamado(s)`}</p>
+            <p className="text-sm text-slate-500">{valLabel}</p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
         </div>
@@ -220,23 +263,16 @@ function DrillModal({ sel, rows, loading, onClose }: { sel: DrillSel; rows: Dril
             <tbody className="divide-y divide-slate-50">
               {(rows as DocInvest[]).map((d) => (
                 <tr key={`${d.tipo}-${d.id}`} className="hover:bg-slate-50">
-                  <td className="whitespace-nowrap px-5 py-2">
-                    <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
-                      {d.tipo === 'NF' ? <FileText className="h-3.5 w-3.5 shrink-0 text-sky-600" /> : <Receipt className="h-3.5 w-3.5 shrink-0 text-indigo-600" />}
-                      {d.tipo === 'NF' ? `NF ${d.numero}` : d.numero}
-                    </span>
-                  </td>
+                  <td className="whitespace-nowrap px-5 py-2"><span className="inline-flex items-center gap-1.5 font-medium text-slate-700">{d.tipo === 'NF' ? <FileText className="h-3.5 w-3.5 shrink-0 text-sky-600" /> : <Receipt className="h-3.5 w-3.5 shrink-0 text-indigo-600" />}{d.tipo === 'NF' ? `NF ${d.numero}` : d.numero}</span></td>
                   <td className="whitespace-nowrap px-5 py-2 text-slate-600">{d.descricao}</td>
                   <td className="whitespace-nowrap px-5 py-2 text-slate-500">{d.data ? new Date(d.data).toLocaleDateString('pt-BR') : '—'}</td>
                   <td className="whitespace-nowrap px-5 py-2 text-right font-semibold text-slate-800">{brl(d.valor)}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot className="border-t border-slate-200 bg-slate-50">
-              <tr><td className="px-5 py-2 text-sm font-semibold text-slate-700" colSpan={3}>Total ({rows.length})</td><td className="px-5 py-2 text-right text-sm font-bold text-slate-800">{brl(soma)}</td></tr>
-            </tfoot>
+            <tfoot className="border-t border-slate-200 bg-slate-50"><tr><td className="px-5 py-2 text-sm font-semibold text-slate-700" colSpan={3}>Total ({rows.length})</td><td className="px-5 py-2 text-right text-sm font-bold text-slate-800">{brl(soma)}</td></tr></tfoot>
           </table>
-        ) : (
+        ) : ehChamado ? (
           <table className="w-full text-sm">
             <thead className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
               <tr><th className="px-5 py-2">Chamado</th><th className="px-5 py-2">Título</th><th className="px-5 py-2">Solicitante</th><th className="px-5 py-2">Prioridade</th><th className="px-5 py-2">Data</th></tr>
@@ -252,9 +288,24 @@ function DrillModal({ sel, rows, loading, onClose }: { sel: DrillSel; rows: Dril
                 </tr>
               ))}
             </tbody>
-            <tfoot className="border-t border-slate-200 bg-slate-50">
-              <tr><td className="px-5 py-2 text-sm font-semibold text-slate-700" colSpan={5}>Total: {rows.length} chamado(s)</td></tr>
-            </tfoot>
+            <tfoot className="border-t border-slate-200 bg-slate-50"><tr><td className="px-5 py-2 text-sm font-semibold text-slate-700" colSpan={5}>Total: {rows.length} chamado(s)</td></tr></tfoot>
+          </table>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
+              <tr><th className="px-5 py-2">Item</th><th className="px-5 py-2">Detalhe</th><th className="px-5 py-2">Data</th>{mostraValor && <th className="px-5 py-2 text-right">Valor</th>}</tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {(rows as DocGenerico[]).map((d) => (
+                <tr key={d.id} className="hover:bg-slate-50">
+                  <td className="whitespace-nowrap px-5 py-2 font-medium text-slate-700">{d.principal}</td>
+                  <td className="px-5 py-2 text-slate-600">{d.secundario}{d.terciario ? <span className="text-slate-400"> · {d.terciario}</span> : ''}</td>
+                  <td className="whitespace-nowrap px-5 py-2 text-slate-500">{d.data ? new Date(d.data).toLocaleDateString('pt-BR') : '—'}</td>
+                  {mostraValor && <td className="whitespace-nowrap px-5 py-2 text-right font-semibold text-slate-800">{fmtVal(d.valor)}</td>}
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="border-t border-slate-200 bg-slate-50"><tr><td className="px-5 py-2 text-sm font-semibold text-slate-700" colSpan={mostraValor ? 3 : 3}>Total ({rows.length})</td>{mostraValor && <td className="px-5 py-2 text-right text-sm font-bold text-slate-800">{fmtVal(soma)}</td>}</tr></tfoot>
           </table>
         )}
       </div>

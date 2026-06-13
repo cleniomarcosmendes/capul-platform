@@ -181,4 +181,23 @@ export class DashboardService {
   ) {
     return this.indicadores.getChamadosDocumentos(mes, ano, dimensao, chave, user, role);
   }
+
+  getLicencasAnalitico(user?: JwtPayload, role?: string) {
+    return this.indicadores.getLicencasAnalitico(user, role);
+  }
+  getLicencasDocumentos(dimensao: 'fornecedor' | 'software' | 'categoria', chave: string, user?: JwtPayload, role?: string) {
+    return this.indicadores.getLicencasDocumentos(dimensao, chave, user, role);
+  }
+  getDisponibilidadeAnalitico(mes: number, ano: number, user?: JwtPayload, role?: string) {
+    return this.indicadores.getDisponibilidadeAnalitico(mes, ano, user, role);
+  }
+  getDisponibilidadeDocumentos(mes: number, ano: number, dimensao: 'software' | 'tipo' | 'motivo', chave: string, user?: JwtPayload, role?: string) {
+    return this.indicadores.getDisponibilidadeDocumentos(mes, ano, dimensao, chave, user, role);
+  }
+  getHorasDevAnalitico(mes: number, ano: number, user?: JwtPayload, role?: string) {
+    return this.indicadores.getHorasDevAnalitico(mes, ano, user, role);
+  }
+  getHorasDevDocumentos(mes: number, ano: number, dimensao: 'projeto' | 'analista', chave: string, user?: JwtPayload, role?: string) {
+    return this.indicadores.getHorasDevDocumentos(mes, ano, dimensao, chave, user, role);
+  }
 }
