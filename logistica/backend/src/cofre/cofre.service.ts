@@ -94,6 +94,21 @@ export class CofreService {
     });
   }
 
+  /**
+   * Tipo (FOTO|ASSINATURA) de vários comprovantes numa única query — join no
+   * app (cofre é DB isolado, sem JOIN SQL). Usado pela lista de baixadas pra
+   * badgear a prova sem N+1.
+   */
+  async tiposPorIds(ids: string[]): Promise<Map<string, TipoComprovante>> {
+    const limpos = ids.filter(Boolean);
+    if (limpos.length === 0) return new Map();
+    const rows = await this.cofre.comprovante.findMany({
+      where: { id: { in: limpos } },
+      select: { id: true, tipo: true },
+    });
+    return new Map(rows.map((r) => [r.id, r.tipo]));
+  }
+
   /** Consulta do financeiro: por matrícula/cupom/nº de entrega (lastro). */
   buscar(filtro: BuscarComprovanteFiltro) {
     return this.cofre.comprovante.findMany({

@@ -236,7 +236,19 @@ export class EntregaService {
       orderBy: { dataHoraEntrega: 'desc' },
       take: 200,
     });
-    return entregas.map((e) => this.comTotal(e));
+    // Badge da prova (FOTO|ASSINATURA): 1 query batched no cofre (join no app).
+    // Cofre é degradável — se cair, a lista sai sem o tipo (não quebra).
+    let tipos = new Map<string, string>();
+    try {
+      const ids = entregas.map((e) => e.comprovanteId).filter((x): x is string => !!x);
+      tipos = await this.cofre.tiposPorIds(ids);
+    } catch {
+      /* cofre indisponível — segue sem o tipo */
+    }
+    return entregas.map((e) => ({
+      ...this.comTotal(e),
+      comprovanteTipo: e.comprovanteId ? tipos.get(e.comprovanteId) ?? null : null,
+    }));
   }
 
   async findOne(id: string, user?: JwtPayload) {

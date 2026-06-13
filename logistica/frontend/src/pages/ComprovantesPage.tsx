@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileSearch, Loader2, MapPin, X, ImageIcon, Phone } from 'lucide-react';
+import { FileSearch, Loader2, MapPin, X, ImageIcon, PenLine, Phone } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { maskTelefone } from '../utils/format';
 
@@ -14,16 +14,20 @@ interface EntregaBaixada {
   motivoNaoEntrega: string | null;
   temComprovante: boolean;
   comprovanteId: string | null;
+  comprovanteTipo?: 'FOTO' | 'ASSINATURA' | null;
 }
 
 interface ComprovanteMeta {
   id: string;
   entregaNumero: number | null;
+  tipo?: 'FOTO' | 'ASSINATURA';
   hash: string;
   geoLat: string | null;
   geoLng: string | null;
   trilha?: { recebedorNome?: string | null } | null;
 }
+
+const PROVA_LABEL: Record<string, string> = { FOTO: 'Foto', ASSINATURA: 'Assinatura' };
 
 /**
  * Consulta de comprovante de entrega (Fase 1b — financeiro/cobrança). A prova
@@ -139,7 +143,10 @@ export function ComprovantesPage() {
                         {e.temComprovante && e.comprovanteId
                           ? <button onClick={() => verProva(e)} disabled={imgBusy === e.id}
                               className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">
-                              {imgBusy === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5" />} Ver prova
+                              {imgBusy === e.id
+                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                : e.comprovanteTipo === 'ASSINATURA' ? <PenLine className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />}
+                              {e.comprovanteTipo ? `Ver ${PROVA_LABEL[e.comprovanteTipo].toLowerCase()}` : 'Ver prova'}
                             </button>
                           : <span className="text-xs text-slate-400">sem prova</span>}
                         {e.status === 'NAO_ENTREGUE' && (
@@ -161,13 +168,25 @@ export function ComprovantesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" onClick={() => setImagem(null)}>
           <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-2 flex items-center justify-between">
-              <div className="text-sm font-semibold text-slate-700">
-                Prova · Entrega #{imagem.entrega.numero} · {imagem.entrega.destinatarioNome}
-                {imagem.meta.trilha?.recebedorNome ? ` · Recebido por ${imagem.meta.trilha.recebedorNome}` : ''}
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                {imagem.meta.tipo && (
+                  <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${imagem.meta.tipo === 'ASSINATURA' ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700'}`}>
+                    {imagem.meta.tipo === 'ASSINATURA' ? <PenLine className="h-3 w-3" /> : <ImageIcon className="h-3 w-3" />}
+                    {PROVA_LABEL[imagem.meta.tipo]}
+                  </span>
+                )}
+                <span>
+                  Entrega #{imagem.entrega.numero} · {imagem.entrega.destinatarioNome}
+                  {imagem.meta.trilha?.recebedorNome ? ` · Recebido por ${imagem.meta.trilha.recebedorNome}` : ''}
+                </span>
               </div>
               <button onClick={() => setImagem(null)} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
             </div>
-            <img src={imagem.url} alt="comprovante" className="w-full rounded-lg" />
+            <img
+              src={imagem.url}
+              alt={imagem.meta.tipo === 'ASSINATURA' ? 'assinatura' : 'foto da entrega'}
+              className={`w-full rounded-lg ${imagem.meta.tipo === 'ASSINATURA' ? 'border border-slate-200 bg-white' : ''}`}
+            />
             <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-400">
               <span className="break-all">SHA-256: {imagem.meta.hash}</span>
               {imagem.meta.geoLat && imagem.meta.geoLng && (
