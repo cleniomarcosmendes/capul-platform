@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import {
@@ -165,8 +166,19 @@ export class UsuarioService {
       }
     }
 
+    // Login pelo portal RH (entregador): sem senha local — gera um hash
+    // inutilizável (a validação acontece no Protheus). Senão, exige a senha.
+    if (!dto.autenticaPortal && !dto.senha) {
+      throw new BadRequestException('Informe a senha (ou marque autenticação pelo portal).');
+    }
+    if (dto.autenticaPortal && !dto.matricula?.trim()) {
+      throw new BadRequestException('Autenticação pelo portal exige a matrícula.');
+    }
     // Cost 12 — auditoria 10/05/2026 #M2
-    const senhaHash = await bcrypt.hash(dto.senha, 12);
+    const senhaHash = await bcrypt.hash(
+      dto.autenticaPortal ? `portal:${randomUUID()}` : (dto.senha as string),
+      12,
+    );
 
     const novoUsuario = await this.prisma.usuario.create({
       data: {
@@ -174,6 +186,8 @@ export class UsuarioService {
         email: dto.email,
         nome: dto.nome,
         senha: senhaHash,
+        matricula: dto.matricula?.trim() || null,
+        autenticaPortal: dto.autenticaPortal ?? false,
         telefone: dto.telefone,
         cargo: dto.cargo,
         tipo: (dto.tipo as never) || 'INDIVIDUAL',
@@ -238,7 +252,10 @@ export class UsuarioService {
       }
     }
 
-    const { filialIds, ...userData } = dto;
+    const { filialIds, matricula, ...userData } = dto;
+    // Matrícula vazia → null (evita colisão no índice único de string vazia).
+    const matriculaData =
+      matricula !== undefined ? { matricula: matricula.trim() || null } : {};
 
     // Atualizar filiais vinculadas (delete + recreate)
     if (filialIds !== undefined) {
@@ -256,7 +273,7 @@ export class UsuarioService {
 
     return this.prisma.usuario.update({
       where: { id },
-      data: userData,
+      data: { ...userData, ...matriculaData },
       include: {
         filialPrincipal: true,
         departamento: true,

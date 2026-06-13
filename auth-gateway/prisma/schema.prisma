@@ -138,6 +138,10 @@ model Usuario {
   email          String?     @unique
   nome           String
   senha          String
+  // Matrícula RH (chapa). Quando `autenticaPortal`, o login do app valida
+  // matrícula+senha no portal RH (loginPortal) e a `senha` local fica inutilizável.
+  matricula      String?     @unique
+  autenticaPortal Boolean    @default(false) @map("autentica_portal")
   telefone       String?
   cargo          String?
   avatarUrl      String?     @map("avatar_url")

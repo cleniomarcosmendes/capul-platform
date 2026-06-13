@@ -4,6 +4,7 @@ import {
   IsString,
   IsUUID,
   IsEmail,
+  IsBoolean,
   MinLength,
   Matches,
   IsArray,
@@ -43,13 +44,25 @@ export class CreateUsuarioDto {
   @IsString()
   nome: string;
 
-  @IsNotEmpty()
+  // Opcional: usuários que autenticam pelo portal RH (autenticaPortal) não têm
+  // senha local — o service gera um hash inutilizável. As regras de força só
+  // valem quando a senha é informada (@IsOptional pula quando ausente).
+  @IsOptional()
   @IsString()
   @MinLength(8, { message: 'Senha deve ter no minimo 8 caracteres' })
   @Matches(/(?=.*[a-z])/, { message: 'Senha deve conter pelo menos uma letra minuscula' })
   @Matches(/(?=.*[A-Z])/, { message: 'Senha deve conter pelo menos uma letra maiuscula' })
   @Matches(/(?=.*\d)/, { message: 'Senha deve conter pelo menos um numero' })
-  senha: string;
+  senha?: string;
+
+  // Matrícula RH (chapa) + login pelo portal (app do entregador).
+  @IsOptional()
+  @IsString()
+  matricula?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  autenticaPortal?: boolean;
 
   @IsOptional()
   @IsString()
@@ -95,6 +108,14 @@ export class UpdateUsuarioDto {
   @IsOptional()
   @IsString()
   nome?: string;
+
+  @IsOptional()
+  @IsString()
+  matricula?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  autenticaPortal?: boolean;
 
   @IsOptional()
   @IsString()

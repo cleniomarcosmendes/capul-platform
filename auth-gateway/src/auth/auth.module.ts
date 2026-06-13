@@ -7,11 +7,14 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 import { DispositivoSessaoModule } from '../dispositivo-sessao/dispositivo-sessao.module';
+import { IntegracaoModule } from '../integracao/integracao.module';
+import { PortalAuthService } from './portal-auth.service';
 
 @Module({
   imports: [
     AuditLogModule,
     DispositivoSessaoModule,
+    IntegracaoModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -25,7 +28,7 @@ import { DispositivoSessaoModule } from '../dispositivo-sessao/dispositivo-sessa
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, PortalAuthService],
   exports: [AuthService, JwtStrategy],
 })
 export class AuthModule {}

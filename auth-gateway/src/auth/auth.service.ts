@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   BadRequestException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -19,6 +20,7 @@ import { buildModulosPayload } from './helpers/build-modulos-payload';
 import { buildCapabilitiesPayload } from './helpers/build-capabilities-payload';
 import { buildModulosResponse } from './helpers/build-modulos-response';
 import { DispositivoSessaoService } from '../dispositivo-sessao/dispositivo-sessao.service';
+import { PortalAuthService } from './portal-auth.service';
 
 @Injectable()
 export class AuthService {
@@ -28,6 +30,7 @@ export class AuthService {
     private config: ConfigService,
     private auditLog: AuditLogService,
     private dispositivos: DispositivoSessaoService,
+    private portalAuth: PortalAuthService,
   ) {}
 
   async login(dto: LoginDto, ip?: string, userAgent?: string) {
@@ -36,9 +39,11 @@ export class AuthService {
     const isEmail = login.includes('@');
 
     const usuario = await this.prisma.usuario.findFirst({
+      // App do entregador entra com a MATRÍCULA — aceita username OU matrícula
+      // (além do email). Quem usa portal RH valida a senha no Protheus, abaixo.
       where: isEmail
         ? { email: login, status: 'ATIVO' }
-        : { username: login, status: 'ATIVO' },
+        : { status: 'ATIVO', OR: [{ username: login }, { matricula: login }] },
       include: {
         permissoes: {
           where: { status: 'ATIVO' },
@@ -60,10 +65,27 @@ export class AuthService {
       throw new UnauthorizedException('Credenciais invalidas');
     }
 
-    const senhaValida = await bcrypt.compare(senha, usuario.senha);
-    if (!senhaValida) {
-      this.auditLog.log({ action: 'LOGIN_FAILURE', usuarioId: usuario.id, ipAddress: ip, userAgent, metadata: { login } });
-      throw new UnauthorizedException('Credenciais invalidas');
+    // Autenticação: portal RH (entregador) OU senha local (demais).
+    if (usuario.autenticaPortal) {
+      if (!usuario.matricula) {
+        throw new UnauthorizedException('Usuário sem matrícula configurada para login do portal.');
+      }
+      const r = await this.portalAuth.validar(usuario.matricula, senha);
+      if (r === 'INDISPONIVEL') {
+        throw new ServiceUnavailableException(
+          'Portal de autenticação (RH) indisponível no momento. Tente novamente em instantes.',
+        );
+      }
+      if (r !== 'VALIDA') {
+        this.auditLog.log({ action: 'LOGIN_FAILURE', usuarioId: usuario.id, ipAddress: ip, userAgent, metadata: { login, via: 'portal' } });
+        throw new UnauthorizedException('Credenciais invalidas');
+      }
+    } else {
+      const senhaValida = await bcrypt.compare(senha, usuario.senha);
+      if (!senhaValida) {
+        this.auditLog.log({ action: 'LOGIN_FAILURE', usuarioId: usuario.id, ipAddress: ip, userAgent, metadata: { login } });
+        throw new UnauthorizedException('Credenciais invalidas');
+      }
     }
 
     const filialAtiva =
