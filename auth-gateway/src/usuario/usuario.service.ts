@@ -81,6 +81,14 @@ export class UsuarioService {
     });
   }
 
+  /** Remove campos sensíveis (senha/mfaSecret) antes de devolver via API. */
+  private semSegredos<T extends object>(u: T): T {
+    const clone = { ...u } as Record<string, unknown>;
+    delete clone.senha;
+    delete clone.mfaSecret;
+    return clone as T;
+  }
+
   async findOne(id: string) {
     const usuario = await this.prisma.usuario.findUnique({
       where: { id },
@@ -98,7 +106,7 @@ export class UsuarioService {
       },
     });
     if (!usuario) throw new NotFoundException('Usuario nao encontrado');
-    return usuario;
+    return this.semSegredos(usuario);
   }
 
   async getPreferencias(id: string): Promise<Record<string, any>> {
@@ -228,7 +236,7 @@ export class UsuarioService {
       },
     });
     this.auditLog.log({ action: 'USER_CREATE', metadata: { targetUserId: novoUsuario.id, username: dto.username } });
-    return novoUsuario;
+    return this.semSegredos(novoUsuario);
   }
 
   async update(id: string, dto: UpdateUsuarioDto) {
@@ -271,24 +279,28 @@ export class UsuarioService {
       }
     }
 
-    return this.prisma.usuario.update({
-      where: { id },
-      data: { ...userData, ...matriculaData },
-      include: {
-        filialPrincipal: true,
-        departamento: true,
-        filiais: { include: { filial: true } },
-        permissoes: { include: { modulo: true, roleModulo: true, departamento: true } },
-      },
-    });
+    return this.semSegredos(
+      await this.prisma.usuario.update({
+        where: { id },
+        data: { ...userData, ...matriculaData },
+        include: {
+          filialPrincipal: true,
+          departamento: true,
+          filiais: { include: { filial: true } },
+          permissoes: { include: { modulo: true, roleModulo: true, departamento: true } },
+        },
+      }),
+    );
   }
 
   async updateStatus(id: string, status: 'ATIVO' | 'INATIVO') {
     await this.findOne(id);
-    return this.prisma.usuario.update({
-      where: { id },
-      data: { status },
-    });
+    return this.semSegredos(
+      await this.prisma.usuario.update({
+        where: { id },
+        data: { status },
+      }),
+    );
   }
 
   async resetSenha(id: string, novaSenha: string) {

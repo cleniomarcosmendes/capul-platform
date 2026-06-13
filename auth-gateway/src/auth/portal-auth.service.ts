@@ -6,6 +6,21 @@ import { IntegracaoService } from '../integracao/integracao.service';
 export type ResultadoPortal = 'VALIDA' | 'INVALIDA' | 'INDISPONIVEL';
 
 /**
+ * Interpreta o campo `autenticacao` da resposta do loginPortal, tolerante a
+ * acento/caixa. Retorna null quando a resposta é inesperada (→ INDISPONIVEL).
+ * ATENÇÃO: "invalidas" CONTÉM "validas" — testar 'invalid' ANTES de 'valid'.
+ */
+export function interpretarAutenticacao(raw: unknown): 'VALIDA' | 'INVALIDA' | null {
+  const a = String(raw ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  if (a.includes('invalid')) return 'INVALIDA';
+  if (a.includes('valid')) return 'VALIDA';
+  return null;
+}
+
+/**
  * Valida matrícula + senha no portal RH do Protheus (operação `loginPortal`),
  * para o login do app do entregador. Mesmo endpoint usado no Chamado PADRAO —
  * a config (URL + auth) mora no próprio auth-gateway (IntegracaoApi/PROTHEUS),
@@ -56,13 +71,8 @@ export class PortalAuthService {
     const data = await this.requestJson(url, authHeader, ep.timeoutMs || 8000, ep.metodo || 'POST', logLabel);
     if (!data) return 'INDISPONIVEL';
 
-    // Normaliza acento + caixa. "invalidas" CONTÉM "validas" → testar 'invalid' ANTES.
-    const auth = String(data.autenticacao ?? '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase();
-    if (auth.includes('invalid')) return 'INVALIDA';
-    if (auth.includes('valid')) return 'VALIDA';
+    const r = interpretarAutenticacao(data.autenticacao);
+    if (r) return r;
     this.logger.warn(`loginPortal resposta inesperada (chapa ${chapa})`);
     return 'INDISPONIVEL';
   }
