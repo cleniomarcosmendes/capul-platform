@@ -334,11 +334,20 @@ export class DashboardIndicadoresService {
     const chamados = await this.prisma.chamado.findMany({
       where: { createdAt: { gte: dataInicio, lte: dataFim }, ...(escopo ?? {}) },
       select: {
-        departamentoId: true, departamento: { select: { nome: true } },
         prioridade: true,
         equipeAtualId: true, equipeAtual: { select: { sigla: true, nome: true } },
+        // SETOR = departamento do SOLICITANTE (cadastro de quem abriu), NÃO o
+        // workspace-alvo do chamado (departamentoId). O workspace é só o escopo.
+        solicitante: { select: { departamentoId: true } },
       },
     });
+    // Nomes dos setores (departamento do solicitante) — lookup batched (Usuario
+    // não tem relação `departamento` no schema; resolvo aqui, sem JOIN forçado).
+    const setorIds = [...new Set(chamados.map((c) => c.solicitante?.departamentoId).filter((x): x is string => !!x))];
+    const deptos = setorIds.length
+      ? await this.prisma.departamento.findMany({ where: { id: { in: setorIds } }, select: { id: true, nome: true } })
+      : [];
+    const nomeSetor = new Map(deptos.map((d) => [d.id, d.nome]));
 
     type Bucket = Map<string, { label: string; valor: number; qtd: number }>;
     const add = (m: Bucket, key: string, label: string) => {
@@ -352,7 +361,11 @@ export class DashboardIndicadoresService {
     const prioridade: Bucket = new Map();
     const equipe: Bucket = new Map();
     for (const c of chamados) {
-      add(setor, c.departamentoId ?? '__sd', c.departamento?.nome ?? 'Sem setor');
+      const sid = c.solicitante?.departamentoId;
+      // Consolida por NOME do setor — mesmo setor em filiais diferentes (ids
+      // distintos) vira uma linha só. A chave/label é o próprio nome.
+      const nome = (sid && nomeSetor.get(sid)) || 'Sem setor';
+      add(setor, nome, nome);
       add(prioridade, c.prioridade, PRIO[c.prioridade] ?? c.prioridade);
       add(equipe, c.equipeAtualId ?? '__se', c.equipeAtual?.sigla || c.equipeAtual?.nome || 'Sem equipe');
     }
@@ -375,11 +388,17 @@ export class DashboardIndicadoresService {
     const dataInicio = new Date(ano, mes - 1, 1);
     const dataFim = new Date(ano, mes, 0, 23, 59, 59, 999);
     const escopo = await this.chamadoEscopoOr(user, role);
-    const campo = (
-      dimensao === 'prioridade' ? { prioridade: chave }
-      : dimensao === 'equipe' ? (chave === '__se' ? { equipeAtualId: null } : { equipeAtualId: chave })
-      : (chave === '__sd' ? { departamentoId: null } : { departamentoId: chave })
-    ) as Prisma.ChamadoWhereInput;
+    let campo: Prisma.ChamadoWhereInput;
+    if (dimensao === 'prioridade') {
+      campo = { prioridade: chave } as Prisma.ChamadoWhereInput;
+    } else if (dimensao === 'equipe') {
+      campo = { equipeAtualId: chave };
+    } else {
+      // setor = NOME do departamento do SOLICITANTE → resolve p/ todos os ids
+      // com esse nome (consolidação multi-filial) e filtra pela relação.
+      const deptos = await this.prisma.departamento.findMany({ where: { nome: chave }, select: { id: true } });
+      campo = { solicitante: { departamentoId: { in: deptos.map((d) => d.id) } } };
+    }
 
     const chamados = await this.prisma.chamado.findMany({
       where: { createdAt: { gte: dataInicio, lte: dataFim }, ...(escopo ?? {}), ...campo },
