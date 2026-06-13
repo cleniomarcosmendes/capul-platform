@@ -398,6 +398,70 @@ export function ViagemDetalhePage() {
         </div>
         {v.paradas.length === 0 ? (
           <div className="p-6 text-sm text-slate-500">Sem entregas nesta viagem.</div>
+        ) : !ehRascunho ? (
+          /* Execução (em curso/concluída): GRID — uma entrega por linha,
+             ação no fim (pedido Clenio 12/06). */
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
+              <tr>
+                <th className="px-3 py-2.5 w-10">#</th>
+                <th className="px-3 py-2.5">Entrega</th>
+                <th className="px-3 py-2.5">Endereço</th>
+                <th className="px-3 py-2.5">Telefone</th>
+                <th className="px-3 py-2.5 text-right">Vol.</th>
+                <th className="px-3 py-2.5 text-right">Situação</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {[...v.paradas].sort((a, b) => a.sequencia - b.sequencia).map((p) => (
+                <tr key={p.id} className="hover:bg-slate-50">
+                  <td className="px-3 py-2 text-slate-500">{p.sequencia}</td>
+                  {p.entrega ? (
+                    <>
+                      <td className="px-3 py-2 font-medium text-slate-700">
+                        <Link to={`/entregas/${p.entrega.id}`} className="hover:text-sky-700 hover:underline">
+                          #{p.entrega.numero} · {p.entrega.destinatarioNome}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2 text-slate-500">
+                        {p.entrega.endLogradouro}{p.entrega.endNumero ? `, ${p.entrega.endNumero}` : ''}{p.entrega.endBairro ? ` — ${p.entrega.endBairro}` : ''}
+                      </td>
+                      <td className="px-3 py-2">
+                        {p.entrega.telefone ? (
+                          <a href={`tel:${p.entrega.telefone}`} className="inline-flex items-center gap-1 text-sky-700 hover:underline">
+                            <Phone className="h-3 w-3" /> {maskTelefone(p.entrega.telefone)}
+                          </a>
+                        ) : <span className="text-slate-400">—</span>}
+                      </td>
+                      <td className="px-3 py-2 text-right text-slate-600">{p.entrega.quantidadeVolumes}</td>
+                      <td className="px-3 py-2 text-right">
+                        {v.situacao === 'EM_CURSO' && p.entrega.status === 'EM_VIAGEM' ? (
+                          <button onClick={() => setBaixaAlvo({ id: p.entrega!.id, numero: p.entrega!.numero, destinatarioNome: p.entrega!.destinatarioNome })}
+                            disabled={busy} title="Dar baixa (prova de entrega)"
+                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                            <Camera className="h-3.5 w-3.5" /> Baixa
+                          </button>
+                        ) : p.entrega.status === 'ENTREGUE' ? (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700"
+                            title={p.entrega.temComprovante ? 'Com comprovante' : 'Sem comprovante'}>
+                            ✓ Entregue{p.entrega.temComprovante ? ' 📎' : ''}
+                          </span>
+                        ) : p.entrega.status === 'NAO_ENTREGUE' ? (
+                          <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[11px] font-medium text-rose-700">✗ Não entregue</span>
+                        ) : (
+                          <span className="text-xs text-slate-400">{p.entrega.status}</span>
+                        )}
+                      </td>
+                    </>
+                  ) : (
+                    <td colSpan={5} className="px-3 py-2 text-xs text-slate-500">{p.local ?? 'Parada sem entrega'}{p.observacao ? ` — ${p.observacao}` : ''}</td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
         ) : (
           <ul className="divide-y divide-slate-100">
             {[...v.paradas].sort((a, b) => a.sequencia - b.sequencia).map((p) => (
