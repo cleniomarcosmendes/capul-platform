@@ -817,3 +817,29 @@ Arquivos: 6 `*Tab.tsx` + 2 `Operacao*Page.tsx` (hubs) em `pages/operacao/`,
 - **Dono:** Clenio (decide prioridade) + Claude (proativo em sugerir)
 - **Revisão recomendada:** no início de cada sessão, ou antes de grandes
   mudanças no módulo correspondente.
+
+---
+
+## [Logística FE] Harmonização de acabamento com Fiscal/Workspace
+
+**Origem:** análise comparativa dos 3 frontends em 12/06/2026 (a pedido do
+Clenio, que percebeu o FE da logística "um pouco a desejar" vs. Fiscal/Workspace).
+
+**Veredito:** stack (React 19 / Vite 7 / Tailwind v4 / TS / axios / router 7 /
+lucide) e arquitetura **idênticas**; páginas até mais enxutas (maior = 818
+linhas vs. 1.500–3.758 dos maduros). Tabelas inline são o padrão dos TRÊS
+módulos — não é deficiência. O gap real eram abstrações de acabamento.
+
+**Feito (12/06):** ✅ Toast centralizado portado do Gestão-TI (commit `7ee8696`).
+
+**Adiado por decisão (Clenio escolheu "só o Toast"):**
+1. **Componentes de formulário compartilhados** — Gestão-TI tem `SearchSelect`,
+   `EmptyState`, `Paginator`, `DepartamentoField`. Logística repete lógica de
+   sort/`STATUS_META` entre páginas. Extrair p/ `components/`.
+2. **`types.ts` central** — interfaces (`Status`, `Viagem`, `SortKey`)
+   redefinidas por página; consolidar em `src/types.ts`.
+3. **Refresh token no client web** — Fiscal/Gestão-TI fazem refresh silencioso
+   com fila; o `api.ts` web da logística só faz 401→Hub. (O **app mobile** já
+   tem refresh sofisticado.) Avaliar se vale, dado que o Hub centraliza login.
+
+**Esforço estimado:** algumas sessões de refactor. Não bloqueia a Fase 1b/deploy.
