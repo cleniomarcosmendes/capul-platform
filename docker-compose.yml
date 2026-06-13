@@ -629,6 +629,10 @@ services:
       COFRE_S3_ACCESS_KEY: ${MINIO_ROOT_USER:-${DB_USER}}
       COFRE_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-${DB_PASSWORD}}
       JWT_SECRET: ${JWT_SECRET}
+      # Sugestão de rota por distância de RUA — OPT-IN. Vazio = haversine (linha
+      # reta). Para ligar: suba o profile `osrm` e defina OSRM_URL=http://osrm:5000.
+      OSRM_URL: ${OSRM_URL:-}
+      OSRM_TIMEOUT_MS: ${OSRM_TIMEOUT_MS:-8000}
       NODE_ENV: production
       PORT: 3003
       CORS_ORIGINS: ${CORS_ORIGINS:-https://localhost}
@@ -652,6 +656,50 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # OSRM — distância REAL de rua p/ a sugestão de ordem (Logística Fase 1c pt2).
+  # OPT-IN: não sobe no `up` padrão (tem profile). Antes de ligar, rodar UMA vez
+  # o `osrm-prep` (baixa o extract OSM + processa ~minutos). Depois:
+  #   docker compose --profile osrm up -d osrm
+  # e no .env: OSRM_URL=http://osrm:5000
+  # Região default = Minas Gerais (Geofabrik). Trocar via OSRM_REGION/OSRM_PBF_URL.
+  # ──────────────────────────────────────────────────────────────────────────
+  osrm-prep:
+    image: osrm/osrm-backend:v5.27.1
+    container_name: capul-osrm-prep
+    profiles: ["osrm-prep"]
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        cd /data
+        REGION="${OSRM_REGION:-minas-gerais}"
+        if [ -f "$$REGION.osrm.mldgr" ]; then echo ">> $$REGION ja processado — nada a fazer."; exit 0; fi
+        command -v wget >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq wget)
+        if [ ! -f "$$REGION.osm.pbf" ]; then
+          echo ">> baixando extract OSM ($$REGION)..."
+          wget -O "$$REGION.osm.pbf" "${OSRM_PBF_URL:-https://download.geofabrik.de/south-america/brazil/minas-gerais-latest.osm.pbf}"
+        fi
+        echo ">> osrm-extract..."   && osrm-extract -p /opt/car.lua "$$REGION.osm.pbf"
+        echo ">> osrm-partition..." && osrm-partition "$$REGION.osrm"
+        echo ">> osrm-customize..." && osrm-customize "$$REGION.osrm"
+        echo ">> PRONTO: $$REGION.osrm (suba o serviço osrm)."
+    volumes:
+      - osrm_data:/data
+    logging: *default-logging
+
+  osrm:
+    image: osrm/osrm-backend:v5.27.1
+    container_name: capul-osrm
+    profiles: ["osrm"]
+    command: ["osrm-routed", "--algorithm", "mld", "/data/${OSRM_REGION:-minas-gerais}.osrm"]
+    volumes:
+      - osrm_data:/data
+    # Porta 5000 só interna (logistica-backend chama http://osrm:5000). Em DEV,
+    # o override pode publicar pra debug.
+    restart: unless-stopped
+    logging: *default-logging
+
 volumes:
   postgres_data:
   postgres_rfb_data:
@@ -660,3 +708,4 @@ volumes:
   redis_data:
   uploads_data:
   fiscal_xmls:
+  osrm_data:
