@@ -25,7 +25,8 @@ FROM (VALUES
   ('ADMIN',            'Administrador',        'Administra o módulo Logística'),
   ('GESTOR_ENTREGA',   'Gestor de Entregas',   'Painel, indicadores e cadastros'),
   ('OPERADOR_ENTREGA', 'Operador de Entregas', 'Cadastra entregas, monta viagens, imprime etiquetas'),
-  ('ENTREGADOR',       'Entregador',           'App do entregador (Fase 1b)')
+  ('ENTREGADOR',       'Entregador',           'App do entregador (Fase 1b)'),
+  ('GESTOR_FROTA',     'Gestor de Frota',      'Controle de frota: viagens, veículos, ajustes e indicadores')
 ) AS r(codigo, nome, descricao)
 CROSS JOIN core.modulos_sistema m
 WHERE m.codigo = 'LOGISTICA'
