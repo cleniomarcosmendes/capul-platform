@@ -66,6 +66,20 @@ export class AddParadaDto {
   observacao?: string;
 }
 
+/** Registrar manutenção feita — reseta o contador preventivo do veículo. */
+export class RegistrarManutencaoDto {
+  // KM do odômetro na manutenção (default: kmAtual do veículo).
+  @IsOptional() @IsInt() @Min(0)
+  km?: number;
+
+  // Intervalo até a próxima (default: o intervalo cadastrado no veículo).
+  @IsOptional() @IsInt() @Min(0)
+  intervaloKm?: number;
+
+  @IsOptional() @IsString() @MaxLength(255)
+  observacao?: string;
+}
+
 /** Ajuste/fechamento por GESTOR_FROTA ou supervisor do veículo (sem senha do condutor). */
 export class AjusteGestorDto {
   @IsOptional() @IsInt() @Min(0)

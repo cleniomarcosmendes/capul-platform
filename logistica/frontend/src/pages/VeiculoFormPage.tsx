@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, Truck } from 'lucide-react';
+import { ArrowLeft, Loader2, Truck, Wrench } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { maskPlaca } from '../utils/format';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -30,6 +30,9 @@ export function VeiculoFormPage() {
   const [ano, setAno] = useState('');
   const [tipo, setTipo] = useState('CARRO');
   const [kmAtual, setKmAtual] = useState('0');
+  const [intervaloManutencaoKm, setIntervalo] = useState('');
+  const [kmUltimaManutencao, setKmUltima] = useState<number | null>(null);
+  const [kmProximaManutencao, setKmProxima] = useState<number | null>(null);
   const [filialId, setFilialId] = useState('');
   const [departamentoLotacaoId, setDepartamentoId] = useState('');
   const [supervisorId, setSupervisorId] = useState('');
@@ -59,9 +62,12 @@ export function VeiculoFormPage() {
           placa: string; modelo?: string | null; marca?: string | null; ano?: number | null;
           tipo: string; kmAtual: number; filialId: string; departamentoLotacaoId: string;
           supervisorId: string; situacao: string;
+          intervaloManutencaoKm?: number | null; kmUltimaManutencao?: number | null; kmProximaManutencao?: number | null;
         }>(`/veiculos/${id}`);
         setPlaca(v.placa); setModelo(v.modelo ?? ''); setMarca(v.marca ?? '');
         setAno(v.ano ? String(v.ano) : ''); setTipo(v.tipo); setKmAtual(String(v.kmAtual ?? 0));
+        setIntervalo(v.intervaloManutencaoKm != null ? String(v.intervaloManutencaoKm) : '');
+        setKmUltima(v.kmUltimaManutencao ?? null); setKmProxima(v.kmProximaManutencao ?? null);
         setFilialId(v.filialId); setDepartamentoId(v.departamentoLotacaoId);
         setSupervisorId(v.supervisorId); setSituacao(v.situacao);
       } catch {
@@ -85,6 +91,7 @@ export function VeiculoFormPage() {
       ano: ano ? parseInt(ano) : undefined,
       tipo,
       kmAtual: kmAtual ? parseInt(kmAtual) : 0,
+      intervaloManutencaoKm: intervaloManutencaoKm ? parseInt(intervaloManutencaoKm) : undefined,
       departamentoLotacaoId,
       supervisorId,
       ...(modoEdicao ? { situacao } : {}),
@@ -141,6 +148,21 @@ export function VeiculoFormPage() {
             <select value={departamentoLotacaoId} onChange={(e) => setDepartamentoId(e.target.value)} className={inp}><option value="">—</option>{departamentos.map((d) => <option key={d.id} value={d.id}>{labelCore(d)}</option>)}</select></div>
           <div><label className={lbl}>Supervisor responsável *</label>
             <select value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)} className={inp}><option value="">—</option>{usuarios.map((u) => <option key={u.id} value={u.id}>{labelCore(u)}</option>)}</select></div>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+          <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <Wrench className="h-3.5 w-3.5" /> Manutenção preventiva (por KM)
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div><label className={lbl}>Intervalo de revisão (km)</label>
+              <input type="number" min={0} value={intervaloManutencaoKm} onChange={(e) => setIntervalo(e.target.value)} placeholder="ex.: 10000" className={inp} /></div>
+            <div><label className={lbl}>Última manutenção (km)</label>
+              <input value={kmUltimaManutencao != null ? kmUltimaManutencao.toLocaleString('pt-BR') : '—'} disabled className={`${inp} bg-slate-100 text-slate-500`} /></div>
+            <div><label className={lbl}>Próxima revisão (km)</label>
+              <input value={kmProximaManutencao != null ? kmProximaManutencao.toLocaleString('pt-BR') : '—'} disabled className={`${inp} bg-slate-100 text-slate-500`} /></div>
+          </div>
+          <p className="mt-2 text-xs text-slate-400">A próxima revisão é recalculada ao registrar a manutenção no Monitor da Frota (última + intervalo).</p>
         </div>
 
         <div className="flex items-center justify-end gap-2">

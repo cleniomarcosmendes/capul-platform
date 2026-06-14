@@ -7,10 +7,13 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
-import { SaidaFrotaDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto } from './dto.js';
+import { SaidaFrotaDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto } from './dto.js';
 
 // Mesma normalização do toChapaPortal pra comparar matrículas com segurança.
 const chapa = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
+
+// Quantos km antes da próxima revisão o Monitor começa a avisar.
+const LIMIAR_AVISO_MANUTENCAO_KM = 500;
 
 /**
  * Controle de FROTA (Fase 2) — viagens internas (saída/retorno), o "caderno
@@ -149,6 +152,36 @@ export class FrotaService {
     });
   }
 
+  /**
+   * Registra manutenção feita: marca o odômetro da revisão (kmUltimaManutencao)
+   * e agenda a próxima (km + intervalo). Reseta o alerta preventivo do veículo.
+   * Gestor de frota ou supervisor do veículo (mesma governança do ajuste).
+   */
+  async registrarManutencao(veiculoId: string, dto: RegistrarManutencaoDto, user: JwtPayload, role?: string) {
+    const veiculo = await this.prisma.veiculo.findUnique({ where: { id: veiculoId } });
+    if (!veiculo) throw new NotFoundException('Veículo não encontrado.');
+    if (veiculo.filialId !== user.filialId) throw new ForbiddenException('Veículo de outra filial.');
+    const ehGestor = role === 'GESTOR_FROTA' || role === 'ADMIN';
+    if (!ehGestor && veiculo.supervisorId !== user.sub) {
+      throw new ForbiddenException('Apenas gestor de frota ou o supervisor do veículo podem registrar manutenção.');
+    }
+
+    const km = dto.km ?? veiculo.kmAtual;
+    if (km < 0) throw new BadRequestException('KM inválido.');
+    const intervalo = dto.intervaloKm ?? veiculo.intervaloManutencaoKm ?? null;
+    const proxima = intervalo != null ? km + intervalo : null;
+
+    return this.prisma.veiculo.update({
+      where: { id: veiculoId },
+      data: {
+        kmUltimaManutencao: km,
+        kmProximaManutencao: proxima,
+        // Se o intervalo veio na chamada, persiste como o padrão do veículo.
+        ...(dto.intervaloKm != null ? { intervaloManutencaoKm: dto.intervaloKm } : {}),
+      },
+    });
+  }
+
   private async fechar(id: string, veiculoId: string | null, kmFinal: number, obsChegada: string | null, extra?: { kmInicial?: number; observacoesSaida?: string }) {
     return this.prisma.$transaction(async (tx) => {
       const viagem = await tx.viagem.update({
@@ -188,7 +221,7 @@ export class FrotaService {
 
     const [
       veicDisponiveis, veicEmUso, veicManutencao, veicBaixados,
-      emCurso, manutencaoLista, despesasPendentes,
+      emCurso, manutencaoLista, preventivaLista, despesasPendentes,
       concluidasMes, despesasMes, viagensMes,
     ] = await Promise.all([
       this.prisma.veiculo.count({ where: { filialId, ativo: true, situacao: SituacaoVeiculo.DISPONIVEL } }),
@@ -203,6 +236,12 @@ export class FrotaService {
       this.prisma.veiculo.findMany({
         where: { filialId, ativo: true, situacao: SituacaoVeiculo.EM_MANUTENCAO },
         select: { placa: true, modelo: true },
+      }),
+      // Manutenção preventiva: veículos com próxima revisão definida cujo odômetro
+      // já chegou perto (LIMIAR) ou passou do alvo.
+      this.prisma.veiculo.findMany({
+        where: { filialId, ativo: true, kmProximaManutencao: { not: null } },
+        select: { id: true, placa: true, modelo: true, kmAtual: true, kmProximaManutencao: true },
       }),
       this.prisma.despesaVeiculo.count({ where: { filialId, situacao: StatusDespesa.PENDENTE, ...despesaScope } }),
       // Concluídas no mês (km rodado) — janela pela chegada.
@@ -256,6 +295,15 @@ export class FrotaService {
       })),
       alertas: {
         veiculosManutencao: manutencaoLista.map((v) => v.placa + (v.modelo ? ` (${v.modelo})` : '')),
+        manutencaoPreventiva: preventivaLista
+          .map((v) => ({
+            id: v.id, placa: v.placa, modelo: v.modelo,
+            kmAtual: v.kmAtual, kmProxima: v.kmProximaManutencao!,
+            faltam: v.kmProximaManutencao! - v.kmAtual,
+            vencida: v.kmAtual >= v.kmProximaManutencao!,
+          }))
+          .filter((v) => v.faltam <= LIMIAR_AVISO_MANUTENCAO_KM)
+          .sort((a, b) => a.faltam - b.faltam),
         despesasPendentes,
       },
       indicadores: {

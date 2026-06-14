@@ -151,6 +151,12 @@ model Veiculo {
   kmAtual               Int             @default(0) @map("km_atual")
   capacidadeCarga       String?         @map("capacidade_carga")
   situacao              SituacaoVeiculo @default(DISPONIVEL)
+  // Manutenção preventiva por KM (Fase 2). intervalo = a cada quantos km revisa;
+  // kmProximaManutencao = odômetro-alvo da próxima (kmUltima + intervalo). O
+  // Monitor da Frota alerta quando kmAtual se aproxima/passa da próxima.
+  intervaloManutencaoKm Int?            @map("intervalo_manutencao_km")
+  kmUltimaManutencao    Int?            @map("km_ultima_manutencao")
+  kmProximaManutencao   Int?            @map("km_proxima_manutencao")
   departamentoLotacaoId String          @map("departamento_lotacao_id")
   supervisorId          String          @map("supervisor_id")
   ativo                 Boolean         @default(true)

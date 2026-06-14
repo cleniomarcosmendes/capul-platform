@@ -9,7 +9,11 @@ import { useToast } from '../components/Toast';
 interface PainelFrota {
   veiculos: { disponivel: number; emUso: number; manutencao: number; baixado: number; total: number };
   emCurso: { id: string; numero: number; placa: string; modelo?: string | null; condutorNome?: string | null; dataHoraSaida?: string | null; finalidade?: string | null; kmInicial?: number | null; paradas: number }[];
-  alertas: { veiculosManutencao: string[]; despesasPendentes: number };
+  alertas: {
+    veiculosManutencao: string[];
+    manutencaoPreventiva: { id: string; placa: string; modelo?: string | null; kmAtual: number; kmProxima: number; faltam: number; vencida: boolean }[];
+    despesasPendentes: number;
+  };
   indicadores: {
     custoTotalMes: number; kmRodadoMes: number; custoPorKm: number | null;
     rankingVeiculo: { placa: string; km: number }[];
@@ -29,10 +33,11 @@ const desde = (s?: string | null) => {
 };
 
 export function PainelFrotaPage() {
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
   const [data, setData] = useState<PainelFrota | null>(null);
   const [loading, setLoading] = useState(true);
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
+  const [busyManut, setBusyManut] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const carregar = useCallback(async (silencioso = false) => {
@@ -50,6 +55,26 @@ export function PainelFrotaPage() {
       if (!silencioso) setLoading(false);
     }
   }, [toast]);
+
+  const registrarManutencao = async (veiculoId: string, placa: string) => {
+    const ok = await confirm(
+      'Registrar manutenção',
+      `Confirmar manutenção do veículo ${placa}? A próxima revisão será reagendada (km atual + intervalo).`,
+      { confirmLabel: 'Registrar', variant: 'default' },
+    );
+    if (!ok) return;
+    setBusyManut(veiculoId);
+    try {
+      await logisticaApi.post(`/frota/veiculos/${veiculoId}/manutencao`, {});
+      toast('success', `Manutenção do ${placa} registrada.`);
+      await carregar(true);
+    } catch (e) {
+      const m = (e as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
+      toast('error', Array.isArray(m) ? m.join(', ') : (typeof m === 'string' ? m : 'Falha ao registrar manutenção.'));
+    } finally {
+      setBusyManut(null);
+    }
+  };
 
   useEffect(() => {
     void carregar();
@@ -103,6 +128,32 @@ export function PainelFrotaPage() {
               <Wrench className="h-4 w-4" /> Em manutenção: {alertas.veiculosManutencao.join(', ')}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Manutenção preventiva por KM */}
+      {alertas.manutencaoPreventiva.length > 0 && (
+        <div className="rounded-xl border border-orange-200 bg-orange-50/70 p-4">
+          <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-orange-800">
+            <Wrench className="h-4 w-4" /> Revisão preventiva ({alertas.manutencaoPreventiva.length})
+          </p>
+          <div className="space-y-1.5">
+            {alertas.manutencaoPreventiva.map((m) => (
+              <div key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                <span className="font-medium text-slate-800">{m.placa}{m.modelo ? <span className="font-normal text-slate-400"> · {m.modelo}</span> : null}</span>
+                <span className="tabular-nums text-slate-600">{m.kmAtual.toLocaleString('pt-BR')} / {m.kmProxima.toLocaleString('pt-BR')} km</span>
+                {m.vencida ? (
+                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">vencida há {Math.abs(m.faltam).toLocaleString('pt-BR')} km</span>
+                ) : (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">faltam {m.faltam.toLocaleString('pt-BR')} km</span>
+                )}
+                <button onClick={() => void registrarManutencao(m.id, m.placa)} disabled={busyManut === m.id}
+                  className="ml-auto inline-flex items-center gap-1 rounded-lg border border-orange-300 bg-white px-2 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50">
+                  {busyManut === m.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wrench className="h-3 w-3" />} Registrar manutenção
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

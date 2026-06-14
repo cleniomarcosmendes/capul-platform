@@ -3,7 +3,7 @@ import { StatusViagem } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { FrotaService } from './frota.service.js';
-import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto } from './dto.js';
+import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto } from './dto.js';
 
 const roleLogistica = (user: JwtPayload) => user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
 
@@ -46,6 +46,13 @@ export class FrotaController {
   @Patch('viagens/:id')
   ajustar(@Param('id') id: string, @Body() dto: AjusteGestorDto, @CurrentUser() user: JwtPayload) {
     return this.frota.ajustarPorGestor(id, dto, user, roleLogistica(user));
+  }
+
+  /** Registrar manutenção feita no veículo — reseta o alerta preventivo por KM. */
+  @Post('veiculos/:id/manutencao')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  registrarManutencao(@Param('id') id: string, @Body() dto: RegistrarManutencaoDto, @CurrentUser() user: JwtPayload) {
+    return this.frota.registrarManutencao(id, dto, user, roleLogistica(user));
   }
 
   /** Painel tempo real da frota (monitoramento) — gestores. */
