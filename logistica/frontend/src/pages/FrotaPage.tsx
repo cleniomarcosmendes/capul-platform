@@ -223,98 +223,112 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         <button onClick={() => { reset(); setAberto(false); }} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="max-w-3xl space-y-5">
+        {/* Passo 1 — Condutor */}
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Matrícula do condutor</label>
-          <div className="flex gap-2">
-            <input
-              value={matricula}
-              onChange={(e) => { setMatricula(e.target.value); setNome(null); setCredOk(false); }}
-              onKeyDown={(e) => { if (e.key === 'Enter') void buscarCondutor(); }}
-              onBlur={() => void buscarCondutor()}
-              placeholder="ex.: E01047"
-              autoComplete="off"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            />
-            <button
-              onClick={() => void buscarCondutor()}
-              disabled={buscando || !matricula.trim() || !!nome}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
-            >
-              {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Buscar
-            </button>
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">1. Condutor</p>
+          <div className="flex flex-wrap items-start gap-4">
+            <div className="w-60">
+              <label className="mb-1 block text-xs font-medium text-slate-600">Matrícula</label>
+              <div className="flex gap-1">
+                <input
+                  value={matricula}
+                  onChange={(e) => { setMatricula(e.target.value); setNome(null); setCredOk(false); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void buscarCondutor(); }}
+                  onBlur={() => void buscarCondutor()}
+                  placeholder="ex.: E01047"
+                  autoComplete="off"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+                <button
+                  onClick={() => void buscarCondutor()}
+                  disabled={buscando || !matricula.trim() || !!nome}
+                  title="Buscar condutor"
+                  className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                </button>
+              </div>
+              {nome && <p className="mt-1 text-xs font-medium text-emerald-700">{nome}</p>}
+            </div>
+
+            <div className="w-60">
+              <label className="mb-1 block text-xs font-medium text-slate-600">Senha do portal RH</label>
+              <div className="flex items-center gap-1">
+                <input
+                  ref={senhaRef}
+                  type="password" value={senha}
+                  onChange={(e) => { setSenha(e.target.value); setErroSenha(null); setCredOk(false); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void validarSenha(); }}
+                  onBlur={() => void validarSenha()}
+                  disabled={!nome || credOk} autoComplete="new-password" name="frota-senha-saida"
+                  placeholder={nome ? 'Senha e Enter' : ''}
+                  className={`w-full rounded-lg border px-3 py-2 text-sm disabled:bg-slate-100 ${erroSenha ? 'border-rose-400' : (credOk ? 'border-emerald-400' : 'border-slate-300')}`}
+                />
+                {validandoSenha && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-400" />}
+              </div>
+              {erroSenha && <p className="mt-1 text-xs font-medium text-rose-600">{erroSenha}</p>}
+              {credOk && <p className="mt-1 text-xs font-medium text-emerald-700">✓ Senha confere</p>}
+            </div>
           </div>
-          {nome && <p className="mt-1 text-sm font-medium text-emerald-700">{nome}</p>}
         </div>
 
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Senha do portal RH</label>
-          <div className="flex gap-2">
-            <input
-              ref={senhaRef}
-              type="password" value={senha}
-              onChange={(e) => { setSenha(e.target.value); setErroSenha(null); setCredOk(false); }}
-              onKeyDown={(e) => { if (e.key === 'Enter') void validarSenha(); }}
-              onBlur={() => void validarSenha()}
-              disabled={!nome || credOk} autoComplete="new-password" name="frota-senha-saida"
-              placeholder={nome ? 'Digite a senha e tecle Enter' : ''}
-              className={`w-full rounded-lg border px-3 py-2 text-sm disabled:bg-slate-100 ${erroSenha ? 'border-rose-400' : (credOk ? 'border-emerald-400' : 'border-slate-300')}`}
-            />
-            {validandoSenha && <span className="flex items-center px-2"><Loader2 className="h-4 w-4 animate-spin text-slate-400" /></span>}
+        {/* Passo 2 — Viagem (libera após validar a senha) */}
+        <div className={podeAvancar ? '' : 'opacity-60'}>
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">2. Viagem</p>
+          <div className="flex flex-wrap items-start gap-4">
+            <div className="w-72">
+              <label className="mb-1 block text-xs font-medium text-slate-600">Veículo (disponível)</label>
+              <select
+                ref={veiculoRef}
+                value={veiculoId}
+                onChange={(e) => {
+                  setVeiculoId(e.target.value);
+                  const sel = veiculos.find((x) => x.id === e.target.value);
+                  if (sel && kmInicial === '') setKmInicial(String(sel.kmAtual));
+                }}
+                disabled={!podeAvancar}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+              >
+                <option value="">Selecione…</option>
+                {veiculos.map((x) => (
+                  <option key={x.id} value={x.id}>{x.placa}{x.modelo ? ` — ${x.modelo}` : ''} (KM {x.kmAtual})</option>
+                ))}
+              </select>
+              {podeAvancar && veiculos.length === 0 && (
+                <p className="mt-1 text-xs font-medium text-amber-600">Nenhum veículo disponível na filial.</p>
+              )}
+            </div>
+
+            <div className="w-28">
+              <label className="mb-1 block text-xs font-medium text-slate-600">KM de saída</label>
+              <input
+                type="number" value={kmInicial} onChange={(e) => setKmInicial(e.target.value)}
+                disabled={!podeAvancar}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+              />
+            </div>
+
+            <div className="w-64">
+              <label className="mb-1 block text-xs font-medium text-slate-600">Finalidade / destino</label>
+              <input
+                value={finalidade} onChange={(e) => setFinalidade(e.target.value)} maxLength={255} disabled={!podeAvancar}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+              />
+            </div>
+
+            <div className="w-52">
+              <label className="mb-1 block text-xs font-medium text-slate-600">Local de saída (opcional)</label>
+              <input
+                value={localSaida} onChange={(e) => setLocalSaida(e.target.value)} maxLength={120} disabled={!podeAvancar}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+              />
+            </div>
           </div>
-          {erroSenha && <p className="mt-1 text-xs font-medium text-rose-600">{erroSenha}</p>}
-          {credOk && <p className="mt-1 text-xs font-medium text-emerald-700">✓ Senha confere</p>}
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Veículo (disponível)</label>
-          <select
-            ref={veiculoRef}
-            value={veiculoId}
-            onChange={(e) => {
-              setVeiculoId(e.target.value);
-              const sel = veiculos.find((x) => x.id === e.target.value);
-              if (sel && kmInicial === '') setKmInicial(String(sel.kmAtual));
-            }}
-            disabled={!podeAvancar}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-          >
-            <option value="">Selecione…</option>
-            {veiculos.map((x) => (
-              <option key={x.id} value={x.id}>{x.placa}{x.modelo ? ` — ${x.modelo}` : ''} (KM {x.kmAtual})</option>
-            ))}
-          </select>
-          {podeAvancar && veiculos.length === 0 && (
-            <p className="mt-1 text-xs font-medium text-amber-600">Nenhum veículo disponível na filial no momento.</p>
-          )}
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">KM de saída</label>
-          <input
-            type="number" value={kmInicial} onChange={(e) => setKmInicial(e.target.value)}
-            disabled={!podeAvancar}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Finalidade / destino</label>
-          <input
-            value={finalidade} onChange={(e) => setFinalidade(e.target.value)} maxLength={255} disabled={!podeAvancar}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Local de saída (opcional)</label>
-          <input
-            value={localSaida} onChange={(e) => setLocalSaida(e.target.value)} maxLength={120} disabled={!podeAvancar}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-          />
         </div>
       </div>
 
-      <div className="mt-4 flex justify-end">
+      <div className="mt-5 flex max-w-3xl justify-end">
         <button
           onClick={() => void registrar()}
           disabled={salvando || !podeAvancar || !veiculoId || kmInicial === ''}
@@ -376,11 +390,18 @@ function LinhaViagem({ v, podeAjustar, tipos, onDone }: { v: ViagemFrota; podeAj
       </tr>
       {acao && (
         <tr>
-          <td colSpan={9} className="bg-slate-50 px-4 py-3">
-            {acao === 'retorno' && <RetornoForm v={v} onClose={() => setAcao(null)} onDone={() => { setAcao(null); onDone(); }} />}
-            {acao === 'ajuste' && <AjusteForm v={v} onClose={() => setAcao(null)} onDone={() => { setAcao(null); onDone(); }} />}
-            {acao === 'paradas' && <ParadasPanel v={v} onChanged={onDone} />}
-            {acao === 'despesa' && <DespesaCondutorForm v={v} tipos={tipos} onClose={() => setAcao(null)} onDone={() => { setAcao(null); onDone(); }} />}
+          <td colSpan={9} className="bg-slate-100 p-0">
+            {/* Painel da ação com destaque visual (borda colorida por tipo) — separa da lista */}
+            <div className={`m-2 rounded-lg border-l-4 bg-white p-4 shadow-sm ${
+              acao === 'retorno' ? 'border-emerald-400'
+              : acao === 'despesa' ? 'border-sky-400'
+              : acao === 'ajuste' ? 'border-amber-400'
+              : 'border-slate-300'}`}>
+              {acao === 'retorno' && <RetornoForm v={v} onClose={() => setAcao(null)} onDone={() => { setAcao(null); onDone(); }} />}
+              {acao === 'ajuste' && <AjusteForm v={v} onClose={() => setAcao(null)} onDone={() => { setAcao(null); onDone(); }} />}
+              {acao === 'paradas' && <ParadasPanel v={v} onChanged={onDone} />}
+              {acao === 'despesa' && <DespesaCondutorForm v={v} tipos={tipos} onClose={() => setAcao(null)} onDone={() => { setAcao(null); onDone(); }} />}
+            </div>
           </td>
         </tr>
       )}
@@ -554,10 +575,12 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-500">Retorno da viagem #{v.numero} — só o condutor que iniciou pode fechar (matrícula + senha).</p>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div>
-          <div className="flex gap-2">
+      <p className="flex items-center gap-2 text-sm font-semibold text-slate-700"><LogIn className="h-4 w-4 text-emerald-600" /> Registrar retorno — viagem #{v.numero}</p>
+      <p className="text-xs text-slate-500">Só o condutor que iniciou pode fechar (matrícula + senha).</p>
+      <div className="flex flex-wrap items-start gap-4">
+        <div className="w-56">
+          <label className="mb-1 block text-xs font-medium text-slate-600">Matrícula</label>
+          <div className="flex gap-1">
             <input
               value={matricula}
               onChange={(e) => { setMatricula(e.target.value); setNome(null); setCredOk(false); }}
@@ -570,15 +593,16 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
             <button
               onClick={() => void buscarCondutor()}
               disabled={buscando || !matricula.trim() || !!nome}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+              className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
             >
               {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
             </button>
           </div>
           {nome && <p className="mt-1 text-xs font-medium text-emerald-700">{nome}</p>}
         </div>
-        <div>
-          <div className="flex gap-2">
+        <div className="w-52">
+          <label className="mb-1 block text-xs font-medium text-slate-600">Senha do portal RH</label>
+          <div className="flex items-center gap-1">
             <input
               ref={senhaRef}
               type="password" value={senha}
@@ -589,22 +613,28 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
               placeholder={nome ? 'Senha e Enter' : 'Senha'} autoComplete="new-password" name="frota-senha-retorno"
               className={`w-full rounded-lg border px-3 py-2 text-sm disabled:bg-slate-100 ${erroSenha ? 'border-rose-400' : (credOk ? 'border-emerald-400' : 'border-slate-300')}`}
             />
-            {validandoSenha && <span className="flex items-center"><Loader2 className="h-4 w-4 animate-spin text-slate-400" /></span>}
+            {validandoSenha && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-400" />}
           </div>
           {erroSenha && <p className="mt-1 text-xs font-medium text-rose-600">{erroSenha}</p>}
           {credOk && <p className="mt-1 text-xs font-medium text-emerald-700">✓ Senha confere</p>}
         </div>
-        <input
-          ref={kmRef}
-          type="number" value={kmFinal} onChange={(e) => setKmFinal(e.target.value)} disabled={!podeAvancar}
-          placeholder={`KM final (saída ${v.kmInicial ?? '—'})`}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-        />
-        <input
-          value={obs} onChange={(e) => setObs(e.target.value)} disabled={!podeAvancar}
-          placeholder="Observações" maxLength={255}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-        />
+        <div className={`w-40 ${podeAvancar ? '' : 'opacity-60'}`}>
+          <label className="mb-1 block text-xs font-medium text-slate-600">KM de retorno</label>
+          <input
+            ref={kmRef}
+            type="number" value={kmFinal} onChange={(e) => setKmFinal(e.target.value)} disabled={!podeAvancar}
+            placeholder={`saída ${v.kmInicial ?? '—'}`}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+          />
+        </div>
+        <div className={`w-64 ${podeAvancar ? '' : 'opacity-60'}`}>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Observações (opcional)</label>
+          <input
+            value={obs} onChange={(e) => setObs(e.target.value)} disabled={!podeAvancar}
+            maxLength={255}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+          />
+        </div>
       </div>
       <div className="flex justify-end gap-2">
         <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-white">Cancelar</button>
@@ -646,15 +676,28 @@ function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFrota; ti
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-500">Despesa da viagem #{v.numero} — condutor <b>{v.condutorNome ?? '—'}</b> (da saída); entra como <b>pendente</b> até o supervisor validar.</p>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <select value={tipoDespesaId} onChange={(e) => setTipoDespesaId(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="">Tipo de despesa…</option>
-          {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
-        </select>
-        <input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="Valor (R$)" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} placeholder="Fornecedor (opcional)" maxLength={120} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observação (opcional)" maxLength={255} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+      <p className="flex items-center gap-2 text-sm font-semibold text-slate-700"><Banknote className="h-4 w-4 text-sky-600" /> Lançar despesa — viagem #{v.numero}</p>
+      <p className="text-xs text-slate-500">Condutor <b>{v.condutorNome ?? '—'}</b> (da saída); entra como <b>pendente</b> até o supervisor validar.</p>
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="w-52">
+          <label className="mb-1 block text-xs font-medium text-slate-600">Tipo de despesa</label>
+          <select value={tipoDespesaId} onChange={(e) => setTipoDespesaId(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="">Selecione…</option>
+            {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+          </select>
+        </div>
+        <div className="w-32">
+          <label className="mb-1 block text-xs font-medium text-slate-600">Valor (R$)</label>
+          <input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </div>
+        <div className="w-52">
+          <label className="mb-1 block text-xs font-medium text-slate-600">Fornecedor (opcional)</label>
+          <input value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} maxLength={120} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </div>
+        <div className="w-56">
+          <label className="mb-1 block text-xs font-medium text-slate-600">Observação (opcional)</label>
+          <input value={obs} onChange={(e) => setObs(e.target.value)} maxLength={255} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </div>
       </div>
       <div className="flex justify-end gap-2">
         <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-white">Cancelar</button>
