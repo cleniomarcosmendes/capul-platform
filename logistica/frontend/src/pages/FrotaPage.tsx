@@ -270,6 +270,9 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               <option key={x.id} value={x.id}>{x.placa}{x.modelo ? ` — ${x.modelo}` : ''} (KM {x.kmAtual})</option>
             ))}
           </select>
+          {podeAvancar && veiculos.length === 0 && (
+            <p className="mt-1 text-xs font-medium text-amber-600">Nenhum veículo disponível na filial no momento.</p>
+          )}
         </div>
 
         <div>
@@ -300,7 +303,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
       <div className="mt-4 flex justify-end">
         <button
           onClick={() => void registrar()}
-          disabled={salvando || !podeAvancar}
+          disabled={salvando || !podeAvancar || !veiculoId || kmInicial === ''}
           className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
         >
           {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} Registrar saída
