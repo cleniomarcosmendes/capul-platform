@@ -846,13 +846,25 @@ módulos — não é deficiência. O gap real eram abstrações de acabamento.
 
 ---
 
+## ✅ 2026-06-14 — [Logística] KM rodados — captura de hodômetro (FEITO)
+
+**Entregue (commit `aa2e12e`):** despachar captura `kmInicial` (valida ≥ kmAtual);
+concluir captura `kmFinal` (valida ≥ kmInicial) e atualiza `veiculo.kmAtual`.
+Indicadores ganharam o bloco **Quilometragem**: KM no mês, KM/entrega, ranking
+por veículo e por motorista (filtra `tipo=ENTREGA` — frota tem Monitor próprio).
+UI: KM via prompt no despachar/concluir (opcional). E2E ok, Jest 50/50.
+Auto-conclusão pelo app não tem hodômetro → viagem entra sem km (não conta).
+
+---
+
 ## [Logística] KM rodados — captura de hodômetro (adiado 12/06)
 
 **Contexto:** ao criar os Indicadores do mês (valor/origem, motorista, demanda,
 re-entregas), o KM rodados por motorista/veículo ficou de fora — os campos
 `viagem.kmInicial`/`kmFinal` existem no schema mas **nada os preenche hoje**.
 
-**Decisão (Clenio, 12/06):** adiar. Demais indicadores entregues.
+**Decisão (Clenio, 12/06):** adiar. Demais indicadores entregues. **→ RETOMADO E
+CONCLUÍDO em 14/06 (ver bloco ✅ acima).**
 
 **Quando retomar — solução recomendada (robusta):** capturar hodômetro no fluxo
 da viagem: KM na **saída** (despachar → kmInicial) e na **chegada** (concluir →
