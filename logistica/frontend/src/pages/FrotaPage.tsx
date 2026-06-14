@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Banknote, Fuel, Loader2, LogIn, LogOut, MapPin, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
@@ -138,6 +138,13 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   const [finalidade, setFinalidade] = useState('');
   const [localSaida, setLocalSaida] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const senhaRef = useRef<HTMLInputElement>(null);
+
+  // Só libera os demais campos depois de identificar o condutor E digitar a senha.
+  const podeAvancar = !!nome && senha.trim().length > 0;
+
+  // Ao resolver o nome, posiciona o cursor na senha.
+  useEffect(() => { if (nome) senhaRef.current?.focus(); }, [nome]);
 
   const reset = () => {
     setMatricula(''); setNome(null); setSenha(''); setVeiculoId('');
@@ -145,7 +152,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   };
 
   const buscarCondutor = async () => {
-    if (!matricula.trim()) return;
+    if (!matricula.trim() || nome || buscando) return;
     setBuscando(true); setNome(null);
     try {
       const { data } = await logisticaApi.post<{ matricula: string; nome: string }>('/frota/condutor', { matricula: matricula.trim() });
@@ -205,12 +212,13 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               value={matricula}
               onChange={(e) => { setMatricula(e.target.value); setNome(null); }}
               onKeyDown={(e) => { if (e.key === 'Enter') void buscarCondutor(); }}
-              placeholder="ex.: 1047"
+              onBlur={() => void buscarCondutor()}
+              placeholder="ex.: E01047"
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
             <button
               onClick={() => void buscarCondutor()}
-              disabled={buscando || !matricula.trim()}
+              disabled={buscando || !matricula.trim() || !!nome}
               className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
             >
               {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Buscar
@@ -222,8 +230,10 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">Senha do portal RH</label>
           <input
+            ref={senhaRef}
             type="password" value={senha} onChange={(e) => setSenha(e.target.value)}
             disabled={!nome} autoComplete="off"
+            placeholder={nome ? 'Digite a senha para continuar' : ''}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
           />
         </div>
@@ -237,7 +247,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               const sel = veiculos.find((x) => x.id === e.target.value);
               if (sel && kmInicial === '') setKmInicial(String(sel.kmAtual));
             }}
-            disabled={!nome}
+            disabled={!podeAvancar}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
           >
             <option value="">Selecione…</option>
@@ -251,7 +261,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
           <label className="mb-1 block text-xs font-medium text-slate-600">KM de saída</label>
           <input
             type="number" value={kmInicial} onChange={(e) => setKmInicial(e.target.value)}
-            disabled={!nome}
+            disabled={!podeAvancar}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
           />
         </div>
@@ -259,14 +269,14 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">Finalidade / destino</label>
           <input
-            value={finalidade} onChange={(e) => setFinalidade(e.target.value)} maxLength={255} disabled={!nome}
+            value={finalidade} onChange={(e) => setFinalidade(e.target.value)} maxLength={255} disabled={!podeAvancar}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
           />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">Local de saída (opcional)</label>
           <input
-            value={localSaida} onChange={(e) => setLocalSaida(e.target.value)} maxLength={120} disabled={!nome}
+            value={localSaida} onChange={(e) => setLocalSaida(e.target.value)} maxLength={120} disabled={!podeAvancar}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
           />
         </div>
@@ -275,7 +285,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
       <div className="mt-4 flex justify-end">
         <button
           onClick={() => void registrar()}
-          disabled={salvando || !nome}
+          disabled={salvando || !podeAvancar}
           className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
         >
           {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} Registrar saída
@@ -446,12 +456,35 @@ function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () => void 
 function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => void; onDone: () => void }) {
   const { toast } = useToast();
   const [matricula, setMatricula] = useState(v.condutorMatricula ?? '');
+  // O condutor já é conhecido pela viagem (da saída) — começa identificado.
+  const [nome, setNome] = useState<string | null>(v.condutorNome ?? null);
+  const [buscando, setBuscando] = useState(false);
   const [senha, setSenha] = useState('');
   const [kmFinal, setKmFinal] = useState('');
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const senhaRef = useRef<HTMLInputElement>(null);
+
+  const podeAvancar = !!nome && senha.trim().length > 0;
+
+  // Foca a senha assim que o condutor estiver identificado.
+  useEffect(() => { if (nome) senhaRef.current?.focus(); }, [nome]);
+
+  const buscarCondutor = async () => {
+    if (!matricula.trim() || nome || buscando) return;
+    setBuscando(true); setNome(null);
+    try {
+      const { data } = await logisticaApi.post<{ matricula: string; nome: string }>('/frota/condutor', { matricula: matricula.trim() });
+      setNome(data.nome);
+    } catch (e) {
+      toast('error', errMsg(e, 'Matrícula não encontrada.'));
+    } finally {
+      setBuscando(false);
+    }
+  };
 
   const registrar = async () => {
+    if (!nome) { toast('warning', 'Identifique o condutor pela matrícula.'); return; }
     if (!senha) { toast('warning', 'Informe a senha do condutor.'); return; }
     if (kmFinal === '') { toast('warning', 'Informe o KM de retorno.'); return; }
     setSalvando(true);
@@ -471,15 +504,47 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
   return (
     <div className="space-y-3">
       <p className="text-xs text-slate-500">Retorno da viagem #{v.numero} — só o condutor que iniciou pode fechar (matrícula + senha).</p>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-        <input value={matricula} onChange={(e) => setMatricula(e.target.value)} placeholder="Matrícula" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Senha" autoComplete="off" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input type="number" value={kmFinal} onChange={(e) => setKmFinal(e.target.value)} placeholder={`KM final (saída ${v.kmInicial ?? '—'})`} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observações" maxLength={255} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div>
+          <div className="flex gap-2">
+            <input
+              value={matricula}
+              onChange={(e) => { setMatricula(e.target.value); setNome(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') void buscarCondutor(); }}
+              onBlur={() => void buscarCondutor()}
+              placeholder="ex.: E01047"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+            <button
+              onClick={() => void buscarCondutor()}
+              disabled={buscando || !matricula.trim() || !!nome}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+            >
+              {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            </button>
+          </div>
+          {nome && <p className="mt-1 text-xs font-medium text-emerald-700">{nome}</p>}
+        </div>
+        <input
+          ref={senhaRef}
+          type="password" value={senha} onChange={(e) => setSenha(e.target.value)} disabled={!nome}
+          placeholder={nome ? 'Senha para continuar' : 'Senha'} autoComplete="off"
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+        />
+        <input
+          type="number" value={kmFinal} onChange={(e) => setKmFinal(e.target.value)} disabled={!podeAvancar}
+          placeholder={`KM final (saída ${v.kmInicial ?? '—'})`}
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+        />
+        <input
+          value={obs} onChange={(e) => setObs(e.target.value)} disabled={!podeAvancar}
+          placeholder="Observações" maxLength={255}
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+        />
       </div>
       <div className="flex justify-end gap-2">
         <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-white">Cancelar</button>
-        <button onClick={() => void registrar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+        <button onClick={() => void registrar()} disabled={salvando || !podeAvancar} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
           {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} Registrar retorno
         </button>
       </div>
