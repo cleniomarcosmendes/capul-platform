@@ -214,6 +214,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               onKeyDown={(e) => { if (e.key === 'Enter') void buscarCondutor(); }}
               onBlur={() => void buscarCondutor()}
               placeholder="ex.: E01047"
+              autoComplete="off"
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
             <button
@@ -232,7 +233,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
           <input
             ref={senhaRef}
             type="password" value={senha} onChange={(e) => setSenha(e.target.value)}
-            disabled={!nome} autoComplete="off"
+            disabled={!nome} autoComplete="new-password" name="frota-senha-saida"
             placeholder={nome ? 'Digite a senha para continuar' : ''}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
           />
@@ -513,6 +514,7 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
               onKeyDown={(e) => { if (e.key === 'Enter') void buscarCondutor(); }}
               onBlur={() => void buscarCondutor()}
               placeholder="ex.: E01047"
+              autoComplete="off"
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
             <button
@@ -528,7 +530,7 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
         <input
           ref={senhaRef}
           type="password" value={senha} onChange={(e) => setSenha(e.target.value)} disabled={!nome}
-          placeholder={nome ? 'Senha para continuar' : 'Senha'} autoComplete="off"
+          placeholder={nome ? 'Senha para continuar' : 'Senha'} autoComplete="new-password" name="frota-senha-retorno"
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
         />
         <input
