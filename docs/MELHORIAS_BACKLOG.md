@@ -17,6 +17,59 @@ esquecer — e sem poluir a conversa principal.
 
 ---
 
+## ⭐ Logística Fase 2 (Frota/Portaria) — pendências da spec (ATACAR 15/06)
+
+Itens abertos do `Especificacao_Fase2_Frota_Portaria_Capul.docx` após a entrega do
+núcleo em 14/06 (viagens, despesas+foto, monitor, manutenção KM, KM hodômetro). O
+núcleo opera ponta a ponta; estes são refinamentos + 1 bloqueio externo. **Combinado
+com o Clenio: atacar na sessão de 15/06.**
+
+### ⏳ 2026-06-15 — Exceção da portaria: apontar saída por NOME (sem senha) [BLOQUEADO]
+- **Spec:** doc "Frota e Portaria" — a portaria precisa tratar exceções (condutor sem
+  senha, portal fora). Decidido (14/06): **só na web**, usuário autorizado busca o
+  condutor por nome no Protheus e aponta a saída **sem senha**, sob a responsabilidade
+  dele (auditável). Ver `[[project_logistica_frota_app_portaria]]`.
+- **Bloqueio:** depende da **API Protheus de busca de funcionário por nome** — Clenio
+  solicita à equipe Protheus em 15/06. Só dá pra codar quando a API existir (possível
+  reuso do `buscarColaborador`/`infoPortal` por NOME do Chamado — confirmar).
+
+### ⏳ 2026-06-15 — Notificação ATIVA ao supervisor de despesa pendente
+- **Spec §5.3:** "o supervisor do veículo é notificado para validar". Hoje é **passivo**
+  (contador `despesasPendentes` no Monitor). Falta notificação ativa (push/e-mail/sino).
+- Avaliar reuso do mecanismo de notificações da plataforma; escopo por supervisor do veículo.
+
+### ⏳ 2026-06-15 — Aviso de discrepância de KM ao fechar a viagem
+- **Spec §5.4:** ao concluir, "avisa (mas não bloqueia) se KM total ≫ soma dos trechos das
+  paradas, paradas sem KM próprio etc.". Hoje fecha sem checagem. Adicionar aviso não-bloqueante.
+
+### ⏳ 2026-06-15 — Regras de exceção do fluxo de validação de despesa
+- **Spec §7:** auto-notificação se o supervisor não validar em X dias; escalonamento ao gestor
+  de frota. Depende da notificação ativa (item acima) existir primeiro.
+
+### ⏳ 2026-06-15 — Manutenção preventiva por TEMPO e por TIPO de veículo
+- **Spec §7:** hoje o alerta é só por **KM** (`359d3bf`). Estender p/ por **data/intervalo de
+  tempo** (ex.: revisão a cada 6 meses) e variar regra por **tipo de veículo**.
+
+### ⏳ 2026-06-15 — Relatórios/exportações da frota (planilha mensal por veículo)
+- **Spec §7:** fechamento interno — planilha mensal de custos/KM por veículo (Excel/CSV).
+  Os indicadores já existem na tela; falta o export.
+
+### ⏳ 2026-06-15 — GPS sugere local/KM ao registrar parada (app)
+- **Spec §5.2:** ao adicionar parada na viagem, o app sugere local pelo GPS e KM pela distância.
+  Hoje a parada é manual. Refinamento do app (só valida em device).
+
+### 🔎 Política de retenção/LGPD das fotos de comprovante de despesa
+- **Spec §7:** definir retenção das fotos de cupom. Conversado 14/06 (binário no MinIO, fora do
+  banco; ver `[[project_logistica_frota_app_portaria]]`). Falta formalizar a política/prazo
+  (diferente da retenção 5a do cofre de entrega — despesa é menos crítica).
+
+### 🔎 Mapa em tempo real no Monitor (adiado desde a Fase 1)
+- **Spec §5.7:** "mapa com todos os veículos em viagem ativa". Hoje é a lista "Na rua agora".
+  Rastreamento GPS contínuo está **adiado desde a Fase 1** (decisão: deep-link + OSRM, tracking
+  depois). Reavaliar quando o OSRM/tracking entrar.
+
+---
+
 ## Fiscal — Qualidade de dados
 
 ### ⏳ 2026-05-16 — "Perfil específico de cliente" (segmentações salvas sobre a base RFB)
