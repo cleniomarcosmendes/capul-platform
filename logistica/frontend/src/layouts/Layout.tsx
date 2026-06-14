@@ -20,13 +20,13 @@ const navItems: NavEntry[] = [
   { section: 'GESTÃO', roles: GESTORES },
   { to: '/painel', label: 'Painel', icon: BarChart3, roles: GESTORES },
   { to: '/indicadores', label: 'Indicadores', icon: TrendingUp, roles: GESTORES },
-  { to: '/clientes', label: 'Endereços', icon: MapPin },
 
   { section: 'ENTREGAS', roles: ENTREGA },
   { to: '/entregas/nova', label: 'Nova Entrega', icon: Package, roles: ENTREGA },
   { to: '/entregas', label: 'Entregas', icon: ClipboardList, end: true, roles: ENTREGA },
   { to: '/viagens', label: 'Viagens', icon: Route, roles: ENTREGA },
   { to: '/comprovantes', label: 'Comprovantes', icon: FileCheck, roles: ENTREGA },
+  { to: '/clientes', label: 'Endereços', icon: MapPin, roles: ENTREGA },
 
   { section: 'FROTA', roles: FROTA_OP },
   { to: '/frota', label: 'Controle de Frota', icon: Fuel, end: true, roles: FROTA_OP },
