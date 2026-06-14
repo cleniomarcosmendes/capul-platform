@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Car, CircleDot, Loader2, MapPin, RefreshCw, TrendingUp, Wrench } from 'lucide-react';
+import { AlertTriangle, Car, CircleDot, Loader2, MapPin, RefreshCw, TrendingUp, Wrench, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 
@@ -21,7 +21,18 @@ interface PainelFrota {
   };
 }
 
+interface VeiculoLinha {
+  id: string; placa: string; modelo?: string | null; marca?: string | null;
+  tipo: string; situacao: string; kmAtual: number; supervisorNome?: string | null;
+}
+
 const REFRESH_MS = 30_000;
+const SIT_VEIC: Record<string, { label: string; cls: string }> = {
+  DISPONIVEL: { label: 'Disponível', cls: 'bg-emerald-100 text-emerald-700' },
+  EM_USO: { label: 'Em uso', cls: 'bg-sky-100 text-sky-700' },
+  EM_MANUTENCAO: { label: 'Manutenção', cls: 'bg-amber-100 text-amber-700' },
+  BAIXADO: { label: 'Baixado', cls: 'bg-slate-200 text-slate-600' },
+};
 const BRL = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtHora = (s?: string | null) => (s ? new Date(s).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
 const desde = (s?: string | null) => {
@@ -38,7 +49,29 @@ export function PainelFrotaPage() {
   const [loading, setLoading] = useState(true);
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
   const [busyManut, setBusyManut] = useState<string | null>(null);
+  // Drill-down dos cards de situação: clicar mostra QUAIS veículos (busca sob
+  // demanda em /veiculos, não infla o polling de 30s).
+  const [drill, setDrill] = useState<{ situacao: string; label: string } | null>(null);
+  const [drillVeiculos, setDrillVeiculos] = useState<VeiculoLinha[]>([]);
+  const [drillLoading, setDrillLoading] = useState(false);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Abre/fecha o detalhe de um card. situacao '' = frota toda.
+  const abrirDrill = useCallback(async (situacao: string, label: string) => {
+    if (drill?.situacao === situacao) { setDrill(null); return; } // toggle fecha
+    setDrill({ situacao, label });
+    setDrillLoading(true);
+    try {
+      const { data } = await logisticaApi.get<VeiculoLinha[]>('/veiculos', {
+        params: situacao ? { situacao } : undefined,
+      });
+      setDrillVeiculos(data);
+    } catch {
+      setDrillVeiculos([]);
+    } finally {
+      setDrillLoading(false);
+    }
+  }, [drill]);
 
   const carregar = useCallback(async (silencioso = false) => {
     if (!silencioso) setLoading(true);
@@ -107,13 +140,57 @@ export function PainelFrotaPage() {
         </div>
       </div>
 
-      {/* Cartões de situação da frota */}
+      {/* Cartões de situação da frota — clicáveis (drill-down por veículo) */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <CardSituacao label="Disponíveis" valor={veiculos.disponivel} cls="text-emerald-600" />
-        <CardSituacao label="Em uso" valor={veiculos.emUso} cls="text-sky-600" />
-        <CardSituacao label="Em manutenção" valor={veiculos.manutencao} cls="text-amber-600" />
-        <CardSituacao label="Frota total" valor={veiculos.total} cls="text-slate-700" icon={<Car className="h-4 w-4" />} />
+        <CardSituacao label="Disponíveis" valor={veiculos.disponivel} cls="text-emerald-600" active={drill?.situacao === 'DISPONIVEL'} onClick={() => void abrirDrill('DISPONIVEL', 'Disponíveis')} />
+        <CardSituacao label="Em uso" valor={veiculos.emUso} cls="text-sky-600" active={drill?.situacao === 'EM_USO'} onClick={() => void abrirDrill('EM_USO', 'Em uso')} />
+        <CardSituacao label="Em manutenção" valor={veiculos.manutencao} cls="text-amber-600" active={drill?.situacao === 'EM_MANUTENCAO'} onClick={() => void abrirDrill('EM_MANUTENCAO', 'Em manutenção')} />
+        <CardSituacao label="Frota total" valor={veiculos.total} cls="text-slate-700" icon={<Car className="h-4 w-4" />} active={drill?.situacao === ''} onClick={() => void abrirDrill('', 'Frota total')} />
       </div>
+
+      {/* Drill-down: veículos da situação clicada */}
+      {drill && (
+        <div className="rounded-xl border border-sky-200 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <Car className="h-4 w-4 text-sky-500" /> {drill.label}
+              {!drillLoading && <span className="text-xs font-normal text-slate-400">({drillVeiculos.length})</span>}
+            </span>
+            <button onClick={() => setDrill(null)} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Fechar"><X className="h-4 w-4" /></button>
+          </div>
+          {drillLoading ? (
+            <div className="flex items-center gap-2 px-4 py-6 text-sm text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
+          ) : drillVeiculos.length === 0 ? (
+            <div className="px-4 py-6 text-center text-sm text-slate-400">Nenhum veículo nesta situação.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-4 py-2">Placa</th>
+                  <th className="px-4 py-2">Modelo</th>
+                  <th className="px-4 py-2">Supervisor</th>
+                  <th className="px-4 py-2 text-right">KM atual</th>
+                  {drill.situacao === '' && <th className="px-4 py-2">Situação</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {drillVeiculos.map((v) => {
+                  const sm = SIT_VEIC[v.situacao] ?? { label: v.situacao, cls: 'bg-slate-100 text-slate-600' };
+                  return (
+                    <tr key={v.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-2 font-medium text-slate-800">{v.placa}</td>
+                      <td className="px-4 py-2 text-slate-600">{[v.marca, v.modelo].filter(Boolean).join(' ') || '—'}</td>
+                      <td className="px-4 py-2 text-slate-600">{v.supervisorNome ?? '—'}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-slate-600">{v.kmAtual.toLocaleString('pt-BR')}</td>
+                      {drill.situacao === '' && <td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${sm.cls}`}>{sm.label}</span></td>}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {/* Alertas */}
       {(alertas.veiculosManutencao.length > 0 || alertas.despesasPendentes > 0) && (
@@ -203,12 +280,17 @@ export function PainelFrotaPage() {
   );
 }
 
-function CardSituacao({ label, valor, cls, icon }: { label: string; valor: number; cls: string; icon?: React.ReactNode }) {
+function CardSituacao({ label, valor, cls, icon, active, onClick }: { label: string; valor: number; cls: string; icon?: React.ReactNode; active?: boolean; onClick?: () => void }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl border bg-white p-4 text-left transition hover:border-sky-300 hover:shadow-sm ${active ? 'border-sky-400 ring-1 ring-sky-300' : 'border-slate-200'}`}
+    >
       <div className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-slate-400">{icon}{label}</div>
       <div className={`mt-1 text-3xl font-semibold ${cls}`}>{valor}</div>
-    </div>
+      <div className="mt-0.5 text-[11px] text-slate-400">{active ? 'clique p/ fechar' : 'ver veículos'}</div>
+    </button>
   );
 }
 
