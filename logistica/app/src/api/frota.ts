@@ -1,0 +1,102 @@
+import { api } from './client';
+import { LOGISTICA_BASE } from './config';
+import type { CondutorInfo, TipoDespesa, VeiculoFrota, ViagemFrota } from '../types/api';
+
+// API de FROTA (Fase 2) — self-service. O condutor NÃO é usuário do sistema:
+// se identifica por matrícula+senha (Protheus loginPortal) POR AÇÃO. A validação
+// de senha responde SEMPRE 200 {valida, motivo} (nunca 401 que deslogaria).
+
+/** Passo 1: nome do condutor pela matrícula (antes da senha). */
+export async function buscarCondutor(matricula: string): Promise<CondutorInfo> {
+  const { data } = await api.post<CondutorInfo>(`${LOGISTICA_BASE}/frota/condutor`, { matricula });
+  return data;
+}
+
+export type ValidacaoCondutor =
+  | { valida: true; matricula: string; nome: string }
+  | { valida: false; motivo: 'CREDENCIAIS_INVALIDAS' | 'INDISPONIVEL' };
+
+/** Passo 2: valida matrícula+senha — 200 sempre (resultado no corpo). */
+export async function validarCondutor(matricula: string, senha: string): Promise<ValidacaoCondutor> {
+  const { data } = await api.post<ValidacaoCondutor>(`${LOGISTICA_BASE}/frota/condutor/validar`, { matricula, senha });
+  return data;
+}
+
+/** Veículos disponíveis da filial (pra escolher na saída). */
+export async function veiculosDisponiveis(): Promise<VeiculoFrota[]> {
+  const { data } = await api.get<VeiculoFrota[]>(`${LOGISTICA_BASE}/veiculos`, { params: { situacao: 'DISPONIVEL' } });
+  return data;
+}
+
+/** Viagens de frota da filial (default: em curso). */
+export async function listarViagensFrota(situacao: 'EM_CURSO' | 'CONCLUIDA' = 'EM_CURSO'): Promise<ViagemFrota[]> {
+  const { data } = await api.get<ViagemFrota[]>(`${LOGISTICA_BASE}/frota/viagens`, { params: { situacao } });
+  return data;
+}
+
+export interface SaidaPayload {
+  matricula: string;
+  senha: string;
+  veiculoId: string;
+  kmInicial: number;
+  finalidade?: string;
+}
+
+/** Registrar saída (revalida senha no backend). */
+export async function registrarSaida(p: SaidaPayload): Promise<ViagemFrota> {
+  const { data } = await api.post<ViagemFrota>(`${LOGISTICA_BASE}/frota/viagens`, p);
+  return data;
+}
+
+export interface RetornoPayload {
+  matricula: string;
+  senha: string;
+  kmFinal: number;
+  observacoes?: string;
+}
+
+/** Registrar retorno (só o próprio condutor; revalida senha). */
+export async function registrarRetorno(viagemId: string, p: RetornoPayload): Promise<ViagemFrota> {
+  const { data } = await api.post<ViagemFrota>(`${LOGISTICA_BASE}/frota/viagens/${viagemId}/retorno`, p);
+  return data;
+}
+
+/** Tipos de despesa ativos (pra o select do lançamento). */
+export async function tiposDespesa(): Promise<TipoDespesa[]> {
+  const { data } = await api.get<TipoDespesa[]>(`${LOGISTICA_BASE}/despesas/tipos`, { params: { ativos: 'true' } });
+  return data;
+}
+
+export interface DespesaViagemPayload {
+  viagemId: string;
+  tipoDespesaId: string;
+  valor: number;
+  fornecedor?: string;
+  observacao?: string;
+}
+
+/**
+ * Lançar despesa na viagem em curso → PENDENTE (herda o condutor da viagem,
+ * sem pedir senha de novo). Foto do cupom OPCIONAL (multipart). Caso de uso
+ * mais forte do mobile: o motorista fotografa o recibo na rua.
+ */
+export async function lancarDespesaViagem(p: DespesaViagemPayload, fotoUri?: string): Promise<void> {
+  const form = new FormData();
+  form.append('viagemId', p.viagemId);
+  form.append('tipoDespesaId', p.tipoDespesaId);
+  form.append('valor', String(p.valor));
+  if (p.fornecedor) form.append('fornecedor', p.fornecedor);
+  if (p.observacao) form.append('observacao', p.observacao);
+  if (fotoUri) {
+    const isPng = fotoUri.toLowerCase().endsWith('.png');
+    form.append('comprovante', {
+      uri: fotoUri,
+      name: isPng ? 'recibo.png' : 'recibo.jpg',
+      type: isPng ? 'image/png' : 'image/jpeg',
+    } as unknown as Blob);
+  }
+  await api.post(`${LOGISTICA_BASE}/despesas/viagem`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60_000,
+  });
+}

@@ -50,3 +50,39 @@ export interface LoginResponse {
   refreshToken: string;
   mfaRequired?: boolean;
 }
+
+// ---- Frota (Fase 2) — self-service do condutor (matrícula+senha por ação) ----
+export interface CondutorInfo {
+  matricula: string;
+  nome: string;
+}
+
+export interface VeiculoFrota {
+  id: string;
+  placa: string;
+  modelo?: string | null;
+  kmAtual: number;
+}
+
+export interface ViagemFrota {
+  id: string;
+  numero: number;
+  situacao: StatusViagem;
+  placa: string;
+  modelo?: string | null;
+  condutorNome?: string | null;
+  condutorMatricula?: string | null;
+  kmInicial?: number | null;
+  kmFinal?: number | null;
+  kmRodado?: number | null;
+  finalidade?: string | null;
+  localSaida?: string | null;
+  dataHoraSaida?: string | null;
+  dataHoraChegada?: string | null;
+  paradas: number;
+}
+
+export interface TipoDespesa {
+  id: string;
+  nome: string;
+}
