@@ -223,12 +223,12 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         <button onClick={() => { reset(); setAberto(false); }} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
       </div>
 
-      <div className="max-w-3xl space-y-5">
+      <div className="max-w-4xl space-y-5">
         {/* Passo 1 — Condutor */}
         <div>
           <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">1. Condutor</p>
-          <div className="flex flex-wrap items-start gap-4">
-            <div className="w-60">
+          <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-12">
+            <div className="sm:col-span-4">
               <label className="mb-1 block text-xs font-medium text-slate-600">Matrícula</label>
               <div className="flex gap-1">
                 <input
@@ -252,7 +252,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               {nome && <p className="mt-1 text-xs font-medium text-emerald-700">{nome}</p>}
             </div>
 
-            <div className="w-60">
+            <div className="sm:col-span-4">
               <label className="mb-1 block text-xs font-medium text-slate-600">Senha do portal RH</label>
               <div className="flex items-center gap-1">
                 <input
@@ -276,8 +276,8 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         {/* Passo 2 — Viagem (libera após validar a senha) */}
         <div className={podeAvancar ? '' : 'opacity-60'}>
           <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">2. Viagem</p>
-          <div className="flex flex-wrap items-start gap-4">
-            <div className="w-72">
+          <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-12">
+            <div className="sm:col-span-5">
               <label className="mb-1 block text-xs font-medium text-slate-600">Veículo (disponível)</label>
               <select
                 ref={veiculoRef}
@@ -300,7 +300,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               )}
             </div>
 
-            <div className="w-28">
+            <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-medium text-slate-600">KM de saída</label>
               <input
                 type="number" value={kmInicial} onChange={(e) => setKmInicial(e.target.value)}
@@ -309,7 +309,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               />
             </div>
 
-            <div className="w-64">
+            <div className="sm:col-span-5">
               <label className="mb-1 block text-xs font-medium text-slate-600">Finalidade / destino</label>
               <input
                 value={finalidade} onChange={(e) => setFinalidade(e.target.value)} maxLength={255} disabled={!podeAvancar}
@@ -317,7 +317,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               />
             </div>
 
-            <div className="w-52">
+            <div className="sm:col-span-7">
               <label className="mb-1 block text-xs font-medium text-slate-600">Local de saída (opcional)</label>
               <input
                 value={localSaida} onChange={(e) => setLocalSaida(e.target.value)} maxLength={120} disabled={!podeAvancar}
@@ -328,7 +328,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         </div>
       </div>
 
-      <div className="mt-5 flex max-w-3xl justify-end">
+      <div className="mt-5 flex max-w-4xl justify-end">
         <button
           onClick={() => void registrar()}
           disabled={salvando || !podeAvancar || !veiculoId || kmInicial === ''}
@@ -627,7 +627,7 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
           />
         </div>
-        <div className={`w-64 ${podeAvancar ? '' : 'opacity-60'}`}>
+        <div className={`min-w-[20rem] flex-1 ${podeAvancar ? '' : 'opacity-60'}`}>
           <label className="mb-1 block text-xs font-medium text-slate-600">Observações (opcional)</label>
           <input
             value={obs} onChange={(e) => setObs(e.target.value)} disabled={!podeAvancar}
@@ -690,11 +690,11 @@ function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFrota; ti
           <label className="mb-1 block text-xs font-medium text-slate-600">Valor (R$)</label>
           <input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
-        <div className="w-52">
+        <div className="w-72">
           <label className="mb-1 block text-xs font-medium text-slate-600">Fornecedor (opcional)</label>
           <input value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} maxLength={120} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
-        <div className="w-56">
+        <div className="min-w-[16rem] flex-1">
           <label className="mb-1 block text-xs font-medium text-slate-600">Observação (opcional)</label>
           <input value={obs} onChange={(e) => setObs(e.target.value)} maxLength={255} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
