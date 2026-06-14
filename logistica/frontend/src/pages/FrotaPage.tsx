@@ -138,18 +138,21 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   const [finalidade, setFinalidade] = useState('');
   const [localSaida, setLocalSaida] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [credOk, setCredOk] = useState(false);
+  const [validandoSenha, setValidandoSenha] = useState(false);
   const [erroSenha, setErroSenha] = useState<string | null>(null);
   const senhaRef = useRef<HTMLInputElement>(null);
+  const veiculoRef = useRef<HTMLSelectElement>(null);
 
-  // Só libera os demais campos depois de identificar o condutor E digitar a senha.
-  const podeAvancar = !!nome && senha.trim().length > 0;
+  // Só avança para o resto do formulário depois que matrícula+senha foram VALIDADAS.
+  const podeAvancar = credOk;
 
   // Ao resolver o nome, posiciona o cursor na senha.
   useEffect(() => { if (nome) senhaRef.current?.focus(); }, [nome]);
 
   const reset = () => {
     setMatricula(''); setNome(null); setSenha(''); setVeiculoId('');
-    setKmInicial(''); setFinalidade(''); setLocalSaida(''); setErroSenha(null);
+    setKmInicial(''); setFinalidade(''); setLocalSaida(''); setErroSenha(null); setCredOk(false);
   };
 
   const buscarCondutor = async () => {
@@ -165,24 +168,28 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
     }
   };
 
+  // Valida matrícula+senha (passo): só libera o resto se confirmar. Sem deslogar.
+  const validarSenha = async () => {
+    if (!nome || !senha.trim() || credOk || validandoSenha) return;
+    setValidandoSenha(true); setErroSenha(null);
+    try {
+      const { data } = await logisticaApi.post<{ valida: boolean; motivo?: string }>(
+        '/frota/condutor/validar', { matricula: matricula.trim(), senha });
+      if (data.valida) { setCredOk(true); setTimeout(() => veiculoRef.current?.focus(), 0); }
+      else { setErroSenha(data.motivo === 'INDISPONIVEL' ? 'Portal do RH indisponível. Tente novamente.' : 'Matrícula ou senha inválidas.'); }
+    } catch (e) {
+      setErroSenha(errMsg(e, 'Falha ao validar a senha.'));
+    } finally {
+      setValidandoSenha(false);
+    }
+  };
+
   const registrar = async () => {
-    if (!nome) { toast('warning', 'Identifique o condutor pela matrícula.'); return; }
-    if (!senha) { toast('warning', 'Informe a senha do condutor.'); return; }
+    if (!credOk) { toast('warning', 'Valide a matrícula e a senha do condutor.'); return; }
     if (!veiculoId) { toast('warning', 'Selecione o veículo.'); return; }
     if (kmInicial === '') { toast('warning', 'Informe o KM de saída.'); return; }
-    setSalvando(true); setErroSenha(null);
+    setSalvando(true);
     try {
-      // 1) Valida a senha (SEMPRE 200 — mesmo padrão do Chamado; não desloga).
-      const { data: val } = await logisticaApi.post<{ valida: boolean; motivo?: string }>(
-        '/frota/condutor/validar', { matricula: matricula.trim(), senha });
-      if (!val.valida) {
-        setErroSenha(val.motivo === 'INDISPONIVEL'
-          ? 'Portal do RH indisponível. Tente novamente em instantes.'
-          : 'Matrícula ou senha inválidas.');
-        senhaRef.current?.focus();
-        return;
-      }
-      // 2) Senha OK → registra a saída.
       await logisticaApi.post('/frota/viagens', {
         matricula: matricula.trim(), senha, veiculoId,
         kmInicial: Number(kmInicial),
@@ -222,7 +229,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
           <div className="flex gap-2">
             <input
               value={matricula}
-              onChange={(e) => { setMatricula(e.target.value); setNome(null); }}
+              onChange={(e) => { setMatricula(e.target.value); setNome(null); setCredOk(false); }}
               onKeyDown={(e) => { if (e.key === 'Enter') void buscarCondutor(); }}
               onBlur={() => void buscarCondutor()}
               placeholder="ex.: E01047"
@@ -242,20 +249,27 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
 
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">Senha do portal RH</label>
-          <input
-            ref={senhaRef}
-            type="password" value={senha} onChange={(e) => { setSenha(e.target.value); setErroSenha(null); }}
-            onKeyDown={(e) => { if (e.key === 'Enter' && podeAvancar) void registrar(); }}
-            disabled={!nome} autoComplete="new-password" name="frota-senha-saida"
-            placeholder={nome ? 'Digite a senha para continuar' : ''}
-            className={`w-full rounded-lg border px-3 py-2 text-sm disabled:bg-slate-100 ${erroSenha ? 'border-rose-400' : 'border-slate-300'}`}
-          />
+          <div className="flex gap-2">
+            <input
+              ref={senhaRef}
+              type="password" value={senha}
+              onChange={(e) => { setSenha(e.target.value); setErroSenha(null); setCredOk(false); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') void validarSenha(); }}
+              onBlur={() => void validarSenha()}
+              disabled={!nome || credOk} autoComplete="new-password" name="frota-senha-saida"
+              placeholder={nome ? 'Digite a senha e tecle Enter' : ''}
+              className={`w-full rounded-lg border px-3 py-2 text-sm disabled:bg-slate-100 ${erroSenha ? 'border-rose-400' : (credOk ? 'border-emerald-400' : 'border-slate-300')}`}
+            />
+            {validandoSenha && <span className="flex items-center px-2"><Loader2 className="h-4 w-4 animate-spin text-slate-400" /></span>}
+          </div>
           {erroSenha && <p className="mt-1 text-xs font-medium text-rose-600">{erroSenha}</p>}
+          {credOk && <p className="mt-1 text-xs font-medium text-emerald-700">✓ Senha confere</p>}
         </div>
 
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">Veículo (disponível)</label>
           <select
+            ref={veiculoRef}
             value={veiculoId}
             onChange={(e) => {
               setVeiculoId(e.target.value);
@@ -481,17 +495,21 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
   const [kmFinal, setKmFinal] = useState('');
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [credOk, setCredOk] = useState(false);
+  const [validandoSenha, setValidandoSenha] = useState(false);
   const [erroSenha, setErroSenha] = useState<string | null>(null);
   const senhaRef = useRef<HTMLInputElement>(null);
+  const kmRef = useRef<HTMLInputElement>(null);
 
-  const podeAvancar = !!nome && senha.trim().length > 0;
+  // Só avança depois que matrícula+senha forem VALIDADAS.
+  const podeAvancar = credOk;
 
   // Foca a senha assim que o condutor estiver identificado.
   useEffect(() => { if (nome) senhaRef.current?.focus(); }, [nome]);
 
   const buscarCondutor = async () => {
     if (!matricula.trim() || nome || buscando) return;
-    setBuscando(true); setNome(null);
+    setBuscando(true); setNome(null); setCredOk(false);
     try {
       const { data } = await logisticaApi.post<{ matricula: string; nome: string }>('/frota/condutor', { matricula: matricula.trim() });
       setNome(data.nome);
@@ -502,23 +520,26 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
     }
   };
 
-  const registrar = async () => {
-    if (!nome) { toast('warning', 'Identifique o condutor pela matrícula.'); return; }
-    if (!senha) { toast('warning', 'Informe a senha do condutor.'); return; }
-    if (kmFinal === '') { toast('warning', 'Informe o KM de retorno.'); return; }
-    setSalvando(true); setErroSenha(null);
+  const validarSenha = async () => {
+    if (!nome || !senha.trim() || credOk || validandoSenha) return;
+    setValidandoSenha(true); setErroSenha(null);
     try {
-      // 1) Valida a senha (SEMPRE 200 — mesmo padrão do Chamado; não desloga).
-      const { data: val } = await logisticaApi.post<{ valida: boolean; motivo?: string }>(
+      const { data } = await logisticaApi.post<{ valida: boolean; motivo?: string }>(
         '/frota/condutor/validar', { matricula: matricula.trim(), senha });
-      if (!val.valida) {
-        setErroSenha(val.motivo === 'INDISPONIVEL'
-          ? 'Portal do RH indisponível. Tente novamente em instantes.'
-          : 'Matrícula ou senha inválidas.');
-        senhaRef.current?.focus();
-        return;
-      }
-      // 2) Senha OK → registra o retorno.
+      if (data.valida) { setCredOk(true); setTimeout(() => kmRef.current?.focus(), 0); }
+      else { setErroSenha(data.motivo === 'INDISPONIVEL' ? 'Portal do RH indisponível. Tente novamente.' : 'Matrícula ou senha inválidas.'); }
+    } catch (e) {
+      setErroSenha(errMsg(e, 'Falha ao validar a senha.'));
+    } finally {
+      setValidandoSenha(false);
+    }
+  };
+
+  const registrar = async () => {
+    if (!credOk) { toast('warning', 'Valide a matrícula e a senha do condutor.'); return; }
+    if (kmFinal === '') { toast('warning', 'Informe o KM de retorno.'); return; }
+    setSalvando(true);
+    try {
       await logisticaApi.post(`/frota/viagens/${v.id}/retorno`, {
         matricula: matricula.trim(), senha, kmFinal: Number(kmFinal), observacoes: obs.trim() || undefined,
       });
@@ -539,7 +560,7 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
           <div className="flex gap-2">
             <input
               value={matricula}
-              onChange={(e) => { setMatricula(e.target.value); setNome(null); }}
+              onChange={(e) => { setMatricula(e.target.value); setNome(null); setCredOk(false); }}
               onKeyDown={(e) => { if (e.key === 'Enter') void buscarCondutor(); }}
               onBlur={() => void buscarCondutor()}
               placeholder="ex.: E01047"
@@ -557,17 +578,24 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
           {nome && <p className="mt-1 text-xs font-medium text-emerald-700">{nome}</p>}
         </div>
         <div>
-          <input
-            ref={senhaRef}
-            type="password" value={senha} onChange={(e) => { setSenha(e.target.value); setErroSenha(null); }}
-            onKeyDown={(e) => { if (e.key === 'Enter' && podeAvancar) void registrar(); }}
-            disabled={!nome}
-            placeholder={nome ? 'Senha para continuar' : 'Senha'} autoComplete="new-password" name="frota-senha-retorno"
-            className={`w-full rounded-lg border px-3 py-2 text-sm disabled:bg-slate-100 ${erroSenha ? 'border-rose-400' : 'border-slate-300'}`}
-          />
+          <div className="flex gap-2">
+            <input
+              ref={senhaRef}
+              type="password" value={senha}
+              onChange={(e) => { setSenha(e.target.value); setErroSenha(null); setCredOk(false); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') void validarSenha(); }}
+              onBlur={() => void validarSenha()}
+              disabled={!nome || credOk}
+              placeholder={nome ? 'Senha e Enter' : 'Senha'} autoComplete="new-password" name="frota-senha-retorno"
+              className={`w-full rounded-lg border px-3 py-2 text-sm disabled:bg-slate-100 ${erroSenha ? 'border-rose-400' : (credOk ? 'border-emerald-400' : 'border-slate-300')}`}
+            />
+            {validandoSenha && <span className="flex items-center"><Loader2 className="h-4 w-4 animate-spin text-slate-400" /></span>}
+          </div>
           {erroSenha && <p className="mt-1 text-xs font-medium text-rose-600">{erroSenha}</p>}
+          {credOk && <p className="mt-1 text-xs font-medium text-emerald-700">✓ Senha confere</p>}
         </div>
         <input
+          ref={kmRef}
           type="number" value={kmFinal} onChange={(e) => setKmFinal(e.target.value)} disabled={!podeAvancar}
           placeholder={`KM final (saída ${v.kmInicial ?? '—'})`}
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
@@ -580,7 +608,7 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
       </div>
       <div className="flex justify-end gap-2">
         <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-white">Cancelar</button>
-        <button onClick={() => void registrar()} disabled={salvando || !podeAvancar} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+        <button onClick={() => void registrar()} disabled={salvando || !podeAvancar || kmFinal === ''} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
           {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} Registrar retorno
         </button>
       </div>
