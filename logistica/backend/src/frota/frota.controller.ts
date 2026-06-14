@@ -3,7 +3,7 @@ import { StatusViagem } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { FrotaService } from './frota.service.js';
-import { BuscarCondutorDto, SaidaFrotaDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto } from './dto.js';
+import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto } from './dto.js';
 
 const roleLogistica = (user: JwtPayload) => user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
 
@@ -16,6 +16,12 @@ export class FrotaController {
   @Post('condutor')
   buscarCondutor(@Body() dto: BuscarCondutorDto) {
     return this.frota.buscarCondutor(dto.matricula);
+  }
+
+  /** Valida matrícula+senha — SEMPRE 200 com {valida, motivo} (nunca 401). */
+  @Post('condutor/validar')
+  validarCondutor(@Body() dto: ValidarCondutorDto) {
+    return this.frota.validarCondutor(dto.matricula, dto.senha);
   }
 
   /** Registrar saída de veículo (condutor valida matrícula+senha). */

@@ -5,6 +5,17 @@ export class BuscarCondutorDto {
   matricula!: string;
 }
 
+// Validação matrícula+senha que SEMPRE responde 200 (mesmo padrão do Chamado
+// PADRAO no workspace) — o resultado vai no corpo {valida, motivo}, nunca como
+// 401 (que faria o interceptor deslogar p/ o Hub).
+export class ValidarCondutorDto {
+  @IsString() @IsNotEmpty() @MaxLength(20)
+  matricula!: string;
+
+  @IsString() @IsNotEmpty()
+  senha!: string;
+}
+
 export class SaidaFrotaDto {
   @IsString() @IsNotEmpty() @MaxLength(20)
   matricula!: string;

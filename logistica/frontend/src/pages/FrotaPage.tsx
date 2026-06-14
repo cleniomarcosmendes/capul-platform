@@ -138,6 +138,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   const [finalidade, setFinalidade] = useState('');
   const [localSaida, setLocalSaida] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [erroSenha, setErroSenha] = useState<string | null>(null);
   const senhaRef = useRef<HTMLInputElement>(null);
 
   // Só libera os demais campos depois de identificar o condutor E digitar a senha.
@@ -148,7 +149,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
 
   const reset = () => {
     setMatricula(''); setNome(null); setSenha(''); setVeiculoId('');
-    setKmInicial(''); setFinalidade(''); setLocalSaida('');
+    setKmInicial(''); setFinalidade(''); setLocalSaida(''); setErroSenha(null);
   };
 
   const buscarCondutor = async () => {
@@ -169,8 +170,19 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
     if (!senha) { toast('warning', 'Informe a senha do condutor.'); return; }
     if (!veiculoId) { toast('warning', 'Selecione o veículo.'); return; }
     if (kmInicial === '') { toast('warning', 'Informe o KM de saída.'); return; }
-    setSalvando(true);
+    setSalvando(true); setErroSenha(null);
     try {
+      // 1) Valida a senha (SEMPRE 200 — mesmo padrão do Chamado; não desloga).
+      const { data: val } = await logisticaApi.post<{ valida: boolean; motivo?: string }>(
+        '/frota/condutor/validar', { matricula: matricula.trim(), senha });
+      if (!val.valida) {
+        setErroSenha(val.motivo === 'INDISPONIVEL'
+          ? 'Portal do RH indisponível. Tente novamente em instantes.'
+          : 'Matrícula ou senha inválidas.');
+        senhaRef.current?.focus();
+        return;
+      }
+      // 2) Senha OK → registra a saída.
       await logisticaApi.post('/frota/viagens', {
         matricula: matricula.trim(), senha, veiculoId,
         kmInicial: Number(kmInicial),
@@ -232,11 +244,13 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
           <label className="mb-1 block text-xs font-medium text-slate-600">Senha do portal RH</label>
           <input
             ref={senhaRef}
-            type="password" value={senha} onChange={(e) => setSenha(e.target.value)}
+            type="password" value={senha} onChange={(e) => { setSenha(e.target.value); setErroSenha(null); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && podeAvancar) void registrar(); }}
             disabled={!nome} autoComplete="new-password" name="frota-senha-saida"
             placeholder={nome ? 'Digite a senha para continuar' : ''}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+            className={`w-full rounded-lg border px-3 py-2 text-sm disabled:bg-slate-100 ${erroSenha ? 'border-rose-400' : 'border-slate-300'}`}
           />
+          {erroSenha && <p className="mt-1 text-xs font-medium text-rose-600">{erroSenha}</p>}
         </div>
 
         <div>
@@ -464,6 +478,7 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
   const [kmFinal, setKmFinal] = useState('');
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [erroSenha, setErroSenha] = useState<string | null>(null);
   const senhaRef = useRef<HTMLInputElement>(null);
 
   const podeAvancar = !!nome && senha.trim().length > 0;
@@ -488,8 +503,19 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
     if (!nome) { toast('warning', 'Identifique o condutor pela matrícula.'); return; }
     if (!senha) { toast('warning', 'Informe a senha do condutor.'); return; }
     if (kmFinal === '') { toast('warning', 'Informe o KM de retorno.'); return; }
-    setSalvando(true);
+    setSalvando(true); setErroSenha(null);
     try {
+      // 1) Valida a senha (SEMPRE 200 — mesmo padrão do Chamado; não desloga).
+      const { data: val } = await logisticaApi.post<{ valida: boolean; motivo?: string }>(
+        '/frota/condutor/validar', { matricula: matricula.trim(), senha });
+      if (!val.valida) {
+        setErroSenha(val.motivo === 'INDISPONIVEL'
+          ? 'Portal do RH indisponível. Tente novamente em instantes.'
+          : 'Matrícula ou senha inválidas.');
+        senhaRef.current?.focus();
+        return;
+      }
+      // 2) Senha OK → registra o retorno.
       await logisticaApi.post(`/frota/viagens/${v.id}/retorno`, {
         matricula: matricula.trim(), senha, kmFinal: Number(kmFinal), observacoes: obs.trim() || undefined,
       });
@@ -527,12 +553,17 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
           </div>
           {nome && <p className="mt-1 text-xs font-medium text-emerald-700">{nome}</p>}
         </div>
-        <input
-          ref={senhaRef}
-          type="password" value={senha} onChange={(e) => setSenha(e.target.value)} disabled={!nome}
-          placeholder={nome ? 'Senha para continuar' : 'Senha'} autoComplete="new-password" name="frota-senha-retorno"
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-        />
+        <div>
+          <input
+            ref={senhaRef}
+            type="password" value={senha} onChange={(e) => { setSenha(e.target.value); setErroSenha(null); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && podeAvancar) void registrar(); }}
+            disabled={!nome}
+            placeholder={nome ? 'Senha para continuar' : 'Senha'} autoComplete="new-password" name="frota-senha-retorno"
+            className={`w-full rounded-lg border px-3 py-2 text-sm disabled:bg-slate-100 ${erroSenha ? 'border-rose-400' : 'border-slate-300'}`}
+          />
+          {erroSenha && <p className="mt-1 text-xs font-medium text-rose-600">{erroSenha}</p>}
+        </div>
         <input
           type="number" value={kmFinal} onChange={(e) => setKmFinal(e.target.value)} disabled={!podeAvancar}
           placeholder={`KM final (saída ${v.kmInicial ?? '—'})`}

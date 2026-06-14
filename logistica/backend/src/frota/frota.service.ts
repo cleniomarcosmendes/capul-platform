@@ -1,6 +1,6 @@
 import {
   BadRequestException, ForbiddenException, Injectable, NotFoundException,
-  ServiceUnavailableException, UnprocessableEntityException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { StatusViagem, TipoViagem, SituacaoVeiculo, StatusDespesa } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -32,14 +32,26 @@ export class FrotaService {
     return r;
   }
 
+  /**
+   * Validação matrícula+senha que SEMPRE responde 200 com {valida, motivo}
+   * (mesmo padrão do Chamado PADRAO). O frontend valida por aqui ANTES de
+   * registrar — assim a senha errada nunca vira 401/erro que desloga p/ o Hub.
+   */
+  async validarCondutor(matricula: string, senha: string) {
+    const r = await this.condutor.validar(matricula, senha);
+    if (r.status === 'VALIDO') return { valida: true as const, matricula: r.matricula, nome: r.nome };
+    if (r.status === 'INVALIDO') return { valida: false as const, motivo: 'CREDENCIAIS_INVALIDAS' as const };
+    return { valida: false as const, motivo: 'INDISPONIVEL' as const };
+  }
+
+  // Revalidação no momento de registrar (defesa em profundidade). 400 (não 401):
+  // senha do condutor é dado do formulário, não expiração do JWT do usuário.
   private async validarOuErro(matricula: string, senha: string) {
     const r = await this.condutor.validar(matricula, senha);
     if (r.status === 'INDISPONIVEL') {
       throw new ServiceUnavailableException('Portal do RH indisponível. Tente novamente em instantes.');
     }
-    // 422 (não 401): senha do CONDUTOR inválida é erro de dado do formulário, não
-    // expiração do JWT do usuário logado — 401 faria o interceptor deslogar p/ o Hub.
-    if (r.status !== 'VALIDO') throw new UnprocessableEntityException('Matrícula ou senha inválidas.');
+    if (r.status !== 'VALIDO') throw new BadRequestException('Matrícula ou senha inválidas.');
     return r;
   }
 
