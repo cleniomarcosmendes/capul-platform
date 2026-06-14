@@ -1,4 +1,4 @@
-import { IsArray, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsArray, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class CreateViagemDto {
   @IsString() @MaxLength(40)
@@ -21,6 +21,13 @@ export class CreateViagemDto {
 export class DespacharViagemDto {
   @IsOptional() @IsString() @MaxLength(120) localSaida?: string;
   @IsOptional() @IsString() @MaxLength(255) observacoesSaida?: string;
+  // Hodômetro na saída (opcional) — habilita os indicadores de KM rodado.
+  @IsOptional() @IsInt() @Min(0) kmInicial?: number;
+}
+
+/** Conclusão da viagem no balcão — hodômetro de chegada (opcional). */
+export class ConcluirViagemDto {
+  @IsOptional() @IsInt() @Min(0) kmFinal?: number;
 }
 
 /** Payload da sugestão de ordem de rota (Fase 1c). */

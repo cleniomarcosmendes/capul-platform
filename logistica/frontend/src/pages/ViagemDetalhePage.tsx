@@ -55,7 +55,7 @@ export function ViagemDetalhePage() {
   const [v, setV] = useState<Viagem | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const { toast } = useToast();
+  const { toast, prompt } = useToast();
   const [naoEncontrada, setNaoEncontrada] = useState(false);
   const [confirmacao, setConfirmacao] = useState<{ titulo: string; mensagem: string; acao: () => Promise<void> } | null>(null);
   const [baixaAlvo, setBaixaAlvo] = useState<{ id: string; numero: number; destinatarioNome: string } | null>(null);
@@ -167,8 +167,23 @@ export function ViagemDetalhePage() {
     } finally { setBusy(false); }
   }
 
-  const despachar = () => acao(() => logisticaApi.post(`/viagens/${id}/despachar`, {}), 'Falha ao despachar.');
-  const concluir = () => acao(() => logisticaApi.post(`/viagens/${id}/concluir`, {}), 'Falha ao concluir.');
+  // KM como número inteiro (ou undefined). Texto vazio → sem km; lixo → undefined.
+  const parseKm = (s: string | null): number | undefined => {
+    if (s == null) return undefined;
+    const n = parseInt(s.replace(/\D/g, ''), 10);
+    return Number.isFinite(n) ? n : undefined;
+  };
+
+  async function despachar() {
+    const km = await prompt('Despachar viagem', 'KM inicial do veículo (odômetro) — opcional. Deixe em branco se não for registrar.', { placeholder: 'KM atual no painel', confirmLabel: 'Despachar' });
+    if (km === null) return; // cancelou
+    await acao(() => logisticaApi.post(`/viagens/${id}/despachar`, { kmInicial: parseKm(km) }), 'Falha ao despachar.');
+  }
+  async function concluir() {
+    const km = await prompt('Concluir viagem', 'Entregas ainda EM VIAGEM serão baixadas sem prova e o veículo liberado. KM final do veículo (odômetro) — opcional.', { placeholder: 'KM final no painel', confirmLabel: 'Concluir', variant: 'warning' });
+    if (km === null) return; // cancelou
+    await acao(() => logisticaApi.post(`/viagens/${id}/concluir`, { kmFinal: parseKm(km) }), 'Falha ao concluir.');
+  }
   const removerEntrega = (entregaId: string) =>
     acao(() => logisticaApi.delete(`/viagens/${id}/entregas/${entregaId}`), 'Falha ao remover entrega.');
   async function descartar() {
@@ -240,11 +255,7 @@ export function ViagemDetalhePage() {
             </>
           )}
           {v.situacao === 'EM_CURSO' && (
-            <button onClick={() => setConfirmacao({
-                titulo: 'Concluir viagem',
-                mensagem: 'Concluir manualmente? Entregas ainda EM VIAGEM serão baixadas sem prova e o veículo é liberado.',
-                acao: async () => { await concluir(); },
-              })} disabled={busy}
+            <button onClick={() => void concluir()} disabled={busy}
               className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
               <CheckCircle2 className="h-3.5 w-3.5" /> Concluir
             </button>

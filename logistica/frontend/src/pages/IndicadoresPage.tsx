@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  Loader2, ChevronLeft, ChevronRight, DollarSign, Boxes, Receipt, RefreshCw, MapPin,
+  Loader2, ChevronLeft, ChevronRight, DollarSign, Boxes, Receipt, RefreshCw, MapPin, Gauge,
 } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 
@@ -12,13 +12,19 @@ interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: 
 interface OrigemInd { origem: string; entregas: number; volumes: number; valor: number; ticketMedio: number }
 interface MotoristaInd { motoristaId: string; nomeMotorista?: string | null; total: number; entregues: number; naoEntregues: number; volumes: number; taxaSucesso: number | null }
 interface DemandaInd { cidade: string | null; bairro: string; total: number }
+interface KmVeiculoInd { placa: string; km: number }
+interface KmMotoristaInd { motoristaId: string; nomeMotorista?: string | null; km: number }
+interface KmInd { total: number; viagens: number; porEntrega: number | null; porVeiculo: KmVeiculoInd[]; porMotorista: KmMotoristaInd[] }
 interface Indicadores {
   filtros: { filialId: string | null; mes: number; ano: number };
   totais: { entregas: number; volumes: number; valorTotal: number; ticketMedio: number; reentregas: number; taxaReentrega: number };
+  km: KmInd;
   porOrigem: OrigemInd[];
   porMotorista: MotoristaInd[];
   demanda: DemandaInd[];
 }
+
+const fmtKm = (v: number) => `${v.toLocaleString('pt-BR')} km`;
 
 const labelCore = (i?: CoreItem) => (i ? i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8) : '—');
 const ORIGEM_LABEL: Record<string, string> = { PRESENCIAL: 'Presencial', TELE_VENDA: 'Tele-venda', OUTRO: 'Outro', NAO_INFORMADO: 'Não informado' };
@@ -205,7 +211,51 @@ export function IndicadoresPage() {
                 </table>
               </div>
             )}
-            <p className="px-4 py-2 text-xs text-slate-400">Taxa de sucesso = entregues ÷ (entregues + não entregues). KM rodados virá quando habilitarmos a captura de hodômetro.</p>
+            <p className="px-4 py-2 text-xs text-slate-400">Taxa de sucesso = entregues ÷ (entregues + não entregues).</p>
+          </div>
+
+          {/* Quilometragem (hodômetro na saída/chegada) */}
+          <div className="rounded-xl border border-slate-200 bg-white">
+            <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
+              <Gauge className="h-4 w-4 text-indigo-500" /> Quilometragem
+            </div>
+            {ind.km.viagens === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-slate-400">
+                Nenhuma viagem com hodômetro registrado no mês.<br />
+                <span className="text-xs">Informe o KM ao despachar e ao concluir a viagem para alimentar este indicador.</span>
+              </p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3">
+                  <StatTexto icon={Gauge} cor="text-indigo-600" bg="bg-indigo-50" valor={fmtKm(ind.km.total)} rotulo="KM rodados no mês" sub={`${ind.km.viagens} viagem(ns) com hodômetro`} />
+                  <StatTexto icon={Boxes} cor="text-sky-600" bg="bg-sky-50" valor={ind.km.porEntrega != null ? `${ind.km.porEntrega.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km` : '—'} rotulo="KM por entrega" sub="eficiência da rota" />
+                </div>
+                <div className="grid grid-cols-1 gap-0 border-t border-slate-100 sm:grid-cols-2">
+                  <div className="sm:border-r sm:border-slate-100">
+                    <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Por veículo</div>
+                    <ul className="divide-y divide-slate-100">
+                      {ind.km.porVeiculo.map((v) => (
+                        <li key={v.placa} className="flex items-center justify-between px-4 py-2 text-sm">
+                          <span className="text-slate-700">{v.placa}</span>
+                          <span className="font-semibold text-slate-800">{fmtKm(v.km)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Por motorista</div>
+                    <ul className="divide-y divide-slate-100">
+                      {ind.km.porMotorista.map((m) => (
+                        <li key={m.motoristaId} className="flex items-center justify-between px-4 py-2 text-sm">
+                          <span className="text-slate-700">{m.nomeMotorista || nomeUsuario(m.motoristaId)}</span>
+                          <span className="font-semibold text-slate-800">{fmtKm(m.km)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </>
       )}

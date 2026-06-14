@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, SituacaoVeiculo, StatusEntrega, StatusViagem } from '@prisma/client';
+import { Prisma, SituacaoVeiculo, StatusEntrega, StatusViagem, TipoViagem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 
@@ -245,7 +245,47 @@ export class PainelService {
           AND e.status <> 'CANCELADA' ${fEnt}`),
     ]);
 
-    const nomesMot = await this.core.nomesUsuarios(motoristaRaw.map((m) => m.motorista_id));
+    // KM rodado no mês: viagens CONCLUÍDAS (janela pela chegada) com hodômetro
+    // de saída E chegada preenchidos. Auto-conclusão pelo app não tem hodômetro
+    // → entra sem km (não conta). Agrega por veículo e por motorista + km/entrega.
+    const kmViagens = await this.prisma.viagem.findMany({
+      where: {
+        tipo: TipoViagem.ENTREGA, // só entregas — frota tem seu próprio Monitor
+        situacao: StatusViagem.CONCLUIDA,
+        kmInicial: { not: null },
+        kmFinal: { not: null },
+        dataHoraChegada: { gte: ini, lt: fim },
+        ...(filialId ? { filialId } : {}),
+      },
+      select: {
+        motoristaId: true, kmInicial: true, kmFinal: true,
+        veiculo: { select: { id: true, placa: true } },
+        _count: { select: { paradas: true } },
+      },
+    });
+
+    const kmTotal = kmViagens.reduce((s, v) => s + ((v.kmFinal ?? 0) - (v.kmInicial ?? 0)), 0);
+    const paradasComKm = kmViagens.reduce((s, v) => s + v._count.paradas, 0);
+    const kmPorVeiculoMap = new Map<string, { placa: string; km: number }>();
+    const kmPorMotoristaMap = new Map<string, number>();
+    for (const v of kmViagens) {
+      const km = (v.kmFinal ?? 0) - (v.kmInicial ?? 0);
+      if (v.veiculo) {
+        const cur = kmPorVeiculoMap.get(v.veiculo.id) ?? { placa: v.veiculo.placa, km: 0 };
+        cur.km += km; kmPorVeiculoMap.set(v.veiculo.id, cur);
+      }
+      if (v.motoristaId) kmPorMotoristaMap.set(v.motoristaId, (kmPorMotoristaMap.get(v.motoristaId) ?? 0) + km);
+    }
+
+    const nomesMot = await this.core.nomesUsuarios([
+      ...motoristaRaw.map((m) => m.motorista_id),
+      ...kmPorMotoristaMap.keys(),
+    ]);
+
+    const kmPorVeiculo = [...kmPorVeiculoMap.values()].sort((a, b) => b.km - a.km);
+    const kmPorMotorista = [...kmPorMotoristaMap.entries()]
+      .map(([motoristaId, km]) => ({ motoristaId, nomeMotorista: nomesMot.get(motoristaId) ?? null, km }))
+      .sort((a, b) => b.km - a.km);
 
     const porOrigem = origemRaw
       .map((o) => {
@@ -296,6 +336,14 @@ export class PainelService {
         ticketMedio: total > 0 ? valorTotal / total : 0,
         reentregas,
         taxaReentrega: total > 0 ? reentregas / total : 0,
+      },
+      km: {
+        // Cobertura: viagens com hodômetro / total de entregas concluídas com KM.
+        total: kmTotal,
+        viagens: kmViagens.length,
+        porEntrega: paradasComKm > 0 ? kmTotal / paradasComKm : null,
+        porVeiculo: kmPorVeiculo,
+        porMotorista: kmPorMotorista,
       },
       porOrigem,
       porMotorista,

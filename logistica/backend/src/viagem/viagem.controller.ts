@@ -5,7 +5,7 @@ import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.
 import { assertMesmaFilial, resolverFilialLeitura } from '../common/filial-scope.js';
 import { ViagemService } from './viagem.service.js';
 import { RotaService } from '../rota/rota.service.js';
-import { AdicionarEntregasDto, CreateViagemDto, DespacharViagemDto, ReordenarViagemDto, SugerirOrdemDto, UpdateViagemDto } from './dto.js';
+import { AdicionarEntregasDto, ConcluirViagemDto, CreateViagemDto, DespacharViagemDto, ReordenarViagemDto, SugerirOrdemDto, UpdateViagemDto } from './dto.js';
 
 @Controller('viagens')
 @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
@@ -82,8 +82,8 @@ export class ViagemController {
   }
 
   @Post(':id/concluir')
-  concluir(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.viagens.concluir(id, user.filialId, user.sub);
+  concluir(@Param('id') id: string, @Body() dto: ConcluirViagemDto, @CurrentUser() user: JwtPayload) {
+    return this.viagens.concluir(id, user.filialId, user.sub, dto);
   }
 
   @Delete(':id/entregas/:entregaId')

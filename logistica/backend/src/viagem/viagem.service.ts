@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import { assertPodeVerRegistro } from '../common/filial-scope.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
-import { CreateViagemDto, DespacharViagemDto } from './dto.js';
+import { CreateViagemDto, DespacharViagemDto, ConcluirViagemDto } from './dto.js';
 
 @Injectable()
 export class ViagemService {
@@ -229,6 +229,10 @@ export class ViagemService {
     if (veiculo.situacao !== SituacaoVeiculo.DISPONIVEL) {
       throw new BadRequestException(`Veículo não está disponível (situação: ${veiculo.situacao}).`);
     }
+    // Hodômetro da saída (opcional): não pode ser menor que o KM atual do veículo.
+    if (dto.kmInicial != null && dto.kmInicial < veiculo.kmAtual) {
+      throw new BadRequestException(`KM inicial (${dto.kmInicial}) menor que o KM atual do veículo (${veiculo.kmAtual}).`);
+    }
 
     const entregaIds = v.paradas.map((p) => p.entregaId).filter((x): x is string => !!x);
 
@@ -245,6 +249,7 @@ export class ViagemService {
           dataHoraSaida: new Date(),
           localSaida: dto.localSaida?.trim() || null,
           observacoesSaida: dto.observacoesSaida?.trim() || null,
+          kmInicial: dto.kmInicial ?? undefined,
         },
         include: { paradas: { include: { entrega: true }, orderBy: { sequencia: 'asc' } } },
       });
@@ -257,7 +262,7 @@ export class ViagemService {
    * de entrega real (foto/assinatura/GPS) é da Fase 1b — aqui é baixa manual no
    * balcão pra fechar o ciclo operacional. Exige viagem EM_CURSO.
    */
-  async concluir(id: string, userFilialId?: string, userId?: string) {
+  async concluir(id: string, userFilialId?: string, userId?: string, dto?: ConcluirViagemDto) {
     const v = await this.prisma.viagem.findUnique({
       where: { id },
       include: { paradas: { select: { entregaId: true } } },
@@ -266,6 +271,11 @@ export class ViagemService {
     if (userFilialId && v.filialId !== userFilialId) throw new ForbiddenException('Viagem de outra filial.');
     if (v.situacao !== StatusViagem.EM_CURSO) {
       throw new BadRequestException(`Só conclui viagem EM_CURSO (atual: ${v.situacao}).`);
+    }
+    // Hodômetro da chegada (opcional): não pode ser menor que o KM de saída.
+    const kmFinal = dto?.kmFinal;
+    if (kmFinal != null && v.kmInicial != null && kmFinal < v.kmInicial) {
+      throw new BadRequestException(`KM final (${kmFinal}) menor que o KM de saída (${v.kmInicial}).`);
     }
     const entregaIds = v.paradas.map((p) => p.entregaId).filter((x): x is string => !!x);
 
@@ -277,11 +287,15 @@ export class ViagemService {
         data: { status: StatusEntrega.ENTREGUE, dataHoraEntrega: new Date(), baixadoPorId: userId ?? null },
       });
       if (v.veiculoId) {
-        await tx.veiculo.update({ where: { id: v.veiculoId }, data: { situacao: SituacaoVeiculo.DISPONIVEL } });
+        await tx.veiculo.update({
+          where: { id: v.veiculoId },
+          // Hodômetro de chegada também atualiza o KM atual do veículo (de quebra).
+          data: { situacao: SituacaoVeiculo.DISPONIVEL, ...(kmFinal != null ? { kmAtual: kmFinal } : {}) },
+        });
       }
       return tx.viagem.update({
         where: { id },
-        data: { situacao: StatusViagem.CONCLUIDA, dataHoraChegada: new Date() },
+        data: { situacao: StatusViagem.CONCLUIDA, dataHoraChegada: new Date(), kmFinal: kmFinal ?? undefined },
         include: { paradas: { include: { entrega: true }, orderBy: { sequencia: 'asc' } } },
       });
     });
