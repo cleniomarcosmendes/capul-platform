@@ -215,6 +215,11 @@ model DespesaVeiculo {
   fornecedor    String?
   observacao    String?
   situacao      StatusDespesa @default(PENDENTE)
+  // Foto do recibo/cupom (lastro da aprovação). O binário vive no object store
+  // (MinIO, reusa o CofreStorageService); aqui ficam só a chave + hash + mime.
+  comprovanteObjectKey String? @map("comprovante_object_key")
+  comprovanteHash      String? @map("comprovante_hash")
+  comprovanteMime      String? @map("comprovante_mime")
   // Autor: quando o motorista lança na viagem (matrícula+senha Protheus).
   autorMatricula String?      @map("autor_matricula")
   autorNome      String?      @map("autor_nome")

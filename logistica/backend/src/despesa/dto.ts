@@ -1,6 +1,7 @@
 import {
   IsBoolean, IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 // ---- Tipos de despesa (cadastro, gestor de frota) ----
 export class CriarTipoDespesaDto {
@@ -33,7 +34,7 @@ export class LancarDespesaDto {
   @IsString() @IsNotEmpty()
   tipoDespesaId!: string;
 
-  @IsNumber({ maxDecimalPlaces: 2 }) @Min(0)
+  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0)
   valor!: number;
 
   // ISO date (default: hoje, no service).
@@ -57,7 +58,7 @@ export class LancarDespesaViagemDto {
   @IsString() @IsNotEmpty()
   tipoDespesaId!: string;
 
-  @IsNumber({ maxDecimalPlaces: 2 }) @Min(0)
+  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0)
   valor!: number;
 
   @IsOptional() @IsString() @MaxLength(120)

@@ -1,11 +1,19 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body, Controller, Get, Header, Param, Patch, Post, Query,
+  StreamableFile, UploadedFile, UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
-import { DespesaService } from './despesa.service.js';
+import { DespesaService, type ReciboBinario } from './despesa.service.js';
 import {
   CriarTipoDespesaDto, AtualizarTipoDespesaDto, LancarDespesaDto,
   LancarDespesaViagemDto, ContestarDespesaDto, ListarDespesasQuery,
 } from './dto.js';
+
+/** Converte o arquivo do multer no binário do recibo (ou undefined). */
+const reciboDe = (f?: Express.Multer.File): ReciboBinario | undefined =>
+  f ? { buffer: f.buffer, mimetype: f.mimetype, size: f.size } : undefined;
 
 const roleLogistica = (user: JwtPayload) => user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
 
@@ -46,16 +54,34 @@ export class DespesaController {
     return this.despesas.indicadores(user, roleLogistica(user), Number(mes) || now.getUTCMonth() + 1, Number(ano) || now.getUTCFullYear());
   }
 
-  /** Lançamento direto (supervisor/gestor) → APROVADA. */
+  /** Lançamento direto (supervisor/gestor) → APROVADA. Recibo (foto/PDF) opcional. */
   @Post()
-  lancarDireto(@Body() dto: LancarDespesaDto, @CurrentUser() user: JwtPayload) {
-    return this.despesas.lancarDireto(dto, user, roleLogistica(user));
+  @UseInterceptors(FileInterceptor('comprovante', { limits: { fileSize: 15 * 1024 * 1024 } }))
+  lancarDireto(
+    @Body() dto: LancarDespesaDto,
+    @CurrentUser() user: JwtPayload,
+    @UploadedFile() comprovante?: Express.Multer.File,
+  ) {
+    return this.despesas.lancarDireto(dto, user, roleLogistica(user), reciboDe(comprovante));
   }
 
-  /** Lançamento na viagem em curso → PENDENTE (herda o condutor da viagem). */
+  /** Lançamento na viagem em curso → PENDENTE (herda o condutor da viagem). Recibo opcional. */
   @Post('viagem')
-  lancarNaViagem(@Body() dto: LancarDespesaViagemDto, @CurrentUser() user: JwtPayload) {
-    return this.despesas.lancarNaViagem(dto, user);
+  @UseInterceptors(FileInterceptor('comprovante', { limits: { fileSize: 15 * 1024 * 1024 } }))
+  lancarNaViagem(
+    @Body() dto: LancarDespesaViagemDto,
+    @CurrentUser() user: JwtPayload,
+    @UploadedFile() comprovante?: Express.Multer.File,
+  ) {
+    return this.despesas.lancarNaViagem(dto, user, reciboDe(comprovante));
+  }
+
+  /** Download do recibo (foto/PDF do cupom) — escopo gestor/supervisor do veículo. */
+  @Get(':id/comprovante')
+  @Header('Cache-Control', 'private, no-store')
+  async comprovante(@Param('id') id: string, @CurrentUser() user: JwtPayload): Promise<StreamableFile> {
+    const { buffer, mimeType } = await this.despesas.obterRecibo(id, user, roleLogistica(user));
+    return new StreamableFile(buffer, { type: mimeType, disposition: `inline; filename="recibo-${id}"` });
   }
 
   @Patch(':id/aprovar')

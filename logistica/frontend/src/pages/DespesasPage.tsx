@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Banknote, Check, Loader2, Plus, Tag, X } from 'lucide-react';
+import { Banknote, Check, Image as ImageIcon, Loader2, Paperclip, Plus, Tag, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,7 +15,7 @@ interface Despesa {
   id: string; situacao: string; placa: string; modelo?: string | null; veiculoId: string;
   tipo: string; valor: number; dataDespesa: string; fornecedor?: string | null;
   observacao?: string | null; autorNome?: string | null; aprovadoEm?: string | null;
-  motivoContestacao?: string | null;
+  motivoContestacao?: string | null; temComprovante?: boolean;
 }
 interface Indicadores { total: number; porVeiculo: { nome: string; valor: number }[]; porTipo: { nome: string; valor: number }[] }
 
@@ -202,6 +202,13 @@ function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
     try { await logisticaApi.patch(`/despesas/${d.id}/contestar`, { motivo: motivo.trim() }); toast('success', 'Despesa contestada.'); onChanged(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao contestar.')); } finally { setBusy(false); }
   };
+  const verRecibo = async () => {
+    setBusy(true);
+    try {
+      const { data } = await logisticaApi.get(`/despesas/${d.id}/comprovante`, { responseType: 'blob' });
+      window.open(URL.createObjectURL(data as Blob), '_blank', 'noopener');
+    } catch (e) { toast('error', errMsg(e, 'Falha ao abrir o recibo.')); } finally { setBusy(false); }
+  };
 
   return (
     <>
@@ -210,7 +217,16 @@ function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
         <td className="px-4 py-2">{d.placa}{d.modelo ? <span className="text-slate-400"> · {d.modelo}</span> : null}</td>
         <td className="px-4 py-2">{d.tipo}</td>
         <td className="px-4 py-2 text-right tabular-nums">{BRL(d.valor)}</td>
-        <td className="px-4 py-2 text-slate-600">{d.fornecedor ?? '—'}</td>
+        <td className="px-4 py-2 text-slate-600">
+          <div className="flex items-center gap-2">
+            <span>{d.fornecedor ?? '—'}</span>
+            {d.temComprovante && (
+              <button onClick={() => void verRecibo()} disabled={busy} title="Ver recibo" className="inline-flex items-center gap-1 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-xs text-sky-700 hover:bg-sky-100 disabled:opacity-50">
+                <Paperclip className="h-3 w-3" /> Recibo
+              </button>
+            )}
+          </div>
+        </td>
         <td className="px-4 py-2 text-slate-600">{d.autorNome ?? '—'}</td>
         <td className="px-4 py-2">
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${sit.cls}`}>{sit.label}</span>
@@ -252,7 +268,14 @@ function LancarDespesaForm({ veiculos, tipos, onClose, onDone }: { veiculos: Vei
   const [dataDespesa, setDataDespesa] = useState(hoje.toISOString().slice(0, 10));
   const [fornecedor, setFornecedor] = useState('');
   const [observacao, setObservacao] = useState('');
+  const [recibo, setRecibo] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+
+  const escolherRecibo = (f: File | null) => {
+    setRecibo(f);
+    setPreview(f && f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
+  };
 
   const salvar = async () => {
     if (!veiculoId) { toast('warning', 'Selecione o veículo.'); return; }
@@ -260,11 +283,24 @@ function LancarDespesaForm({ veiculos, tipos, onClose, onDone }: { veiculos: Vei
     if (valor === '' || Number(valor) <= 0) { toast('warning', 'Informe um valor válido.'); return; }
     setSalvando(true);
     try {
-      await logisticaApi.post('/despesas', {
-        veiculoId, tipoDespesaId, valor: Number(valor),
-        dataDespesa: dataDespesa ? new Date(dataDespesa).toISOString() : undefined,
-        fornecedor: fornecedor.trim() || undefined, observacao: observacao.trim() || undefined,
-      });
+      // Com recibo → multipart (FormData); sem recibo → JSON. O backend aceita os dois.
+      if (recibo) {
+        const fd = new FormData();
+        fd.append('veiculoId', veiculoId);
+        fd.append('tipoDespesaId', tipoDespesaId);
+        fd.append('valor', String(Number(valor)));
+        if (dataDespesa) fd.append('dataDespesa', new Date(dataDespesa).toISOString());
+        if (fornecedor.trim()) fd.append('fornecedor', fornecedor.trim());
+        if (observacao.trim()) fd.append('observacao', observacao.trim());
+        fd.append('comprovante', recibo);
+        await logisticaApi.post('/despesas', fd);
+      } else {
+        await logisticaApi.post('/despesas', {
+          veiculoId, tipoDespesaId, valor: Number(valor),
+          dataDespesa: dataDespesa ? new Date(dataDespesa).toISOString() : undefined,
+          fornecedor: fornecedor.trim() || undefined, observacao: observacao.trim() || undefined,
+        });
+      }
       toast('success', 'Despesa lançada (aprovada).');
       onDone();
     } catch (e) {
@@ -305,6 +341,22 @@ function LancarDespesaForm({ veiculos, tipos, onClose, onDone }: { veiculos: Vei
         <label className="text-xs text-slate-600">Observação (opcional)
           <input value={observacao} onChange={(e) => setObservacao(e.target.value)} maxLength={255} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
+        <div className="text-xs text-slate-600 md:col-span-3">Recibo / cupom (opcional)
+          <div className="mt-1 flex flex-wrap items-center gap-3">
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+              <Paperclip className="h-4 w-4 text-slate-400" />
+              {recibo ? 'Trocar arquivo' : 'Anexar foto/PDF'}
+              <input type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={(e) => escolherRecibo(e.target.files?.[0] ?? null)} />
+            </label>
+            {recibo && (
+              <span className="inline-flex items-center gap-2 text-slate-500">
+                {preview ? <img src={preview} alt="prévia" className="h-10 w-10 rounded border border-slate-200 object-cover" /> : <ImageIcon className="h-5 w-5 text-slate-400" />}
+                <span className="max-w-[14rem] truncate">{recibo.name}</span>
+                <button type="button" onClick={() => escolherRecibo(null)} className="text-slate-400 hover:text-rose-500"><X className="h-4 w-4" /></button>
+              </span>
+            )}
+          </div>
+        </div>
       </div>
       <div className="mt-4 flex justify-end">
         <button onClick={() => void salvar()} disabled={salvando} className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">

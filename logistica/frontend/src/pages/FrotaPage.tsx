@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Banknote, Fuel, Loader2, LogIn, LogOut, MapPin, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
+import { Banknote, Fuel, Loader2, LogIn, LogOut, MapPin, Paperclip, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
@@ -654,6 +654,7 @@ function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFrota; ti
   const [valor, setValor] = useState('');
   const [fornecedor, setFornecedor] = useState('');
   const [obs, setObs] = useState('');
+  const [recibo, setRecibo] = useState<File | null>(null);
   const [salvando, setSalvando] = useState(false);
 
   const lancar = async () => {
@@ -661,10 +662,22 @@ function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFrota; ti
     if (valor === '' || Number(valor) <= 0) { toast('warning', 'Informe um valor válido.'); return; }
     setSalvando(true);
     try {
-      await logisticaApi.post('/despesas/viagem', {
-        viagemId: v.id, tipoDespesaId, valor: Number(valor),
-        fornecedor: fornecedor.trim() || undefined, observacao: obs.trim() || undefined,
-      });
+      // Com recibo → multipart; sem → JSON. Backend aceita os dois.
+      if (recibo) {
+        const fd = new FormData();
+        fd.append('viagemId', v.id);
+        fd.append('tipoDespesaId', tipoDespesaId);
+        fd.append('valor', String(Number(valor)));
+        if (fornecedor.trim()) fd.append('fornecedor', fornecedor.trim());
+        if (obs.trim()) fd.append('observacao', obs.trim());
+        fd.append('comprovante', recibo);
+        await logisticaApi.post('/despesas/viagem', fd);
+      } else {
+        await logisticaApi.post('/despesas/viagem', {
+          viagemId: v.id, tipoDespesaId, valor: Number(valor),
+          fornecedor: fornecedor.trim() || undefined, observacao: obs.trim() || undefined,
+        });
+      }
       toast('success', 'Despesa lançada (pendente de validação do supervisor).');
       onDone();
     } catch (e) {
@@ -697,6 +710,15 @@ function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFrota; ti
         <div className="min-w-[16rem] flex-1">
           <label className="mb-1 block text-xs font-medium text-slate-600">Observação (opcional)</label>
           <input value={obs} onChange={(e) => setObs(e.target.value)} maxLength={255} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </div>
+        <div className="min-w-[14rem]">
+          <label className="mb-1 block text-xs font-medium text-slate-600">Recibo / cupom (opcional)</label>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+            <Paperclip className="h-4 w-4 text-slate-400" />
+            <span className="max-w-[10rem] truncate">{recibo ? recibo.name : 'Anexar foto/PDF'}</span>
+            <input type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={(e) => setRecibo(e.target.files?.[0] ?? null)} />
+          </label>
+          {recibo && <button type="button" onClick={() => setRecibo(null)} className="ml-2 text-xs text-slate-400 hover:text-rose-500">remover</button>}
         </div>
       </div>
       <div className="flex justify-end gap-2">

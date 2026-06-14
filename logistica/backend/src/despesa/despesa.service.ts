@@ -3,6 +3,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, StatusDespesa, StatusViagem, TipoViagem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { CofreStorageService } from '../cofre/cofre-storage.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import {
   CriarTipoDespesaDto, AtualizarTipoDespesaDto, LancarDespesaDto,
@@ -10,6 +11,9 @@ import {
 } from './dto.js';
 
 const ehGestor = (role?: string) => role === 'GESTOR_FROTA' || role === 'ADMIN';
+
+/** Recibo (foto/PDF do cupom) anexado no lançamento — binário p/ o object store. */
+export type ReciboBinario = { buffer: Buffer; mimetype?: string; size: number };
 
 /**
  * Despesas da frota (Fase 2) com governança em 3 níveis:
@@ -20,7 +24,32 @@ const ehGestor = (role?: string) => role === 'GESTOR_FROTA' || role === 'ADMIN';
  */
 @Injectable()
 export class DespesaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: CofreStorageService,
+  ) {}
+
+  /**
+   * Anexa o recibo (foto/PDF do cupom) a uma despesa recém-criada: sobe o binário
+   * no object store e grava objectKey/hash/mime no registro. Degradável — se o
+   * store estiver fora, a despesa permanece lançada (sem recibo) e o erro é
+   * propagado p/ o controller decidir; aqui retorna a despesa atualizada.
+   */
+  private async anexarRecibo(despesaId: string, filialId: string, recibo: ReciboBinario) {
+    const { objectKey, hash } = await this.storage.put(recibo.buffer, {
+      filialId,
+      refId: despesaId,
+      mimeType: recibo.mimetype,
+    });
+    return this.prisma.despesaVeiculo.update({
+      where: { id: despesaId },
+      data: {
+        comprovanteObjectKey: objectKey,
+        comprovanteHash: hash,
+        comprovanteMime: recibo.mimetype ?? null,
+      },
+    });
+  }
 
   // ---------- Tipos de despesa ----------
   listarTipos(somenteAtivos?: boolean) {
@@ -102,18 +131,19 @@ export class DespesaService {
       valor: Number(d.valor), dataDespesa: d.dataDespesa, fornecedor: d.fornecedor,
       observacao: d.observacao, autorNome: d.autorNome, autorMatricula: d.autorMatricula,
       aprovadoEm: d.aprovadoEm, motivoContestacao: d.motivoContestacao,
+      temComprovante: !!d.comprovanteObjectKey,
     }));
   }
 
   // ---------- Lançamento ----------
   /** Lançamento direto por supervisor/gestor → já APROVADA. */
-  async lancarDireto(dto: LancarDespesaDto, user: JwtPayload, role?: string) {
+  async lancarDireto(dto: LancarDespesaDto, user: JwtPayload, role?: string, recibo?: ReciboBinario) {
     const veiculo = await this.assertPodeGerirVeiculo(dto.veiculoId, user, role);
     const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
     if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
     if (dto.viagemId) await this.assertViagemDoVeiculo(dto.viagemId, veiculo.id, user.filialId!);
 
-    return this.prisma.despesaVeiculo.create({
+    const despesa = await this.prisma.despesaVeiculo.create({
       data: {
         filialId: user.filialId!,
         veiculoId: veiculo.id,
@@ -129,6 +159,7 @@ export class DespesaService {
         aprovadoEm: new Date(),
       },
     });
+    return recibo ? this.anexarRecibo(despesa.id, despesa.filialId, recibo) : despesa;
   }
 
   /**
@@ -136,7 +167,7 @@ export class DespesaService {
    * pelo condutor autenticado na saída (senha) — a despesa herda o condutor da
    * viagem, sem pedir senha de novo. Continua exigindo validação do supervisor.
    */
-  async lancarNaViagem(dto: LancarDespesaViagemDto, user: JwtPayload) {
+  async lancarNaViagem(dto: LancarDespesaViagemDto, user: JwtPayload, recibo?: ReciboBinario) {
     const v = await this.prisma.viagem.findUnique({ where: { id: dto.viagemId } });
     if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Viagem de frota não encontrada.');
     if (v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
@@ -146,7 +177,7 @@ export class DespesaService {
     const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
     if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
 
-    return this.prisma.despesaVeiculo.create({
+    const despesa = await this.prisma.despesaVeiculo.create({
       data: {
         filialId: v.filialId,
         veiculoId: v.veiculoId,
@@ -162,6 +193,7 @@ export class DespesaService {
         criadoPorId: user.sub,
       },
     });
+    return recibo ? this.anexarRecibo(despesa.id, despesa.filialId, recibo) : despesa;
   }
 
   private async assertViagemDoVeiculo(viagemId: string, veiculoId: string, filialId: string) {
@@ -193,6 +225,20 @@ export class DespesaService {
       where: { id },
       data: { situacao: StatusDespesa.CONTESTADA, aprovadoPorId: user.sub, aprovadoEm: new Date(), motivoContestacao: dto.motivo.trim() },
     });
+  }
+
+  // ---------- Recibo (download) ----------
+  /**
+   * Lê o binário do recibo de uma despesa. Mesmo escopo da listagem: gestor de
+   * frota (filial toda) ou supervisor do veículo; operador comum não vê.
+   */
+  async obterRecibo(id: string, user: JwtPayload, role?: string): Promise<{ buffer: Buffer; mimeType: string }> {
+    const d = await this.prisma.despesaVeiculo.findUnique({ where: { id } });
+    if (!d || d.filialId !== user.filialId) throw new NotFoundException('Despesa não encontrada nesta filial.');
+    await this.assertPodeGerirVeiculo(d.veiculoId, user, role);
+    if (!d.comprovanteObjectKey) throw new NotFoundException('Esta despesa não tem recibo anexado.');
+    const buffer = await this.storage.get(d.comprovanteObjectKey);
+    return { buffer, mimeType: d.comprovanteMime ?? 'application/octet-stream' };
   }
 
   // ---------- Indicadores (custo por veículo / tipo, mês) ----------

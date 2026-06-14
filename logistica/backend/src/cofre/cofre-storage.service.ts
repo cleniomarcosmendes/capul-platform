@@ -54,17 +54,18 @@ export class CofreStorageService implements OnModuleInit {
   }
 
   /**
-   * Grava o binário da prova e devolve a chave (objectKey) + o hash SHA-256.
-   * O objectKey é particionado por filial/entrega p/ organização e auditoria.
+   * Grava o binário e devolve a chave (objectKey) + o hash SHA-256.
+   * O objectKey é particionado por filial/refId p/ organização e auditoria
+   * (refId = entrega na prova de entrega; despesa no recibo de frota).
    */
   async put(
     binario: Buffer,
-    opts: { filialId: string; entregaId: string; mimeType?: string },
+    opts: { filialId: string; refId: string; mimeType?: string },
   ): Promise<{ objectKey: string; hash: string; tamanhoBytes: number }> {
     await this.ensureBucket();
     const hash = createHash('sha256').update(binario).digest('hex');
     const ext = this.extFromMime(opts.mimeType);
-    const objectKey = `${opts.filialId}/${opts.entregaId}/${randomUUID()}${ext}`;
+    const objectKey = `${opts.filialId}/${opts.refId}/${randomUUID()}${ext}`;
     await this.client.putObject(this.bucket, objectKey, binario, binario.length, {
       'Content-Type': opts.mimeType ?? 'application/octet-stream',
       // Hash redundante nos metadados do objeto — defesa em profundidade.

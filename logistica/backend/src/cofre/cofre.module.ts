@@ -9,11 +9,14 @@ import { ComprovanteController } from './comprovante.controller.js';
  * de entrega (1b.3) gravar a prova e o ComprovanteController p/ a consulta do
  * financeiro (1b.4) lê-la. O PrismaCofreModule é @Global; o store fica
  * encapsulado aqui.
+ *
+ * O CofreStorageService (object store MinIO) é exportado p/ reuso pela frota
+ * (recibo de despesa, Fase 2) — só o binário; o metadado fica no schema logistica.
  */
 @Module({
   imports: [PrismaCofreModule],
   controllers: [ComprovanteController],
   providers: [CofreStorageService, CofreService],
-  exports: [CofreService],
+  exports: [CofreService, CofreStorageService],
 })
 export class CofreModule {}

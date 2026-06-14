@@ -52,7 +52,7 @@ export class CofreService {
   async gravar(input: GravarComprovanteInput): Promise<{ comprovanteId: string; objectKey: string; hash: string }> {
     const { objectKey, hash, tamanhoBytes } = await this.storage.put(input.binario, {
       filialId: input.filialId,
-      entregaId: input.entregaId,
+      refId: input.entregaId,
       mimeType: input.mimeType,
     });
 
