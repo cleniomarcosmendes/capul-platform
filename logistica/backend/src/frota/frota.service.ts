@@ -1,6 +1,6 @@
 import {
   BadRequestException, ForbiddenException, Injectable, NotFoundException,
-  ServiceUnavailableException, UnauthorizedException,
+  ServiceUnavailableException, UnprocessableEntityException,
 } from '@nestjs/common';
 import { StatusViagem, TipoViagem, SituacaoVeiculo, StatusDespesa } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -37,7 +37,9 @@ export class FrotaService {
     if (r.status === 'INDISPONIVEL') {
       throw new ServiceUnavailableException('Portal do RH indisponível. Tente novamente em instantes.');
     }
-    if (r.status !== 'VALIDO') throw new UnauthorizedException('Matrícula ou senha inválidas.');
+    // 422 (não 401): senha do CONDUTOR inválida é erro de dado do formulário, não
+    // expiração do JWT do usuário logado — 401 faria o interceptor deslogar p/ o Hub.
+    if (r.status !== 'VALIDO') throw new UnprocessableEntityException('Matrícula ou senha inválidas.');
     return r;
   }
 

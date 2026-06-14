@@ -85,10 +85,13 @@ export class ProtheusCondutorService {
     this.logger.log(`Validando condutor (chapa ${chapa}, ambiente ${ep.ambiente})`);
     const data = await this.request(url, this.auth(cfg), ep.timeoutMs || 8000, ep.metodo || 'POST', `loginPortal MATRICULA=${chapa} (senha omitida)`);
     if (!data) return { status: 'INDISPONIVEL' };
-    const auth = String((data as Record<string, unknown>).autenticacao ?? '')
+    const bruto = String((data as Record<string, unknown>).autenticacao ?? '');
+    const auth = bruto
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    if (auth.includes('invalid')) return { status: 'INVALIDO' };
-    if (!auth.includes('valid')) { this.logger.warn(`loginPortal resposta inesperada (chapa ${chapa})`); return { status: 'INDISPONIVEL' }; }
+    const _st = auth.includes('invalid') ? 'INVALIDO' : (auth.includes('valid') ? 'VALIDO' : 'INESPERADO');
+    this.logger.log(`loginPortal chapa=${chapa} -> ${_st}`);
+    if (_st === 'INVALIDO') return { status: 'INVALIDO' };
+    if (_st === 'INESPERADO') { this.logger.warn(`loginPortal resposta inesperada (chapa ${chapa})`); return { status: 'INDISPONIVEL' }; }
     // Válido → pega o nome (best-effort; se infoFuncionario falhar, usa a chapa).
     const info = await this.buscarNome(matricula);
     return { status: 'VALIDO', matricula: info?.matricula ?? chapa, nome: info?.nome ?? chapa };
