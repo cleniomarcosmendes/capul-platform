@@ -387,7 +387,34 @@ export class RfbImportacaoService {
       });
       const colsSql = spec.colunas.map((c) => `"${c}"`).join(',');
       const copyStream = client.query(copyFrom(`COPY ${stg} (${colsSql}) FROM STDIN`));
-      await pipeline(entry, parser, mapper, copyStream);
+      // Watchdog de PROGRESSO (incidente 15/06: a RFB entregou o 6º arquivo de
+      // Empresas truncado — EOF "limpo" no meio do deflate — e o unzip ficou
+      // esperando o resto p/ sempre, COPY em ClientRead por 8h, SEM erro nem
+      // bodyTimeout — esse só pega socket ocioso de rede, não pipeline parado).
+      // Se `count` (linhas) não avançar por WATCHDOG_MS, aborta → vira erro →
+      // carregarComRetry reabre a conexão e tenta de novo.
+      const WATCHDOG_MS = 5 * 60 * 1000;
+      let ultimaContagem = 0;
+      let ultimoAvanco = Date.now();
+      let disparou = false;
+      const wd = setInterval(() => {
+        if (count > ultimaContagem) { ultimaContagem = count; ultimoAvanco = Date.now(); return; }
+        if (Date.now() - ultimoAvanco > WATCHDOG_MS && !disparou) {
+          disparou = true;
+          const err = new Error(`watchdog: ${arquivo} sem progresso há >${WATCHDOG_MS / 1000}s (stream truncada/pendurada) — matando socket p/ retry`);
+          this.logger.warn(`RFB ${spec.nome}: ${err.message}`);
+          // DESTRÓI a fonte direto (fecha o socket undici de fato) — o
+          // AbortController do pipeline NÃO força um read nativo pendurado.
+          // O erro propaga unzip→parser→COPY → pipeline rejeita → retry.
+          zipStream.destroy(err);
+          entry.destroy(err);
+        }
+      }, 30_000);
+      try {
+        await pipeline(entry, parser, mapper, copyStream);
+      } finally {
+        clearInterval(wd);
+      }
       break; // zip da RFB tem 1 entry
     }
     return count;
