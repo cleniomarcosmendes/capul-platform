@@ -24,14 +24,11 @@ núcleo em 14/06 (viagens, despesas+foto, monitor, manutenção KM, KM hodômetr
 núcleo opera ponta a ponta; estes são refinamentos + 1 bloqueio externo. **Combinado
 com o Clenio: atacar na sessão de 15/06.**
 
-### ⏳ 2026-06-15 — Exceção da portaria: apontar saída por NOME (sem senha) [BLOQUEADO]
-- **Spec:** doc "Frota e Portaria" — a portaria precisa tratar exceções (condutor sem
-  senha, portal fora). Decidido (14/06): **só na web**, usuário autorizado busca o
-  condutor por nome no Protheus e aponta a saída **sem senha**, sob a responsabilidade
-  dele (auditável). Ver `[[project_logistica_frota_app_portaria]]`.
-- **Bloqueio:** depende da **API Protheus de busca de funcionário por nome** — Clenio
-  solicita à equipe Protheus em 15/06. Só dá pra codar quando a API existir (possível
-  reuso do `buscarColaborador`/`infoPortal` por NOME do Chamado — confirmar).
+### ✅ 2026-06-15 — Exceção da portaria: apontar saída por NOME (sem senha) [FEITO]
+- **Entregue** (commit `110dd13`): modo "pela portaria" na saída da frota (web, só
+  gestores). Reusa a operacao `infoFuncionario` (=.../infoPortal, aceita `?NOME=`) →
+  zero cadastro novo no Configurador. `Viagem.registradaPortaria` audita (accountability
+  do criadoPorId). E2E ok com Protheus real. Ver `[[project_logistica_frota_app_portaria]]`.
 
 ### ⏳ 2026-06-15 — Notificação ATIVA ao supervisor de despesa pendente
 - **Spec §5.3:** "o supervisor do veículo é notificado para validar". Hoje é **passivo**
