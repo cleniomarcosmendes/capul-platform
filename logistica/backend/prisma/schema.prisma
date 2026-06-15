@@ -351,6 +351,10 @@ model Viagem {
   // senha — NÃO é usuário do sistema). Em ENTREGA o condutor é o motoristaId.
   condutorMatricula         String?      @map("condutor_matricula")
   condutorNome              String?      @map("condutor_nome")
+  // Saída registrada pela PORTARIA (exceção): o usuário autorizado apontou a
+  // viagem ao condutor por NOME, SEM a senha dele — accountability é do
+  // criadoPorId. false = condutor se auto-autenticou (matrícula+senha).
+  registradaPortaria        Boolean      @default(false) @map("registrada_portaria")
   situacao                  StatusViagem @default(RASCUNHO)
   criadoEm                  DateTime     @default(now()) @map("criado_em")
   criadoPorId               String       @map("criado_por_id")

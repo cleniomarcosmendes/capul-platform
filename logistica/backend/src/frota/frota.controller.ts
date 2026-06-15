@@ -3,7 +3,7 @@ import { StatusViagem } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { FrotaService } from './frota.service.js';
-import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto } from './dto.js';
+import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto } from './dto.js';
 
 const roleLogistica = (user: JwtPayload) => user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
 
@@ -28,6 +28,20 @@ export class FrotaController {
   @Post('viagens')
   saida(@Body() dto: SaidaFrotaDto, @CurrentUser() user: JwtPayload) {
     return this.frota.registrarSaida(dto, user);
+  }
+
+  /** EXCEÇÃO da portaria: busca condutor por nome (Protheus infoPortal). Gestores. */
+  @Get('condutores/busca')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  buscarPorNome(@Query('nome') nome: string) {
+    return this.frota.buscarCondutoresPorNome(nome ?? '');
+  }
+
+  /** EXCEÇÃO da portaria: aponta a saída ao condutor SEM senha. Gestores (auditável). */
+  @Post('viagens/portaria')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  saidaPortaria(@Body() dto: SaidaPortariaDto, @CurrentUser() user: JwtPayload) {
+    return this.frota.registrarSaidaPortaria(dto, user);
   }
 
   /** Lista viagens de frota da filial (filtro de situação opcional). */

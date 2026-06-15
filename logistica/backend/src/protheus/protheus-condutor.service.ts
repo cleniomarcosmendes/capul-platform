@@ -74,6 +74,32 @@ export class ProtheusCondutorService {
     return { matricula: String(f?.matricula ?? chapa).trim(), nome };
   }
 
+  /**
+   * Busca funcionários por NOME — exceção da portaria (apontar saída sem senha).
+   * Reusa a operacao `infoFuncionario` (mapeada p/ .../infoPortal em HOM+PROD; o
+   * mesmo endpoint aceita ?MATRICULA= e ?NOME=). Resposta: { funcionarios:
+   * [{matricula, nome, cc}] } (ordenada por nome) ou { mensagem: "...não
+   * encontrado..." } → lista vazia. Campos vêm com espaços à direita — trim.
+   */
+  async buscarPorNome(nome: string): Promise<{ matricula: string; nome: string; cc: string | null }[]> {
+    const cfg = await this.getConfig();
+    if (!cfg) return [];
+    const ep = cfg.endpoints.find((e) => e.operacao === 'infoFuncionario');
+    if (!ep) { this.logger.warn('infoFuncionario não cadastrado'); return []; }
+    const url = `${ep.url}?NOME=${encodeURIComponent(nome.trim())}`;
+    const data = await this.request(url, this.auth(cfg), ep.timeoutMs || 8000, ep.metodo || 'GET', `infoFuncionario NOME=${nome.trim()}`);
+    if (!data) return [];
+    const lista = (data as { funcionarios?: Record<string, unknown>[] }).funcionarios;
+    if (!Array.isArray(lista)) return []; // { mensagem: "não encontrado..." }
+    return lista
+      .map((f) => ({
+        matricula: String(f?.matricula ?? '').trim(),
+        nome: String(f?.nome ?? '').trim(),
+        cc: f?.cc != null ? String(f.cc).trim() || null : null,
+      }))
+      .filter((f) => f.matricula && f.nome);
+  }
+
   /** Valida matrícula+senha (loginPortal) e, se válido, retorna o nome. */
   async validar(matricula: string, senha: string): Promise<ResultadoCondutor> {
     const cfg = await this.getConfig();

@@ -40,6 +40,34 @@ export class SaidaFrotaDto {
   departamentoSolicitanteId?: string;
 }
 
+/**
+ * Saída registrada pela PORTARIA (exceção) — usuário autorizado aponta a viagem
+ * ao condutor escolhido na busca por nome, SEM a senha dele. matrícula+nome vêm
+ * do resultado do infoPortal (não digitados livremente).
+ */
+export class SaidaPortariaDto {
+  @IsString() @IsNotEmpty() @MaxLength(20)
+  condutorMatricula!: string;
+
+  @IsString() @IsNotEmpty() @MaxLength(120)
+  condutorNome!: string;
+
+  @IsString() @IsNotEmpty()
+  veiculoId!: string;
+
+  @IsInt() @Min(0)
+  kmInicial!: number;
+
+  @IsOptional() @IsString() @MaxLength(255)
+  finalidade?: string;
+
+  @IsOptional() @IsString() @MaxLength(120)
+  localSaida?: string;
+
+  @IsOptional() @IsString() @MaxLength(40)
+  departamentoSolicitanteId?: string;
+}
+
 export class RetornoFrotaDto {
   @IsString() @IsNotEmpty() @MaxLength(20)
   matricula!: string;

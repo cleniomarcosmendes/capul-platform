@@ -126,9 +126,15 @@ export function FrotaPage() {
 }
 
 // ---- Formulário de SAÍDA (matrícula → nome → senha → veículo/km) ----
+interface CondutorBusca { matricula: string; nome: string; cc: string | null }
+
 function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () => void }) {
   const { toast } = useToast();
+  const { logisticaRole } = useAuth();
+  // Exceção da PORTARIA (apontar por nome, sem senha) — só gestores autorizados.
+  const ehGestorPortaria = ['GESTOR_FROTA', 'GESTOR_ENTREGA', 'ADMIN'].includes(logisticaRole ?? '');
   const [aberto, setAberto] = useState(false);
+  const [modo, setModo] = useState<'CONDUTOR' | 'PORTARIA'>('CONDUTOR');
   const [matricula, setMatricula] = useState('');
   const [nome, setNome] = useState<string | null>(null);
   const [buscando, setBuscando] = useState(false);
@@ -141,11 +147,18 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   const [credOk, setCredOk] = useState(false);
   const [validandoSenha, setValidandoSenha] = useState(false);
   const [erroSenha, setErroSenha] = useState<string | null>(null);
+  // Estado da busca por nome (modo portaria).
+  const [nomeBusca, setNomeBusca] = useState('');
+  const [resultados, setResultados] = useState<CondutorBusca[]>([]);
+  const [buscandoNome, setBuscandoNome] = useState(false);
+  const [buscou, setBuscou] = useState(false);
+  const [condutorSel, setCondutorSel] = useState<CondutorBusca | null>(null);
   const senhaRef = useRef<HTMLInputElement>(null);
   const veiculoRef = useRef<HTMLSelectElement>(null);
 
-  // Só avança para o resto do formulário depois que matrícula+senha foram VALIDADAS.
-  const podeAvancar = credOk;
+  // Avança o passo 2: no modo condutor exige senha validada; na portaria, exige
+  // ter escolhido um condutor da busca por nome (sem senha).
+  const podeAvancar = modo === 'PORTARIA' ? !!condutorSel : credOk;
 
   // Ao resolver o nome, posiciona o cursor na senha.
   useEffect(() => { if (nome) senhaRef.current?.focus(); }, [nome]);
@@ -153,6 +166,21 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   const reset = () => {
     setMatricula(''); setNome(null); setSenha(''); setVeiculoId('');
     setKmInicial(''); setFinalidade(''); setLocalSaida(''); setErroSenha(null); setCredOk(false);
+    setNomeBusca(''); setResultados([]); setBuscou(false); setCondutorSel(null);
+  };
+
+  // Busca condutor por NOME no Protheus (modo portaria — sem senha).
+  const buscarNome = async () => {
+    if (nomeBusca.trim().length < 3 || buscandoNome) return;
+    setBuscandoNome(true); setBuscou(false); setCondutorSel(null); setResultados([]);
+    try {
+      const { data } = await logisticaApi.get<CondutorBusca[]>('/frota/condutores/busca', { params: { nome: nomeBusca.trim() } });
+      setResultados(data); setBuscou(true);
+    } catch (e) {
+      toast('error', errMsg(e, 'Falha na busca por nome.'));
+    } finally {
+      setBuscandoNome(false);
+    }
   };
 
   const buscarCondutor = async () => {
@@ -185,18 +213,31 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   };
 
   const registrar = async () => {
-    if (!credOk) { toast('warning', 'Valide a matrícula e a senha do condutor.'); return; }
+    if (!podeAvancar) {
+      toast('warning', modo === 'PORTARIA' ? 'Busque e selecione o condutor.' : 'Valide a matrícula e a senha do condutor.');
+      return;
+    }
     if (!veiculoId) { toast('warning', 'Selecione o veículo.'); return; }
     if (kmInicial === '') { toast('warning', 'Informe o KM de saída.'); return; }
     setSalvando(true);
     try {
-      await logisticaApi.post('/frota/viagens', {
-        matricula: matricula.trim(), senha, veiculoId,
-        kmInicial: Number(kmInicial),
-        finalidade: finalidade.trim() || undefined,
-        localSaida: localSaida.trim() || undefined,
-      });
-      toast('success', 'Saída registrada.');
+      if (modo === 'PORTARIA') {
+        await logisticaApi.post('/frota/viagens/portaria', {
+          condutorMatricula: condutorSel!.matricula, condutorNome: condutorSel!.nome, veiculoId,
+          kmInicial: Number(kmInicial),
+          finalidade: finalidade.trim() || undefined,
+          localSaida: localSaida.trim() || undefined,
+        });
+        toast('success', 'Saída registrada pela portaria (sob sua responsabilidade).');
+      } else {
+        await logisticaApi.post('/frota/viagens', {
+          matricula: matricula.trim(), senha, veiculoId,
+          kmInicial: Number(kmInicial),
+          finalidade: finalidade.trim() || undefined,
+          localSaida: localSaida.trim() || undefined,
+        });
+        toast('success', 'Saída registrada.');
+      }
       reset(); setAberto(false); onDone();
     } catch (e) {
       toast('error', errMsg(e, 'Falha ao registrar saída.'));
@@ -224,7 +265,21 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
       </div>
 
       <div className="max-w-4xl space-y-5">
-        {/* Passo 1 — Condutor */}
+        {ehGestorPortaria && (
+          <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 text-xs font-medium">
+            <button onClick={() => { setModo('CONDUTOR'); reset(); }}
+              className={`rounded-md px-3 py-1.5 ${modo === 'CONDUTOR' ? 'bg-sky-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+              Condutor (matrícula + senha)
+            </button>
+            <button onClick={() => { setModo('PORTARIA'); reset(); }}
+              className={`rounded-md px-3 py-1.5 ${modo === 'PORTARIA' ? 'bg-amber-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+              Pela portaria (por nome, sem senha)
+            </button>
+          </div>
+        )}
+
+        {/* Passo 1 — Condutor (matrícula + senha) */}
+        {modo === 'CONDUTOR' && (
         <div>
           <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">1. Condutor</p>
           <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-12">
@@ -272,6 +327,47 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
             </div>
           </div>
         </div>
+        )}
+
+        {/* Passo 1 — Portaria (busca por nome, sem senha) */}
+        {modo === 'PORTARIA' && (
+        <div>
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">1. Condutor (pela portaria)</p>
+          <p className="mb-2 text-xs text-amber-700">Exceção: a viagem é apontada ao condutor <b>sem a senha dele</b> — fica registrada sob a sua responsabilidade.</p>
+          <div className="flex max-w-md gap-1">
+            <input
+              value={nomeBusca}
+              onChange={(e) => { setNomeBusca(e.target.value); setBuscou(false); setCondutorSel(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') void buscarNome(); }}
+              placeholder="Nome do condutor (mín. 3 letras)"
+              autoComplete="off"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+            <button onClick={() => void buscarNome()} disabled={buscandoNome || nomeBusca.trim().length < 3}
+              title="Buscar por nome"
+              className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm hover:bg-slate-50 disabled:opacity-50">
+              {buscandoNome ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            </button>
+          </div>
+          {buscou && resultados.length === 0 && (
+            <p className="mt-2 text-xs text-slate-500">Nenhum funcionário encontrado (ou sem acesso ao portal RH).</p>
+          )}
+          {resultados.length > 0 && (
+            <ul className="mt-2 max-w-md divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white">
+              {resultados.map((c) => (
+                <li key={c.matricula}>
+                  <button onClick={() => setCondutorSel(c)}
+                    className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50 ${condutorSel?.matricula === c.matricula ? 'bg-sky-50' : ''}`}>
+                    <span><span className="font-medium text-slate-800">{c.nome}</span><span className="text-slate-400"> · {c.matricula}{c.cc ? ` · CC ${c.cc}` : ''}</span></span>
+                    {condutorSel?.matricula === c.matricula && <span className="shrink-0 text-xs font-medium text-sky-700">✓</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {condutorSel && <p className="mt-2 text-xs font-medium text-emerald-700">Selecionado: {condutorSel.nome} ({condutorSel.matricula})</p>}
+        </div>
+        )}
 
         {/* Passo 2 — Viagem (libera após validar a senha) */}
         <div className={podeAvancar ? '' : 'opacity-60'}>

@@ -7,7 +7,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
-import { SaidaFrotaDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto } from './dto.js';
+import { SaidaFrotaDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto } from './dto.js';
 
 // Mesma normalização do toChapaPortal pra comparar matrículas com segurança.
 const chapa = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
@@ -90,6 +90,67 @@ export class FrotaService {
           veiculoId: veiculo.id,
           condutorMatricula: cond.matricula,
           condutorNome: cond.nome,
+          departamentoSolicitanteId: dto.departamentoSolicitanteId ?? null,
+          kmInicial: dto.kmInicial,
+          localSaida: dto.localSaida ?? null,
+          observacoesSaida: dto.finalidade ?? null,
+          dataHoraSaida: new Date(),
+          criadoPorId: user.sub,
+        },
+      });
+      await tx.veiculo.update({ where: { id: veiculo.id }, data: { situacao: SituacaoVeiculo.EM_USO } });
+      return viagem;
+    });
+  }
+
+  /**
+   * Busca condutores por NOME no Protheus (infoPortal) — para a EXCEÇÃO da
+   * portaria. Não exige senha; é só consulta. Lista ordenada por nome.
+   */
+  async buscarCondutoresPorNome(nome: string) {
+    if (!nome || nome.trim().length < 3) {
+      throw new BadRequestException('Informe ao menos 3 letras do nome.');
+    }
+    return this.condutor.buscarPorNome(nome);
+  }
+
+  /**
+   * Registrar SAÍDA pela PORTARIA (exceção): usuário autorizado aponta a viagem
+   * ao condutor (escolhido na busca por nome) SEM a senha dele. A accountability
+   * é do usuário logado (criadoPorId) — fica registrado `registradaPortaria=true`.
+   * Mesma validação de veículo/KM da saída normal.
+   */
+  async registrarSaidaPortaria(dto: SaidaPortariaDto, user: JwtPayload) {
+    const filialId = user.filialId;
+    if (!filialId) throw new BadRequestException('Usuário sem filial definida.');
+
+    const veiculo = await this.prisma.veiculo.findFirst({
+      where: { id: dto.veiculoId, filialId, ativo: true },
+    });
+    if (!veiculo) throw new NotFoundException('Veículo não encontrado nesta filial.');
+    if (veiculo.situacao !== SituacaoVeiculo.DISPONIVEL) {
+      throw new BadRequestException(`Veículo indisponível (situação: ${veiculo.situacao}).`);
+    }
+    if (dto.kmInicial < veiculo.kmAtual) {
+      throw new BadRequestException(`KM inicial (${dto.kmInicial}) menor que o KM atual do veículo (${veiculo.kmAtual}).`);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const contador = await tx.contadorSequencial.upsert({
+        where: { filialId_escopo: { filialId, escopo: 'VIAGEM' } },
+        create: { filialId, escopo: 'VIAGEM', ultimoNumero: 1 },
+        update: { ultimoNumero: { increment: 1 } },
+      });
+      const viagem = await tx.viagem.create({
+        data: {
+          numero: contador.ultimoNumero,
+          filialId,
+          tipo: TipoViagem.FROTA,
+          situacao: StatusViagem.EM_CURSO,
+          veiculoId: veiculo.id,
+          condutorMatricula: dto.condutorMatricula.trim(),
+          condutorNome: dto.condutorNome.trim(),
+          registradaPortaria: true,
           departamentoSolicitanteId: dto.departamentoSolicitanteId ?? null,
           kmInicial: dto.kmInicial,
           localSaida: dto.localSaida ?? null,
