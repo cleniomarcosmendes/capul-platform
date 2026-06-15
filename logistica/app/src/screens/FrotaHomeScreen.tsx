@@ -72,7 +72,7 @@ export function FrotaHomeScreen({ navigation }: Props) {
       <FlatList
         contentContainerStyle={viagens.length === 0 ? styles.vazioWrap : styles.lista}
         data={viagens}
-        keyExtractor={(v) => v.id}
+        keyExtractor={(v, i) => v.id ?? `idx-${i}`}
         refreshControl={<RefreshControl refreshing={atualizando} onRefresh={onRefresh} tintColor={CAPUL} />}
         ListEmptyComponent={
           <Text style={styles.vazio}>{erro || 'Nenhum veículo em viagem agora.\nArraste para baixo para atualizar.'}</Text>
