@@ -173,22 +173,26 @@ export function ViagemDetalhePage() {
   const SEM_BAIRRO = '__SEM__';
   const keyBairro = (b?: string | null) => (b ?? '').trim().toUpperCase() || SEM_BAIRRO;
 
+  // Oferece recalcular após adicionar — SEMPRE que a rota já foi otimizada
+  // alguma vez (ultimaSugestao != null), mesmo que o operador tenha dito "agora
+  // não" antes. Assim a pergunta volta a cada entrega adicionada, não só na 1ª.
+  const ofereceRecalcular = async (qtd: number) => {
+    if (!ultimaSugestao) return; // nunca otimizou → adiciona livre, sem perguntar
+    const ok = await confirm(
+      'Rota alterada',
+      `${qtd === 1 ? 'A entrega entrou' : `As ${qtd} entregas entraram`} no fim da rota. Recalcular a melhor rota agora?`,
+      { confirmLabel: 'Recalcular', cancelLabel: 'Agora não' },
+    );
+    if (ok) await sugerirOrdemRascunho();
+  };
+
   const adicionarEntrega = async (entregaId: string) => {
-    // A rota estava otimizada ANTES de adicionar? (pra decidir oferecer recálculo)
-    const eraOtimizada = rotaOtimizada;
+    const jaOtimizou = !!ultimaSugestao;
     await acao(async () => {
       await logisticaApi.post(`/viagens/${id}/entregas`, { entregaIds: [entregaId] });
       setPendentesAdd((p) => p.filter((e) => e.id !== entregaId));
     }, 'Falha ao adicionar entrega.');
-    // Entrou no fim de uma rota já otimizada → oferece recalcular (não força).
-    if (eraOtimizada) {
-      const ok = await confirm(
-        'Rota alterada',
-        'A entrega entrou no fim de uma rota que já estava otimizada. Recalcular a melhor rota agora?',
-        { confirmLabel: 'Recalcular', cancelLabel: 'Agora não' },
-      );
-      if (ok) await sugerirOrdemRascunho();
-    }
+    if (jaOtimizou) await ofereceRecalcular(1);
   };
 
   async function acao(fn: () => Promise<unknown>, erro: string) {
@@ -376,11 +380,15 @@ export function ViagemDetalhePage() {
           if (q && !(`#${e.numero} ${e.destinatarioNome} ${e.endLogradouro} ${e.endBairro ?? ''}`.toLowerCase().includes(q))) return false;
           return true;
         });
-        const adicionarTodas = () =>
-          acao(async () => {
+        const adicionarTodas = async () => {
+          const jaOtimizou = !!ultimaSugestao;
+          const qtd = filaFiltrada.length;
+          await acao(async () => {
             await logisticaApi.post(`/viagens/${id}/entregas`, { entregaIds: filaFiltrada.map((e) => e.id) });
             setPendentesAdd((p) => p.filter((e) => !filaFiltrada.some((f) => f.id === e.id)));
           }, 'Falha ao adicionar entregas.');
+          if (jaOtimizou) await ofereceRecalcular(qtd);
+        };
         return (
         <div className="rounded-xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
