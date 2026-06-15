@@ -10,30 +10,36 @@ interface ParadaResp { sequencia?: number; entrega?: EntregaResp }
 interface ViagemResp { numero: number; veiculo?: { placa?: string } | null; paradas?: ParadaResp[] }
 interface Item { entrega: EntregaResp; sequencia?: number }
 
+// Layout para bobina TÉRMICA 80mm (Bematech MP-4200 TH — a mesma do cupom
+// fiscal). Conteúdo ~72mm; tudo em preto e fontes grandes (o papel é colado na
+// caixa e precisa ser lido de longe). O corte do papel é feito pelo DRIVER da
+// impressora (já configurado para cortar o cupom): com @page 80mm auto + quebra
+// por entrega, ela corta ao fim de cada uma e ao terminar o trabalho.
 const CSS = `
 .etq-root { background:#f1f5f9; min-height:100vh; }
 .etq-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 20px; background:#fff; border-bottom:1px solid #e2e8f0; position:sticky; top:0; z-index:10; }
 .etq-folhas { padding:20px; display:flex; flex-direction:column; align-items:center; gap:16px; }
-.etiqueta { width:100mm; background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:6mm; box-sizing:border-box; font-family: system-ui, -apple-system, sans-serif; color:#0f172a; }
-.etq-topo { display:flex; justify-content:space-between; align-items:baseline; border-bottom:2px solid #0f172a; padding-bottom:4px; }
-.etq-marca { font-weight:700; font-size:13px; letter-spacing:.5px; }
-.etq-numero { font-weight:800; font-size:22px; }
-.etq-viagem { font-size:11px; color:#475569; margin-top:4px; }
-.etq-dest { font-size:18px; font-weight:700; margin-top:8px; line-height:1.2; }
-.etq-tel { font-size:13px; color:#334155; }
-.etq-end { font-size:14px; margin-top:6px; line-height:1.35; }
-.etq-ref { font-size:12px; color:#475569; margin-top:2px; }
-.etq-rodape { display:flex; justify-content:space-between; align-items:center; margin-top:8px; font-size:13px; }
-.etq-obs { font-size:12px; color:#475569; margin-top:4px; border-top:1px dashed #cbd5e1; padding-top:4px; }
-.etq-barcode { margin-top:10px; text-align:center; }
-.etq-codigo { font-family: ui-monospace, monospace; font-size:12px; letter-spacing:3px; margin-top:2px; }
+.etiqueta { width:72mm; background:#fff; border:1px solid #cbd5e1; border-radius:6px; padding:4mm; box-sizing:border-box; font-family: system-ui, -apple-system, sans-serif; color:#000; }
+.etq-topo { display:flex; justify-content:space-between; align-items:baseline; border-bottom:2px solid #000; padding-bottom:3px; }
+.etq-marca { font-weight:700; font-size:12px; letter-spacing:.3px; }
+.etq-numero { font-weight:800; font-size:20px; }
+.etq-viagem { font-size:11px; color:#000; margin-top:3px; }
+.etq-dest { font-size:18px; font-weight:800; margin-top:6px; line-height:1.15; text-transform:uppercase; }
+.etq-tel { font-size:15px; font-weight:600; }
+.etq-end { font-size:16px; font-weight:600; margin-top:5px; line-height:1.3; }
+.etq-ref { font-size:13px; color:#000; margin-top:2px; }
+.etq-rodape { display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:14px; font-weight:600; }
+.etq-obs { font-size:13px; color:#000; margin-top:4px; border-top:1px dashed #000; padding-top:3px; }
+.etq-barcode { margin-top:8px; text-align:center; }
+.etq-codigo { font-family: ui-monospace, monospace; font-size:12px; letter-spacing:2px; margin-top:2px; }
 @media print {
   .no-print { display:none !important; }
   .etq-root { background:#fff; min-height:0; }
   .etq-folhas { padding:0; gap:0; }
-  .etiqueta { border:none; border-radius:0; width:100%; page-break-after: always; }
+  .etiqueta { border:none; border-radius:0; width:80mm; padding:2mm 4mm; page-break-after: always; }
   .etiqueta:last-child { page-break-after: auto; }
-  @page { margin:8mm; }
+  /* Bobina térmica 80mm contínua — sem margem; o driver corta a cada página. */
+  @page { size: 80mm auto; margin: 0; }
 }`;
 
 export function EtiquetasPage({ modo }: { modo: 'viagem' | 'entrega' }) {
