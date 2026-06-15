@@ -55,6 +55,20 @@ com o Clenio: atacar na sessão de 15/06.**
 - **Spec §5.2:** ao adicionar parada na viagem, o app sugere local pelo GPS e KM pela distância.
   Hoje a parada é manual. Refinamento do app (só valida em device).
 
+### ⏳ 2026-06-15 — App: tela-lançador FROTA / ENTREGA (usuário com os dois perfis)
+- **Origem:** levantado pelo Clenio testando o app no celular (15/06). Hoje a navegação
+  (`logistica/app/src/navigation/index.tsx:32`) decide **só pela role**: `ENTREGADOR` →
+  app de entrega ("Minhas viagens"); qualquer outra role → Frota. Limitações:
+  1. O JWT carrega **uma role por módulo** (`LOGISTICA → ENTREGADOR`), então "faz os dois"
+     não é representável hoje.
+  2. Um `ENTREGADOR` **nunca alcança a Frota** pelo app — embora a Frota seja *self-service*
+     (condutor se identifica por matrícula+senha a cada ação; nem precisa ser usuário do
+     sistema), logo conceitualmente qualquer pessoa poderia operá-la.
+- **Proposta:** tela-lançador inicial com 2 cards (Frota / Entrega), exibida quando o
+  usuário tem acesso aos dois; lembrar a última escolha; botão para alternar no header.
+  Como a Frota é self-service, dá pra liberar o card "Frota" para todos e manter "Entrega"
+  só para quem tem a role `ENTREGADOR`. **Decisão de design — alinhar antes de implementar.**
+
 ### 🔎 Política de retenção/LGPD das fotos de comprovante de despesa
 - **Spec §7:** definir retenção das fotos de cupom. Conversado 14/06 (binário no MinIO, fora do
   banco; ver `[[project_logistica_frota_app_portaria]]`). Falta formalizar a política/prazo
