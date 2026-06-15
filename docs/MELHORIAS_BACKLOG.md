@@ -70,6 +70,38 @@ com o Clenio: atacar na sessão de 15/06.**
 
 ---
 
+## Fiscal — Importação RFB (robustez contra share degradado)
+
+### ⏳ 2026-06-15 — Retry da importação deve usar conexão NOVA por tentativa
+**Contexto:** incidente 15/06 — o share WebDAV da RFB ficou degradado (arquivo
+truncado num dia, trickle/socket pendurado no outro). Foram aplicados 2 fixes
+(commits `a927ded` dedup do índice único; `af1cc3f` watchdog de progresso que
+**mata o socket** após 5min sem avançar). O watchdog **passou a disparar**
+corretamente (confirmado em log), MAS o `carregarComRetry` reusa a **mesma
+conexão `client`** do COPY — e matar a stream no meio deixa essa conexão em
+estado de COPY quebrado, então a tentativa seguinte não recupera limpa (COPY
+zumbi). **Fix:** cada tentativa em `carregarComRetry` deve abrir/fechar sua
+PRÓPRIA conexão `pg.Client` (ou resetar a conexão após um COPY abortado).
+
+### 🔎 2026-06-15 — Download-para-disco antes do COPY (desacoplar da rede)
+**Contexto:** hoje é stream direto WebDAV→unzip→csv→COPY; qualquer soluço de rede
+no meio trava/aborta um COPY de dezenas de milhões de linhas. **Proposta:** baixar
+o .zip pro disco primeiro (com retry/resume por Range, que o `abrirStream` já
+suporta), validar o tamanho vs PROPFIND, e só então unzip→COPY a partir do
+arquivo local. Mais resiliente à flutuação do share público.
+
+### 📋 Playbook operacional — quando a importação RFB falhar
+- **Causa mais comum NÃO é o código:** o share público da Receita varia (lento/
+  truncado em horário de pico). **Re-rodar fora de pico** costuma resolver.
+- Estado é seguro: o swap é por-tabela e atômico — uma tabela que falha **não
+  derruba** as já importadas (dados do mês anterior ficam intactos; `simples`
+  pode estar no mês novo e o resto no anterior — base segue operacional).
+- Re-disparar só as que faltam: `POST /api/v1/fiscal/rfb/importar {"tabelas":[...]}`.
+- Se travar (`IMPORTANDO` eterno): `docker compose restart fiscal-backend` +
+  `UPDATE rfb.controle_importacao SET status='ERRO' WHERE status='IMPORTANDO'`.
+
+---
+
 ## Fiscal — Qualidade de dados
 
 ### ⏳ 2026-05-16 — "Perfil específico de cliente" (segmentações salvas sobre a base RFB)
