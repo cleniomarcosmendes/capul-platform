@@ -19,17 +19,17 @@ const CSS = `
 .etq-root { background:#f1f5f9; min-height:100vh; }
 .etq-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 20px; background:#fff; border-bottom:1px solid #e2e8f0; position:sticky; top:0; z-index:10; }
 .etq-folhas { padding:20px; display:flex; flex-direction:column; align-items:center; gap:16px; }
-.etiqueta { width:72mm; background:#fff; border:1px solid #cbd5e1; border-radius:6px; padding:4mm; box-sizing:border-box; font-family: system-ui, -apple-system, sans-serif; color:#000; }
-.etq-topo { display:flex; justify-content:space-between; align-items:baseline; border-bottom:2px solid #000; padding-bottom:3px; }
-.etq-marca { font-weight:700; font-size:12px; letter-spacing:.3px; }
-.etq-numero { font-weight:800; font-size:20px; }
-.etq-viagem { font-size:11px; color:#000; margin-top:3px; }
-.etq-dest { font-size:18px; font-weight:800; margin-top:6px; line-height:1.15; text-transform:uppercase; }
-.etq-tel { font-size:15px; font-weight:600; }
-.etq-end { font-size:16px; font-weight:600; margin-top:5px; line-height:1.3; }
-.etq-ref { font-size:13px; color:#000; margin-top:2px; }
-.etq-rodape { display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:14px; font-weight:600; }
-.etq-obs { font-size:13px; color:#000; margin-top:4px; border-top:1px dashed #000; padding-top:3px; }
+.etiqueta { width:72mm; background:#fff; border:1px solid #cbd5e1; border-radius:6px; padding:4mm; box-sizing:border-box; font-family: system-ui, -apple-system, sans-serif; color:#000; font-weight:700; }
+.etq-topo { display:flex; justify-content:space-between; align-items:baseline; border-bottom:3px solid #000; padding-bottom:4px; }
+.etq-marca { font-weight:800; font-size:14px; letter-spacing:.3px; }
+.etq-numero { font-weight:900; font-size:26px; }
+.etq-viagem { font-size:14px; font-weight:700; color:#000; margin-top:4px; }
+.etq-dest { font-size:24px; font-weight:900; margin-top:8px; line-height:1.15; text-transform:uppercase; }
+.etq-tel { font-size:19px; font-weight:800; margin-top:2px; }
+.etq-end { font-size:20px; font-weight:800; margin-top:7px; line-height:1.3; }
+.etq-ref { font-size:16px; font-weight:700; color:#000; margin-top:3px; }
+.etq-rodape { display:flex; justify-content:space-between; align-items:center; margin-top:8px; font-size:17px; font-weight:800; }
+.etq-obs { font-size:17px; font-weight:800; color:#000; margin-top:6px; border-top:2px dashed #000; padding-top:5px; }
 @media print {
   .no-print { display:none !important; }
   .etq-root { background:#fff; min-height:0; }
