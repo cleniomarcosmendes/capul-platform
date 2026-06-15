@@ -17,6 +17,7 @@ export function LoginScreen() {
   const { login } = useAuth();
   const [usuario, setUsuario] = useState('');
   const [senha, setSenha] = useState('');
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [erro, setErro] = useState('');
   const [entrando, setEntrando] = useState(false);
 
@@ -44,28 +45,39 @@ export function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.box}>
-        <Text style={styles.titulo}>CAPUL Entregas</Text>
-        <Text style={styles.sub}>Acesso do entregador</Text>
+        <Text style={styles.titulo}>CAPUL Logística</Text>
+        <Text style={styles.sub}>Entregas e Frota</Text>
 
         <TextInput
           style={styles.input}
-          placeholder="Matrícula"
-          keyboardType="number-pad"
+          placeholder="Matrícula ou usuário"
           autoCapitalize="none"
           autoCorrect={false}
           value={usuario}
           onChangeText={setUsuario}
           editable={!entrando}
         />
-        <TextInput
-          style={styles.input}
-          placeholder="Senha do portal RH"
-          secureTextEntry
-          value={senha}
-          onChangeText={setSenha}
-          editable={!entrando}
-          onSubmitEditing={entrar}
-        />
+        <View style={styles.senhaWrap}>
+          <TextInput
+            style={[styles.input, styles.senhaInput]}
+            placeholder="Senha"
+            secureTextEntry={!mostrarSenha}
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={senha}
+            onChangeText={setSenha}
+            editable={!entrando}
+            onSubmitEditing={entrar}
+          />
+          <TouchableOpacity
+            style={styles.olho}
+            onPress={() => setMostrarSenha((v) => !v)}
+            hitSlop={10}
+            accessibilityLabel={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'}
+          >
+            <Text style={styles.olhoTxt}>{mostrarSenha ? '🙈' : '👁️'}</Text>
+          </TouchableOpacity>
+        </View>
 
         {erro ? <Text style={styles.erro}>{erro}</Text> : null}
 
@@ -98,6 +110,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
   },
+  senhaWrap: { justifyContent: 'center' },
+  senhaInput: { paddingRight: 48 },
+  olho: { position: 'absolute', right: 8, padding: 6 },
+  olhoTxt: { fontSize: 20 },
   erro: { color: '#dc2626', fontSize: 13 },
   botao: {
     backgroundColor: CAPUL,
