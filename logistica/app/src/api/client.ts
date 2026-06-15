@@ -29,7 +29,9 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 // concorrentes que tomarem 401 esperam o mesmo refresh). ---
 let refreshing: Promise<string | null> | null = null;
 
-async function doRefresh(): Promise<string | null> {
+/** Renova o access token a partir do refresh salvo. Exportado para o boot do
+ *  AuthContext (garantir access+role frescos) além do uso no interceptor 401. */
+export async function doRefresh(): Promise<string | null> {
   const refresh = await getRefresh();
   if (!refresh) return null;
   try {

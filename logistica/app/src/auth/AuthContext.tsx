@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { loginRequest, setAccessToken, setOnAuthFailure } from '../api/client';
+import { doRefresh, loginRequest, setAccessToken, setOnAuthFailure } from '../api/client';
 import { getDeviceId } from './deviceId';
-import { clearTokens, getAccess, getRefresh, saveTokens } from './storage';
+import { clearTokens, getRefresh, saveTokens } from './storage';
 import { papelLogistica } from '../lib/jwt';
 
 type Status = 'loading' | 'authenticated' | 'unauthenticated';
@@ -33,18 +33,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // Boot: carrega tokens do keystore. Sessão é válida se houver REFRESH (30d
-  // deslizante) — o access pode estar vencido (15m) que o client renova no
-  // 1º request. Refresh morto → o client chama onAuthFailure → logout.
+  // Boot: a sessão é válida se houver REFRESH (30d deslizante). NÃO confiamos só
+  // no access salvo (pode estar ausente/vencido) — renovamos no boot para ter
+  // access E role frescos já na 1ª tela (senão a role vinha null → lançador
+  // marcava tudo "sem permissão"). Sem rede, cai no access salvo; refresh morto
+  // → logout.
   useEffect(() => {
     setOnAuthFailure(() => {
       void logout();
     });
     (async () => {
-      const [access, refresh] = await Promise.all([getAccess(), getRefresh()]);
+      const refresh = await getRefresh();
+      if (!refresh) {
+        setAccessToken(null);
+        setStatus('unauthenticated');
+        return;
+      }
+      // Renova SEMPRE no boot — o access salvo pode ser de uma sessão antiga sem
+      // `modulos` (role viria null). Se o refresh falhar (sessão velha/inválida),
+      // NÃO caímos num access-lixo: limpamos e mostramos o login.
+      const access = await doRefresh().catch(() => null);
+      if (!access) {
+        await clearTokens().catch(() => {});
+        setAccessToken(null);
+        setRole(null);
+        setStatus('unauthenticated');
+        return;
+      }
       setAccessToken(access);
       setRole(papelLogistica(access));
-      setStatus(refresh ? 'authenticated' : 'unauthenticated');
+      setStatus('authenticated');
     })();
     return () => setOnAuthFailure(null);
   }, [logout]);
