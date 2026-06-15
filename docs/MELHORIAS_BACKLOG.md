@@ -55,19 +55,17 @@ com o Clenio: atacar na sessão de 15/06.**
 - **Spec §5.2:** ao adicionar parada na viagem, o app sugere local pelo GPS e KM pela distância.
   Hoje a parada é manual. Refinamento do app (só valida em device).
 
-### ⏳ 2026-06-15 — App: tela-lançador FROTA / ENTREGA (usuário com os dois perfis)
-- **Origem:** levantado pelo Clenio testando o app no celular (15/06). Hoje a navegação
-  (`logistica/app/src/navigation/index.tsx:32`) decide **só pela role**: `ENTREGADOR` →
-  app de entrega ("Minhas viagens"); qualquer outra role → Frota. Limitações:
-  1. O JWT carrega **uma role por módulo** (`LOGISTICA → ENTREGADOR`), então "faz os dois"
-     não é representável hoje.
-  2. Um `ENTREGADOR` **nunca alcança a Frota** pelo app — embora a Frota seja *self-service*
-     (condutor se identifica por matrícula+senha a cada ação; nem precisa ser usuário do
-     sistema), logo conceitualmente qualquer pessoa poderia operá-la.
-- **Proposta:** tela-lançador inicial com 2 cards (Frota / Entrega), exibida quando o
-  usuário tem acesso aos dois; lembrar a última escolha; botão para alternar no header.
-  Como a Frota é self-service, dá pra liberar o card "Frota" para todos e manter "Entrega"
-  só para quem tem a role `ENTREGADOR`. **Decisão de design — alinhar antes de implementar.**
+### ✅ 2026-06-15 — App: tela-lançador FROTA / ENTREGA (usuário com os dois perfis) [FEITO]
+- **Origem:** levantado pelo Clenio testando o app no celular (15/06) — duas equipes
+  diferentes validam Frota e Entrega ao mesmo tempo, e o roteamento por role + logout
+  travado impedia alternar.
+- **Entregue** (commit `9be5341`): tela-lançador `Home` após o login com 2 cards (Entregas
+  / Frota). Cada card é habilitado conforme a role na Logística, espelhando a RBAC do
+  backend (`roles.guard`: ADMIN sempre) — `ROLES_ENTREGA` / `ROLES_FROTA` em
+  `HomeScreen.tsx`. Volta ao lançador (botão voltar) troca de app sem deslogar. A Home
+  como rota inicial autenticada também resolveu o "preso na Frota" de sessão em cache.
+- Removido o fork por role em `navigation/index.tsx`. Para o testador ver os dois cards,
+  basta role `ADMIN` na Logística (backend libera ambos).
 
 ### 🔎 Política de retenção/LGPD das fotos de comprovante de despesa
 - **Spec §7:** definir retenção das fotos de cupom. Conversado 14/06 (binário no MinIO, fora do
