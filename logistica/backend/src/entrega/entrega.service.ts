@@ -1,5 +1,6 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, SituacaoVeiculo, StatusEntrega, StatusViagem } from '@prisma/client';
+import { carimbarProvaEntrega, fmtGeo } from './watermark.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import { CofreService } from '../cofre/cofre.service.js';
@@ -21,6 +22,8 @@ export interface ProvaBinaria {
 
 @Injectable()
 export class EntregaService {
+  private readonly logger = new Logger(EntregaService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly core: CoreLookupService,
@@ -544,6 +547,36 @@ export class EntregaService {
     let temComprovante = false;
     if (entregue && prova) {
       const cupom = e.cupons.find((c) => c.numeroCupom)?.numeroCupom ?? null;
+
+      // FOTO: carimba metadados na própria imagem (auto-contida, anti-fraude).
+      // Best-effort — se o carimbo falhar, grava a foto original (não bloqueia
+      // a baixa). ASSINATURA não é carimbada.
+      let binario = prova.buffer;
+      let mimeType = prova.mimetype;
+      if (dto.tipoProva === 'FOTO' && prova.mimetype.startsWith('image/')) {
+        try {
+          const endereco = [
+            e.endLogradouro + (e.endNumero ? `, ${e.endNumero}` : ''),
+            e.endBairro,
+            e.endCidade && e.endUf ? `${e.endCidade}/${e.endUf}` : e.endCidade,
+          ]
+            .filter(Boolean)
+            .join(' - ');
+          const linhas = [
+            `Entrega #${e.numero} - ${e.destinatarioNome}`,
+            endereco,
+            fmtGeo(dto.geoLat, dto.geoLng) ?? '',
+            new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+          ].filter((l): l is string => !!l && l.trim().length > 0);
+          binario = await carimbarProvaEntrega(prova.buffer, linhas);
+          mimeType = 'image/jpeg';
+        } catch (err) {
+          this.logger.warn(
+            `Falha ao carimbar prova da entrega ${e.id}; gravando original. ${String(err)}`,
+          );
+        }
+      }
+
       const { comprovanteId: cid } = await this.cofre.gravar({
         entregaId: e.id,
         entregaNumero: e.numero,
@@ -551,8 +584,8 @@ export class EntregaService {
         matricula: e.matricula,
         cupom,
         tipo: dto.tipoProva === 'ASSINATURA' ? 'ASSINATURA' : 'FOTO',
-        binario: prova.buffer,
-        mimeType: prova.mimetype,
+        binario,
+        mimeType,
         geoLat: dto.geoLat ?? null,
         geoLng: dto.geoLng ?? null,
         entregadorId: user.sub,
