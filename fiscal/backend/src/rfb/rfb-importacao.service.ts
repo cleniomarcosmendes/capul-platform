@@ -280,6 +280,37 @@ export class RfbImportacaoService {
         if (onArquivo) await onArquivo(i, linhas);
       }
 
+      // Defesa contra duplicata no dump da Receita (incidente 14/06: empresas
+      // 2026-06 trouxe 1 cnpj_basico repetido — 1 linha boa + 1 "lixo" de campos
+      // vazios — e o índice ÚNICO abortava o import inteiro de 68M linhas). Antes
+      // de cada índice ÚNICO, deduplica o staging pela coluna-chave mantendo a
+      // linha MAIS RICA (maior conteúdo concatenado); a versão "lixo" cai. Cobre
+      // empresas (cnpj_basico) e estabelecimentos (cnpj_completo).
+      for (const ix of spec.indices) {
+        if (!ix.unique || ix.def.startsWith('USING')) continue;
+        const chave = ix.def.replace(/[()]/g, '').trim(); // ex.: "cnpj_basico"
+        if (!chave) continue;
+        const partição = chave.split(',').map((c) => `"${c.trim()}"`).join(', ');
+        const conteúdo = spec.colunas.map((c) => `coalesce("${c}"::text, '')`).join(', ');
+        const del = await client.query(
+          `DELETE FROM ${stg} WHERE ctid IN (
+             SELECT ctid FROM (
+               SELECT ctid, row_number() OVER (
+                 PARTITION BY ${partição}
+                 ORDER BY length(concat_ws('', ${conteúdo})) DESC, ctid
+               ) AS rn FROM ${stg}
+             ) t WHERE rn > 1
+           )`,
+        );
+        if (del.rowCount && del.rowCount > 0) {
+          linhas -= del.rowCount;
+          this.logger.warn(
+            `RFB ${spec.nome}: ${del.rowCount} linha(s) duplicada(s) por (${chave}) ` +
+              `removida(s) do staging (defeito do dump da Receita) antes do índice único`,
+          );
+        }
+      }
+
       // Índices no staging (nomes _stg_ → renomeados p/ canônico no swap).
       for (const ix of spec.indices) {
         const kind = ix.def.startsWith('USING') ? '' : '';
