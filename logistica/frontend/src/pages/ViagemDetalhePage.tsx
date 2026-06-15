@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowDown, ArrowLeft, ArrowUp, Camera, CheckCircle2, FileText, Loader2, Phone, Plus, Printer, Send, Sparkles, Trash2,
 } from 'lucide-react';
@@ -55,8 +55,13 @@ export function ViagemDetalhePage() {
   const [v, setV] = useState<Viagem | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const { toast, prompt } = useToast();
+  const { toast, prompt, confirm } = useToast();
+  const location = useLocation();
   const [naoEncontrada, setNaoEncontrada] = useState(false);
+  // Última ordem sugerida — botão "Sugerir melhor rota" desabilita enquanto a
+  // rota atual for igual a ela; qualquer mudança (add/remover/mover) reabilita.
+  const [ultimaSugestao, setUltimaSugestao] = useState<string[] | null>(null);
+  const aplicouNavState = useRef(false);
   const [confirmacao, setConfirmacao] = useState<{ titulo: string; mensagem: string; acao: () => Promise<void> } | null>(null);
   const [baixaAlvo, setBaixaAlvo] = useState<{ id: string; numero: number; destinatarioNome: string } | null>(null);
   // Edição de RASCUNHO (12/06): veículo/motorista, adicionar entregas, reordenar.
@@ -119,6 +124,21 @@ export function ViagemDetalhePage() {
     [...(v?.paradas ?? [])].sort((a, b) => a.sequencia - b.sequencia)
       .map((p) => p.entrega?.id).filter((x): x is string => !!x);
 
+  const mesmaOrdem = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+  // Rota já está na ordem sugerida? (= botão "otimizado", desabilitado).
+  const rotaOtimizada = !!ultimaSugestao && mesmaOrdem(ordemAtual(), ultimaSugestao);
+
+  // Ponte do estado vindo da montagem: se salvou lá com a rota já sugerida, o
+  // botão nasce desabilitado aqui (aplica UMA vez, quando a viagem carrega).
+  useEffect(() => {
+    if (aplicouNavState.current || !v) return;
+    if ((location.state as { otimizada?: boolean } | null)?.otimizada) {
+      setUltimaSugestao(ordemAtual());
+    }
+    aplicouNavState.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [v]);
+
   async function aplicarOrdem(entregaIds: string[]) {
     await logisticaApi.patch(`/viagens/${id}/ordem`, { entregaIds });
     await carregar();
@@ -140,6 +160,7 @@ export function ViagemDetalhePage() {
       const { data } = await logisticaApi.post<{ ordem: string[]; semCoordenada: string[]; geocodificadas: number; distanciaKm: number | null; fonteDistancia?: 'OSRM' | 'HAVERSINE' }>(
         '/viagens/sugerir-ordem', { filialId: v?.filialId, entregaIds: ordem });
       await aplicarOrdem(data.ordem);
+      setUltimaSugestao(data.ordem);
       const aviso = data.semCoordenada.length ? ` ${data.semCoordenada.length} sem localização foram pro fim.` : '';
       const via = data.fonteDistancia === 'OSRM' ? ' por rua' : data.distanciaKm != null ? ' em linha reta' : '';
       toast('success', `Ordem recalculada (${data.geocodificadas} localizadas${data.distanciaKm != null ? `, ~${data.distanciaKm} km${via}` : ''}).${aviso}`);
@@ -152,11 +173,23 @@ export function ViagemDetalhePage() {
   const SEM_BAIRRO = '__SEM__';
   const keyBairro = (b?: string | null) => (b ?? '').trim().toUpperCase() || SEM_BAIRRO;
 
-  const adicionarEntrega = (entregaId: string) =>
-    acao(async () => {
+  const adicionarEntrega = async (entregaId: string) => {
+    // A rota estava otimizada ANTES de adicionar? (pra decidir oferecer recálculo)
+    const eraOtimizada = rotaOtimizada;
+    await acao(async () => {
       await logisticaApi.post(`/viagens/${id}/entregas`, { entregaIds: [entregaId] });
       setPendentesAdd((p) => p.filter((e) => e.id !== entregaId));
     }, 'Falha ao adicionar entrega.');
+    // Entrou no fim de uma rota já otimizada → oferece recalcular (não força).
+    if (eraOtimizada) {
+      const ok = await confirm(
+        'Rota alterada',
+        'A entrega entrou no fim de uma rota que já estava otimizada. Recalcular a melhor rota agora?',
+        { confirmLabel: 'Recalcular', cancelLabel: 'Agora não' },
+      );
+      if (ok) await sugerirOrdemRascunho();
+    }
+  };
 
   async function acao(fn: () => Promise<unknown>, erro: string) {
     setBusy(true);
@@ -405,11 +438,11 @@ export function ViagemDetalhePage() {
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
           <span>Rota ({v.paradas.length} paradas · {volumes} vol)</span>
           {ehRascunho && v.paradas.length >= 2 && (
-            <button onClick={() => void sugerirOrdemRascunho()} disabled={busy || sugerindo}
-              title="Recalcula o melhor percurso a partir da filial"
+            <button onClick={() => void sugerirOrdemRascunho()} disabled={busy || sugerindo || rotaOtimizada}
+              title={rotaOtimizada ? 'Rota já otimizada — mude a composição/ordem para recalcular' : 'Recalcula o melhor percurso a partir da filial'}
               className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300">
               {sugerindo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {sugerindo ? 'Recalculando…' : 'Sugerir melhor rota'}
+              {sugerindo ? 'Recalculando…' : rotaOtimizada ? '✓ Rota otimizada' : 'Sugerir melhor rota'}
             </button>
           )}
         </div>

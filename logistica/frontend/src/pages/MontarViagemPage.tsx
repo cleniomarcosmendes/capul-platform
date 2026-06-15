@@ -38,6 +38,9 @@ export function MontarViagemPage() {
   const [veiculoId, setVeiculoId] = useState('');
   const [motoristaId, setMotoristaId] = useState('');
   const [rota, setRota] = useState<string[]>([]); // ids na ordem da rota
+  // Última ordem sugerida — o botão "Sugerir melhor rota" desabilita enquanto a
+  // rota atual for IGUAL a ela; qualquer mudança (add/remover/mover) reabilita.
+  const [ultimaSugestao, setUltimaSugestao] = useState<string[] | null>(null);
   const [bairrosSel, setBairrosSel] = useState<string[]>([]);
   const [busca, setBusca] = useState('');
   const [sugerindo, setSugerindo] = useState(false);
@@ -87,6 +90,12 @@ export function MontarViagemPage() {
     });
   }, [pendentes, rota, bairrosSel, busca]);
 
+  // Rota já está na ordem sugerida? (mesma sequência) → botão "otimizado".
+  const rotaOtimizada = useMemo(
+    () => !!ultimaSugestao && ultimaSugestao.length === rota.length && ultimaSugestao.every((x, i) => x === rota[i]),
+    [ultimaSugestao, rota],
+  );
+
   const volumesRota = useMemo(
     () => rota.reduce((s, id) => s + (porId.get(id)?.quantidadeVolumes ?? 0), 0),
     [rota, porId],
@@ -110,6 +119,7 @@ export function MontarViagemPage() {
         ordem: string[]; semCoordenada: string[]; geocodificadas: number; distanciaKm: number | null; fonteDistancia?: 'OSRM' | 'HAVERSINE';
       }>('/viagens/sugerir-ordem', { filialId, entregaIds: rota });
       setRota(data.ordem);
+      setUltimaSugestao(data.ordem);
       const aviso = data.semCoordenada.length
         ? ` ${data.semCoordenada.length} sem localização foram pro fim — posicione com as setas.`
         : '';
@@ -132,7 +142,9 @@ export function MontarViagemPage() {
         entregaIds: rota,
       });
       setSalvou(true);
-      navigate(`/viagens/${data.id}`);
+      // Leva o estado "otimizada" pro detalhe — se salvou com a rota já sugerida,
+      // lá o botão "Sugerir melhor rota" já nasce desabilitado.
+      navigate(`/viagens/${data.id}`, { state: { otimizada: rotaOtimizada } });
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
       toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao montar viagem.');
@@ -255,11 +267,11 @@ export function MontarViagemPage() {
           <div className="rounded-xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
               <span>Rota da viagem ({rota.length} {rota.length === 1 ? 'entrega' : 'entregas'} · {volumesRota} vol)</span>
-              <button onClick={() => void sugerirOrdem()} disabled={sugerindo || rota.length < 2}
-                title={rota.length < 2 ? 'Adicione ao menos 2 entregas' : 'Calcula o melhor percurso a partir da filial'}
+              <button onClick={() => void sugerirOrdem()} disabled={sugerindo || rota.length < 2 || rotaOtimizada}
+                title={rota.length < 2 ? 'Adicione ao menos 2 entregas' : rotaOtimizada ? 'Rota já otimizada — mude a composição/ordem para recalcular' : 'Calcula o melhor percurso a partir da filial'}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300">
                 {sugerindo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                {sugerindo ? 'Calculando…' : 'Sugerir melhor rota'}
+                {sugerindo ? 'Calculando…' : rotaOtimizada ? '✓ Rota otimizada' : 'Sugerir melhor rota'}
               </button>
             </div>
             {rota.length === 0 ? (
