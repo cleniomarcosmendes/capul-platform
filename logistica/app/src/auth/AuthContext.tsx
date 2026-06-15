@@ -22,16 +22,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<string | null>(null);
 
   const logout = useCallback(async () => {
-    // Mesmo que o SecureStore falhe, o estado SEMPRE vira unauthenticated —
-    // "Sair" não pode ficar mudo.
-    try {
-      await clearTokens();
-    } catch {
-      /* segue */
-    }
+    // Vira o estado PRIMEIRO — "Sair" não pode ficar mudo, nem mesmo se o
+    // SecureStore travar/demorar (deleteItemAsync já travou no Expo Go Android).
+    // A limpeza do keystore vai em segundo plano (fire-and-forget).
     setAccessToken(null);
     setRole(null);
     setStatus('unauthenticated');
+    void clearTokens().catch(() => {
+      /* keystore some no próximo login de qualquer forma */
+    });
   }, []);
 
   // Boot: carrega tokens do keystore. Sessão é válida se houver REFRESH (30d
