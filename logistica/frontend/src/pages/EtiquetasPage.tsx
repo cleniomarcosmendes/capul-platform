@@ -30,8 +30,6 @@ const CSS = `
 .etq-ref { font-size:13px; color:#000; margin-top:2px; }
 .etq-rodape { display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:14px; font-weight:600; }
 .etq-obs { font-size:13px; color:#000; margin-top:4px; border-top:1px dashed #000; padding-top:3px; }
-.etq-barcode { margin-top:8px; text-align:center; }
-.etq-codigo { font-family: ui-monospace, monospace; font-size:12px; letter-spacing:2px; margin-top:2px; }
 @media print {
   .no-print { display:none !important; }
   .etq-root { background:#fff; min-height:0; }

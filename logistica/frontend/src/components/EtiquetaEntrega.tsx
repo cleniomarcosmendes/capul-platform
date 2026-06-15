@@ -1,4 +1,3 @@
-import { Barcode } from './Barcode';
 import { maskCep, maskTelefone } from '../utils/format';
 
 export interface EntregaEtiqueta {
@@ -61,11 +60,6 @@ export function EtiquetaEntrega({
       </div>
 
       {e.observacoes && <div className="etq-obs">Obs.: {e.observacoes}</div>}
-
-      <div className="etq-barcode">
-        <Barcode value={String(e.numero)} />
-        <div className="etq-codigo">{e.numero}</div>
-      </div>
     </div>
   );
 }
