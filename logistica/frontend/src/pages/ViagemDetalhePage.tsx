@@ -152,8 +152,10 @@ export function ViagemDetalhePage() {
     void acao(() => aplicarOrdem(ordem), 'Falha ao reordenar.');
   }
 
-  async function sugerirOrdemRascunho() {
-    const ordem = ordemAtual();
+  // ordemOverride: usado quando o `v` do closure ainda está desatualizado (logo
+  // após adicionar) — aí passamos a ordem FRESCA buscada do servidor.
+  async function sugerirOrdemRascunho(ordemOverride?: string[]) {
+    const ordem = ordemOverride ?? ordemAtual();
     if (ordem.length < 2) return;
     setSugerindo(true);
     try {
@@ -177,13 +179,21 @@ export function ViagemDetalhePage() {
   // o recálculo faz sentido). No detalhe a viagem já está montada/salva, então
   // editar a carga é o momento certo de perguntar; vale a cada adição.
   const ofereceRecalcular = async () => {
-    if (ordemAtual().length < 2) return; // 0/1 parada → nada a otimizar
+    // O `v` deste closure ainda é o de ANTES do add — busca a ordem FRESCA do
+    // servidor (senão o recálculo roda com a lista velha e nada muda na tela).
+    let ordem: string[] = [];
+    try {
+      const { data } = await logisticaApi.get<Viagem>(`/viagens/${id}`);
+      ordem = [...(data.paradas ?? [])].sort((a, b) => a.sequencia - b.sequencia)
+        .map((p) => p.entrega?.id).filter((x): x is string => !!x);
+    } catch { return; }
+    if (ordem.length < 2) return; // 0/1 parada → nada a otimizar
     const ok = await confirm(
       'Rota alterada',
       'A carga da rota mudou. Recalcular a melhor rota agora?',
       { confirmLabel: 'Recalcular', cancelLabel: 'Agora não' },
     );
-    if (ok) await sugerirOrdemRascunho();
+    if (ok) await sugerirOrdemRascunho(ordem);
   };
 
   const adicionarEntrega = async (entregaId: string) => {
