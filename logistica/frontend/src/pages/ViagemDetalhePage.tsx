@@ -173,26 +173,25 @@ export function ViagemDetalhePage() {
   const SEM_BAIRRO = '__SEM__';
   const keyBairro = (b?: string | null) => (b ?? '').trim().toUpperCase() || SEM_BAIRRO;
 
-  // Oferece recalcular após adicionar — SEMPRE que a rota já foi otimizada
-  // alguma vez (ultimaSugestao != null), mesmo que o operador tenha dito "agora
-  // não" antes. Assim a pergunta volta a cada entrega adicionada, não só na 1ª.
-  const ofereceRecalcular = async (qtd: number) => {
-    if (!ultimaSugestao) return; // nunca otimizou → adiciona livre, sem perguntar
+  // Oferece recalcular após adicionar — sempre que a rota tiver ≥2 paradas (aí
+  // o recálculo faz sentido). No detalhe a viagem já está montada/salva, então
+  // editar a carga é o momento certo de perguntar; vale a cada adição.
+  const ofereceRecalcular = async () => {
+    if (ordemAtual().length < 2) return; // 0/1 parada → nada a otimizar
     const ok = await confirm(
       'Rota alterada',
-      `${qtd === 1 ? 'A entrega entrou' : `As ${qtd} entregas entraram`} no fim da rota. Recalcular a melhor rota agora?`,
+      'A carga da rota mudou. Recalcular a melhor rota agora?',
       { confirmLabel: 'Recalcular', cancelLabel: 'Agora não' },
     );
     if (ok) await sugerirOrdemRascunho();
   };
 
   const adicionarEntrega = async (entregaId: string) => {
-    const jaOtimizou = !!ultimaSugestao;
     await acao(async () => {
       await logisticaApi.post(`/viagens/${id}/entregas`, { entregaIds: [entregaId] });
       setPendentesAdd((p) => p.filter((e) => e.id !== entregaId));
     }, 'Falha ao adicionar entrega.');
-    if (jaOtimizou) await ofereceRecalcular(1);
+    await ofereceRecalcular();
   };
 
   async function acao(fn: () => Promise<unknown>, erro: string) {
@@ -221,8 +220,19 @@ export function ViagemDetalhePage() {
     if (km === null) return; // cancelou
     await acao(() => logisticaApi.post(`/viagens/${id}/concluir`, { kmFinal: parseKm(km) }), 'Falha ao concluir.');
   }
-  const removerEntrega = (entregaId: string) =>
-    acao(() => logisticaApi.delete(`/viagens/${id}/entregas/${entregaId}`), 'Falha ao remover entrega.');
+  // Recarrega a fila de pendentes (a entrega removida da viagem volta a ficar
+  // disponível para adicionar — sem isso ela sumia das duas listas até o refresh).
+  async function recarregarFila() {
+    try {
+      const { data } = await logisticaApi.get('/entregas', { params: v?.filialId ? { filialId: v.filialId } : undefined });
+      setPendentesAdd(data);
+    } catch { /* mantém a fila atual */ }
+  }
+
+  const removerEntrega = async (entregaId: string) => {
+    await acao(() => logisticaApi.delete(`/viagens/${id}/entregas/${entregaId}`), 'Falha ao remover entrega.');
+    await recarregarFila();
+  };
   async function descartar() {
     setBusy(true);
     try {
@@ -381,13 +391,11 @@ export function ViagemDetalhePage() {
           return true;
         });
         const adicionarTodas = async () => {
-          const jaOtimizou = !!ultimaSugestao;
-          const qtd = filaFiltrada.length;
           await acao(async () => {
             await logisticaApi.post(`/viagens/${id}/entregas`, { entregaIds: filaFiltrada.map((e) => e.id) });
             setPendentesAdd((p) => p.filter((e) => !filaFiltrada.some((f) => f.id === e.id)));
           }, 'Falha ao adicionar entregas.');
-          if (jaOtimizou) await ofereceRecalcular(qtd);
+          await ofereceRecalcular();
         };
         return (
         <div className="rounded-xl border border-slate-200 bg-white">
