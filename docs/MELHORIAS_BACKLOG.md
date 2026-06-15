@@ -55,6 +55,27 @@ com o Clenio: atacar na sessão de 15/06.**
 - **Spec §5.2:** ao adicionar parada na viagem, o app sugere local pelo GPS e KM pela distância.
   Hoje a parada é manual. Refinamento do app (só valida em device).
 
+### ⏳ 2026-06-15 — Carimbo na FOTO da prova de entrega (coords+endereço+data/hora)
+- **Origem:** Clenio mostrou comprovante do AliExpress/J&T (15/06) — a foto da embalagem
+  vinha com **endereço + coordenadas + data/hora "queimados" na imagem**. Hoje a nossa
+  baixa salva GPS num campo separado do cofre, mas a **foto crua** não carrega esse
+  contexto → sozinha não prova onde/quando. Carimbar fortalece o lastro de cobrança
+  (cofre, 5 anos) e torna a prova auto-contida e difícil de falsificar.
+- **Recomendação: carimbar no SERVIDOR** (não no cliente) — mais robusto (data/hora e
+  coords autoritativas, difícil de forjar) e **não depende do Expo Go** (a lib usual de
+  cliente, `react-native-view-shot`, é nativa e pode não rodar no Expo Go).
+- **Plano concreto:**
+  - Lib: `jimp` (JS puro, sem binário nativo → ok no Docker; `sharp` exigiria build nativo).
+    Atenção: jimp v1 mudou API/ESM — exige ciclo build-e-testa (por isso virou tarefa
+    focada, não fix inline).
+  - Ponto de integração: `entrega.service.ts` → `baixar()`, **antes** do `this.cofre.gravar`
+    (~linha 545), só quando `dto.tipoProva === 'FOTO'`. Incluir `enderecos: true` na query
+    da entrega (linha 511) para ter o endereço.
+  - Carimbo (rodapé semi-transparente): `#<numero> · destinatário · logradouro/bairro/cidade
+    · lat,lng · data/hora`. Best-effort: se o carimbo falhar, grava a foto original (nunca
+    bloquear a baixa).
+  - Requer rebuild do `logistica-backend`. Não carimbar ASSINATURA (só FOTO).
+
 ### ✅ 2026-06-15 — App: tela-lançador FROTA / ENTREGA (usuário com os dois perfis) [FEITO]
 - **Origem:** levantado pelo Clenio testando o app no celular (15/06) — duas equipes
   diferentes validam Frota e Entrega ao mesmo tempo, e o roteamento por role + logout
