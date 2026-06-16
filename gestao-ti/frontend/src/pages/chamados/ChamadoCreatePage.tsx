@@ -415,13 +415,13 @@ export function ChamadoCreatePage() {
                   <input
                     value={matriculaColaborador}
                     onChange={(e) => {
-                      // Matricula = somente numeros (definicao do projeto, sem letra).
-                      setMatriculaColaborador(e.target.value.replace(/\D/g, ''));
+                      // Aceita com ou sem 'E' (E01047 == 001047): o backend
+                      // normaliza via toChapaPortal (tira não-dígitos → E+5díg).
+                      setMatriculaColaborador(e.target.value.toUpperCase());
                       resetMatricula();
                     }}
                     onBlur={buscarNome}
-                    placeholder="Ex: 001047"
-                    inputMode="numeric"
+                    placeholder="ex.: E01047 ou 001047"
                     autoComplete="off"
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                     required

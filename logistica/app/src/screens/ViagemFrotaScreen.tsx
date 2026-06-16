@@ -90,7 +90,7 @@ function RetornoForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
     <View style={styles.painel}>
       <Text style={styles.dica}>Só o condutor que iniciou fecha a viagem — confirme matrícula + senha.</Text>
       <Text style={styles.label}>Matrícula</Text>
-      <TextInput style={styles.input} value={matricula} onChangeText={setMatricula} keyboardType="numeric" editable={!salvando} />
+      <TextInput style={styles.input} value={matricula} onChangeText={(t) => setMatricula(t.toUpperCase())} autoCapitalize="characters" autoCorrect={false} editable={!salvando} />
       <Text style={styles.label}>Senha do portal RH</Text>
       <View style={styles.senhaWrap}>
         <TextInput style={[styles.input, styles.senhaInput]} value={senha} onChangeText={setSenha} secureTextEntry={!mostrarSenha} editable={!salvando} />

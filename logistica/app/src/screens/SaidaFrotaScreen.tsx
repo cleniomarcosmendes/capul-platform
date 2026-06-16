@@ -143,10 +143,11 @@ export function SaidaFrotaScreen({ navigation }: Props) {
           <View style={styles.linha}>
             <TextInput
               style={[styles.input, { flex: 1 }]}
-              placeholder="Matrícula do condutor"
+              placeholder="ex.: E01047 ou 001047"
               value={matricula}
-              onChangeText={(t) => { setMatricula(t); setNome(null); setCredOk(false); }}
-              keyboardType="numeric"
+              onChangeText={(t) => { setMatricula(t.toUpperCase()); setNome(null); setCredOk(false); }}
+              autoCapitalize="characters"
+              autoCorrect={false}
               editable={!salvando}
               onBlur={acharNome}
             />
