@@ -17,11 +17,14 @@ import type { Parada, Viagem } from '../types/api';
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'ViagemDetalhe'>;
 
+type Filtro = 'PENDENTES' | 'ENTREGUES' | 'TODAS';
+
 export function ViagemDetalheScreen({ route, navigation }: Props) {
   const { viagemId } = route.params;
   const [viagem, setViagem] = useState<Viagem | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
+  const [filtro, setFiltro] = useState<Filtro>('PENDENTES');
 
   const carregar = useCallback(async () => {
     try {
@@ -56,19 +59,55 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   }
 
   const paradas = [...(viagem.paradas ?? [])].sort((a, b) => a.sequencia - b.sequencia);
+  const nPendentes = paradas.filter((p) => p.entrega?.status === 'EM_VIAGEM').length;
+  const nEntregues = paradas.filter((p) => p.entrega?.status === 'ENTREGUE').length;
+  const paradasFiltradas = paradas.filter((p) => {
+    if (filtro === 'TODAS') return true;
+    if (filtro === 'ENTREGUES') return p.entrega?.status === 'ENTREGUE';
+    return p.entrega?.status === 'EM_VIAGEM'; // PENDENTES
+  });
+
+  const chips: { id: Filtro; rotulo: string }[] = [
+    { id: 'PENDENTES', rotulo: `Pendentes (${nPendentes})` },
+    { id: 'ENTREGUES', rotulo: `Entregues (${nEntregues})` },
+    { id: 'TODAS', rotulo: `Todas (${paradas.length})` },
+  ];
 
   return (
     <FlatList
       contentContainerStyle={styles.lista}
-      data={paradas}
+      data={paradasFiltradas}
       keyExtractor={(p) => p.id}
       ListHeaderComponent={
-        <Text style={styles.cabecalho}>
-          {viagem.veiculo?.placa ?? 'sem veículo'} · {paradas.length} parada
-          {paradas.length === 1 ? '' : 's'}
+        <View>
+          <Text style={styles.cabecalho}>
+            {viagem.veiculo?.placa ?? 'sem veículo'} · {paradas.length} parada
+            {paradas.length === 1 ? '' : 's'}
+          </Text>
+          <View style={styles.filtros}>
+            {chips.map((c) => (
+              <TouchableOpacity
+                key={c.id}
+                style={[styles.filtroChip, filtro === c.id && styles.filtroChipOn]}
+                onPress={() => setFiltro(c.id)}
+              >
+                <Text style={[styles.filtroTxt, filtro === c.id && styles.filtroTxtOn]}>{c.rotulo}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      }
+      ListEmptyComponent={
+        <Text style={styles.vazio}>
+          {paradas.length === 0
+            ? 'Esta viagem não tem paradas.'
+            : filtro === 'PENDENTES'
+              ? 'Nenhuma entrega pendente — tudo entregue por aqui! 🎉'
+              : filtro === 'ENTREGUES'
+                ? 'Nenhuma entrega concluída ainda.'
+                : 'Nada para mostrar.'}
         </Text>
       }
-      ListEmptyComponent={<Text style={styles.vazio}>Esta viagem não tem paradas.</Text>}
       renderItem={({ item }) => (
         <ParadaCard
           parada={item}
@@ -146,7 +185,12 @@ const styles = StyleSheet.create({
   centro: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   erro: { color: '#dc2626', fontSize: 15, textAlign: 'center' },
   lista: { padding: 12, gap: 10 },
-  cabecalho: { color: '#475569', fontSize: 14, marginBottom: 4 },
+  cabecalho: { color: '#475569', fontSize: 14, marginBottom: 8 },
+  filtros: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  filtroChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#fff' },
+  filtroChipOn: { backgroundColor: CAPUL, borderColor: CAPUL },
+  filtroTxt: { color: '#334155', fontWeight: '700', fontSize: 13 },
+  filtroTxtOn: { color: '#fff' },
   vazio: { textAlign: 'center', color: '#64748b', marginTop: 24 },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#e2e8f0' },
   topo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
