@@ -1,5 +1,5 @@
 import React, { useLayoutEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { useAuth } from '../auth/AuthContext';
@@ -51,6 +51,12 @@ export function HomeScreen({ navigation }: Props) {
       />
 
       <Text style={styles.rodape}>Você pode voltar aqui a qualquer momento para trocar.</Text>
+
+      {/* Sair no CORPO (não só no header): o botão do header da native-stack
+          engole o toque no Android. Aqui o toque é garantido. */}
+      <TouchableOpacity style={styles.sairBtn} onPress={() => void logout()}>
+        <Text style={styles.sairBtnTxt}>Sair</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -88,4 +94,9 @@ const styles = StyleSheet.create({
   seta: { fontSize: 28, color: '#cbd5e1', fontWeight: '300' },
   rodape: { fontSize: 12, color: '#94a3b8', textAlign: 'center', marginTop: 6 },
   sair: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  sairBtn: {
+    marginTop: 'auto', alignSelf: 'center', flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 22, paddingVertical: 12, backgroundColor: '#fff',
+  },
+  sairBtnTxt: { color: '#b91c1c', fontSize: 16, fontWeight: '700' },
 });
