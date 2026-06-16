@@ -4,7 +4,17 @@ Revisão após o Clenio revisar a v1. Mudanças relevantes marcadas com 🔄. De
 pendentes (precisam de OK antes de codar) marcadas com ❓.
 
 Branch: `feat/logistica-frota` (= `main`, já pushada até `11ee5ed`).
-Dados DEV: `clenio`/`123456` (ADMIN), `entregador_teste`/`entrega123` (ENTREGADOR).
+Dados DEV: `clenio`/`123456` (ADMIN/PADRAO), `entregador_teste`/`entrega123` (ENTREGADOR/INDIVIDUAL),
+`frota_teste`/`123456` (INDIVIDUAL, OPERADOR_ENTREGA, filial c/ veículos — testa saída sem senha).
+
+## Progresso (16/06)
+- ✅ **FASE 1** (saída PADRAO×INDIVIDUAL, msg veículo, busca/depto, olhinho) — testado pelo Clenio.
+- ✅ **FASE 1b** (filtro Pendentes/Entregues/Todas no app de entrega).
+- ✅ **Sair do app** (botão no corpo do lançador — header engolia o toque).
+- ✅ **FASE 2** (olhinho global — faltavam Chamado PADRAO + Frota web; PasswordInput reutilizável).
+- ✅ **FASE 3** (matrícula com/sem 'E' — inputs liberados; backend já normalizava).
+- ⏳ Próximas: 7a (veículo próprio/alugado) + 7b (tela tipos de despesa) → 4 (credencial sessão) →
+  7c (fornecedor) → 5 (navegação/validação) → 6 (revamp Frota).
 
 ---
 
