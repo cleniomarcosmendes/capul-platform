@@ -1,10 +1,11 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma, SituacaoVeiculo, StatusEntrega, StatusViagem } from '@prisma/client';
 import { carimbarProvaEntrega, fmtGeo } from './watermark.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import { CofreService } from '../cofre/cofre.service.js';
 import { GeocodeService } from '../rota/geocode.service.js';
+import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import { assertPodeVerRegistro } from '../common/filial-scope.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { BaixarEntregaDto, CreateEntregaDto, UpdateEntregaDto } from './dto.js';
@@ -29,15 +30,50 @@ export class EntregaService {
     private readonly core: CoreLookupService,
     private readonly cofre: CofreService,
     private readonly geocode: GeocodeService,
+    private readonly condutor: ProtheusCondutorService,
   ) {}
+
+  /**
+   * Valida matrícula+senha do operador no portal RH — SEMPRE devolve 200
+   * {valida, motivo, nome} (nunca lança 401, que deslogaria). Usado pela tela de
+   * cadastro de entrega (login PADRAO) p/ identificar o operador 1x por sessão.
+   */
+  async validarOperador(matricula: string, senha: string) {
+    const r = await this.condutor.validar(matricula, senha);
+    if (r.status === 'VALIDO') return { valida: true as const, matricula: r.matricula, nome: r.nome };
+    return { valida: false as const, motivo: r.status === 'INDISPONIVEL' ? ('INDISPONIVEL' as const) : ('CREDENCIAIS_INVALIDAS' as const) };
+  }
+
+  /** Resolve quem REGISTROU a entrega conforme o tipo do login (PADRAO/INDIVIDUAL). */
+  private async resolverRegistrador(
+    user: JwtPayload,
+    operadorMatricula?: string,
+    operadorSenha?: string,
+  ): Promise<{ matricula: string | null; nome: string | null }> {
+    if (user.tipo === 'PADRAO') {
+      if (!operadorMatricula?.trim() || !operadorSenha) {
+        throw new BadRequestException('Identifique-se: informe matrícula e senha do operador.');
+      }
+      const r = await this.condutor.validar(operadorMatricula.trim(), operadorSenha);
+      if (r.status === 'INDISPONIVEL') throw new ServiceUnavailableException('Portal do RH indisponível. Tente novamente em instantes.');
+      if (r.status !== 'VALIDO') throw new BadRequestException('Matrícula ou senha do operador inválidas.');
+      return { matricula: r.matricula, nome: r.nome };
+    }
+    // INDIVIDUAL: o próprio usuário logado é o registrador (matrícula do core).
+    const col = await this.core.colaboradorDoUsuario(user.sub);
+    return { matricula: col?.matricula ?? null, nome: col?.nome ?? null };
+  }
 
   /**
    * Cria a entrega. Atômico: incrementa o contador por filial (nº tipo talão),
    * congela o snapshot do endereço (autoritativo quando vem de um
    * EnderecoEntrega) e grava os cupons. Status inicial PENDENTE.
    */
-  async create(dto: CreateEntregaDto, criadoPorId: string) {
+  async create(dto: CreateEntregaDto, user: JwtPayload) {
     await this.core.validarFilial(dto.filialId);
+    // Identifica quem registrou (PADRAO valida matrícula+senha; INDIVIDUAL usa o
+    // próprio login). Roda ANTES de qualquer escrita — senha inválida não cria.
+    const registrador = await this.resolverRegistrador(user, dto.operadorMatricula, dto.operadorSenha);
     const snap = await this.resolverSnapshotEndereco(dto);
 
     const cupons = (dto.cupons ?? []).filter((c) => c.numeroCupom || c.valor != null);
@@ -65,7 +101,9 @@ export class EntregaService {
           quantidadeVolumes: dto.quantidadeVolumes,
           origemVenda: dto.origemVenda,
           status: StatusEntrega.PENDENTE,
-          criadoPorId,
+          criadoPorId: user.sub,
+          registradoPorMatricula: registrador.matricula,
+          registradoPorNome: registrador.nome,
           cupons: {
             create: cupons.map((c) => ({
               numeroCupom: c.numeroCupom?.trim() || null,

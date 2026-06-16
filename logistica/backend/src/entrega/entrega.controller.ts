@@ -5,17 +5,20 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { assertMesmaFilial, resolverFilialLeitura } from '../common/filial-scope.js';
 import { EntregaService, type ProvaBinaria } from './entrega.service.js';
-import { BaixarEntregaDto, CancelarEntregaDto, CreateEntregaDto, UpdateEntregaDto } from './dto.js';
+import { BaixarEntregaDto, CancelarEntregaDto, CreateEntregaDto, UpdateEntregaDto, ValidarOperadorDto } from './dto.js';
 
 @Controller('entregas')
 @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
 export class EntregaController {
   constructor(private readonly entregas: EntregaService) {}
 
+  // REGISTRADOR_ENTREGA (caixa) entra aqui — só incluir/alterar. O @Roles do
+  // método sobrepõe o da classe.
   @Post()
+  @Roles('REGISTRADOR_ENTREGA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
   criar(@Body() dto: CreateEntregaDto, @CurrentUser() user: JwtPayload) {
     assertMesmaFilial(user, dto.filialId);
-    return this.entregas.create(dto, user.sub);
+    return this.entregas.create(dto, user);
   }
 
   /** Lista (default PENDENTE = fila de montagem). Filtros: filialId, status. */
@@ -63,10 +66,19 @@ export class EntregaController {
     return this.entregas.findOne(id, user);
   }
 
-  /** Edição (grid): só PENDENTE fora de viagem. */
+  /** Edição (grid): só PENDENTE fora de viagem. REGISTRADOR_ENTREGA (caixa) inclui. */
   @Patch(':id')
+  @Roles('REGISTRADOR_ENTREGA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
   atualizar(@Param('id') id: string, @Body() dto: UpdateEntregaDto, @CurrentUser() user: JwtPayload) {
     return this.entregas.update(id, dto, user.filialId);
+  }
+
+  /** Identificação do operador (login PADRAO): matrícula+senha do portal RH.
+   *  SEMPRE 200 {valida, motivo, nome} — o front cacheia a sessão. */
+  @Post('operador/validar')
+  @Roles('REGISTRADOR_ENTREGA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
+  validarOperador(@Body() dto: ValidarOperadorDto) {
+    return this.entregas.validarOperador(dto.matricula, dto.senha);
   }
 
   /** Nova tentativa: NÃO ENTREGUE volta pra fila (PENDENTE) p/ nova viagem. */

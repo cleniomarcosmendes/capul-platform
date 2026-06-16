@@ -3,9 +3,10 @@ import { EntregaService } from './entrega.service';
 import { createPrismaMock } from '../common/testing/prisma-mock';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const coreMock = () => ({ validarFilial: jest.fn().mockResolvedValue(undefined) }) as any;
+const coreMock = () => ({ validarFilial: jest.fn().mockResolvedValue(undefined), colaboradorDoUsuario: jest.fn().mockResolvedValue(null) }) as any;
 const cofreMock = () => ({ gravar: jest.fn().mockResolvedValue({ comprovanteId: 'cmp1', objectKey: 'k', hash: 'h' }) }) as any;
 const geocodeMock = () => ({ geocodificar: jest.fn().mockResolvedValue(null), statusCacheLote: jest.fn().mockResolvedValue([]) }) as any;
+const condutorMock = () => ({ validar: jest.fn().mockResolvedValue({ status: 'VALIDO', matricula: 'E00001', nome: 'Op' }) }) as any;
 // Operador da filial f1 (não vê outras filiais) — exercita o escopo por filial.
 const userF1 = { sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'OPERADOR_ENTREGA' }] } as any;
 
@@ -19,7 +20,7 @@ describe('EntregaService', () => {
     prisma = createPrismaMock();
     core = coreMock();
     cofre = cofreMock();
-    svc = new EntregaService(prisma, core, cofre, geocodeMock());
+    svc = new EntregaService(prisma, core, cofre, geocodeMock(), condutorMock());
   });
 
   describe('create', () => {
@@ -27,7 +28,7 @@ describe('EntregaService', () => {
       prisma.contadorSequencial.upsert.mockResolvedValue({ ultimoNumero: 7 });
       prisma.entrega.create.mockResolvedValue({ id: 'e1', numero: 7, cupons: [] });
       const dto = { filialId: 'f1', tipoCliente: 'EVENTUAL', destinatarioNome: 'Cliente X', endLogradouro: 'Rua A', quantidadeVolumes: 1 } as any;
-      const r = await svc.create(dto, 'u1');
+      const r = await svc.create(dto, userF1);
       expect(core.validarFilial).toHaveBeenCalledWith('f1');
       expect(prisma.entrega.create).toHaveBeenCalled();
       expect(r.numero).toBe(7);

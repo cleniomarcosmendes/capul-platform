@@ -296,6 +296,11 @@ model Entrega {
   status            StatusEntrega      @default(PENDENTE)
   criadoEm          DateTime           @default(now()) @map("criado_em")
   criadoPorId       String             @map("criado_por_id")
+  // Quem REGISTROU de fato (accountability): em login PADRAO (caixa) é o
+  // colaborador identificado por matrícula+senha; em login INDIVIDUAL é o
+  // próprio usuário (resolvido do core). criadoPorId continua sendo o login.
+  registradoPorMatricula String?       @map("registrado_por_matricula")
+  registradoPorNome      String?       @map("registrado_por_nome")
   canceladaEm       DateTime?          @map("cancelada_em")
   canceladaPorId    String?            @map("cancelada_por_id")
   motivoCancelamento String?           @map("motivo_cancelamento")

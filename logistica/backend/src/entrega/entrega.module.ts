@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { CofreModule } from '../cofre/cofre.module.js';
 import { RotaModule } from '../rota/rota.module.js';
+import { ProtheusModule } from '../protheus/protheus.module.js';
 import { EntregaController } from './entrega.controller.js';
 import { EntregaService } from './entrega.service.js';
 
 @Module({
-  imports: [CofreModule, RotaModule],
+  imports: [CofreModule, RotaModule, ProtheusModule],
   controllers: [EntregaController],
   providers: [EntregaService],
 })

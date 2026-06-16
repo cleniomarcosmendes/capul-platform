@@ -3,6 +3,7 @@ import {
   IsArray,
   IsEnum,
   IsInt,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
@@ -13,6 +14,16 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { OrigemVenda, TipoClienteEntrega } from '@prisma/client';
+
+// Validação matrícula+senha do operador — SEMPRE 200 {valida, motivo, nome}
+// (nunca 401, que deslogaria). Mesmo padrão do Chamado PADRAO / frota.
+export class ValidarOperadorDto {
+  @IsString() @IsNotEmpty() @MaxLength(30)
+  matricula!: string;
+
+  @IsString() @IsNotEmpty()
+  senha!: string;
+}
 
 export class CupomDto {
   @IsOptional() @IsString() @MaxLength(60)
@@ -25,6 +36,15 @@ export class CupomDto {
 export class CreateEntregaDto {
   @IsString() @MaxLength(40)
   filialId!: string; // filial consulente/operadora (contexto do operador) — UUID core.filiais
+
+  // Identificação do OPERADOR no login PADRAO (caixa): matrícula+senha do portal
+  // RH, revalidados no backend ao criar (defesa em profundidade). Em login
+  // INDIVIDUAL são ignorados (usa o próprio usuário).
+  @IsOptional() @IsString() @MaxLength(30)
+  operadorMatricula?: string;
+
+  @IsOptional() @IsString()
+  operadorSenha?: string;
 
   @IsEnum(TipoClienteEntrega)
   tipoCliente!: TipoClienteEntrega;
