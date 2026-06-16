@@ -13,8 +13,13 @@ Dados DEV: `clenio`/`123456` (ADMIN/PADRAO), `entregador_teste`/`entrega123` (EN
 - ✅ **Sair do app** (botão no corpo do lançador — header engolia o toque).
 - ✅ **FASE 2** (olhinho global — faltavam Chamado PADRAO + Frota web; PasswordInput reutilizável).
 - ✅ **FASE 3** (matrícula com/sem 'E' — inputs liberados; backend já normalizava).
-- ⏳ Próximas: 7a (veículo próprio/alugado) + 7b (tela tipos de despesa) → 4 (credencial sessão) →
-  7c (fornecedor) → 5 (navegação/validação) → 6 (revamp Frota).
+- ✅ **Ajustes pós-teste**: removido "Sair" do header (só o do corpo do lançador); KM sugerido/
+  atualizado ao escolher veículo (app + desktop).
+- ✅ **FASE 7a** (veículo próprio/alugado — enum+migration+form). Migration via diff+deploy
+  (ver `[[feedback_logistica_migrate_dev_reseta]]`).
+- ✅ **FASE 7b** (tipos de despesa) — JÁ EXISTIA: aba "Tipos" na DespesasPage (criar/listar/ativar).
+- ⏳ Próximas: 4 (credencial sessão — caixa) → 7c (fornecedor) → 5 (navegação/validação) →
+  6 (revamp Frota).
 
 ---
 
