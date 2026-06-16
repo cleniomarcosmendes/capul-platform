@@ -382,8 +382,9 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
                 value={veiculoId}
                 onChange={(e) => {
                   setVeiculoId(e.target.value);
+                  // Sugere o KM do veículo escolhido — e ATUALIZA ao trocar de veículo.
                   const sel = veiculos.find((x) => x.id === e.target.value);
-                  if (sel && kmInicial === '') setKmInicial(String(sel.kmAtual));
+                  setKmInicial(sel ? String(sel.kmAtual) : '');
                 }}
                 disabled={!podeAvancar}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"

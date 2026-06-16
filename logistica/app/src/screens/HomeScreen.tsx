@@ -1,4 +1,4 @@
-import React, { useLayoutEffect } from 'react';
+import React from 'react';
 import { Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
@@ -20,16 +20,6 @@ export function HomeScreen({ navigation }: Props) {
   const { logout, role } = useAuth();
   const podeEntrega = !!role && ROLES_ENTREGA.includes(role);
   const podeFrota = !!role && ROLES_FROTA.includes(role);
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <Pressable onPress={() => void logout()} hitSlop={14} style={{ paddingHorizontal: 10, paddingVertical: 6 }}>
-          <Text style={styles.sair}>Sair</Text>
-        </Pressable>
-      ),
-    });
-  }, [navigation, logout]);
 
   return (
     <View style={styles.container}>

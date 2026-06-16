@@ -1,11 +1,10 @@
-import React, { useCallback, useLayoutEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, TouchableOpacity, View,
+  ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
-import { useAuth } from '../auth/AuthContext';
 import { listarViagensFrota } from '../api/frota';
 import type { ViagemFrota } from '../types/api';
 
@@ -14,7 +13,6 @@ type Props = NativeStackScreenProps<RootStackParamList, 'FrotaHome'>;
 
 /** Home do self-service da frota: registrar saída + viagens em curso (retorno/despesa). */
 export function FrotaHomeScreen({ navigation }: Props) {
-  const { logout } = useAuth();
   const [viagens, setViagens] = useState<ViagemFrota[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [atualizando, setAtualizando] = useState(false);
@@ -46,16 +44,6 @@ export function FrotaHomeScreen({ navigation }: Props) {
     await carregar();
     setAtualizando(false);
   }, [carregar]);
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <Pressable onPress={() => void logout()} hitSlop={14} style={{ paddingHorizontal: 10, paddingVertical: 6 }}>
-          <Text style={styles.sair}>Sair</Text>
-        </Pressable>
-      ),
-    });
-  }, [navigation, logout]);
 
   if (carregando) {
     return <View style={styles.centro}><ActivityIndicator size="large" color={CAPUL} /></View>;

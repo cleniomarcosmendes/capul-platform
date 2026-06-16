@@ -1,9 +1,8 @@
-import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -13,7 +12,6 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
-import { useAuth } from '../auth/AuthContext';
 import { minhasViagens } from '../api/viagens';
 import { contarPendentes, onFilaChange, processarFila } from '../offline/filaBaixas';
 import type { Viagem } from '../types/api';
@@ -22,7 +20,6 @@ const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'MinhasViagens'>;
 
 export function MinhasViagensScreen({ navigation }: Props) {
-  const { logout } = useAuth();
   const [viagens, setViagens] = useState<Viagem[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [atualizando, setAtualizando] = useState(false);
@@ -84,22 +81,6 @@ export function MinhasViagensScreen({ navigation }: Props) {
     await carregar();
     setAtualizando(false);
   }, [carregar]);
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      // Pressable + hitSlop: TouchableOpacity dentro do header da native-stack
-      // não registra o toque no Android (bug conhecido) — "Sair" ficava mudo.
-      headerRight: () => (
-        <Pressable
-          onPress={() => void logout()}
-          hitSlop={14}
-          style={{ paddingHorizontal: 10, paddingVertical: 6 }}
-        >
-          <Text style={styles.sair}>Sair</Text>
-        </Pressable>
-      ),
-    });
-  }, [navigation, logout]);
 
   if (carregando) {
     return (

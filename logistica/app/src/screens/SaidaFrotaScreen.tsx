@@ -221,7 +221,7 @@ export function SaidaFrotaScreen({ navigation }: Props) {
                 <TouchableOpacity
                   key={v.id}
                   style={[styles.chip, veiculoId === v.id && styles.chipOn]}
-                  onPress={() => { setVeiculoId(v.id); if (km === '') setKm(String(v.kmAtual)); }}
+                  onPress={() => { setVeiculoId(v.id); setKm(String(v.kmAtual)); }}
                 >
                   <Text style={[styles.chipTxt, veiculoId === v.id && styles.chipTxtOn]}>{v.placa}{v.modelo ? ` · ${v.modelo}` : ''}</Text>
                 </TouchableOpacity>
