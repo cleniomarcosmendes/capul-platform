@@ -48,14 +48,25 @@ Normalizar via `toChapaPortal` (já em `gestao-ti .../protheus.service.ts:67` e
 senha do portal RH. Frontend aceita os dois formatos. Aplicar em: entrega, frota (web+app)
 e **Workspace "abrir chamado"**. (Reusa também na matrícula do usuário INDIVIDUAL da Fase 1.)
 
-## FASE 4 — Credencial por SESSÃO no cadastro de entrega (caixas) ⏳ (feature)
-Os **caixas do mercado** cadastram entregas. Mesma lógica **PADRAO × INDIVIDUAL** da Fase 1:
-- Usuário **PADRAO** (caixa compartilhado): pede matrícula+senha do portal RH **1x por
-  sessão** (cache em memória, NÃO persistir senha) + botão **"trocar operador"** + expiração
-  por inatividade + limpa no logout/fechar aba. Revalida no backend ao criar a entrega.
-- Usuário **INDIVIDUAL**: não pede (usa a matrícula do próprio login).
+## FASE 4 — Identificação do colaborador (PADRAO×INDIVIDUAL) no cadastro de entrega ⏳ (feature)
+Conceito (esclarecido pelo Clenio): **PADRAO = login genérico/compartilhado** (ex.: o caixa).
+Ele entra com a senha do próprio usuário PADRAO, mas por ser genérico, **na ação que precisa
+identificar a pessoa** o sistema pede **matrícula + senha do colaborador** (igual ao Chamado).
+**INDIVIDUAL** já é a pessoa → não pede (usa a matrícula do próprio login).
+Aplicar essa identificação em DOIS pontos: **cadastro de ENTREGA** (esta fase) e **registro de
+SAÍDA DE VEÍCULO** (Fase 1).
+- **PADRAO**: pede matrícula+senha do portal RH **1x por sessão** (cache em memória, NÃO
+  persistir senha) + botão **"trocar operador"** + expiração por inatividade + limpa no
+  logout/fechar aba. Revalida no backend ao criar/alterar a entrega.
+- **INDIVIDUAL**: não pede (usa `core.usuarios.matricula` do login).
 - Reusa o conceito do **Chamado PADRAO** (`loginPortal`, resposta 200 `{valida,motivo}`).
 - Tela: `logistica/frontend .../EntregaNovaPage.tsx`.
+- ❓🔄 **ROLE restrito p/ o caixa**: o usuário PADRAO do caixa deve ter um role que **só**
+  permite **incluir e alterar entrega** (não ver frota/painel/comprovantes). Hoje os roles
+  da logística são OPERADOR_ENTREGA / GESTOR_ENTREGA / GESTOR_FROTA / ENTREGADOR / ADMIN.
+  Proposta: criar `REGISTRADOR_ENTREGA` (ou nome a definir) limitado a POST/PATCH de entrega
+  na própria filial. Ajustar `@Roles` dos endpoints de entrega + matriz de permissões no
+  Configurador.
 
 ## FASE 5 — Padronização de navegação + validação (logística) ⏳
 - **ENTER/TAB** consistente em todos os formulários do módulo (Enter avança/foca próximo;
@@ -122,4 +133,8 @@ Checkpoint por fase: build + verifica DEV + commit.
 ## Decisões pendentes (precisam de OK)
 - ❓ **7c — arquitetura do Fornecedor**: A (raw cross-schema, recomendado) / B (API) / C (core).
 - ❓ **7a — campo veículo**: enum `PROPRIO | ALUGADO` cobre, ou precisa de mais (ex.: TERCEIRIZADO)?
-- ✅ **PADRAO×INDIVIDUAL** + matrícula do usuário INDIVIDUAL via `core.usuarios.matricula` (confirmar que estará preenchida).
+- ❓ **Fase 4 — role restrito do caixa**: criar `REGISTRADOR_ENTREGA` (só incluir/alterar
+  entrega) ou reusar `OPERADOR_ENTREGA`?
+- ✅ **PADRAO×INDIVIDUAL** confirmado: PADRAO = login genérico → pede matrícula+senha por ação
+  (entrega + saída de veículo); INDIVIDUAL usa `core.usuarios.matricula` do login (confirmar
+  preenchida).
