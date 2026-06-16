@@ -4,6 +4,8 @@
 
 interface JwtPayload {
   modulos?: { codigo: string; role: string }[];
+  tipo?: string;
+  departamentoId?: string;
 }
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -57,14 +59,27 @@ function decodeBase64Url(b64url: string): string {
   return utf8Decode(base64ToBytes(b64));
 }
 
-export function papelLogistica(accessToken: string | null): string | null {
+function decodePayload(accessToken: string | null): JwtPayload | null {
   if (!accessToken) return null;
   try {
     const payload = accessToken.split('.')[1];
     if (!payload) return null;
-    const json = JSON.parse(decodeBase64Url(payload)) as JwtPayload;
-    return json.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role ?? null;
+    return JSON.parse(decodeBase64Url(payload)) as JwtPayload;
   } catch {
     return null;
   }
+}
+
+export function papelLogistica(accessToken: string | null): string | null {
+  return decodePayload(accessToken)?.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role ?? null;
+}
+
+/** Tipo do usuário: 'INDIVIDUAL' (pessoa) | 'PADRAO' (login genérico). */
+export function tipoUsuario(accessToken: string | null): string | null {
+  return decodePayload(accessToken)?.tipo ?? null;
+}
+
+/** Departamento (lotação) do usuário — usado p/ filtrar veículos na saída de frota. */
+export function departamentoUsuario(accessToken: string | null): string | null {
+  return decodePayload(accessToken)?.departamentoId ?? null;
 }

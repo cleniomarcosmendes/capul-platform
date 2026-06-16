@@ -63,6 +63,7 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
 function RetornoForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () => void }) {
   const [matricula, setMatricula] = useState(viagem.condutorMatricula ?? '');
   const [senha, setSenha] = useState('');
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [kmFinal, setKmFinal] = useState('');
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -91,7 +92,12 @@ function RetornoForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
       <Text style={styles.label}>Matrícula</Text>
       <TextInput style={styles.input} value={matricula} onChangeText={setMatricula} keyboardType="numeric" editable={!salvando} />
       <Text style={styles.label}>Senha do portal RH</Text>
-      <TextInput style={styles.input} value={senha} onChangeText={setSenha} secureTextEntry editable={!salvando} />
+      <View style={styles.senhaWrap}>
+        <TextInput style={[styles.input, styles.senhaInput]} value={senha} onChangeText={setSenha} secureTextEntry={!mostrarSenha} editable={!salvando} />
+        <TouchableOpacity style={styles.olho} onPress={() => setMostrarSenha((v) => !v)} hitSlop={10}>
+          <Text style={styles.olhoTxt}>{mostrarSenha ? '🙈' : '👁️'}</Text>
+        </TouchableOpacity>
+      </View>
       <Text style={styles.label}>KM final (odômetro)</Text>
       <TextInput style={styles.input} value={kmFinal} onChangeText={setKmFinal} keyboardType="numeric" editable={!salvando} />
       <Text style={styles.label}>Observações (opcional)</Text>
@@ -187,6 +193,10 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, fontWeight: '600', color: '#475569', marginTop: 8 },
   dica: { fontSize: 12, color: '#64748b', backgroundColor: '#f1f5f9', borderRadius: 8, padding: 8 },
   input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, backgroundColor: '#fff' },
+  senhaWrap: { justifyContent: 'center' },
+  senhaInput: { paddingRight: 48 },
+  olho: { position: 'absolute', right: 8, padding: 6 },
+  olhoTxt: { fontSize: 20 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   chip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: '#fff' },
   chipOn: { backgroundColor: CAPUL, borderColor: CAPUL },

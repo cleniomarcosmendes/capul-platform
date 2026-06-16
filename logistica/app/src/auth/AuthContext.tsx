@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { doRefresh, loginRequest, setAccessToken, setOnAuthFailure } from '../api/client';
 import { getDeviceId } from './deviceId';
 import { clearTokens, getRefresh, saveTokens } from './storage';
-import { papelLogistica } from '../lib/jwt';
+import { papelLogistica, tipoUsuario, departamentoUsuario } from '../lib/jwt';
 
 type Status = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -11,6 +11,11 @@ interface AuthState {
   // Papel na Logística (do JWT) — decide a tela inicial: ENTREGADOR vê entregas;
   // os demais (operador/gestor/frota PADRÃO) veem a Frota.
   role: string | null;
+  // Tipo do usuário: 'INDIVIDUAL' (pessoa) | 'PADRAO' (login genérico). Decide se
+  // a saída de frota pede matrícula+senha (PADRAO) ou usa o próprio login (INDIVIDUAL).
+  tipo: string | null;
+  // Departamento (lotação) — filtra os veículos na saída de frota.
+  departamentoId: string | null;
   login: (login: string, senha: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -20,18 +25,27 @@ const AuthContext = createContext<AuthState | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
   const [role, setRole] = useState<string | null>(null);
+  const [tipo, setTipo] = useState<string | null>(null);
+  const [departamentoId, setDepartamentoId] = useState<string | null>(null);
+
+  // Deriva role/tipo/departamento de um access token (ou limpa, se null).
+  const aplicarToken = useCallback((access: string | null) => {
+    setRole(papelLogistica(access));
+    setTipo(tipoUsuario(access));
+    setDepartamentoId(departamentoUsuario(access));
+  }, []);
 
   const logout = useCallback(async () => {
     // Vira o estado PRIMEIRO — "Sair" não pode ficar mudo, nem mesmo se o
     // SecureStore travar/demorar (deleteItemAsync já travou no Expo Go Android).
     // A limpeza do keystore vai em segundo plano (fire-and-forget).
     setAccessToken(null);
-    setRole(null);
+    aplicarToken(null);
     setStatus('unauthenticated');
     void clearTokens().catch(() => {
       /* keystore some no próximo login de qualquer forma */
     });
-  }, []);
+  }, [aplicarToken]);
 
   // Boot: a sessão é válida se houver REFRESH (30d deslizante). NÃO confiamos só
   // no access salvo (pode estar ausente/vencido) — renovamos no boot para ter
@@ -56,28 +70,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!access) {
         await clearTokens().catch(() => {});
         setAccessToken(null);
-        setRole(null);
+        aplicarToken(null);
         setStatus('unauthenticated');
         return;
       }
       setAccessToken(access);
-      setRole(papelLogistica(access));
+      aplicarToken(access);
       setStatus('authenticated');
     })();
     return () => setOnAuthFailure(null);
-  }, [logout]);
+  }, [logout, aplicarToken]);
 
   const login = useCallback(async (loginValue: string, senha: string) => {
     const deviceId = await getDeviceId();
     const tokens = await loginRequest(loginValue.trim(), senha, deviceId);
     await saveTokens(tokens.accessToken, tokens.refreshToken);
     setAccessToken(tokens.accessToken);
-    setRole(papelLogistica(tokens.accessToken));
+    aplicarToken(tokens.accessToken);
     setStatus('authenticated');
-  }, []);
+  }, [aplicarToken]);
 
   return (
-    <AuthContext.Provider value={{ status, role, login, logout }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ status, role, tipo, departamentoId, login, logout }}>
+      {children}
+    </AuthContext.Provider>
   );
 }
 

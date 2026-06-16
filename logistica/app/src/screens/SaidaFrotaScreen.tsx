@@ -5,37 +5,65 @@ import {
 import { isAxiosError } from 'axios';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
-import { buscarCondutor, validarCondutor, veiculosDisponiveis, registrarSaida } from '../api/frota';
+import { useAuth } from '../auth/AuthContext';
+import {
+  buscarCondutor, validarCondutor, veiculosDisponiveis, registrarSaida, registrarSaidaIndividual,
+} from '../api/frota';
 import type { VeiculoFrota } from '../types/api';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'SaidaFrota'>;
 
 /**
- * Saída de veículo (self-service). Passo a passo igual à web: matrícula → nome →
- * senha (valida 200, nunca desloga) → veículo + km. A senha é REVALIDADA no
- * registrar (backend), então a validação aqui é só pra liberar o resto do form.
+ * Saída de veículo (self-service). Dois fluxos pelo TIPO do usuário:
+ *  - INDIVIDUAL: já autenticado é o próprio condutor → NÃO pede matrícula/senha.
+ *  - PADRAO (login genérico/compartilhado): pede matrícula + senha do portal RH.
+ * A senha PADRAO é revalidada no backend ao registrar.
  */
 export function SaidaFrotaScreen({ navigation }: Props) {
+  const { tipo, departamentoId } = useAuth();
+  const ehIndividual = tipo === 'INDIVIDUAL';
+
+  // --- Identificação (só PADRAO) ---
   const [matricula, setMatricula] = useState('');
   const [nome, setNome] = useState<string | null>(null);
   const [buscandoNome, setBuscandoNome] = useState(false);
   const [senha, setSenha] = useState('');
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [credOk, setCredOk] = useState(false);
   const [validando, setValidando] = useState(false);
   const [erroSenha, setErroSenha] = useState('');
 
+  // --- Veículo e saída ---
   const [veiculos, setVeiculos] = useState<VeiculoFrota[]>([]);
+  const [carregandoVeiculos, setCarregandoVeiculos] = useState(true);
+  const [busca, setBusca] = useState('');
   const [veiculoId, setVeiculoId] = useState('');
   const [km, setKm] = useState('');
   const [finalidade, setFinalidade] = useState('');
   const [salvando, setSalvando] = useState(false);
 
+  // INDIVIDUAL filtra pelo depto do usuário; busca (placa) procura em toda a filial.
   useEffect(() => {
-    void (async () => {
-      try { setVeiculos(await veiculosDisponiveis()); } catch { /* lista vazia */ }
-    })();
-  }, []);
+    let ativo = true;
+    const t = setTimeout(async () => {
+      setCarregandoVeiculos(true);
+      try {
+        const termo = busca.trim();
+        const lista = await veiculosDisponiveis(
+          termo
+            ? { busca: termo }
+            : { departamentoLotacaoId: ehIndividual ? departamentoId ?? undefined : undefined },
+        );
+        if (ativo) setVeiculos(lista);
+      } catch {
+        if (ativo) setVeiculos([]);
+      } finally {
+        if (ativo) setCarregandoVeiculos(false);
+      }
+    }, 300);
+    return () => { ativo = false; clearTimeout(t); };
+  }, [busca, ehIndividual, departamentoId]);
 
   const veiculo = veiculos.find((v) => v.id === veiculoId);
 
@@ -74,7 +102,9 @@ export function SaidaFrotaScreen({ navigation }: Props) {
     }
   }
 
-  const podeRegistrar = credOk && !!veiculoId && km !== '' && Number(km) >= 0 && !salvando;
+  // INDIVIDUAL não precisa de credOk; PADRAO sim.
+  const identificado = ehIndividual || credOk;
+  const podeRegistrar = identificado && !!veiculoId && km !== '' && Number(km) >= 0 && !salvando;
 
   async function registrar() {
     if (!podeRegistrar) return;
@@ -84,10 +114,14 @@ export function SaidaFrotaScreen({ navigation }: Props) {
     }
     setSalvando(true);
     try {
-      const v = await registrarSaida({
-        matricula: matricula.trim(), senha, veiculoId,
-        kmInicial: Number(km), finalidade: finalidade.trim() || undefined,
-      });
+      const v = ehIndividual
+        ? await registrarSaidaIndividual({
+            veiculoId, kmInicial: Number(km), finalidade: finalidade.trim() || undefined,
+          })
+        : await registrarSaida({
+            matricula: matricula.trim(), senha, veiculoId,
+            kmInicial: Number(km), finalidade: finalidade.trim() || undefined,
+          });
       Alert.alert('Saída registrada', `${v.placa} · viagem #${v.numero}.`, [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
@@ -101,62 +135,98 @@ export function SaidaFrotaScreen({ navigation }: Props) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.conteudo}>
-      <Text style={styles.passo}>1. Condutor</Text>
-      <Text style={styles.label}>Matrícula</Text>
-      <View style={styles.linha}>
-        <TextInput
-          style={[styles.input, { flex: 1 }]}
-          placeholder="Matrícula do condutor"
-          value={matricula}
-          onChangeText={(t) => { setMatricula(t); setNome(null); setCredOk(false); }}
-          keyboardType="numeric"
-          editable={!salvando}
-          onBlur={acharNome}
-        />
-        <TouchableOpacity style={styles.btnBuscar} onPress={acharNome} disabled={buscandoNome || !matricula.trim()}>
-          {buscandoNome ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnBuscarTxt}>Buscar</Text>}
-        </TouchableOpacity>
-      </View>
-      {nome ? <Text style={styles.nome}>👤 {nome}</Text> : null}
-
-      {nome ? (
+      {/* Passo 1 — Condutor (só PADRAO; INDIVIDUAL já está identificado pelo login) */}
+      {!ehIndividual ? (
         <>
-          <Text style={styles.label}>Senha do portal RH</Text>
-          <TextInput
-            style={[styles.input, credOk && styles.inputOk, !!erroSenha && styles.inputErr]}
-            placeholder="Senha"
-            value={senha}
-            onChangeText={(t) => { setSenha(t); setCredOk(false); setErroSenha(''); }}
-            secureTextEntry
-            editable={!salvando}
-            onBlur={validarSenha}
-          />
-          {validando ? <Text style={styles.dica}>Validando…</Text> : null}
-          {credOk ? <Text style={styles.ok}>✓ Condutor confirmado</Text> : null}
-          {erroSenha ? <Text style={styles.err}>{erroSenha}</Text> : null}
-          {!credOk && !validando && senha ? (
-            <TouchableOpacity style={styles.btnValidar} onPress={validarSenha}><Text style={styles.btnValidarTxt}>Validar senha</Text></TouchableOpacity>
+          <Text style={styles.passo}>1. Condutor</Text>
+          <Text style={styles.label}>Matrícula</Text>
+          <View style={styles.linha}>
+            <TextInput
+              style={[styles.input, { flex: 1 }]}
+              placeholder="Matrícula do condutor"
+              value={matricula}
+              onChangeText={(t) => { setMatricula(t); setNome(null); setCredOk(false); }}
+              keyboardType="numeric"
+              editable={!salvando}
+              onBlur={acharNome}
+            />
+            <TouchableOpacity style={styles.btnBuscar} onPress={acharNome} disabled={buscandoNome || !matricula.trim()}>
+              {buscandoNome ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnBuscarTxt}>Buscar</Text>}
+            </TouchableOpacity>
+          </View>
+          {nome ? <Text style={styles.nome}>👤 {nome}</Text> : null}
+
+          {nome ? (
+            <>
+              <Text style={styles.label}>Senha do portal RH</Text>
+              <View style={styles.senhaWrap}>
+                <TextInput
+                  style={[styles.input, styles.senhaInput, credOk && styles.inputOk, !!erroSenha && styles.inputErr]}
+                  placeholder="Senha"
+                  value={senha}
+                  onChangeText={(t) => { setSenha(t); setCredOk(false); setErroSenha(''); }}
+                  secureTextEntry={!mostrarSenha}
+                  editable={!salvando}
+                  onBlur={validarSenha}
+                />
+                <TouchableOpacity style={styles.olho} onPress={() => setMostrarSenha((v) => !v)} hitSlop={10}>
+                  <Text style={styles.olhoTxt}>{mostrarSenha ? '🙈' : '👁️'}</Text>
+                </TouchableOpacity>
+              </View>
+              {validando ? <Text style={styles.dica}>Validando…</Text> : null}
+              {credOk ? <Text style={styles.ok}>✓ Condutor confirmado</Text> : null}
+              {erroSenha ? <Text style={styles.err}>{erroSenha}</Text> : null}
+              {!credOk && !validando && senha ? (
+                <TouchableOpacity style={styles.btnValidar} onPress={validarSenha}><Text style={styles.btnValidarTxt}>Validar senha</Text></TouchableOpacity>
+              ) : null}
+            </>
           ) : null}
         </>
       ) : null}
 
-      {credOk ? (
+      {/* Passo 2 — Veículo e saída */}
+      {identificado ? (
         <>
-          <Text style={[styles.passo, { marginTop: 18 }]}>2. Veículo e saída</Text>
+          <Text style={[styles.passo, !ehIndividual && { marginTop: 18 }]}>
+            {ehIndividual ? 'Veículo e saída' : '2. Veículo e saída'}
+          </Text>
+
+          <Text style={styles.label}>Buscar veículo (placa / modelo)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Digite a placa para procurar outro veículo"
+            value={busca}
+            onChangeText={setBusca}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            editable={!salvando}
+          />
+
           <Text style={styles.label}>Veículo disponível</Text>
-          <View style={styles.chips}>
-            {veiculos.length === 0 ? (
-              <Text style={styles.dica}>Nenhum veículo disponível na filial.</Text>
-            ) : veiculos.map((v) => (
-              <TouchableOpacity
-                key={v.id}
-                style={[styles.chip, veiculoId === v.id && styles.chipOn]}
-                onPress={() => { setVeiculoId(v.id); if (km === '') setKm(String(v.kmAtual)); }}
-              >
-                <Text style={[styles.chipTxt, veiculoId === v.id && styles.chipTxtOn]}>{v.placa}{v.modelo ? ` · ${v.modelo}` : ''}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {carregandoVeiculos ? (
+            <View style={styles.veicVazio}><ActivityIndicator color={CAPUL} /></View>
+          ) : veiculos.length === 0 ? (
+            <View style={styles.veicVazio}>
+              <Text style={styles.veicVazioTit}>Nenhum veículo disponível</Text>
+              <Text style={styles.veicVazioSub}>
+                {busca.trim()
+                  ? `Nada encontrado para "${busca.trim()}". Limpe a busca para ver os do seu setor.`
+                  : 'Não há veículo livre no seu setor agora (todos em uso ou nenhum cadastrado). Use a busca acima para procurar em outro setor.'}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.chips}>
+              {veiculos.map((v) => (
+                <TouchableOpacity
+                  key={v.id}
+                  style={[styles.chip, veiculoId === v.id && styles.chipOn]}
+                  onPress={() => { setVeiculoId(v.id); if (km === '') setKm(String(v.kmAtual)); }}
+                >
+                  <Text style={[styles.chipTxt, veiculoId === v.id && styles.chipTxtOn]}>{v.placa}{v.modelo ? ` · ${v.modelo}` : ''}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
           <Text style={styles.label}>KM inicial (odômetro)</Text>
           <TextInput style={styles.input} placeholder="KM no painel" value={km} onChangeText={setKm} keyboardType="numeric" editable={!salvando} />
@@ -183,6 +253,10 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, backgroundColor: '#fff' },
   inputOk: { borderColor: CAPUL },
   inputErr: { borderColor: '#b91c1c' },
+  senhaWrap: { justifyContent: 'center' },
+  senhaInput: { paddingRight: 48 },
+  olho: { position: 'absolute', right: 8, padding: 6 },
+  olhoTxt: { fontSize: 20 },
   btnBuscar: { backgroundColor: CAPUL, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 12, justifyContent: 'center' },
   btnBuscarTxt: { color: '#fff', fontWeight: '700' },
   nome: { fontSize: 15, fontWeight: '600', color: '#0f172a', marginTop: 6 },
@@ -196,6 +270,9 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: CAPUL, borderColor: CAPUL },
   chipTxt: { color: '#334155', fontWeight: '600' },
   chipTxtOn: { color: '#fff' },
+  veicVazio: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 4 },
+  veicVazioTit: { fontSize: 15, fontWeight: '700', color: '#b45309' },
+  veicVazioSub: { fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 4, lineHeight: 19 },
   registrar: { backgroundColor: CAPUL, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 18 },
   registrarOff: { opacity: 0.45 },
   registrarTxt: { color: '#fff', fontSize: 16, fontWeight: '700' },

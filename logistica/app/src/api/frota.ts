@@ -22,9 +22,18 @@ export async function validarCondutor(matricula: string, senha: string): Promise
   return data;
 }
 
-/** Veículos disponíveis da filial (pra escolher na saída). */
-export async function veiculosDisponiveis(): Promise<VeiculoFrota[]> {
-  const { data } = await api.get<VeiculoFrota[]>(`${LOGISTICA_BASE}/veiculos`, { params: { situacao: 'DISPONIVEL' } });
+/** Veículos disponíveis da filial (pra escolher na saída). Filtra por departamento
+ *  de lotação e/ou busca (placa/modelo/marca) quando informado. */
+export async function veiculosDisponiveis(
+  opts: { departamentoLotacaoId?: string; busca?: string } = {},
+): Promise<VeiculoFrota[]> {
+  const { data } = await api.get<VeiculoFrota[]>(`${LOGISTICA_BASE}/veiculos`, {
+    params: {
+      situacao: 'DISPONIVEL',
+      ...(opts.departamentoLotacaoId ? { departamentoLotacaoId: opts.departamentoLotacaoId } : {}),
+      ...(opts.busca?.trim() ? { busca: opts.busca.trim() } : {}),
+    },
+  });
   return data;
 }
 
@@ -42,9 +51,21 @@ export interface SaidaPayload {
   finalidade?: string;
 }
 
-/** Registrar saída (revalida senha no backend). */
+/** Registrar saída PADRAO (revalida matrícula+senha no backend). */
 export async function registrarSaida(p: SaidaPayload): Promise<ViagemFrota> {
   const { data } = await api.post<ViagemFrota>(`${LOGISTICA_BASE}/frota/viagens`, p);
+  return data;
+}
+
+export interface SaidaIndividualPayload {
+  veiculoId: string;
+  kmInicial: number;
+  finalidade?: string;
+}
+
+/** Registrar saída INDIVIDUAL — o próprio usuário logado é o condutor (sem senha). */
+export async function registrarSaidaIndividual(p: SaidaIndividualPayload): Promise<ViagemFrota> {
+  const { data } = await api.post<ViagemFrota>(`${LOGISTICA_BASE}/frota/viagens/individual`, p);
   return data;
 }
 
