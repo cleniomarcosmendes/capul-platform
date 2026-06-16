@@ -211,6 +211,21 @@ model TipoDespesa {
   @@schema("logistica")
 }
 
+// Fornecedor da despesa de frota — cadastro PRÓPRIO da logística (postos,
+// borracharias, lava-jatos...), separado do FornecedorConfig de TI (gestao_ti),
+// que é de TI/telecom. Gerenciado pelo gestor de frota, igual aos tipos de
+// despesa. Seed inclui "NÃO DEFINIDO" (default quando não informado).
+model FornecedorDespesa {
+  id        String           @id @default(uuid())
+  nome      String           @unique
+  ativo     Boolean          @default(true)
+  criadoEm  DateTime         @default(now()) @map("criado_em")
+  despesas  DespesaVeiculo[]
+
+  @@map("fornecedor_despesa")
+  @@schema("logistica")
+}
+
 // Despesa vincula SEMPRE a Veiculo (chave principal de análise) e OPCIONALMENTE
 // a Viagem (quando contextualizada). Fora do escopo: rateio por departamento e
 // integração financeira com Protheus (gestão própria do módulo). filialId é
@@ -226,6 +241,10 @@ model DespesaVeiculo {
   tipoDespesa   TipoDespesa   @relation(fields: [tipoDespesaId], references: [id])
   valor         Decimal       @db.Decimal(12, 2)
   dataDespesa   DateTime      @map("data_despesa")
+  // Fornecedor: ref ao cadastro próprio (preferido) + texto livre (retrocompat /
+  // posto não cadastrado). Indicadores agrupam por fornecedorRef.nome › fornecedor › "NÃO DEFINIDO".
+  fornecedorId  String?            @map("fornecedor_id")
+  fornecedorRef FornecedorDespesa? @relation(fields: [fornecedorId], references: [id])
   fornecedor    String?
   observacao    String?
   situacao      StatusDespesa @default(PENDENTE)

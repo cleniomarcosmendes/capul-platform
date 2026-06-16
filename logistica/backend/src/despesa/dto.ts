@@ -23,6 +23,20 @@ export class AtualizarTipoDespesaDto {
   ativo?: boolean;
 }
 
+// ---- Fornecedores da despesa (cadastro PRÓPRIO da logística) ----
+export class CriarFornecedorDespesaDto {
+  @IsString() @IsNotEmpty() @MaxLength(120)
+  nome!: string;
+}
+
+export class AtualizarFornecedorDespesaDto {
+  @IsOptional() @IsString() @MaxLength(120)
+  nome?: string;
+
+  @IsOptional() @IsBoolean()
+  ativo?: boolean;
+}
+
 // ---- Lançamento direto (supervisor/gestor) → já APROVADA ----
 export class LancarDespesaDto {
   @IsString() @IsNotEmpty()
@@ -40,6 +54,9 @@ export class LancarDespesaDto {
   // ISO date (default: hoje, no service).
   @IsOptional() @IsDateString()
   dataDespesa?: string;
+
+  @IsOptional() @IsString()
+  fornecedorId?: string; // ref ao cadastro de fornecedores; vazio = texto livre/NÃO DEFINIDO
 
   @IsOptional() @IsString() @MaxLength(120)
   fornecedor?: string;
@@ -60,6 +77,9 @@ export class LancarDespesaViagemDto {
 
   @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0)
   valor!: number;
+
+  @IsOptional() @IsString()
+  fornecedorId?: string; // ref ao cadastro de fornecedores; vazio = texto livre/NÃO DEFINIDO
 
   @IsOptional() @IsString() @MaxLength(120)
   fornecedor?: string;

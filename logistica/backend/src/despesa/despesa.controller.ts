@@ -9,6 +9,7 @@ import { DespesaService, type ReciboBinario } from './despesa.service.js';
 import {
   CriarTipoDespesaDto, AtualizarTipoDespesaDto, LancarDespesaDto,
   LancarDespesaViagemDto, ContestarDespesaDto, ListarDespesasQuery,
+  CriarFornecedorDespesaDto, AtualizarFornecedorDespesaDto,
 } from './dto.js';
 
 /** Converte o arquivo do multer no binário do recibo (ou undefined). */
@@ -40,6 +41,24 @@ export class DespesaController {
   @Roles('GESTOR_FROTA')
   atualizarTipo(@Param('id') id: string, @Body() dto: AtualizarTipoDespesaDto) {
     return this.despesas.atualizarTipo(id, dto);
+  }
+
+  // ---- Fornecedores (cadastro próprio da logística) ----
+  @Get('fornecedores')
+  listarFornecedores(@Query('ativos') ativos?: string) {
+    return this.despesas.listarFornecedores(ativos === 'true' || ativos === '1');
+  }
+
+  @Post('fornecedores')
+  @Roles('GESTOR_FROTA')
+  criarFornecedor(@Body() dto: CriarFornecedorDespesaDto) {
+    return this.despesas.criarFornecedor(dto);
+  }
+
+  @Patch('fornecedores/:id')
+  @Roles('GESTOR_FROTA')
+  atualizarFornecedor(@Param('id') id: string, @Body() dto: AtualizarFornecedorDespesaDto) {
+    return this.despesas.atualizarFornecedor(id, dto);
   }
 
   // ---- Despesas ----

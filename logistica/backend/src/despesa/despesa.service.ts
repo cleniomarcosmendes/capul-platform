@@ -8,6 +8,7 @@ import type { JwtPayload } from '../common/decorators/current-user.decorator.js'
 import {
   CriarTipoDespesaDto, AtualizarTipoDespesaDto, LancarDespesaDto,
   LancarDespesaViagemDto, ContestarDespesaDto, ListarDespesasQuery,
+  CriarFornecedorDespesaDto, AtualizarFornecedorDespesaDto,
 } from './dto.js';
 
 const ehGestor = (role?: string) => role === 'GESTOR_FROTA' || role === 'ADMIN';
@@ -75,6 +76,30 @@ export class DespesaService {
         descricao: dto.descricao !== undefined ? (dto.descricao.trim() || null) : undefined,
         ativo: dto.ativo ?? undefined,
       },
+    });
+  }
+
+  // ---- Fornecedores da despesa (cadastro próprio) ----
+  listarFornecedores(somenteAtivos?: boolean) {
+    return this.prisma.fornecedorDespesa.findMany({
+      where: somenteAtivos ? { ativo: true } : {},
+      orderBy: { nome: 'asc' },
+    });
+  }
+
+  async criarFornecedor(dto: CriarFornecedorDespesaDto) {
+    const nome = dto.nome.trim();
+    const existe = await this.prisma.fornecedorDespesa.findUnique({ where: { nome } });
+    if (existe) throw new BadRequestException('Já existe um fornecedor com esse nome.');
+    return this.prisma.fornecedorDespesa.create({ data: { nome } });
+  }
+
+  async atualizarFornecedor(id: string, dto: AtualizarFornecedorDespesaDto) {
+    const f = await this.prisma.fornecedorDespesa.findUnique({ where: { id } });
+    if (!f) throw new NotFoundException('Fornecedor não encontrado.');
+    return this.prisma.fornecedorDespesa.update({
+      where: { id },
+      data: { nome: dto.nome?.trim() ?? undefined, ativo: dto.ativo ?? undefined },
     });
   }
 
@@ -151,6 +176,7 @@ export class DespesaService {
         tipoDespesaId: tipo.id,
         valor: new Prisma.Decimal(dto.valor),
         dataDespesa: dto.dataDespesa ? new Date(dto.dataDespesa) : new Date(),
+        fornecedorId: dto.fornecedorId || null,
         fornecedor: dto.fornecedor?.trim() || null,
         observacao: dto.observacao?.trim() || null,
         situacao: StatusDespesa.APROVADA,
@@ -185,6 +211,7 @@ export class DespesaService {
         tipoDespesaId: tipo.id,
         valor: new Prisma.Decimal(dto.valor),
         dataDespesa: new Date(),
+        fornecedorId: dto.fornecedorId || null,
         fornecedor: dto.fornecedor?.trim() || null,
         observacao: dto.observacao?.trim() || null,
         situacao: StatusDespesa.PENDENTE,
