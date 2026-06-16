@@ -18,8 +18,14 @@ Dados DEV: `clenio`/`123456` (ADMIN/PADRAO), `entregador_teste`/`entrega123` (EN
 - ✅ **FASE 7a** (veículo próprio/alugado — enum+migration+form). Migration via diff+deploy
   (ver `[[feedback_logistica_migrate_dev_reseta]]`).
 - ✅ **FASE 7b** (tipos de despesa) — JÁ EXISTIA: aba "Tipos" na DespesasPage (criar/listar/ativar).
-- ⏳ Próximas: 4 (credencial sessão — caixa) → 7c (fornecedor) → 5 (navegação/validação) →
+- ✅ **FASE 4** (credencial por sessão no cadastro de entrega): role `REGISTRADOR_ENTREGA`;
+  PADRAO identifica operador por matrícula+senha 1x/sessão (cache em memória + "trocar
+  operador"); INDIVIDUAL usa o próprio; grava registradoPorMatricula/Nome. Migration
+  `20260616130000`. Usuário de teste `caixa_teste`/`123456` (PADRAO+REGISTRADOR_ENTREGA).
+- ⏳ Próximas: 7c (fornecedor — leitura cross-schema) → 5 (navegação/validação cupom-valor) →
   6 (revamp Frota).
+- ⏳ Refinamento aberto: nav do frontend web ainda não esconde links não-entrega p/
+  REGISTRADOR_ENTREGA (backend já bloqueia por RBAC).
 
 ---
 
