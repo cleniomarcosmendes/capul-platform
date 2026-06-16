@@ -8,7 +8,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { SituacaoVeiculo, TipoVeiculo } from '@prisma/client';
+import { PropriedadeVeiculo, SituacaoVeiculo, TipoVeiculo } from '@prisma/client';
 
 export class CreateVeiculoDto {
   @IsString() @MaxLength(40)
@@ -24,6 +24,7 @@ export class CreateVeiculoDto {
   @IsOptional() @IsInt() @Min(1900) ano?: number;
   @IsOptional() @IsString() @MaxLength(30) cor?: string;
   @IsOptional() @IsEnum(TipoVeiculo) tipo?: TipoVeiculo;
+  @IsOptional() @IsEnum(PropriedadeVeiculo) propriedade?: PropriedadeVeiculo;
   @IsOptional() @IsInt() @Min(0) kmAtual?: number;
   @IsOptional() @IsString() @MaxLength(60) capacidadeCarga?: string;
   @IsOptional() @IsEnum(SituacaoVeiculo) situacao?: SituacaoVeiculo;
@@ -50,6 +51,7 @@ export class UpdateVeiculoDto {
   @IsOptional() @IsInt() @Min(1900) ano?: number;
   @IsOptional() @IsString() @MaxLength(30) cor?: string;
   @IsOptional() @IsEnum(TipoVeiculo) tipo?: TipoVeiculo;
+  @IsOptional() @IsEnum(PropriedadeVeiculo) propriedade?: PropriedadeVeiculo;
   @IsOptional() @IsInt() @Min(0) kmAtual?: number;
   @IsOptional() @IsString() @MaxLength(60) capacidadeCarga?: string;
   @IsOptional() @IsEnum(SituacaoVeiculo) situacao?: SituacaoVeiculo;

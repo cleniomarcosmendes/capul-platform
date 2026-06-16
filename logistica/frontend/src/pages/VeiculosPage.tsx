@@ -9,7 +9,7 @@ import { coreApi, logisticaApi } from '../services/api';
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
 interface Veiculo {
   id: string; placa: string; modelo?: string | null; marca?: string | null;
-  ano?: number | null; tipo: string; situacao: string; kmAtual: number;
+  ano?: number | null; tipo: string; propriedade?: string; situacao: string; kmAtual: number;
   filialId: string; supervisorId: string;
 }
 
@@ -130,7 +130,7 @@ export function VeiculosPage() {
                   <tr key={v.id} onClick={() => navigate(`/veiculos/${v.id}/editar`)} className="cursor-pointer hover:bg-slate-50">
                     <td className="px-3 py-2 font-mono font-medium text-slate-700">{v.placa}</td>
                     <td className="px-3 py-2 text-slate-600">{[v.marca, v.modelo].filter(Boolean).join(' ') || '—'}{v.ano ? ` · ${v.ano}` : ''}</td>
-                    <td className="px-3 py-2 text-slate-500">{v.tipo}</td>
+                    <td className="px-3 py-2 text-slate-500">{v.tipo}{v.propriedade === 'ALUGADO' ? ' · Alugado' : ''}</td>
                     <td className="px-3 py-2"><span className={`rounded px-1.5 py-0.5 text-xs font-medium ${sit.cls}`}>{sit.label}</span></td>
                     <td className="px-3 py-2 text-slate-600">{nomeSupervisor(v.supervisorId)}</td>
                     <td className="px-3 py-2 text-right font-mono text-slate-600">{v.kmAtual}</td>

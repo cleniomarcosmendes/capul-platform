@@ -75,6 +75,13 @@ enum TipoVeiculo {
   @@schema("logistica")
 }
 
+// Propriedade do veículo: da frota própria da CAPUL ou alugado.
+enum PropriedadeVeiculo {
+  PROPRIO
+  ALUGADO
+  @@schema("logistica")
+}
+
 // Governança de despesas (Fase 2): motorista lança PENDENTE → supervisor/gestor
 // aprova (entra nos indicadores) ou contesta. Lançamento direto por
 // supervisor/gestor já nasce APROVADA.
@@ -148,6 +155,7 @@ model Veiculo {
   ano                   Int?
   cor                   String?
   tipo                  TipoVeiculo     @default(CARRO)
+  propriedade           PropriedadeVeiculo @default(PROPRIO)
   kmAtual               Int             @default(0) @map("km_atual")
   capacidadeCarga       String?         @map("capacidade_carga")
   situacao              SituacaoVeiculo @default(DISPONIVEL)

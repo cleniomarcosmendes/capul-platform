@@ -13,6 +13,7 @@ interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: 
 const labelCore = (i: CoreItem) => i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8);
 
 const TIPOS = ['CARRO', 'UTILITARIO', 'CAMINHAO', 'OUTRO'];
+const PROPRIEDADES: [string, string][] = [['PROPRIO', 'Próprio'], ['ALUGADO', 'Alugado']];
 const SITUACOES = ['DISPONIVEL', 'EM_USO', 'EM_MANUTENCAO', 'BAIXADO'];
 
 export function VeiculoFormPage() {
@@ -29,6 +30,7 @@ export function VeiculoFormPage() {
   const [marca, setMarca] = useState('');
   const [ano, setAno] = useState('');
   const [tipo, setTipo] = useState('CARRO');
+  const [propriedade, setPropriedade] = useState('PROPRIO');
   const [kmAtual, setKmAtual] = useState('0');
   const [intervaloManutencaoKm, setIntervalo] = useState('');
   const [kmUltimaManutencao, setKmUltima] = useState<number | null>(null);
@@ -60,12 +62,12 @@ export function VeiculoFormPage() {
       try {
         const { data: v } = await logisticaApi.get<{
           placa: string; modelo?: string | null; marca?: string | null; ano?: number | null;
-          tipo: string; kmAtual: number; filialId: string; departamentoLotacaoId: string;
+          tipo: string; propriedade?: string; kmAtual: number; filialId: string; departamentoLotacaoId: string;
           supervisorId: string; situacao: string;
           intervaloManutencaoKm?: number | null; kmUltimaManutencao?: number | null; kmProximaManutencao?: number | null;
         }>(`/veiculos/${id}`);
         setPlaca(v.placa); setModelo(v.modelo ?? ''); setMarca(v.marca ?? '');
-        setAno(v.ano ? String(v.ano) : ''); setTipo(v.tipo); setKmAtual(String(v.kmAtual ?? 0));
+        setAno(v.ano ? String(v.ano) : ''); setTipo(v.tipo); setPropriedade(v.propriedade ?? 'PROPRIO'); setKmAtual(String(v.kmAtual ?? 0));
         setIntervalo(v.intervaloManutencaoKm != null ? String(v.intervaloManutencaoKm) : '');
         setKmUltima(v.kmUltimaManutencao ?? null); setKmProxima(v.kmProximaManutencao ?? null);
         setFilialId(v.filialId); setDepartamentoId(v.departamentoLotacaoId);
@@ -90,6 +92,7 @@ export function VeiculoFormPage() {
       marca: marca || undefined,
       ano: ano ? parseInt(ano) : undefined,
       tipo,
+      propriedade,
       kmAtual: kmAtual ? parseInt(kmAtual) : 0,
       intervaloManutencaoKm: intervaloManutencaoKm ? parseInt(intervaloManutencaoKm) : undefined,
       departamentoLotacaoId,
@@ -131,6 +134,8 @@ export function VeiculoFormPage() {
             <input value={placa} onChange={(e) => setPlaca(maskPlaca(e.target.value))} required placeholder="ABC1D23" maxLength={7} className={`${inp} font-mono uppercase`} /></div>
           <div><label className={lbl}>Tipo</label>
             <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={inp}>{TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+          <div><label className={lbl}>Propriedade</label>
+            <select value={propriedade} onChange={(e) => setPropriedade(e.target.value)} className={inp}>{PROPRIEDADES.map(([v, rotulo]) => <option key={v} value={v}>{rotulo}</option>)}</select></div>
           <div><label className={lbl}>Marca</label><input value={marca} onChange={(e) => setMarca(e.target.value)} className={inp} /></div>
           <div><label className={lbl}>Modelo</label><input value={modelo} onChange={(e) => setModelo(e.target.value)} className={inp} /></div>
           <div><label className={lbl}>Ano</label><input type="number" value={ano} onChange={(e) => setAno(e.target.value)} className={inp} /></div>
