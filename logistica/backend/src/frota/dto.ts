@@ -41,6 +41,27 @@ export class SaidaFrotaDto {
 }
 
 /**
+ * Saída registrada por usuário INDIVIDUAL (já autenticado) — NÃO pede matrícula
+ * nem senha: o condutor é o próprio usuário logado (matrícula resolvida do core).
+ */
+export class SaidaIndividualDto {
+  @IsString() @IsNotEmpty()
+  veiculoId!: string;
+
+  @IsInt() @Min(0)
+  kmInicial!: number;
+
+  @IsOptional() @IsString() @MaxLength(255)
+  finalidade?: string;
+
+  @IsOptional() @IsString() @MaxLength(120)
+  localSaida?: string;
+
+  @IsOptional() @IsString() @MaxLength(40)
+  departamentoSolicitanteId?: string;
+}
+
+/**
  * Saída registrada pela PORTARIA (exceção) — usuário autorizado aponta a viagem
  * ao condutor escolhido na busca por nome, SEM a senha dele. matrícula+nome vêm
  * do resultado do infoPortal (não digitados livremente).

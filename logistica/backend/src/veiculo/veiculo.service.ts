@@ -79,12 +79,29 @@ export class VeiculoService {
     }
   }
 
-  async list(params: { filialId?: string; situacao?: SituacaoVeiculo; incluirInativos?: boolean }) {
+  async list(params: {
+    filialId?: string;
+    situacao?: SituacaoVeiculo;
+    incluirInativos?: boolean;
+    departamentoLotacaoId?: string;
+    busca?: string;
+  }) {
+    const termo = params.busca?.trim();
     const veiculos = await this.prisma.veiculo.findMany({
       where: {
         ...(params.filialId ? { filialId: params.filialId } : {}),
         ...(params.situacao ? { situacao: params.situacao } : {}),
         ...(params.incluirInativos ? {} : { ativo: true }),
+        ...(params.departamentoLotacaoId ? { departamentoLotacaoId: params.departamentoLotacaoId } : {}),
+        ...(termo
+          ? {
+              OR: [
+                { placa: { contains: termo, mode: 'insensitive' } },
+                { modelo: { contains: termo, mode: 'insensitive' } },
+                { marca: { contains: termo, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
       },
       orderBy: { placa: 'asc' },
       take: 300,

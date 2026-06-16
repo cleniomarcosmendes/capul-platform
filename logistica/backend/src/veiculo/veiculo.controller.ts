@@ -23,8 +23,16 @@ export class VeiculoController {
     @Query('filialId') filialId?: string,
     @Query('situacao') situacao?: SituacaoVeiculo,
     @Query('incluirInativos') incluirInativos?: string,
+    @Query('departamentoLotacaoId') departamentoLotacaoId?: string,
+    @Query('busca') busca?: string,
   ) {
-    return this.veiculos.list({ filialId: resolverFilialLeitura(user, filialId), situacao, incluirInativos: incluirInativos === 'true' });
+    return this.veiculos.list({
+      filialId: resolverFilialLeitura(user, filialId),
+      situacao,
+      incluirInativos: incluirInativos === 'true',
+      departamentoLotacaoId,
+      busca,
+    });
   }
 
   @Get(':id')

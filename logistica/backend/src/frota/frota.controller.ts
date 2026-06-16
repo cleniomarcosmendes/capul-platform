@@ -3,7 +3,7 @@ import { StatusViagem } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { FrotaService } from './frota.service.js';
-import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto } from './dto.js';
+import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto } from './dto.js';
 
 const roleLogistica = (user: JwtPayload) => user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
 
@@ -24,10 +24,16 @@ export class FrotaController {
     return this.frota.validarCondutor(dto.matricula, dto.senha);
   }
 
-  /** Registrar saída de veículo (condutor valida matrícula+senha). */
+  /** Registrar saída de veículo (PADRAO: condutor valida matrícula+senha). */
   @Post('viagens')
   saida(@Body() dto: SaidaFrotaDto, @CurrentUser() user: JwtPayload) {
     return this.frota.registrarSaida(dto, user);
+  }
+
+  /** Saída por usuário INDIVIDUAL (já autenticado): condutor = próprio usuário, sem senha. */
+  @Post('viagens/individual')
+  saidaIndividual(@Body() dto: SaidaIndividualDto, @CurrentUser() user: JwtPayload) {
+    return this.frota.registrarSaidaIndividual(dto, user);
   }
 
   /** EXCEÇÃO da portaria: busca condutor por nome (Protheus infoPortal). Gestores. */

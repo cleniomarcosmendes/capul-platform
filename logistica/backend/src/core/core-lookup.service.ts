@@ -63,6 +63,20 @@ export class CoreLookupService {
   }
 
   /**
+   * Matrícula + nome do colaborador a partir do id do usuário (login). Usado no
+   * caminho INDIVIDUAL da frota: o próprio usuário logado é o condutor, sem pedir
+   * senha de novo. Retorna null se o usuário não tiver matrícula cadastrada.
+   */
+  async colaboradorDoUsuario(userId: string): Promise<{ matricula: string; nome: string } | null> {
+    if (!userId) return null;
+    const rows = await this.prisma.$queryRaw<{ matricula: string | null; nome: string }[]>(Prisma.sql`
+      SELECT matricula, TRIM(nome) AS nome FROM "core"."usuarios" WHERE id = ${userId} LIMIT 1`);
+    const r = rows[0];
+    if (!r || !r.matricula || !r.matricula.trim()) return null;
+    return { matricula: r.matricula.trim(), nome: r.nome };
+  }
+
+  /**
    * Usuários elegíveis a MOTORISTA: ATIVOS, com permissão ATIVA no módulo
    * LOGISTICA (Configurador) e da FILIAL informada (filial principal). Evita
    * listar a base inteira de colaboradores no seletor de motorista.

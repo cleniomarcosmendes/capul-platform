@@ -7,7 +7,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
-import { SaidaFrotaDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto } from './dto.js';
+import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto } from './dto.js';
 
 // Mesma normalização do toChapaPortal pra comparar matrículas com segurança.
 const chapa = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
@@ -60,19 +60,45 @@ export class FrotaService {
 
   /** Registrar SAÍDA do veículo (condutor autentica). Veículo → EM_USO. */
   async registrarSaida(dto: SaidaFrotaDto, user: JwtPayload) {
+    // PADRAO: identifica o condutor por matrícula+senha do portal RH.
+    const cond = await this.validarOuErro(dto.matricula, dto.senha);
+    return this.criarSaida(user, cond.matricula, cond.nome, dto);
+  }
+
+  /**
+   * INDIVIDUAL: usuário já autenticado é o próprio condutor — NÃO pede senha. A
+   * matrícula/nome vêm do cadastro do usuário (core). Se o usuário não tiver
+   * matrícula, orienta a cadastrar (ou usar o fluxo com matrícula+senha).
+   */
+  async registrarSaidaIndividual(dto: SaidaIndividualDto, user: JwtPayload) {
+    const col = await this.core.colaboradorDoUsuario(user.sub);
+    if (!col) {
+      throw new BadRequestException(
+        'Seu usuário não tem matrícula cadastrada. Peça ao administrador para cadastrá-la ou registre a saída informando matrícula e senha.',
+      );
+    }
+    return this.criarSaida(user, col.matricula, col.nome, dto);
+  }
+
+  /** Núcleo da saída de frota — compartilhado pelos fluxos PADRAO e INDIVIDUAL. */
+  private async criarSaida(
+    user: JwtPayload,
+    condutorMatricula: string,
+    condutorNome: string,
+    dados: { veiculoId: string; kmInicial: number; finalidade?: string; localSaida?: string; departamentoSolicitanteId?: string },
+  ) {
     const filialId = user.filialId;
     if (!filialId) throw new BadRequestException('Usuário sem filial definida.');
-    const cond = await this.validarOuErro(dto.matricula, dto.senha);
 
     const veiculo = await this.prisma.veiculo.findFirst({
-      where: { id: dto.veiculoId, filialId, ativo: true },
+      where: { id: dados.veiculoId, filialId, ativo: true },
     });
     if (!veiculo) throw new NotFoundException('Veículo não encontrado nesta filial.');
     if (veiculo.situacao !== SituacaoVeiculo.DISPONIVEL) {
       throw new BadRequestException(`Veículo indisponível (situação: ${veiculo.situacao}).`);
     }
-    if (dto.kmInicial < veiculo.kmAtual) {
-      throw new BadRequestException(`KM inicial (${dto.kmInicial}) menor que o KM atual do veículo (${veiculo.kmAtual}).`);
+    if (dados.kmInicial < veiculo.kmAtual) {
+      throw new BadRequestException(`KM inicial (${dados.kmInicial}) menor que o KM atual do veículo (${veiculo.kmAtual}).`);
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -88,12 +114,12 @@ export class FrotaService {
           tipo: TipoViagem.FROTA,
           situacao: StatusViagem.EM_CURSO,
           veiculoId: veiculo.id,
-          condutorMatricula: cond.matricula,
-          condutorNome: cond.nome,
-          departamentoSolicitanteId: dto.departamentoSolicitanteId ?? null,
-          kmInicial: dto.kmInicial,
-          localSaida: dto.localSaida ?? null,
-          observacoesSaida: dto.finalidade ?? null,
+          condutorMatricula,
+          condutorNome,
+          departamentoSolicitanteId: dados.departamentoSolicitanteId ?? null,
+          kmInicial: dados.kmInicial,
+          localSaida: dados.localSaida ?? null,
+          observacoesSaida: dados.finalidade ?? null,
           dataHoraSaida: new Date(),
           criadoPorId: user.sub,
         },

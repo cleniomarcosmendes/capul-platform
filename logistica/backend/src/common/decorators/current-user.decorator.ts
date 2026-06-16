@@ -7,6 +7,9 @@ export interface JwtPayload {
   nome?: string;
   empresaId?: string;
   filialId?: string;
+  departamentoId?: string;
+  // Tipo do usuário: INDIVIDUAL (pessoa) ou PADRAO (login genérico/compartilhado).
+  tipo?: 'INDIVIDUAL' | 'PADRAO';
   modulos?: { codigo: string; role: string }[];
 }
 
