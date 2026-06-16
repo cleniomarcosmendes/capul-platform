@@ -22,8 +22,11 @@ Dados DEV: `clenio`/`123456` (ADMIN/PADRAO), `entregador_teste`/`entrega123` (EN
   PADRAO identifica operador por matrícula+senha 1x/sessão (cache em memória + "trocar
   operador"); INDIVIDUAL usa o próprio; grava registradoPorMatricula/Nome. Migration
   `20260616130000`. Usuário de teste `caixa_teste`/`123456` (PADRAO+REGISTRADOR_ENTREGA).
-- ⏳ Próximas: 7c (fornecedor — leitura cross-schema) → 5 (navegação/validação cupom-valor) →
-  6 (revamp Frota).
+- ✅ **FASE 7c** (fornecedor da despesa): decidido **cadastro PRÓPRIO da logística**
+  (`FornecedorDespesa`, postos/borracharias) em vez do FornecedorConfig de TI (domínio errado).
+  Backend (CRUD + migration `20260616140000` + seed "NÃO DEFINIDO") + web (aba Fornecedores +
+  select no lançamento) + app (chips). Centralizar fornecedor (core + tag de módulo) → backlog.
+- ⏳ Próximas: 5 (navegação/validação cupom-valor) → 6 (revamp Frota).
 - ⏳ Refinamento aberto: nav do frontend web ainda não esconde links não-entrega p/
   REGISTRADOR_ENTREGA (backend já bloqueia por RBAC).
 

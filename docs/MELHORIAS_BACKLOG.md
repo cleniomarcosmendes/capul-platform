@@ -84,6 +84,22 @@ com o Clenio: atacar na sessão de 15/06.**
   banco; ver `[[project_logistica_frota_app_portaria]]`). Falta formalizar a política/prazo
   (diferente da retenção 5a do cofre de entrega — despesa é menos crítica).
 
+### 🔎 2026-06-16 — Cadastro CENTRALIZADO de Fornecedor (core + tag de módulo) — iniciativa de plataforma
+- **Origem:** ao fazer a despesa de frota (7c), o Clenio sugeriu um cadastro ÚNICO de
+  fornecedor com checkbox de em qual(is) módulo(s) é usado (um fornecedor pode servir TI +
+  Logística; módulos futuros também). Ideia certa pro longo prazo.
+- **Por que NÃO foi feito agora:** o fornecedor existente (`FornecedorConfig`) vive em
+  `gestao_ti` e está **muito amarrado ao gestao-ti em produção** (Contrato, NotaFiscal,
+  Licenças). Centralizar = mover/mesclar pro `core` (FKs cross-schema), criar tela no
+  Configurador + write-path, e repontar TI/Logística/Fiscal → **projeto de plataforma**, não
+  sub-passo da frota.
+- **Estado atual (16/06):** a logística ganhou um cadastro PRÓPRIO pequeno (`FornecedorDespesa`,
+  postos/borracharias) — fácil de migrar depois (poucas linhas). O `FornecedorConfig` de TI é o
+  trabalho pesado.
+- **Plano quando atacar:** tabela `core.fornecedores` (codigo opcional, nome, status) + join/array
+  `modulos[]` (tag), dona = Configurador (padrão do `core.integracoes_api_endpoints`); módulos leem
+  RO via `$queryRaw`. Migrar `FornecedorConfig` (TI) e `FornecedorDespesa` (logística) pra dentro.
+
 ### 🔎 Mapa em tempo real no Monitor (adiado desde a Fase 1)
 - **Spec §5.7:** "mapa com todos os veículos em viagem ativa". Hoje é a lista "Na rua agora".
   Rastreamento GPS contínuo está **adiado desde a Fase 1** (decisão: deep-link + OSRM, tracking
