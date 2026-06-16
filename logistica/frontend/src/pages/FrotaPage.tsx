@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Banknote, Fuel, Loader2, LogIn, LogOut, MapPin, Paperclip, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
+import PasswordInput from '../components/PasswordInput';
 import { useAuth } from '../contexts/AuthContext';
 
 // Controle de FROTA (terminal da portaria). O CONDUTOR se identifica por
@@ -310,9 +311,10 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
             <div className="sm:col-span-4">
               <label className="mb-1 block text-xs font-medium text-slate-600">Senha do portal RH</label>
               <div className="flex items-center gap-1">
-                <input
+                <PasswordInput
                   ref={senhaRef}
-                  type="password" value={senha}
+                  wrapperClassName="flex-1"
+                  value={senha}
                   onChange={(e) => { setSenha(e.target.value); setErroSenha(null); setCredOk(false); }}
                   onKeyDown={(e) => { if (e.key === 'Enter') void validarSenha(); }}
                   onBlur={() => void validarSenha()}
@@ -699,9 +701,10 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
         <div className="w-52">
           <label className="mb-1 block text-xs font-medium text-slate-600">Senha do portal RH</label>
           <div className="flex items-center gap-1">
-            <input
+            <PasswordInput
               ref={senhaRef}
-              type="password" value={senha}
+              wrapperClassName="flex-1"
+              value={senha}
               onChange={(e) => { setSenha(e.target.value); setErroSenha(null); setCredOk(false); }}
               onKeyDown={(e) => { if (e.key === 'Enter') void validarSenha(); }}
               onBlur={() => void validarSenha()}

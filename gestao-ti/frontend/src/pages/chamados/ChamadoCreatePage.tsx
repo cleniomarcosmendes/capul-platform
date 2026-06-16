@@ -14,6 +14,7 @@ import { ordemServicoService } from '../../services/ordem-servico.service';
 import { ativoService } from '../../services/ativo.service';
 import { coreService } from '../../services/core.service';
 import { ArrowLeft, FolderKanban, Paperclip, X, CheckCircle, Users2 } from 'lucide-react';
+import PasswordInput from '../../components/PasswordInput';
 import type { Equipe, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento, Ativo, UsuarioCore } from '../../types';
 import { isWorkspaceModulo } from '../../lib/workspace-modulo';
 
@@ -448,14 +449,14 @@ export function ChamadoCreatePage() {
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Senha *</label>
                   <div className="flex gap-2">
-                    <input
-                      type="password"
+                    <PasswordInput
+                      wrapperClassName="flex-1"
                       value={senhaColaborador}
                       onChange={(e) => { setSenhaColaborador(e.target.value); resetValidacaoSenha(); }}
                       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); validarColaborador(); } }}
                       placeholder="Senha do portal RH"
                       autoComplete="off"
-                      className={`flex-1 border rounded-lg px-3 py-2 text-sm ${
+                      className={`w-full border rounded-lg px-3 py-2 text-sm ${
                         credOk ? 'border-green-400 bg-green-50' : 'border-slate-300'
                       }`}
                       required
