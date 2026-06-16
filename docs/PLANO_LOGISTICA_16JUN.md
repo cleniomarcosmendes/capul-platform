@@ -91,7 +91,7 @@ visível, sem campos escondidos atrás de etapas. Validar por tela com o Clenio.
   nome/descricao/ativo). Falta a **tela de gestão** no frontend p/ o usuário cadastrar os
   tipos conforme a necessidade (em vez de lista fixa).
 
-### 7c. Fornecedor nas despesas reutilizando o cadastro do Workspace ❓ (decisão de arquitetura)
+### 7c. Fornecedor nas despesas reutilizando o cadastro do Workspace ✅ (decisão: Opção A)
 - Hoje `DespesaVeiculo.fornecedor` é **texto livre** (opcional).
 - O cadastro do Workspace é **`FornecedorConfig`** (schema `gestao_ti`, tabela `fornecedores`;
   campos codigo/loja/nome/status) — **muito acoplado** ao gestao-ti (Contrato, NotaFiscal,
@@ -130,11 +130,14 @@ visível, sem campos escondidos atrás de etapas. Validar por tela com o Clenio.
 
 Checkpoint por fase: build + verifica DEV + commit.
 
-## Decisões pendentes (precisam de OK)
-- ❓ **7c — arquitetura do Fornecedor**: A (raw cross-schema, recomendado) / B (API) / C (core).
-- ❓ **7a — campo veículo**: enum `PROPRIO | ALUGADO` cobre, ou precisa de mais (ex.: TERCEIRIZADO)?
-- ❓ **Fase 4 — role restrito do caixa**: criar `REGISTRADOR_ENTREGA` (só incluir/alterar
-  entrega) ou reusar `OPERADOR_ENTREGA`?
-- ✅ **PADRAO×INDIVIDUAL** confirmado: PADRAO = login genérico → pede matrícula+senha por ação
-  (entrega + saída de veículo); INDIVIDUAL usa `core.usuarios.matricula` do login (confirmar
-  preenchida).
+## Decisões — TODAS FECHADAS (16/06) ✅
+- ✅ **7c — Fornecedor**: **Opção A** — leitura cross-schema (`$queryRaw` read-only de
+  `gestao_ti.fornecedores`, mesmo padrão do `core`). Default `999999 - NÃO DEFINIDO` (seed no
+  FornecedorConfig). Conferir grant SELECT em `gestao_ti` no deploy PROD.
+- ✅ **7a — Veículo**: enum **`PROPRIO | ALUGADO`** (default `PROPRIO`).
+- ✅ **Fase 4 — role do caixa**: criar **`REGISTRADOR_ENTREGA`** — restrito a incluir/alterar
+  entrega na própria filial (não vê frota/painel/comprovantes).
+- ✅ **PADRAO×INDIVIDUAL**: PADRAO = login genérico → pede matrícula+senha por ação (entrega +
+  saída de veículo); INDIVIDUAL usa `core.usuarios.matricula` do login (confirmar preenchida).
+
+> Plano fechado — pronto para executar pela ordem sugerida.
