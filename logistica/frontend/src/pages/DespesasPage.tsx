@@ -10,6 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 // entra PENDENTE e exige validação aqui.
 
 interface TipoDespesa { id: string; nome: string; descricao?: string | null; ativo: boolean }
+interface FornecedorDespesa { id: string; nome: string; ativo: boolean }
 interface VeiculoItem { id: string; placa: string; modelo?: string | null }
 interface Despesa {
   id: string; situacao: string; placa: string; modelo?: string | null; veiculoId: string;
@@ -35,7 +36,7 @@ const hoje = new Date();
 export function DespesasPage() {
   const { logisticaRole } = useAuth();
   const ehGestor = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN';
-  const [tab, setTab] = useState<'despesas' | 'tipos'>('despesas');
+  const [tab, setTab] = useState<'despesas' | 'tipos' | 'fornecedores'>('despesas');
 
   return (
     <div className="space-y-5">
@@ -49,19 +50,19 @@ export function DespesasPage() {
 
       {ehGestor && (
         <div className="flex gap-1 border-b border-slate-200">
-          {(['despesas', 'tipos'] as const).map((t) => (
+          {(['despesas', 'tipos', 'fornecedores'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`px-4 py-2 text-sm font-medium ${tab === t ? 'border-b-2 border-sky-600 text-sky-700' : 'text-slate-500 hover:text-slate-700'}`}
             >
-              {t === 'despesas' ? 'Despesas' : 'Tipos de despesa'}
+              {t === 'despesas' ? 'Despesas' : t === 'tipos' ? 'Tipos de despesa' : 'Fornecedores'}
             </button>
           ))}
         </div>
       )}
 
-      {tab === 'despesas' ? <DespesasTab /> : <TiposTab />}
+      {tab === 'despesas' ? <DespesasTab /> : tab === 'tipos' ? <TiposTab /> : <FornecedoresTab />}
     </div>
   );
 }
@@ -266,11 +267,18 @@ function LancarDespesaForm({ veiculos, tipos, onClose, onDone }: { veiculos: Vei
   const [tipoDespesaId, setTipoDespesaId] = useState('');
   const [valor, setValor] = useState('');
   const [dataDespesa, setDataDespesa] = useState(hoje.toISOString().slice(0, 10));
+  const [fornecedorId, setFornecedorId] = useState('');
+  const [fornecedores, setFornecedores] = useState<FornecedorDespesa[]>([]);
   const [fornecedor, setFornecedor] = useState('');
   const [observacao, setObservacao] = useState('');
   const [recibo, setRecibo] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    logisticaApi.get<FornecedorDespesa[]>('/despesas/fornecedores', { params: { ativos: 'true' } })
+      .then((r) => setFornecedores(r.data)).catch(() => {});
+  }, []);
 
   const escolherRecibo = (f: File | null) => {
     setRecibo(f);
@@ -290,6 +298,7 @@ function LancarDespesaForm({ veiculos, tipos, onClose, onDone }: { veiculos: Vei
         fd.append('tipoDespesaId', tipoDespesaId);
         fd.append('valor', String(Number(valor)));
         if (dataDespesa) fd.append('dataDespesa', new Date(dataDespesa).toISOString());
+        if (fornecedorId) fd.append('fornecedorId', fornecedorId);
         if (fornecedor.trim()) fd.append('fornecedor', fornecedor.trim());
         if (observacao.trim()) fd.append('observacao', observacao.trim());
         fd.append('comprovante', recibo);
@@ -298,6 +307,7 @@ function LancarDespesaForm({ veiculos, tipos, onClose, onDone }: { veiculos: Vei
         await logisticaApi.post('/despesas', {
           veiculoId, tipoDespesaId, valor: Number(valor),
           dataDespesa: dataDespesa ? new Date(dataDespesa).toISOString() : undefined,
+          fornecedorId: fornecedorId || undefined,
           fornecedor: fornecedor.trim() || undefined, observacao: observacao.trim() || undefined,
         });
       }
@@ -335,8 +345,14 @@ function LancarDespesaForm({ veiculos, tipos, onClose, onDone }: { veiculos: Vei
         <label className="text-xs text-slate-600">Data
           <input type="date" value={dataDespesa} onChange={(e) => setDataDespesa(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
-        <label className="text-xs text-slate-600">Fornecedor (opcional)
-          <input value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} maxLength={120} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        <label className="text-xs text-slate-600">Fornecedor (cadastrado)
+          <select value={fornecedorId} onChange={(e) => setFornecedorId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="">— Não definido —</option>
+            {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+          </select>
+        </label>
+        <label className="text-xs text-slate-600">Fornecedor (livre, se não cadastrado)
+          <input value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} maxLength={120} placeholder="ex.: posto não listado" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
         <label className="text-xs text-slate-600">Observação (opcional)
           <input value={observacao} onChange={(e) => setObservacao(e.target.value)} maxLength={255} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
@@ -368,6 +384,74 @@ function LancarDespesaForm({ veiculos, tipos, onClose, onDone }: { veiculos: Vei
 }
 
 // ---- Aba Tipos de despesa (gestor de frota) ----
+function FornecedoresTab() {
+  const { toast } = useToast();
+  const [fornecedores, setFornecedores] = useState<FornecedorDespesa[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [nome, setNome] = useState('');
+  const [salvando, setSalvando] = useState(false);
+
+  const carregar = async () => {
+    setLoading(true);
+    try { const { data } = await logisticaApi.get<FornecedorDespesa[]>('/despesas/fornecedores'); setFornecedores(data); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao carregar fornecedores.')); } finally { setLoading(false); }
+  };
+  useEffect(() => { void carregar(); /* eslint-disable-next-line */ }, []);
+
+  const criar = async () => {
+    if (!nome.trim()) { toast('warning', 'Informe o nome.'); return; }
+    setSalvando(true);
+    try { await logisticaApi.post('/despesas/fornecedores', { nome: nome.trim() }); setNome(''); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao criar fornecedor.')); } finally { setSalvando(false); }
+  };
+  const toggle = async (f: FornecedorDespesa) => {
+    try { await logisticaApi.patch(`/despesas/fornecedores/${f.id}`, { ativo: !f.ativo }); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao atualizar.')); }
+  };
+
+  const ativos = useMemo(() => fornecedores.filter((f) => f.ativo).length, [fornecedores]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-white p-4">
+        <label className="flex-1 text-xs text-slate-600">Novo fornecedor
+          <input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={120} placeholder="ex.: Posto Ipiranga Centro" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </label>
+        <button onClick={() => void criar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+          {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Adicionar
+        </button>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white">
+        <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
+          <Tag className="h-4 w-4 text-slate-400" /> Fornecedores ({ativos} ativos)
+        </div>
+        {loading ? (
+          <div className="flex items-center gap-2 py-8 px-4 text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
+        ) : (
+          <table className="w-full text-sm">
+            <tbody className="divide-y divide-slate-100">
+              {fornecedores.map((f) => (
+                <tr key={f.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-2 font-medium text-slate-700">{f.nome}</td>
+                  <td className="px-4 py-2">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${f.ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                      {f.ativo ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    <button onClick={() => void toggle(f)} className="text-xs text-sky-600 hover:underline">{f.ativo ? 'Inativar' : 'Ativar'}</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TiposTab() {
   const { toast } = useToast();
   const [tipos, setTipos] = useState<TipoDespesa[]>([]);
