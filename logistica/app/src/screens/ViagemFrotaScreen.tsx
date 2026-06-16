@@ -9,6 +9,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import {
   listarViagensFrota, registrarRetorno, tiposDespesa, lancarDespesaViagem,
+  fornecedoresDespesa, type FornecedorDespesa,
 } from '../api/frota';
 import type { TipoDespesa, ViagemFrota } from '../types/api';
 
@@ -112,12 +113,17 @@ function RetornoForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
 function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () => void }) {
   const [tipos, setTipos] = useState<TipoDespesa[]>([]);
   const [tipoId, setTipoId] = useState('');
+  const [fornecedores, setFornecedores] = useState<FornecedorDespesa[]>([]);
+  const [fornecedorId, setFornecedorId] = useState('');
   const [valor, setValor] = useState('');
   const [fornecedor, setFornecedor] = useState('');
   const [fotoUri, setFotoUri] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
-  useEffect(() => { void (async () => { try { setTipos(await tiposDespesa()); } catch { /* vazio */ } })(); }, []);
+  useEffect(() => {
+    void (async () => { try { setTipos(await tiposDespesa()); } catch { /* vazio */ } })();
+    void (async () => { try { setFornecedores(await fornecedoresDespesa()); } catch { /* vazio */ } })();
+  }, []);
 
   const podeLancar = !!tipoId && valor !== '' && Number(valor) > 0 && !salvando;
 
@@ -133,7 +139,7 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
     setSalvando(true);
     try {
       await lancarDespesaViagem(
-        { viagemId: viagem.id, tipoDespesaId: tipoId, valor: Number(valor), fornecedor: fornecedor.trim() || undefined },
+        { viagemId: viagem.id, tipoDespesaId: tipoId, valor: Number(valor), fornecedorId: fornecedorId || undefined, fornecedor: fornecedor.trim() || undefined },
         fotoUri ?? undefined,
       );
       Alert.alert('Despesa lançada', 'Entrou como pendente de validação do supervisor.', [{ text: 'OK', onPress: onPronto }]);
@@ -156,7 +162,19 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
       </View>
       <Text style={styles.label}>Valor (R$)</Text>
       <TextInput style={styles.input} value={valor} onChangeText={setValor} keyboardType="decimal-pad" editable={!salvando} />
-      <Text style={styles.label}>Fornecedor (opcional)</Text>
+      {fornecedores.length > 0 && (
+        <>
+          <Text style={styles.label}>Fornecedor (cadastrado)</Text>
+          <View style={styles.chips}>
+            {fornecedores.map((f) => (
+              <TouchableOpacity key={f.id} style={[styles.chip, fornecedorId === f.id && styles.chipOn]} onPress={() => setFornecedorId(fornecedorId === f.id ? '' : f.id)}>
+                <Text style={[styles.chipTxt, fornecedorId === f.id && styles.chipTxtOn]}>{f.nome}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
+      )}
+      <Text style={styles.label}>Fornecedor (livre, se não cadastrado)</Text>
       <TextInput style={styles.input} value={fornecedor} onChangeText={setFornecedor} maxLength={120} editable={!salvando} />
 
       <Text style={styles.label}>Foto do cupom (opcional)</Text>

@@ -88,10 +88,19 @@ export async function tiposDespesa(): Promise<TipoDespesa[]> {
   return data;
 }
 
+export interface FornecedorDespesa { id: string; nome: string; ativo: boolean }
+
+/** Fornecedores ativos do cadastro (postos etc.) pro lançamento de despesa. */
+export async function fornecedoresDespesa(): Promise<FornecedorDespesa[]> {
+  const { data } = await api.get<FornecedorDespesa[]>(`${LOGISTICA_BASE}/despesas/fornecedores`, { params: { ativos: 'true' } });
+  return data;
+}
+
 export interface DespesaViagemPayload {
   viagemId: string;
   tipoDespesaId: string;
   valor: number;
+  fornecedorId?: string;
   fornecedor?: string;
   observacao?: string;
 }
@@ -106,6 +115,7 @@ export async function lancarDespesaViagem(p: DespesaViagemPayload, fotoUri?: str
   form.append('viagemId', p.viagemId);
   form.append('tipoDespesaId', p.tipoDespesaId);
   form.append('valor', String(p.valor));
+  if (p.fornecedorId) form.append('fornecedorId', p.fornecedorId);
   if (p.fornecedor) form.append('fornecedor', p.fornecedor);
   if (p.observacao) form.append('observacao', p.observacao);
   if (fotoUri) {
