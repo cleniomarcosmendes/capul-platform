@@ -101,13 +101,13 @@ export class FrotaService {
       throw new BadRequestException(`KM inicial (${dados.kmInicial}) menor que o KM atual do veículo (${veiculo.kmAtual}).`);
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const viagem = await this.prisma.$transaction(async (tx) => {
       const contador = await tx.contadorSequencial.upsert({
         where: { filialId_escopo: { filialId, escopo: 'VIAGEM' } },
         create: { filialId, escopo: 'VIAGEM', ultimoNumero: 1 },
         update: { ultimoNumero: { increment: 1 } },
       });
-      const viagem = await tx.viagem.create({
+      const v = await tx.viagem.create({
         data: {
           numero: contador.ultimoNumero,
           filialId,
@@ -125,8 +125,10 @@ export class FrotaService {
         },
       });
       await tx.veiculo.update({ where: { id: veiculo.id }, data: { situacao: SituacaoVeiculo.EM_USO } });
-      return viagem;
+      return v;
     });
+    // Anexa a placa/modelo p/ a confirmação do app ("PLACA · viagem #N").
+    return { ...viagem, placa: veiculo.placa, modelo: veiculo.modelo };
   }
 
   /**
