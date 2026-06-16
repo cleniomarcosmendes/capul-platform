@@ -5,6 +5,8 @@ import { logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useToast } from '../components/Toast';
+import PasswordInput from '../components/PasswordInput';
+import { getOperador, setOperador, limparOperador } from '../lib/operadorSessao';
 import { maskTelefone, maskCep, onlyDigits, UFS } from '../utils/format';
 
 type TipoCliente = 'IDENTIFICADO' | 'RECORRENTE_LOCAL' | 'EVENTUAL';
@@ -49,9 +51,86 @@ const TIPOS: { v: TipoCliente; label: string }[] = [
   { v: 'EVENTUAL', label: 'Eventual' },
 ];
 
+/** Gate de identificação do operador (login PADRAO): matrícula+senha do portal RH,
+ *  validadas via backend e cacheadas na sessão (pediremos só 1x). */
+function GateOperador({ onOk }: { onOk: (nome: string) => void }) {
+  const { toast } = useToast();
+  const [matricula, setMatricula] = useState('');
+  const [senha, setSenha] = useState('');
+  const [validando, setValidando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function validar() {
+    if (!matricula.trim() || !senha) { setErro('Informe matrícula e senha.'); return; }
+    setValidando(true); setErro(null);
+    try {
+      const { data } = await logisticaApi.post<{ valida: boolean; nome?: string; motivo?: string }>(
+        '/entregas/operador/validar', { matricula: matricula.trim(), senha },
+      );
+      if (data.valida && data.nome) {
+        setOperador({ matricula: matricula.trim(), senha, nome: data.nome });
+        toast('success', `Bem-vindo, ${data.nome}.`);
+        onOk(data.nome);
+      } else {
+        setErro(data.motivo === 'INDISPONIVEL' ? 'Portal do RH indisponível. Tente novamente em instantes.' : 'Matrícula ou senha inválidas.');
+      }
+    } catch {
+      setErro('Falha ao validar. Verifique a conexão.');
+    } finally {
+      setValidando(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-6">
+      <h2 className="text-lg font-semibold text-slate-800">Identifique-se para cadastrar entregas</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Este é um login compartilhado. Informe sua matrícula e senha do portal RH —
+        pediremos só uma vez enquanto o sistema estiver aberto.
+      </p>
+      <div className="mt-4 space-y-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-500">Matrícula</label>
+          <input
+            value={matricula}
+            onChange={(e) => { setMatricula(e.target.value.toUpperCase()); setErro(null); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') void validar(); }}
+            placeholder="ex.: E01047 ou 001047"
+            autoComplete="off"
+            autoFocus
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500">Senha do portal RH</label>
+          <PasswordInput
+            value={senha}
+            onChange={(e) => { setSenha(e.target.value); setErro(null); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') void validar(); }}
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          />
+        </div>
+        {erro && <p className="text-sm font-medium text-rose-600">{erro}</p>}
+        <button
+          type="button"
+          onClick={() => void validar()}
+          disabled={validando}
+          className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+        >
+          {validando ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Entrar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function EntregaNovaPage() {
   const { usuario } = useAuth();
   const filialId = usuario?.filialAtual?.id ?? usuario?.filiais?.[0]?.id ?? '';
+  // Login PADRAO (caixa genérico): identifica o operador por matrícula+senha 1x
+  // por sessão. INDIVIDUAL não precisa (já é a pessoa).
+  const ehPadrao = usuario?.tipo === 'PADRAO';
+  const [operadorNome, setOperadorNome] = useState<string | null>(getOperador()?.nome ?? null);
   // Modo EDIÇÃO (padrão FormPage do workspace: criar e editar na mesma página).
   // Com :id na rota, carrega a entrega, pré-preenche e o salvar vira PATCH.
   const { id: edicaoId } = useParams<{ id: string }>();
@@ -453,6 +532,9 @@ export function EntregaNovaPage() {
     e.preventDefault();
     if (!filialId) { toast('warning', 'Sem filial no perfil — selecione uma filial no Hub.'); return; }
     if (!origemVenda) { toast('warning', 'Informe a origem da venda (presencial, tele-venda ou outro).'); return; }
+    // Login PADRAO (caixa): exige operador identificado (matrícula+senha 1x/sessão).
+    const op = getOperador();
+    if (ehPadrao && !op) { toast('warning', 'Identifique-se: informe matrícula e senha do operador.'); return; }
     setSalvando(true);
     if (modoEdicao) {
       // Edição (PATCH): só os campos editáveis; cupons substituem o conjunto.
@@ -484,6 +566,9 @@ export function EntregaNovaPage() {
     try {
       const { data } = await logisticaApi.post('/entregas', {
         filialId,
+        // Operador (login PADRAO): backend revalida matrícula+senha do portal RH.
+        operadorMatricula: ehPadrao ? op!.matricula : undefined,
+        operadorSenha: ehPadrao ? op!.senha : undefined,
         tipoCliente,
         matricula: tipoCliente === 'IDENTIFICADO' ? matricula || undefined : undefined,
         clienteLocalId: clienteLocalId || undefined,
@@ -519,8 +604,25 @@ export function EntregaNovaPage() {
   const inp = 'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none';
   const lbl = 'block text-xs font-medium text-slate-500';
 
+  // Login PADRAO ainda não identificado → bloqueia o form e pede matrícula+senha.
+  if (ehPadrao && !operadorNome) {
+    return (
+      <div className="mx-auto max-w-xl">
+        <GateOperador onOk={(nome) => setOperadorNome(nome)} />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-6xl" onChange={() => setDirty(true)}>
+      {ehPadrao && operadorNome && (
+        <div className="mb-3 flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm">
+          <span className="text-emerald-800">Operador: <b>{operadorNome}</b></span>
+          <button type="button" onClick={() => { limparOperador(); setOperadorNome(null); }} className="font-medium text-sky-600 hover:underline">
+            Trocar operador
+          </button>
+        </div>
+      )}
       {DirtyDialog}
       {/* Formulário */}
       <form onSubmit={submit} onKeyDown={bloquearEnterSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">

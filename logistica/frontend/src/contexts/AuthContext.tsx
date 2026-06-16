@@ -17,6 +17,8 @@ export interface UsuarioLogado {
   modulos: ModuloUsuario[];
   filialAtual?: FilialResumo | null;
   filiais?: FilialResumo[];
+  // Tipo do login (do JWT): 'INDIVIDUAL' (pessoa) | 'PADRAO' (login genérico/caixa).
+  tipo?: string | null;
 }
 
 interface AuthContextType {
@@ -25,6 +27,18 @@ interface AuthContextType {
   /** Role do usuário no módulo LOGISTICA (ou null se não tem acesso). */
   logisticaRole: string | null;
   logout: () => void;
+}
+
+/** Lê o `tipo` (INDIVIDUAL/PADRAO) direto do access token (JWT). */
+function tipoDoToken(token: string | null): string | null {
+  if (!token) return null;
+  try {
+    const p = token.split('.')[1];
+    if (!p) return null;
+    return JSON.parse(atob(p.replace(/-/g, '+').replace(/_/g, '/'))).tipo ?? null;
+  } catch {
+    return null;
+  }
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -41,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     authApi
       .get<UsuarioLogado>('/me')
-      .then((r) => setUsuario(r.data))
+      .then((r) => setUsuario({ ...r.data, tipo: tipoDoToken(token) }))
       .catch(() => {
         localStorage.removeItem('accessToken');
         window.location.href = '/';
