@@ -22,7 +22,7 @@ import { FrotaViagemDetalhePage } from './pages/FrotaViagemDetalhePage';
 import { DespesasPage } from './pages/DespesasPage';
 import { DespesaNovaPage } from './pages/DespesaNovaPage';
 import { PainelFrotaPage } from './pages/PainelFrotaPage';
-import { FrotaIndicadoresPage } from './pages/FrotaIndicadoresPage';
+import { FrotaAnalisePage } from './pages/FrotaAnalisePage';
 
 function Protected() {
   const { loading, logisticaRole } = useAuth();
@@ -61,7 +61,7 @@ function Protected() {
               <Route path="/despesas/nova" element={<DespesaNovaPage />} />
               <Route path="/despesas/:id/editar" element={<DespesaNovaPage />} />
               <Route path="/frota/painel" element={<PainelFrotaPage />} />
-              <Route path="/frota/indicadores" element={<FrotaIndicadoresPage />} />
+              <Route path="/frota/analise" element={<FrotaAnalisePage />} />
               <Route path="/veiculos" element={<VeiculosPage />} />
               <Route path="/veiculos/novo" element={<VeiculoFormPage />} />
               <Route path="/veiculos/:id/editar" element={<VeiculoFormPage />} />

@@ -20,6 +20,7 @@ const navItems: NavEntry[] = [
   { section: 'GESTÃO', roles: GESTORES },
   { to: '/painel', label: 'Painel', icon: BarChart3, roles: GESTORES },
   { to: '/indicadores', label: 'Indicadores de Entrega', icon: TrendingUp, roles: GESTORES },
+  { to: '/frota/analise', label: 'Análise da Frota', icon: TrendingUp, roles: GESTORES },
 
   { section: 'ENTREGAS', roles: ENTREGA },
   { to: '/entregas/nova', label: 'Nova Entrega', icon: Package, roles: ENTREGA },
@@ -31,7 +32,6 @@ const navItems: NavEntry[] = [
   { section: 'FROTA', roles: FROTA_OP },
   { to: '/frota', label: 'Controle de Frota', icon: Fuel, end: true, roles: FROTA_OP },
   { to: '/frota/painel', label: 'Monitor da Frota', icon: CircleDot, roles: GESTORES },
-  { to: '/frota/indicadores', label: 'Indicadores da Frota', icon: TrendingUp, roles: GESTORES },
   { to: '/despesas', label: 'Despesas', icon: Banknote, roles: FROTA_OP },
   { to: '/veiculos', label: 'Veículos', icon: Car, roles: GESTORES },
 ];

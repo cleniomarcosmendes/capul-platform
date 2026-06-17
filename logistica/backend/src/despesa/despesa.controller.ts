@@ -73,6 +73,24 @@ export class DespesaController {
     return this.despesas.indicadores(user, roleLogistica(user), Number(mes) || now.getUTCMonth() + 1, Number(ano) || now.getUTCFullYear());
   }
 
+  /** Análise — total agrupado por veículo/tipo/fornecedor/departamento (manchete + grupos). */
+  @Get('indicadores/analitico')
+  indicadoresAnalitico(@CurrentUser() user: JwtPayload, @Query('mes') mes: string, @Query('ano') ano: string) {
+    const now = new Date();
+    return this.despesas.indicadoresAnalitico(user, roleLogistica(user), Number(mes) || now.getUTCMonth() + 1, Number(ano) || now.getUTCFullYear());
+  }
+
+  /** Análise — despesas que compõem um grupo (drill-down). */
+  @Get('indicadores/documentos')
+  indicadoresDocumentos(
+    @CurrentUser() user: JwtPayload,
+    @Query('mes') mes: string, @Query('ano') ano: string,
+    @Query('dimensao') dimensao: string, @Query('chave') chave: string,
+  ) {
+    const now = new Date();
+    return this.despesas.indicadoresDocumentos(user, roleLogistica(user), Number(mes) || now.getUTCMonth() + 1, Number(ano) || now.getUTCFullYear(), dimensao, chave);
+  }
+
   /** Lançamento direto (supervisor/gestor) → APROVADA. Recibo (foto/PDF) opcional. */
   @Post()
   @UseInterceptors(FileInterceptor('comprovante', { limits: { fileSize: 15 * 1024 * 1024 } }))

@@ -4,6 +4,7 @@ import {
 import { Prisma, StatusDespesa, StatusViagem, TipoViagem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CofreStorageService } from '../cofre/cofre-storage.service.js';
+import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { assertPodeOperarViagem } from '../common/frota-perms.js';
 import {
@@ -29,6 +30,7 @@ export class DespesaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: CofreStorageService,
+    private readonly core: CoreLookupService,
   ) {}
 
   /**
@@ -371,5 +373,84 @@ export class DespesaService {
       porVeiculo: agrupa((d) => d.veiculo?.placa ?? '—'),
       porTipo: agrupa((d) => d.tipoDespesa?.nome ?? '—'),
     };
+  }
+
+  // ---------- Análise (manchete + grupos + drill-down) ----------
+  /** Despesas APROVADAS do mês (escopo de gestão) com tudo p/ agrupar/detalhar. */
+  private async despesasDoMes(user: JwtPayload, role: string | undefined, mes: number, ano: number) {
+    const where: Prisma.DespesaVeiculoWhereInput = {
+      filialId: user.filialId,
+      situacao: StatusDespesa.APROVADA,
+      dataDespesa: { gte: new Date(Date.UTC(ano, mes - 1, 1)), lt: new Date(Date.UTC(ano, mes, 1)) },
+    };
+    if (!ehGestor(role)) {
+      const ids = await this.veiculosDoSupervisor(user.filialId!, user.sub);
+      if (ids.length === 0) return [];
+      where.veiculoId = { in: ids };
+    }
+    return this.prisma.despesaVeiculo.findMany({
+      where,
+      include: {
+        veiculo: { select: { placa: true, modelo: true } },
+        tipoDespesa: { select: { nome: true } },
+        fornecedorRef: { select: { nome: true } },
+        viagem: { select: { departamentoSolicitanteId: true } },
+      },
+      orderBy: { dataDespesa: 'desc' },
+    });
+  }
+
+  // Chave/rótulo de cada despesa por dimensão (usados no agrupamento e no drill).
+  private chaveDim(d: { veiculoId: string; tipoDespesaId: string; fornecedorId: string | null; fornecedor: string | null; viagem?: { departamentoSolicitanteId: string | null } | null }, dim: string): string {
+    switch (dim) {
+      case 'veiculo': return d.veiculoId;
+      case 'tipo': return d.tipoDespesaId;
+      case 'fornecedor': return d.fornecedorId ?? (d.fornecedor ? `livre:${d.fornecedor}` : '__sem');
+      case 'departamento': return d.viagem?.departamentoSolicitanteId ?? '__sem';
+      default: return '__sem';
+    }
+  }
+
+  async indicadoresAnalitico(user: JwtPayload, role: string | undefined, mes: number, ano: number) {
+    const despesas = await this.despesasDoMes(user, role, mes, ano);
+    const total = despesas.reduce((s, d) => s + Number(d.valor), 0);
+
+    // Resolve nomes de departamento (uma vez) p/ os rótulos do grupo.
+    const deptoIds = [...new Set(despesas.map((d) => d.viagem?.departamentoSolicitanteId).filter(Boolean) as string[])];
+    const nomesDepto = deptoIds.length ? await this.core.nomesDepartamentos(deptoIds) : new Map<string, string>();
+
+    const agrupar = (dim: string, rotulo: (d: (typeof despesas)[number]) => string) => {
+      const m = new Map<string, { label: string; valor: number; qtd: number }>();
+      for (const d of despesas) {
+        const id = this.chaveDim(d, dim);
+        const cur = m.get(id) ?? { label: rotulo(d), valor: 0, qtd: 0 };
+        cur.valor += Number(d.valor); cur.qtd += 1;
+        m.set(id, cur);
+      }
+      return [...m.entries()].map(([id, g]) => ({ id, ...g })).sort((a, b) => b.valor - a.valor);
+    };
+
+    return {
+      total,
+      porVeiculo: agrupar('veiculo', (d) => d.veiculo?.placa ? `${d.veiculo.placa}${d.veiculo.modelo ? ` · ${d.veiculo.modelo}` : ''}` : '—'),
+      porTipo: agrupar('tipo', (d) => d.tipoDespesa?.nome ?? '—'),
+      porFornecedor: agrupar('fornecedor', (d) => d.fornecedorRef?.nome ?? d.fornecedor ?? 'NÃO DEFINIDO'),
+      porDepartamento: agrupar('departamento', (d) => (d.viagem?.departamentoSolicitanteId ? (nomesDepto.get(d.viagem.departamentoSolicitanteId) ?? 'Departamento') : 'Sem departamento')),
+    };
+  }
+
+  /** Documentos (despesas) que compõem um grupo da Análise — drill-down. */
+  async indicadoresDocumentos(user: JwtPayload, role: string | undefined, mes: number, ano: number, dimensao: string, chave: string) {
+    const despesas = await this.despesasDoMes(user, role, mes, ano);
+    return despesas
+      .filter((d) => this.chaveDim(d, dimensao) === chave)
+      .map((d) => ({
+        id: d.id,
+        principal: d.tipoDespesa?.nome ?? '—',
+        secundario: `${d.veiculo?.placa ?? '—'}${d.fornecedorRef?.nome || d.fornecedor ? ` · ${d.fornecedorRef?.nome ?? d.fornecedor}` : ''}`,
+        terciario: d.observacao ?? undefined,
+        data: d.dataDespesa,
+        valor: Number(d.valor),
+      }));
   }
 }
