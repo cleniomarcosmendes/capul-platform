@@ -264,18 +264,18 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
     return (
       <button
         onClick={() => setAberto(true)}
-        className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700"
+        className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-5 py-2.5 text-base font-semibold text-white hover:bg-sky-700"
       >
-        <LogOut className="h-4 w-4" /> Registrar saída
+        <LogOut className="h-5 w-5" /> Registrar saída
       </button>
     );
   }
 
   return (
-    <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-700">Registrar saída de veículo</h3>
-        <button onClick={() => { reset(); setAberto(false); }} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
+    <div className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-base font-semibold text-slate-800">Registrar saída de veículo</h3>
+        <button onClick={() => { reset(); setAberto(false); }} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
       </div>
 
       <div className="max-w-4xl space-y-5">
