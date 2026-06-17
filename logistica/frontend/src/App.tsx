@@ -23,6 +23,7 @@ import { DespesasPage } from './pages/DespesasPage';
 import { DespesaNovaPage } from './pages/DespesaNovaPage';
 import { PainelFrotaPage } from './pages/PainelFrotaPage';
 import { FrotaAnalisePage } from './pages/FrotaAnalisePage';
+import { EntregaAnalisePage } from './pages/EntregaAnalisePage';
 
 function Protected() {
   const { loading, logisticaRole } = useAuth();
@@ -50,6 +51,7 @@ function Protected() {
               <Route path="/" element={<HomePage />} />
               <Route path="/painel" element={<PainelPage />} />
               <Route path="/indicadores" element={<IndicadoresPage />} />
+              <Route path="/analise-entregas" element={<EntregaAnalisePage />} />
               <Route path="/clientes" element={<ClientesPage />} />
               <Route path="/entregas" element={<EntregasPage />} />
               <Route path="/entregas/nova" element={<EntregaNovaPage />} />

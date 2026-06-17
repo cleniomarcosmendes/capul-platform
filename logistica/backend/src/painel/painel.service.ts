@@ -350,4 +350,90 @@ export class PainelService {
       demanda,
     };
   }
+
+  // ---------- Análise de Entregas (manchete + grupos + drill-down) ----------
+  // Métrica primária: nº de entregas (reconcilia entre as dimensões); valor
+  // (cupons) aparece por linha no drill. Exclui CANCELADA. Escopo por filial.
+  private readonly ORIGEM_LABEL: Record<string, string> = {
+    PRESENCIAL: 'Presencial', TELE_VENDA: 'Tele-venda', OUTRO: 'Outro', NAO_INFORMADO: 'Não informado',
+  };
+  private readonly STATUS_LABEL: Record<string, string> = {
+    PENDENTE: 'Pendente', EM_VIAGEM: 'Em viagem', ENTREGUE: 'Entregue', NAO_ENTREGUE: 'Não entregue',
+  };
+  private deaccentUpper(s: string): string {
+    return s.trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
+
+  private async entregasDoMes(filialId: string | undefined, mes: number, ano: number) {
+    const ini = new Date(Date.UTC(ano, mes - 1, 1));
+    const fim = new Date(Date.UTC(ano, mes, 1));
+    const entregas = await this.prisma.entrega.findMany({
+      where: { ...(filialId ? { filialId } : {}), criadoEm: { gte: ini, lt: fim }, status: { not: StatusEntrega.CANCELADA } },
+      select: {
+        id: true, destinatarioNome: true, origemVenda: true, endBairro: true, endCidade: true,
+        status: true, criadoEm: true,
+        cupons: { select: { valor: true } },
+        parada: { select: { viagem: { select: { motoristaId: true } } } },
+      },
+      orderBy: { criadoEm: 'desc' },
+    });
+    return entregas.map((e) => ({
+      ...e,
+      valor: e.cupons.reduce((s, c) => s + Number(c.valor), 0),
+      motoristaId: e.parada?.viagem?.motoristaId ?? null,
+      bairroKey: e.endBairro ? this.deaccentUpper(`${e.endBairro}|${e.endCidade ?? ''}`) : '__sem',
+    }));
+  }
+
+  private chaveEntrega(e: { origemVenda: string | null; status: string; motoristaId: string | null; bairroKey: string }, dim: string): string {
+    switch (dim) {
+      case 'origem': return e.origemVenda ?? 'NAO_INFORMADO';
+      case 'status': return e.status;
+      case 'motorista': return e.motoristaId ?? '__sem';
+      case 'bairro': return e.bairroKey;
+      default: return '__sem';
+    }
+  }
+
+  async analiseEntregas(filialId: string | undefined, mes: number, ano: number) {
+    const entregas = await this.entregasDoMes(filialId, mes, ano);
+    const totalEntregas = entregas.length;
+    const valorTotal = entregas.reduce((s, e) => s + e.valor, 0);
+
+    const motoristaIds = [...new Set(entregas.map((e) => e.motoristaId).filter(Boolean) as string[])];
+    const nomesMot = motoristaIds.length ? await this.core.nomesUsuarios(motoristaIds) : new Map<string, string>();
+
+    const agrupar = (dim: string, rotulo: (e: (typeof entregas)[number]) => string) => {
+      const m = new Map<string, { label: string; qtd: number; valor: number }>();
+      for (const e of entregas) {
+        const id = this.chaveEntrega(e, dim);
+        const cur = m.get(id) ?? { label: rotulo(e), qtd: 0, valor: 0 };
+        cur.qtd += 1; cur.valor += e.valor;
+        m.set(id, cur);
+      }
+      return [...m.entries()].map(([id, g]) => ({ id, ...g })).sort((a, b) => b.qtd - a.qtd);
+    };
+
+    return {
+      totalEntregas, valorTotal,
+      porOrigem: agrupar('origem', (e) => this.ORIGEM_LABEL[e.origemVenda ?? 'NAO_INFORMADO'] ?? 'Não informado'),
+      porStatus: agrupar('status', (e) => this.STATUS_LABEL[e.status] ?? e.status),
+      porMotorista: agrupar('motorista', (e) => (e.motoristaId ? (nomesMot.get(e.motoristaId) ?? 'Motorista') : 'Sem motorista (não despachada)')),
+      porBairro: agrupar('bairro', (e) => (e.endBairro ? `${e.endBairro}${e.endCidade ? ` · ${e.endCidade}` : ''}` : 'Sem bairro')),
+    };
+  }
+
+  async analiseEntregasDocumentos(filialId: string | undefined, mes: number, ano: number, dimensao: string, chave: string) {
+    const entregas = await this.entregasDoMes(filialId, mes, ano);
+    return entregas
+      .filter((e) => this.chaveEntrega(e, dimensao) === chave)
+      .map((e) => ({
+        id: e.id,
+        principal: e.destinatarioNome,
+        secundario: `${e.endBairro ?? 'Sem bairro'}${e.endCidade ? ` · ${e.endCidade}` : ''} · ${this.ORIGEM_LABEL[e.origemVenda ?? 'NAO_INFORMADO'] ?? 'Não informado'}`,
+        terciario: this.STATUS_LABEL[e.status] ?? e.status,
+        data: e.criadoEm,
+        valor: e.valor,
+      }));
+  }
 }

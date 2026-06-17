@@ -20,6 +20,7 @@ const navItems: NavEntry[] = [
   { section: 'GESTÃO', roles: GESTORES },
   { to: '/painel', label: 'Painel', icon: BarChart3, roles: GESTORES },
   { to: '/indicadores', label: 'Indicadores de Entrega', icon: TrendingUp, roles: GESTORES },
+  { to: '/analise-entregas', label: 'Análise de Entregas', icon: TrendingUp, roles: GESTORES },
   { to: '/frota/analise', label: 'Análise da Frota', icon: TrendingUp, roles: GESTORES },
 
   { section: 'ENTREGAS', roles: ENTREGA },
