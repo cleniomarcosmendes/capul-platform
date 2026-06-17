@@ -129,6 +129,19 @@ export function FrotaPage() {
 // ---- Formulário de SAÍDA (matrícula → nome → senha → veículo/km) ----
 interface CondutorBusca { matricula: string; nome: string; cc: string | null }
 
+/** Cabeçalho de passo numerado, grande e legível (usabilidade — Fase 6). */
+function PassoHeader({ n, titulo, hint, ativo = true }: { n: number; titulo: string; hint?: string; ativo?: boolean }) {
+  return (
+    <div className="mb-3 flex items-center gap-2.5">
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${ativo ? 'bg-sky-600' : 'bg-slate-300'}`}>{n}</span>
+      <div>
+        <h4 className="text-base font-semibold text-slate-800">{titulo}</h4>
+        {hint && <p className="text-xs text-slate-500">{hint}</p>}
+      </div>
+    </div>
+  );
+}
+
 function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () => void }) {
   const { toast } = useToast();
   const { logisticaRole } = useAuth();
@@ -282,10 +295,10 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         {/* Passo 1 — Condutor (matrícula + senha) */}
         {modo === 'CONDUTOR' && (
         <div>
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">1. Condutor</p>
+          <PassoHeader n={1} titulo="Condutor" hint="Matrícula e senha do portal RH" />
           <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-12">
             <div className="sm:col-span-4">
-              <label className="mb-1 block text-xs font-medium text-slate-600">Matrícula</label>
+              <label className="mb-1 block text-sm font-medium text-slate-600">Matrícula</label>
               <div className="flex gap-1">
                 <input
                   value={matricula}
@@ -294,7 +307,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
                   onBlur={() => void buscarCondutor()}
                   placeholder="ex.: E01047"
                   autoComplete="off"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base"
                 />
                 <button
                   onClick={() => void buscarCondutor()}
@@ -309,7 +322,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
             </div>
 
             <div className="sm:col-span-4">
-              <label className="mb-1 block text-xs font-medium text-slate-600">Senha do portal RH</label>
+              <label className="mb-1 block text-sm font-medium text-slate-600">Senha do portal RH</label>
               <div className="flex items-center gap-1">
                 <PasswordInput
                   ref={senhaRef}
@@ -320,7 +333,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
                   onBlur={() => void validarSenha()}
                   disabled={!nome || credOk} autoComplete="new-password" name="frota-senha-saida"
                   placeholder={nome ? 'Senha e Enter' : ''}
-                  className={`w-full rounded-lg border px-3 py-2 text-sm disabled:bg-slate-100 ${erroSenha ? 'border-rose-400' : (credOk ? 'border-emerald-400' : 'border-slate-300')}`}
+                  className={`w-full rounded-lg border px-3.5 py-2.5 text-base disabled:bg-slate-100 ${erroSenha ? 'border-rose-400' : (credOk ? 'border-emerald-400' : 'border-slate-300')}`}
                 />
                 {validandoSenha && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-400" />}
               </div>
@@ -334,7 +347,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         {/* Passo 1 — Portaria (busca por nome, sem senha) */}
         {modo === 'PORTARIA' && (
         <div>
-          <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">1. Condutor (pela portaria)</p>
+          <PassoHeader n={1} titulo="Condutor (pela portaria)" />
           <p className="mb-2 text-xs text-amber-700">Exceção: a viagem é apontada ao condutor <b>sem a senha dele</b> — fica registrada sob a sua responsabilidade.</p>
           <div className="flex max-w-md gap-1">
             <input
@@ -343,7 +356,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               onKeyDown={(e) => { if (e.key === 'Enter') void buscarNome(); }}
               placeholder="Nome do condutor (mín. 3 letras)"
               autoComplete="off"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base"
             />
             <button onClick={() => void buscarNome()} disabled={buscandoNome || nomeBusca.trim().length < 3}
               title="Buscar por nome"
@@ -373,10 +386,10 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
 
         {/* Passo 2 — Viagem (libera após validar a senha) */}
         <div className={podeAvancar ? '' : 'opacity-60'}>
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">2. Viagem</p>
+          <PassoHeader n={2} titulo="Veículo e saída" hint={podeAvancar ? undefined : 'Valide o condutor primeiro'} ativo={podeAvancar} />
           <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-12">
             <div className="sm:col-span-5">
-              <label className="mb-1 block text-xs font-medium text-slate-600">Veículo (disponível)</label>
+              <label className="mb-1 block text-sm font-medium text-slate-600">Veículo (disponível)</label>
               <select
                 ref={veiculoRef}
                 value={veiculoId}
@@ -387,7 +400,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
                   setKmInicial(sel ? String(sel.kmAtual) : '');
                 }}
                 disabled={!podeAvancar}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
               >
                 <option value="">Selecione…</option>
                 {veiculos.map((x) => (
@@ -400,27 +413,27 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
             </div>
 
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-slate-600">KM de saída</label>
+              <label className="mb-1 block text-sm font-medium text-slate-600">KM de saída</label>
               <input
                 type="number" value={kmInicial} onChange={(e) => setKmInicial(e.target.value)}
                 disabled={!podeAvancar}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
               />
             </div>
 
             <div className="sm:col-span-5">
-              <label className="mb-1 block text-xs font-medium text-slate-600">Finalidade / destino</label>
+              <label className="mb-1 block text-sm font-medium text-slate-600">Finalidade / destino</label>
               <input
                 value={finalidade} onChange={(e) => setFinalidade(e.target.value)} maxLength={255} disabled={!podeAvancar}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
               />
             </div>
 
             <div className="sm:col-span-7">
-              <label className="mb-1 block text-xs font-medium text-slate-600">Local de saída (opcional)</label>
+              <label className="mb-1 block text-sm font-medium text-slate-600">Local de saída (opcional)</label>
               <input
                 value={localSaida} onChange={(e) => setLocalSaida(e.target.value)} maxLength={120} disabled={!podeAvancar}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
               />
             </div>
           </div>
@@ -431,9 +444,9 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         <button
           onClick={() => void registrar()}
           disabled={salvando || !podeAvancar || !veiculoId || kmInicial === ''}
-          className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-6 py-3 text-base font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
         >
-          {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} Registrar saída
+          {salvando ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />} Registrar saída
         </button>
       </div>
     </div>
@@ -678,7 +691,7 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
       <p className="text-xs text-slate-500">Só o condutor que iniciou pode fechar (matrícula + senha).</p>
       <div className="flex flex-wrap items-start gap-4">
         <div className="w-56">
-          <label className="mb-1 block text-xs font-medium text-slate-600">Matrícula</label>
+          <label className="mb-1 block text-sm font-medium text-slate-600">Matrícula</label>
           <div className="flex gap-1">
             <input
               value={matricula}
@@ -700,7 +713,7 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
           {nome && <p className="mt-1 text-xs font-medium text-emerald-700">{nome}</p>}
         </div>
         <div className="w-52">
-          <label className="mb-1 block text-xs font-medium text-slate-600">Senha do portal RH</label>
+          <label className="mb-1 block text-sm font-medium text-slate-600">Senha do portal RH</label>
           <div className="flex items-center gap-1">
             <PasswordInput
               ref={senhaRef}
@@ -711,7 +724,7 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
               onBlur={() => void validarSenha()}
               disabled={!nome || credOk}
               placeholder={nome ? 'Senha e Enter' : 'Senha'} autoComplete="new-password" name="frota-senha-retorno"
-              className={`w-full rounded-lg border px-3 py-2 text-sm disabled:bg-slate-100 ${erroSenha ? 'border-rose-400' : (credOk ? 'border-emerald-400' : 'border-slate-300')}`}
+              className={`w-full rounded-lg border px-3.5 py-2.5 text-base disabled:bg-slate-100 ${erroSenha ? 'border-rose-400' : (credOk ? 'border-emerald-400' : 'border-slate-300')}`}
             />
             {validandoSenha && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-400" />}
           </div>
@@ -719,20 +732,20 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
           {credOk && <p className="mt-1 text-xs font-medium text-emerald-700">✓ Senha confere</p>}
         </div>
         <div className={`w-40 ${podeAvancar ? '' : 'opacity-60'}`}>
-          <label className="mb-1 block text-xs font-medium text-slate-600">KM de retorno</label>
+          <label className="mb-1 block text-sm font-medium text-slate-600">KM de retorno</label>
           <input
             ref={kmRef}
             type="number" value={kmFinal} onChange={(e) => setKmFinal(e.target.value)} disabled={!podeAvancar}
             placeholder={`saída ${v.kmInicial ?? '—'}`}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+            className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
           />
         </div>
         <div className={`min-w-[20rem] flex-1 ${podeAvancar ? '' : 'opacity-60'}`}>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Observações (opcional)</label>
+          <label className="mb-1 block text-sm font-medium text-slate-600">Observações (opcional)</label>
           <input
             value={obs} onChange={(e) => setObs(e.target.value)} disabled={!podeAvancar}
             maxLength={255}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+            className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
           />
         </div>
       </div>
@@ -793,26 +806,26 @@ function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFrota; ti
       <p className="text-xs text-slate-500">Condutor <b>{v.condutorNome ?? '—'}</b> (da saída); entra como <b>pendente</b> até o supervisor validar.</p>
       <div className="flex flex-wrap items-end gap-4">
         <div className="w-52">
-          <label className="mb-1 block text-xs font-medium text-slate-600">Tipo de despesa</label>
+          <label className="mb-1 block text-sm font-medium text-slate-600">Tipo de despesa</label>
           <select value={tipoDespesaId} onChange={(e) => setTipoDespesaId(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             <option value="">Selecione…</option>
             {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
           </select>
         </div>
         <div className="w-32">
-          <label className="mb-1 block text-xs font-medium text-slate-600">Valor (R$)</label>
+          <label className="mb-1 block text-sm font-medium text-slate-600">Valor (R$)</label>
           <input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
         <div className="w-72">
-          <label className="mb-1 block text-xs font-medium text-slate-600">Fornecedor (opcional)</label>
+          <label className="mb-1 block text-sm font-medium text-slate-600">Fornecedor (opcional)</label>
           <input value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} maxLength={120} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
         <div className="min-w-[16rem] flex-1">
-          <label className="mb-1 block text-xs font-medium text-slate-600">Observação (opcional)</label>
+          <label className="mb-1 block text-sm font-medium text-slate-600">Observação (opcional)</label>
           <input value={obs} onChange={(e) => setObs(e.target.value)} maxLength={255} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
         <div className="min-w-[14rem]">
-          <label className="mb-1 block text-xs font-medium text-slate-600">Recibo / cupom (opcional)</label>
+          <label className="mb-1 block text-sm font-medium text-slate-600">Recibo / cupom (opcional)</label>
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
             <Paperclip className="h-4 w-4 text-slate-400" />
             <span className="max-w-[10rem] truncate">{recibo ? recibo.name : 'Anexar foto/PDF'}</span>
