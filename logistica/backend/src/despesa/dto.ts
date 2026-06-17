@@ -93,6 +93,28 @@ export class ContestarDespesaDto {
   motivo!: string;
 }
 
+// ---- Edição de uma despesa (gestor de frota / supervisor do veículo) ----
+// Não altera o veículo (mantém o escopo de supervisão) nem a situação.
+export class AtualizarDespesaDto {
+  @IsOptional() @IsString()
+  tipoDespesaId?: string;
+
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0)
+  valor?: number;
+
+  @IsOptional() @IsDateString()
+  dataDespesa?: string;
+
+  @IsOptional() @IsString()
+  fornecedorId?: string; // vazio (string vazia) = limpa o vínculo
+
+  @IsOptional() @IsString() @MaxLength(120)
+  fornecedor?: string;
+
+  @IsOptional() @IsString() @MaxLength(255)
+  observacao?: string;
+}
+
 // Filtro de listagem (querystring).
 export class ListarDespesasQuery {
   @IsOptional() @IsString()

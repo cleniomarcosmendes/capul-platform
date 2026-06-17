@@ -83,6 +83,12 @@ export class CofreStorageService implements OnModuleInit {
     return Buffer.concat(chunks);
   }
 
+  /** Remove o objeto (limpeza ao excluir a despesa/prova). Best-effort. */
+  async remove(objectKey: string): Promise<void> {
+    await this.ensureBucket();
+    await this.client.removeObject(this.bucket, objectKey);
+  }
+
   private extFromMime(mime?: string): string {
     if (!mime) return '';
     if (mime.includes('jpeg') || mime.includes('jpg')) return '.jpg';

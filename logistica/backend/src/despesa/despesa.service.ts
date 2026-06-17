@@ -9,7 +9,7 @@ import { assertPodeOperarViagem } from '../common/frota-perms.js';
 import {
   CriarTipoDespesaDto, AtualizarTipoDespesaDto, LancarDespesaDto,
   LancarDespesaViagemDto, ContestarDespesaDto, ListarDespesasQuery,
-  CriarFornecedorDespesaDto, AtualizarFornecedorDespesaDto,
+  CriarFornecedorDespesaDto, AtualizarFornecedorDespesaDto, AtualizarDespesaDto,
 } from './dto.js';
 
 const ehGestor = (role?: string) => role === 'GESTOR_FROTA' || role === 'ADMIN';
@@ -258,6 +258,65 @@ export class DespesaService {
       where: { id },
       data: { situacao: StatusDespesa.CONTESTADA, aprovadoPorId: user.sub, aprovadoEm: new Date(), motivoContestacao: dto.motivo.trim() },
     });
+  }
+
+  /** Uma despesa (campos editáveis) — escopo de gestão. Usado na tela de edição. */
+  async obter(id: string, user: JwtPayload, role?: string) {
+    const d = await this.prisma.despesaVeiculo.findUnique({
+      where: { id },
+      include: { veiculo: { select: { placa: true, modelo: true } }, tipoDespesa: { select: { nome: true } } },
+    });
+    if (!d || d.filialId !== user.filialId) throw new NotFoundException('Despesa não encontrada nesta filial.');
+    await this.assertPodeGerirVeiculo(d.veiculoId, user, role);
+    return {
+      id: d.id, situacao: d.situacao,
+      veiculoId: d.veiculoId, placa: d.veiculo?.placa ?? '—', modelo: d.veiculo?.modelo ?? null,
+      tipoDespesaId: d.tipoDespesaId, tipo: d.tipoDespesa?.nome ?? '—',
+      valor: Number(d.valor), dataDespesa: d.dataDespesa,
+      fornecedorId: d.fornecedorId, fornecedor: d.fornecedor, observacao: d.observacao,
+      temComprovante: !!d.comprovanteObjectKey,
+    };
+  }
+
+  // ---------- Edição / exclusão (gestor de frota / supervisor do veículo) ----------
+  /**
+   * Edita uma despesa. Mesmo escopo de gestão (gestor de frota ou supervisor do
+   * veículo). Não troca o veículo (manteria o escopo) nem mexe na situação —
+   * é correção de valor/tipo/data/fornecedor/observação.
+   */
+  async atualizar(id: string, dto: AtualizarDespesaDto, user: JwtPayload, role?: string) {
+    const d = await this.prisma.despesaVeiculo.findUnique({ where: { id } });
+    if (!d || d.filialId !== user.filialId) throw new NotFoundException('Despesa não encontrada nesta filial.');
+    await this.assertPodeGerirVeiculo(d.veiculoId, user, role);
+
+    if (dto.tipoDespesaId) {
+      const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
+      if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
+    }
+    return this.prisma.despesaVeiculo.update({
+      where: { id },
+      data: {
+        tipoDespesaId: dto.tipoDespesaId ?? undefined,
+        valor: dto.valor !== undefined ? new Prisma.Decimal(dto.valor) : undefined,
+        dataDespesa: dto.dataDespesa ? new Date(dto.dataDespesa) : undefined,
+        // fornecedorId: string vazia limpa o vínculo; undefined não toca.
+        fornecedorId: dto.fornecedorId !== undefined ? (dto.fornecedorId || null) : undefined,
+        fornecedor: dto.fornecedor !== undefined ? (dto.fornecedor.trim() || null) : undefined,
+        observacao: dto.observacao !== undefined ? (dto.observacao.trim() || null) : undefined,
+      },
+    });
+  }
+
+  /** Exclui uma despesa (e o recibo, best-effort). Mesmo escopo de gestão. */
+  async excluir(id: string, user: JwtPayload, role?: string) {
+    const d = await this.prisma.despesaVeiculo.findUnique({ where: { id } });
+    if (!d || d.filialId !== user.filialId) throw new NotFoundException('Despesa não encontrada nesta filial.');
+    await this.assertPodeGerirVeiculo(d.veiculoId, user, role);
+    await this.prisma.despesaVeiculo.delete({ where: { id } });
+    if (d.comprovanteObjectKey) {
+      try { await this.storage.remove(d.comprovanteObjectKey); } catch { /* objeto órfão é tolerável */ }
+    }
+    return { ok: true };
   }
 
   // ---------- Recibo (download) ----------

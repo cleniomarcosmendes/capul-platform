@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Get, Header, Param, Patch, Post, Query,
+  Body, Controller, Delete, Get, Header, Param, Patch, Post, Query,
   StreamableFile, UploadedFile, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -9,7 +9,7 @@ import { DespesaService, type ReciboBinario } from './despesa.service.js';
 import {
   CriarTipoDespesaDto, AtualizarTipoDespesaDto, LancarDespesaDto,
   LancarDespesaViagemDto, ContestarDespesaDto, ListarDespesasQuery,
-  CriarFornecedorDespesaDto, AtualizarFornecedorDespesaDto,
+  CriarFornecedorDespesaDto, AtualizarFornecedorDespesaDto, AtualizarDespesaDto,
 } from './dto.js';
 
 /** Converte o arquivo do multer no binário do recibo (ou undefined). */
@@ -103,6 +103,18 @@ export class DespesaController {
     return new StreamableFile(buffer, { type: mimeType, disposition: `inline; filename="recibo-${id}"` });
   }
 
+  /** Editar despesa (gestor de frota / supervisor do veículo). */
+  @Patch(':id')
+  atualizar(@Param('id') id: string, @Body() dto: AtualizarDespesaDto, @CurrentUser() user: JwtPayload) {
+    return this.despesas.atualizar(id, dto, user, roleLogistica(user));
+  }
+
+  /** Excluir despesa (gestor de frota / supervisor do veículo). */
+  @Delete(':id')
+  excluir(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.despesas.excluir(id, user, roleLogistica(user));
+  }
+
   @Patch(':id/aprovar')
   aprovar(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.despesas.aprovar(id, user, roleLogistica(user));
@@ -111,5 +123,12 @@ export class DespesaController {
   @Patch(':id/contestar')
   contestar(@Param('id') id: string, @Body() dto: ContestarDespesaDto, @CurrentUser() user: JwtPayload) {
     return this.despesas.contestar(id, dto, user, roleLogistica(user));
+  }
+
+  // :id genérico por último — não captura tipos/fornecedores/indicadores (literais
+  // registrados antes). Usado pela tela de edição.
+  @Get(':id')
+  obter(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.despesas.obter(id, user, roleLogistica(user));
   }
 }
