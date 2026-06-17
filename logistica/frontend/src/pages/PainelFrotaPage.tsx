@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Car, CircleDot, Loader2, MapPin, RefreshCw, TrendingUp, Wrench, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { AlertTriangle, Car, ChevronRight, CircleDot, Loader2, MapPin, RefreshCw, TrendingUp, Wrench, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 
@@ -45,6 +46,7 @@ const desde = (s?: string | null) => {
 
 export function PainelFrotaPage() {
   const { toast, confirm } = useToast();
+  const navigate = useNavigate();
   const [data, setData] = useState<PainelFrota | null>(null);
   const [loading, setLoading] = useState(true);
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
@@ -245,15 +247,25 @@ export function PainelFrotaPage() {
           ) : (
             <ul className="divide-y divide-slate-100">
               {emCurso.map((v) => (
-                <li key={v.id} className="flex items-center justify-between px-4 py-3">
-                  <div>
-                    <div className="font-medium text-slate-800">{v.placa}{v.modelo ? <span className="text-slate-400"> · {v.modelo}</span> : null}</div>
-                    <div className="text-xs text-slate-500">{v.condutorNome ?? '—'}{v.finalidade ? ` — ${v.finalidade}` : ''}</div>
-                  </div>
-                  <div className="text-right text-xs text-slate-500">
-                    <div>{fmtHora(v.dataHoraSaida)} <span className="text-slate-400">{desde(v.dataHoraSaida)}</span></div>
-                    {v.paradas > 0 && <div className="inline-flex items-center gap-1 text-slate-400"><MapPin className="h-3 w-3" /> {v.paradas} parada(s)</div>}
-                  </div>
+                <li key={v.id}>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/frota/viagens/${v.id}`)}
+                    className="group flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition hover:bg-sky-50/60"
+                    title="Abrir viagem"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium text-slate-800">{v.placa}{v.modelo ? <span className="text-slate-400"> · {v.modelo}</span> : null}</div>
+                      <div className="truncate text-xs text-slate-500">{v.condutorNome ?? '—'}{v.finalidade ? ` — ${v.finalidade}` : ''}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right text-xs text-slate-500">
+                        <div>{fmtHora(v.dataHoraSaida)} <span className="text-slate-400">{desde(v.dataHoraSaida)}</span></div>
+                        {v.paradas > 0 && <div className="inline-flex items-center gap-1 text-slate-400"><MapPin className="h-3 w-3" /> {v.paradas} parada(s)</div>}
+                      </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-sky-500" />
+                    </div>
+                  </button>
                 </li>
               ))}
             </ul>
