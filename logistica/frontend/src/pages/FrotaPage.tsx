@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Banknote, Fuel, Loader2, LogIn, LogOut, Paperclip, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
-import { logisticaApi } from '../services/api';
+import { coreApi, logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import PasswordInput from '../components/PasswordInput';
 import { useAuth } from '../contexts/AuthContext';
@@ -125,6 +125,7 @@ export function FrotaPage() {
 
 // ---- Formulário de SAÍDA (matrícula → nome → senha → veículo/km) ----
 export interface CondutorBusca { matricula: string; nome: string; cc: string | null }
+interface DeptoItem { id: string; nome: string }
 
 /** Cabeçalho de passo numerado, grande e legível (usabilidade — Fase 6). */
 function PassoHeader({ n, titulo, hint, ativo = true }: { n: number; titulo: string; hint?: string; ativo?: boolean }) {
@@ -141,7 +142,7 @@ function PassoHeader({ n, titulo, hint, ativo = true }: { n: number; titulo: str
 
 function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () => void }) {
   const { toast } = useToast();
-  const { logisticaRole } = useAuth();
+  const { logisticaRole, usuario } = useAuth();
   // Exceção da PORTARIA (apontar por nome, sem senha) — só gestores autorizados.
   const ehGestorPortaria = ['GESTOR_FROTA', 'GESTOR_ENTREGA', 'ADMIN'].includes(logisticaRole ?? '');
   const [aberto, setAberto] = useState(false);
@@ -154,6 +155,8 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   const [kmInicial, setKmInicial] = useState('');
   const [finalidade, setFinalidade] = useState('');
   const [localSaida, setLocalSaida] = useState('');
+  const [departamentoSolicitanteId, setDepartamentoSolicitanteId] = useState('');
+  const [deptos, setDeptos] = useState<DeptoItem[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [credOk, setCredOk] = useState(false);
   const [validandoSenha, setValidandoSenha] = useState(false);
@@ -174,9 +177,20 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   // Ao resolver o nome, posiciona o cursor na senha.
   useEffect(() => { if (nome) senhaRef.current?.focus(); }, [nome]);
 
+  // Departamentos da filial p/ "departamento solicitante" (alimenta o ranking de
+  // uso por departamento no Monitor). Carrega ao abrir o form.
+  useEffect(() => {
+    if (!aberto) return;
+    const filialId = usuario?.filialAtual?.id;
+    coreApi.get<DeptoItem[]>('/departamentos', { params: filialId ? { filialId } : undefined })
+      .then((r) => setDeptos(r.data))
+      .catch(() => setDeptos([]));
+  }, [aberto, usuario?.filialAtual?.id]);
+
   const reset = () => {
     setMatricula(''); setNome(null); setSenha(''); setVeiculoId('');
     setKmInicial(''); setFinalidade(''); setLocalSaida(''); setErroSenha(null); setCredOk(false);
+    setDepartamentoSolicitanteId('');
     setNomeBusca(''); setResultados([]); setBuscou(false); setCondutorSel(null);
   };
 
@@ -238,6 +252,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
           kmInicial: Number(kmInicial),
           finalidade: finalidade.trim() || undefined,
           localSaida: localSaida.trim() || undefined,
+          departamentoSolicitanteId: departamentoSolicitanteId || undefined,
         });
         toast('success', 'Saída registrada pela portaria (sob sua responsabilidade).');
       } else {
@@ -246,6 +261,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
           kmInicial: Number(kmInicial),
           finalidade: finalidade.trim() || undefined,
           localSaida: localSaida.trim() || undefined,
+          departamentoSolicitanteId: departamentoSolicitanteId || undefined,
         });
         toast('success', 'Saída registrada.');
       }
@@ -426,7 +442,19 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               />
             </div>
 
-            <div className="sm:col-span-12">
+            <div className="sm:col-span-6">
+              <label className="mb-1 block text-sm font-medium text-slate-600">Departamento solicitante</label>
+              <select
+                value={departamentoSolicitanteId} onChange={(e) => setDepartamentoSolicitanteId(e.target.value)} disabled={!podeAvancar}
+                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
+              >
+                <option value="">— Não informado —</option>
+                {deptos.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
+              </select>
+              <p className="mt-1 text-xs text-slate-400">Quem pediu o veículo — alimenta o "Uso por departamento" no Monitor.</p>
+            </div>
+
+            <div className="sm:col-span-6">
               <label className="mb-1 block text-sm font-medium text-slate-600">Local de saída (opcional)</label>
               <input
                 value={localSaida} onChange={(e) => setLocalSaida(e.target.value)} maxLength={120} disabled={!podeAvancar}
