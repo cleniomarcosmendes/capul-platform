@@ -183,6 +183,7 @@ export function EntregaNovaPage() {
   const { ConfirmDialog: DirtyDialog, guardedNavigate } = useUnsavedChanges(dirty);
   const { toast } = useToast();
   const ultimoCupomRef = useRef<HTMLInputElement>(null);
+  const ultimoValorRef = useRef<HTMLInputElement>(null);
   const matriculaRef = useRef<HTMLInputElement>(null);
   const numeroRef = useRef<HTMLInputElement>(null);
   // Quando o telefone é preenchido por autofill, pula a próxima busca/dropdown.
@@ -523,6 +524,19 @@ export function EntregaNovaPage() {
   }
 
   function addCupom() {
+    // Valida o ÚLTIMO cupom antes de adicionar outro (faltava validação: dava pra
+    // criar linha nova com valor vazio). Foca o campo que falta.
+    const ultimo = cupons[cupons.length - 1];
+    if (!ultimo.numeroCupom.trim()) {
+      toast('warning', 'Informe o número do cupom antes de adicionar outro.');
+      ultimoCupomRef.current?.focus();
+      return;
+    }
+    if (ultimo.valor === '' || !(parseFloat(ultimo.valor) > 0)) {
+      toast('warning', 'Informe o valor do cupom antes de adicionar outro.');
+      ultimoValorRef.current?.focus();
+      return;
+    }
     setCupons((p) => [...p, { numeroCupom: '', valor: '' }]);
     // foca o nº do novo cupom no próximo tick
     setTimeout(() => ultimoCupomRef.current?.focus(), 0);
@@ -847,12 +861,15 @@ export function EntregaNovaPage() {
                   placeholder="Nº cupom / nota"
                   value={c.numeroCupom}
                   inputMode="numeric"
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCupom(); } }}
+                  // Enter no nº NÃO adiciona linha — leva ao Valor (mesmo padrão de TAB).
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (e.currentTarget.nextElementSibling as HTMLInputElement | null)?.focus(); } }}
                   onChange={(e) => setCupons((p) => p.map((x, j) => j === i ? { ...x, numeroCupom: e.target.value } : x))}
                   className="w-44 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none" />
                 <input
+                  ref={i === cupons.length - 1 ? ultimoValorRef : undefined}
                   placeholder="Valor"
                   type="number" step="0.01" value={c.valor}
+                  // Enter no valor adiciona outro cupom — addCupom valida nº+valor antes.
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCupom(); } }}
                   onChange={(e) => setCupons((p) => p.map((x, j) => j === i ? { ...x, valor: e.target.value } : x))}
                   className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none" />
@@ -866,7 +883,7 @@ export function EntregaNovaPage() {
               className="flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline"><Plus className="h-3 w-3" /> Adicionar cupom</button>
             <div className="text-sm text-slate-600">Total: <strong>R$ {totalCupons.toFixed(2)}</strong></div>
           </div>
-          <p className="mt-1 text-[11px] text-slate-400">Enter adiciona outro cupom; o cadastro só é gravado no botão “Salvar entrega”.</p>
+          <p className="mt-1 text-[11px] text-slate-400">Enter no nº vai para o valor; Enter no valor adiciona outro cupom (precisa nº + valor). O cadastro só é gravado no botão “Salvar entrega”.</p>
         </div>
 
         <div className="space-y-4">
