@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Banknote, Fuel, Loader2, LogIn, LogOut, MapPin, Paperclip, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Banknote, Fuel, Loader2, LogIn, LogOut, Paperclip, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import PasswordInput from '../components/PasswordInput';
@@ -10,7 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 // que quem monta a viagem indica o motorista. Padrão workspace: grid + formulários
 // inline (sem modal). Gestor de frota / supervisor ajustam quando o condutor erra.
 
-interface ViagemFrota {
+export interface ViagemFrota {
   id: string; numero: number; situacao: string;
   placa: string; modelo?: string | null;
   condutorNome?: string | null; condutorMatricula?: string | null;
@@ -19,46 +20,41 @@ interface ViagemFrota {
   dataHoraSaida?: string | null; dataHoraChegada?: string | null;
   paradas?: number;
 }
-interface ParadaFrota { id: string; sequencia: number; local: string; km?: number | null; dataHora?: string | null; observacao?: string | null }
+export interface ParadaFrota { id: string; sequencia: number; local: string; km?: number | null; dataHora?: string | null; observacao?: string | null }
 interface VeiculoDisp { id: string; placa: string; modelo?: string | null; situacao: string; kmAtual: number }
-interface TipoDespesa { id: string; nome: string }
+export interface TipoDespesa { id: string; nome: string }
 
-const SIT_META: Record<string, { label: string; cls: string }> = {
+export const SIT_META: Record<string, { label: string; cls: string }> = {
   EM_CURSO: { label: 'Em curso', cls: 'bg-sky-100 text-sky-700' },
   CONCLUIDA: { label: 'Concluída', cls: 'bg-emerald-100 text-emerald-700' },
   CANCELADA: { label: 'Cancelada', cls: 'bg-rose-100 text-rose-700' },
   RASCUNHO: { label: 'Rascunho', cls: 'bg-slate-100 text-slate-600' },
 };
 
-const fmtDateTime = (s?: string | null) =>
+export const fmtDateTime = (s?: string | null) =>
   s ? new Date(s).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
-const errMsg = (e: unknown, fb: string) => {
+export const errMsg = (e: unknown, fb: string) => {
   const m = (e as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
   return Array.isArray(m) ? m.join(', ') : (typeof m === 'string' ? m : fb);
 };
 
 export function FrotaPage() {
   const { toast } = useToast();
-  const { logisticaRole } = useAuth();
-  const podeAjustar = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN';
 
   const [viagens, setViagens] = useState<ViagemFrota[]>([]);
   const [veiculos, setVeiculos] = useState<VeiculoDisp[]>([]);
-  const [tipos, setTipos] = useState<TipoDespesa[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState('');
 
   const carregar = async () => {
     setLoading(true);
     try {
-      const [v, frota, t] = await Promise.all([
+      const [v, frota] = await Promise.all([
         logisticaApi.get<ViagemFrota[]>('/frota/viagens', { params: filtro ? { situacao: filtro } : {} }),
         logisticaApi.get<VeiculoDisp[]>('/veiculos'),
-        logisticaApi.get<TipoDespesa[]>('/despesas/tipos', { params: { ativos: 'true' } }),
       ]);
       setViagens(v.data);
       setVeiculos(frota.data.filter((x) => x.situacao === 'DISPONIVEL'));
-      setTipos(t.data);
     } catch (e) {
       toast('error', errMsg(e, 'Falha ao carregar viagens de frota.'));
     } finally {
@@ -112,12 +108,11 @@ export function FrotaPage() {
                 <th className="px-4 py-2 text-right">KM</th>
                 <th className="px-4 py-2 text-center">Paradas</th>
                 <th className="px-4 py-2">Situação</th>
-                <th className="px-4 py-2"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {viagens.map((v) => (
-                <LinhaViagem key={v.id} v={v} podeAjustar={podeAjustar} tipos={tipos} onDone={carregar} />
+                <LinhaViagem key={v.id} v={v} />
               ))}
             </tbody>
           </table>
@@ -128,7 +123,7 @@ export function FrotaPage() {
 }
 
 // ---- Formulário de SAÍDA (matrícula → nome → senha → veículo/km) ----
-interface CondutorBusca { matricula: string; nome: string; cc: string | null }
+export interface CondutorBusca { matricula: string; nome: string; cc: string | null }
 
 /** Cabeçalho de passo numerado, grande e legível (usabilidade — Fase 6). */
 function PassoHeader({ n, titulo, hint, ativo = true }: { n: number; titulo: string; hint?: string; ativo?: boolean }) {
@@ -455,76 +450,29 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
 }
 
 // ---- Linha da viagem + ações de retorno / ajuste ----
-function LinhaViagem({ v, podeAjustar, tipos, onDone }: { v: ViagemFrota; podeAjustar: boolean; tipos: TipoDespesa[]; onDone: () => void }) {
+function LinhaViagem({ v }: { v: ViagemFrota }) {
+  const navigate = useNavigate();
   const sit = SIT_META[v.situacao] ?? { label: v.situacao, cls: 'bg-slate-100 text-slate-600' };
-  const [acao, setAcao] = useState<'retorno' | 'ajuste' | 'paradas' | 'despesa' | null>(null);
-  const ativa = v.situacao !== 'CANCELADA';
-
+  // Linha clicável → tela de detalhe da viagem (retorno/despesa/paradas/ajuste).
   return (
-    <>
-      <tr className="hover:bg-slate-50">
-        <td className="px-4 py-2 font-mono text-slate-500">{v.numero}</td>
-        <td className="px-4 py-2">{v.placa}{v.modelo ? <span className="text-slate-400"> · {v.modelo}</span> : null}</td>
-        <td className="px-4 py-2">{v.condutorNome ?? '—'}</td>
-        <td className="px-4 py-2 text-slate-600"><span className="block max-w-[14rem] truncate" title={v.finalidade ?? ''}>{v.finalidade ?? '—'}</span></td>
-        <td className="px-4 py-2 text-slate-600">{fmtDateTime(v.dataHoraSaida)}</td>
-        <td className="px-4 py-2 text-slate-600">{fmtDateTime(v.dataHoraChegada)}</td>
-        <td className="px-4 py-2 text-right tabular-nums">
-          {v.kmRodado != null ? `${v.kmRodado} km` : v.kmInicial != null ? `${v.kmInicial} →` : '—'}
-        </td>
-        <td className="px-4 py-2 text-center">
-          {ativa ? (
-            <button
-              onClick={() => setAcao(acao === 'paradas' ? null : 'paradas')}
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${acao === 'paradas' ? 'bg-sky-100 text-sky-700' : 'text-slate-500 hover:bg-slate-100'}`}
-              title="Ver/registrar paradas"
-            >
-              <MapPin className="h-3.5 w-3.5" /> {v.paradas ?? 0}
-            </button>
-          ) : <span className="text-slate-400">{v.paradas ?? 0}</span>}
-        </td>
-        <td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${sit.cls}`}>{sit.label}</span></td>
-        <td className="px-4 py-2 text-right">
-          {v.situacao === 'EM_CURSO' && (
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setAcao(acao === 'despesa' ? null : 'despesa')} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50">
-                <Banknote className="h-3.5 w-3.5" /> Despesa
-              </button>
-              <button onClick={() => setAcao(acao === 'retorno' ? null : 'retorno')} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50">
-                <LogIn className="h-3.5 w-3.5" /> Retorno
-              </button>
-              {podeAjustar && (
-                <button onClick={() => setAcao(acao === 'ajuste' ? null : 'ajuste')} className="inline-flex items-center gap-1 rounded-lg border border-amber-300 px-2 py-1 text-xs text-amber-700 hover:bg-amber-50">
-                  <Settings2 className="h-3.5 w-3.5" /> Ajustar
-                </button>
-              )}
-            </div>
-          )}
-        </td>
-      </tr>
-      {acao && (
-        <tr>
-          <td colSpan={10} className="bg-slate-100 p-0">
-            {/* Painel da ação com destaque visual (borda colorida por tipo) — separa da lista */}
-            <div className={`m-2 rounded-lg border-l-4 bg-white p-4 shadow-sm ${
-              acao === 'retorno' ? 'border-emerald-400'
-              : acao === 'despesa' ? 'border-sky-400'
-              : acao === 'ajuste' ? 'border-amber-400'
-              : 'border-slate-300'}`}>
-              {acao === 'retorno' && <RetornoForm v={v} onClose={() => setAcao(null)} onDone={() => { setAcao(null); onDone(); }} />}
-              {acao === 'ajuste' && <AjusteForm v={v} onClose={() => setAcao(null)} onDone={() => { setAcao(null); onDone(); }} />}
-              {acao === 'paradas' && <ParadasPanel v={v} onChanged={onDone} />}
-              {acao === 'despesa' && <DespesaCondutorForm v={v} tipos={tipos} onClose={() => setAcao(null)} onDone={() => { setAcao(null); onDone(); }} />}
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
+    <tr className="cursor-pointer hover:bg-slate-50" onClick={() => navigate(`/frota/viagens/${v.id}`)}>
+      <td className="px-4 py-2 font-mono text-slate-500">{v.numero}</td>
+      <td className="px-4 py-2">{v.placa}{v.modelo ? <span className="text-slate-400"> · {v.modelo}</span> : null}</td>
+      <td className="px-4 py-2">{v.condutorNome ?? '—'}</td>
+      <td className="px-4 py-2 text-slate-600"><span className="block max-w-[14rem] truncate" title={v.finalidade ?? ''}>{v.finalidade ?? '—'}</span></td>
+      <td className="px-4 py-2 text-slate-600">{fmtDateTime(v.dataHoraSaida)}</td>
+      <td className="px-4 py-2 text-slate-600">{fmtDateTime(v.dataHoraChegada)}</td>
+      <td className="px-4 py-2 text-right tabular-nums">
+        {v.kmRodado != null ? `${v.kmRodado} km` : v.kmInicial != null ? `${v.kmInicial} →` : '—'}
+      </td>
+      <td className="px-4 py-2 text-center text-slate-500">{v.paradas ?? 0}</td>
+      <td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${sit.cls}`}>{sit.label}</span></td>
+    </tr>
   );
 }
 
 // ---- Grid de paradas (pontos de rota / "caderno" da viagem) ----
-function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () => void }) {
+export function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () => void }) {
   const { toast } = useToast();
   const [paradas, setParadas] = useState<ParadaFrota[]>([]);
   const [loading, setLoading] = useState(true);
@@ -620,7 +568,7 @@ function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () => void 
   );
 }
 
-function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => void; onDone: () => void }) {
+export function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => void; onDone: () => void }) {
   const { toast } = useToast();
   const [matricula, setMatricula] = useState(v.condutorMatricula ?? '');
   // O condutor já é conhecido pela viagem (da saída) — começa identificado.
@@ -763,7 +711,7 @@ function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => vo
 
 // Lançamento de despesa NA viagem em curso → PENDENTE. A viagem já foi aberta
 // pelo condutor autenticado na saída — herda o condutor, NÃO pede senha de novo.
-function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFrota; tipos: TipoDespesa[]; onClose: () => void; onDone: () => void }) {
+export function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFrota; tipos: TipoDespesa[]; onClose: () => void; onDone: () => void }) {
   const { toast } = useToast();
   const [tipoDespesaId, setTipoDespesaId] = useState('');
   const [valor, setValor] = useState('');
@@ -846,7 +794,7 @@ function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFrota; ti
   );
 }
 
-function AjusteForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => void; onDone: () => void }) {
+export function AjusteForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => void; onDone: () => void }) {
   const { toast } = useToast();
   const [kmInicial, setKmInicial] = useState(v.kmInicial != null ? String(v.kmInicial) : '');
   const [kmFinal, setKmFinal] = useState(v.kmFinal != null ? String(v.kmFinal) : '');

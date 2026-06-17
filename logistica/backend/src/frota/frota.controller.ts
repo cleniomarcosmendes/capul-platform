@@ -56,6 +56,12 @@ export class FrotaController {
     return this.frota.listar(user.filialId!, situacao);
   }
 
+  /** Detalhe de uma viagem de frota (página de operações). */
+  @Get('viagens/:id')
+  obterViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.frota.obterViagem(id, user.filialId!);
+  }
+
   /** Registrar retorno (só o próprio condutor). */
   @Post('viagens/:id/retorno')
   retorno(@Param('id') id: string, @Body() dto: RetornoFrotaDto, @CurrentUser() user: JwtPayload) {

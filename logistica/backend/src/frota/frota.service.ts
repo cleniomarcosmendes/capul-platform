@@ -471,4 +471,23 @@ export class FrotaService {
       paradas: v._count.paradas,
     }));
   }
+
+  /** Uma viagem de FROTA por id (detalhe — mesma forma do listar). */
+  async obterViagem(id: string, filialId: string) {
+    const v = await this.prisma.viagem.findFirst({
+      where: { id, tipo: TipoViagem.FROTA, filialId },
+      include: { veiculo: { select: { placa: true, modelo: true } }, _count: { select: { paradas: true } } },
+    });
+    if (!v) throw new NotFoundException('Viagem de frota não encontrada.');
+    return {
+      id: v.id, numero: v.numero, situacao: v.situacao,
+      placa: v.veiculo?.placa ?? '—', modelo: v.veiculo?.modelo ?? null,
+      condutorNome: v.condutorNome, condutorMatricula: v.condutorMatricula,
+      kmInicial: v.kmInicial, kmFinal: v.kmFinal,
+      kmRodado: v.kmFinal != null && v.kmInicial != null ? v.kmFinal - v.kmInicial : null,
+      finalidade: v.observacoesSaida, localSaida: v.localSaida,
+      dataHoraSaida: v.dataHoraSaida, dataHoraChegada: v.dataHoraChegada,
+      paradas: v._count.paradas,
+    };
+  }
 }
