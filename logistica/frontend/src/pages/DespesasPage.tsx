@@ -81,7 +81,8 @@ function DespesasTab() {
   const carregar = async () => {
     setLoading(true);
     try {
-      const params: Record<string, string | number> = { mes, ano };
+      const params: Record<string, string | number> = {};
+      if (mes) { params.mes = mes; params.ano = ano; } // mes 0 = Todos os meses
       if (situacao) params.situacao = situacao;
       if (veiculoFiltro) params.veiculoId = veiculoFiltro;
       const [d, v] = await Promise.all([
@@ -101,9 +102,11 @@ function DespesasTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <select value={mes} onChange={(e) => setMes(Number(e.target.value))} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+          <option value={0}>Todos os meses</option>
           {Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>{new Date(2000, i, 1).toLocaleString('pt-BR', { month: 'long' })}</option>)}
         </select>
-        <input type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+        <input type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} disabled={!mes}
+          className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-sm disabled:bg-slate-100 disabled:text-slate-400" />
         <select value={situacao} onChange={(e) => setSituacao(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
           <option value="">Todas situações</option>
           <option value="PENDENTE">Pendentes</option>
