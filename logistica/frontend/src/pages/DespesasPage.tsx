@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Banknote, Check, Loader2, Paperclip, Pencil, Plus, Tag, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Banknote, Check, Loader2, Paperclip, Pencil, Plus, Tag, Trash2, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
@@ -247,13 +247,26 @@ function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
   );
 }
 
-// ---- Aba Tipos de despesa (gestor de frota) ----
+// Ícone de ordenação (padrão workspace).
+function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
+  if (!active) return <ArrowUpDown className="h-3 w-3 text-slate-300" />;
+  return dir === 'asc' ? <ArrowUp className="h-3 w-3 text-sky-600" /> : <ArrowDown className="h-3 w-3 text-sky-600" />;
+}
+const thCad = 'px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500';
+const btnSortCad = 'flex items-center gap-1 hover:text-slate-700';
+const pill = (ativo: boolean) => `rounded-full px-2 py-1 text-xs font-medium ${ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`;
+
+// ---- Aba Fornecedores (gestor de frota) — padrão de cadastro do workspace ----
 function FornecedoresTab() {
   const { toast } = useToast();
   const [fornecedores, setFornecedores] = useState<FornecedorDespesa[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
   const [nome, setNome] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editNome, setEditNome] = useState('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const carregar = async () => {
     setLoading(true);
@@ -262,67 +275,119 @@ function FornecedoresTab() {
   };
   useEffect(() => { void carregar(); /* eslint-disable-next-line */ }, []);
 
-  const criar = async () => {
+  const criar = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!nome.trim()) { toast('warning', 'Informe o nome.'); return; }
     setSalvando(true);
-    try { await logisticaApi.post('/despesas/fornecedores', { nome: nome.trim() }); setNome(''); await carregar(); }
+    try { await logisticaApi.post('/despesas/fornecedores', { nome: nome.trim() }); setNome(''); setShowForm(false); toast('success', 'Fornecedor criado.'); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao criar fornecedor.')); } finally { setSalvando(false); }
   };
+  const salvarEdicao = async () => {
+    if (!editId || !editNome.trim()) return;
+    try { await logisticaApi.patch(`/despesas/fornecedores/${editId}`, { nome: editNome.trim() }); toast('success', 'Fornecedor atualizado.'); setEditId(null); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao atualizar.')); }
+  };
   const toggle = async (f: FornecedorDespesa) => {
-    try { await logisticaApi.patch(`/despesas/fornecedores/${f.id}`, { ativo: !f.ativo }); await carregar(); }
+    try { await logisticaApi.patch(`/despesas/fornecedores/${f.id}`, { ativo: !f.ativo }); toast('success', f.ativo ? 'Fornecedor inativado.' : 'Fornecedor ativado.'); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao atualizar.')); }
   };
 
-  const ativos = useMemo(() => fornecedores.filter((f) => f.ativo).length, [fornecedores]);
+  const ordenados = useMemo(() => {
+    const arr = [...fornecedores].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    return sortDir === 'asc' ? arr : arr.reverse();
+  }, [fornecedores, sortDir]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-white p-4">
-        <label className="flex-1 text-xs text-slate-600">Novo fornecedor
-          <input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={120} placeholder="ex.: Posto Ipiranga Centro" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        </label>
-        <button onClick={() => void criar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
-          {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Adicionar
+    <div>
+      <div className="mb-6 flex items-center justify-between">
+        <p className="text-sm text-slate-500">Fornecedores usados nas despesas da frota (postos, oficinas, etc.).</p>
+        <button onClick={() => { setShowForm(!showForm); setEditId(null); }} className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700">
+          <Plus className="h-4 w-4" /> Novo Fornecedor
         </button>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white">
-        <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
-          <Tag className="h-4 w-4 text-slate-400" /> Fornecedores ({ativos} ativos)
+      {showForm && (
+        <form onSubmit={criar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
+          <div className="mb-4 max-w-md">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Nome *</label>
+            <input value={nome} onChange={(e) => setNome(e.target.value)} required maxLength={120} autoFocus placeholder="ex.: Posto Ipiranga Centro"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+          </div>
+          <div className="flex gap-3">
+            <button type="submit" disabled={salvando} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar'}</button>
+            <button type="button" onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <div className="py-12 text-center text-slate-500">Carregando…</div>
+      ) : fornecedores.length === 0 ? (
+        <div className="py-12 text-center">
+          <Tag className="mx-auto mb-3 h-12 w-12 text-slate-300" />
+          <p className="text-slate-500">Nenhum fornecedor cadastrado</p>
         </div>
-        {loading ? (
-          <div className="flex items-center gap-2 py-8 px-4 text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
-        ) : (
-          <table className="w-full text-sm">
-            <tbody className="divide-y divide-slate-100">
-              {fornecedores.map((f) => (
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-slate-50">
+                <th className={thCad}><button onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')} className={btnSortCad}>Nome <SortIcon active dir={sortDir} /></button></th>
+                <th className={thCad}>Status</th>
+                <th className={thCad}>Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-sm">
+              {ordenados.map((f) => (
                 <tr key={f.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-2 font-medium text-slate-700">{f.nome}</td>
-                  <td className="px-4 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${f.ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                      {f.ativo ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <button onClick={() => void toggle(f)} className="text-xs text-sky-600 hover:underline">{f.ativo ? 'Inativar' : 'Ativar'}</button>
-                  </td>
+                  {editId === f.id ? (
+                    <>
+                      <td className="px-6 py-3"><input value={editNome} onChange={(e) => setEditNome(e.target.value)} maxLength={120} className="w-full rounded border border-slate-300 px-2 py-1 text-sm" /></td>
+                      <td className="px-6 py-3"><span className={pill(f.ativo)}>{f.ativo ? 'Ativo' : 'Inativo'}</span></td>
+                      <td className="px-6 py-3">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => void salvarEdicao()} className="text-emerald-600 hover:text-emerald-800" title="Salvar"><Check className="h-4 w-4" /></button>
+                          <button onClick={() => setEditId(null)} className="text-slate-400 hover:text-slate-600" title="Cancelar"><X className="h-4 w-4" /></button>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-6 py-4">
+                        <button onClick={() => { setEditId(f.id); setEditNome(f.nome); }} className="text-left font-medium text-sky-700 hover:underline">{f.nome}</button>
+                      </td>
+                      <td className="px-6 py-4"><span className={pill(f.ativo)}>{f.ativo ? 'Ativo' : 'Inativo'}</span></td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => { setEditId(f.id); setEditNome(f.nome); }} className="flex items-center gap-1 text-xs text-sky-600 hover:underline"><Pencil className="h-3.5 w-3.5" /> Editar</button>
+                          <button onClick={() => void toggle(f)} className="text-xs text-sky-600 hover:underline">{f.ativo ? 'Inativar' : 'Ativar'}</button>
+                        </div>
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
 
+// ---- Aba Tipos de despesa (gestor de frota) — padrão de cadastro do workspace ----
 function TiposTab() {
   const { toast } = useToast();
   const [tipos, setTipos] = useState<TipoDespesa[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editNome, setEditNome] = useState('');
+  const [editDescricao, setEditDescricao] = useState('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const carregar = async () => {
     setLoading(true);
@@ -331,60 +396,112 @@ function TiposTab() {
   };
   useEffect(() => { void carregar(); /* eslint-disable-next-line */ }, []);
 
-  const criar = async () => {
+  const criar = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!nome.trim()) { toast('warning', 'Informe o nome.'); return; }
     setSalvando(true);
-    try { await logisticaApi.post('/despesas/tipos', { nome: nome.trim(), descricao: descricao.trim() || undefined }); setNome(''); setDescricao(''); await carregar(); }
+    try { await logisticaApi.post('/despesas/tipos', { nome: nome.trim(), descricao: descricao.trim() || undefined }); setNome(''); setDescricao(''); setShowForm(false); toast('success', 'Tipo de despesa criado.'); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao criar tipo.')); } finally { setSalvando(false); }
   };
+  const salvarEdicao = async () => {
+    if (!editId || !editNome.trim()) return;
+    try { await logisticaApi.patch(`/despesas/tipos/${editId}`, { nome: editNome.trim(), descricao: editDescricao.trim() || undefined }); toast('success', 'Tipo atualizado.'); setEditId(null); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao atualizar.')); }
+  };
   const toggle = async (t: TipoDespesa) => {
-    try { await logisticaApi.patch(`/despesas/tipos/${t.id}`, { ativo: !t.ativo }); await carregar(); }
+    try { await logisticaApi.patch(`/despesas/tipos/${t.id}`, { ativo: !t.ativo }); toast('success', t.ativo ? 'Tipo inativado.' : 'Tipo ativado.'); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao atualizar.')); }
   };
 
-  const ativos = useMemo(() => tipos.filter((t) => t.ativo).length, [tipos]);
+  const ordenados = useMemo(() => {
+    const arr = [...tipos].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    return sortDir === 'asc' ? arr : arr.reverse();
+  }, [tipos, sortDir]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-white p-4">
-        <label className="flex-1 text-xs text-slate-600">Novo tipo de despesa
-          <input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={60} placeholder="ex.: Lavagem" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        </label>
-        <label className="flex-1 text-xs text-slate-600">Descrição (opcional)
-          <input value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={255} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        </label>
-        <button onClick={() => void criar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
-          {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Adicionar
+    <div>
+      <div className="mb-6 flex items-center justify-between">
+        <p className="text-sm text-slate-500">Classificação das despesas (Combustível, Manutenção, Pedágio, IPVA, etc.).</p>
+        <button onClick={() => { setShowForm(!showForm); setEditId(null); }} className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700">
+          <Plus className="h-4 w-4" /> Novo Tipo
         </button>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white">
-        <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
-          <Tag className="h-4 w-4 text-slate-400" /> Tipos ({ativos} ativos)
+      {showForm && (
+        <form onSubmit={criar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
+          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Nome *</label>
+              <input value={nome} onChange={(e) => setNome(e.target.value)} required maxLength={60} autoFocus placeholder="ex.: Lavagem"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Descrição (opcional)</label>
+              <input value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={255}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button type="submit" disabled={salvando} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar'}</button>
+            <button type="button" onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <div className="py-12 text-center text-slate-500">Carregando…</div>
+      ) : tipos.length === 0 ? (
+        <div className="py-12 text-center">
+          <Tag className="mx-auto mb-3 h-12 w-12 text-slate-300" />
+          <p className="text-slate-500">Nenhum tipo de despesa cadastrado</p>
         </div>
-        {loading ? (
-          <div className="flex items-center gap-2 py-8 px-4 text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
-        ) : (
-          <table className="w-full text-sm">
-            <tbody className="divide-y divide-slate-100">
-              {tipos.map((t) => (
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-slate-50">
+                <th className={thCad}><button onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')} className={btnSortCad}>Nome <SortIcon active dir={sortDir} /></button></th>
+                <th className={thCad}>Descrição</th>
+                <th className={thCad}>Status</th>
+                <th className={thCad}>Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-sm">
+              {ordenados.map((t) => (
                 <tr key={t.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-2 font-medium text-slate-700">{t.nome}</td>
-                  <td className="px-4 py-2 text-slate-500">{t.descricao ?? '—'}</td>
-                  <td className="px-4 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${t.ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                      {t.ativo ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <button onClick={() => void toggle(t)} className="text-xs text-sky-600 hover:underline">{t.ativo ? 'Inativar' : 'Ativar'}</button>
-                  </td>
+                  {editId === t.id ? (
+                    <>
+                      <td className="px-6 py-3"><input value={editNome} onChange={(e) => setEditNome(e.target.value)} maxLength={60} className="w-full rounded border border-slate-300 px-2 py-1 text-sm" /></td>
+                      <td className="px-6 py-3"><input value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)} maxLength={255} className="w-full rounded border border-slate-300 px-2 py-1 text-sm" /></td>
+                      <td className="px-6 py-3"><span className={pill(t.ativo)}>{t.ativo ? 'Ativo' : 'Inativo'}</span></td>
+                      <td className="px-6 py-3">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => void salvarEdicao()} className="text-emerald-600 hover:text-emerald-800" title="Salvar"><Check className="h-4 w-4" /></button>
+                          <button onClick={() => setEditId(null)} className="text-slate-400 hover:text-slate-600" title="Cancelar"><X className="h-4 w-4" /></button>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-6 py-4">
+                        <button onClick={() => { setEditId(t.id); setEditNome(t.nome); setEditDescricao(t.descricao ?? ''); }} className="text-left font-medium text-sky-700 hover:underline">{t.nome}</button>
+                      </td>
+                      <td className="px-6 py-4 text-slate-500">{t.descricao ?? '—'}</td>
+                      <td className="px-6 py-4"><span className={pill(t.ativo)}>{t.ativo ? 'Ativo' : 'Inativo'}</span></td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => { setEditId(t.id); setEditNome(t.nome); setEditDescricao(t.descricao ?? ''); }} className="flex items-center gap-1 text-xs text-sky-600 hover:underline"><Pencil className="h-3.5 w-3.5" /> Editar</button>
+                          <button onClick={() => void toggle(t)} className="text-xs text-sky-600 hover:underline">{t.ativo ? 'Inativar' : 'Ativar'}</button>
+                        </div>
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
