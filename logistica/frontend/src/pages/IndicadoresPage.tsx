@@ -76,7 +76,7 @@ export function IndicadoresPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-800">Indicadores</h2>
+          <h2 className="text-lg font-semibold text-slate-800">Indicadores de Entrega</h2>
           <p className="text-sm text-slate-500">Valor por canal, performance por motorista, demanda e re-entregas — por mês.</p>
         </div>
         <div className="flex items-center gap-2">
