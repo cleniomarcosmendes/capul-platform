@@ -100,8 +100,14 @@ export function VeiculoFormPage() {
       ...(modoEdicao ? { situacao } : {}),
     };
     try {
-      if (modoEdicao) await logisticaApi.patch(`/veiculos/${id}`, payload);
-      else await logisticaApi.post('/veiculos', payload);
+      if (modoEdicao) {
+        // filialId não entra no PATCH (não se muda a filial do veículo; o
+        // UpdateVeiculoDto não tem o campo e o ValidationPipe rejeitaria).
+        const { filialId: _filial, ...edit } = payload;
+        await logisticaApi.patch(`/veiculos/${id}`, edit);
+      } else {
+        await logisticaApi.post('/veiculos', payload);
+      }
       setDirty(false);
       toast('success', modoEdicao ? 'Veículo atualizado.' : 'Veículo cadastrado.');
       navigate('/veiculos');
