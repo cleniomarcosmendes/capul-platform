@@ -23,6 +23,7 @@ export interface ViagemFrota {
 export interface ParadaFrota { id: string; sequencia: number; local: string; km?: number | null; dataHora?: string | null; observacao?: string | null }
 interface VeiculoDisp { id: string; placa: string; modelo?: string | null; situacao: string; kmAtual: number }
 export interface TipoDespesa { id: string; nome: string }
+export interface FornecedorDespesa { id: string; nome: string; ativo: boolean }
 
 export const SIT_META: Record<string, { label: string; cls: string }> = {
   EM_CURSO: { label: 'Em curso', cls: 'bg-sky-100 text-sky-700' },
@@ -715,10 +716,17 @@ export function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFr
   const { toast } = useToast();
   const [tipoDespesaId, setTipoDespesaId] = useState('');
   const [valor, setValor] = useState('');
+  const [fornecedorId, setFornecedorId] = useState('');
+  const [fornecedores, setFornecedores] = useState<FornecedorDespesa[]>([]);
   const [fornecedor, setFornecedor] = useState('');
   const [obs, setObs] = useState('');
   const [recibo, setRecibo] = useState<File | null>(null);
   const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    logisticaApi.get<FornecedorDespesa[]>('/despesas/fornecedores', { params: { ativos: 'true' } })
+      .then((r) => setFornecedores(r.data)).catch(() => {});
+  }, []);
 
   const lancar = async () => {
     if (!tipoDespesaId) { toast('warning', 'Selecione o tipo de despesa.'); return; }
@@ -731,6 +739,7 @@ export function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFr
         fd.append('viagemId', v.id);
         fd.append('tipoDespesaId', tipoDespesaId);
         fd.append('valor', String(Number(valor)));
+        if (fornecedorId) fd.append('fornecedorId', fornecedorId);
         if (fornecedor.trim()) fd.append('fornecedor', fornecedor.trim());
         if (obs.trim()) fd.append('observacao', obs.trim());
         fd.append('comprovante', recibo);
@@ -738,12 +747,13 @@ export function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFr
       } else {
         await logisticaApi.post('/despesas/viagem', {
           viagemId: v.id, tipoDespesaId, valor: Number(valor),
+          fornecedorId: fornecedorId || undefined,
           fornecedor: fornecedor.trim() || undefined, observacao: obs.trim() || undefined,
         });
       }
       toast('success', 'Despesa lançada — pode lançar outra.');
       // Limpa pra lançar a PRÓXIMA despesa da mesma viagem sem recarregar a tela.
-      setTipoDespesaId(''); setValor(''); setFornecedor(''); setObs(''); setRecibo(null);
+      setTipoDespesaId(''); setValor(''); setFornecedorId(''); setFornecedor(''); setObs(''); setRecibo(null);
       onDone();
     } catch (e) {
       toast('error', errMsg(e, 'Falha ao lançar despesa.'));
@@ -769,8 +779,12 @@ export function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFr
           <input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
         <div className="w-72">
-          <label className="mb-1 block text-sm font-medium text-slate-600">Fornecedor (opcional)</label>
-          <input value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} maxLength={120} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <label className="mb-1 block text-sm font-medium text-slate-600">Fornecedor (cadastrado)</label>
+          <select value={fornecedorId} onChange={(e) => setFornecedorId(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="">— Não definido —</option>
+            {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+          </select>
+          <input value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} maxLength={120} placeholder="ou digite (não cadastrado)" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
         <div className="min-w-[16rem] flex-1">
           <label className="mb-1 block text-sm font-medium text-slate-600">Observação (opcional)</label>
