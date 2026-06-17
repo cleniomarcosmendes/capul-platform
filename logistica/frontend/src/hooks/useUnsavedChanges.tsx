@@ -34,12 +34,18 @@ export function useUnsavedChanges(isDirty: boolean) {
     const handleClick = (e: MouseEvent) => {
       const anchor = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement | null;
       if (!anchor) return;
-      const href = anchor.getAttribute('href');
-      if (!href || href.startsWith('http') || href.startsWith('//') || anchor.target === '_blank') return;
-      if (href !== location.pathname && dirtyRef.current) {
+      const raw = anchor.getAttribute('href');
+      if (!raw || raw.startsWith('http') || raw.startsWith('//') || anchor.target === '_blank') return;
+      // anchor.pathname é o caminho COMPLETO (com o basename do router). Como o
+      // navigate() já reaplica o basename, convertemos para o caminho INTERNO
+      // removendo o basename — senão duplica (ex.: /entregas/entregas/frota).
+      const basename = window.location.pathname.slice(0, window.location.pathname.length - location.pathname.length);
+      let alvo = anchor.pathname;
+      if (basename && (alvo === basename || alvo.startsWith(`${basename}/`))) alvo = alvo.slice(basename.length) || '/';
+      if (alvo !== location.pathname && dirtyRef.current) {
         e.preventDefault();
         e.stopPropagation();
-        pendingRef.current = () => navigate(href);
+        pendingRef.current = () => navigate(alvo);
         setShowDialog(true);
       }
     };
