@@ -191,22 +191,22 @@ function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
 
   return (
     <>
-      <tr className="hover:bg-slate-50">
+      <tr className="cursor-pointer hover:bg-slate-50" onClick={() => navigate(`/despesas/${d.id}/editar`)} title="Clique para editar">
         <td className="px-4 py-2 text-slate-600">{fmtDate(d.dataDespesa)}</td>
         <td className="px-4 py-2">{d.placa}{d.modelo ? <span className="text-slate-400"> · {d.modelo}</span> : null}</td>
         <td className="px-4 py-2">{d.tipo}</td>
         <td className="px-4 py-2 text-right tabular-nums">{BRL(d.valor)}</td>
         <td className="px-4 py-2 text-slate-600">
           <div className="flex items-center gap-2">
-            <span>{d.fornecedor ?? '—'}</span>
+            <span className="block max-w-[12rem] truncate" title={d.fornecedor ?? ''}>{d.fornecedor ?? '—'}</span>
             {d.temComprovante && (
-              <button onClick={() => void verRecibo()} disabled={busy} title="Ver recibo" className="inline-flex items-center gap-1 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-xs text-sky-700 hover:bg-sky-100 disabled:opacity-50">
+              <button onClick={(e) => { e.stopPropagation(); void verRecibo(); }} disabled={busy} title="Ver recibo" className="inline-flex shrink-0 items-center gap-1 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-xs text-sky-700 hover:bg-sky-100 disabled:opacity-50">
                 <Paperclip className="h-3 w-3" /> Recibo
               </button>
             )}
           </div>
         </td>
-        <td className="px-4 py-2 text-slate-600">{d.autorNome ?? '—'}</td>
+        <td className="px-4 py-2 text-slate-600"><span className="block max-w-[12rem] truncate" title={d.autorNome ?? ''}>{d.autorNome ?? '—'}</span></td>
         <td className="px-4 py-2">
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${sit.cls}`}>{sit.label}</span>
           {d.situacao === 'CONTESTADA' && d.motivoContestacao && <span className="ml-1 text-xs text-rose-500" title={d.motivoContestacao}>ⓘ</span>}
@@ -215,18 +215,18 @@ function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
           <div className="flex justify-end gap-2">
             {d.situacao === 'PENDENTE' && (
               <>
-                <button onClick={() => void aprovar()} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+                <button onClick={(e) => { e.stopPropagation(); void aprovar(); }} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
                   <Check className="h-3.5 w-3.5" /> Aprovar
                 </button>
-                <button onClick={() => setContestando((s) => !s)} className="inline-flex items-center gap-1 rounded-lg border border-rose-300 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50">
+                <button onClick={(e) => { e.stopPropagation(); setContestando((s) => !s); }} className="inline-flex items-center gap-1 rounded-lg border border-rose-300 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50">
                   <X className="h-3.5 w-3.5" /> Contestar
                 </button>
               </>
             )}
-            <button onClick={() => navigate(`/despesas/${d.id}/editar`)} disabled={busy} title="Editar" className="inline-flex items-center rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+            <button onClick={(e) => { e.stopPropagation(); navigate(`/despesas/${d.id}/editar`); }} disabled={busy} title="Editar" className="inline-flex items-center rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50">
               <Pencil className="h-3.5 w-3.5" />
             </button>
-            <button onClick={() => void excluir()} disabled={busy} title="Excluir" className="inline-flex items-center rounded-lg border border-rose-200 px-2 py-1 text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-50">
+            <button onClick={(e) => { e.stopPropagation(); void excluir(); }} disabled={busy} title="Excluir" className="inline-flex items-center rounded-lg border border-rose-200 px-2 py-1 text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-50">
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
