@@ -106,6 +106,7 @@ export function FrotaPage() {
                 <th className="px-4 py-2">#</th>
                 <th className="px-4 py-2">Veículo</th>
                 <th className="px-4 py-2">Condutor</th>
+                <th className="px-4 py-2">Finalidade</th>
                 <th className="px-4 py-2">Saída</th>
                 <th className="px-4 py-2">Retorno</th>
                 <th className="px-4 py-2 text-right">KM</th>
@@ -465,6 +466,7 @@ function LinhaViagem({ v, podeAjustar, tipos, onDone }: { v: ViagemFrota; podeAj
         <td className="px-4 py-2 font-mono text-slate-500">{v.numero}</td>
         <td className="px-4 py-2">{v.placa}{v.modelo ? <span className="text-slate-400"> · {v.modelo}</span> : null}</td>
         <td className="px-4 py-2">{v.condutorNome ?? '—'}</td>
+        <td className="px-4 py-2 text-slate-600"><span className="block max-w-[14rem] truncate" title={v.finalidade ?? ''}>{v.finalidade ?? '—'}</span></td>
         <td className="px-4 py-2 text-slate-600">{fmtDateTime(v.dataHoraSaida)}</td>
         <td className="px-4 py-2 text-slate-600">{fmtDateTime(v.dataHoraChegada)}</td>
         <td className="px-4 py-2 text-right tabular-nums">
@@ -502,7 +504,7 @@ function LinhaViagem({ v, podeAjustar, tipos, onDone }: { v: ViagemFrota; podeAj
       </tr>
       {acao && (
         <tr>
-          <td colSpan={9} className="bg-slate-100 p-0">
+          <td colSpan={10} className="bg-slate-100 p-0">
             {/* Painel da ação com destaque visual (borda colorida por tipo) — separa da lista */}
             <div className={`m-2 rounded-lg border-l-4 bg-white p-4 shadow-sm ${
               acao === 'retorno' ? 'border-emerald-400'
