@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Banknote, Check, Image as ImageIcon, Loader2, Paperclip, Plus, Tag, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Banknote, Check, Loader2, Paperclip, Plus, Tag, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
@@ -70,16 +71,15 @@ export function DespesasPage() {
 // ---- Aba Despesas ----
 function DespesasTab() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [veiculos, setVeiculos] = useState<VeiculoItem[]>([]);
-  const [tipos, setTipos] = useState<TipoDespesa[]>([]);
   const [ind, setInd] = useState<Indicadores | null>(null);
   const [loading, setLoading] = useState(true);
   const [mes, setMes] = useState(hoje.getMonth() + 1);
   const [ano, setAno] = useState(hoje.getFullYear());
   const [situacao, setSituacao] = useState('');
   const [veiculoFiltro, setVeiculoFiltro] = useState('');
-  const [novo, setNovo] = useState(false);
 
   const carregar = async () => {
     setLoading(true);
@@ -87,13 +87,12 @@ function DespesasTab() {
       const params: Record<string, string | number> = { mes, ano };
       if (situacao) params.situacao = situacao;
       if (veiculoFiltro) params.veiculoId = veiculoFiltro;
-      const [d, v, t, i] = await Promise.all([
+      const [d, v, i] = await Promise.all([
         logisticaApi.get<Despesa[]>('/despesas', { params }),
         logisticaApi.get<VeiculoItem[]>('/veiculos'),
-        logisticaApi.get<TipoDespesa[]>('/despesas/tipos', { params: { ativos: 'true' } }),
         logisticaApi.get<Indicadores>('/despesas/indicadores', { params: { mes, ano } }),
       ]);
-      setDespesas(d.data); setVeiculos(v.data); setTipos(t.data); setInd(i.data);
+      setDespesas(d.data); setVeiculos(v.data); setInd(i.data);
     } catch (e) {
       toast('error', errMsg(e, 'Falha ao carregar despesas.'));
     } finally {
@@ -128,13 +127,11 @@ function DespesasTab() {
           {veiculos.map((v) => <option key={v.id} value={v.id}>{v.placa}</option>)}
         </select>
         <div className="ml-auto">
-          <button onClick={() => setNovo((s) => !s)} className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700">
+          <button onClick={() => navigate('/despesas/nova')} className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700">
             <Plus className="h-4 w-4" /> Lançar despesa
           </button>
         </div>
       </div>
-
-      {novo && <LancarDespesaForm veiculos={veiculos} tipos={tipos} onClose={() => setNovo(false)} onDone={() => { setNovo(false); void carregar(); }} />}
 
       <div className="rounded-xl border border-slate-200 bg-white">
         {loading ? (
@@ -258,128 +255,6 @@ function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
         </tr>
       )}
     </>
-  );
-}
-
-function LancarDespesaForm({ veiculos, tipos, onClose, onDone }: { veiculos: VeiculoItem[]; tipos: TipoDespesa[]; onClose: () => void; onDone: () => void }) {
-  const { toast } = useToast();
-  const [veiculoId, setVeiculoId] = useState('');
-  const [tipoDespesaId, setTipoDespesaId] = useState('');
-  const [valor, setValor] = useState('');
-  const [dataDespesa, setDataDespesa] = useState(hoje.toISOString().slice(0, 10));
-  const [fornecedorId, setFornecedorId] = useState('');
-  const [fornecedores, setFornecedores] = useState<FornecedorDespesa[]>([]);
-  const [fornecedor, setFornecedor] = useState('');
-  const [observacao, setObservacao] = useState('');
-  const [recibo, setRecibo] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [salvando, setSalvando] = useState(false);
-
-  useEffect(() => {
-    logisticaApi.get<FornecedorDespesa[]>('/despesas/fornecedores', { params: { ativos: 'true' } })
-      .then((r) => setFornecedores(r.data)).catch(() => {});
-  }, []);
-
-  const escolherRecibo = (f: File | null) => {
-    setRecibo(f);
-    setPreview(f && f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
-  };
-
-  const salvar = async () => {
-    if (!veiculoId) { toast('warning', 'Selecione o veículo.'); return; }
-    if (!tipoDespesaId) { toast('warning', 'Selecione o tipo de despesa.'); return; }
-    if (valor === '' || Number(valor) <= 0) { toast('warning', 'Informe um valor válido.'); return; }
-    setSalvando(true);
-    try {
-      // Com recibo → multipart (FormData); sem recibo → JSON. O backend aceita os dois.
-      if (recibo) {
-        const fd = new FormData();
-        fd.append('veiculoId', veiculoId);
-        fd.append('tipoDespesaId', tipoDespesaId);
-        fd.append('valor', String(Number(valor)));
-        if (dataDespesa) fd.append('dataDespesa', new Date(dataDespesa).toISOString());
-        if (fornecedorId) fd.append('fornecedorId', fornecedorId);
-        if (fornecedor.trim()) fd.append('fornecedor', fornecedor.trim());
-        if (observacao.trim()) fd.append('observacao', observacao.trim());
-        fd.append('comprovante', recibo);
-        await logisticaApi.post('/despesas', fd);
-      } else {
-        await logisticaApi.post('/despesas', {
-          veiculoId, tipoDespesaId, valor: Number(valor),
-          dataDespesa: dataDespesa ? new Date(dataDespesa).toISOString() : undefined,
-          fornecedorId: fornecedorId || undefined,
-          fornecedor: fornecedor.trim() || undefined, observacao: observacao.trim() || undefined,
-        });
-      }
-      toast('success', 'Despesa lançada (aprovada).');
-      onDone();
-    } catch (e) {
-      toast('error', errMsg(e, 'Falha ao lançar despesa.'));
-    } finally {
-      setSalvando(false);
-    }
-  };
-
-  return (
-    <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-700">Lançar despesa (entra como aprovada)</h3>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
-      </div>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <label className="text-xs text-slate-600">Veículo
-          <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option value="">Selecione…</option>
-            {veiculos.map((v) => <option key={v.id} value={v.id}>{v.placa}{v.modelo ? ` — ${v.modelo}` : ''}</option>)}
-          </select>
-        </label>
-        <label className="text-xs text-slate-600">Tipo
-          <select value={tipoDespesaId} onChange={(e) => setTipoDespesaId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option value="">Selecione…</option>
-            {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
-          </select>
-        </label>
-        <label className="text-xs text-slate-600">Valor (R$)
-          <input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        </label>
-        <label className="text-xs text-slate-600">Data
-          <input type="date" value={dataDespesa} onChange={(e) => setDataDespesa(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        </label>
-        <label className="text-xs text-slate-600">Fornecedor (cadastrado)
-          <select value={fornecedorId} onChange={(e) => setFornecedorId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option value="">— Não definido —</option>
-            {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
-          </select>
-        </label>
-        <label className="text-xs text-slate-600">Fornecedor (livre, se não cadastrado)
-          <input value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} maxLength={120} placeholder="ex.: posto não listado" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        </label>
-        <label className="text-xs text-slate-600">Observação (opcional)
-          <input value={observacao} onChange={(e) => setObservacao(e.target.value)} maxLength={255} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        </label>
-        <div className="text-xs text-slate-600 md:col-span-3">Recibo / cupom (opcional)
-          <div className="mt-1 flex flex-wrap items-center gap-3">
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
-              <Paperclip className="h-4 w-4 text-slate-400" />
-              {recibo ? 'Trocar arquivo' : 'Anexar foto/PDF'}
-              <input type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={(e) => escolherRecibo(e.target.files?.[0] ?? null)} />
-            </label>
-            {recibo && (
-              <span className="inline-flex items-center gap-2 text-slate-500">
-                {preview ? <img src={preview} alt="prévia" className="h-10 w-10 rounded border border-slate-200 object-cover" /> : <ImageIcon className="h-5 w-5 text-slate-400" />}
-                <span className="max-w-[14rem] truncate">{recibo.name}</span>
-                <button type="button" onClick={() => escolherRecibo(null)} className="text-slate-400 hover:text-rose-500"><X className="h-4 w-4" /></button>
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-      <div className="mt-4 flex justify-end">
-        <button onClick={() => void salvar()} disabled={salvando} className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
-          {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Lançar
-        </button>
-      </div>
-    </div>
   );
 }
 
