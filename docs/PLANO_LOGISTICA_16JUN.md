@@ -26,7 +26,11 @@ Dados DEV: `clenio`/`123456` (ADMIN/PADRAO), `entregador_teste`/`entrega123` (EN
   (`FornecedorDespesa`, postos/borracharias) em vez do FornecedorConfig de TI (domínio errado).
   Backend (CRUD + migration `20260616140000` + seed "NÃO DEFINIDO") + web (aba Fornecedores +
   select no lançamento) + app (chips). Centralizar fornecedor (core + tag de módulo) → backlog.
-- ⏳ Próximas: 5 (navegação/validação cupom-valor) → 6 (revamp Frota).
+- ✅ **FASE 5** (cupom/valor): Enter no nº → valor; Enter no valor → adiciona só com nº+valor
+  válidos (faltava validação). Auditoria ENTER/TAB ampla pode continuar se surgirem casos.
+- ✅ **Fix**: editar veículo não envia filialId (PATCH rejeitava forbidNonWhitelisted).
+- ⏳ Próxima: **6 (revamp UX da Frota)** — a maior; recomendado fazer com o Clenio iterando
+  por tela. Antes: testar + PUSH (23 commits + 4 migrations acumulados).
 - ⏳ Refinamento aberto: nav do frontend web ainda não esconde links não-entrega p/
   REGISTRADOR_ENTREGA (backend já bloqueia por RBAC).
 
