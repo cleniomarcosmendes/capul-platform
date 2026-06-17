@@ -9,6 +9,14 @@ import {
   type ViagemFrota, type TipoDespesa,
 } from './FrotaPage';
 
+interface DespesaViagem { id: string; tipo: string; valor: number; fornecedor: string | null; situacao: string; dataDespesa: string }
+
+const SIT_DESPESA: Record<string, string> = {
+  PENDENTE: 'bg-amber-100 text-amber-700',
+  APROVADA: 'bg-emerald-100 text-emerald-700',
+  CONTESTADA: 'bg-rose-100 text-rose-700',
+};
+
 /** Detalhe de uma viagem de frota — operações (retorno/despesa/paradas/ajuste)
  *  em seções focadas, abertas ao clicar na linha do grid (lista → detalhe). */
 export function FrotaViagemDetalhePage() {
@@ -19,18 +27,21 @@ export function FrotaViagemDetalhePage() {
 
   const [viagem, setViagem] = useState<ViagemFrota | null>(null);
   const [tipos, setTipos] = useState<TipoDespesa[]>([]);
+  const [despesas, setDespesas] = useState<DespesaViagem[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
 
   const carregar = useCallback(async () => {
     if (!id) return;
     try {
-      const [v, t] = await Promise.all([
+      const [v, t, d] = await Promise.all([
         logisticaApi.get<ViagemFrota>(`/frota/viagens/${id}`),
         logisticaApi.get<TipoDespesa[]>('/despesas/tipos', { params: { ativos: 'true' } }),
+        logisticaApi.get<DespesaViagem[]>(`/frota/viagens/${id}/despesas`),
       ]);
       setViagem(v.data);
       setTipos(t.data);
+      setDespesas(d.data);
       setErro('');
     } catch (e) {
       setErro(errMsg(e, 'Viagem não encontrada.'));
@@ -85,9 +96,31 @@ export function FrotaViagemDetalhePage() {
           <RetornoForm v={v} onClose={voltar} onDone={() => void carregar()} />
         </Secao>
       )}
-      {emCurso && (
+      {(emCurso || despesas.length > 0) && (
         <Secao cor="border-l-sky-400">
-          <DespesaCondutorForm v={v} tipos={tipos} onClose={voltar} onDone={() => void carregar()} />
+          {despesas.length > 0 && (
+            <div className="mb-4">
+              <p className="mb-2 text-sm font-semibold text-slate-700">Despesas lançadas ({despesas.length})</p>
+              <div className="overflow-hidden rounded-lg border border-slate-200">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                    <tr><th className="px-3 py-2">Tipo</th><th className="px-3 py-2">Fornecedor</th><th className="px-3 py-2 text-right">Valor</th><th className="px-3 py-2">Situação</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {despesas.map((d) => (
+                      <tr key={d.id}>
+                        <td className="px-3 py-2 text-slate-700">{d.tipo}</td>
+                        <td className="px-3 py-2 text-slate-500">{d.fornecedor ?? '—'}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">R$ {d.valor.toFixed(2)}</td>
+                        <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${SIT_DESPESA[d.situacao] ?? 'bg-slate-100 text-slate-600'}`}>{d.situacao}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {emCurso && <DespesaCondutorForm v={v} tipos={tipos} onClose={voltar} onDone={() => void carregar()} />}
         </Secao>
       )}
       <Secao cor="border-l-slate-300">

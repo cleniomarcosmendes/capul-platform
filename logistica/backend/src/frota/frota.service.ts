@@ -472,6 +472,25 @@ export class FrotaService {
     }));
   }
 
+  /** Despesas lançadas numa viagem de frota (lista da tela de detalhe). */
+  async despesasDaViagem(viagemId: string, filialId: string) {
+    const v = await this.prisma.viagem.findFirst({ where: { id: viagemId, filialId }, select: { id: true } });
+    if (!v) throw new NotFoundException('Viagem de frota não encontrada.');
+    const despesas = await this.prisma.despesaVeiculo.findMany({
+      where: { viagemId },
+      include: { tipoDespesa: { select: { nome: true } }, fornecedorRef: { select: { nome: true } } },
+      orderBy: { criadoEm: 'desc' },
+    });
+    return despesas.map((d) => ({
+      id: d.id,
+      tipo: d.tipoDespesa?.nome ?? '—',
+      valor: Number(d.valor),
+      fornecedor: d.fornecedorRef?.nome ?? d.fornecedor ?? null,
+      situacao: d.situacao,
+      dataDespesa: d.dataDespesa,
+    }));
+  }
+
   /** Uma viagem de FROTA por id (detalhe — mesma forma do listar). */
   async obterViagem(id: string, filialId: string) {
     const v = await this.prisma.viagem.findFirst({

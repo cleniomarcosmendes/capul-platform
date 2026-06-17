@@ -741,7 +741,9 @@ export function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFr
           fornecedor: fornecedor.trim() || undefined, observacao: obs.trim() || undefined,
         });
       }
-      toast('success', 'Despesa lançada (pendente de validação do supervisor).');
+      toast('success', 'Despesa lançada — pode lançar outra.');
+      // Limpa pra lançar a PRÓXIMA despesa da mesma viagem sem recarregar a tela.
+      setTipoDespesaId(''); setValor(''); setFornecedor(''); setObs(''); setRecibo(null);
       onDone();
     } catch (e) {
       toast('error', errMsg(e, 'Falha ao lançar despesa.'));
