@@ -260,11 +260,15 @@ export class DespesaService {
     });
   }
 
-  /** Uma despesa (campos editáveis) — escopo de gestão. Usado na tela de edição. */
+  /** Uma despesa (todos os dados) — escopo de gestão. Usado na tela de edição/detalhe. */
   async obter(id: string, user: JwtPayload, role?: string) {
     const d = await this.prisma.despesaVeiculo.findUnique({
       where: { id },
-      include: { veiculo: { select: { placa: true, modelo: true } }, tipoDespesa: { select: { nome: true } } },
+      include: {
+        veiculo: { select: { placa: true, modelo: true } },
+        tipoDespesa: { select: { nome: true } },
+        viagem: { select: { numero: true, observacoesSaida: true, condutorNome: true } },
+      },
     });
     if (!d || d.filialId !== user.filialId) throw new NotFoundException('Despesa não encontrada nesta filial.');
     await this.assertPodeGerirVeiculo(d.veiculoId, user, role);
@@ -275,6 +279,13 @@ export class DespesaService {
       valor: Number(d.valor), dataDespesa: d.dataDespesa,
       fornecedorId: d.fornecedorId, fornecedor: d.fornecedor, observacao: d.observacao,
       temComprovante: !!d.comprovanteObjectKey,
+      // Contexto (read-only) p/ a tela mostrar "todas as informações".
+      autorNome: d.autorNome, autorMatricula: d.autorMatricula,
+      criadoEm: d.criadoEm, aprovadoEm: d.aprovadoEm, motivoContestacao: d.motivoContestacao,
+      viagemId: d.viagemId,
+      viagemNumero: d.viagem?.numero ?? null,
+      viagemFinalidade: d.viagem?.observacoesSaida ?? null,
+      viagemCondutor: d.viagem?.condutorNome ?? null,
     };
   }
 

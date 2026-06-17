@@ -12,7 +12,21 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 interface TipoDespesa { id: string; nome: string; ativo: boolean }
 interface FornecedorDespesa { id: string; nome: string; ativo: boolean }
 interface VeiculoItem { id: string; placa: string; modelo?: string | null }
+// Contexto read-only da despesa (mostrado na edição — "todas as informações").
+interface DespesaInfo {
+  situacao: string; placa: string; modelo?: string | null;
+  autorNome?: string | null; autorMatricula?: string | null;
+  criadoEm?: string | null; aprovadoEm?: string | null; motivoContestacao?: string | null;
+  viagemId?: string | null; viagemNumero?: number | null; viagemFinalidade?: string | null; viagemCondutor?: string | null;
+  temComprovante?: boolean;
+}
 
+const SIT_META: Record<string, { label: string; cls: string }> = {
+  PENDENTE: { label: 'Pendente', cls: 'bg-amber-100 text-amber-700' },
+  APROVADA: { label: 'Aprovada', cls: 'bg-emerald-100 text-emerald-700' },
+  CONTESTADA: { label: 'Contestada', cls: 'bg-rose-100 text-rose-700' },
+};
+const fmtDateTime = (s?: string | null) => (s ? new Date(s).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
 const errMsg = (e: unknown, fb: string) => {
   const m = (e as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
   return Array.isArray(m) ? m.join(', ') : (typeof m === 'string' ? m : fb);
@@ -39,6 +53,7 @@ export function DespesaNovaPage() {
   const [recibo, setRecibo] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [info, setInfo] = useState<DespesaInfo | null>(null); // contexto read-only (edição)
 
   const [dirty, setDirty] = useState(false);
   const { ConfirmDialog: DirtyDialog, guardedNavigate } = useUnsavedChanges(dirty);
@@ -66,7 +81,7 @@ export function DespesaNovaPage() {
     if (!edicaoId) return;
     void (async () => {
       try {
-        const { data: d } = await logisticaApi.get<{
+        const { data: d } = await logisticaApi.get<DespesaInfo & {
           veiculoId: string; tipoDespesaId: string; valor: number; dataDespesa: string;
           fornecedorId?: string | null; fornecedor?: string | null; observacao?: string | null;
         }>(`/despesas/${edicaoId}`);
@@ -77,6 +92,7 @@ export function DespesaNovaPage() {
         setFornecedorId(d.fornecedorId ?? '');
         setFornecedor(d.fornecedor ?? '');
         setObservacao(d.observacao ?? '');
+        setInfo(d);
       } catch (e) {
         toast('error', errMsg(e, 'Despesa não encontrada.'));
         navigate('/despesas', { replace: true });
@@ -84,6 +100,14 @@ export function DespesaNovaPage() {
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [edicaoId]);
+
+  const verRecibo = async () => {
+    if (!edicaoId) return;
+    try {
+      const { data } = await logisticaApi.get(`/despesas/${edicaoId}/comprovante`, { responseType: 'blob' });
+      window.open(URL.createObjectURL(data as Blob), '_blank', 'noopener');
+    } catch (e) { toast('error', errMsg(e, 'Falha ao abrir o recibo.')); }
+  };
 
   const escolherRecibo = (f: File | null) => {
     setRecibo(f);
@@ -175,6 +199,35 @@ export function DespesaNovaPage() {
           </p>
         </div>
 
+        {modoEdicao && info && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Informações da despesa</span>
+              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${(SIT_META[info.situacao] ?? { cls: 'bg-slate-100 text-slate-600' }).cls}`}>
+                {(SIT_META[info.situacao] ?? { label: info.situacao }).label}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
+              <InfoItem rotulo="Veículo" valor={`${info.placa}${info.modelo ? ` · ${info.modelo}` : ''}`} />
+              <InfoItem rotulo="Autor" valor={info.autorNome ? `${info.autorNome}${info.autorMatricula ? ` · ${info.autorMatricula}` : ''}` : '—'} />
+              <InfoItem rotulo="Lançada em" valor={fmtDateTime(info.criadoEm)} />
+              {info.viagemNumero != null && (
+                <InfoItem rotulo="Viagem vinculada" valor={`#${info.viagemNumero}${info.viagemFinalidade ? ` · ${info.viagemFinalidade}` : ''}${info.viagemCondutor ? ` · ${info.viagemCondutor}` : ''}`} />
+              )}
+              {info.situacao === 'APROVADA' && <InfoItem rotulo="Aprovada em" valor={fmtDateTime(info.aprovadoEm)} />}
+              {info.situacao === 'CONTESTADA' && <InfoItem rotulo="Motivo da contestação" valor={info.motivoContestacao ?? '—'} />}
+              <div>
+                <p className="text-xs text-slate-400">Recibo</p>
+                {info.temComprovante ? (
+                  <button type="button" onClick={() => void verRecibo()} className="mt-0.5 inline-flex items-center gap-1 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-xs font-medium text-sky-700 hover:bg-sky-100">
+                    <Paperclip className="h-3 w-3" /> Ver recibo
+                  </button>
+                ) : <p className="font-medium text-slate-500">Sem recibo</p>}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <label className={lbl}>Veículo *</label>
@@ -244,6 +297,15 @@ export function DespesaNovaPage() {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function InfoItem({ rotulo, valor }: { rotulo: string; valor: string }) {
+  return (
+    <div>
+      <p className="text-xs text-slate-400">{rotulo}</p>
+      <p className="font-medium text-slate-700">{valor}</p>
     </div>
   );
 }
