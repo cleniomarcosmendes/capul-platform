@@ -278,7 +278,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         <button onClick={() => { reset(); setAberto(false); }} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
       </div>
 
-      <div className="max-w-4xl space-y-5">
+      <div className="space-y-6">
         {ehGestorPortaria && (
           <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 text-xs font-medium">
             <button onClick={() => { setModo('CONDUTOR'); reset(); }}
@@ -297,7 +297,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         <div>
           <PassoHeader n={1} titulo="Condutor" hint="Matrícula e senha do portal RH" />
           <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-12">
-            <div className="sm:col-span-4">
+            <div className="sm:col-span-6">
               <label className="mb-1 block text-sm font-medium text-slate-600">Matrícula</label>
               <div className="flex gap-1">
                 <input
@@ -321,7 +321,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               {nome && <p className="mt-1 text-xs font-medium text-emerald-700">{nome}</p>}
             </div>
 
-            <div className="sm:col-span-4">
+            <div className="sm:col-span-6">
               <label className="mb-1 block text-sm font-medium text-slate-600">Senha do portal RH</label>
               <div className="flex items-center gap-1">
                 <PasswordInput
@@ -429,7 +429,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               />
             </div>
 
-            <div className="sm:col-span-7">
+            <div className="sm:col-span-12">
               <label className="mb-1 block text-sm font-medium text-slate-600">Local de saída (opcional)</label>
               <input
                 value={localSaida} onChange={(e) => setLocalSaida(e.target.value)} maxLength={120} disabled={!podeAvancar}
@@ -440,7 +440,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         </div>
       </div>
 
-      <div className="mt-5 flex max-w-4xl justify-end">
+      <div className="mt-6 flex justify-end">
         <button
           onClick={() => void registrar()}
           disabled={salvando || !podeAvancar || !veiculoId || kmInicial === ''}
