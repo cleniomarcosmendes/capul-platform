@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Banknote, Image as ImageIcon, Loader2, Paperclip, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
@@ -21,6 +21,9 @@ const errMsg = (e: unknown, fb: string) => {
 export function DespesaNovaPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  // Cria e edita na mesma página (padrão FormPage do workspace). Com :id → edição.
+  const { id: edicaoId } = useParams<{ id: string }>();
+  const modoEdicao = !!edicaoId;
 
   const [veiculos, setVeiculos] = useState<VeiculoItem[]>([]);
   const [tipos, setTipos] = useState<TipoDespesa[]>([]);
@@ -54,9 +57,33 @@ export function DespesaNovaPage() {
         toast('error', errMsg(e, 'Falha ao carregar os dados do lançamento.'));
       }
     })();
-    veiculoRef.current?.focus();
+    if (!modoEdicao) veiculoRef.current?.focus();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Edição: carrega a despesa e pré-preenche.
+  useEffect(() => {
+    if (!edicaoId) return;
+    void (async () => {
+      try {
+        const { data: d } = await logisticaApi.get<{
+          veiculoId: string; tipoDespesaId: string; valor: number; dataDespesa: string;
+          fornecedorId?: string | null; fornecedor?: string | null; observacao?: string | null;
+        }>(`/despesas/${edicaoId}`);
+        setVeiculoId(d.veiculoId);
+        setTipoDespesaId(d.tipoDespesaId);
+        setValor(String(d.valor));
+        setDataDespesa(d.dataDespesa ? d.dataDespesa.slice(0, 10) : '');
+        setFornecedorId(d.fornecedorId ?? '');
+        setFornecedor(d.fornecedor ?? '');
+        setObservacao(d.observacao ?? '');
+      } catch (e) {
+        toast('error', errMsg(e, 'Despesa não encontrada.'));
+        navigate('/despesas', { replace: true });
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edicaoId]);
 
   const escolherRecibo = (f: File | null) => {
     setRecibo(f);
@@ -76,6 +103,26 @@ export function DespesaNovaPage() {
     if (!tipoDespesaId) { toast('warning', 'Selecione o tipo de despesa.'); return; }
     if (valor === '' || Number(valor) <= 0) { toast('warning', 'Informe um valor válido.'); return; }
     setSalvando(true);
+    // Edição (PATCH): só os campos editáveis; não troca veículo nem recibo.
+    if (modoEdicao) {
+      try {
+        await logisticaApi.patch(`/despesas/${edicaoId}`, {
+          tipoDespesaId, valor: Number(valor),
+          dataDespesa: dataDespesa ? new Date(dataDespesa).toISOString() : undefined,
+          fornecedorId: fornecedorId || '',
+          fornecedor: fornecedor.trim(),
+          observacao: observacao.trim(),
+        });
+        toast('success', 'Despesa atualizada.');
+        setDirty(false);
+        navigate('/despesas');
+      } catch (e) {
+        toast('error', errMsg(e, 'Falha ao salvar as alterações.'));
+      } finally {
+        setSalvando(false);
+      }
+      return;
+    }
     try {
       // Com recibo → multipart (FormData); sem recibo → JSON. O backend aceita os dois.
       if (recibo) {
@@ -120,14 +167,19 @@ export function DespesaNovaPage() {
 
       <form onSubmit={submit} onKeyDown={bloquearEnterSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
         <div>
-          <h2 className="text-lg font-semibold text-slate-800">Lançar despesa</h2>
-          <p className="text-sm text-slate-500">Entra como <b>aprovada</b> (lançamento direto do supervisor / gestor de frota).</p>
+          <h2 className="text-lg font-semibold text-slate-800">{modoEdicao ? 'Editar despesa' : 'Lançar despesa'}</h2>
+          <p className="text-sm text-slate-500">
+            {modoEdicao
+              ? 'Correção do lançamento (veículo e recibo não mudam aqui).'
+              : <>Entra como <b>aprovada</b> (lançamento direto do supervisor / gestor de frota).</>}
+          </p>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <label className={lbl}>Veículo *</label>
-            <select ref={veiculoRef} value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} className={inp}>
+            <select ref={veiculoRef} value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} disabled={modoEdicao}
+              className={`${inp} disabled:bg-slate-100 disabled:text-slate-500`}>
               <option value="">Selecione…</option>
               {veiculos.map((v) => <option key={v.id} value={v.id}>{v.placa}{v.modelo ? ` — ${v.modelo}` : ''}</option>)}
             </select>
@@ -164,6 +216,7 @@ export function DespesaNovaPage() {
           </div>
         </div>
 
+        {!modoEdicao && (
         <div>
           <label className={lbl}>Recibo / cupom (opcional)</label>
           <div className="mt-1 flex flex-wrap items-center gap-3">
@@ -181,12 +234,13 @@ export function DespesaNovaPage() {
             )}
           </div>
         </div>
+        )}
 
         <div className="flex justify-end gap-2">
           <button type="button" onClick={() => guardedNavigate('/despesas')} className="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50">Cancelar</button>
           <button type="submit" disabled={salvando}
             className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-5 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
-            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />} Lançar despesa
+            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />} {modoEdicao ? 'Salvar alterações' : 'Lançar despesa'}
           </button>
         </div>
       </form>

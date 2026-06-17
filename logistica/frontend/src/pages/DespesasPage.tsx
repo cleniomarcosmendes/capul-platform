@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Banknote, Check, Loader2, Paperclip, Plus, Tag, X } from 'lucide-react';
+import { Banknote, Check, Loader2, Paperclip, Pencil, Plus, Tag, Trash2, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,8 +19,6 @@ interface Despesa {
   observacao?: string | null; autorNome?: string | null; aprovadoEm?: string | null;
   motivoContestacao?: string | null; temComprovante?: boolean;
 }
-interface Indicadores { total: number; porVeiculo: { nome: string; valor: number }[]; porTipo: { nome: string; valor: number }[] }
-
 const SIT_META: Record<string, { label: string; cls: string }> = {
   PENDENTE: { label: 'Pendente', cls: 'bg-amber-100 text-amber-700' },
   APROVADA: { label: 'Aprovada', cls: 'bg-emerald-100 text-emerald-700' },
@@ -74,7 +72,6 @@ function DespesasTab() {
   const navigate = useNavigate();
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [veiculos, setVeiculos] = useState<VeiculoItem[]>([]);
-  const [ind, setInd] = useState<Indicadores | null>(null);
   const [loading, setLoading] = useState(true);
   const [mes, setMes] = useState(hoje.getMonth() + 1);
   const [ano, setAno] = useState(hoje.getFullYear());
@@ -87,12 +84,11 @@ function DespesasTab() {
       const params: Record<string, string | number> = { mes, ano };
       if (situacao) params.situacao = situacao;
       if (veiculoFiltro) params.veiculoId = veiculoFiltro;
-      const [d, v, i] = await Promise.all([
+      const [d, v] = await Promise.all([
         logisticaApi.get<Despesa[]>('/despesas', { params }),
         logisticaApi.get<VeiculoItem[]>('/veiculos'),
-        logisticaApi.get<Indicadores>('/despesas/indicadores', { params: { mes, ano } }),
       ]);
-      setDespesas(d.data); setVeiculos(v.data); setInd(i.data);
+      setDespesas(d.data); setVeiculos(v.data);
     } catch (e) {
       toast('error', errMsg(e, 'Falha ao carregar despesas.'));
     } finally {
@@ -103,14 +99,6 @@ function DespesasTab() {
 
   return (
     <div className="space-y-4">
-      {ind && (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <ResumoCard titulo="Total aprovado no mês" destaque={BRL(ind.total)} />
-          <ResumoCard titulo="Por veículo" itens={ind.porVeiculo} />
-          <ResumoCard titulo="Por tipo" itens={ind.porTipo} />
-        </div>
-      )}
-
       <div className="flex flex-wrap items-center gap-2">
         <select value={mes} onChange={(e) => setMes(Number(e.target.value))} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
           {Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>{new Date(2000, i, 1).toLocaleString('pt-BR', { month: 'long' })}</option>)}
@@ -164,26 +152,9 @@ function DespesasTab() {
   );
 }
 
-function ResumoCard({ titulo, destaque, itens }: { titulo: string; destaque?: string; itens?: { nome: string; valor: number }[] }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{titulo}</p>
-      {destaque ? (
-        <p className="mt-1 text-2xl font-semibold text-slate-800">{destaque}</p>
-      ) : (
-        <ul className="mt-2 space-y-1 text-sm">
-          {(itens ?? []).slice(0, 4).map((i) => (
-            <li key={i.nome} className="flex justify-between"><span className="text-slate-600">{i.nome}</span><span className="tabular-nums text-slate-800">{BRL(i.valor)}</span></li>
-          ))}
-          {(!itens || itens.length === 0) && <li className="text-slate-400">—</li>}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
+  const navigate = useNavigate();
   const sit = SIT_META[d.situacao] ?? { label: d.situacao, cls: 'bg-slate-100 text-slate-600' };
   const [contestando, setContestando] = useState(false);
   const [motivo, setMotivo] = useState('');
@@ -193,6 +164,13 @@ function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
     setBusy(true);
     try { await logisticaApi.patch(`/despesas/${d.id}/aprovar`); toast('success', 'Despesa aprovada.'); onChanged(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao aprovar.')); } finally { setBusy(false); }
+  };
+  const excluir = async () => {
+    const ok = await confirm('Excluir despesa', `Excluir a despesa de ${BRL(d.valor)} (${d.tipo} · ${d.placa})? Esta ação não pode ser desfeita.`, { confirmLabel: 'Excluir', variant: 'danger' });
+    if (!ok) return;
+    setBusy(true);
+    try { await logisticaApi.delete(`/despesas/${d.id}`); toast('success', 'Despesa excluída.'); onChanged(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao excluir.')); } finally { setBusy(false); }
   };
   const contestar = async () => {
     if (!motivo.trim()) { toast('warning', 'Informe o motivo da contestação.'); return; }
@@ -231,16 +209,24 @@ function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
           {d.situacao === 'CONTESTADA' && d.motivoContestacao && <span className="ml-1 text-xs text-rose-500" title={d.motivoContestacao}>ⓘ</span>}
         </td>
         <td className="px-4 py-2 text-right">
-          {d.situacao === 'PENDENTE' && (
-            <div className="flex justify-end gap-2">
-              <button onClick={() => void aprovar()} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
-                <Check className="h-3.5 w-3.5" /> Aprovar
-              </button>
-              <button onClick={() => setContestando((s) => !s)} className="inline-flex items-center gap-1 rounded-lg border border-rose-300 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50">
-                <X className="h-3.5 w-3.5" /> Contestar
-              </button>
-            </div>
-          )}
+          <div className="flex justify-end gap-2">
+            {d.situacao === 'PENDENTE' && (
+              <>
+                <button onClick={() => void aprovar()} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+                  <Check className="h-3.5 w-3.5" /> Aprovar
+                </button>
+                <button onClick={() => setContestando((s) => !s)} className="inline-flex items-center gap-1 rounded-lg border border-rose-300 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50">
+                  <X className="h-3.5 w-3.5" /> Contestar
+                </button>
+              </>
+            )}
+            <button onClick={() => navigate(`/despesas/${d.id}/editar`)} disabled={busy} title="Editar" className="inline-flex items-center rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button onClick={() => void excluir()} disabled={busy} title="Excluir" className="inline-flex items-center rounded-lg border border-rose-200 px-2 py-1 text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-50">
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </td>
       </tr>
       {contestando && d.situacao === 'PENDENTE' && (
