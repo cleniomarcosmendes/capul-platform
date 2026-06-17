@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
+import { assertPodeOperarViagem } from '../common/frota-perms.js';
 import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto } from './dto.js';
 
 // Mesma normalização do toChapaPortal pra comparar matrículas com segurança.
@@ -407,7 +408,10 @@ export class FrotaService {
 
   /** Garante que a viagem existe, é de frota e da filial do usuário. */
   private async viagemDaFilial(id: string, user: JwtPayload) {
-    const v = await this.prisma.viagem.findUnique({ where: { id } });
+    const v = await this.prisma.viagem.findUnique({
+      where: { id },
+      include: { veiculo: { select: { supervisorId: true } } },
+    });
     if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Viagem de frota não encontrada.');
     if (v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
     return v;
@@ -426,6 +430,7 @@ export class FrotaService {
   /** Adiciona uma parada ao log da viagem (não permitido em viagem cancelada). */
   async adicionarParada(id: string, dto: AddParadaDto, user: JwtPayload) {
     const v = await this.viagemDaFilial(id, user);
+    assertPodeOperarViagem(user, v);
     if (v.situacao === StatusViagem.CANCELADA) throw new BadRequestException('Viagem cancelada não recebe paradas.');
     const ultima = await this.prisma.parada.findFirst({
       where: { viagemId: id }, orderBy: { sequencia: 'desc' }, select: { sequencia: true },
@@ -445,7 +450,8 @@ export class FrotaService {
 
   /** Remove uma parada do log da viagem. */
   async removerParada(id: string, paradaId: string, user: JwtPayload) {
-    await this.viagemDaFilial(id, user);
+    const v = await this.viagemDaFilial(id, user);
+    assertPodeOperarViagem(user, v);
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
     if (!p || p.viagemId !== id) throw new NotFoundException('Parada não encontrada nesta viagem.');
     await this.prisma.parada.delete({ where: { id: paradaId } });

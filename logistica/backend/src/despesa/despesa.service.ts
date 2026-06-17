@@ -5,6 +5,7 @@ import { Prisma, StatusDespesa, StatusViagem, TipoViagem } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CofreStorageService } from '../cofre/cofre-storage.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
+import { assertPodeOperarViagem } from '../common/frota-perms.js';
 import {
   CriarTipoDespesaDto, AtualizarTipoDespesaDto, LancarDespesaDto,
   LancarDespesaViagemDto, ContestarDespesaDto, ListarDespesasQuery,
@@ -194,9 +195,14 @@ export class DespesaService {
    * viagem, sem pedir senha de novo. Continua exigindo validação do supervisor.
    */
   async lancarNaViagem(dto: LancarDespesaViagemDto, user: JwtPayload, recibo?: ReciboBinario) {
-    const v = await this.prisma.viagem.findUnique({ where: { id: dto.viagemId } });
+    const v = await this.prisma.viagem.findUnique({
+      where: { id: dto.viagemId },
+      include: { veiculo: { select: { supervisorId: true } } },
+    });
     if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Viagem de frota não encontrada.');
     if (v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
+    // Só registrante da saída / supervisor do veículo / gestão da frota podem lançar.
+    assertPodeOperarViagem(user, v);
     if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('Só dá pra lançar despesa em viagem em curso.');
     if (!v.veiculoId) throw new BadRequestException('Viagem sem veículo.');
 
