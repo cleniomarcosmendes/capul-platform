@@ -44,8 +44,8 @@ export function DespesasPage() {
       <div className="flex items-center gap-3">
         <Banknote className="h-6 w-6 text-sky-600" />
         <div>
-          <h2 className="text-lg font-semibold text-slate-800">Despesas da Frota</h2>
-          <p className="text-sm text-slate-500">Custos por veículo, com validação do supervisor / gestor de frota.</p>
+          <h2 className="text-lg font-semibold text-slate-800">Custos da Frota</h2>
+          <p className="text-sm text-slate-500">Despesas, fornecedores e locais — por veículo, com validação do supervisor / gestor de frota.</p>
         </div>
       </div>
 
