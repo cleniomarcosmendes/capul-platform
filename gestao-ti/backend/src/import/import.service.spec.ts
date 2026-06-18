@@ -124,6 +124,7 @@ describe('ImportService', () => {
 
   describe('executar', () => {
     it('cria ativos validos', async () => {
+      prisma.departamento.findFirstOrThrow.mockResolvedValue({ id: 'dep-ti' });
       prisma.ativo.create.mockResolvedValue({ id: 'a1' });
 
       const result = await service.executar('ativos', [

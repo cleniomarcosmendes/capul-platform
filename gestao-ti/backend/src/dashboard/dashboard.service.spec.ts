@@ -1,5 +1,14 @@
 import { Test } from '@nestjs/testing';
 import { DashboardService } from './dashboard.service';
+import { DashboardResumoService } from './services/dashboard-resumo.service';
+import { DashboardOperacionalService } from './services/dashboard-operacional.service';
+import { DashboardFinanceiroService } from './services/dashboard-financeiro.service';
+import { DashboardAcompanhamentoService } from './services/dashboard-acompanhamento.service';
+import { DashboardRelatorioService } from './services/dashboard-relatorio.service';
+import { DashboardIndicadoresService } from './services/dashboard-indicadores.service';
+import { DashboardPainelService } from './services/dashboard-painel.service';
+import { HorarioService } from '../horario/horario.service';
+import { ChamadoExternoService } from '../chamado-externo/chamado-externo.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { createPrismaMock } from '../common/testing/prisma-mock';
 
@@ -18,8 +27,20 @@ describe('DashboardService', () => {
 
     const module = await Test.createTestingModule({
       providers: [
+        // Facade + sub-services reais (delegam ao prisma mock). getResumo →
+        // DashboardResumoService; os demais entram só para o DI da facade.
         DashboardService,
+        DashboardResumoService,
+        DashboardOperacionalService,
+        DashboardFinanceiroService,
+        DashboardAcompanhamentoService,
+        DashboardRelatorioService,
+        DashboardIndicadoresService,
+        DashboardPainelService,
         { provide: PrismaService, useValue: prisma },
+        // Deps não exercitadas por getResumo — mock vazio só p/ construir o DI.
+        { provide: HorarioService, useValue: {} },
+        { provide: ChamadoExternoService, useValue: {} },
       ],
     }).compile();
 

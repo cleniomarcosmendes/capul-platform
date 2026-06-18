@@ -22,29 +22,30 @@ describe('ConhecimentoService', () => {
   });
 
   describe('findAll', () => {
-    it('retorna lista sem filtros', async () => {
+    it('retorna lista (sem user → só globais publicados) e pagina', async () => {
       const artigos = [{ id: '1', titulo: 'Artigo 1' }];
       prisma.artigoConhecimento.findMany.mockResolvedValue(artigos);
 
       const result = await service.findAll({});
 
-      expect(prisma.artigoConhecimento.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: {},
-          orderBy: { updatedAt: 'desc' },
-        }),
-      );
-      expect(result).toEqual(artigos);
+      const call = prisma.artigoConhecimento.findMany.mock.calls[0][0];
+      expect(call.orderBy).toEqual({ updatedAt: 'desc' });
+      // S16.2: sem user, a visibilidade restringe a globais publicados.
+      expect(call.where.OR).toEqual([{ equipeTiId: null, publica: true, status: 'PUBLICADO' }]);
+      // paginate retorna { items, total, page, pageSize }.
+      expect(result.items).toEqual(artigos);
     });
 
-    it('aplica busca por search com OR', async () => {
+    it('aplica busca por search com OR (composta com a visibilidade via AND)', async () => {
       prisma.artigoConhecimento.findMany.mockResolvedValue([]);
 
       await service.findAll({ search: 'teste' });
 
       const call = prisma.artigoConhecimento.findMany.mock.calls[0][0];
-      expect(call.where.OR).toHaveLength(3);
-      expect(call.where.OR[0]).toEqual({ titulo: { contains: 'teste', mode: 'insensitive' } });
+      // search vira where.AND[0].OR; a visibilidade entra como AND[1].OR.
+      const searchOr = call.where.AND[0].OR;
+      expect(searchOr).toHaveLength(3);
+      expect(searchOr[0]).toEqual({ titulo: { contains: 'teste', mode: 'insensitive' } });
     });
   });
 
