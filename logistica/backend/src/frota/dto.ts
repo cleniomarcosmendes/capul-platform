@@ -38,6 +38,10 @@ export class SaidaFrotaDto {
 
   @IsOptional() @IsString() @MaxLength(40)
   departamentoSolicitanteId?: string;
+
+  // Rota planejada (opcional): locais das visitas — nascem como PLANEJADA.
+  @IsOptional() @IsArray() @IsString({ each: true })
+  paradasPlanejadas?: string[];
 }
 
 /**
@@ -59,6 +63,9 @@ export class SaidaIndividualDto {
 
   @IsOptional() @IsString() @MaxLength(40)
   departamentoSolicitanteId?: string;
+
+  @IsOptional() @IsArray() @IsString({ each: true })
+  paradasPlanejadas?: string[];
 }
 
 /**
@@ -87,6 +94,9 @@ export class SaidaPortariaDto {
 
   @IsOptional() @IsString() @MaxLength(40)
   departamentoSolicitanteId?: string;
+
+  @IsOptional() @IsArray() @IsString({ each: true })
+  paradasPlanejadas?: string[];
 }
 
 export class RetornoFrotaDto {

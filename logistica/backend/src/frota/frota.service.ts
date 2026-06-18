@@ -86,7 +86,7 @@ export class FrotaService {
     user: JwtPayload,
     condutorMatricula: string,
     condutorNome: string,
-    dados: { veiculoId: string; kmInicial: number; finalidade?: string; localSaida?: string; departamentoSolicitanteId?: string },
+    dados: { veiculoId: string; kmInicial: number; finalidade?: string; localSaida?: string; departamentoSolicitanteId?: string; paradasPlanejadas?: string[] },
   ) {
     const filialId = user.filialId;
     if (!filialId) throw new BadRequestException('Usuário sem filial definida.');
@@ -128,8 +128,21 @@ export class FrotaService {
       await tx.veiculo.update({ where: { id: veiculo.id }, data: { situacao: SituacaoVeiculo.EM_USO } });
       return v;
     });
+    await this.seedParadasPlanejadas(viagem.id, dados.paradasPlanejadas);
     // Anexa a placa/modelo p/ a confirmação do app ("PLACA · viagem #N").
     return { ...viagem, placa: veiculo.placa, modelo: veiculo.modelo };
+  }
+
+  /** Cria as paradas PLANEJADAS da rota informada na saída (opcional). */
+  private async seedParadasPlanejadas(viagemId: string, locais?: string[]) {
+    const limpos = (locais ?? []).map((l) => l.trim()).filter(Boolean);
+    if (limpos.length === 0) return;
+    let seq = 1;
+    await this.prisma.parada.createMany({
+      data: limpos.map((local) => ({
+        viagemId, sequencia: seq++, status: StatusParada.PLANEJADA, planejadoLocal: local, local,
+      })),
+    });
   }
 
   /**
@@ -164,7 +177,7 @@ export class FrotaService {
       throw new BadRequestException(`KM inicial (${dto.kmInicial}) menor que o KM atual do veículo (${veiculo.kmAtual}).`);
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const novaViagem = await this.prisma.$transaction(async (tx) => {
       const contador = await tx.contadorSequencial.upsert({
         where: { filialId_escopo: { filialId, escopo: 'VIAGEM' } },
         create: { filialId, escopo: 'VIAGEM', ultimoNumero: 1 },
@@ -191,6 +204,8 @@ export class FrotaService {
       await tx.veiculo.update({ where: { id: veiculo.id }, data: { situacao: SituacaoVeiculo.EM_USO } });
       return viagem;
     });
+    await this.seedParadasPlanejadas(novaViagem.id, dto.paradasPlanejadas);
+    return novaViagem;
   }
 
   /** Registrar RETORNO (só o próprio condutor). Veículo → DISPONIVEL + km atualizado. */
