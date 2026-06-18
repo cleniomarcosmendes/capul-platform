@@ -89,7 +89,9 @@ describe('NfeParserService', () => {
     it('extrai transporte (modalidade, transportador, veículo, volumes)', () => {
       const result = parser.parse(xml);
       expect(result.transporte.modalidadeFrete).toBe('0');
-      expect(result.transporte.modalidadeFreteDescricao).toContain('CIF');
+      // Modalidade '0' = frete por conta do Remetente (historicamente "CIF").
+      // O parser usa a redação oficial da SEFAZ (sem a sigla informal).
+      expect(result.transporte.modalidadeFreteDescricao).toContain('Conta do Remetente');
       expect(result.transporte.transportador?.cnpj).toBe('11222333000144');
       expect(result.transporte.transportador?.razaoSocial).toBe('TRANSPORTADORA TESTE LTDA');
       expect(result.transporte.veiculo?.placa).toBe('ABC1D23');
