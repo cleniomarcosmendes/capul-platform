@@ -1,4 +1,4 @@
-import { ArrayNotEmpty, IsArray, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsBoolean, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class BuscarCondutorDto {
   @IsString() @IsNotEmpty() @MaxLength(20)
@@ -133,6 +133,19 @@ export class AddParadaDto {
   // Idempotência (fila offline): reenvio com a mesma chave não duplica.
   @IsOptional() @IsString() @MaxLength(60)
   idempotencyKey?: string;
+}
+
+/** Cadastro de local/ponto de parada (pick-list do planejamento). */
+export class CriarLocalParadaDto {
+  @IsString() @IsNotEmpty() @MaxLength(120)
+  nome!: string;
+}
+export class AtualizarLocalParadaDto {
+  @IsOptional() @IsString() @MaxLength(120)
+  nome?: string;
+
+  @IsOptional() @IsBoolean()
+  ativo?: boolean;
 }
 
 /** Planejamento de paradas (visitas) — lista de locais (texto livre). */

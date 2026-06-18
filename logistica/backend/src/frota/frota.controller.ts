@@ -3,7 +3,7 @@ import { StatusViagem } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { FrotaService } from './frota.service.js';
-import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto } from './dto.js';
+import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto } from './dto.js';
 
 const roleLogistica = (user: JwtPayload) => user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
 
@@ -97,6 +97,24 @@ export class FrotaController {
       mes ? parseInt(mes, 10) : agora.getUTCMonth() + 1,
       ano ? parseInt(ano, 10) : agora.getUTCFullYear(),
     );
+  }
+
+  /** Cadastro de locais/pontos de parada (pick-list do planejamento). */
+  @Get('locais')
+  listarLocais(@Query('ativos') ativos?: string) {
+    return this.frota.listarLocais(ativos === 'true' || ativos === '1');
+  }
+
+  @Post('locais')
+  @Roles('GESTOR_FROTA')
+  criarLocal(@Body() dto: CriarLocalParadaDto) {
+    return this.frota.criarLocal(dto);
+  }
+
+  @Patch('locais/:id')
+  @Roles('GESTOR_FROTA')
+  atualizarLocal(@Param('id') id: string, @Body() dto: AtualizarLocalParadaDto) {
+    return this.frota.atualizarLocal(id, dto);
   }
 
   /** Paradas (pontos de rota / "caderno" da viagem). */

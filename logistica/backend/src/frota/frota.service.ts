@@ -8,7 +8,7 @@ import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.j
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { assertPodeOperarViagem } from '../common/frota-perms.js';
-import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto } from './dto.js';
+import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto } from './dto.js';
 
 // Mesma normalização do toChapaPortal pra comparar matrículas com segurança.
 const chapa = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
@@ -545,6 +545,30 @@ export class FrotaService {
     if (!p || p.viagemId !== id) throw new NotFoundException('Parada não encontrada nesta viagem.');
     await this.prisma.parada.delete({ where: { id: paradaId } });
     return { ok: true };
+  }
+
+  // ---- Cadastro de locais/pontos de parada (pick-list do planejamento) ----
+  listarLocais(somenteAtivos?: boolean) {
+    return this.prisma.localParada.findMany({
+      where: somenteAtivos ? { ativo: true } : {},
+      orderBy: { nome: 'asc' },
+    });
+  }
+
+  async criarLocal(dto: CriarLocalParadaDto) {
+    const nome = dto.nome.trim();
+    const existe = await this.prisma.localParada.findUnique({ where: { nome } });
+    if (existe) throw new BadRequestException('Já existe um local com esse nome.');
+    return this.prisma.localParada.create({ data: { nome } });
+  }
+
+  async atualizarLocal(id: string, dto: AtualizarLocalParadaDto) {
+    const l = await this.prisma.localParada.findUnique({ where: { id } });
+    if (!l) throw new NotFoundException('Local não encontrado.');
+    return this.prisma.localParada.update({
+      where: { id },
+      data: { nome: dto.nome?.trim() ?? undefined, ativo: dto.ativo ?? undefined },
+    });
   }
 
   /** Lista as viagens de FROTA da filial (com nome do veículo). */

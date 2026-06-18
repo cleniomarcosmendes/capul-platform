@@ -48,6 +48,24 @@ export const errMsg = (e: unknown, fb: string) => {
   return Array.isArray(m) ? m.join(', ') : (typeof m === 'string' ? m : fb);
 };
 
+/** Atalho que adiciona um local CADASTRADO ao textarea de rota (mantém digitação livre). */
+function SeletorLocais({ onPick, disabled }: { onPick: (nome: string) => void; disabled?: boolean }) {
+  const [locais, setLocais] = useState<{ id: string; nome: string }[]>([]);
+  useEffect(() => {
+    logisticaApi.get<{ id: string; nome: string }[]>('/frota/locais', { params: { ativos: 'true' } })
+      .then((r) => setLocais(r.data)).catch(() => {});
+  }, []);
+  if (locais.length === 0) return null;
+  return (
+    <select value="" disabled={disabled}
+      onChange={(e) => { if (e.target.value) onPick(e.target.value); }}
+      className="mt-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm disabled:bg-slate-100">
+      <option value="">+ Adicionar do cadastro…</option>
+      {locais.map((l) => <option key={l.id} value={l.nome}>{l.nome}</option>)}
+    </select>
+  );
+}
+
 export function FrotaPage() {
   const { toast } = useToast();
 
@@ -476,13 +494,16 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
             </div>
 
             <div className="sm:col-span-12">
-              <label className="mb-1 block text-sm font-medium text-slate-600">Rota planejada (opcional)</label>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label className="block text-sm font-medium text-slate-600">Rota planejada (opcional)</label>
+                <SeletorLocais disabled={!podeAvancar} onPick={(n) => setPlanejadasTxt((t) => (t.trim() ? `${t}\n${n}` : n))} />
+              </div>
               <textarea
                 value={planejadasTxt} onChange={(e) => setPlanejadasTxt(e.target.value)} disabled={!podeAvancar} rows={3}
                 placeholder={'Um local por linha — ex.:\nCliente A\nFornecedor B\nBanco Centro'}
                 className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
               />
-              <p className="mt-1 text-xs text-slate-400">As visitas entram como <b>planejadas</b>; o condutor dá baixa ("Cheguei") em cada uma durante a viagem.</p>
+              <p className="mt-1 text-xs text-slate-400">Escolha do cadastro (atalho) ou digite um por linha. As visitas entram como <b>planejadas</b>; o condutor dá baixa ("Cheguei") durante a viagem.</p>
             </div>
           </div>
         </div>
@@ -685,7 +706,8 @@ export function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () =
           </div>
           <details className="border-t border-slate-200 pt-3">
             <summary className="cursor-pointer text-sm font-medium text-slate-600">Planejar visitas (opcional)</summary>
-            <p className="mt-1 text-xs text-slate-400">Um local por linha — entram como <b>planejadas</b> e você dá baixa ("Cheguei") durante a viagem.</p>
+            <p className="mt-1 text-xs text-slate-400">Escolha do cadastro (atalho) ou digite um por linha — entram como <b>planejadas</b> e você dá baixa ("Cheguei") durante a viagem.</p>
+            <SeletorLocais onPick={(n) => setPlanejados((t) => (t.trim() ? `${t}\n${n}` : n))} />
             <textarea value={planejados} onChange={(e) => setPlanejados(e.target.value)} rows={3} placeholder={'Cliente A\nFornecedor B\nBanco Centro'} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             <button onClick={() => void planejar()} disabled={planejando} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-sky-300 px-3 py-1.5 text-sm font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50">
               {planejando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Planejar paradas

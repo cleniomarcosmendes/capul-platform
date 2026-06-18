@@ -442,6 +442,19 @@ model Parada {
   @@schema("logistica")
 }
 
+// Cadastro de locais/pontos de parada frequentes (Fase 2d) — pick-list pro
+// planejamento da rota (o condutor seleciona em vez de redigitar). Não é FK da
+// parada: a parada guarda o texto (planejadoLocal); este cadastro é conveniência.
+model LocalParada {
+  id       String   @id @default(uuid())
+  nome     String   @unique
+  ativo    Boolean  @default(true)
+  criadoEm DateTime @default(now()) @map("criado_em")
+
+  @@map("local_parada")
+  @@schema("logistica")
+}
+
 // Cache de geocodificação (Fase 1c): endereço normalizado → lat/lng.
 // MISS também é gravado (lat/lng null) pra não martelar os provedores com
 // endereço que não resolve; limpar a linha força re-tentativa.

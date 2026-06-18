@@ -12,6 +12,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface TipoDespesa { id: string; nome: string; descricao?: string | null; ativo: boolean }
 interface FornecedorDespesa { id: string; nome: string; ativo: boolean }
+interface LocalParada { id: string; nome: string; ativo: boolean }
 interface VeiculoItem { id: string; placa: string; modelo?: string | null }
 interface Despesa {
   id: string; situacao: string; placa: string; modelo?: string | null; veiculoId: string;
@@ -35,7 +36,7 @@ const hoje = new Date();
 export function DespesasPage() {
   const { logisticaRole } = useAuth();
   const ehGestor = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN';
-  const [tab, setTab] = useState<'despesas' | 'tipos' | 'fornecedores'>('despesas');
+  const [tab, setTab] = useState<'despesas' | 'tipos' | 'fornecedores' | 'locais'>('despesas');
 
   return (
     <div className="space-y-5">
@@ -49,19 +50,19 @@ export function DespesasPage() {
 
       {ehGestor && (
         <div className="flex gap-1 border-b border-slate-200">
-          {(['despesas', 'tipos', 'fornecedores'] as const).map((t) => (
+          {(['despesas', 'tipos', 'fornecedores', 'locais'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`px-4 py-2 text-sm font-medium ${tab === t ? 'border-b-2 border-sky-600 text-sky-700' : 'text-slate-500 hover:text-slate-700'}`}
             >
-              {t === 'despesas' ? 'Despesas' : t === 'tipos' ? 'Tipos de despesa' : 'Fornecedores'}
+              {t === 'despesas' ? 'Despesas' : t === 'tipos' ? 'Tipos de despesa' : t === 'fornecedores' ? 'Fornecedores' : 'Locais de parada'}
             </button>
           ))}
         </div>
       )}
 
-      {tab === 'despesas' ? <DespesasTab /> : tab === 'tipos' ? <TiposTab /> : <FornecedoresTab />}
+      {tab === 'despesas' ? <DespesasTab /> : tab === 'tipos' ? <TiposTab /> : tab === 'fornecedores' ? <FornecedoresTab /> : <LocaisTab />}
     </div>
   );
 }
@@ -376,6 +377,125 @@ function FornecedoresTab() {
 }
 
 // ---- Aba Tipos de despesa (gestor de frota) — padrão de cadastro do workspace ----
+// ---- Aba Locais de parada (gestor de frota) — pick-list do planejamento ----
+function LocaisTab() {
+  const { toast } = useToast();
+  const [locais, setLocais] = useState<LocalParada[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [nome, setNome] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editNome, setEditNome] = useState('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const carregar = async () => {
+    setLoading(true);
+    try { const { data } = await logisticaApi.get<LocalParada[]>('/frota/locais'); setLocais(data); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao carregar locais.')); } finally { setLoading(false); }
+  };
+  useEffect(() => { void carregar(); /* eslint-disable-next-line */ }, []);
+
+  const criar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nome.trim()) { toast('warning', 'Informe o nome.'); return; }
+    setSalvando(true);
+    try { await logisticaApi.post('/frota/locais', { nome: nome.trim() }); setNome(''); setShowForm(false); toast('success', 'Local criado.'); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao criar local.')); } finally { setSalvando(false); }
+  };
+  const salvarEdicao = async () => {
+    if (!editId || !editNome.trim()) return;
+    try { await logisticaApi.patch(`/frota/locais/${editId}`, { nome: editNome.trim() }); toast('success', 'Local atualizado.'); setEditId(null); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao atualizar.')); }
+  };
+  const toggle = async (l: LocalParada) => {
+    try { await logisticaApi.patch(`/frota/locais/${l.id}`, { ativo: !l.ativo }); toast('success', l.ativo ? 'Local inativado.' : 'Local ativado.'); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao atualizar.')); }
+  };
+
+  const ordenados = useMemo(() => {
+    const arr = [...locais].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    return sortDir === 'asc' ? arr : arr.reverse();
+  }, [locais, sortDir]);
+
+  return (
+    <div>
+      <div className="mb-6 flex items-center justify-between">
+        <p className="text-sm text-slate-500">Locais/pontos de parada frequentes — aparecem como atalho ao planejar a rota da viagem.</p>
+        <button onClick={() => { setShowForm(!showForm); setEditId(null); }} className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700">
+          <Plus className="h-4 w-4" /> Novo Local
+        </button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={criar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
+          <div className="mb-4 max-w-md">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Nome *</label>
+            <input value={nome} onChange={(e) => setNome(e.target.value)} required maxLength={120} autoFocus placeholder="ex.: Matriz CAPUL, Banco Centro, Fornecedor X"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+          </div>
+          <div className="flex gap-3">
+            <button type="submit" disabled={salvando} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar'}</button>
+            <button type="button" onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <div className="py-12 text-center text-slate-500">Carregando…</div>
+      ) : locais.length === 0 ? (
+        <div className="py-12 text-center">
+          <Tag className="mx-auto mb-3 h-12 w-12 text-slate-300" />
+          <p className="text-slate-500">Nenhum local cadastrado</p>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-slate-50">
+                <th className={thCad}><button onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')} className={btnSortCad}>Nome <SortIcon active dir={sortDir} /></button></th>
+                <th className={thCad}>Status</th>
+                <th className={thCad}>Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-sm">
+              {ordenados.map((l) => (
+                <tr key={l.id} className="hover:bg-slate-50">
+                  {editId === l.id ? (
+                    <>
+                      <td className="px-6 py-3"><input value={editNome} onChange={(e) => setEditNome(e.target.value)} maxLength={120} className="w-full rounded border border-slate-300 px-2 py-1 text-sm" /></td>
+                      <td className="px-6 py-3"><span className={pill(l.ativo)}>{l.ativo ? 'Ativo' : 'Inativo'}</span></td>
+                      <td className="px-6 py-3">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => void salvarEdicao()} className="text-emerald-600 hover:text-emerald-800" title="Salvar"><Check className="h-4 w-4" /></button>
+                          <button onClick={() => setEditId(null)} className="text-slate-400 hover:text-slate-600" title="Cancelar"><X className="h-4 w-4" /></button>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-6 py-4">
+                        <button onClick={() => { setEditId(l.id); setEditNome(l.nome); }} className="text-left font-medium text-sky-700 hover:underline">{l.nome}</button>
+                      </td>
+                      <td className="px-6 py-4"><span className={pill(l.ativo)}>{l.ativo ? 'Ativo' : 'Inativo'}</span></td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => { setEditId(l.id); setEditNome(l.nome); }} className="flex items-center gap-1 text-xs text-sky-600 hover:underline"><Pencil className="h-3.5 w-3.5" /> Editar</button>
+                          <button onClick={() => void toggle(l)} className="text-xs text-sky-600 hover:underline">{l.ativo ? 'Inativar' : 'Ativar'}</button>
+                        </div>
+                      </td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TiposTab() {
   const { toast } = useToast();
   const [tipos, setTipos] = useState<TipoDespesa[]>([]);

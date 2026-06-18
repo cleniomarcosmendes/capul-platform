@@ -116,6 +116,14 @@ export async function pularParadaFrota(viagemId: string, paradaId: string): Prom
   await api.patch(`${LOGISTICA_BASE}/frota/viagens/${viagemId}/paradas/${paradaId}/pular`, {});
 }
 
+export interface LocalParada { id: string; nome: string; ativo: boolean }
+
+/** Locais/pontos de parada cadastrados (atalho do planejamento da rota). */
+export async function listarLocaisParada(): Promise<LocalParada[]> {
+  const { data } = await api.get<LocalParada[]>(`${LOGISTICA_BASE}/frota/locais`, { params: { ativos: 'true' } });
+  return data;
+}
+
 export async function tiposDespesa(): Promise<TipoDespesa[]> {
   const { data } = await api.get<TipoDespesa[]>(`${LOGISTICA_BASE}/despesas/tipos`, { params: { ativos: 'true' } });
   return data;

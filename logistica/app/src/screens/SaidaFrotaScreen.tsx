@@ -8,6 +8,7 @@ import type { RootStackParamList } from '../navigation';
 import { useAuth } from '../auth/AuthContext';
 import {
   buscarCondutor, validarCondutor, veiculosDisponiveis, registrarSaida, registrarSaidaIndividual,
+  listarLocaisParada, type LocalParada,
 } from '../api/frota';
 import type { VeiculoFrota } from '../types/api';
 
@@ -42,7 +43,11 @@ export function SaidaFrotaScreen({ navigation }: Props) {
   const [km, setKm] = useState('');
   const [finalidade, setFinalidade] = useState('');
   const [planejadasTxt, setPlanejadasTxt] = useState(''); // rota planejada (um local por linha)
+  const [locais, setLocais] = useState<LocalParada[]>([]);
   const [salvando, setSalvando] = useState(false);
+
+  // Locais cadastrados (atalho do planejamento — pode-se digitar avulso também).
+  useEffect(() => { void (async () => { try { setLocais(await listarLocaisParada()); } catch { /* vazio */ } })(); }, []);
 
   // INDIVIDUAL filtra pelo depto do usuário; busca (placa) procura em toda a filial.
   useEffect(() => {
@@ -240,12 +245,22 @@ export function SaidaFrotaScreen({ navigation }: Props) {
           <TextInput style={styles.input} placeholder="Ex.: entrega no fornecedor X" value={finalidade} onChangeText={setFinalidade} maxLength={255} editable={!salvando} />
 
           <Text style={styles.label}>Rota planejada (opcional)</Text>
+          {locais.length > 0 && (
+            <View style={styles.chipsLocais}>
+              {locais.map((l) => (
+                <TouchableOpacity key={l.id} style={styles.chipLocal} disabled={salvando}
+                  onPress={() => setPlanejadasTxt((t) => (t.trim() ? `${t}\n${l.nome}` : l.nome))}>
+                  <Text style={styles.chipLocalTxt}>+ {l.nome}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
           <TextInput
             style={[styles.input, { minHeight: 84, textAlignVertical: 'top' }]}
             placeholder={'Uma visita por linha:\nCliente A\nFornecedor B'}
             value={planejadasTxt} onChangeText={setPlanejadasTxt} multiline editable={!salvando}
           />
-          <Text style={styles.dica}>Entram como planejadas; você dá baixa ("Cheguei") em cada uma durante a viagem.</Text>
+          <Text style={styles.dica}>Toque nos atalhos do cadastro ou digite um por linha. Entram como planejadas; você dá baixa ("Cheguei") durante a viagem.</Text>
 
           <TouchableOpacity style={[styles.registrar, !podeRegistrar && styles.registrarOff]} onPress={registrar} disabled={!podeRegistrar}>
             {salvando ? <ActivityIndicator color="#fff" /> : <Text style={styles.registrarTxt}>Registrar saída</Text>}
@@ -288,4 +303,7 @@ const styles = StyleSheet.create({
   registrar: { backgroundColor: CAPUL, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 18 },
   registrarOff: { opacity: 0.45 },
   registrarTxt: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  chipsLocais: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6, marginBottom: 2 },
+  chipLocal: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#fff' },
+  chipLocalTxt: { color: '#334155', fontWeight: '600', fontSize: 13 },
 });
