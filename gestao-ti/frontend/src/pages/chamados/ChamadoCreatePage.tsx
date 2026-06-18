@@ -47,6 +47,10 @@ export function ChamadoCreatePage() {
   const [filiais, setFiliais] = useState<{ id: string; codigo: string; nomeFantasia: string }[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [saving, setSaving] = useState(false);
+  // Guard SÍNCRONO contra duplo-submit: setSaving/disabled do botão são
+  // assíncronos (React agenda o render), então um 2º clique/evento na janela
+  // antes do re-render abria o chamado em DUPLICIDADE. O ref bloqueia na hora.
+  const submittingRef = useRef(false);
   const [error, setError] = useState('');
 
   const [titulo, setTitulo] = useState('');
@@ -295,6 +299,9 @@ export function ChamadoCreatePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
+    // Já há um envio em andamento → ignora reentrada (anti-duplicidade).
+    if (submittingRef.current) return;
+
     // PADRAO: exige validar matricula+senha antes de enviar (ou fallback de
     // Protheus fora). Reforco de UX — o backend revalida de qualquer forma.
     if (isUsuarioPadrao && !padraoLiberado) {
@@ -302,6 +309,7 @@ export function ChamadoCreatePage() {
       return;
     }
 
+    submittingRef.current = true;
     setSaving(true);
     setError('');
 
@@ -349,6 +357,7 @@ export function ChamadoCreatePage() {
       setError(msg || 'Erro ao criar chamado');
     } finally {
       setSaving(false);
+      submittingRef.current = false;
     }
   }
 
