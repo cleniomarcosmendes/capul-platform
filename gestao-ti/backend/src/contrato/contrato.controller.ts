@@ -132,19 +132,19 @@ export class ContratoController {
   }
 
   @Post('produtos')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   createProduto(@Body() dto: CreateProdutoDto) {
     return this.service.createProduto(dto);
   }
 
   @Patch('produtos/:id')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   updateProduto(@Param('id') id: string, @Body() dto: UpdateProdutoDto) {
     return this.service.updateProduto(id, dto);
   }
 
   @Delete('produtos/:id')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   removeProduto(@Param('id') id: string) {
     return this.service.removeProduto(id);
   }

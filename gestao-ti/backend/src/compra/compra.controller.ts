@@ -69,19 +69,19 @@ export class CompraController {
   }
 
   @Post('tipos-produto')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   createTipoProduto(@Body() dto: CreateTipoProdutoDto) {
     return this.service.createTipoProduto(dto);
   }
 
   @Patch('tipos-produto/:id')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   updateTipoProduto(@Param('id') id: string, @Body() dto: UpdateTipoProdutoDto) {
     return this.service.updateTipoProduto(id, dto);
   }
 
   @Delete('tipos-produto/:id')
-  @Roles('ADMIN', 'GESTOR')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   removeTipoProduto(@Param('id') id: string) {
     return this.service.removeTipoProduto(id);
   }

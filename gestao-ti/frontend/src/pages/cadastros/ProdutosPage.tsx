@@ -12,7 +12,7 @@ type SortDir = 'asc' | 'desc';
 
 export function ProdutosPage() {
   const { gestaoTiRole } = useAuth();
-  const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR';
+  const canManage = gestaoTiRole === 'ADMIN' || gestaoTiRole === 'GESTOR' || gestaoTiRole === 'SUPORTE';
   const { toast, confirm } = useToast();
 
   const [produtos, setProdutos] = useState<ProdutoConfig[]>([]);
