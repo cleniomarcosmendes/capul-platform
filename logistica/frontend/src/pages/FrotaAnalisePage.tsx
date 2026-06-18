@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Banknote, Building2, Car, ChevronLeft, ChevronRight, Layers, Loader2, RefreshCw, Tag, X } from 'lucide-react';
+import { Banknote, Building2, Car, ChevronLeft, ChevronRight, KeyRound, Layers, Loader2, RefreshCw, Tag, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 
@@ -11,7 +11,7 @@ import { useToast } from '../components/Toast';
 interface Grupo { id: string; label: string; valor: number; qtd: number }
 interface Analitico {
   total: number;
-  porVeiculo: Grupo[]; porTipo: Grupo[]; porFornecedor: Grupo[]; porDepartamento: Grupo[];
+  porVeiculo: Grupo[]; porTipo: Grupo[]; porFornecedor: Grupo[]; porDepartamento: Grupo[]; porPropriedade: Grupo[];
 }
 interface Doc { id: string; principal: string; secundario: string; terciario?: string; data: string | null; valor: number }
 interface DrillSel { dimensao: string; titulo: string; grupo: Grupo }
@@ -98,6 +98,7 @@ export function FrotaAnalisePage() {
             <CardGrupo titulo="Por tipo de despesa" dimensao="tipo" icone={<Tag className="h-4 w-4 text-sky-600" />} itens={data.porTipo} total={data.total} onSelect={abrirDrill} />
             <CardGrupo titulo="Por fornecedor" dimensao="fornecedor" icone={<Building2 className="h-4 w-4 text-sky-600" />} itens={data.porFornecedor} total={data.total} onSelect={abrirDrill} />
             <CardGrupo titulo="Por departamento solicitante" dimensao="departamento" icone={<Layers className="h-4 w-4 text-sky-600" />} itens={data.porDepartamento} total={data.total} onSelect={abrirDrill} />
+            <CardGrupo titulo="Por tipo de veículo (próprio × alugado)" dimensao="propriedade" icone={<KeyRound className="h-4 w-4 text-sky-600" />} itens={data.porPropriedade} total={data.total} onSelect={abrirDrill} />
           </div>
           <p className="text-xs text-slate-400">Clique num item para ver as despesas que o compõem. A soma reconcilia com o total; linhas em cinza são valores sem a dimensão (ex.: sem departamento).</p>
         </div>

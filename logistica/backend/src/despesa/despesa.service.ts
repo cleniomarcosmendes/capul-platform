@@ -398,7 +398,7 @@ export class DespesaService {
     return this.prisma.despesaVeiculo.findMany({
       where,
       include: {
-        veiculo: { select: { placa: true, modelo: true } },
+        veiculo: { select: { placa: true, modelo: true, propriedade: true } },
         tipoDespesa: { select: { nome: true } },
         fornecedorRef: { select: { nome: true } },
         viagem: { select: { departamentoSolicitanteId: true } },
@@ -408,12 +408,13 @@ export class DespesaService {
   }
 
   // Chave/rótulo de cada despesa por dimensão (usados no agrupamento e no drill).
-  private chaveDim(d: { veiculoId: string; tipoDespesaId: string; fornecedorId: string | null; fornecedor: string | null; viagem?: { departamentoSolicitanteId: string | null } | null }, dim: string): string {
+  private chaveDim(d: { veiculoId: string; tipoDespesaId: string; fornecedorId: string | null; fornecedor: string | null; viagem?: { departamentoSolicitanteId: string | null } | null; veiculo?: { propriedade?: string | null } | null }, dim: string): string {
     switch (dim) {
       case 'veiculo': return d.veiculoId;
       case 'tipo': return d.tipoDespesaId;
       case 'fornecedor': return d.fornecedorId ?? (d.fornecedor ? `livre:${d.fornecedor}` : '__sem');
       case 'departamento': return d.viagem?.departamentoSolicitanteId ?? '__sem';
+      case 'propriedade': return d.veiculo?.propriedade ?? '__sem';
       default: return '__sem';
     }
   }
@@ -443,6 +444,7 @@ export class DespesaService {
       porTipo: agrupar('tipo', (d) => d.tipoDespesa?.nome ?? '—'),
       porFornecedor: agrupar('fornecedor', (d) => d.fornecedorRef?.nome ?? d.fornecedor ?? 'NÃO DEFINIDO'),
       porDepartamento: agrupar('departamento', (d) => (d.viagem?.departamentoSolicitanteId ? (nomesDepto.get(d.viagem.departamentoSolicitanteId) ?? 'Departamento') : 'Sem departamento')),
+      porPropriedade: agrupar('propriedade', (d) => (d.veiculo?.propriedade === 'ALUGADO' ? 'Alugado' : d.veiculo?.propriedade === 'PROPRIO' ? 'Próprio' : 'Não informado')),
     };
   }
 
