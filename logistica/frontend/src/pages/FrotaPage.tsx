@@ -166,6 +166,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   const [localSaida, setLocalSaida] = useState('');
   const [departamentoSolicitanteId, setDepartamentoSolicitanteId] = useState('');
   const [deptos, setDeptos] = useState<DeptoItem[]>([]);
+  const [planejadasTxt, setPlanejadasTxt] = useState(''); // rota planejada (um local por linha)
   const [salvando, setSalvando] = useState(false);
   const [credOk, setCredOk] = useState(false);
   const [validandoSenha, setValidandoSenha] = useState(false);
@@ -199,7 +200,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   const reset = () => {
     setMatricula(''); setNome(null); setSenha(''); setVeiculoId('');
     setKmInicial(''); setFinalidade(''); setLocalSaida(''); setErroSenha(null); setCredOk(false);
-    setDepartamentoSolicitanteId('');
+    setDepartamentoSolicitanteId(''); setPlanejadasTxt('');
     setNomeBusca(''); setResultados([]); setBuscou(false); setCondutorSel(null);
   };
 
@@ -253,6 +254,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
     }
     if (!veiculoId) { toast('warning', 'Selecione o veículo.'); return; }
     if (kmInicial === '') { toast('warning', 'Informe o KM de saída.'); return; }
+    const paradasPlanejadas = planejadasTxt.split('\n').map((l) => l.trim()).filter(Boolean);
     setSalvando(true);
     try {
       if (modo === 'PORTARIA') {
@@ -262,6 +264,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
           finalidade: finalidade.trim() || undefined,
           localSaida: localSaida.trim() || undefined,
           departamentoSolicitanteId: departamentoSolicitanteId || undefined,
+          paradasPlanejadas: paradasPlanejadas.length ? paradasPlanejadas : undefined,
         });
         toast('success', 'Saída registrada pela portaria (sob sua responsabilidade).');
       } else {
@@ -271,6 +274,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
           finalidade: finalidade.trim() || undefined,
           localSaida: localSaida.trim() || undefined,
           departamentoSolicitanteId: departamentoSolicitanteId || undefined,
+          paradasPlanejadas: paradasPlanejadas.length ? paradasPlanejadas : undefined,
         });
         toast('success', 'Saída registrada.');
       }
@@ -469,6 +473,16 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
                 value={localSaida} onChange={(e) => setLocalSaida(e.target.value)} maxLength={120} disabled={!podeAvancar}
                 className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
               />
+            </div>
+
+            <div className="sm:col-span-12">
+              <label className="mb-1 block text-sm font-medium text-slate-600">Rota planejada (opcional)</label>
+              <textarea
+                value={planejadasTxt} onChange={(e) => setPlanejadasTxt(e.target.value)} disabled={!podeAvancar} rows={3}
+                placeholder={'Um local por linha — ex.:\nCliente A\nFornecedor B\nBanco Centro'}
+                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
+              />
+              <p className="mt-1 text-xs text-slate-400">As visitas entram como <b>planejadas</b>; o condutor dá baixa ("Cheguei") em cada uma durante a viagem.</p>
             </div>
           </div>
         </div>

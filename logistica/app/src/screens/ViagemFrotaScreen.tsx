@@ -136,8 +136,9 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
       {planejadas.length > 0 && (
         <>
           <Text style={[styles.label, { marginTop: 4 }]}>Visitas planejadas ({planejadas.length})</Text>
-          {planejadas.map((p) => (
-            <View key={p.id} style={styles.paradaCard}>
+          {planejadas.map((p, i) => (
+            <View key={p.id} style={[styles.paradaCard, i === 0 && styles.paradaCardProx]}>
+              {i === 0 && <Text style={styles.proxTag}>PRÓXIMA PARADA</Text>}
               <Text style={styles.paradaLocal}>📍 {p.planejadoLocal ?? p.local}</Text>
               {checkinId === p.id ? (
                 <View style={{ gap: 6, marginTop: 6 }}>
@@ -359,6 +360,8 @@ const styles = StyleSheet.create({
   registrarOff: { opacity: 0.45 },
   registrarTxt: { color: '#fff', fontSize: 16, fontWeight: '700' },
   paradaCard: { borderWidth: 1, borderColor: '#fcd34d', backgroundColor: '#fffbeb', borderRadius: 10, padding: 12, marginTop: 8 },
+  paradaCardProx: { borderColor: CAPUL, borderWidth: 2, backgroundColor: '#ecfdf5' },
+  proxTag: { fontSize: 10, fontWeight: '800', color: CAPUL, letterSpacing: 0.5, marginBottom: 2 },
   paradaLocal: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
   paradaBtns: { flexDirection: 'row', gap: 8, marginTop: 8 },
   btnCheck: { flex: 1, backgroundColor: '#059669', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },

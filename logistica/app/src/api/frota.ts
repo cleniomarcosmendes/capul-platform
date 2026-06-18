@@ -49,6 +49,7 @@ export interface SaidaPayload {
   veiculoId: string;
   kmInicial: number;
   finalidade?: string;
+  paradasPlanejadas?: string[];
 }
 
 /** Registrar saída PADRAO (revalida matrícula+senha no backend). */
@@ -61,6 +62,7 @@ export interface SaidaIndividualPayload {
   veiculoId: string;
   kmInicial: number;
   finalidade?: string;
+  paradasPlanejadas?: string[];
 }
 
 /** Registrar saída INDIVIDUAL — o próprio usuário logado é o condutor (sem senha). */

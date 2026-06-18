@@ -41,6 +41,7 @@ export function SaidaFrotaScreen({ navigation }: Props) {
   const [veiculoId, setVeiculoId] = useState('');
   const [km, setKm] = useState('');
   const [finalidade, setFinalidade] = useState('');
+  const [planejadasTxt, setPlanejadasTxt] = useState(''); // rota planejada (um local por linha)
   const [salvando, setSalvando] = useState(false);
 
   // INDIVIDUAL filtra pelo depto do usuário; busca (placa) procura em toda a filial.
@@ -112,15 +113,17 @@ export function SaidaFrotaScreen({ navigation }: Props) {
       Alert.alert('KM inicial', `O KM informado (${km}) é menor que o KM atual do veículo (${veiculo.kmAtual}).`);
       return;
     }
+    const paradasPlanejadas = planejadasTxt.split('\n').map((l) => l.trim()).filter(Boolean);
+    const rota = paradasPlanejadas.length ? paradasPlanejadas : undefined;
     setSalvando(true);
     try {
       const v = ehIndividual
         ? await registrarSaidaIndividual({
-            veiculoId, kmInicial: Number(km), finalidade: finalidade.trim() || undefined,
+            veiculoId, kmInicial: Number(km), finalidade: finalidade.trim() || undefined, paradasPlanejadas: rota,
           })
         : await registrarSaida({
             matricula: matricula.trim(), senha, veiculoId,
-            kmInicial: Number(km), finalidade: finalidade.trim() || undefined,
+            kmInicial: Number(km), finalidade: finalidade.trim() || undefined, paradasPlanejadas: rota,
           });
       Alert.alert('Saída registrada', `${v.placa} · viagem #${v.numero}.`, [
         { text: 'OK', onPress: () => navigation.goBack() },
@@ -235,6 +238,14 @@ export function SaidaFrotaScreen({ navigation }: Props) {
 
           <Text style={styles.label}>Finalidade / destino (opcional)</Text>
           <TextInput style={styles.input} placeholder="Ex.: entrega no fornecedor X" value={finalidade} onChangeText={setFinalidade} maxLength={255} editable={!salvando} />
+
+          <Text style={styles.label}>Rota planejada (opcional)</Text>
+          <TextInput
+            style={[styles.input, { minHeight: 84, textAlignVertical: 'top' }]}
+            placeholder={'Uma visita por linha:\nCliente A\nFornecedor B'}
+            value={planejadasTxt} onChangeText={setPlanejadasTxt} multiline editable={!salvando}
+          />
+          <Text style={styles.dica}>Entram como planejadas; você dá baixa ("Cheguei") em cada uma durante a viagem.</Text>
 
           <TouchableOpacity style={[styles.registrar, !podeRegistrar && styles.registrarOff]} onPress={registrar} disabled={!podeRegistrar}>
             {salvando ? <ActivityIndicator color="#fff" /> : <Text style={styles.registrarTxt}>Registrar saída</Text>}
