@@ -99,10 +99,21 @@ export class FrotaController {
     );
   }
 
-  /** Cadastro de locais/pontos de parada (pick-list do planejamento). */
+  /** Cadastro de locais/pontos de parada. Sem `scope` → todos (cadastro);
+   *  com `scope=true` → só os relevantes p/ a saída (filial + veículo/depto/global). */
   @Get('locais')
-  listarLocais(@Query('ativos') ativos?: string) {
-    return this.frota.listarLocais(ativos === 'true' || ativos === '1');
+  listarLocais(
+    @Query('ativos') ativos?: string,
+    @Query('scope') scope?: string,
+    @Query('filialId') filialId?: string,
+    @Query('veiculoId') veiculoId?: string,
+    @Query('departamentoId') departamentoId?: string,
+  ) {
+    return this.frota.listarLocais({
+      somenteAtivos: ativos === 'true' || ativos === '1',
+      scope: scope === 'true' || scope === '1',
+      filialId, veiculoId, departamentoId,
+    });
   }
 
   @Post('locais')

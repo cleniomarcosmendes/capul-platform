@@ -2,7 +2,7 @@ import {
   BadRequestException, ForbiddenException, Injectable, NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { StatusViagem, TipoViagem, SituacaoVeiculo, StatusDespesa, StatusParada } from '@prisma/client';
+import { Prisma, StatusViagem, TipoViagem, SituacaoVeiculo, StatusDespesa, StatusParada } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
@@ -548,18 +548,46 @@ export class FrotaService {
   }
 
   // ---- Cadastro de locais/pontos de parada (pick-list do planejamento) ----
-  listarLocais(somenteAtivos?: boolean) {
-    return this.prisma.localParada.findMany({
-      where: somenteAtivos ? { ativo: true } : {},
-      orderBy: { nome: 'asc' },
-    });
+  /**
+   * Lista locais. Sem `scope` → cadastro (todos, com os campos de escopo).
+   * Com `scope` (saída) → só os RELEVANTES: da filial (ou globais) E do veículo
+   * selecionado OU do depto solicitante OU globais (sem veículo nem depto).
+   */
+  listarLocais(opts: { somenteAtivos?: boolean; scope?: boolean; filialId?: string; veiculoId?: string; departamentoId?: string }) {
+    const where: Prisma.LocalParadaWhereInput = {};
+    if (opts.somenteAtivos) where.ativo = true;
+    const and: Prisma.LocalParadaWhereInput[] = [];
+    // Filial: da filial informada OU global (todas) — vale com ou sem scope.
+    if (opts.filialId) and.push({ OR: [{ filialId: opts.filialId }, { filialId: null }] });
+    // Scope da saída: veículo selecionado OU depto solicitante OU global.
+    if (opts.scope) {
+      and.push({
+        OR: [
+          ...(opts.veiculoId ? [{ veiculoId: opts.veiculoId }] : []),
+          ...(opts.departamentoId ? [{ departamentoId: opts.departamentoId }] : []),
+          { veiculoId: null, departamentoId: null },
+        ],
+      });
+    }
+    if (and.length) where.AND = and;
+    return this.prisma.localParada.findMany({ where, orderBy: { nome: 'asc' } });
   }
 
   async criarLocal(dto: CriarLocalParadaDto) {
     const nome = dto.nome.trim();
-    const existe = await this.prisma.localParada.findUnique({ where: { nome } });
-    if (existe) throw new BadRequestException('Já existe um local com esse nome.');
-    return this.prisma.localParada.create({ data: { nome } });
+    // Dedup no MESMO escopo (mesmo nome pode existir em filiais/escopos distintos).
+    const existe = await this.prisma.localParada.findFirst({
+      where: { nome, filialId: dto.filialId || null, departamentoId: dto.departamentoId || null, veiculoId: dto.veiculoId || null },
+    });
+    if (existe) throw new BadRequestException('Já existe um local com esse nome neste escopo.');
+    return this.prisma.localParada.create({
+      data: {
+        nome,
+        filialId: dto.filialId || null,
+        departamentoId: dto.departamentoId || null,
+        veiculoId: dto.veiculoId || null,
+      },
+    });
   }
 
   async atualizarLocal(id: string, dto: AtualizarLocalParadaDto) {
@@ -567,7 +595,14 @@ export class FrotaService {
     if (!l) throw new NotFoundException('Local não encontrado.');
     return this.prisma.localParada.update({
       where: { id },
-      data: { nome: dto.nome?.trim() ?? undefined, ativo: dto.ativo ?? undefined },
+      data: {
+        nome: dto.nome?.trim() ?? undefined,
+        ativo: dto.ativo ?? undefined,
+        // string vazia limpa o escopo (vira global/todas); undefined não toca.
+        filialId: dto.filialId !== undefined ? (dto.filialId || null) : undefined,
+        departamentoId: dto.departamentoId !== undefined ? (dto.departamentoId || null) : undefined,
+        veiculoId: dto.veiculoId !== undefined ? (dto.veiculoId || null) : undefined,
+      },
     });
   }
 

@@ -44,10 +44,21 @@ export function SaidaFrotaScreen({ navigation }: Props) {
   const [finalidade, setFinalidade] = useState('');
   const [planejadasTxt, setPlanejadasTxt] = useState(''); // rota planejada (um local por linha)
   const [locais, setLocais] = useState<LocalParada[]>([]);
+  const [buscaLocal, setBuscaLocal] = useState('');
   const [salvando, setSalvando] = useState(false);
 
   // Locais cadastrados (atalho do planejamento — pode-se digitar avulso também).
   useEffect(() => { void (async () => { try { setLocais(await listarLocaisParada()); } catch { /* vazio */ } })(); }, []);
+
+  const addLocal = (n: string) => setPlanejadasTxt((t) => (t.trim() ? `${t}\n${n}` : n));
+  // Sugeridos: globais (sem veículo/depto) + os do veículo selecionado. Curto.
+  const sugeridos = locais
+    .filter((l) => (!l.veiculoId && !l.departamentoId) || l.veiculoId === veiculoId)
+    .slice(0, 8);
+  // Busca: filtra TODO o cadastro pelo texto (typeahead) — escala p/ muitos locais.
+  const resultadosBusca = buscaLocal.trim()
+    ? locais.filter((l) => l.nome.toLowerCase().includes(buscaLocal.trim().toLowerCase())).slice(0, 10)
+    : [];
 
   // INDIVIDUAL filtra pelo depto do usuário; busca (placa) procura em toda a filial.
   useEffect(() => {
@@ -246,14 +257,30 @@ export function SaidaFrotaScreen({ navigation }: Props) {
 
           <Text style={styles.label}>Rota planejada (opcional)</Text>
           {locais.length > 0 && (
-            <View style={styles.chipsLocais}>
-              {locais.map((l) => (
-                <TouchableOpacity key={l.id} style={styles.chipLocal} disabled={salvando}
-                  onPress={() => setPlanejadasTxt((t) => (t.trim() ? `${t}\n${l.nome}` : l.nome))}>
-                  <Text style={styles.chipLocalTxt}>+ {l.nome}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <>
+              <TextInput style={styles.input} value={buscaLocal} onChangeText={setBuscaLocal}
+                placeholder="🔎 Buscar local do cadastro…" editable={!salvando} />
+              {buscaLocal.trim() ? (
+                resultadosBusca.length > 0 ? (
+                  <View style={styles.buscaLista}>
+                    {resultadosBusca.map((l) => (
+                      <TouchableOpacity key={l.id} style={styles.buscaItem} disabled={salvando}
+                        onPress={() => { addLocal(l.nome); setBuscaLocal(''); }}>
+                        <Text style={styles.buscaItemTxt}>📍 {l.nome}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : <Text style={styles.dicaMini}>Nenhum local encontrado — digite avulso abaixo.</Text>
+              ) : sugeridos.length > 0 ? (
+                <View style={styles.chipsLocais}>
+                  {sugeridos.map((l) => (
+                    <TouchableOpacity key={l.id} style={styles.chipLocal} disabled={salvando} onPress={() => addLocal(l.nome)}>
+                      <Text style={styles.chipLocalTxt}>+ {l.nome}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
+            </>
           )}
           <TextInput
             style={[styles.input, { minHeight: 84, textAlignVertical: 'top' }]}
@@ -306,4 +333,8 @@ const styles = StyleSheet.create({
   chipsLocais: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6, marginBottom: 2 },
   chipLocal: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#fff' },
   chipLocalTxt: { color: '#334155', fontWeight: '600', fontSize: 13 },
+  dicaMini: { fontSize: 12, color: '#64748b', marginTop: 6 },
+  buscaLista: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, marginTop: 6, overflow: 'hidden' },
+  buscaItem: { paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  buscaItemTxt: { color: '#0f172a', fontSize: 14 },
 });

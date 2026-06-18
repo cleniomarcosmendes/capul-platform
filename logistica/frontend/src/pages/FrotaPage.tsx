@@ -49,13 +49,27 @@ export const errMsg = (e: unknown, fb: string) => {
   return Array.isArray(m) ? m.join(', ') : (typeof m === 'string' ? m : fb);
 };
 
-/** Atalho que adiciona um local CADASTRADO ao textarea de rota (mantém digitação livre). */
-function SeletorLocais({ onPick, disabled }: { onPick: (nome: string) => void; disabled?: boolean }) {
+/** Atalho que adiciona um local CADASTRADO ao textarea de rota (mantém digitação
+ *  livre). Escopado pela filial + veículo selecionado + depto solicitante: a
+ *  lista mostra só os locais relevantes (globais + do veículo + do depto). */
+function SeletorLocais({ onPick, disabled, filialId, veiculoId, departamentoId }: {
+  onPick: (nome: string) => void; disabled?: boolean;
+  filialId?: string; veiculoId?: string; departamentoId?: string;
+}) {
   const [locais, setLocais] = useState<{ id: string; nome: string }[]>([]);
   useEffect(() => {
-    logisticaApi.get<{ id: string; nome: string }[]>('/frota/locais', { params: { ativos: 'true' } })
+    const params: Record<string, string> = { ativos: 'true' };
+    // Só escopa quando há contexto (na saída); sem contexto (planejar na viagem)
+    // lista tudo, pra não esconder veículo/depto-específicos.
+    if (filialId || veiculoId || departamentoId) {
+      params.scope = 'true';
+      if (filialId) params.filialId = filialId;
+      if (veiculoId) params.veiculoId = veiculoId;
+      if (departamentoId) params.departamentoId = departamentoId;
+    }
+    logisticaApi.get<{ id: string; nome: string }[]>('/frota/locais', { params })
       .then((r) => setLocais(r.data)).catch(() => {});
-  }, []);
+  }, [filialId, veiculoId, departamentoId]);
   if (locais.length === 0) return null;
   return (
     <select value="" disabled={disabled}
@@ -497,7 +511,9 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
             <div className="sm:col-span-12">
               <div className="mb-1 flex items-center justify-between gap-2">
                 <label className="block text-sm font-medium text-slate-600">Rota planejada (opcional)</label>
-                <SeletorLocais disabled={!podeAvancar} onPick={(n) => setPlanejadasTxt((t) => (t.trim() ? `${t}\n${n}` : n))} />
+                <SeletorLocais disabled={!podeAvancar}
+                  filialId={usuario?.filialAtual?.id} veiculoId={veiculoId || undefined} departamentoId={departamentoSolicitanteId || undefined}
+                  onPick={(n) => setPlanejadasTxt((t) => (t.trim() ? `${t}\n${n}` : n))} />
               </div>
               <textarea
                 value={planejadasTxt} onChange={(e) => setPlanejadasTxt(e.target.value)} disabled={!podeAvancar} rows={3}

@@ -447,10 +447,18 @@ model Parada {
 // parada: a parada guarda o texto (planejadoLocal); este cadastro é conveniência.
 model LocalParada {
   id       String   @id @default(uuid())
-  nome     String   @unique
+  nome     String
   ativo    Boolean  @default(true)
+  // Escopo (Fase 18/06): null em todos = global. filialId null = todas as
+  // filiais. veiculoId set => local do veículo (rota do carro individual);
+  // departamentoId set => local do depto. UI permite só UM dos dois (ou nenhum).
+  filialId       String? @map("filial_id")
+  departamentoId String? @map("departamento_id")
+  veiculoId      String? @map("veiculo_id")
   criadoEm DateTime @default(now()) @map("criado_em")
 
+  @@index([filialId])
+  @@index([veiculoId])
   @@map("local_parada")
   @@schema("logistica")
 }

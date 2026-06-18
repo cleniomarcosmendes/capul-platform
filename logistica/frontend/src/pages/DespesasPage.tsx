@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowUp, ArrowUpDown, Banknote, Check, Loader2, Paperclip, Pencil, Plus, Tag, Trash2, X } from 'lucide-react';
-import { logisticaApi } from '../services/api';
+import { coreApi, logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -12,7 +12,8 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface TipoDespesa { id: string; nome: string; descricao?: string | null; ativo: boolean }
 interface FornecedorDespesa { id: string; nome: string; ativo: boolean }
-interface LocalParada { id: string; nome: string; ativo: boolean }
+interface LocalParada { id: string; nome: string; ativo: boolean; filialId?: string | null; departamentoId?: string | null; veiculoId?: string | null }
+interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
 interface VeiculoItem { id: string; placa: string; modelo?: string | null }
 interface Despesa {
   id: string; situacao: string; placa: string; modelo?: string | null; veiculoId: string;
@@ -378,30 +379,62 @@ function FornecedoresTab() {
 
 // ---- Aba Tipos de despesa (gestor de frota) — padrão de cadastro do workspace ----
 // ---- Aba Locais de parada (gestor de frota) — pick-list do planejamento ----
+const labelCore = (i?: CoreItem) => (i ? i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8) : '—');
+
 function LocaisTab() {
   const { toast } = useToast();
   const [locais, setLocais] = useState<LocalParada[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [nome, setNome] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editNome, setEditNome] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  // Form de criação — nome + escopo.
+  const [nome, setNome] = useState('');
+  const [filialId, setFilialId] = useState(''); // '' = todas as filiais
+  const [aplicaA, setAplicaA] = useState<'TODOS' | 'DEPTO' | 'VEICULO'>('TODOS');
+  const [deptoId, setDeptoId] = useState('');
+  const [veicId, setVeicId] = useState('');
+  // Listas auxiliares (escopo).
+  const [filiais, setFiliais] = useState<CoreItem[]>([]);
+  const [deptos, setDeptos] = useState<CoreItem[]>([]);
+  const [veiculos, setVeiculos] = useState<VeiculoItem[]>([]);
 
   const carregar = async () => {
     setLoading(true);
     try { const { data } = await logisticaApi.get<LocalParada[]>('/frota/locais'); setLocais(data); }
     catch (e) { toast('error', errMsg(e, 'Falha ao carregar locais.')); } finally { setLoading(false); }
   };
-  useEffect(() => { void carregar(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => {
+    void carregar();
+    coreApi.get<CoreItem[]>('/filiais').then((r) => setFiliais(r.data)).catch(() => {});
+    coreApi.get<CoreItem[]>('/departamentos').then((r) => setDeptos(r.data)).catch(() => {});
+    logisticaApi.get<VeiculoItem[]>('/veiculos').then((r) => setVeiculos(r.data)).catch(() => {});
+  /* eslint-disable-next-line */ }, []);
+
+  const filialNome = (id?: string | null) => (id ? labelCore(filiais.find((f) => f.id === id)) : 'Todas');
+  const deptoNome = (id?: string | null) => (id ? labelCore(deptos.find((d) => d.id === id)) : '');
+  const veicLabel = (id?: string | null) => { const v = veiculos.find((x) => x.id === id); return v ? `${v.placa}${v.modelo ? ` · ${v.modelo}` : ''}` : '—'; };
+  const escopo = (l: LocalParada) => (l.veiculoId ? `Veículo: ${veicLabel(l.veiculoId)}` : l.departamentoId ? `Depto: ${deptoNome(l.departamentoId)}` : 'Todos');
+
+  const resetForm = () => { setNome(''); setFilialId(''); setAplicaA('TODOS'); setDeptoId(''); setVeicId(''); };
 
   const criar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nome.trim()) { toast('warning', 'Informe o nome.'); return; }
+    if (aplicaA === 'DEPTO' && !deptoId) { toast('warning', 'Selecione o departamento.'); return; }
+    if (aplicaA === 'VEICULO' && !veicId) { toast('warning', 'Selecione o veículo.'); return; }
     setSalvando(true);
-    try { await logisticaApi.post('/frota/locais', { nome: nome.trim() }); setNome(''); setShowForm(false); toast('success', 'Local criado.'); await carregar(); }
-    catch (e) { toast('error', errMsg(e, 'Falha ao criar local.')); } finally { setSalvando(false); }
+    try {
+      await logisticaApi.post('/frota/locais', {
+        nome: nome.trim(),
+        filialId: filialId || undefined,
+        departamentoId: aplicaA === 'DEPTO' ? deptoId : undefined,
+        veiculoId: aplicaA === 'VEICULO' ? veicId : undefined,
+      });
+      resetForm(); setShowForm(false); toast('success', 'Local criado.'); await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao criar local.')); } finally { setSalvando(false); }
   };
   const salvarEdicao = async () => {
     if (!editId || !editNome.trim()) return;
@@ -418,10 +451,12 @@ function LocaisTab() {
     return sortDir === 'asc' ? arr : arr.reverse();
   }, [locais, sortDir]);
 
+  const selCls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500';
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <p className="text-sm text-slate-500">Locais/pontos de parada frequentes — aparecem como atalho ao planejar a rota da viagem.</p>
+        <p className="text-sm text-slate-500">Locais/pontos de parada — atalho ao planejar a rota. O <b>escopo</b> define onde o local aparece (todos, um departamento ou um veículo) — evita poluir a lista.</p>
         <button onClick={() => { setShowForm(!showForm); setEditId(null); }} className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700">
           <Plus className="h-4 w-4" /> Novo Local
         </button>
@@ -429,12 +464,46 @@ function LocaisTab() {
 
       {showForm && (
         <form onSubmit={criar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
-          <div className="mb-4 max-w-md">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Nome *</label>
-            <input value={nome} onChange={(e) => setNome(e.target.value)} required maxLength={120} autoFocus placeholder="ex.: Matriz CAPUL, Banco Centro, Fornecedor X"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Nome *</label>
+              <input value={nome} onChange={(e) => setNome(e.target.value)} required maxLength={120} autoFocus placeholder="ex.: Fazenda Boa Vista, Banco Centro" className={selCls} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Filial</label>
+              <select value={filialId} onChange={(e) => setFilialId(e.target.value)} className={selCls}>
+                <option value="">Todas as filiais</option>
+                {filiais.map((f) => <option key={f.id} value={f.id}>{labelCore(f)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Aplica a</label>
+              <select value={aplicaA} onChange={(e) => setAplicaA(e.target.value as typeof aplicaA)} className={selCls}>
+                <option value="TODOS">Todos (qualquer veículo/depto)</option>
+                <option value="DEPTO">Um departamento</option>
+                <option value="VEICULO">Um veículo (rota do carro)</option>
+              </select>
+            </div>
+            {aplicaA === 'DEPTO' && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Departamento *</label>
+                <select value={deptoId} onChange={(e) => setDeptoId(e.target.value)} className={selCls}>
+                  <option value="">Selecione…</option>
+                  {deptos.map((d) => <option key={d.id} value={d.id}>{labelCore(d)}</option>)}
+                </select>
+              </div>
+            )}
+            {aplicaA === 'VEICULO' && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Veículo *</label>
+                <select value={veicId} onChange={(e) => setVeicId(e.target.value)} className={selCls}>
+                  <option value="">Selecione…</option>
+                  {veiculos.map((v) => <option key={v.id} value={v.id}>{v.placa}{v.modelo ? ` — ${v.modelo}` : ''}</option>)}
+                </select>
+              </div>
+            )}
           </div>
-          <div className="flex gap-3">
+          <div className="mt-4 flex gap-3">
             <button type="submit" disabled={salvando} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar'}</button>
             <button type="button" onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
           </div>
@@ -454,6 +523,8 @@ function LocaisTab() {
             <thead>
               <tr className="bg-slate-50">
                 <th className={thCad}><button onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')} className={btnSortCad}>Nome <SortIcon active dir={sortDir} /></button></th>
+                <th className={thCad}>Escopo</th>
+                <th className={thCad}>Filial</th>
                 <th className={thCad}>Status</th>
                 <th className={thCad}>Ações</th>
               </tr>
@@ -464,6 +535,8 @@ function LocaisTab() {
                   {editId === l.id ? (
                     <>
                       <td className="px-6 py-3"><input value={editNome} onChange={(e) => setEditNome(e.target.value)} maxLength={120} className="w-full rounded border border-slate-300 px-2 py-1 text-sm" /></td>
+                      <td className="px-6 py-3 text-slate-500">{escopo(l)}</td>
+                      <td className="px-6 py-3 text-slate-500">{filialNome(l.filialId)}</td>
                       <td className="px-6 py-3"><span className={pill(l.ativo)}>{l.ativo ? 'Ativo' : 'Inativo'}</span></td>
                       <td className="px-6 py-3">
                         <div className="flex items-center gap-2">
@@ -477,6 +550,8 @@ function LocaisTab() {
                       <td className="px-6 py-4">
                         <button onClick={() => { setEditId(l.id); setEditNome(l.nome); }} className="text-left font-medium text-sky-700 hover:underline">{l.nome}</button>
                       </td>
+                      <td className="px-6 py-4 text-slate-600">{escopo(l)}</td>
+                      <td className="px-6 py-4 text-slate-600">{filialNome(l.filialId)}</td>
                       <td className="px-6 py-4"><span className={pill(l.ativo)}>{l.ativo ? 'Ativo' : 'Inativo'}</span></td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">

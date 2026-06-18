@@ -139,6 +139,17 @@ export class AddParadaDto {
 export class CriarLocalParadaDto {
   @IsString() @IsNotEmpty() @MaxLength(120)
   nome!: string;
+
+  // Escopo (vazio = global). filialId vazio = todas as filiais. veiculoId e
+  // departamentoId são mutuamente exclusivos (a UI garante).
+  @IsOptional() @IsString() @MaxLength(40)
+  filialId?: string;
+
+  @IsOptional() @IsString() @MaxLength(40)
+  departamentoId?: string;
+
+  @IsOptional() @IsString() @MaxLength(40)
+  veiculoId?: string;
 }
 export class AtualizarLocalParadaDto {
   @IsOptional() @IsString() @MaxLength(120)
@@ -146,6 +157,16 @@ export class AtualizarLocalParadaDto {
 
   @IsOptional() @IsBoolean()
   ativo?: boolean;
+
+  // Escopo — string vazia limpa (vira global/todas); undefined não toca.
+  @IsOptional() @IsString() @MaxLength(40)
+  filialId?: string;
+
+  @IsOptional() @IsString() @MaxLength(40)
+  departamentoId?: string;
+
+  @IsOptional() @IsString() @MaxLength(40)
+  veiculoId?: string;
 }
 
 /** Planejamento de paradas (visitas) — lista de locais (texto livre). */
