@@ -94,6 +94,30 @@ export async function adicionarParadaFrota(viagemId: string, p: ParadaPayload): 
   });
 }
 
+export interface ParadaFrotaItem {
+  id: string; sequencia: number; status: 'PLANEJADA' | 'REALIZADA' | 'PULADA';
+  local: string | null; planejadoLocal: string | null;
+  km: number | null; realizadaEm: string | null; observacao: string | null;
+}
+
+/** Lista as paradas da viagem (planejadas + realizadas + puladas). */
+export async function listarParadasFrota(viagemId: string): Promise<ParadaFrotaItem[]> {
+  const { data } = await api.get<ParadaFrotaItem[]>(`${LOGISTICA_BASE}/frota/viagens/${viagemId}/paradas`);
+  return data;
+}
+
+export interface CheckinPayload { km?: number; latitude?: number; longitude?: number; observacao?: string }
+
+/** Check-in numa parada planejada → REALIZADA (KM + GPS opcional + obs). */
+export async function checkinParadaFrota(viagemId: string, paradaId: string, p: CheckinPayload): Promise<void> {
+  await api.patch(`${LOGISTICA_BASE}/frota/viagens/${viagemId}/paradas/${paradaId}/checkin`, p);
+}
+
+/** Marca uma parada planejada como PULADA. */
+export async function pularParadaFrota(viagemId: string, paradaId: string): Promise<void> {
+  await api.patch(`${LOGISTICA_BASE}/frota/viagens/${viagemId}/paradas/${paradaId}/pular`, {});
+}
+
 export async function tiposDespesa(): Promise<TipoDespesa[]> {
   const { data } = await api.get<TipoDespesa[]>(`${LOGISTICA_BASE}/despesas/tipos`, { params: { ativos: 'true' } });
   return data;

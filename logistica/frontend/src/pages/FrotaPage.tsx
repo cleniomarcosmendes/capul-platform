@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Banknote, Fuel, Loader2, LogIn, LogOut, Paperclip, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
@@ -20,7 +20,16 @@ export interface ViagemFrota {
   dataHoraSaida?: string | null; dataHoraChegada?: string | null;
   paradas?: number;
 }
-export interface ParadaFrota { id: string; sequencia: number; local: string; km?: number | null; dataHora?: string | null; observacao?: string | null }
+export interface ParadaFrota {
+  id: string; sequencia: number; local: string | null; km?: number | null;
+  dataHora?: string | null; observacao?: string | null;
+  status?: 'PLANEJADA' | 'REALIZADA' | 'PULADA'; planejadoLocal?: string | null; realizadaEm?: string | null;
+}
+const PARADA_META: Record<string, { label: string; cls: string }> = {
+  PLANEJADA: { label: 'Planejada', cls: 'bg-amber-100 text-amber-700' },
+  REALIZADA: { label: 'Realizada', cls: 'bg-emerald-100 text-emerald-700' },
+  PULADA: { label: 'Pulada', cls: 'bg-slate-200 text-slate-500' },
+};
 interface VeiculoDisp { id: string; placa: string; modelo?: string | null; situacao: string; kmAtual: number }
 export interface TipoDespesa { id: string; nome: string }
 export interface FornecedorDespesa { id: string; nome: string; ativo: boolean }
@@ -509,6 +518,11 @@ export function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () =
   const [km, setKm] = useState('');
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [planejados, setPlanejados] = useState('');
+  const [planejando, setPlanejando] = useState(false);
+  const [checkinId, setCheckinId] = useState<string | null>(null);
+  const [checkinKm, setCheckinKm] = useState('');
+  const [checkinObs, setCheckinObs] = useState('');
   const editavel = v.situacao !== 'CANCELADA';
 
   const carregar = async () => {
@@ -540,6 +554,43 @@ export function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () =
     }
   };
 
+  // Planejar várias visitas (uma por linha) → status PLANEJADA.
+  const planejar = async () => {
+    const locais = planejados.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (locais.length === 0) { toast('warning', 'Informe ao menos um local (um por linha).'); return; }
+    setPlanejando(true);
+    try {
+      await logisticaApi.post(`/frota/viagens/${v.id}/paradas/planejar`, { locais });
+      setPlanejados('');
+      await carregar(); onChanged();
+    } catch (e) {
+      toast('error', errMsg(e, 'Falha ao planejar paradas.'));
+    } finally {
+      setPlanejando(false);
+    }
+  };
+
+  const checkin = async (pid: string) => {
+    try {
+      await logisticaApi.patch(`/frota/viagens/${v.id}/paradas/${pid}/checkin`, {
+        km: checkinKm === '' ? undefined : Number(checkinKm), observacao: checkinObs.trim() || undefined,
+      });
+      setCheckinId(null); setCheckinKm(''); setCheckinObs('');
+      await carregar(); onChanged();
+    } catch (e) {
+      toast('error', errMsg(e, 'Falha no check-in.'));
+    }
+  };
+
+  const pular = async (pid: string) => {
+    try {
+      await logisticaApi.patch(`/frota/viagens/${v.id}/paradas/${pid}/pular`);
+      await carregar(); onChanged();
+    } catch (e) {
+      toast('error', errMsg(e, 'Falha ao pular parada.'));
+    }
+  };
+
   const remover = async (pid: string) => {
     try {
       await logisticaApi.delete(`/frota/viagens/${v.id}/paradas/${pid}`);
@@ -551,7 +602,7 @@ export function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () =
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-500">Paradas da viagem #{v.numero} — registro dos pontos de rota (o caderno digital da frota).</p>
+      <p className="text-xs text-slate-500">Paradas da viagem #{v.numero} — caderno digital da rota. Planeje as visitas (opcional) e dê baixa em cada uma; o retorno é o que fecha a viagem.</p>
 
       {loading ? (
         <div className="flex items-center gap-2 py-3 text-sm text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
@@ -560,45 +611,80 @@ export function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () =
       ) : (
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase text-slate-400">
-            <tr><th className="py-1 pr-3">#</th><th className="py-1 pr-3">Local</th><th className="py-1 pr-3">KM</th><th className="py-1 pr-3">Hora</th><th className="py-1 pr-3">Observação</th><th></th></tr>
+            <tr><th className="py-1 pr-3">#</th><th className="py-1 pr-3">Local</th><th className="py-1 pr-3">Situação</th><th className="py-1 pr-3">KM</th><th className="py-1 pr-3">Hora</th><th className="py-1 pr-3">Observação</th><th></th></tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {paradas.map((p) => (
-              <tr key={p.id}>
+            {paradas.map((p) => {
+              const meta = PARADA_META[p.status ?? 'REALIZADA'] ?? PARADA_META.REALIZADA;
+              const planejada = p.status === 'PLANEJADA';
+              return (
+              <Fragment key={p.id}>
+              <tr>
                 <td className="py-1 pr-3 font-mono text-slate-400">{p.sequencia}</td>
-                <td className="py-1 pr-3">{p.local}</td>
+                <td className="py-1 pr-3">{p.local ?? p.planejadoLocal ?? '—'}</td>
+                <td className="py-1 pr-3"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${meta.cls}`}>{meta.label}</span></td>
                 <td className="py-1 pr-3 tabular-nums">{p.km ?? '—'}</td>
-                <td className="py-1 pr-3 text-slate-500">{fmtDateTime(p.dataHora)}</td>
+                <td className="py-1 pr-3 text-slate-500">{fmtDateTime(p.realizadaEm ?? p.dataHora)}</td>
                 <td className="py-1 pr-3 text-slate-500">{p.observacao ?? '—'}</td>
                 <td className="py-1 text-right">
-                  {editavel && (
-                    <button onClick={() => void remover(p.id)} className="text-slate-400 hover:text-rose-600" title="Remover">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                  {editavel && planejada && (
+                    <span className="inline-flex gap-2">
+                      <button onClick={() => { setCheckinId(checkinId === p.id ? null : p.id); setCheckinKm(''); setCheckinObs(''); }} className="text-xs font-medium text-emerald-700 hover:underline">Cheguei</button>
+                      <button onClick={() => void pular(p.id)} className="text-xs text-slate-500 hover:underline">Pular</button>
+                      <button onClick={() => void remover(p.id)} className="text-slate-400 hover:text-rose-600" title="Remover"><Trash2 className="h-3.5 w-3.5" /></button>
+                    </span>
+                  )}
+                  {editavel && !planejada && (
+                    <button onClick={() => void remover(p.id)} className="text-slate-400 hover:text-rose-600" title="Remover"><Trash2 className="h-3.5 w-3.5" /></button>
                   )}
                 </td>
               </tr>
-            ))}
+              {checkinId === p.id && (
+                <tr className="bg-emerald-50/40">
+                  <td></td>
+                  <td colSpan={6} className="py-2 pr-3">
+                    <div className="flex flex-wrap items-end gap-2">
+                      <input type="number" value={checkinKm} onChange={(e) => setCheckinKm(e.target.value)} placeholder="KM no local" className="w-28 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+                      <input value={checkinObs} onChange={(e) => setCheckinObs(e.target.value)} placeholder="Observação (opcional)" maxLength={255} className="min-w-[12rem] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+                      <button onClick={() => void checkin(p.id)} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700">Confirmar chegada</button>
+                      <button onClick={() => setCheckinId(null)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-white">Cancelar</button>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
+              );
+            })}
           </tbody>
         </table>
       )}
 
       {editavel && (
-        <div className="flex flex-wrap items-end gap-2 border-t border-slate-200 pt-3">
-          <input value={local} onChange={(e) => setLocal(e.target.value)} placeholder="Local da parada" maxLength={120} className="min-w-[12rem] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
-          <input type="number" value={km} onChange={(e) => setKm(e.target.value)} placeholder="KM" className="w-24 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
-          <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observação" maxLength={255} className="min-w-[10rem] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
-          <button onClick={() => void adicionar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
-            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Adicionar
-          </button>
-        </div>
+        <>
+          <div className="flex flex-wrap items-end gap-2 border-t border-slate-200 pt-3">
+            <input value={local} onChange={(e) => setLocal(e.target.value)} placeholder="Registrar parada agora (local)" maxLength={120} className="min-w-[12rem] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+            <input type="number" value={km} onChange={(e) => setKm(e.target.value)} placeholder="KM" className="w-24 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+            <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observação" maxLength={255} className="min-w-[10rem] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+            <button onClick={() => void adicionar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+              {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Adicionar
+            </button>
+          </div>
+          <details className="border-t border-slate-200 pt-3">
+            <summary className="cursor-pointer text-sm font-medium text-slate-600">Planejar visitas (opcional)</summary>
+            <p className="mt-1 text-xs text-slate-400">Um local por linha — entram como <b>planejadas</b> e você dá baixa ("Cheguei") durante a viagem.</p>
+            <textarea value={planejados} onChange={(e) => setPlanejados(e.target.value)} rows={3} placeholder={'Cliente A\nFornecedor B\nBanco Centro'} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <button onClick={() => void planejar()} disabled={planejando} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-sky-300 px-3 py-1.5 text-sm font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50">
+              {planejando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Planejar paradas
+            </button>
+          </details>
+        </>
       )}
     </div>
   );
 }
 
 export function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => void; onDone: () => void }) {
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
   const [matricula, setMatricula] = useState(v.condutorMatricula ?? '');
   // O condutor já é conhecido pela viagem (da saída) — começa identificado.
   const [nome, setNome] = useState<string | null>(v.condutorNome ?? null);
@@ -650,6 +736,17 @@ export function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: (
   const registrar = async () => {
     if (!credOk) { toast('warning', 'Valide a matrícula e a senha do condutor.'); return; }
     if (kmFinal === '') { toast('warning', 'Informe o KM de retorno.'); return; }
+    // Aviso NÃO-bloqueante: paradas planejadas sem baixa (decisão: retorno é o obrigatório).
+    try {
+      const { data: ps } = await logisticaApi.get<ParadaFrota[]>(`/frota/viagens/${v.id}/paradas`);
+      const pend = ps.filter((p) => p.status === 'PLANEJADA').length;
+      if (pend > 0) {
+        const ok = await confirm('Paradas planejadas sem baixa',
+          `Há ${pend} parada(s) planejada(s) sem check-in. Concluir a viagem mesmo assim?`,
+          { confirmLabel: 'Concluir', variant: 'warning' });
+        if (!ok) return;
+      }
+    } catch { /* se falhar a checagem, não bloqueia o retorno */ }
     setSalvando(true);
     try {
       await logisticaApi.post(`/frota/viagens/${v.id}/retorno`, {

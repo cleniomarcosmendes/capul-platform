@@ -3,13 +3,15 @@ import {
   ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { useFocusEffect } from '@react-navigation/native';
 import { isAxiosError } from 'axios';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import {
   listarViagensFrota, registrarRetorno, tiposDespesa, lancarDespesaViagem,
-  fornecedoresDespesa, adicionarParadaFrota, type FornecedorDespesa,
+  fornecedoresDespesa, adicionarParadaFrota, listarParadasFrota,
+  checkinParadaFrota, pularParadaFrota, type FornecedorDespesa, type ParadaFrotaItem,
 } from '../api/frota';
 import type { TipoDespesa, ViagemFrota } from '../types/api';
 
@@ -66,25 +68,60 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
 }
 
 function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrada: () => void }) {
+  const [paradas, setParadas] = useState<ParadaFrotaItem[]>([]);
   const [local, setLocal] = useState('');
   const [km, setKm] = useState('');
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
+  // Check-in da parada planejada selecionada.
+  const [checkinId, setCheckinId] = useState<string | null>(null);
+  const [ckKm, setCkKm] = useState('');
+  const [ckObs, setCkObs] = useState('');
+  const [ckBusy, setCkBusy] = useState(false);
+
+  const carregar = useCallback(async () => {
+    try { setParadas(await listarParadasFrota(viagem.id)); } catch { /* mantém */ }
+  }, [viagem.id]);
+  useEffect(() => { void carregar(); }, [carregar]);
+
+  const planejadas = paradas.filter((p) => p.status === 'PLANEJADA');
+
+  async function confirmarChegada(pid: string) {
+    setCkBusy(true);
+    // GPS opcional: captura automática; se negar permissão, segue sem coordenada.
+    let latitude: number | undefined; let longitude: number | undefined;
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        latitude = pos.coords.latitude; longitude = pos.coords.longitude;
+      }
+    } catch { /* sem GPS — não trava */ }
+    try {
+      await checkinParadaFrota(viagem.id, pid, {
+        km: ckKm !== '' ? Number(ckKm) : undefined, latitude, longitude, observacao: ckObs.trim() || undefined,
+      });
+      setCheckinId(null); setCkKm(''); setCkObs('');
+      await carregar(); onRegistrada();
+    } catch (e) {
+      const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
+      Alert.alert('Não foi possível dar baixa', String(msg || 'Tente novamente.'));
+    } finally { setCkBusy(false); }
+  }
+
+  async function pular(pid: string) {
+    try { await pularParadaFrota(viagem.id, pid); await carregar(); onRegistrada(); }
+    catch { Alert.alert('Erro', 'Não foi possível pular a parada.'); }
+  }
 
   const podeRegistrar = !!local.trim() && !salvando;
-
   async function registrar() {
     if (!podeRegistrar) return;
     setSalvando(true);
     try {
-      await adicionarParadaFrota(viagem.id, {
-        local: local.trim(),
-        km: km !== '' ? Number(km) : undefined,
-        observacao: obs.trim() || undefined,
-      });
-      // Limpa pra registrar a próxima parada sem sair (o "caderno" da rota).
+      await adicionarParadaFrota(viagem.id, { local: local.trim(), km: km !== '' ? Number(km) : undefined, observacao: obs.trim() || undefined });
       setLocal(''); setKm(''); setObs('');
-      onRegistrada();
+      await carregar(); onRegistrada();
       Alert.alert('Parada registrada', 'Pode registrar a próxima quando chegar.');
     } catch (e) {
       const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
@@ -94,8 +131,38 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
 
   return (
     <View style={styles.painel}>
-      <Text style={styles.dica}>Registre os pontos de parada durante a viagem (o caderno da rota). O retorno é o que fecha a viagem.</Text>
-      <Text style={styles.label}>Local da parada</Text>
+      <Text style={styles.dica}>Caderno da rota. Dê baixa nas visitas planejadas ou registre uma parada na hora. O retorno é o que fecha a viagem.</Text>
+
+      {planejadas.length > 0 && (
+        <>
+          <Text style={[styles.label, { marginTop: 4 }]}>Visitas planejadas ({planejadas.length})</Text>
+          {planejadas.map((p) => (
+            <View key={p.id} style={styles.paradaCard}>
+              <Text style={styles.paradaLocal}>📍 {p.planejadoLocal ?? p.local}</Text>
+              {checkinId === p.id ? (
+                <View style={{ gap: 6, marginTop: 6 }}>
+                  <TextInput style={styles.input} value={ckKm} onChangeText={setCkKm} keyboardType="numeric" placeholder="KM no local (opcional)" editable={!ckBusy} />
+                  <TextInput style={styles.input} value={ckObs} onChangeText={setCkObs} maxLength={255} placeholder="Observação (opcional)" editable={!ckBusy} />
+                  <Text style={styles.dicaMini}>📡 A localização (GPS) é capturada automaticamente ao confirmar.</Text>
+                  <View style={styles.paradaBtns}>
+                    <TouchableOpacity style={[styles.btnCheck, ckBusy && styles.registrarOff]} onPress={() => confirmarChegada(p.id)} disabled={ckBusy}>
+                      {ckBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnCheckTxt}>✅ Confirmar chegada</Text>}
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.btnCancel} onPress={() => setCheckinId(null)} disabled={ckBusy}><Text style={styles.btnCancelTxt}>Cancelar</Text></TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.paradaBtns}>
+                  <TouchableOpacity style={styles.btnCheck} onPress={() => { setCheckinId(p.id); setCkKm(''); setCkObs(''); }}><Text style={styles.btnCheckTxt}>Cheguei aqui</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.btnCancel} onPress={() => pular(p.id)}><Text style={styles.btnCancelTxt}>Pular</Text></TouchableOpacity>
+                </View>
+              )}
+            </View>
+          ))}
+        </>
+      )}
+
+      <Text style={[styles.label, { marginTop: 12 }]}>Registrar parada agora</Text>
       <TextInput style={styles.input} value={local} onChangeText={setLocal} maxLength={120} placeholder="Ex.: Posto BR, Cliente X, Oficina…" editable={!salvando} />
       <Text style={styles.label}>KM atual (opcional)</Text>
       <TextInput style={styles.input} value={km} onChangeText={setKm} keyboardType="numeric" editable={!salvando} />
@@ -118,12 +185,7 @@ function RetornoForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
 
   const podeRegistrar = !!matricula.trim() && !!senha && kmFinal !== '' && Number(kmFinal) >= 0 && !salvando;
 
-  async function registrar() {
-    if (!podeRegistrar) return;
-    if (viagem.kmInicial != null && Number(kmFinal) < viagem.kmInicial) {
-      Alert.alert('KM final', `O KM final (${kmFinal}) é menor que o KM de saída (${viagem.kmInicial}).`);
-      return;
-    }
+  async function executar() {
     setSalvando(true);
     try {
       await registrarRetorno(viagem.id, { matricula: matricula.trim(), senha, kmFinal: Number(kmFinal), observacoes: obs.trim() || undefined });
@@ -132,6 +194,27 @@ function RetornoForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
       const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
       Alert.alert('Não foi possível registrar', String(msg || 'Tente novamente.'));
     } finally { setSalvando(false); }
+  }
+
+  async function registrar() {
+    if (!podeRegistrar) return;
+    if (viagem.kmInicial != null && Number(kmFinal) < viagem.kmInicial) {
+      Alert.alert('KM final', `O KM final (${kmFinal}) é menor que o KM de saída (${viagem.kmInicial}).`);
+      return;
+    }
+    // Aviso NÃO-bloqueante: paradas planejadas sem baixa (retorno é o obrigatório).
+    try {
+      const ps = await listarParadasFrota(viagem.id);
+      const pend = ps.filter((p) => p.status === 'PLANEJADA').length;
+      if (pend > 0) {
+        Alert.alert('Paradas planejadas', `Há ${pend} parada(s) planejada(s) sem baixa. Concluir a viagem mesmo assim?`, [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Concluir', onPress: () => void executar() },
+        ]);
+        return;
+      }
+    } catch { /* se a checagem falhar, não bloqueia */ }
+    void executar();
   }
 
   return (
@@ -275,4 +358,12 @@ const styles = StyleSheet.create({
   registrar: { backgroundColor: CAPUL, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 14 },
   registrarOff: { opacity: 0.45 },
   registrarTxt: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  paradaCard: { borderWidth: 1, borderColor: '#fcd34d', backgroundColor: '#fffbeb', borderRadius: 10, padding: 12, marginTop: 8 },
+  paradaLocal: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
+  paradaBtns: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  btnCheck: { flex: 1, backgroundColor: '#059669', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  btnCheckTxt: { color: '#fff', fontWeight: '700' },
+  btnCancel: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', backgroundColor: '#fff' },
+  btnCancelTxt: { color: '#475569', fontWeight: '600' },
+  dicaMini: { fontSize: 11, color: '#64748b' },
 });
