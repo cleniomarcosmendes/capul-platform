@@ -55,6 +55,17 @@ com o Clenio: atacar na sessão de 15/06.**
 - **Spec §5.2:** ao adicionar parada na viagem, o app sugere local pelo GPS e KM pela distância.
   Hoje a parada é manual. Refinamento do app (só valida em device).
 
+### ⏳ 2026-06-18 — Mapa CONSOLIDADO das paradas/fazendas visitadas
+- **Origem:** Clenio 18/06 — "realizamos várias visitas em fazenda e precisamos mapear nossos
+  clientes/fazendas". Hoje (FEITO 18/06, commit `6accdcb`): toda parada — check-in da planejada
+  E ad-hoc — captura GPS (`parada.latitude/longitude`); o detalhe da viagem (web) já tem link
+  **"📍 mapa"** por parada (deep-link Google Maps, ponto-a-ponto).
+- **Falta (este item):** uma **tela de mapa único** com TODOS os pontos das paradas plotados
+  (pins), com filtro por período / veículo / cliente, pra enxergar a malha de
+  fazendas/clientes visitados. Reusar OSRM/Leaflet já cogitado na Fase 1 (ver
+  "Mapa em tempo real no Monitor"). Considerar agrupar paradas próximas e linkar com o
+  cliente/endereço quando houver. Dado já existe (lat/long nas paradas) — é só a visualização.
+
 ### ✅ 2026-06-15 — Carimbo na FOTO da prova de entrega (coords+endereço+data/hora) [FEITO]
 - **Origem:** Clenio mostrou comprovante do AliExpress/J&T (15/06) — foto com endereço +
   coordenadas + data/hora "queimados" na imagem. A foto crua não provava onde/quando.
