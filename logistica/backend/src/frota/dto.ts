@@ -129,6 +129,10 @@ export class AddParadaDto {
 
   @IsOptional() @IsNumber()
   longitude?: number;
+
+  // Idempotência (fila offline): reenvio com a mesma chave não duplica.
+  @IsOptional() @IsString() @MaxLength(60)
+  idempotencyKey?: string;
 }
 
 /** Planejamento de paradas (visitas) — lista de locais (texto livre). */

@@ -211,6 +211,12 @@ export class DespesaService {
     const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
     if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
 
+    // Idempotência (fila offline): se já chegou com essa chave, devolve a existente.
+    if (dto.idempotencyKey) {
+      const ja = await this.prisma.despesaVeiculo.findUnique({ where: { idempotencyKey: dto.idempotencyKey } });
+      if (ja) return ja;
+    }
+
     const despesa = await this.prisma.despesaVeiculo.create({
       data: {
         filialId: v.filialId,
@@ -226,6 +232,7 @@ export class DespesaService {
         autorMatricula: v.condutorMatricula,
         autorNome: v.condutorNome,
         criadoPorId: user.sub,
+        idempotencyKey: dto.idempotencyKey ?? null,
       },
     });
     return recibo ? this.anexarRecibo(despesa.id, despesa.filialId, recibo) : despesa;

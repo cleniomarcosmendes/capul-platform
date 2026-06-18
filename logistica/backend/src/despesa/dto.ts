@@ -86,6 +86,10 @@ export class LancarDespesaViagemDto {
 
   @IsOptional() @IsString() @MaxLength(255)
   observacao?: string;
+
+  // Idempotência (fila offline): reenvio com a mesma chave não duplica.
+  @IsOptional() @IsString() @MaxLength(60)
+  idempotencyKey?: string;
 }
 
 export class ContestarDespesaDto {

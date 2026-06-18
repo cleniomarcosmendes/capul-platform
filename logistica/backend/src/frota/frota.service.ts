@@ -463,6 +463,11 @@ export class FrotaService {
     const v = await this.viagemDaFilial(id, user);
     assertPodeOperarViagem(user, v);
     if (v.situacao === StatusViagem.CANCELADA) throw new BadRequestException('Viagem cancelada não recebe paradas.');
+    // Idempotência (fila offline): se já chegou com essa chave, devolve a existente.
+    if (dto.idempotencyKey) {
+      const ja = await this.prisma.parada.findUnique({ where: { idempotencyKey: dto.idempotencyKey } });
+      if (ja) return ja;
+    }
     return this.prisma.parada.create({
       data: {
         viagemId: id,
@@ -475,6 +480,7 @@ export class FrotaService {
         longitude: dto.longitude ?? null,
         dataHora: new Date(),
         realizadaEm: new Date(),
+        idempotencyKey: dto.idempotencyKey ?? null,
       },
       select: { id: true, sequencia: true, status: true, local: true, km: true, dataHora: true, observacao: true },
     });

@@ -272,6 +272,8 @@ model DespesaVeiculo {
   aprovadoPorId      String?   @map("aprovado_por_id")
   aprovadoEm         DateTime? @map("aprovado_em")
   motivoContestacao  String?   @map("motivo_contestacao")
+  // Chave de idempotência (Fase 2d offline): reenvio da fila não duplica a despesa.
+  idempotencyKey String? @unique @map("idempotency_key")
 
   @@index([filialId, situacao])
   @@index([veiculoId])
@@ -431,6 +433,8 @@ model Parada {
   status         StatusParada @default(REALIZADA)
   planejadoLocal String?      @map("planejado_local")
   realizadaEm    DateTime?    @map("realizada_em")
+  // Chave de idempotência (Fase 2d offline): reenvio da fila não duplica a parada.
+  idempotencyKey String?   @unique @map("idempotency_key")
   registradoEm DateTime  @default(now()) @map("registrado_em")
 
   @@index([viagemId, sequencia])
