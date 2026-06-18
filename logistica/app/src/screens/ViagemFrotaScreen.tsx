@@ -13,6 +13,10 @@ import {
   fornecedoresDespesa, adicionarParadaFrota, listarParadasFrota,
   checkinParadaFrota, pularParadaFrota, type FornecedorDespesa, type ParadaFrotaItem,
 } from '../api/frota';
+import {
+  enfileirarFrota, processarFilaFrota, contarPendentesFrota, onFilaFrotaChange, ehErroDeRede,
+} from '../offline/filaFrota';
+import { uuid } from '../lib/uuid';
 import type { TipoDespesa, ViagemFrota } from '../types/api';
 
 const CAPUL = '#1e7d3a';
@@ -25,6 +29,7 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
   const [viagem, setViagem] = useState<ViagemFrota | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [aba, setAba] = useState<Aba>(null);
+  const [pendentes, setPendentes] = useState(0);
 
   const carregar = useCallback(async () => {
     try {
@@ -33,13 +38,32 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
     } catch { /* mantém */ } finally { setCarregando(false); }
   }, [viagemId]);
 
-  useFocusEffect(useCallback(() => { void carregar(); }, [carregar]));
+  // Ao focar: tenta sincronizar a fila offline e recarrega.
+  useFocusEffect(useCallback(() => {
+    void processarFilaFrota().finally(() => void carregar());
+    void contarPendentesFrota().then(setPendentes);
+    const off = onFilaFrotaChange(setPendentes);
+    return off;
+  }, [carregar]));
+
+  const sincronizar = async () => {
+    const r = await processarFilaFrota();
+    await carregar();
+    if (r.enviadas > 0) Alert.alert('Sincronizado', `${r.enviadas} registro(s) enviado(s).`);
+    else if (r.restantes > 0) Alert.alert('Sem conexão', `${r.restantes} registro(s) ainda na fila.`);
+    if (r.descartadas.length) Alert.alert('Recusado pelo servidor', r.descartadas.map((d) => `• ${d.rotulo}: ${d.motivo}`).join('\n'));
+  };
 
   if (carregando) return <View style={styles.centro}><ActivityIndicator size="large" color={CAPUL} /></View>;
   if (!viagem) return <View style={styles.centro}><Text style={styles.vazio}>Viagem não está mais em curso.</Text></View>;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.conteudo}>
+      {pendentes > 0 && (
+        <TouchableOpacity style={styles.banner} onPress={() => void sincronizar()}>
+          <Text style={styles.bannerTxt}>📴 {pendentes} registro(s) aguardando sinal — toque para reenviar</Text>
+        </TouchableOpacity>
+      )}
       <View style={styles.cab}>
         <Text style={styles.placa}>{viagem.placa}{viagem.modelo ? ` · ${viagem.modelo}` : ''}</Text>
         <Text style={styles.linhaInfo}>Viagem #{viagem.numero} · {viagem.paradas} parada{viagem.paradas === 1 ? '' : 's'}</Text>
@@ -86,7 +110,7 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
 
   const planejadas = paradas.filter((p) => p.status === 'PLANEJADA');
 
-  async function confirmarChegada(pid: string) {
+  async function confirmarChegada(pid: string, rotulo: string) {
     setCkBusy(true);
     // GPS opcional: captura automática; se negar permissão, segue sem coordenada.
     let latitude: number | undefined; let longitude: number | undefined;
@@ -97,35 +121,53 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
         latitude = pos.coords.latitude; longitude = pos.coords.longitude;
       }
     } catch { /* sem GPS — não trava */ }
+    const payload = { km: ckKm !== '' ? Number(ckKm) : undefined, latitude, longitude, observacao: ckObs.trim() || undefined };
     try {
-      await checkinParadaFrota(viagem.id, pid, {
-        km: ckKm !== '' ? Number(ckKm) : undefined, latitude, longitude, observacao: ckObs.trim() || undefined,
-      });
+      await checkinParadaFrota(viagem.id, pid, payload);
       setCheckinId(null); setCkKm(''); setCkObs('');
       await carregar(); onRegistrada();
     } catch (e) {
-      const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
-      Alert.alert('Não foi possível dar baixa', String(msg || 'Tente novamente.'));
+      if (ehErroDeRede(e)) {
+        await enfileirarFrota({ id: uuid(), rotulo: `Check-in: ${rotulo}`, acao: { tipo: 'checkin', viagemId: viagem.id, paradaId: pid, payload } });
+        setCheckinId(null); setCkKm(''); setCkObs(''); onRegistrada();
+        Alert.alert('Salvo offline', 'Sem sinal — o check-in vai sincronizar quando a conexão voltar.');
+      } else {
+        const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
+        Alert.alert('Não foi possível dar baixa', String(msg || 'Tente novamente.'));
+      }
     } finally { setCkBusy(false); }
   }
 
-  async function pular(pid: string) {
+  async function pular(pid: string, rotulo: string) {
     try { await pularParadaFrota(viagem.id, pid); await carregar(); onRegistrada(); }
-    catch { Alert.alert('Erro', 'Não foi possível pular a parada.'); }
+    catch (e) {
+      if (ehErroDeRede(e)) {
+        await enfileirarFrota({ id: uuid(), rotulo: `Pular: ${rotulo}`, acao: { tipo: 'pular', viagemId: viagem.id, paradaId: pid } });
+        onRegistrada();
+        Alert.alert('Salvo offline', 'Sem sinal — vai sincronizar quando a conexão voltar.');
+      } else { Alert.alert('Erro', 'Não foi possível pular a parada.'); }
+    }
   }
 
   const podeRegistrar = !!local.trim() && !salvando;
   async function registrar() {
     if (!podeRegistrar) return;
     setSalvando(true);
+    const payload = { local: local.trim(), km: km !== '' ? Number(km) : undefined, observacao: obs.trim() || undefined, idempotencyKey: uuid() };
     try {
-      await adicionarParadaFrota(viagem.id, { local: local.trim(), km: km !== '' ? Number(km) : undefined, observacao: obs.trim() || undefined });
+      await adicionarParadaFrota(viagem.id, payload);
       setLocal(''); setKm(''); setObs('');
       await carregar(); onRegistrada();
       Alert.alert('Parada registrada', 'Pode registrar a próxima quando chegar.');
     } catch (e) {
-      const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
-      Alert.alert('Não foi possível registrar', String(msg || 'Tente novamente.'));
+      if (ehErroDeRede(e)) {
+        await enfileirarFrota({ id: payload.idempotencyKey, rotulo: `Parada: ${payload.local}`, acao: { tipo: 'parada', viagemId: viagem.id, payload } });
+        setLocal(''); setKm(''); setObs(''); onRegistrada();
+        Alert.alert('Salvo offline', 'Sem sinal — a parada vai sincronizar quando a conexão voltar.');
+      } else {
+        const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
+        Alert.alert('Não foi possível registrar', String(msg || 'Tente novamente.'));
+      }
     } finally { setSalvando(false); }
   }
 
@@ -146,7 +188,7 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
                   <TextInput style={styles.input} value={ckObs} onChangeText={setCkObs} maxLength={255} placeholder="Observação (opcional)" editable={!ckBusy} />
                   <Text style={styles.dicaMini}>📡 A localização (GPS) é capturada automaticamente ao confirmar.</Text>
                   <View style={styles.paradaBtns}>
-                    <TouchableOpacity style={[styles.btnCheck, ckBusy && styles.registrarOff]} onPress={() => confirmarChegada(p.id)} disabled={ckBusy}>
+                    <TouchableOpacity style={[styles.btnCheck, ckBusy && styles.registrarOff]} onPress={() => confirmarChegada(p.id, p.planejadoLocal ?? p.local ?? 'parada')} disabled={ckBusy}>
                       {ckBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnCheckTxt}>✅ Confirmar chegada</Text>}
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.btnCancel} onPress={() => setCheckinId(null)} disabled={ckBusy}><Text style={styles.btnCancelTxt}>Cancelar</Text></TouchableOpacity>
@@ -155,7 +197,7 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
               ) : (
                 <View style={styles.paradaBtns}>
                   <TouchableOpacity style={styles.btnCheck} onPress={() => { setCheckinId(p.id); setCkKm(''); setCkObs(''); }}><Text style={styles.btnCheckTxt}>Cheguei aqui</Text></TouchableOpacity>
-                  <TouchableOpacity style={styles.btnCancel} onPress={() => pular(p.id)}><Text style={styles.btnCancelTxt}>Pular</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.btnCancel} onPress={() => pular(p.id, p.planejadoLocal ?? p.local ?? 'parada')}><Text style={styles.btnCancelTxt}>Pular</Text></TouchableOpacity>
                 </View>
               )}
             </View>
@@ -268,15 +310,18 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
   async function lancar() {
     if (!podeLancar) return;
     setSalvando(true);
+    const payload = { viagemId: viagem.id, tipoDespesaId: tipoId, valor: Number(valor), fornecedorId: fornecedorId || undefined, fornecedor: fornecedor.trim() || undefined, idempotencyKey: uuid() };
     try {
-      await lancarDespesaViagem(
-        { viagemId: viagem.id, tipoDespesaId: tipoId, valor: Number(valor), fornecedorId: fornecedorId || undefined, fornecedor: fornecedor.trim() || undefined },
-        fotoUri ?? undefined,
-      );
+      await lancarDespesaViagem(payload, fotoUri ?? undefined);
       Alert.alert('Despesa lançada', 'Entrou como pendente de validação do supervisor.', [{ text: 'OK', onPress: onPronto }]);
     } catch (e) {
-      const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
-      Alert.alert('Não foi possível lançar', String(msg || 'Tente novamente.'));
+      if (ehErroDeRede(e)) {
+        await enfileirarFrota({ id: payload.idempotencyKey, rotulo: `Despesa R$ ${valor}`, acao: { tipo: 'despesa', viagemId: viagem.id, payload, fotoUri: fotoUri ?? null } });
+        Alert.alert('Salvo offline', 'Sem sinal — a despesa (e a foto) vão sincronizar quando a conexão voltar.', [{ text: 'OK', onPress: onPronto }]);
+      } else {
+        const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
+        Alert.alert('Não foi possível lançar', String(msg || 'Tente novamente.'));
+      }
     } finally { setSalvando(false); }
   }
 
@@ -369,4 +414,6 @@ const styles = StyleSheet.create({
   btnCancel: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', backgroundColor: '#fff' },
   btnCancelTxt: { color: '#475569', fontWeight: '600' },
   dicaMini: { fontSize: 11, color: '#64748b' },
+  banner: { backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fcd34d', borderRadius: 10, padding: 12 },
+  bannerTxt: { color: '#92400e', fontWeight: '700', textAlign: 'center' },
 });

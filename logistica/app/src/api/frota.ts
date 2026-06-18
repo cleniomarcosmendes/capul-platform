@@ -85,15 +85,11 @@ export async function registrarRetorno(viagemId: string, p: RetornoPayload): Pro
 }
 
 /** Tipos de despesa ativos (pra o select do lançamento). */
-export interface ParadaPayload { local: string; km?: number; observacao?: string }
+export interface ParadaPayload { local: string; km?: number; observacao?: string; latitude?: number; longitude?: number; idempotencyKey?: string }
 
 /** Registra uma parada (ad-hoc) na viagem em curso — o "caderno" da frota. */
 export async function adicionarParadaFrota(viagemId: string, p: ParadaPayload): Promise<void> {
-  await api.post(`${LOGISTICA_BASE}/frota/viagens/${viagemId}/paradas`, {
-    local: p.local,
-    km: p.km,
-    observacao: p.observacao,
-  });
+  await api.post(`${LOGISTICA_BASE}/frota/viagens/${viagemId}/paradas`, p);
 }
 
 export interface ParadaFrotaItem {
@@ -140,6 +136,7 @@ export interface DespesaViagemPayload {
   fornecedorId?: string;
   fornecedor?: string;
   observacao?: string;
+  idempotencyKey?: string;
 }
 
 /**
@@ -155,6 +152,7 @@ export async function lancarDespesaViagem(p: DespesaViagemPayload, fotoUri?: str
   if (p.fornecedorId) form.append('fornecedorId', p.fornecedorId);
   if (p.fornecedor) form.append('fornecedor', p.fornecedor);
   if (p.observacao) form.append('observacao', p.observacao);
+  if (p.idempotencyKey) form.append('idempotencyKey', p.idempotencyKey);
   if (fotoUri) {
     const isPng = fotoUri.toLowerCase().endsWith('.png');
     form.append('comprovante', {
