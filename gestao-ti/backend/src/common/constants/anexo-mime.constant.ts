@@ -21,6 +21,8 @@ export const ALLOWED_MIMES_ANEXO = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   // Texto
   'text/plain', 'text/csv',
+  // XML (NF-e, retornos, configs) — anexo é só armazenado/baixado, não parseado.
+  'application/xml', 'text/xml',
   // Arquivos compactados
   'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
   // Certificados (chamados de cert/A1, etc.)
@@ -36,7 +38,7 @@ export const ALLOWED_MIMES_ANEXO = [
  *
  * Validação por extensão case-insensitive.
  */
-export const ALLOWED_EXTENSIONS_ANEXO = ['.trc', '.log'];
+export const ALLOWED_EXTENSIONS_ANEXO = ['.trc', '.log', '.xml'];
 
 /**
  * Decide se um arquivo é permitido como anexo no Gestão TI.
