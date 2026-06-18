@@ -6,6 +6,7 @@ import { ConfirmProvider } from './components/ConfirmDialog';
 import { MainLayout } from './layouts/MainLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { NfeConsultaPage } from './pages/NfeConsultaPage';
+import { NfeBuscaPage } from './pages/NfeBuscaPage';
 import { NfePendenciasPage } from './pages/NfePendenciasPage';
 import { CteConsultaPage } from './pages/CteConsultaPage';
 import { CteRecebidosPage } from './pages/CteRecebidosPage';
@@ -116,6 +117,7 @@ function App() {
               }
             />
             <Route path="nfe" element={<NfeConsultaPage />} />
+            <Route path="nfe/busca" element={<NfeBuscaPage />} />
             <Route path="nfe/pendencias" element={<NfePendenciasPage />} />
             <Route path="cte" element={<CteRecebidosPage />} />
             <Route path="cte/consulta-por-chave" element={<CteConsultaPage />} />

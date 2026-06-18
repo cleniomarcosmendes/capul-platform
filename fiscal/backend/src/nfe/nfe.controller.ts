@@ -249,6 +249,30 @@ export class NfeController {
   }
 
   /**
+   * Busca de NF-e (18/06/2026) — por NÚMERO da nota (9 dígitos, NÃO a chave)
+   * ou por RAZÃO SOCIAL. 100% LOCAL: lê só `fiscal.documento_consulta`, nunca
+   * dispara SEFAZ (protege o limite diário do CNPJ da CAPUL). O grid resultante
+   * abre a Consulta NF-e por chave já existente.
+   */
+  @Get('buscar')
+  @RoleMinima('OPERADOR_ENTRADA')
+  async buscar(
+    @Query('tipo') tipo: string,
+    @Query('termo') termo?: string,
+    @Query('filial') filial?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.documentoConsulta.buscar({
+      tipo: tipo === 'razao' ? 'razao' : 'numero',
+      termo: termo ?? '',
+      filial: filial?.trim() || undefined,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  /**
    * Marca pendencia (preNotaFalhou ou pendenteAmarracao) como resolvida
    * manualmente no Protheus pelo setor fiscal.
    */

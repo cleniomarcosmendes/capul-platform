@@ -367,6 +367,8 @@ export class NfeService {
         : null,
       cnpjEmitente: parsed.emitente.cnpj ?? null,
       cnpjDestinatario: parsed.destinatario.cnpj ?? null,
+      emitenteRazaoSocial: parsed.emitente.razaoSocial ?? null,
+      destinatarioRazaoSocial: parsed.destinatario.razaoSocial ?? null,
       numeroNF: parsed.dadosGerais.numero || null,
       serie: parsed.dadosGerais.serie || null,
       valorTotal: parsed.totais.valorNota,

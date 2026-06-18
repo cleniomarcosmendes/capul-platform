@@ -36,6 +36,7 @@ const menuItems: MenuItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/', minRole: 'GESTOR_FISCAL' },
   { section: 'DOCUMENTOS FISCAIS' },
   { label: 'Consulta NF-e', icon: FileText, path: '/nfe' },
+  { label: 'Busca de NF-e', icon: FileSearch, path: '/nfe/busca' },
   { label: 'Pendências NF-e', icon: AlertTriangle, path: '/nfe/pendencias' },
   // /cte aponta para CteRecebidosPage (listagem dos CT-es baixados via distNSU).
   // /cte/consulta-por-chave fica como rota secundaria (limitada pelo Nacional).

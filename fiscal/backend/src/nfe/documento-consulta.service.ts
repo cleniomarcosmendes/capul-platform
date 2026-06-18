@@ -14,6 +14,8 @@ export interface RegistrarConsultaInput {
   dataAutorizacao?: Date | null;
   cnpjEmitente?: string | null;
   cnpjDestinatario?: string | null;
+  emitenteRazaoSocial?: string | null;
+  destinatarioRazaoSocial?: string | null;
   numeroNF?: string | null;
   serie?: string | null;
   valorTotal?: number | null;
@@ -54,6 +56,8 @@ export class DocumentoConsultaService {
     const statusAtual = trunc(input.statusAtual, 30);
     const numeroNF = trunc(input.numeroNF, 9);
     const serie = trunc(input.serie, 3);
+    const emitenteRazaoSocial = trunc(input.emitenteRazaoSocial, 120);
+    const destinatarioRazaoSocial = trunc(input.destinatarioRazaoSocial, 120);
     const ambienteSefaz = trunc(input.ambienteSefaz, 20) ?? input.ambienteSefaz;
     // Flags granulares (08/05/2026): undefined deixa Prisma nao alterar campo,
     // null sobrescreve. So passamos null/valor quando a chamada teve gravacao
@@ -82,6 +86,8 @@ export class DocumentoConsultaService {
         dataAutorizacao: input.dataAutorizacao,
         cnpjEmitente: input.cnpjEmitente,
         cnpjDestinatario: input.cnpjDestinatario,
+        emitenteRazaoSocial,
+        destinatarioRazaoSocial,
         numeroNF,
         serie,
         valorTotal: valorTotal !== null ? valorTotal : undefined,
@@ -100,6 +106,8 @@ export class DocumentoConsultaService {
         dataAutorizacao: input.dataAutorizacao ?? undefined,
         cnpjEmitente: input.cnpjEmitente ?? undefined,
         cnpjDestinatario: input.cnpjDestinatario ?? undefined,
+        emitenteRazaoSocial: emitenteRazaoSocial ?? undefined,
+        destinatarioRazaoSocial: destinatarioRazaoSocial ?? undefined,
         numeroNF: numeroNF ?? undefined,
         serie: serie ?? undefined,
         valorTotal: valorTotal !== null ? valorTotal : undefined,
@@ -132,6 +140,83 @@ export class DocumentoConsultaService {
       orderBy: { updatedAt: 'desc' },
       take: limit,
     });
+  }
+
+  /**
+   * Busca de NF-e (18/06/2026) — 100% LOCAL, NUNCA toca SEFAZ.
+   *
+   * Lê apenas `fiscal.documento_consulta` (NF-es já consultadas por chave,
+   * que portanto já têm metadados persistidos). Dois modos:
+   *
+   *  - 'numero'  → casa o número da nota IGNORANDO zeros à esquerda que o
+   *                usuário normalmente não digita (XML grava `nNF` sem zeros,
+   *                então normalizamos os dois lados).
+   *  - 'razao'   → ILIKE parcial na razão social do emitente OU destinatário
+   *                (campos preenchidos a partir da consulta que populou a linha;
+   *                linhas antigas sem razão não aparecem na busca por nome).
+   *
+   * Retorna linhas enxutas pro grid; o clique abre a Consulta NF-e por chave.
+   */
+  async buscar(filtros: {
+    tipo: 'numero' | 'razao';
+    termo: string;
+    filial?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = Math.max(1, filtros.page ?? 1);
+    const limit = Math.min(100, Math.max(1, filtros.limit ?? 20));
+    const skip = (page - 1) * limit;
+
+    const where: any = { tipoDocumento: 'NFE' };
+    if (filtros.filial) where.filial = filtros.filial;
+
+    const termo = (filtros.termo ?? '').trim();
+    if (filtros.tipo === 'numero') {
+      // Remove tudo que não é dígito e zeros à esquerda — "000012345" → "12345".
+      const normalizado = termo.replace(/\D/g, '').replace(/^0+/, '');
+      if (!normalizado) {
+        return { items: [], total: 0, page, limit, totalPages: 0 };
+      }
+      where.numeroNF = normalizado;
+    } else {
+      if (termo.length < 2) {
+        return { items: [], total: 0, page, limit, totalPages: 0 };
+      }
+      where.OR = [
+        { emitenteRazaoSocial: { contains: termo, mode: 'insensitive' } },
+        { destinatarioRazaoSocial: { contains: termo, mode: 'insensitive' } },
+      ];
+    }
+
+    const select = {
+      id: true,
+      chave: true,
+      filial: true,
+      numeroNF: true,
+      serie: true,
+      cnpjEmitente: true,
+      cnpjDestinatario: true,
+      emitenteRazaoSocial: true,
+      destinatarioRazaoSocial: true,
+      valorTotal: true,
+      statusAtual: true,
+      dataAutorizacao: true,
+      updatedAt: true,
+    } as const;
+
+    const [total, items] = await Promise.all([
+      this.prisma.documentoConsulta.count({ where }),
+      this.prisma.documentoConsulta.findMany({
+        where,
+        select,
+        orderBy: [{ dataAutorizacao: 'desc' }, { updatedAt: 'desc' }],
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   /**
