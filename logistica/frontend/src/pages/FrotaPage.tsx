@@ -24,6 +24,7 @@ export interface ParadaFrota {
   id: string; sequencia: number; local: string | null; km?: number | null;
   dataHora?: string | null; observacao?: string | null;
   status?: 'PLANEJADA' | 'REALIZADA' | 'PULADA'; planejadoLocal?: string | null; realizadaEm?: string | null;
+  latitude?: number | null; longitude?: number | null;
 }
 const PARADA_META: Record<string, { label: string; cls: string }> = {
   PLANEJADA: { label: 'Planejada', cls: 'bg-amber-100 text-amber-700' },
@@ -656,7 +657,13 @@ export function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () =
               <Fragment key={p.id}>
               <tr>
                 <td className="py-1 pr-3 font-mono text-slate-400">{p.sequencia}</td>
-                <td className="py-1 pr-3">{p.local ?? p.planejadoLocal ?? '—'}</td>
+                <td className="py-1 pr-3">
+                  {p.local ?? p.planejadoLocal ?? '—'}
+                  {p.latitude != null && p.longitude != null && (
+                    <a href={`https://www.google.com/maps?q=${p.latitude},${p.longitude}`} target="_blank" rel="noopener noreferrer"
+                      title={`Abrir no mapa (${p.latitude}, ${p.longitude})`} className="ml-1.5 text-xs text-sky-600 hover:underline">📍 mapa</a>
+                  )}
+                </td>
                 <td className="py-1 pr-3"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${meta.cls}`}>{meta.label}</span></td>
                 <td className="py-1 pr-3 tabular-nums">{p.km ?? '—'}</td>
                 <td className="py-1 pr-3 text-slate-500">{fmtDateTime(p.realizadaEm ?? p.dataHora)}</td>

@@ -23,6 +23,17 @@ const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'ViagemFrota'>;
 type Aba = null | 'parada' | 'retorno' | 'despesa';
 
+/** GPS opcional com captura automática: se negar permissão/falhar, segue sem
+ *  coordenada (não trava a operação). Usado na parada ad-hoc e no check-in. */
+async function capturarCoordenadas(): Promise<{ latitude?: number; longitude?: number }> {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') return {};
+    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+  } catch { return {}; }
+}
+
 /** Detalhe de uma viagem de frota EM CURSO: registrar retorno OU lançar despesa. */
 export function ViagemFrotaScreen({ route, navigation }: Props) {
   const { viagemId } = route.params;
@@ -112,15 +123,7 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
 
   async function confirmarChegada(pid: string, rotulo: string) {
     setCkBusy(true);
-    // GPS opcional: captura automática; se negar permissão, segue sem coordenada.
-    let latitude: number | undefined; let longitude: number | undefined;
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        latitude = pos.coords.latitude; longitude = pos.coords.longitude;
-      }
-    } catch { /* sem GPS — não trava */ }
+    const { latitude, longitude } = await capturarCoordenadas();
     const payload = { km: ckKm !== '' ? Number(ckKm) : undefined, latitude, longitude, observacao: ckObs.trim() || undefined };
     try {
       await checkinParadaFrota(viagem.id, pid, payload);
@@ -153,7 +156,9 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
   async function registrar() {
     if (!podeRegistrar) return;
     setSalvando(true);
-    const payload = { local: local.trim(), km: km !== '' ? Number(km) : undefined, observacao: obs.trim() || undefined, idempotencyKey: uuid() };
+    // GPS automático também na parada ad-hoc (mapear cliente/fazenda da visita).
+    const { latitude, longitude } = await capturarCoordenadas();
+    const payload = { local: local.trim(), km: km !== '' ? Number(km) : undefined, observacao: obs.trim() || undefined, latitude, longitude, idempotencyKey: uuid() };
     try {
       await adicionarParadaFrota(viagem.id, payload);
       setLocal(''); setKm(''); setObs('');
@@ -211,6 +216,7 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
       <TextInput style={styles.input} value={km} onChangeText={setKm} keyboardType="numeric" editable={!salvando} />
       <Text style={styles.label}>Observação (opcional)</Text>
       <TextInput style={styles.input} value={obs} onChangeText={setObs} maxLength={255} editable={!salvando} />
+      <Text style={styles.dicaMini}>📡 A localização (GPS) é capturada automaticamente ao registrar — útil pra mapear a fazenda/cliente.</Text>
       <TouchableOpacity style={[styles.registrar, !podeRegistrar && styles.registrarOff]} onPress={registrar} disabled={!podeRegistrar}>
         {salvando ? <ActivityIndicator color="#fff" /> : <Text style={styles.registrarTxt}>Registrar parada</Text>}
       </TouchableOpacity>
