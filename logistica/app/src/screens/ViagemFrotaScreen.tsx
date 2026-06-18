@@ -9,13 +9,13 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import {
   listarViagensFrota, registrarRetorno, tiposDespesa, lancarDespesaViagem,
-  fornecedoresDespesa, type FornecedorDespesa,
+  fornecedoresDespesa, adicionarParadaFrota, type FornecedorDespesa,
 } from '../api/frota';
 import type { TipoDespesa, ViagemFrota } from '../types/api';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'ViagemFrota'>;
-type Aba = null | 'retorno' | 'despesa';
+type Aba = null | 'parada' | 'retorno' | 'despesa';
 
 /** Detalhe de uma viagem de frota EM CURSO: registrar retorno OU lançar despesa. */
 export function ViagemFrotaScreen({ route, navigation }: Props) {
@@ -47,6 +47,9 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
       </View>
 
       <View style={styles.acoes}>
+        <TouchableOpacity style={[styles.acao, aba === 'parada' && styles.acaoOn]} onPress={() => setAba(aba === 'parada' ? null : 'parada')}>
+          <Text style={[styles.acaoTxt, aba === 'parada' && styles.acaoTxtOn]}>📍 Parada</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={[styles.acao, aba === 'retorno' && styles.acaoOn]} onPress={() => setAba(aba === 'retorno' ? null : 'retorno')}>
           <Text style={[styles.acaoTxt, aba === 'retorno' && styles.acaoTxtOn]}>🏁 Retorno</Text>
         </TouchableOpacity>
@@ -55,9 +58,53 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
         </TouchableOpacity>
       </View>
 
+      {aba === 'parada' && <ParadaForm viagem={viagem} onRegistrada={() => void carregar()} />}
       {aba === 'retorno' && <RetornoForm viagem={viagem} onPronto={() => navigation.goBack()} />}
       {aba === 'despesa' && <DespesaForm viagem={viagem} onPronto={() => { setAba(null); void carregar(); }} />}
     </ScrollView>
+  );
+}
+
+function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrada: () => void }) {
+  const [local, setLocal] = useState('');
+  const [km, setKm] = useState('');
+  const [obs, setObs] = useState('');
+  const [salvando, setSalvando] = useState(false);
+
+  const podeRegistrar = !!local.trim() && !salvando;
+
+  async function registrar() {
+    if (!podeRegistrar) return;
+    setSalvando(true);
+    try {
+      await adicionarParadaFrota(viagem.id, {
+        local: local.trim(),
+        km: km !== '' ? Number(km) : undefined,
+        observacao: obs.trim() || undefined,
+      });
+      // Limpa pra registrar a próxima parada sem sair (o "caderno" da rota).
+      setLocal(''); setKm(''); setObs('');
+      onRegistrada();
+      Alert.alert('Parada registrada', 'Pode registrar a próxima quando chegar.');
+    } catch (e) {
+      const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
+      Alert.alert('Não foi possível registrar', String(msg || 'Tente novamente.'));
+    } finally { setSalvando(false); }
+  }
+
+  return (
+    <View style={styles.painel}>
+      <Text style={styles.dica}>Registre os pontos de parada durante a viagem (o caderno da rota). O retorno é o que fecha a viagem.</Text>
+      <Text style={styles.label}>Local da parada</Text>
+      <TextInput style={styles.input} value={local} onChangeText={setLocal} maxLength={120} placeholder="Ex.: Posto BR, Cliente X, Oficina…" editable={!salvando} />
+      <Text style={styles.label}>KM atual (opcional)</Text>
+      <TextInput style={styles.input} value={km} onChangeText={setKm} keyboardType="numeric" editable={!salvando} />
+      <Text style={styles.label}>Observação (opcional)</Text>
+      <TextInput style={styles.input} value={obs} onChangeText={setObs} maxLength={255} editable={!salvando} />
+      <TouchableOpacity style={[styles.registrar, !podeRegistrar && styles.registrarOff]} onPress={registrar} disabled={!podeRegistrar}>
+        {salvando ? <ActivityIndicator color="#fff" /> : <Text style={styles.registrarTxt}>Registrar parada</Text>}
+      </TouchableOpacity>
+    </View>
   );
 }
 

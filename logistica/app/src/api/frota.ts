@@ -83,6 +83,17 @@ export async function registrarRetorno(viagemId: string, p: RetornoPayload): Pro
 }
 
 /** Tipos de despesa ativos (pra o select do lançamento). */
+export interface ParadaPayload { local: string; km?: number; observacao?: string }
+
+/** Registra uma parada (ad-hoc) na viagem em curso — o "caderno" da frota. */
+export async function adicionarParadaFrota(viagemId: string, p: ParadaPayload): Promise<void> {
+  await api.post(`${LOGISTICA_BASE}/frota/viagens/${viagemId}/paradas`, {
+    local: p.local,
+    km: p.km,
+    observacao: p.observacao,
+  });
+}
+
 export async function tiposDespesa(): Promise<TipoDespesa[]> {
   const { data } = await api.get<TipoDespesa[]>(`${LOGISTICA_BASE}/despesas/tipos`, { params: { ativos: 'true' } });
   return data;
