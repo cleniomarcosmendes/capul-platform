@@ -92,6 +92,15 @@ enum StatusDespesa {
   @@schema("logistica")
 }
 
+// Status de uma parada de frota. Ad-hoc/legado nasce REALIZADA (default);
+// parada planejada nasce PLANEJADA e vira REALIZADA no check-in (ou PULADA).
+enum StatusParada {
+  PLANEJADA
+  REALIZADA
+  PULADA
+  @@schema("logistica")
+}
+
 // ---------- Cliente / Endereço (GLOBAIS, cross-filial) ----------
 model ClienteLocal {
   id         String            @id @default(uuid())
@@ -416,6 +425,12 @@ model Parada {
   km           Int?
   dataHora     DateTime? @map("data_hora")
   observacao   String?
+  // Planejamento (Fase 2b): parada PLANEJADA → REALIZADA (check-in) / PULADA.
+  // `planejadoLocal` guarda o que foi planejado (separado do `local` realizado);
+  // `realizadaEm` é o carimbo do check-in (≠ registradoEm = quando a linha nasceu).
+  status         StatusParada @default(REALIZADA)
+  planejadoLocal String?      @map("planejado_local")
+  realizadaEm    DateTime?    @map("realizada_em")
   registradoEm DateTime  @default(now()) @map("registrado_em")
 
   @@index([viagemId, sequencia])

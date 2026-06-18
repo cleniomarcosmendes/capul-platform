@@ -3,7 +3,7 @@ import { StatusViagem } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { FrotaService } from './frota.service.js';
-import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto } from './dto.js';
+import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto } from './dto.js';
 
 const roleLogistica = (user: JwtPayload) => user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
 
@@ -108,6 +108,24 @@ export class FrotaController {
   @Post('viagens/:id/paradas')
   adicionarParada(@Param('id') id: string, @Body() dto: AddParadaDto, @CurrentUser() user: JwtPayload) {
     return this.frota.adicionarParada(id, dto, user);
+  }
+
+  /** Planeja N paradas (visitas) — status PLANEJADA. */
+  @Post('viagens/:id/paradas/planejar')
+  planejarParadas(@Param('id') id: string, @Body() dto: PlanejarParadasDto, @CurrentUser() user: JwtPayload) {
+    return this.frota.planejarParadas(id, dto, user);
+  }
+
+  /** Check-in numa parada planejada → REALIZADA (KM + GPS opcional). */
+  @Patch('viagens/:id/paradas/:paradaId/checkin')
+  checkinParada(@Param('id') id: string, @Param('paradaId') paradaId: string, @Body() dto: CheckinParadaDto, @CurrentUser() user: JwtPayload) {
+    return this.frota.checkinParada(id, paradaId, dto, user);
+  }
+
+  /** Marca uma parada planejada como PULADA. */
+  @Patch('viagens/:id/paradas/:paradaId/pular')
+  pularParada(@Param('id') id: string, @Param('paradaId') paradaId: string, @CurrentUser() user: JwtPayload) {
+    return this.frota.pularParada(id, paradaId, user);
   }
 
   @Delete('viagens/:id/paradas/:paradaId')

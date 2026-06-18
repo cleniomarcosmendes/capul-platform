@@ -2,13 +2,13 @@ import {
   BadRequestException, ForbiddenException, Injectable, NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { StatusViagem, TipoViagem, SituacaoVeiculo, StatusDespesa } from '@prisma/client';
+import { StatusViagem, TipoViagem, SituacaoVeiculo, StatusDespesa, StatusParada } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { assertPodeOperarViagem } from '../common/frota-perms.js';
-import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto } from './dto.js';
+import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto } from './dto.js';
 
 // Mesma normalização do toChapaPortal pra comparar matrículas com segurança.
 const chapa = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
@@ -417,34 +417,102 @@ export class FrotaService {
     return v;
   }
 
-  /** Lista as paradas da viagem (ordem da rota). */
-  async listarParadas(id: string, user: JwtPayload) {
-    await this.viagemDaFilial(id, user);
-    return this.prisma.parada.findMany({
-      where: { viagemId: id },
-      orderBy: { sequencia: 'asc' },
-      select: { id: true, sequencia: true, local: true, km: true, dataHora: true, observacao: true },
+  // Próxima sequência da rota.
+  private async proximaSequencia(viagemId: string): Promise<number> {
+    const ultima = await this.prisma.parada.findFirst({
+      where: { viagemId }, orderBy: { sequencia: 'desc' }, select: { sequencia: true },
     });
+    return (ultima?.sequencia ?? 0) + 1;
   }
 
-  /** Adiciona uma parada ao log da viagem (não permitido em viagem cancelada). */
+  /** Lista as paradas da viagem (ordem da rota) — com status/planejamento/GPS. */
+  async listarParadas(id: string, user: JwtPayload) {
+    await this.viagemDaFilial(id, user);
+    const paradas = await this.prisma.parada.findMany({
+      where: { viagemId: id },
+      orderBy: { sequencia: 'asc' },
+      select: {
+        id: true, sequencia: true, status: true, local: true, planejadoLocal: true,
+        km: true, dataHora: true, realizadaEm: true, observacao: true, latitude: true, longitude: true,
+      },
+    });
+    return paradas.map((p) => ({
+      ...p,
+      latitude: p.latitude != null ? Number(p.latitude) : null,
+      longitude: p.longitude != null ? Number(p.longitude) : null,
+    }));
+  }
+
+  /** Adiciona uma parada REALIZADA (ad-hoc) ao log da viagem (não em cancelada). */
   async adicionarParada(id: string, dto: AddParadaDto, user: JwtPayload) {
     const v = await this.viagemDaFilial(id, user);
     assertPodeOperarViagem(user, v);
     if (v.situacao === StatusViagem.CANCELADA) throw new BadRequestException('Viagem cancelada não recebe paradas.');
-    const ultima = await this.prisma.parada.findFirst({
-      where: { viagemId: id }, orderBy: { sequencia: 'desc' }, select: { sequencia: true },
-    });
     return this.prisma.parada.create({
       data: {
         viagemId: id,
-        sequencia: (ultima?.sequencia ?? 0) + 1,
+        sequencia: await this.proximaSequencia(id),
+        status: StatusParada.REALIZADA,
         local: dto.local,
         km: dto.km ?? null,
         observacao: dto.observacao ?? null,
+        latitude: dto.latitude ?? null,
+        longitude: dto.longitude ?? null,
         dataHora: new Date(),
+        realizadaEm: new Date(),
       },
-      select: { id: true, sequencia: true, local: true, km: true, dataHora: true, observacao: true },
+      select: { id: true, sequencia: true, status: true, local: true, km: true, dataHora: true, observacao: true },
+    });
+  }
+
+  /** Planeja N paradas (status PLANEJADA) — visitas que o condutor pretende fazer. */
+  async planejarParadas(id: string, dto: PlanejarParadasDto, user: JwtPayload) {
+    const v = await this.viagemDaFilial(id, user);
+    assertPodeOperarViagem(user, v);
+    if (v.situacao === StatusViagem.CANCELADA) throw new BadRequestException('Viagem cancelada não recebe paradas.');
+    const locais = dto.locais.map((l) => l.trim()).filter(Boolean);
+    if (locais.length === 0) throw new BadRequestException('Informe ao menos um local.');
+    let seq = await this.proximaSequencia(id);
+    await this.prisma.parada.createMany({
+      data: locais.map((local) => ({
+        viagemId: id, sequencia: seq++, status: StatusParada.PLANEJADA, planejadoLocal: local, local,
+      })),
+    });
+    return this.listarParadas(id, user);
+  }
+
+  /** Check-in numa parada planejada → REALIZADA (KM + GPS opcional + obs). */
+  async checkinParada(id: string, paradaId: string, dto: CheckinParadaDto, user: JwtPayload) {
+    const v = await this.viagemDaFilial(id, user);
+    assertPodeOperarViagem(user, v);
+    if (v.situacao === StatusViagem.CANCELADA) throw new BadRequestException('Viagem cancelada.');
+    const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
+    if (!p || p.viagemId !== id) throw new NotFoundException('Parada não encontrada nesta viagem.');
+    return this.prisma.parada.update({
+      where: { id: paradaId },
+      data: {
+        status: StatusParada.REALIZADA,
+        local: dto.local?.trim() || p.local || p.planejadoLocal,
+        km: dto.km ?? p.km,
+        observacao: dto.observacao?.trim() || p.observacao,
+        latitude: dto.latitude ?? p.latitude,
+        longitude: dto.longitude ?? p.longitude,
+        dataHora: new Date(),
+        realizadaEm: new Date(),
+      },
+      select: { id: true, sequencia: true, status: true, local: true, km: true, realizadaEm: true },
+    });
+  }
+
+  /** Marca uma parada planejada como PULADA (visita não realizada). */
+  async pularParada(id: string, paradaId: string, user: JwtPayload) {
+    const v = await this.viagemDaFilial(id, user);
+    assertPodeOperarViagem(user, v);
+    const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
+    if (!p || p.viagemId !== id) throw new NotFoundException('Parada não encontrada nesta viagem.');
+    return this.prisma.parada.update({
+      where: { id: paradaId }, data: { status: StatusParada.PULADA },
+      select: { id: true, status: true },
     });
   }
 

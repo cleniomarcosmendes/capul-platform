@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class BuscarCondutorDto {
   @IsString() @IsNotEmpty() @MaxLength(20)
@@ -113,6 +113,36 @@ export class AddParadaDto {
 
   @IsOptional() @IsString() @MaxLength(255)
   observacao?: string;
+
+  @IsOptional() @IsNumber()
+  latitude?: number;
+
+  @IsOptional() @IsNumber()
+  longitude?: number;
+}
+
+/** Planejamento de paradas (visitas) — lista de locais (texto livre). */
+export class PlanejarParadasDto {
+  @IsArray() @ArrayNotEmpty() @IsString({ each: true })
+  locais!: string[];
+}
+
+/** Check-in numa parada planejada → REALIZADA (KM + GPS opcional + obs). */
+export class CheckinParadaDto {
+  @IsOptional() @IsString() @MaxLength(120)
+  local?: string;
+
+  @IsOptional() @IsInt() @Min(0)
+  km?: number;
+
+  @IsOptional() @IsString() @MaxLength(255)
+  observacao?: string;
+
+  @IsOptional() @IsNumber()
+  latitude?: number;
+
+  @IsOptional() @IsNumber()
+  longitude?: number;
 }
 
 /** Registrar manutenção feita — reseta o contador preventivo do veículo. */
