@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { NotificacaoService } from '../../notificacao/notificacao.service.js';
+import { EmailEnvolvidosService } from '../../email/email-envolvidos.service.js';
+import * as emailTpl from '../../email/email-templates.js';
 import { CreateMembroDto } from '../dto/create-membro.dto.js';
 import { CreateUsuarioChaveDto } from '../dto/create-usuario-chave.dto.js';
 import { ProjetoHelpersService } from './projeto-helpers.service.js';
@@ -14,6 +16,7 @@ export class ProjetoMembroService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificacaoService: NotificacaoService,
+    private readonly emailEnvolvidos: EmailEnvolvidosService,
     private readonly helpers: ProjetoHelpersService,
   ) {}
 
@@ -143,6 +146,19 @@ export class ProjetoMembroService {
         `Voce foi incluido${funcaoTrecho} no projeto "${projeto.nome}". Acesse o projeto pelo modulo Gestao TI > Projetos para acompanhar pendencias e atualizacoes.`,
         { projetoId, usuarioChaveId: resultado.id },
       ).catch((err) => console.error('Notificacao error:', err.message));
+      // E-mail ao usuário-chave (opt-out canal 'atividades' respeitado no serviço).
+      this.emailEnvolvidos.enviar({
+        canal: 'atividades',
+        emissorId: '', // ação do sistema/gestor; ninguém é excluído como emissor
+        destinatarioIds: [dto.usuarioId],
+        subject: `Voce foi incluido no projeto #${projeto.numero} — ${projeto.nome}`,
+        html: emailTpl.usuarioChaveAdicionado({
+          projetoNumero: projeto.numero,
+          projetoNome: projeto.nome,
+          projetoId,
+          funcao: dto.funcao ?? undefined,
+        }),
+      }).catch((err) => console.error('Email envolvidos (usuario-chave) error:', (err as Error).message));
     }
 
     return resultado;

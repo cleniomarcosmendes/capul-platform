@@ -189,7 +189,10 @@ export class ProjetoPendenciaService {
       ).catch((err) => console.error('Notificacao error:', err.message));
     }
 
-    if (dto.emailEnvolvidos === true && dto.responsavelId !== criadorId) {
+    // E-mail ao responsável SEMPRE que atribuído a outra pessoa (antes
+    // dependia do checkbox dto.emailEnvolvidos — o responsável ficava sem
+    // saber). O opt-out por canal ('pendencias') é respeitado no serviço.
+    if (dto.responsavelId !== criadorId) {
       this.emailEnvolvidos.enviar({
         canal: 'pendencias',
         emissorId: criadorId,
@@ -280,6 +283,26 @@ export class ProjetoPendenciaService {
         `Voce foi atribuido como responsavel da pendencia "${pendencia.titulo}" no projeto "${proj?.nome}".`,
         { projetoId, pendenciaId },
       ).catch((err) => console.error('Notificacao error:', err.message));
+      // E-mail ao novo responsável (sempre que muda; opt-out 'pendencias' respeitado).
+      if (dto.responsavelId !== userId) {
+        const autor = await this.prisma.usuario.findUnique({ where: { id: userId }, select: { nome: true } });
+        this.emailEnvolvidos.enviar({
+          canal: 'pendencias',
+          emissorId: userId,
+          destinatarioIds: [dto.responsavelId],
+          subject: `[Pendência #${pendencia.numero}] ${pendencia.titulo}`,
+          html: emailTpl.pendenciaCriada({
+            numero: pendencia.numero,
+            titulo: pendencia.titulo,
+            projetoNome: proj?.nome ?? '—',
+            projetoId,
+            pendenciaId,
+            criador: autor?.nome ?? 'Sistema',
+            responsavel: '—',
+            descricao: pendencia.descricao ?? undefined,
+          }),
+        }).catch((err) => console.error('Email envolvidos (pendencia transferida) error:', (err as Error).message));
+      }
     }
 
     if (dto.status !== undefined && dto.status !== pendencia.status) {

@@ -183,6 +183,23 @@ export function atividadeCriada(args: {
   );
 }
 
+export function usuarioChaveAdicionado(args: {
+  projetoNumero: number;
+  projetoNome: string;
+  projetoId: string;
+  funcao?: string;
+}): string {
+  const funcaoTrecho = args.funcao ? ` como <strong style="color: #0e7490;">${escapeHtml(args.funcao)}</strong>` : '';
+  return layout(
+    `Voce foi incluido no projeto #${args.projetoNumero}`,
+    `<p style="margin: 0 0 8px; color: #475569;">Projeto: <strong>${escapeHtml(args.projetoNome)}</strong></p>
+     <p style="margin: 0; color: #64748b; font-size: 13px;">Voce foi incluido${funcaoTrecho} como usuário-chave. Acompanhe pendências e atualizações pela plataforma.</p>`,
+    `${BASE_URL}/gestao-ti/projetos/${args.projetoId}`,
+    'Abrir projeto',
+    'atividade',
+  );
+}
+
 export function atividadeComentario(args: {
   titulo: string;
   projetoNome: string;
