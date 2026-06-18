@@ -181,6 +181,12 @@ model Equipe {
   // abrir chamado direto pra equipe; usuário final/chave/terceirizado e staff de
   // outros deptos não a veem. Transferência permanece global (inalterada).
   privada              Boolean     @default(false)
+  // Visibilidade na LISTAGEM de chamado (independe de `privada`).
+  // restritaVisibilidade=true => chamados desta equipe só são VISÍVEIS aos
+  // membros ativos dela; nem o staff do depto (não-membro) vê na listagem.
+  // Solicitante/técnico/colaborador do chamado e ADMIN seguem vendo (carve-out
+  // aplicado SÓ na cláusula de visibilidade por departamento).
+  restritaVisibilidade Boolean     @default(false) @map("restrita_visibilidade")
   emailEquipe          String?     @map("email_equipe")
   ordem                Int         @default(0)
   status               StatusGeral @default(ATIVO)

@@ -52,6 +52,8 @@ export interface Equipe {
   // Visibilidade na abertura de chamado: true => privada (só staff do próprio
   // departamento abre direto). Substitui o antigo aceitaChamadoExterno.
   privada: boolean;
+  // Visibilidade na listagem: true => só membros veem os chamados da equipe.
+  restritaVisibilidade?: boolean;
   emailEquipe: string | null;
   ordem: number;
   status: 'ATIVO' | 'INATIVO';

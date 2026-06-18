@@ -14,6 +14,7 @@ interface FormData {
   cor: string;
   icone: string;
   privada: boolean;
+  restritaVisibilidade: boolean;
   emailEquipe: string;
   ordem: number;
   /** Workspace Onda 2 C2.8 — depto-dono explícito no form (antes vinha
@@ -28,6 +29,7 @@ const initialForm: FormData = {
   cor: '#006838',
   icone: 'users',
   privada: false,
+  restritaVisibilidade: false,
   emailEquipe: '',
   ordem: 0,
   departamentoId: '',
@@ -66,6 +68,7 @@ export function EquipeFormPage() {
             cor: equipe.cor || '#006838',
             icone: equipe.icone || 'users',
             privada: equipe.privada,
+            restritaVisibilidade: equipe.restritaVisibilidade ?? false,
             emailEquipe: equipe.emailEquipe || '',
             ordem: equipe.ordem,
             departamentoId: equipe.departamentoId ?? '',
@@ -261,6 +264,25 @@ export function EquipeFormPage() {
                 demais (usuário final, chave, terceirizado e outros setores)
                 não a veem na abertura — chegam via transferência. A
                 transferência entre equipes não muda.
+              </span>
+            </label>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              id="restritaVisibilidade"
+              checked={form.restritaVisibilidade}
+              onChange={(e) => handleChange('restritaVisibilidade', e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded border-slate-300 text-capul-600 focus:ring-capul-600"
+            />
+            <label htmlFor="restritaVisibilidade" className="text-sm text-slate-700">
+              Visibilidade restrita à equipe
+              <span className="block text-xs text-slate-500">
+                Quando marcada, só os <b>membros</b> desta equipe visualizam os
+                chamados dela na listagem — nem o SUPORTE do departamento (não
+                membro) os vê. O <b>gestor do workspace</b> e o solicitante/
+                técnico/colaborador do chamado seguem vendo normalmente.
               </span>
             </label>
           </div>

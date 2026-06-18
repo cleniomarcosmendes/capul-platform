@@ -70,6 +70,22 @@ export function getDeptosOndeStaff(user: JwtPayload | null | undefined): string[
 }
 
 /**
+ * Departamentos onde o user é GESTOR (ou ADMIN). Subconjunto de
+ * getDeptosOndeStaff (que inclui SUPORTE). Usado na visibilidade restrita de
+ * equipe (Fase workspace 18/06): o GESTOR do workspace navega TODAS as equipes
+ * — inclusive as `restritaVisibilidade` —, enquanto o SUPORTE só vê as equipes
+ * restritas de que é membro.
+ */
+export function getDeptosOndeGestor(user: JwtPayload | null | undefined): string[] {
+  if (!user) return [];
+  const workspace = user.modulos?.find((m) => m.codigo === 'WORKSPACE');
+  if (!workspace) return [];
+  return (workspace.departamentos ?? [])
+    .filter((d) => ROLES_GESTORES.includes(d.role as typeof ROLES_GESTORES[number]))
+    .map((d) => d.id);
+}
+
+/**
  * Workspace (fix deploy 01/06) — retorna a role do user NO departamento
  * informado, lida de `modulos[WORKSPACE].departamentos[]`. Retorna `undefined`
  * se o user não participa daquele depto (ou token antigo sem departamentos[]).

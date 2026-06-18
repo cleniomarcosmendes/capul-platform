@@ -180,6 +180,7 @@ export class EquipeService {
         cor: dto.cor,
         icone: dto.icone,
         privada: dto.privada,
+        restritaVisibilidade: dto.restritaVisibilidade,
         emailEquipe: dto.emailEquipe,
         ordem: dto.ordem,
         departamentoId,

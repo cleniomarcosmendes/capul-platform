@@ -8,6 +8,7 @@ import { ChamadoColaboradorService } from './services/chamado-colaborador.servic
 import { ChamadoAnexoService } from './services/chamado-anexo.service';
 import { ChamadoAgrupamentoService } from './services/chamado-agrupamento.service';
 import { EmailEnvolvidosService } from '../email/email-envolvidos.service';
+import { ProtheusService } from '../protheus/protheus.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificacaoService } from '../notificacao/notificacao.service';
 import { createPrismaMock } from '../common/testing/prisma-mock';
@@ -31,6 +32,7 @@ function baseChamado(overrides = {}) {
 
 describe('ChamadoService', () => {
   let service: ChamadoService;
+  let core: ChamadoCoreService;
   let prisma: ReturnType<typeof createPrismaMock>;
   let notificacaoService: { criarParaUsuario: jest.Mock; criarParaUsuarios: jest.Mock };
 
@@ -61,10 +63,12 @@ describe('ChamadoService', () => {
         { provide: NotificacaoService, useValue: notificacaoService },
         { provide: ChamadoAgrupamentoService, useValue: agrupamentoService },
         { provide: EmailEnvolvidosService, useValue: emailEnvolvidosService },
+        { provide: ProtheusService, useValue: { validarCredencialPortal: jest.fn() } },
       ],
     }).compile();
 
     service = module.get(ChamadoService);
+    core = module.get(ChamadoCoreService);
   });
 
   describe('create', () => {
@@ -323,6 +327,35 @@ describe('ChamadoService', () => {
 
       const result = await service.cancelar('ch-1', mockUser as any, 'ADMIN');
       expect(result.status).toBe('CANCELADO');
+    });
+  });
+
+  // #6 (18/06) — visibilidade restrita à equipe na LISTAGEM. O carve-out só
+  // entra na cláusula de visibilidade por DEPTO-STAFF; gestor do workspace e
+  // ADMIN veem tudo. Capturamos o `where` montado em prisma.chamado.findMany.
+  describe('findAll — visibilidade restrita à equipe', () => {
+    function workspaceUser(role: 'SUPORTE' | 'GESTOR') {
+      return {
+        sub: 'u-1', email: 'u@test.com', filialId: 'filial-1',
+        modulos: [{ codigo: 'WORKSPACE', role, departamentos: [{ id: 'dep-ti', role, isTI: true }] }],
+      } as any;
+    }
+    async function whereDe(role: 'SUPORTE' | 'GESTOR') {
+      prisma.membroEquipe.findMany.mockResolvedValue([]); // não é membro de nenhuma equipe
+      await core.findAll(workspaceUser(role), role, {});
+      return JSON.stringify(prisma.chamado.findMany.mock.calls.at(-1)?.[0]?.where ?? {});
+    }
+
+    it('SUPORTE (não-membro): aplica o carve-out de equipe restrita', async () => {
+      const where = await whereDe('SUPORTE');
+      expect(where).toContain('restritaVisibilidade');
+      expect(where).toContain('dep-ti');
+    });
+
+    it('GESTOR do workspace: vê tudo do depto, SEM carve-out de equipe restrita', async () => {
+      const where = await whereDe('GESTOR');
+      expect(where).not.toContain('restritaVisibilidade');
+      expect(where).toContain('dep-ti');
     });
   });
 });

@@ -40,6 +40,12 @@ export class CreateEquipeDto {
   @IsBoolean()
   privada?: boolean;
 
+  // Visibilidade na LISTAGEM. true => só membros ativos veem os chamados
+  // da equipe (nem o staff do depto não-membro vê). Default false.
+  @IsOptional()
+  @IsBoolean()
+  restritaVisibilidade?: boolean;
+
   @IsOptional()
   @IsString()
   @MaxLength(255)

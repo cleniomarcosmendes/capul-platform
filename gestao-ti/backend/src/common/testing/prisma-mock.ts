@@ -18,6 +18,8 @@ function modelMock() {
 
 export function createPrismaMock(): Record<string, any> {
   return {
+    // $transaction([...]) → resolve o array de promises (ex.: [count, findMany]).
+    $transaction: jest.fn((arg: any) => (Array.isArray(arg) ? Promise.all(arg) : arg)),
     chamado: modelMock(),
     historicoChamado: modelMock(),
     anexoChamado: modelMock(),

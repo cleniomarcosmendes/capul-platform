@@ -20,7 +20,7 @@ import { ChamadoAgrupamentoService } from './chamado-agrupamento.service.js';
 import { ChamadoTempoService } from './chamado-tempo.service.js';
 import { ProtheusService } from '../../protheus/protheus.service.js';
 import { chamadoInclude } from './chamado.constants.js';
-import { isGestor, isTI, hasStaffPerfilEmTI, getDeptosOndeStaff, getRoleNoDepto } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI, hasStaffPerfilEmTI, getDeptosOndeStaff, getDeptosOndeGestor, getRoleNoDepto } from '../../common/constants/roles.constant.js';
 import { hasCapability } from '../../common/helpers/capability.helper.js';
 import { Prisma, StatusChamado, Visibilidade } from '@prisma/client';
 import * as path from 'path';
@@ -441,12 +441,40 @@ export class ChamadoCoreService {
       // deptos onde ela é staff (mais correto: gestor CTL vê CTL completo).
       const ehStaffTI = hasStaffPerfilEmTI(user);
       const deptosStaff = getDeptosOndeStaff(user);
+      // Visibilidade restrita por equipe (18/06): a cláusula "vejo todos os
+      // chamados do meu depto-staff" ganha um carve-out — chamado de equipe
+      // `restritaVisibilidade` só passa por aqui se eu for GESTOR/ADMIN do
+      // depto (gestor do workspace navega todas as equipes) OU membro da
+      // equipe. SUPORTE não-membro não vê. Solicitante/técnico/colaborador
+      // (cláusulas acima) seguem vendo, restrita ou não.
+      const deptosGestor = getDeptosOndeGestor(user);
+      const deptosSuporteOnly = deptosStaff.filter((d) => !deptosGestor.includes(d));
+      const deptoStaffClauses: Record<string, unknown>[] = [];
+      if (deptosGestor.length > 0) {
+        // GESTOR/ADMIN do depto: vê tudo do depto (inclusive equipe restrita).
+        deptoStaffClauses.push({ departamentoId: { in: deptosGestor } });
+      }
+      if (deptosSuporteOnly.length > 0) {
+        // SUPORTE: vê o depto, MENOS chamados de equipe restrita de que não é membro.
+        deptoStaffClauses.push({
+          AND: [
+            { departamentoId: { in: deptosSuporteOnly } },
+            {
+              OR: [
+                { equipeAtual: { is: { restritaVisibilidade: false } } },
+                { equipeAtualId: null },
+                ...(equipeIds.length > 0 ? [{ equipeAtualId: { in: equipeIds } }] : []),
+              ],
+            },
+          ],
+        });
+      }
       const orVisibilidade: Record<string, unknown>[] = [
         { solicitanteId: user.sub },
         { tecnicoId: user.sub },
         { colaboradores: { some: { usuarioId: user.sub } } },
         ...(equipeIds.length > 0 ? [{ equipeAtualId: { in: equipeIds } }] : []),
-        ...(deptosStaff.length > 0 ? [{ departamentoId: { in: deptosStaff } }] : []),
+        ...deptoStaffClauses,
       ];
       const andClauses: Record<string, unknown>[] = [where, { OR: orVisibilidade }];
       // S12 — força visibilidade=PUBLICO se não-staff TI (defesa em
