@@ -341,6 +341,16 @@ não resolver, considerar automatizar parte do checklist (script que lê
 
 ## Gestão TI — UX
 
+### 🔎 2026-06-19 — Workspace/Chamado para o SAC (atendimento ao consumidor) — CONCEITO AVALIADO
+- **Ideia do Clenio:** usar o Workspace/Chamado pra atender o SAC (vários SAC entrando/saindo por
+  e-mail, atendimento central pra todas as filiais, responsável único que aciona apoiadores).
+- **Avaliação completa em `docs/AVALIACAO_SAC_WORKSPACE.md`** (viável, sem implementação ainda).
+- **Conclusões-chave:** (1) "Em cópia" já existe (não confundir: Colaborador é T.I.-only) e é o
+  mecanismo certo pro "apoiador vê só o chamado em que foi puxado" — **equipe NÃO serve** (vê a fila
+  toda). (2) Maior gap estrutural: o **cliente do SAC não é usuário do sistema** → modelar
+  "solicitante externo". (3) **Entrada e saída por e-mail NÃO existem** (porte médio-alto: IMAP/
+  webhook + dedupe + threading + anti-loop; resposta externa com anexo). Fases sugeridas no doc.
+
 ### ⏳ 2026-05-29 — Chamados: filtro inline de workspace na lista (opt-in)
 
 **Contexto:** Hoje o filtro por workspace funciona via **`WorkspaceSwitcher`
