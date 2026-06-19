@@ -12,6 +12,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { obterViagem } from '../api/viagens';
 import { abrirGoogleMaps, abrirWaze, enderecoTexto, ligar } from '../lib/navegar';
+import { useRastreamento } from '../lib/useRastreamento';
 import type { Parada, Viagem } from '../types/api';
 
 const CAPUL = '#1e7d3a';
@@ -42,6 +43,9 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       void carregar();
     }, [carregar]),
   );
+
+  // Rastreamento foreground enquanto a viagem está em curso (Fase A).
+  const { rastreando } = useRastreamento(viagemId, viagem?.situacao === 'EM_CURSO');
 
   if (carregando) {
     return (
@@ -80,6 +84,11 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       keyExtractor={(p) => p.id}
       ListHeaderComponent={
         <View>
+          {rastreando && (
+            <View style={styles.rastreioBanner}>
+              <Text style={styles.rastreioTxt}>📍 Localização ativa durante a viagem</Text>
+            </View>
+          )}
           <Text style={styles.cabecalho}>
             {viagem.veiculo?.placa ?? 'sem veículo'} · {paradas.length} parada
             {paradas.length === 1 ? '' : 's'}
@@ -186,6 +195,8 @@ const styles = StyleSheet.create({
   erro: { color: '#dc2626', fontSize: 15, textAlign: 'center' },
   lista: { padding: 12, gap: 10 },
   cabecalho: { color: '#475569', fontSize: 14, marginBottom: 8 },
+  rastreioBanner: { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0', borderWidth: 1, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, marginBottom: 8 },
+  rastreioTxt: { color: '#047857', fontSize: 12, fontWeight: '600' },
   filtros: { flexDirection: 'row', gap: 8, marginBottom: 10 },
   filtroChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#fff' },
   filtroChipOn: { backgroundColor: CAPUL, borderColor: CAPUL },

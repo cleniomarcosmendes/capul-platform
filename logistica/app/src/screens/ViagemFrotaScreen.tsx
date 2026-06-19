@@ -18,6 +18,7 @@ import {
 } from '../offline/filaFrota';
 import { uuid } from '../lib/uuid';
 import { maskMoeda, parseMoeda } from '../lib/moeda';
+import { useRastreamento } from '../lib/useRastreamento';
 import type { TipoDespesa, ViagemFrota } from '../types/api';
 
 const CAPUL = '#1e7d3a';
@@ -66,11 +67,19 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
     if (r.descartadas.length) Alert.alert('Recusado pelo servidor', r.descartadas.map((d) => `• ${d.rotulo}: ${d.motivo}`).join('\n'));
   };
 
+  // Rastreamento foreground enquanto a viagem está em curso (Fase A).
+  const { rastreando } = useRastreamento(viagemId, viagem?.situacao === 'EM_CURSO');
+
   if (carregando) return <View style={styles.centro}><ActivityIndicator size="large" color={CAPUL} /></View>;
   if (!viagem) return <View style={styles.centro}><Text style={styles.vazio}>Viagem não está mais em curso.</Text></View>;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.conteudo}>
+      {rastreando && (
+        <View style={styles.rastreioBanner}>
+          <Text style={styles.rastreioTxt}>📍 Localização ativa durante a viagem</Text>
+        </View>
+      )}
       {pendentes > 0 && (
         <TouchableOpacity style={styles.banner} onPress={() => void sincronizar()}>
           <Text style={styles.bannerTxt}>📴 {pendentes} registro(s) aguardando sinal — toque para reenviar</Text>
@@ -423,4 +432,6 @@ const styles = StyleSheet.create({
   dicaMini: { fontSize: 11, color: '#64748b' },
   banner: { backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fcd34d', borderRadius: 10, padding: 12 },
   bannerTxt: { color: '#92400e', fontWeight: '700', textAlign: 'center' },
+  rastreioBanner: { backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#a7f3d0', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12 },
+  rastreioTxt: { color: '#047857', fontWeight: '600', fontSize: 12, textAlign: 'center' },
 });
