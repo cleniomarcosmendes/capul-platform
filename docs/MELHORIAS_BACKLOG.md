@@ -111,7 +111,25 @@ com o Clenio: atacar na sessão de 15/06.**
   `modulos[]` (tag), dona = Configurador (padrão do `core.integracoes_api_endpoints`); módulos leem
   RO via `$queryRaw`. Migrar `FornecedorConfig` (TI) e `FornecedorDespesa` (logística) pra dentro.
 
-### 🔎 2026-06-19 — Rastreamento em tempo real (mapa "tipo Maps/Waze") no Monitor da Frota — PEDIDO DA GERENTE
+### ✅ 2026-06-19 — Rastreamento em tempo real (mapa "tipo Maps/Waze") no Monitor da Frota — FASE A FEITA (núcleo)
+
+- **✅ ENTREGUE 19/06 (Fase A, foreground):** backend `PosicaoVeiculo` + módulo `rastreamento`
+  (`POST /rastreamento/posicao`, `GET /rastreamento/ativos`); app `useRastreamento`
+  (watchPositionAsync ~25s/150m, só viagem EM_CURSO) enganchado em ENTREGA (`ViagemDetalheScreen`)
+  e FROTA (`ViagemFrotaScreen`) + banner "📍 Localização ativa"; mapa Leaflet/OSM no Monitor
+  (`MapaFrota` em `PainelFrotaPage`, polling 12s). Commits `9370ba7` (backend) + `c078ec4` (app) +
+  `54f61c7` (web). Migração `20260619140000`. tsc/smoke E2E ok. **Falta push do Clenio.**
+- **⏳ Pendências de governança (Fase A polish):**
+  1. **Retenção/purga do rastro bruto** (LGPD) — hoje `posicao_veiculo` cresce sem limite.
+     Criar job/cron de purga (ex.: apagar pings > N dias; o GPS da baixa é lastro separado).
+  2. **Tela no Configurador** documentando a política de rastreamento (regra da plataforma —
+     [[feedback_funcionalidade_visivel_no_configurador]]).
+  3. Testar no celular real (Expo Go) com viagem em curso; afinar intervalo/bateria.
+- **⏳ Fase B (futuro):** localização em background (app fechado) — exige `expo-task-manager` +
+  build standalone (EAS), não roda no Expo Go. Avaliar quando a gerente validar a Fase A.
+
+<!-- entrada original preservada abaixo -->
+### (spec) Rastreamento em tempo real — detalhe técnico
 - **Origem:** gerente do supermercado pediu tela pra monitorar veículos/entregadores ao vivo.
   Spec §5.7 ("mapa com todos os veículos em viagem ativa") — hoje é só a lista "Na rua agora"
   em `PainelFrotaPage.tsx`. Rastreamento contínuo foi **adiado desde a Fase 1** (decisão original:
