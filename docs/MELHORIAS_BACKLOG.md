@@ -111,10 +111,54 @@ com o Clenio: atacar na sessão de 15/06.**
   `modulos[]` (tag), dona = Configurador (padrão do `core.integracoes_api_endpoints`); módulos leem
   RO via `$queryRaw`. Migrar `FornecedorConfig` (TI) e `FornecedorDespesa` (logística) pra dentro.
 
-### 🔎 Mapa em tempo real no Monitor (adiado desde a Fase 1)
-- **Spec §5.7:** "mapa com todos os veículos em viagem ativa". Hoje é a lista "Na rua agora".
-  Rastreamento GPS contínuo está **adiado desde a Fase 1** (decisão: deep-link + OSRM, tracking
-  depois). Reavaliar quando o OSRM/tracking entrar.
+### 🔎 2026-06-19 — Rastreamento em tempo real (mapa "tipo Maps/Waze") no Monitor da Frota — PEDIDO DA GERENTE
+- **Origem:** gerente do supermercado pediu tela pra monitorar veículos/entregadores ao vivo.
+  Spec §5.7 ("mapa com todos os veículos em viagem ativa") — hoje é só a lista "Na rua agora"
+  em `PainelFrotaPage.tsx`. Rastreamento contínuo foi **adiado desde a Fase 1** (decisão original:
+  deep-link + OSRM, tracking depois). **Agora destravado** — combinado com o Clenio em 19/06:
+  **Fase A (foreground), planejar primeiro**.
+
+- **Contexto LGPD favorável:** os celulares são **CORPORATIVOS** (uso exclusivo de trabalho) →
+  base legal sólida (legítimo interesse/execução de contrato). Mesmo assim, manter governança
+  (abaixo) — o aparelho corporativo reduz risco, não dispensa transparência/retenção.
+
+- **Fundação que JÁ existe:** app captura GPS via `expo-location` (foreground) na baixa
+  (`BaixaScreen`) e nas paradas/check-ins (`ViagemFrotaScreen`); device-session/aparelho
+  corporativo vinculado; RBAC `GESTOR_ENTREGA`; tela Monitor (`PainelFrotaPage.tsx`).
+  **Falta:** modelo de posição contínua + envio periódico + render de mapa.
+
+- **A bifurcação técnica (decidida: Fase A primeiro):**
+  - **Fase A — foreground (escolhida, roda no Expo Go atual):** `Location.watchPositionAsync`
+    enquanto o app está aberto (uso normal do entregador: navega/dá baixa). Esforço baixo.
+    Limite honesto: se ele **fechar** o app, o ponto **congela** até reabrir.
+  - **Fase B — background (futuro):** localização com app fechado/tela bloqueada exige
+    `expo-task-manager` + **build standalone (EAS)** — NÃO roda no Expo Go. É o passo que se
+    daria pra produção de qualquer forma. Deixar pra quando a gerente validar a Fase A.
+
+- **Escopo da Fase A (a implementar depois):**
+  1. **Backend — modelo** `PosicaoVeiculo` (schema `logistica`): `viagemId`, `veiculoId`,
+     `latitude`, `longitude`, `precisao?`, `velocidade?`, `bateria?`, `capturadoEm`. Índice por
+     `viagemId`+`capturadoEm`. Decidir hot (última posição por viagem) vs trail (histórico curto).
+  2. **Backend — endpoints:** `POST /frota/viagens/:id/posicao` (app envia ping; herda condutor
+     da viagem, sem senha — padrão das paradas/despesa) + `GET /frota/posicoes` (gestor: últimas
+     posições das viagens EM_CURSO da filial). Reusar fila offline (`filaFrota.ts`) com idempotência.
+  3. **App:** liga `watchPositionAsync` ao entrar na viagem em curso, intervalo ~20–30s ou ~150m;
+     desliga no retorno. Aviso visível "localização ativa durante a entrega" + aceite no 1º uso.
+  4. **Web (Monitor):** mapa **Leaflet + OpenStreetMap** (grátis, sem chave; alinhado ao OSRM já
+     previsto) em `PainelFrotaPage`; marcadores por veículo, auto-refresh (poll ~10–15s; só
+     viagens EM_CURSO da filial), clique → condutor/viagem. WebSocket/SSE é overkill p/ poucos
+     veículos — polling resolve.
+  5. **Governança/LGPD (obrigatório):** rastrear **só durante viagem ativa** (liga na saída,
+     **desliga automático no retorno** — rastreia a *entrega*, não a pessoa 24h); **retenção curta**
+     do rastro bruto (purga após N dias; o GPS da *baixa* é lastro de cobrança, retém à parte);
+     acesso só `GESTOR_ENTREGA`/ADMIN; **tela no Configurador** documentando a política (regra da
+     plataforma — [[feedback_funcionalidade_visivel_no_configurador]]).
+  6. **Bateria/dados:** afinar intervalo; foreground já limita ao horário de trabalho.
+
+- **Possível "entrega 0" (validação rápida):** plotar no mapa o **rastro do dia** com os pontos
+  de GPS já capturados nas baixas/paradas — protótipo da tela sem mexer no app, pra a gerente
+  validar o layout antes de investir no ao vivo. Relacionado: [[#]] item "Mapa CONSOLIDADO das
+  paradas/fazendas visitadas" (2026-06-18) reusa a mesma base de render Leaflet.
 
 ---
 
