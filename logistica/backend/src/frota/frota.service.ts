@@ -333,9 +333,17 @@ export class FrotaService {
       this.prisma.veiculo.count({ where: { filialId, ativo: true, situacao: SituacaoVeiculo.EM_USO } }),
       this.prisma.veiculo.count({ where: { filialId, ativo: true, situacao: SituacaoVeiculo.EM_MANUTENCAO } }),
       this.prisma.veiculo.count({ where: { filialId, ativo: true, situacao: SituacaoVeiculo.BAIXADO } }),
+      // "Na rua agora": TODAS as viagens em curso (ENTREGA + FROTA) — alinha com o
+      // mapa ao vivo (que mostra os dois tipos). O nome do condutor de ENTREGA
+      // vem do motoristaId (core), resolvido logo abaixo.
       this.prisma.viagem.findMany({
-        where: { filialId, tipo: TipoViagem.FROTA, situacao: StatusViagem.EM_CURSO },
-        include: { veiculo: { select: { placa: true, modelo: true } }, _count: { select: { paradas: true } } },
+        where: { filialId, situacao: StatusViagem.EM_CURSO },
+        select: {
+          id: true, numero: true, tipo: true, condutorNome: true, motoristaId: true,
+          dataHoraSaida: true, observacoesSaida: true, kmInicial: true,
+          veiculo: { select: { placa: true, modelo: true } },
+          _count: { select: { paradas: true } },
+        },
         orderBy: { dataHoraSaida: 'asc' },
       }),
       this.prisma.veiculo.findMany({
@@ -364,6 +372,11 @@ export class FrotaService {
         select: { departamentoSolicitanteId: true },
       }),
     ]);
+
+    // Nome do condutor das viagens de ENTREGA em curso (motoristaId → core).
+    const nomesCondutor = await this.core.nomesUsuarios(
+      emCurso.map((v) => v.motoristaId).filter((x): x is string => !!x),
+    );
 
     const kmRodadoMes = concluidasMes.reduce((s, v) => s + ((v.kmFinal ?? 0) - (v.kmInicial ?? 0)), 0);
     const custoTotalMes = despesasMes.reduce((s, d) => s + Number(d.valor), 0);
@@ -394,8 +407,10 @@ export class FrotaService {
         total: veicDisponiveis + veicEmUso + veicManutencao + veicBaixados,
       },
       emCurso: emCurso.map((v) => ({
-        id: v.id, numero: v.numero, placa: v.veiculo?.placa ?? '—', modelo: v.veiculo?.modelo ?? null,
-        condutorNome: v.condutorNome, dataHoraSaida: v.dataHoraSaida, finalidade: v.observacoesSaida,
+        id: v.id, numero: v.numero, tipo: v.tipo,
+        placa: v.veiculo?.placa ?? '—', modelo: v.veiculo?.modelo ?? null,
+        condutorNome: v.condutorNome ?? (v.motoristaId ? nomesCondutor.get(v.motoristaId) ?? null : null),
+        dataHoraSaida: v.dataHoraSaida, finalidade: v.observacoesSaida,
         kmInicial: v.kmInicial, paradas: v._count.paradas,
       })),
       alertas: {

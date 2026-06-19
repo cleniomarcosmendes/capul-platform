@@ -10,7 +10,7 @@ import { MapaFrota } from '../components/MapaFrota';
 
 interface PainelFrota {
   veiculos: { disponivel: number; emUso: number; manutencao: number; baixado: number; total: number };
-  emCurso: { id: string; numero: number; placa: string; modelo?: string | null; condutorNome?: string | null; dataHoraSaida?: string | null; finalidade?: string | null; kmInicial?: number | null; paradas: number }[];
+  emCurso: { id: string; numero: number; tipo: 'ENTREGA' | 'FROTA'; placa: string; modelo?: string | null; condutorNome?: string | null; dataHoraSaida?: string | null; finalidade?: string | null; kmInicial?: number | null; paradas: number }[];
   alertas: {
     veiculosManutencao: string[];
     manutencaoPreventiva: { id: string; placa: string; modelo?: string | null; kmAtual: number; kmProxima: number; faltam: number; vencida: boolean }[];
@@ -279,12 +279,17 @@ export function PainelFrotaPage() {
                 <li key={v.id}>
                   <button
                     type="button"
-                    onClick={() => navigate(`/frota/viagens/${v.id}`)}
+                    onClick={() => navigate(v.tipo === 'FROTA' ? `/frota/viagens/${v.id}` : `/viagens/${v.id}`)}
                     className="group flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition hover:bg-sky-50/60"
                     title="Abrir viagem"
                   >
                     <div className="min-w-0">
-                      <div className="font-medium text-slate-800">{v.placa}{v.modelo ? <span className="text-slate-400"> · {v.modelo}</span> : null}</div>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${v.tipo === 'FROTA' ? 'bg-green-100 text-green-700' : 'bg-sky-100 text-sky-700'}`}>
+                          {v.tipo === 'FROTA' ? 'Frota' : 'Entrega'}
+                        </span>
+                        <span className="font-medium text-slate-800">{v.placa}{v.modelo ? <span className="text-slate-400"> · {v.modelo}</span> : null}</span>
+                      </div>
                       <div className="truncate text-xs text-slate-500">{v.condutorNome ?? '—'}{v.finalidade ? ` — ${v.finalidade}` : ''}</div>
                     </div>
                     <div className="flex items-center gap-2">
