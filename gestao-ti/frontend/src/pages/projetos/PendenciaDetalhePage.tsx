@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ACCEPT_ANEXO } from '../../constants/anexo';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/Toast';
@@ -511,6 +512,7 @@ export function PendenciaDetalhePage() {
                 <input
                   ref={comentarioFileInputRef}
                   type="file"
+                  accept={ACCEPT_ANEXO}
                   multiple
                   onChange={(e) => {
                     const files = Array.from(e.target.files ?? []);
@@ -677,8 +679,11 @@ export function PendenciaDetalhePage() {
         </div>
 
             {/* Ações — card separado (paridade com chamado, 14/05/2026).
-                Só renderiza se houver pelo menos uma ação disponível. */}
-            {(isGestor || pendencia.responsavel.id === usuario?.id) && !['CONCLUIDA', 'CANCELADA'].includes(pendencia.status) && (
+                Só renderiza se houver pelo menos uma ação disponível.
+                19/06: staff T.I. (inclui SUPORTE) também encerra/altera status —
+                resolve UC/TERCEIRIZADO que não fecham a pendência. Backend já
+                permite (mudança de status pura, sem editar dados). */}
+            {(isStaffTI || pendencia.responsavel.id === usuario?.id) && !['CONCLUIDA', 'CANCELADA'].includes(pendencia.status) && (
               <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
                 <h4 className="font-semibold text-slate-700 text-sm">Ações</h4>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -799,7 +804,7 @@ export function PendenciaDetalhePage() {
               <label className="flex items-center gap-1 text-xs text-capul-600 hover:underline cursor-pointer">
                 <Paperclip className="w-3 h-3" />
                 {uploading ? 'Enviando...' : 'Anexar'}
-                <input type="file" className="hidden" onChange={handleUploadAnexo} disabled={uploading} />
+                <input type="file" accept={ACCEPT_ANEXO} className="hidden" onChange={handleUploadAnexo} disabled={uploading} />
               </label>
             </div>
             {(pendencia.anexos || []).length === 0 ? (
