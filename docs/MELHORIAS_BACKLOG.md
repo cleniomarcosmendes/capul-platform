@@ -120,10 +120,12 @@ com o Clenio: atacar na sessão de 15/06.**
   (`MapaFrota` em `PainelFrotaPage`, polling 12s). Commits `9370ba7` (backend) + `c078ec4` (app) +
   `54f61c7` (web). Migração `20260619140000`. tsc/smoke E2E ok. **Falta push do Clenio.**
 - **⏳ Pendências de governança (Fase A polish):**
-  1. **Retenção/purga do rastro bruto** (LGPD) — hoje `posicao_veiculo` cresce sem limite.
-     Criar job/cron de purga (ex.: apagar pings > N dias; o GPS da baixa é lastro separado).
+  1. ✅ **Retenção/purga do rastro bruto** (LGPD) — FEITO 19/06 (`01aea65`): cron diário 03:30
+     (`@nestjs/schedule`) apaga `posicao_veiculo` > `RASTREAMENTO_RETENCAO_DIAS` (default 7) +
+     `POST /rastreamento/purga` manual (GESTOR_FROTA). GPS da baixa fica intocado.
   2. **Tela no Configurador** documentando a política de rastreamento (regra da plataforma —
-     [[feedback_funcionalidade_visivel_no_configurador]]).
+     [[feedback_funcionalidade_visivel_no_configurador]]). Hoje a purga já loga a retenção no boot,
+     mas falta a tela.
   3. Testar no celular real (Expo Go) com viagem em curso; afinar intervalo/bateria.
 - **⏳ Fase B (futuro):** localização em background (app fechado) — exige `expo-task-manager` +
   build standalone (EAS), não roda no Expo Go. Avaliar quando a gerente validar a Fase A.
