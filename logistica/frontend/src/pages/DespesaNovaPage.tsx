@@ -4,6 +4,7 @@ import { ArrowLeft, Banknote, Image as ImageIcon, Loader2, Paperclip, X } from '
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { maskMoeda, parseMoeda, moedaParaInput } from '../utils/format';
 
 // Lançamento de despesa em PÁGINA dedicada (modelo da Nova Entrega: Lista →
 // Formulário). A tela /despesas é o painel; aqui é só o cadastro. Lançamento
@@ -87,7 +88,7 @@ export function DespesaNovaPage() {
         }>(`/despesas/${edicaoId}`);
         setVeiculoId(d.veiculoId);
         setTipoDespesaId(d.tipoDespesaId);
-        setValor(String(d.valor));
+        setValor(moedaParaInput(d.valor));
         setDataDespesa(d.dataDespesa ? d.dataDespesa.slice(0, 10) : '');
         setFornecedorId(d.fornecedorId ?? '');
         setFornecedor(d.fornecedor ?? '');
@@ -125,13 +126,13 @@ export function DespesaNovaPage() {
     e.preventDefault();
     if (!veiculoId) { toast('warning', 'Selecione o veículo.'); return; }
     if (!tipoDespesaId) { toast('warning', 'Selecione o tipo de despesa.'); return; }
-    if (valor === '' || Number(valor) <= 0) { toast('warning', 'Informe um valor válido.'); return; }
+    if (valor === '' || parseMoeda(valor) <= 0) { toast('warning', 'Informe um valor válido.'); return; }
     setSalvando(true);
     // Edição (PATCH): só os campos editáveis; não troca veículo nem recibo.
     if (modoEdicao) {
       try {
         await logisticaApi.patch(`/despesas/${edicaoId}`, {
-          tipoDespesaId, valor: Number(valor),
+          tipoDespesaId, valor: parseMoeda(valor),
           dataDespesa: dataDespesa ? new Date(dataDespesa).toISOString() : undefined,
           fornecedorId: fornecedorId || '',
           fornecedor: fornecedor.trim(),
@@ -153,7 +154,7 @@ export function DespesaNovaPage() {
         const fd = new FormData();
         fd.append('veiculoId', veiculoId);
         fd.append('tipoDespesaId', tipoDespesaId);
-        fd.append('valor', String(Number(valor)));
+        fd.append('valor', String(parseMoeda(valor)));
         if (dataDespesa) fd.append('dataDespesa', new Date(dataDespesa).toISOString());
         if (fornecedorId) fd.append('fornecedorId', fornecedorId);
         if (fornecedor.trim()) fd.append('fornecedor', fornecedor.trim());
@@ -162,7 +163,7 @@ export function DespesaNovaPage() {
         await logisticaApi.post('/despesas', fd);
       } else {
         await logisticaApi.post('/despesas', {
-          veiculoId, tipoDespesaId, valor: Number(valor),
+          veiculoId, tipoDespesaId, valor: parseMoeda(valor),
           dataDespesa: dataDespesa ? new Date(dataDespesa).toISOString() : undefined,
           fornecedorId: fornecedorId || undefined,
           fornecedor: fornecedor.trim() || undefined, observacao: observacao.trim() || undefined,
@@ -246,7 +247,14 @@ export function DespesaNovaPage() {
           </div>
           <div>
             <label className={lbl}>Valor (R$) *</label>
-            <input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} className={inp} />
+            <input
+              type="text"
+              inputMode="decimal"
+              value={valor}
+              onChange={(e) => setValor(maskMoeda(e.target.value))}
+              placeholder="0,00"
+              className={inp}
+            />
           </div>
           <div>
             <label className={lbl}>Data</label>

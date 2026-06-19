@@ -17,6 +17,7 @@ import {
   enfileirarFrota, processarFilaFrota, contarPendentesFrota, onFilaFrotaChange, ehErroDeRede,
 } from '../offline/filaFrota';
 import { uuid } from '../lib/uuid';
+import { maskMoeda, parseMoeda } from '../lib/moeda';
 import type { TipoDespesa, ViagemFrota } from '../types/api';
 
 const CAPUL = '#1e7d3a';
@@ -304,7 +305,7 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
     void (async () => { try { setFornecedores(await fornecedoresDespesa()); } catch { /* vazio */ } })();
   }, []);
 
-  const podeLancar = !!tipoId && valor !== '' && Number(valor) > 0 && !salvando;
+  const podeLancar = !!tipoId && valor !== '' && parseMoeda(valor) > 0 && !salvando;
 
   async function tirarFoto() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -316,7 +317,7 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
   async function lancar() {
     if (!podeLancar) return;
     setSalvando(true);
-    const payload = { viagemId: viagem.id, tipoDespesaId: tipoId, valor: Number(valor), fornecedorId: fornecedorId || undefined, fornecedor: fornecedor.trim() || undefined, idempotencyKey: uuid() };
+    const payload = { viagemId: viagem.id, tipoDespesaId: tipoId, valor: parseMoeda(valor), fornecedorId: fornecedorId || undefined, fornecedor: fornecedor.trim() || undefined, idempotencyKey: uuid() };
     try {
       await lancarDespesaViagem(payload, fotoUri ?? undefined);
       Alert.alert('Despesa lançada', 'Entrou como pendente de validação do supervisor.', [{ text: 'OK', onPress: onPronto }]);
@@ -343,7 +344,7 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
         ))}
       </View>
       <Text style={styles.label}>Valor (R$)</Text>
-      <TextInput style={styles.input} value={valor} onChangeText={setValor} keyboardType="decimal-pad" editable={!salvando} />
+      <TextInput style={styles.input} value={valor} onChangeText={(t) => setValor(maskMoeda(t))} keyboardType="decimal-pad" placeholder="0,00" editable={!salvando} />
       {fornecedores.length > 0 && (
         <>
           <Text style={styles.label}>Fornecedor (cadastrado)</Text>

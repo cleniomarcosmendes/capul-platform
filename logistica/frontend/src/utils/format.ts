@@ -19,6 +19,36 @@ export function maskCep(v: string): string {
   return d.replace(/^(\d{5})(\d{0,3})/, '$1-$2');
 }
 
+/**
+ * Máscara monetária progressiva (pt-BR) — digita-se da direita p/ esquerda em
+ * centavos: "5" → "0,05", "1234" → "12,34", "150000" → "1.500,00". Cap em 11
+ * dígitos (até 999.999.999,99). Aplicar no onChange; usar `parseMoeda` no submit.
+ */
+export function maskMoeda(v: string): string {
+  const d = onlyDigits(v).replace(/^0+/, '').slice(0, 11);
+  if (!d) return '';
+  const padded = d.padStart(3, '0');
+  const cent = padded.slice(-2);
+  const inteiro = Number(padded.slice(0, -2)).toLocaleString('pt-BR');
+  return `${inteiro},${cent}`;
+}
+
+/** Converte a string mascarada ("1.500,00") em número (1500). Robusto: lê os
+ *  dígitos como centavos, então independe de pontos/vírgula. "" → 0. */
+export function parseMoeda(v?: string | null): number {
+  const d = onlyDigits(v);
+  return d ? Number(d) / 100 : 0;
+}
+
+/** Número (ou string numérica) do backend → string mascarada p/ preencher o
+ *  input na edição (ex.: 1500.5 → "1.500,50"). null/undefined/"" → "". */
+export function moedaParaInput(n?: number | string | null): string {
+  if (n == null || n === '') return '';
+  const num = typeof n === 'string' ? Number(n) : n;
+  if (!Number.isFinite(num)) return '';
+  return maskMoeda(String(Math.round(num * 100)));
+}
+
 /** Placa BR (antiga `ABC1234` ou Mercosul `ABC1D23`): maiúsculas, alfanumérico, 7 chars. */
 export function maskPlaca(v: string): string {
   return (v ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);

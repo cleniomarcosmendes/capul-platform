@@ -5,6 +5,7 @@ import { coreApi, logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import PasswordInput from '../components/PasswordInput';
 import { useAuth } from '../contexts/AuthContext';
+import { maskMoeda, parseMoeda } from '../utils/format';
 
 // Controle de FROTA (terminal da portaria). O CONDUTOR se identifica por
 // matrícula+senha (Protheus, só funcionário ativo) — diferente da ENTREGA, em
@@ -914,7 +915,7 @@ export function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFr
 
   const lancar = async () => {
     if (!tipoDespesaId) { toast('warning', 'Selecione o tipo de despesa.'); return; }
-    if (valor === '' || Number(valor) <= 0) { toast('warning', 'Informe um valor válido.'); return; }
+    if (valor === '' || parseMoeda(valor) <= 0) { toast('warning', 'Informe um valor válido.'); return; }
     setSalvando(true);
     try {
       // Com recibo → multipart; sem → JSON. Backend aceita os dois.
@@ -922,7 +923,7 @@ export function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFr
         const fd = new FormData();
         fd.append('viagemId', v.id);
         fd.append('tipoDespesaId', tipoDespesaId);
-        fd.append('valor', String(Number(valor)));
+        fd.append('valor', String(parseMoeda(valor)));
         if (fornecedorId) fd.append('fornecedorId', fornecedorId);
         if (fornecedor.trim()) fd.append('fornecedor', fornecedor.trim());
         if (obs.trim()) fd.append('observacao', obs.trim());
@@ -930,7 +931,7 @@ export function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFr
         await logisticaApi.post('/despesas/viagem', fd);
       } else {
         await logisticaApi.post('/despesas/viagem', {
-          viagemId: v.id, tipoDespesaId, valor: Number(valor),
+          viagemId: v.id, tipoDespesaId, valor: parseMoeda(valor),
           fornecedorId: fornecedorId || undefined,
           fornecedor: fornecedor.trim() || undefined, observacao: obs.trim() || undefined,
         });
@@ -960,7 +961,7 @@ export function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFr
         </div>
         <div className="w-32">
           <label className="mb-1 block text-sm font-medium text-slate-600">Valor (R$)</label>
-          <input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <input type="text" inputMode="decimal" value={valor} onChange={(e) => setValor(maskMoeda(e.target.value))} placeholder="0,00" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
         <div className="w-72">
           <label className="mb-1 block text-sm font-medium text-slate-600">Fornecedor (cadastrado)</label>

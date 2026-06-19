@@ -7,7 +7,7 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useToast } from '../components/Toast';
 import PasswordInput from '../components/PasswordInput';
 import { getOperador, setOperador, limparOperador } from '../lib/operadorSessao';
-import { maskTelefone, maskCep, onlyDigits, UFS } from '../utils/format';
+import { maskTelefone, maskCep, onlyDigits, UFS, maskMoeda, parseMoeda, moedaParaInput } from '../utils/format';
 
 type TipoCliente = 'IDENTIFICADO' | 'RECORRENTE_LOCAL' | 'EVENTUAL';
 
@@ -221,7 +221,7 @@ export function EntregaNovaPage() {
         setVolumes(e.quantidadeVolumes); setObservacoes(e.observacoes ?? '');
         setOrigemVenda(e.origemVenda ?? '');
         setCupons(e.cupons.length
-          ? e.cupons.map((c) => ({ numeroCupom: c.numeroCupom ?? '', valor: c.valor != null ? String(c.valor) : '' }))
+          ? e.cupons.map((c) => ({ numeroCupom: c.numeroCupom ?? '', valor: moedaParaInput(c.valor) }))
           : [{ numeroCupom: '', valor: '' }]);
       } catch {
         toast('error', 'Entrega não encontrada.');
@@ -230,7 +230,7 @@ export function EntregaNovaPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [edicaoId]);
 
-  const totalCupons = cupons.reduce((acc, c) => acc + (parseFloat(c.valor) || 0), 0);
+  const totalCupons = cupons.reduce((acc, c) => acc + parseMoeda(c.valor), 0);
   const identificado = tipoCliente === 'IDENTIFICADO';
 
 
@@ -532,7 +532,7 @@ export function EntregaNovaPage() {
       ultimoCupomRef.current?.focus();
       return;
     }
-    if (ultimo.valor === '' || !(parseFloat(ultimo.valor) > 0)) {
+    if (ultimo.valor === '' || !(parseMoeda(ultimo.valor) > 0)) {
       toast('warning', 'Informe o valor do cupom antes de adicionar outro.');
       ultimoValorRef.current?.focus();
       return;
@@ -565,7 +565,7 @@ export function EntregaNovaPage() {
           observacoes,
           cupons: cupons
             .filter((c) => c.numeroCupom || c.valor)
-            .map((c) => ({ numeroCupom: c.numeroCupom || undefined, valor: c.valor ? parseFloat(c.valor) : undefined })),
+            .map((c) => ({ numeroCupom: c.numeroCupom || undefined, valor: c.valor ? parseMoeda(c.valor) : undefined })),
         });
         setDirty(false);
         navigate(`/entregas/${edicaoId}`);
@@ -867,11 +867,11 @@ export function EntregaNovaPage() {
                   className="w-44 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none" />
                 <input
                   ref={i === cupons.length - 1 ? ultimoValorRef : undefined}
-                  placeholder="Valor"
-                  type="number" step="0.01" value={c.valor}
+                  placeholder="0,00"
+                  type="text" inputMode="decimal" value={c.valor}
                   // Enter no valor adiciona outro cupom — addCupom valida nº+valor antes.
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCupom(); } }}
-                  onChange={(e) => setCupons((p) => p.map((x, j) => j === i ? { ...x, valor: e.target.value } : x))}
+                  onChange={(e) => setCupons((p) => p.map((x, j) => j === i ? { ...x, valor: maskMoeda(e.target.value) } : x))}
                   className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none" />
                 <button type="button" onClick={() => setCupons((p) => p.length > 1 ? p.filter((_, j) => j !== i) : [{ numeroCupom: '', valor: '' }])}
                   className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>
@@ -881,7 +881,7 @@ export function EntregaNovaPage() {
           <div className="mt-2 flex items-center justify-between">
             <button type="button" onClick={addCupom}
               className="flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline"><Plus className="h-3 w-3" /> Adicionar cupom</button>
-            <div className="text-sm text-slate-600">Total: <strong>R$ {totalCupons.toFixed(2)}</strong></div>
+            <div className="text-sm text-slate-600">Total: <strong>R$ {totalCupons.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
           </div>
           <p className="mt-1 text-[11px] text-slate-400">Enter no nº vai para o valor; Enter no valor adiciona outro cupom (precisa nº + valor). O cadastro só é gravado no botão “Salvar entrega”.</p>
         </div>
