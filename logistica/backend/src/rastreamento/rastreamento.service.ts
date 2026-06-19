@@ -52,6 +52,21 @@ export class RastreamentoService {
     return { ok: true as const };
   }
 
+  /** Estatísticas do rastro pra tela de política no Configurador (visão geral,
+   *  sem recorte de filial — é um panorama administrativo). */
+  async estatisticas() {
+    const [totalPosicoes, agg, viagens] = await Promise.all([
+      this.prisma.posicaoVeiculo.count(),
+      this.prisma.posicaoVeiculo.aggregate({ _min: { capturadoEm: true } }),
+      this.prisma.posicaoVeiculo.findMany({ distinct: ['viagemId'], select: { viagemId: true } }),
+    ]);
+    return {
+      totalPosicoes,
+      viagensComPosicao: viagens.length,
+      posicaoMaisAntiga: agg._min.capturadoEm,
+    };
+  }
+
   /** Última posição de cada viagem EM_CURSO da filial — alimenta o mapa ao vivo. */
   async ativos(filialId: string) {
     const viagens = await this.prisma.viagem.findMany({

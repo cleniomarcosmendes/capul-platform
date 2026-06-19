@@ -3,11 +3,16 @@ import axios from 'axios';
 const AUTH_BASE = '/api/v1/auth';
 const CORE_BASE = '/api/v1/core';
 const FISCAL_BASE = '/api/v1/fiscal';
+const LOGISTICA_BASE = '/api/v1/logistica';
 
 // timeout 30s — auditoria 10/05/2026 #A2 (Robustez UX)
 export const authApi = axios.create({ baseURL: AUTH_BASE, timeout: 30_000 });
 export const coreApi = axios.create({ baseURL: CORE_BASE, timeout: 30_000 });
 export const fiscalApi = axios.create({ baseURL: FISCAL_BASE, timeout: 30_000 });
+// Usado só pela tela de política de rastreamento (estatísticas best-effort).
+// Pode 403 se o admin do Configurador não tiver o módulo LOGISTICA — a tela
+// degrada com elegância (mostra a política mesmo sem os números ao vivo).
+export const logisticaApi = axios.create({ baseURL: LOGISTICA_BASE, timeout: 30_000 });
 
 let isRefreshing = false;
 let failedQueue: { resolve: (token: string) => void; reject: (err: unknown) => void }[] = [];
@@ -23,7 +28,7 @@ function processQueue(error: unknown, token: string | null) {
   failedQueue = [];
 }
 
-[authApi, coreApi, fiscalApi].forEach((api) => {
+[authApi, coreApi, fiscalApi, logisticaApi].forEach((api) => {
   api.interceptors.request.use((config) => {
     const token = localStorage.getItem('accessToken');
     if (token) config.headers.Authorization = `Bearer ${token}`;

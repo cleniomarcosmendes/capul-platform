@@ -14,6 +14,7 @@ import { UsuariosOnlinePage } from './pages/usuarios-online/UsuariosOnlinePage';
 import { IntegracoesPage } from './pages/integracoes/IntegracoesPage';
 import { BackupDrPage } from './pages/backup-dr/BackupDrPage';
 import { AuditRetentionPage } from './pages/observabilidade/AuditRetentionPage';
+import { RastreamentoGpsPage } from './pages/logistica/RastreamentoGpsPage';
 import { CertificadoFiscalPage } from './pages/certificado/CertificadoFiscalPage';
 import type { ReactNode } from 'react';
 
@@ -72,6 +73,7 @@ function AppRoutes() {
         <Route path="certificado-fiscal" element={<CertificadoFiscalPage />} />
         <Route path="backup-dr" element={<BackupDrPage />} />
         <Route path="audit-retention" element={<AuditRetentionPage />} />
+        <Route path="rastreamento-gps" element={<RastreamentoGpsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/configurador" replace />} />
     </Routes>

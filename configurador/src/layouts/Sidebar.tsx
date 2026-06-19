@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   HardDrive,
   ScrollText,
+  MapPin,
   X,
 } from 'lucide-react';
 
@@ -39,6 +40,7 @@ const menuItems: MenuItem[] = [
   { label: 'Certificado A1', icon: ShieldCheck, path: '/configurador/certificado-fiscal', roles: ADMINS },
   { label: 'Backup & DR', icon: HardDrive, path: '/configurador/backup-dr', roles: ADMINS },
   { label: 'Retencao Logs', icon: ScrollText, path: '/configurador/audit-retention', roles: ADMINS },
+  { label: 'Rastreamento GPS', icon: MapPin, path: '/configurador/rastreamento-gps', roles: ADMINS },
 ];
 
 function filterMenuByRole(items: MenuItem[], role: string | null): MenuItem[] {

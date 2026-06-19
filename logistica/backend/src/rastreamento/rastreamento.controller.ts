@@ -26,6 +26,15 @@ export class RastreamentoController {
     return this.rastreamento.ativos(user.filialId!);
   }
 
+  /** Política/estatísticas do rastreamento — alimenta a tela do Configurador
+   *  (orientação + config + histórico). Retenção + tamanho do trail. */
+  @Get('config')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  async config() {
+    const stats = await this.rastreamento.estatisticas();
+    return { retencaoDias: this.purga.diasRetencao, ...stats };
+  }
+
   /** Dispara a purga de retenção manualmente (a automática roda todo dia 03:30).
    *  Transparência LGPD — gestor consegue rodar e ver quantas posições saíram. */
   @Post('purga')
