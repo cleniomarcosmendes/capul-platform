@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
 import { enviarPosicao } from '../api/rastreamento';
+import { iniciarBackground, pararBackground } from '../tracking/backgroundLocation';
 
 /**
  * Rastreamento em tempo real (Fase A — FOREGROUND).
@@ -17,12 +18,29 @@ import { enviarPosicao } from '../api/rastreamento';
 export function useRastreamento(viagemId: string, ativo: boolean): { rastreando: boolean } {
   const [rastreando, setRastreando] = useState(false);
   const subRef = useRef<Location.LocationSubscription | null>(null);
+  const bgRef = useRef(false);
 
   useEffect(() => {
     let cancelado = false;
 
     async function iniciar() {
       if (!ativo || !viagemId) return;
+      // Fase B: tenta o background (app fechado) — só funciona em build
+      // standalone. Em Expo Go retorna false e caímos no foreground (Fase A).
+      try {
+        const ok = await iniciarBackground(viagemId);
+        if (ok) {
+          if (cancelado) {
+            void pararBackground();
+            return;
+          }
+          bgRef.current = true;
+          setRastreando(true);
+          return;
+        }
+      } catch {
+        /* sem suporte a background: segue pro foreground */
+      }
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted' || cancelado) return;
@@ -53,6 +71,10 @@ export function useRastreamento(viagemId: string, ativo: boolean): { rastreando:
       cancelado = true;
       subRef.current?.remove();
       subRef.current = null;
+      if (bgRef.current) {
+        bgRef.current = false;
+        void pararBackground();
+      }
       setRastreando(false);
     };
   }, [viagemId, ativo]);

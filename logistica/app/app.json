@@ -11,10 +11,14 @@
     ],
     "android": {
       "package": "br.com.capul.entregas",
-      "versionCode": 1,
+      "versionCode": 2,
       "permissions": [
         "INTERNET",
         "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
         "CAMERA"
       ]
     },
@@ -23,7 +27,15 @@
       "apiUrl": "https://platform.capul.com.br"
     },
     "plugins": [
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "locationAlwaysAndWhenInUsePermission": "O CAPUL Entregas usa sua localização durante a viagem (inclusive em segundo plano) para o monitoramento da rota pela gestão."
+        }
+      ]
     ]
   }
 }
