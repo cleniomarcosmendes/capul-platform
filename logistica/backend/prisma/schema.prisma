@@ -403,6 +403,7 @@ model Viagem {
   criadoPorId               String       @map("criado_por_id")
   paradas                   Parada[]
   despesas                  DespesaVeiculo[]
+  posicoes                  PosicaoVeiculo[]
 
   @@unique([filialId, numero])
   @@index([filialId, situacao])
@@ -439,6 +440,29 @@ model Parada {
 
   @@index([viagemId, sequencia])
   @@map("parada")
+  @@schema("logistica")
+}
+
+// Rastreamento em tempo real (Fase A, 19/06/2026) — pings de GPS enviados pelo
+// app DURANTE a viagem em curso (foreground). Cada linha é um ponto do trajeto
+// (trail); o Monitor da Frota mostra a ÚLTIMA posição por viagem ativa.
+// LGPD: só grava com viagem EM_CURSO (liga na saída, para no retorno); rastro
+// bruto tem retenção curta (o GPS da baixa/entrega é lastro separado). Acesso
+// de leitura restrito a gestores.
+model PosicaoVeiculo {
+  id          String   @id @default(uuid())
+  viagemId    String   @map("viagem_id")
+  viagem      Viagem   @relation(fields: [viagemId], references: [id], onDelete: Cascade)
+  latitude    Decimal  @db.Decimal(10, 7)
+  longitude   Decimal  @db.Decimal(10, 7)
+  precisao    Decimal? @db.Decimal(7, 2) // metros (accuracy do GPS)
+  velocidade  Decimal? @db.Decimal(7, 2) // m/s, quando disponível
+  bateria     Int? // % do aparelho (0-100), quando disponível
+  capturadoEm DateTime @map("capturado_em") // hora no device
+  recebidoEm  DateTime @default(now()) @map("recebido_em")
+
+  @@index([viagemId, capturadoEm])
+  @@map("posicao_veiculo")
   @@schema("logistica")
 }
 
