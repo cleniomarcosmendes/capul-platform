@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Car, ChevronRight, CircleDot, Loader2, MapPin, RefreshCw, TrendingUp, Wrench, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
+import { MapaFrota } from '../components/MapaFrota';
 
 // Painel tempo real da frota (monitoramento com recorte interno). "Tempo real"
 // via polling (auto-refresh 30s) — sem websocket. Padrão workspace.
@@ -260,6 +261,9 @@ export function PainelFrotaPage() {
           </div>
         </div>
       )}
+
+      {/* Mapa ao vivo das viagens em curso (rastreamento Fase A) */}
+      <MapaFrota />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Na rua agora */}
