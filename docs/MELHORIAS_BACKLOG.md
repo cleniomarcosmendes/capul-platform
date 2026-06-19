@@ -123,12 +123,16 @@ com o Clenio: atacar na sessão de 15/06.**
   1. ✅ **Retenção/purga do rastro bruto** (LGPD) — FEITO 19/06 (`01aea65`): cron diário 03:30
      (`@nestjs/schedule`) apaga `posicao_veiculo` > `RASTREAMENTO_RETENCAO_DIAS` (default 7) +
      `POST /rastreamento/purga` manual (GESTOR_FROTA). GPS da baixa fica intocado.
-  2. **Tela no Configurador** documentando a política de rastreamento (regra da plataforma —
-     [[feedback_funcionalidade_visivel_no_configurador]]). Hoje a purga já loga a retenção no boot,
-     mas falta a tela.
-  3. Testar no celular real (Expo Go) com viagem em curso; afinar intervalo/bateria.
-- **⏳ Fase B (futuro):** localização em background (app fechado) — exige `expo-task-manager` +
-  build standalone (EAS), não roda no Expo Go. Avaliar quando a gerente validar a Fase A.
+  2. ✅ **Tela no Configurador** FEITA 19/06 (`0f216b8`): `/configurador/rastreamento-gps`
+     (orientação + política LGPD + métricas ao vivo best-effort + botão de purga manual).
+     Endpoint `GET /rastreamento/config` na logística.
+  3. Testar no celular real com viagem em curso; afinar intervalo/bateria.
+- **🚧 Fase B — background (CÓDIGO FEITO 19/06 `4be7341`, FALTA TESTAR NO DEVICE):**
+  `expo-task-manager` + `expo-location` background + foreground-service Android;
+  `backgroundLocation.ts` (task + start/stop), `useRastreamento` tenta background e cai
+  pro foreground (Expo Go) sem regressão; `app.json` com ACCESS_BACKGROUND_LOCATION +
+  versionCode 2. **NÃO roda no Expo Go** — precisa `npm run build:apk` (EAS) + validar no
+  celular (permissão "permitir o tempo todo", app em background, ponto andando no Monitor).
 
 <!-- entrada original preservada abaixo -->
 ### (spec) Rastreamento em tempo real — detalhe técnico
