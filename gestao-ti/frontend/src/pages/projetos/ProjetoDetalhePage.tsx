@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { ACCEPT_ANEXO } from '../../constants/anexo';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/Toast';
@@ -2799,7 +2800,7 @@ function TabAnexos({ projetoId, canAdd, canManage }: { projetoId: string; canAdd
         <h4 className="font-semibold text-slate-700">Anexos ({itens.length})</h4>
         {canAdd && (
           <div className="flex items-center gap-3">
-            <input type="file" ref={fileInputRef} className="hidden" onChange={handleUpload} disabled={uploading} />
+            <input type="file" ref={fileInputRef} accept={ACCEPT_ANEXO} className="hidden" onChange={handleUpload} disabled={uploading} />
             <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-1 text-sm text-capul-600 hover:underline disabled:opacity-50">
               <Upload className="w-4 h-4" />
               {uploading ? 'Enviando...' : 'Upload Arquivo'}

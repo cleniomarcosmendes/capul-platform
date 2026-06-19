@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ACCEPT_ANEXO } from '../../constants/anexo';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { chamadoService } from '../../services/chamado.service';
@@ -638,7 +639,7 @@ export function ChamadoDetalhePage() {
                       if (comentarioFileInputRef.current) comentarioFileInputRef.current.value = '';
                     }}
                     className="hidden"
-                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.7z"
+                    accept={ACCEPT_ANEXO}
                   />
                   {/* Checkbox e "Solicitar info" só pra staff TI (ADMIN/GESTOR_TI/
                       SUPORTE_TI). Antes mostrava pra todos !USUARIO_FINAL — incluindo

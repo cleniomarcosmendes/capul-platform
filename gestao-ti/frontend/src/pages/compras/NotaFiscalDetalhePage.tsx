@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ACCEPT_ANEXO } from '../../constants/anexo';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { compraService } from '../../services/compra.service';
@@ -402,7 +403,7 @@ export function NotaFiscalDetalhePage() {
                 <Upload className="w-4 h-4" /> {uploading ? 'Enviando...' : 'Anexar Arquivo'}
               </button>
             )}
-            <input ref={fileInputRef} type="file" className="hidden" multiple onChange={handleUploadAnexo} disabled={uploading} />
+            <input ref={fileInputRef} type="file" accept={ACCEPT_ANEXO} className="hidden" multiple onChange={handleUploadAnexo} disabled={uploading} />
           </div>
           {anexos.length === 0 ? (
             <p className="px-6 py-8 text-sm text-slate-400 text-center">Nenhum anexo</p>

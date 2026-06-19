@@ -793,16 +793,12 @@ export class ProjetoController {
 
   @Post(':id/pendencias/:pid/anexos')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE', 'TERCEIRIZADO')
-  @UseInterceptors(FileInterceptor('file', {
-    storage: diskStorage({
-      destination: PENDENCIA_UPLOADS_DIR,
-      filename: (_req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        cb(null, `${randomUUID()}${ext}`);
-      },
-    }),
-    limits: { fileSize: 10 * 1024 * 1024 },
-  }))
+  // Padronizado 19/06: usava config própria SEM fileFilter (aceitava qualquer
+  // arquivo). Agora usa a whitelist canônica (createUploadConfig → isAnexoPermitido).
+  @UseInterceptors(FileInterceptor('file', createUploadConfig({
+    uploadsDir: PENDENCIA_UPLOADS_DIR,
+    loggerName: 'PendenciaUploads',
+  })))
   addAnexoPendencia(
     @Param('id') id: string,
     @Param('pid') pid: string,

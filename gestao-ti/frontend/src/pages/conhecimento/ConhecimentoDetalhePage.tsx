@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ACCEPT_ANEXO } from '../../constants/anexo';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { conhecimentoService } from '../../services/conhecimento.service';
@@ -204,7 +205,7 @@ export function ConhecimentoDetalhePage() {
                     multiple
                     onChange={handleUploadAnexo}
                     className="hidden"
-                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.7z"
+                    accept={ACCEPT_ANEXO}
                   />
                 </>
               )}

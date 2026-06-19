@@ -23,8 +23,11 @@ export const ALLOWED_MIMES_ANEXO = [
   'text/plain', 'text/csv',
   // XML (NF-e, retornos, configs) — anexo é só armazenado/baixado, não parseado.
   'application/xml', 'text/xml',
-  // Arquivos compactados
-  'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
+  // Arquivos compactados (RAR moderno manda 'application/vnd.rar'; navegadores/SO
+  // variam o MIME — a whitelist de EXTENSÕES abaixo cobre os casos genéricos).
+  'application/zip', 'application/x-zip-compressed',
+  'application/x-rar-compressed', 'application/vnd.rar',
+  'application/x-7z-compressed',
   // Certificados (chamados de cert/A1, etc.)
   'application/x-pkcs12', 'application/pkcs12',
 ];
@@ -35,10 +38,13 @@ export const ALLOWED_MIMES_ANEXO = [
  * não detectam corretamente:
  *   .trc — trace files Oracle/SQL Server (debug de chamados de banco)
  *   .log — arquivos de log em geral
+ *   .xml — NF-e, retornos, configs
+ *   .zip/.rar/.7z — compactados (MIME varia muito entre navegador/SO; a
+ *                   extensão garante a liberação independente do MIME enviado)
  *
  * Validação por extensão case-insensitive.
  */
-export const ALLOWED_EXTENSIONS_ANEXO = ['.trc', '.log', '.xml'];
+export const ALLOWED_EXTENSIONS_ANEXO = ['.trc', '.log', '.xml', '.zip', '.rar', '.7z'];
 
 /**
  * Decide se um arquivo é permitido como anexo no Gestão TI.

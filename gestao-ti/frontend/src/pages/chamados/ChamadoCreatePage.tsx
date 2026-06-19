@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ACCEPT_ANEXO } from '../../constants/anexo';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
@@ -849,7 +850,7 @@ export function ChamadoCreatePage() {
                   multiple
                   onChange={handleFileChange}
                   className="hidden"
-                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.7z"
+                  accept={ACCEPT_ANEXO}
                 />
               </label>
               <p className="text-xs text-slate-400 mt-1">Max 10MB por arquivo. Imagens, PDF, documentos, planilhas, ZIP. Arraste arquivos para ca.</p>

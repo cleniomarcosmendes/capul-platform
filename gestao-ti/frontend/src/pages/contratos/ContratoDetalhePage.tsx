@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ACCEPT_ANEXO } from '../../constants/anexo';
 import { Header } from '../../layouts/Header';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { useAuth } from '../../contexts/AuthContext';
@@ -580,7 +581,7 @@ function TabGeral({ contrato, canManage, onReload, toast, confirm }: TabPropsWit
               {uploading ? 'Enviando...' : 'Anexar Arquivo'}
             </button>
           )}
-          <input ref={fileInputRef} type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
+          <input ref={fileInputRef} type="file" accept={ACCEPT_ANEXO} className="hidden" onChange={handleUpload} disabled={uploading} />
         </div>
         {anexos.length === 0 ? (
           <p className="px-6 py-8 text-sm text-slate-400 text-center">Nenhum anexo</p>

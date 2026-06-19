@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { ACCEPT_ANEXO } from '../../constants/anexo';
 import { Header } from '../../layouts/Header';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { paradaService } from '../../services/parada.service';
@@ -365,7 +366,7 @@ export function ParadaFormPage() {
                     type="file"
                     className="hidden"
                     disabled={uploadingAnexo}
-                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.7z"
+                    accept={ACCEPT_ANEXO}
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
