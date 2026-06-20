@@ -738,6 +738,25 @@ export function ChamadoDetalhePage() {
                 </InfoRow>
               )}
 
+              {/* SAC (Fase 1) — dados do cliente externo, quando preenchidos. */}
+              {chamado.clienteNome && (
+                <InfoRow label="Cliente (SAC)">
+                  <span className="text-xs text-slate-600 font-medium">{chamado.clienteNome}</span>
+                </InfoRow>
+              )}
+              {chamado.clienteContato && (
+                <InfoRow label="Contato">
+                  <span className="text-xs text-slate-600">{chamado.clienteContato}</span>
+                </InfoRow>
+              )}
+              {chamado.canalOrigem && (
+                <InfoRow label="Canal">
+                  <span className="text-xs text-slate-600">
+                    {({ BALCAO: 'Balcão', TELEFONE: 'Telefone', EMAIL: 'E-mail', OUTRO: 'Outro' } as const)[chamado.canalOrigem]}
+                  </span>
+                </InfoRow>
+              )}
+
               <InfoRow label="Tecnico">
                 <span className="text-xs text-slate-600">{chamado.tecnico?.nome || 'Nao atribuido'}</span>
               </InfoRow>
