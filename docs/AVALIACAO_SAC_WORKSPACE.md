@@ -1,10 +1,14 @@
 # Avaliação — Workspace/Chamado para o SAC da empresa
 
-**Data:** 19/06/2026 · **Status:** 🔎 conceito avaliado, SEM implementação · **Origem:** ideia do Clenio
+**Data:** 19/06/2026 · **Atualizado:** 20/06/2026 (desenho de 5 camadas) · **Status:** 🔎 conceito avaliado, SEM implementação · **Origem:** ideia do Clenio
 **Objetivo:** usar o módulo Workspace/Chamado (Gestão TI) para atender o **SAC** (atendimento ao consumidor), com vários SAC entrando por e-mail e respondidos por e-mail, atendidos de forma central para todas as filiais.
 
 > Este doc é a validação do conceito contra o que o sistema **já faz hoje**. Não é spec de
 > implementação — é o mapa de decisões + viabilidade + fases para quando o desenvolvimento for autorizado.
+>
+> **Veja primeiro a §9 — Desenho consolidado (5 camadas)**, que sintetiza as decisões abaixo
+> com os dois complementos do Clenio (equipe restrita + rosters por departamento), reverificados
+> no código em 20/06.
 
 ---
 
@@ -42,6 +46,10 @@ Requisito do Clenio: *"o apoiador vê só o SAC em que foi incluído, não todos
 - **Apoiadores dos departamentos** = adicionados **em cópia** caso a caso → veem **só aquele** chamado.
 - "Equipes por departamento" servem, no máximo, como **catálogo de quem pode ser puxado** (lista de apoiadores por área), não como visibilidade.
 
+**Atualização 20/06 — dois complementos do Clenio (reverificados no código):**
+- **Equipe `restritaVisibilidade` (18/06) — isola a FILA do SAC.** `findAll` (~L444-470): GESTOR/ADMIN do depto vê tudo; **SUPORTE não-membro NÃO vê** chamados de equipe restrita; membro da equipe vê a fila daquela equipe. Logo, uma **Equipe SAC restrita** mantém a fila do SAC visível só aos operadores (+ gestor), sem vazar pro resto do Gestão TI. ⚠️ Continua sendo **fila inteira da equipe**, não per-chamado — por isso é camada de **isolamento**, não o controle por-apoiador.
+- **Rosters por departamento curados pelos líderes — catálogo de elegíveis.** Cada líder de setor mantém a equipe (membros) de quem pode apoiar o SAC; o **seletor de "em cópia" do SAC passa a oferecer só esses usuários**. ⚠️ **Regra de ouro:** essas equipes-catálogo **NUNCA** podem ser `equipeAtualId` (roteadas) de um SAC — senão todos os membros veriam a fila. Servem **só** pra popular o seletor; o acesso real é per-chamado via cópia.
+
 ---
 
 ## 4. Dúvidas do Clenio — respostas
@@ -63,7 +71,8 @@ Requisito do Clenio: *"o apoiador vê só o SAC em que foi incluído, não todos
 
 - **Entrada (inbound)** — NÃO existe. Serviço lê a caixa do SAC (IMAP) ou recebe via webhook → cria o chamado → atribui ao responsável. **Pontos críticos:** dedupe (não duplicar do mesmo e-mail), **threading** (resposta do cliente = nova interação no MESMO chamado, via `Message-ID`/`In-Reply-To` ou token no assunto `[SAC-123]`), **anti-loop** (auto-resposta/out-of-office), spam/anexo.
 - **Saída (resposta ao cliente)** — NÃO existe como e-mail externo. Precisa de uma **interação tipo "Resposta SAC"**: externa/pública, dispara e-mail ao cliente (com **anexo**), mantém threading.
-- **Ponto técnico a confirmar:** "em cópia" garante acesso no **detalhe** (link direto); na **listagem** de USUARIO_FINAL o filtro pega só os próprios chamados — confirmar se o chamado em cópia **aparece na lista** do apoiador; se não, é ajuste necessário.
+- **Ponto técnico ✅ CONFIRMADO (20/06) — é um GAP real:** "em cópia" garante acesso no **detalhe** (`chamado-core.service.ts` findOne, ~L603 `isCopiado`), mas no **`findAll` (listagem) NÃO existe cláusula para `copias`** (o OR de visibilidade, ~L472-478, só tem solicitante/técnico/colaborador/`equipeAtualId`/depto-staff). Logo, o SAC em cópia **não aparece na lista** do apoiador — só por link direto. **Ajuste necessário na Fase 1:** adicionar `{ copias: { some: { usuarioId: user.sub } } }` ao OR do `findAll`.
+- **Regra de elegibilidade da cópia ✅ CONFIRMADA (20/06):** `adicionarCopias` chama `assertNaoSeTI` (~L826) → **só usuários NÃO-T.I.** entram em cópia. Bom para o SAC (apoiadores são de outros setores). Limite: apoiador que seja staff de T.I. não entra por cópia (usaria Colaborador, T.I.-only).
 
 ---
 
@@ -86,6 +95,41 @@ Requisito do Clenio: *"o apoiador vê só o SAC em que foi incluído, não todos
 2. **Saída por e-mail** (resposta ao cliente com anexo + threading).
 3. **Entrada por e-mail** (IMAP/webhook + dedupe + anti-loop + threading).
 4. **Relatórios/templates/SLA de SAC.**
+
+---
+
+## 9. Desenho consolidado — controle de acesso em 5 camadas (20/06)
+
+Síntese das decisões acima + os dois complementos do Clenio, reverificados no código.
+**Cada camada resolve um problema distinto; elas se somam, não competem.**
+
+| # | Camada | Mecanismo | Resolve |
+|---|--------|-----------|---------|
+| 1 | **Workspace SAC** (departamento) | responsável + operadores = staff do depto | fila central do SAC, multi-filial (`filialId` marca a origem) |
+| 2 | **Equipe SAC `restritaVisibilidade`** | flag de equipe (18/06) | **isola a fila do SAC** do resto do Gestão TI (só operadores + gestor veem) |
+| 3 | **Rosters por departamento** (equipes curadas pelos líderes) | membros de equipe = catálogo | **governança:** só quem o líder de setor indicou pode ser puxado |
+| 4 | **Em cópia** (por chamado) | `ChamadoCopia` (já existe) | apoiador puxado vê/interage **só naquele SAC** (somente não-T.I.) |
+| 5 | **Fix do `findAll`** | cláusula `copias` no OR | o SAC em cópia **aparece na listagem** do apoiador (gap §6) |
+
+**Fluxo resultante:** o líder de cada setor cura sua equipe (camada 3) → o operador do SAC,
+ao precisar de apoio, só consegue puxar (em cópia) alguém dessas listas (camada 4) → o apoiador
+passa a ver/interagir **apenas naquele SAC** (camadas 4 + 5), e a fila central permanece isolada
+do resto do Gestão TI (camada 2). Governança descentralizada + isolamento + controle por-chamado.
+
+**Regra de ouro (não vazar):** as equipes-catálogo da camada 3 **nunca** podem ser alvo de
+roteamento (`equipeAtualId`) de um SAC — senão a visibilidade vira "fila inteira da equipe"
+(camada 2/equipe), o oposto do desejado. Elas existem só para popular o seletor de cópia.
+
+**Trabalho de código do núcleo (Fase 1), em ordem:**
+1. **Cliente externo** (solicitante sem login) + **workspace SAC** (camada 1).
+2. **`findAll`:** adicionar `{ copias: { some: { usuarioId } } }` ao OR de visibilidade (camada 5).
+3. **Seletor de cópia do SAC** restrito aos rosters (camada 3) + **guard "roster não é roteável"** (regra de ouro).
+4. Equipe SAC marcada `restritaVisibilidade` (camada 2 — só configuração, já existe no código).
+
+> O peso real do projeto continua sendo **cliente externo + e-mail (Fases 2-3)**, não a
+> visibilidade — o único ajuste estrutural de visibilidade é a cláusula da cópia no `findAll`.
+
+---
 
 > Referências de código: `gestao-ti/backend/src/chamado/services/chamado-core.service.ts` (visibilidade/findAll),
 > `chamado-helpers.service.ts` (regra em cópia ≠ colaborador), `chamado-colaborador.service.ts` (T.I.-only),
