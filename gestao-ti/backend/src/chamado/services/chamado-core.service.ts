@@ -473,6 +473,11 @@ export class ChamadoCoreService {
         { solicitanteId: user.sub },
         { tecnicoId: user.sub },
         { colaboradores: { some: { usuarioId: user.sub } } },
+        // SAC Fase 1 (camada 5): quem está EM CÓPIA vê o chamado na LISTAGEM, não
+        // só no detalhe (findOne já liberava via isCopiado). Sem isto, o apoiador
+        // do SAC puxado por cópia não via o chamado na lista dele. Copiado é
+        // sempre não-TI → o S12 abaixo já restringe a visibilidade=PUBLICO.
+        { copias: { some: { usuarioId: user.sub } } },
         ...(equipeIds.length > 0 ? [{ equipeAtualId: { in: equipeIds } }] : []),
         ...deptoStaffClauses,
       ];

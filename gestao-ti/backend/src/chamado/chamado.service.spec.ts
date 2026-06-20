@@ -357,5 +357,11 @@ describe('ChamadoService', () => {
       expect(where).not.toContain('restritaVisibilidade');
       expect(where).toContain('dep-ti');
     });
+
+    // SAC Fase 1 (camada 5): quem está em cópia precisa ver o chamado na LISTAGEM.
+    it('inclui a cláusula de cópia no OR de visibilidade (apoiador em cópia vê na lista)', async () => {
+      const where = await whereDe('SUPORTE');
+      expect(where).toContain('copias');
+    });
   });
 });
