@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Car, ChevronLeft, ChevronRight, Gauge, Loader2, RefreshCw } from 'lucide-react';
+import { Car, ChevronLeft, ChevronRight, Gauge, Loader2, Printer, RefreshCw } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { LinhaKmBarra, fmtKm, HACHURA, type LinhaKm } from '../components/LinhaKmBarra';
@@ -49,6 +49,11 @@ export function LinhaKmPage() {
   const semDados = linhas.length - comDados.length;
   const exibidas = umVeiculo ? linhas : comDados; // num veículo específico, mostro mesmo vazio (com aviso)
 
+  const imprimir = () => {
+    const veicLabel = veiculoId ? (veiculos.find((v) => v.id === veiculoId)?.placa ?? '—') : 'Todos os veículos';
+    abrirRelatorioLinhaKm(exibidas.filter((l) => l.segmentos.length > 0), `${MESES[mes - 1]} / ${ano}`, veicLabel, umVeiculo, noMesAtual);
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -68,6 +73,7 @@ export function LinhaKmPage() {
           <span className="min-w-[9.5rem] text-center text-sm font-medium text-slate-700">{MESES[mes - 1]} / {ano}</span>
           <button onClick={() => passoMes(1)} disabled={noMesAtual} className="rounded-lg border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
           <button onClick={() => void carregar()} className="ml-1 inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-50"><RefreshCw className="h-3.5 w-3.5" /> Atualizar</button>
+          <button onClick={imprimir} disabled={comDados.length === 0} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-40"><Printer className="h-3.5 w-3.5" /> Imprimir</button>
         </div>
       </div>
 
@@ -125,4 +131,86 @@ export function LinhaKmPage() {
       )}
     </div>
   );
+}
+
+// Relatório da Linha do KM para impressão — abre nova janela com HTML inline
+// (React 19 não aplica <style> dinâmico; o documento bruto evita o problema).
+// Desenha a faixa de cada veículo (viagens × não apontadas) e, num veículo só,
+// a tabela de trechos. Respeita o mês e o veículo selecionados.
+function abrirRelatorioLinhaKm(linhas: LinhaKm[], periodo: string, veicLabel: string, umVeiculo: boolean, mesCorrente: boolean) {
+  const esc = (s: unknown) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
+  const dt = (s?: string | null) => (s ? new Date(s).toLocaleDateString('pt-BR') : '—');
+
+  const blocos = linhas.map((l) => {
+    const span = Math.max(l.kmMax - l.kmMin, 1);
+    const segs = l.segmentos.map((s) => {
+      const left = ((s.kmInicio - l.kmMin) / span) * 100;
+      const width = Math.max((s.km / span) * 100, 0.5);
+      return `<div class="seg ${s.tipo}" style="left:${left}%;width:${width}%" title="${esc(s.label)}"></div>`;
+    }).join('');
+    const tabela = umVeiculo ? `
+      <table class="trechos">
+        <thead><tr><th>Trecho</th><th>Data</th><th>Condutor</th><th class="r">Faixa de KM</th><th class="r">KM</th></tr></thead>
+        <tbody>${l.segmentos.map((s) => `
+          <tr class="${s.tipo}">
+            <td>${s.tipo === 'gap' ? `<i>${esc(s.label)}</i>` : `Viagem #${esc(s.viagemNumero)}`}</td>
+            <td>${s.tipo === 'gap' ? '—' : esc(dt(s.data))}</td>
+            <td>${s.tipo === 'gap' ? '—' : esc(s.condutor ?? '—')}</td>
+            <td class="r num">${esc(fmtKm(s.kmInicio))} – ${esc(fmtKm(s.kmFim))}</td>
+            <td class="r num">${esc(fmtKm(s.km))} km</td>
+          </tr>`).join('')}</tbody>
+      </table>` : '';
+    return `
+      <div class="veic">
+        <div class="vhead">
+          <b>${esc(l.placa)}</b>${l.modelo ? ` · <span class="muted">${esc(l.modelo)}</span>` : ''}
+          <span class="tot">Viagens: <b>${esc(fmtKm(l.kmViagens))} km</b> · Não apontadas: <b>${esc(fmtKm(l.kmNaoApontadas))} km</b> · ${esc(l.qtdViagens)} viagem(ns)</span>
+        </div>
+        <div class="bar">${segs}</div>
+        <div class="kmlabels"><span>${esc(fmtKm(l.kmMin))} km</span><span>${esc(fmtKm(l.kmMax))} km</span></div>
+        ${tabela}
+      </div>`;
+  }).join('');
+
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Linha do KM — Frota</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,sans-serif;color:#0f172a;margin:24px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  h1{font-size:20px;font-weight:800;margin:0 0 2px}
+  .sub{color:#475569;font-size:12px;margin:0 0 10px}
+  .filtros{font-size:12px;color:#334155;margin:0 0 16px}
+  .filtros span{display:inline-block;background:#f1f5f9;border-radius:6px;padding:2px 8px;margin-right:6px}
+  .legenda{font-size:11px;color:#475569;margin:0 0 16px}
+  .legenda i{font-style:normal;display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:middle;margin-right:4px}
+  .legenda .lv{background:#0ea5e9}
+  .legenda .lg{background-image:repeating-linear-gradient(45deg,#cbd5e1,#cbd5e1 4px,#e2e8f0 4px,#e2e8f0 8px)}
+  .veic{margin:0 0 18px;page-break-inside:avoid}
+  .vhead{font-size:13px;margin:0 0 6px}
+  .vhead .muted{color:#64748b;font-weight:400}
+  .vhead .tot{float:right;font-size:11px;color:#475569}
+  .bar{position:relative;height:22px;background:#f1f5f9;border-radius:4px;overflow:hidden}
+  .seg{position:absolute;top:2px;bottom:2px;border-radius:3px}
+  .seg.viagem{background:#0ea5e9}
+  .seg.gap{background-image:repeating-linear-gradient(45deg,#cbd5e1,#cbd5e1 4px,#e2e8f0 4px,#e2e8f0 8px)}
+  .kmlabels{display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:3px}
+  table.trechos{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}
+  table.trechos th{background:#0f172a;color:#fff;text-align:left;padding:5px 8px;font-size:9px;text-transform:uppercase;letter-spacing:.5px}
+  table.trechos td{padding:4px 8px;border-bottom:1px solid #e2e8f0}
+  table.trechos tr.gap td{background:#f8fafc;color:#64748b}
+  .r{text-align:right}.num{font-variant-numeric:tabular-nums}
+  @media print{@page{size:A4 landscape;margin:10mm}}
+</style></head><body>
+  <h1>Linha do KM — Frota</h1>
+  <p class="sub">CAPUL · Logística · gerado em ${esc(new Date().toLocaleString('pt-BR'))}</p>
+  <div class="filtros"><span>Período: ${esc(periodo)}</span><span>Veículo: ${esc(veicLabel)}</span></div>
+  <div class="legenda"><i class="lv"></i> Viagens (KM apontado) &nbsp;&nbsp; <i class="lg"></i> Não apontadas (lacuna de odômetro)${mesCorrente ? ' — inclui a lacuna até o KM atual' : ''}</div>
+  ${blocos || '<p class="muted">Sem viagens com KM apontado no período.</p>'}
+  <script>window.onload=function(){window.print()}</script>
+</body></html>`;
+
+  const w = window.open('', '_blank', 'noopener,width=1000,height=700');
+  if (!w) return;
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
 }
