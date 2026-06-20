@@ -777,6 +777,10 @@ export class ChamadoCoreService {
         ipMaquina: dto.ipMaquina,
         matriculaColaborador: dto.matriculaColaborador,
         nomeColaborador: dto.nomeColaborador?.trim() || undefined,
+        // SAC (Fase 1) — dados do cliente externo (só preenchidos no workspace SAC).
+        clienteNome: dto.clienteNome?.trim() || undefined,
+        clienteContato: dto.clienteContato?.trim() || undefined,
+        canalOrigem: dto.canalOrigem,
         slaDefinicaoId: sla?.id,
         dataLimiteSla,
       },

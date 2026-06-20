@@ -247,6 +247,17 @@ enum Prioridade {
   @@schema("gestao_ti")
 }
 
+/// SAC (Fase 1) — canal por onde o atendimento ao cliente entrou. Usado só nos
+/// chamados do workspace SAC; nullable (chamados internos não preenchem).
+enum CanalOrigemSac {
+  BALCAO
+  TELEFONE
+  EMAIL
+  OUTRO
+
+  @@schema("gestao_ti")
+}
+
 enum StatusChamado {
   ABERTO
   EM_ATENDIMENTO
@@ -373,6 +384,12 @@ model Chamado {
   ipMaquina            String?       @map("ip_maquina")
   matriculaColaborador String?       @map("matricula_colaborador")
   nomeColaborador      String?       @map("nome_colaborador")
+  // SAC (Fase 1) — dados do CLIENTE externo (o colaborador registra em nome
+  // dele; o cliente não é usuário do sistema). Nullable: só preenchidos nos
+  // chamados do workspace SAC. `clienteContato` habilita o e-mail de saída (F2).
+  clienteNome          String?         @map("cliente_nome")
+  clienteContato       String?         @map("cliente_contato")
+  canalOrigem          CanalOrigemSac? @map("canal_origem")
   createdAt            DateTime      @default(now()) @map("created_at")
   updatedAt          DateTime      @updatedAt @map("updated_at")
 

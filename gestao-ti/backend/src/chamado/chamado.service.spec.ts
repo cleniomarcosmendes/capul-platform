@@ -95,6 +95,29 @@ describe('ChamadoService', () => {
       );
     });
 
+    it('persiste os campos do cliente SAC (nome/contato/canal) — Fase 1', async () => {
+      prisma.equipe.findUnique.mockResolvedValue({ id: 'eq-1', privada: false, departamentoId: 'dep-ti' });
+      prisma.slaDefinicao.findUnique.mockResolvedValue(null);
+      prisma.chamado.create.mockResolvedValue(baseChamado());
+      prisma.historicoChamado.create.mockResolvedValue({});
+
+      const dto = {
+        titulo: 'Cliente reclamou do produto', descricao: 'Detalhes', equipeAtualId: 'eq-1',
+        clienteNome: '  Maria Silva  ', clienteContato: 'maria@cliente.com', canalOrigem: 'TELEFONE',
+      };
+      await service.create(dto as any, mockUser as any, 'SUPORTE');
+
+      expect(prisma.chamado.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            clienteNome: 'Maria Silva',            // trim aplicado
+            clienteContato: 'maria@cliente.com',
+            canalOrigem: 'TELEFONE',
+          }),
+        }),
+      );
+    });
+
     it('calcula data limite SLA quando existe definicao', async () => {
       const equipe = { id: 'eq-1', privada: false, departamentoId: 'dep-ti' };
       const sla = { id: 'sla-1', horasResolucao: 24 };

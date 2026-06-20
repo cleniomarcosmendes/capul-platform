@@ -1,5 +1,5 @@
 import { IsString, IsNotEmpty, IsOptional, IsEnum, MaxLength, IsArray, IsUUID, ArrayMaxSize } from 'class-validator';
-import { Prioridade, Visibilidade } from '@prisma/client';
+import { CanalOrigemSac, Prioridade, Visibilidade } from '@prisma/client';
 
 export class CreateChamadoDto {
   @IsString()
@@ -86,6 +86,22 @@ export class CreateChamadoDto {
   @IsString()
   @MaxLength(60)
   senhaColaborador?: string;
+
+  // SAC (Fase 1) — dados do cliente externo (o colaborador registra em nome dele).
+  // Só fazem sentido no workspace SAC; o frontend exibe condicionalmente (1c).
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  clienteNome?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  clienteContato?: string;
+
+  @IsOptional()
+  @IsEnum(CanalOrigemSac)
+  canalOrigem?: CanalOrigemSac;
 
   /**
    * IDs dos usuarios a adicionar em copia no chamado.
