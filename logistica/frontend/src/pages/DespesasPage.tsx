@@ -21,6 +21,7 @@ interface Despesa {
   observacao?: string | null; autorNome?: string | null; aprovadoEm?: string | null;
   motivoContestacao?: string | null; temComprovante?: boolean;
   anormalidade?: boolean; motivoAnormalidade?: string | null;
+  numeroDocumento?: string | null; semNota?: boolean;
 }
 const SIT_META: Record<string, { label: string; cls: string }> = {
   PENDENTE: { label: 'Pendente', cls: 'bg-amber-100 text-amber-700' },
@@ -70,7 +71,7 @@ export function DespesasPage() {
 }
 
 // ---- Aba Despesas ----
-type SortCol = 'data' | 'veiculo' | 'tipo' | 'valor' | 'fornecedor' | 'autor' | 'situacao';
+type SortCol = 'data' | 'veiculo' | 'tipo' | 'documento' | 'valor' | 'fornecedor' | 'autor' | 'situacao';
 
 function DespesasTab() {
   const { toast } = useToast();
@@ -115,6 +116,7 @@ function DespesasTab() {
         case 'data': return new Date(d.dataDespesa).getTime();
         case 'veiculo': return d.placa ?? '';
         case 'tipo': return d.tipo ?? '';
+        case 'documento': return d.numeroDocumento ?? '';
         case 'valor': return d.valor ?? 0;
         case 'fornecedor': return d.fornecedor ?? '';
         case 'autor': return d.autorNome ?? '';
@@ -193,6 +195,7 @@ function DespesasTab() {
                 <Th col="data">Data</Th>
                 <Th col="veiculo">Veículo</Th>
                 <Th col="tipo">Tipo</Th>
+                <Th col="documento">Documento</Th>
                 <Th col="valor" right>Valor</Th>
                 <Th col="fornecedor">Fornecedor</Th>
                 <Th col="autor">Autor</Th>
@@ -207,7 +210,7 @@ function DespesasTab() {
             </tbody>
             <tfoot>
               <tr className="border-t border-slate-200 bg-slate-50 font-semibold text-slate-700">
-                <td className="px-4 py-2" colSpan={3}>Total ({despesas.length} despesa{despesas.length === 1 ? '' : 's'})</td>
+                <td className="px-4 py-2" colSpan={4}>Total ({despesas.length} despesa{despesas.length === 1 ? '' : 's'})</td>
                 <td className="px-4 py-2 text-right tabular-nums">{BRL(totalPeriodo)}</td>
                 <td className="px-4 py-2" colSpan={4}></td>
               </tr>
@@ -234,6 +237,7 @@ function abrirRelatorioDespesas(despesas: Despesa[], filtros: string[], total: n
       <td>${esc(fmtDate(d.dataDespesa))}</td>
       <td>${esc(d.placa)}${d.modelo ? ` · ${esc(d.modelo)}` : ''}</td>
       <td>${esc(d.tipo)}</td>
+      <td>${d.semNota ? 'S/N' : esc(d.numeroDocumento ?? '—')}</td>
       <td class="r num">${esc(brl(Number(d.valor || 0)))}</td>
       <td>${esc(d.fornecedor ?? '—')}</td>
       <td>${esc(d.autorNome ?? '—')}</td>
@@ -263,9 +267,9 @@ function abrirRelatorioDespesas(despesas: Despesa[], filtros: string[], total: n
   <p class="sub">CAPUL · Logística · gerado em ${new Date().toLocaleString('pt-BR')}</p>
   <div class="filtros">${filtros.map((f) => `<span>${esc(f)}</span>`).join('')}</div>
   <table>
-    <thead><tr><th>Data</th><th>Veículo</th><th>Tipo</th><th class="r">Valor</th><th>Fornecedor</th><th>Autor</th><th>Situação</th></tr></thead>
+    <thead><tr><th>Data</th><th>Veículo</th><th>Tipo</th><th>Documento</th><th class="r">Valor</th><th>Fornecedor</th><th>Autor</th><th>Situação</th></tr></thead>
     <tbody>${linhas}</tbody>
-    <tfoot><tr><td colspan="3">Total — ${despesas.length} despesa(s)</td><td class="r num">${esc(brl(total))}</td><td colspan="3"></td></tr></tfoot>
+    <tfoot><tr><td colspan="4">Total — ${despesas.length} despesa(s)</td><td class="r num">${esc(brl(total))}</td><td colspan="3"></td></tr></tfoot>
   </table>
   <div class="grid2">
     <div class="box">
@@ -323,6 +327,7 @@ function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
         <td className="px-4 py-2 text-slate-600">{fmtDate(d.dataDespesa)}</td>
         <td className="px-4 py-2">{d.placa}{d.modelo ? <span className="text-slate-400"> · {d.modelo}</span> : null}</td>
         <td className="px-4 py-2">{d.tipo}</td>
+        <td className="px-4 py-2 text-slate-600">{d.semNota ? <span className="text-slate-400 italic">S/N</span> : (d.numeroDocumento ?? '—')}</td>
         <td className="px-4 py-2 text-right tabular-nums">{BRL(d.valor)}</td>
         <td className="px-4 py-2 text-slate-600">
           <div className="flex items-center gap-2">
@@ -369,7 +374,7 @@ function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
       </tr>
       {contestando && d.situacao === 'PENDENTE' && (
         <tr>
-          <td colSpan={8} className="bg-slate-50 px-4 py-3">
+          <td colSpan={9} className="bg-slate-50 px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
               <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo da contestação" maxLength={255} className="min-w-[16rem] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
               <button onClick={() => void contestar()} disabled={busy} className="rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50">Confirmar contestação</button>

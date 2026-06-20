@@ -21,6 +21,7 @@ interface DespesaInfo {
   criadoEm?: string | null; aprovadoEm?: string | null; motivoContestacao?: string | null;
   viagemId?: string | null; viagemNumero?: number | null; viagemFinalidade?: string | null; viagemCondutor?: string | null;
   anormalidade?: boolean; motivoAnormalidade?: string | null;
+  numeroDocumento?: string | null; semNota?: boolean;
   temComprovante?: boolean;
 }
 
@@ -53,6 +54,12 @@ export function DespesaNovaPage() {
   const [fornecedorId, setFornecedorId] = useState('');
   const [fornecedor, setFornecedor] = useState('');
   const [observacao, setObservacao] = useState('');
+  // Nota fiscal / documento (+ sem nota, padrão Licença do Workspace).
+  const [numeroDocumento, setNumeroDocumento] = useState('');
+  const [semNota, setSemNota] = useState(false);
+  // Rateio (só na criação): 1 nota → várias linhas (tipo + valor).
+  const [rateio, setRateio] = useState(false);
+  const [linhas, setLinhas] = useState<{ tipoDespesaId: string; valor: string }[]>([{ tipoDespesaId: '', valor: '' }]);
   const [recibo, setRecibo] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -101,6 +108,8 @@ export function DespesaNovaPage() {
         setFornecedorId(d.fornecedorId ?? '');
         setFornecedor(d.fornecedor ?? '');
         setObservacao(d.observacao ?? '');
+        setNumeroDocumento(d.numeroDocumento ?? '');
+        setSemNota(!!d.semNota);
         setAnormal(!!d.anormalidade);
         setMotivoAnormal(d.motivoAnormalidade ?? '');
         setInfo(d);
@@ -146,11 +155,14 @@ export function DespesaNovaPage() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!veiculoId) { toast('warning', 'Selecione o veículo.'); return; }
-    if (!tipoDespesaId) { toast('warning', 'Selecione o tipo de despesa.'); return; }
-    if (valor === '' || parseMoeda(valor) <= 0) { toast('warning', 'Informe um valor válido.'); return; }
-    setSalvando(true);
+    if (!semNota && !rateio && !numeroDocumento.trim()) { /* nota é opcional fora do rateio */ }
+    if (rateio && !numeroDocumento.trim()) { toast('warning', 'Informe o número da nota para ratear.'); return; }
+
     // Edição (PATCH): só os campos editáveis; não troca veículo nem recibo.
     if (modoEdicao) {
+      if (!tipoDespesaId) { toast('warning', 'Selecione o tipo de despesa.'); return; }
+      if (valor === '' || parseMoeda(valor) <= 0) { toast('warning', 'Informe um valor válido.'); return; }
+      setSalvando(true);
       try {
         await logisticaApi.patch(`/despesas/${edicaoId}`, {
           tipoDespesaId, valor: parseMoeda(valor),
@@ -158,6 +170,8 @@ export function DespesaNovaPage() {
           fornecedorId: fornecedorId || '',
           fornecedor: fornecedor.trim(),
           observacao: observacao.trim(),
+          numeroDocumento: semNota ? '' : numeroDocumento.trim(),
+          semNota,
         });
         toast('success', 'Despesa atualizada.');
         setDirty(false);
@@ -169,6 +183,43 @@ export function DespesaNovaPage() {
       }
       return;
     }
+
+    // ---- Criação ----
+    // Rateio: 1 nota → várias linhas (tipo + valor) → /despesas/ratear.
+    if (rateio) {
+      const itens = linhas
+        .filter((l) => l.tipoDespesaId && l.valor !== '' && parseMoeda(l.valor) > 0)
+        .map((l) => ({ tipoDespesaId: l.tipoDespesaId, valor: parseMoeda(l.valor) }));
+      if (itens.length === 0) { toast('warning', 'Adicione ao menos uma linha (tipo + valor) ao rateio.'); return; }
+      if (new Set(itens.map((i) => i.tipoDespesaId)).size !== itens.length) { toast('warning', 'Cada tipo só pode aparecer uma vez no rateio.'); return; }
+      setSalvando(true);
+      try {
+        const fd = new FormData();
+        fd.append('veiculoId', veiculoId);
+        fd.append('numeroDocumento', numeroDocumento.trim());
+        if (dataDespesa) fd.append('dataDespesa', new Date(dataDespesa).toISOString());
+        if (fornecedorId) fd.append('fornecedorId', fornecedorId);
+        if (fornecedor.trim()) fd.append('fornecedor', fornecedor.trim());
+        if (observacao.trim()) fd.append('observacao', observacao.trim());
+        fd.append('itens', JSON.stringify(itens));
+        if (recibo) fd.append('comprovante', recibo);
+        await logisticaApi.post('/despesas/ratear', fd);
+        toast('success', `Rateio lançado: ${itens.length} despesa(s) aprovada(s).`);
+        setDirty(false);
+        navigate('/despesas');
+      } catch (e) {
+        toast('error', errMsg(e, 'Falha ao lançar o rateio.'));
+      } finally {
+        setSalvando(false);
+      }
+      return;
+    }
+
+    // Despesa simples.
+    if (!tipoDespesaId) { toast('warning', 'Selecione o tipo de despesa.'); return; }
+    if (valor === '' || parseMoeda(valor) <= 0) { toast('warning', 'Informe um valor válido.'); return; }
+    setSalvando(true);
+    const docFields = { numeroDocumento: semNota ? undefined : (numeroDocumento.trim() || undefined), semNota: semNota || undefined };
     try {
       // Com recibo → multipart (FormData); sem recibo → JSON. O backend aceita os dois.
       if (recibo) {
@@ -180,6 +231,8 @@ export function DespesaNovaPage() {
         if (fornecedorId) fd.append('fornecedorId', fornecedorId);
         if (fornecedor.trim()) fd.append('fornecedor', fornecedor.trim());
         if (observacao.trim()) fd.append('observacao', observacao.trim());
+        if (docFields.numeroDocumento) fd.append('numeroDocumento', docFields.numeroDocumento);
+        if (semNota) fd.append('semNota', 'true');
         fd.append('comprovante', recibo);
         await logisticaApi.post('/despesas', fd);
       } else {
@@ -188,6 +241,7 @@ export function DespesaNovaPage() {
           dataDespesa: dataDespesa ? new Date(dataDespesa).toISOString() : undefined,
           fornecedorId: fornecedorId || undefined,
           fornecedor: fornecedor.trim() || undefined, observacao: observacao.trim() || undefined,
+          ...docFields,
         });
       }
       toast('success', 'Despesa lançada (aprovada).');
@@ -233,6 +287,7 @@ export function DespesaNovaPage() {
               <InfoItem rotulo="Veículo" valor={`${info.placa}${info.modelo ? ` · ${info.modelo}` : ''}`} />
               <InfoItem rotulo="Autor" valor={info.autorNome ? `${info.autorNome}${info.autorMatricula ? ` · ${info.autorMatricula}` : ''}` : '—'} />
               <InfoItem rotulo="Lançada em" valor={fmtDateTime(info.criadoEm)} />
+              <InfoItem rotulo="Nota / documento" valor={info.semNota ? 'Sem nota (S/N)' : (info.numeroDocumento || '—')} />
               {info.viagemNumero != null && (
                 <InfoItem rotulo="Viagem vinculada" valor={`#${info.viagemNumero}${info.viagemFinalidade ? ` · ${info.viagemFinalidade}` : ''}${info.viagemCondutor ? ` · ${info.viagemCondutor}` : ''}`} />
               )}
@@ -280,27 +335,43 @@ export function DespesaNovaPage() {
               {veiculos.map((v) => <option key={v.id} value={v.id}>{v.placa}{v.modelo ? ` — ${v.modelo}` : ''}</option>)}
             </select>
           </div>
-          <div>
-            <label className={lbl}>Tipo de despesa *</label>
-            <select value={tipoDespesaId} onChange={(e) => setTipoDespesaId(e.target.value)} className={inp}>
-              <option value="">Selecione…</option>
-              {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className={lbl}>Valor (R$) *</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={valor}
-              onChange={(e) => setValor(maskMoeda(e.target.value))}
-              placeholder="0,00"
-              className={inp}
-            />
-          </div>
+          {!rateio && (
+            <>
+              <div>
+                <label className={lbl}>Tipo de despesa *</label>
+                <select value={tipoDespesaId} onChange={(e) => setTipoDespesaId(e.target.value)} className={inp}>
+                  <option value="">Selecione…</option>
+                  {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={lbl}>Valor (R$) *</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={valor}
+                  onChange={(e) => setValor(maskMoeda(e.target.value))}
+                  placeholder="0,00"
+                  className={inp}
+                />
+              </div>
+            </>
+          )}
           <div>
             <label className={lbl}>Data</label>
             <input type="date" value={dataDespesa} onChange={(e) => setDataDespesa(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className={lbl}>Nº nota / documento {rateio && '*'}</label>
+            <input value={semNota ? 'S/N' : numeroDocumento} disabled={semNota} maxLength={60}
+              onChange={(e) => setNumeroDocumento(e.target.value)} placeholder="ex.: 12345 ou nota de débito"
+              className={`${inp} disabled:bg-slate-100 disabled:text-slate-500`} />
+            {!rateio && (
+              <label className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                <input type="checkbox" checked={semNota} onChange={(e) => { setSemNota(e.target.checked); if (e.target.checked) setNumeroDocumento(''); }} className="h-3.5 w-3.5 accent-sky-600" />
+                Sem nota fiscal (ex.: nota de débito, sem documento)
+              </label>
+            )}
           </div>
           <div>
             <label className={lbl}>Fornecedor (cadastrado)</label>
@@ -318,6 +389,41 @@ export function DespesaNovaPage() {
             <input value={observacao} onChange={(e) => setObservacao(e.target.value)} maxLength={255} className={inp} />
           </div>
         </div>
+
+        {!modoEdicao && (
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" checked={rateio} onChange={(e) => { setRateio(e.target.checked); if (e.target.checked) setSemNota(false); }} className="h-4 w-4 accent-sky-600" />
+            Ratear esta nota em vários tipos de despesa
+            <span className="text-xs text-slate-400">— ex.: uma nota com pneu + alinhamento no mesmo veículo</span>
+          </label>
+        )}
+
+        {!modoEdicao && rateio && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Linhas do rateio (mesma nota, tipos distintos)</p>
+            <div className="space-y-2">
+              {linhas.map((l, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <select value={l.tipoDespesaId} onChange={(e) => setLinhas((ls) => ls.map((x, j) => (j === i ? { ...x, tipoDespesaId: e.target.value } : x)))}
+                    className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <option value="">Tipo de despesa…</option>
+                    {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                  </select>
+                  <input value={l.valor} inputMode="decimal" placeholder="0,00"
+                    onChange={(e) => setLinhas((ls) => ls.map((x, j) => (j === i ? { ...x, valor: maskMoeda(e.target.value) } : x)))}
+                    className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-right text-sm" />
+                  <button type="button" onClick={() => setLinhas((ls) => (ls.length > 1 ? ls.filter((_, j) => j !== i) : ls))}
+                    disabled={linhas.length <= 1} className="text-slate-400 hover:text-rose-500 disabled:opacity-30"><X className="h-4 w-4" /></button>
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 flex items-center justify-between">
+              <button type="button" onClick={() => setLinhas((ls) => [...ls, { tipoDespesaId: '', valor: '' }])}
+                className="text-sm font-medium text-sky-600 hover:underline">+ Adicionar linha</button>
+              <span className="text-sm text-slate-600">Total: <b>{linhas.reduce((s, l) => s + (l.valor ? parseMoeda(l.valor) : 0), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</b></span>
+            </div>
+          </div>
+        )}
 
         {!modoEdicao && (
         <div>

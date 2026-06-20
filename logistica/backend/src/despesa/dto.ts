@@ -1,7 +1,8 @@
 import {
-  IsBoolean, IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min,
+  IsArray, IsBoolean, IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString,
+  MaxLength, Min, ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 // ---- Tipos de despesa (cadastro, gestor de frota) ----
 export class CriarTipoDespesaDto {
@@ -70,6 +71,13 @@ export class LancarDespesaDto {
 
   @IsOptional() @IsString() @MaxLength(255)
   observacao?: string;
+
+  // Nota fiscal / documento. Vazio + semNota=true → lançamento sem nota.
+  @IsOptional() @IsString() @MaxLength(60)
+  numeroDocumento?: string;
+
+  @IsOptional() @IsBoolean()
+  semNota?: boolean;
 }
 
 // ---- Lançamento na viagem em curso → PENDENTE ----
@@ -93,6 +101,14 @@ export class LancarDespesaViagemDto {
 
   @IsOptional() @IsString() @MaxLength(255)
   observacao?: string;
+
+  // Nota fiscal / documento (ex.: nota de débito da borracharia). Vazio +
+  // semNota=true → sem nota.
+  @IsOptional() @IsString() @MaxLength(60)
+  numeroDocumento?: string;
+
+  @IsOptional() @IsBoolean()
+  semNota?: boolean;
 
   // Idempotência (fila offline): reenvio com a mesma chave não duplica.
   @IsOptional() @IsString() @MaxLength(60)
@@ -133,6 +149,53 @@ export class AtualizarDespesaDto {
 
   @IsOptional() @IsString() @MaxLength(255)
   observacao?: string;
+
+  // Nota fiscal / documento (string vazia = limpa). semNota alterna sem-nota.
+  @IsOptional() @IsString() @MaxLength(60)
+  numeroDocumento?: string;
+
+  @IsOptional() @IsBoolean()
+  semNota?: boolean;
+}
+
+// ---- Rateio de uma nota: 1 documento → vários TIPOS no mesmo veículo ----
+// Cada item vira uma despesa (mesmo veículo/nota, tipo distinto). Lançamento
+// direto do supervisor/gestor → cada linha já APROVADA.
+export class RateioItemDto {
+  @IsString() @IsNotEmpty()
+  tipoDespesaId!: string;
+
+  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0)
+  valor!: number;
+}
+
+export class RatearDespesaDto {
+  @IsString() @IsNotEmpty()
+  veiculoId!: string;
+
+  @IsOptional() @IsString()
+  viagemId?: string;
+
+  // Rateio sempre tem nota (é o que está sendo dividido).
+  @IsString() @IsNotEmpty() @MaxLength(60)
+  numeroDocumento!: string;
+
+  @IsOptional() @IsDateString()
+  dataDespesa?: string;
+
+  @IsOptional() @IsString()
+  fornecedorId?: string;
+
+  @IsOptional() @IsString() @MaxLength(120)
+  fornecedor?: string;
+
+  @IsOptional() @IsString() @MaxLength(255)
+  observacao?: string;
+
+  // Em multipart (com recibo) chega como string JSON — converte antes de validar.
+  @Transform(({ value }) => (typeof value === 'string' ? JSON.parse(value) : value))
+  @IsArray() @ValidateNested({ each: true }) @Type(() => RateioItemDto)
+  itens!: RateioItemDto[];
 }
 
 // Filtro de listagem (querystring).

@@ -11,7 +11,7 @@ import {
   CriarTipoDespesaDto, AtualizarTipoDespesaDto, LancarDespesaDto,
   LancarDespesaViagemDto, ContestarDespesaDto, ListarDespesasQuery,
   CriarFornecedorDespesaDto, AtualizarFornecedorDespesaDto, AtualizarDespesaDto,
-  MarcarAnormalidadeDto,
+  MarcarAnormalidadeDto, RatearDespesaDto,
 } from './dto.js';
 
 const ehGestor = (role?: string) => role === 'GESTOR_FROTA' || role === 'ADMIN';
@@ -171,8 +171,31 @@ export class DespesaService {
       observacao: d.observacao, autorNome: d.autorNome, autorMatricula: d.autorMatricula,
       aprovadoEm: d.aprovadoEm, motivoContestacao: d.motivoContestacao,
       anormalidade: d.anormalidade, motivoAnormalidade: d.motivoAnormalidade,
+      numeroDocumento: d.numeroDocumento, semNota: d.semNota,
       temComprovante: !!d.comprovanteObjectKey,
     }));
+  }
+
+  // ---------- Nota fiscal / documento ----------
+  /** Normaliza documento + semNota: sem-nota força documento nulo. */
+  private normalizaDoc(dto: { numeroDocumento?: string; semNota?: boolean }): { numeroDocumento: string | null; semNota: boolean } {
+    if (dto.semNota) return { numeroDocumento: null, semNota: true };
+    return { numeroDocumento: dto.numeroDocumento?.trim() || null, semNota: false };
+  }
+
+  /**
+   * Bloqueia duplicidade: a mesma nota não pode repetir no veículo no MESMO tipo
+   * (rateio = tipos distintos é permitido). Sem documento → sem checagem.
+   */
+  private async assertDocumentoUnico(filialId: string, veiculoId: string, numeroDocumento: string | null, tipoDespesaId: string, exceptId?: string) {
+    if (!numeroDocumento) return;
+    const ja = await this.prisma.despesaVeiculo.findFirst({
+      where: { filialId, veiculoId, numeroDocumento, tipoDespesaId, id: exceptId ? { not: exceptId } : undefined },
+      include: { tipoDespesa: { select: { nome: true } } },
+    });
+    if (ja) {
+      throw new BadRequestException(`A nota ${numeroDocumento} já foi lançada para este veículo no tipo "${ja.tipoDespesa?.nome ?? '—'}".`);
+    }
   }
 
   // ---------- Lançamento ----------
@@ -182,6 +205,9 @@ export class DespesaService {
     const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
     if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
     if (dto.viagemId) await this.assertViagemDoVeiculo(dto.viagemId, veiculo.id, user.filialId!);
+
+    const { numeroDocumento, semNota } = this.normalizaDoc(dto);
+    await this.assertDocumentoUnico(user.filialId!, veiculo.id, numeroDocumento, tipo.id);
 
     const despesa = await this.prisma.despesaVeiculo.create({
       data: {
@@ -194,6 +220,8 @@ export class DespesaService {
         fornecedorId: dto.fornecedorId || null,
         fornecedor: dto.fornecedor?.trim() || null,
         observacao: dto.observacao?.trim() || null,
+        numeroDocumento,
+        semNota,
         situacao: StatusDespesa.APROVADA,
         criadoPorId: user.sub,
         aprovadoPorId: user.sub,
@@ -229,6 +257,9 @@ export class DespesaService {
       if (ja) return ja;
     }
 
+    const { numeroDocumento, semNota } = this.normalizaDoc(dto);
+    await this.assertDocumentoUnico(v.filialId, v.veiculoId, numeroDocumento, tipo.id);
+
     // Tipo sem exigência de aprovação (ex.: Abastecimento) entra direto APROVADA;
     // os demais nascem PENDENTE e aguardam o supervisor/gestor.
     const autoAprova = !tipo.requerAprovacao;
@@ -243,6 +274,8 @@ export class DespesaService {
         fornecedorId: dto.fornecedorId || null,
         fornecedor: dto.fornecedor?.trim() || null,
         observacao: dto.observacao?.trim() || null,
+        numeroDocumento,
+        semNota,
         situacao: autoAprova ? StatusDespesa.APROVADA : StatusDespesa.PENDENTE,
         aprovadoEm: autoAprova ? new Date() : null, // auto-aprovada: sem aprovadoPorId (não houve revisor)
         autorMatricula: v.condutorMatricula,
@@ -252,6 +285,64 @@ export class DespesaService {
       },
     });
     return recibo ? this.anexarRecibo(despesa.id, despesa.filialId, recibo) : despesa;
+  }
+
+  /**
+   * Rateio de uma nota: 1 documento → vários TIPOS no mesmo veículo. Cada item
+   * vira uma despesa (mesmo veículo/nota, tipo distinto), já APROVADA (lançamento
+   * direto do supervisor/gestor). Tudo em transação — ou grava tudo, ou nada.
+   */
+  async ratear(dto: RatearDespesaDto, user: JwtPayload, role?: string, recibo?: ReciboBinario) {
+    const veiculo = await this.assertPodeGerirVeiculo(dto.veiculoId, user, role);
+    if (dto.viagemId) await this.assertViagemDoVeiculo(dto.viagemId, veiculo.id, user.filialId!);
+    if (!dto.itens?.length) throw new BadRequestException('Adicione ao menos um tipo de despesa ao rateio.');
+
+    const numeroDocumento = dto.numeroDocumento.trim();
+    if (!numeroDocumento) throw new BadRequestException('Informe o número da nota/documento do rateio.');
+
+    // Tipos distintos dentro do rateio (a chave é veículo+nota+tipo).
+    const tipoIds = dto.itens.map((i) => i.tipoDespesaId);
+    if (new Set(tipoIds).size !== tipoIds.length) {
+      throw new BadRequestException('Cada tipo de despesa só pode aparecer uma vez no rateio.');
+    }
+    // Tipos válidos/ativos.
+    const tipos = await this.prisma.tipoDespesa.findMany({ where: { id: { in: tipoIds }, ativo: true } });
+    if (tipos.length !== tipoIds.length) throw new BadRequestException('Há tipo de despesa inválido ou inativo no rateio.');
+    // Duplicidade contra o que já existe (cada tipo).
+    for (const it of dto.itens) {
+      await this.assertDocumentoUnico(user.filialId!, veiculo.id, numeroDocumento, it.tipoDespesaId);
+    }
+
+    const dataDespesa = dto.dataDespesa ? new Date(dto.dataDespesa) : new Date();
+    const agora = new Date();
+    const criadas = await this.prisma.$transaction(
+      dto.itens.map((it) => this.prisma.despesaVeiculo.create({
+        data: {
+          filialId: user.filialId!,
+          veiculoId: veiculo.id,
+          viagemId: dto.viagemId ?? null,
+          tipoDespesaId: it.tipoDespesaId,
+          valor: new Prisma.Decimal(it.valor),
+          dataDespesa,
+          fornecedorId: dto.fornecedorId || null,
+          fornecedor: dto.fornecedor?.trim() || null,
+          observacao: dto.observacao?.trim() || null,
+          numeroDocumento,
+          semNota: false,
+          situacao: StatusDespesa.APROVADA,
+          criadoPorId: user.sub,
+          aprovadoPorId: user.sub,
+          aprovadoEm: agora,
+        },
+      })),
+    );
+    // Recibo (a foto da nota) — anexa em cada linha do rateio para abrir de qualquer uma.
+    if (recibo) {
+      for (const d of criadas) {
+        try { await this.anexarRecibo(d.id, d.filialId, recibo); } catch { /* recibo é best-effort */ }
+      }
+    }
+    return { ok: true, criadas: criadas.length };
   }
 
   private async assertViagemDoVeiculo(viagemId: string, veiculoId: string, filialId: string) {
@@ -322,6 +413,7 @@ export class DespesaService {
       valor: Number(d.valor), dataDespesa: d.dataDespesa,
       fornecedorId: d.fornecedorId, fornecedor: d.fornecedor, observacao: d.observacao,
       anormalidade: d.anormalidade, motivoAnormalidade: d.motivoAnormalidade,
+      numeroDocumento: d.numeroDocumento, semNota: d.semNota,
       temComprovante: !!d.comprovanteObjectKey,
       // Contexto (read-only) p/ a tela mostrar "todas as informações".
       autorNome: d.autorNome, autorMatricula: d.autorMatricula,
@@ -348,6 +440,18 @@ export class DespesaService {
       const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
       if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
     }
+
+    // Documento/semNota: se algum dos dois veio no DTO, recalcula; senão, mantém.
+    const mexeuDoc = dto.numeroDocumento !== undefined || dto.semNota !== undefined;
+    let numeroDocumento: string | null | undefined = undefined;
+    let semNota: boolean | undefined = undefined;
+    if (mexeuDoc) {
+      const norm = this.normalizaDoc({ numeroDocumento: dto.numeroDocumento ?? d.numeroDocumento ?? undefined, semNota: dto.semNota ?? d.semNota });
+      numeroDocumento = norm.numeroDocumento;
+      semNota = norm.semNota;
+      await this.assertDocumentoUnico(d.filialId, d.veiculoId, numeroDocumento, dto.tipoDespesaId ?? d.tipoDespesaId, id);
+    }
+
     return this.prisma.despesaVeiculo.update({
       where: { id },
       data: {
@@ -358,6 +462,8 @@ export class DespesaService {
         fornecedorId: dto.fornecedorId !== undefined ? (dto.fornecedorId || null) : undefined,
         fornecedor: dto.fornecedor !== undefined ? (dto.fornecedor.trim() || null) : undefined,
         observacao: dto.observacao !== undefined ? (dto.observacao.trim() || null) : undefined,
+        numeroDocumento,
+        semNota,
       },
     });
   }

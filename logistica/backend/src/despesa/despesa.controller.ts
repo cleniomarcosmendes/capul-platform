@@ -10,7 +10,7 @@ import {
   CriarTipoDespesaDto, AtualizarTipoDespesaDto, LancarDespesaDto,
   LancarDespesaViagemDto, ContestarDespesaDto, ListarDespesasQuery,
   CriarFornecedorDespesaDto, AtualizarFornecedorDespesaDto, AtualizarDespesaDto,
-  MarcarAnormalidadeDto,
+  MarcarAnormalidadeDto, RatearDespesaDto,
 } from './dto.js';
 
 /** Converte o arquivo do multer no binário do recibo (ou undefined). */
@@ -101,6 +101,17 @@ export class DespesaController {
     @UploadedFile() comprovante?: Express.Multer.File,
   ) {
     return this.despesas.lancarDireto(dto, user, roleLogistica(user), reciboDe(comprovante));
+  }
+
+  /** Rateio de uma nota: 1 documento → vários tipos no mesmo veículo (cada um vira despesa APROVADA). Recibo opcional. */
+  @Post('ratear')
+  @UseInterceptors(FileInterceptor('comprovante', { limits: { fileSize: 15 * 1024 * 1024 } }))
+  ratear(
+    @Body() dto: RatearDespesaDto,
+    @CurrentUser() user: JwtPayload,
+    @UploadedFile() comprovante?: Express.Multer.File,
+  ) {
+    return this.despesas.ratear(dto, user, roleLogistica(user), reciboDe(comprovante));
   }
 
   /** Lançamento na viagem em curso → PENDENTE (herda o condutor da viagem). Recibo opcional. */

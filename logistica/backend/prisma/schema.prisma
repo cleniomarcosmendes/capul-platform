@@ -280,6 +280,13 @@ model DespesaVeiculo {
   fornecedorRef FornecedorDespesa? @relation(fields: [fornecedorId], references: [id])
   fornecedor    String?
   observacao    String?
+  // Nota fiscal / documento. Pode não existir (semNota=true → ex.: nota de débito
+  // da borracharia em viagem). Chave de duplicidade é (veiculo, documento, tipo):
+  // a MESMA nota pode gerar vários lançamentos no veículo se forem TIPOS distintos
+  // (rateio); repetir veículo+documento+tipo é bloqueado (índice parcial único na
+  // migration). semNota não entra na checagem (documento nulo repete por natureza).
+  numeroDocumento String? @map("numero_documento")
+  semNota         Boolean @default(false) @map("sem_nota")
   situacao      StatusDespesa @default(PENDENTE)
   // Anormalidade (mau uso): o GESTOR da frota sinaliza quando a despesa decorre
   // de uso indevido do veículo. Destaca/segrega esse custo na Análise para não
