@@ -133,6 +133,11 @@ export class ChamadoService {
     return this.core.listarApoiadoresSac();
   }
 
+  // SAC (Fase 1) — departamentos que são workspace de SAC (têm equipe apoioSac).
+  async listarDepartamentosSac() {
+    return this.core.listarDepartamentosSac();
+  }
+
   async adicionarCopias(chamadoId: string, usuariosIds: string[], user: JwtPayload, role: string) {
     return this.core.adicionarCopiasComCheck(chamadoId, usuariosIds, user, role);
   }

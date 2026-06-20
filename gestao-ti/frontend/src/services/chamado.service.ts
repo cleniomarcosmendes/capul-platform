@@ -52,7 +52,14 @@ interface CreateChamadoPayload {
   senhaColaborador?: string;
   /** IDs de usuarios a colocar em copia. Backend rejeita membros de Equipe. */
   copiasUsuariosIds?: string[];
+  /** SAC (Fase 1) — dados do cliente externo (só no workspace SAC). */
+  clienteNome?: string;
+  clienteContato?: string;
+  canalOrigem?: 'BALCAO' | 'TELEFONE' | 'EMAIL' | 'OUTRO';
 }
+
+/** SAC (Fase 1) — apoiador elegível (membro de equipe de apoio SAC). */
+export interface ApoiadorSac { id: string; nome: string; username: string; email: string | null }
 
 export interface ChamadoCopia {
   id: string;
@@ -115,6 +122,18 @@ export const chamadoService = {
 
   async criar(payload: CreateChamadoPayload): Promise<Chamado> {
     const { data } = await gestaoApi.post('/chamados', payload);
+    return data;
+  },
+
+  // SAC (Fase 1) — apoiadores elegíveis (roster) p/ o seletor de cópia do SAC.
+  async listarApoiadoresSac(): Promise<ApoiadorSac[]> {
+    const { data } = await gestaoApi.get('/chamados/sac/apoiadores');
+    return data;
+  },
+
+  // SAC (Fase 1) — ids dos departamentos-workspace de SAC (detecção no form).
+  async listarDepartamentosSac(): Promise<string[]> {
+    const { data } = await gestaoApi.get('/chamados/sac/departamentos');
     return data;
   },
 

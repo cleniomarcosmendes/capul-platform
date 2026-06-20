@@ -927,6 +927,20 @@ export class ChamadoCoreService {
     return apoiadores;
   }
 
+  /**
+   * SAC (Fase 1) — departamentos que SÃO workspace de SAC = os que contêm ao
+   * menos uma equipe `apoioSac` (catálogo). O frontend usa para detectar "este
+   * chamado é SAC?" (mostrar campos do cliente + picker do roster). Sem flag no
+   * core (read-only): o marcador é derivado da equipe de apoio.
+   */
+  async listarDepartamentosSac(): Promise<string[]> {
+    const equipes = await this.prisma.equipe.findMany({
+      where: { apoioSac: true, status: 'ATIVO' },
+      select: { departamentoId: true },
+    });
+    return [...new Set(equipes.map((e) => e.departamentoId).filter(Boolean) as string[])];
+  }
+
   private prefixoAutor(user: JwtPayload): string {
     const nome = (user as { nome?: string }).nome || (user as { username?: string }).username;
     return nome ? `${nome} ` : '';

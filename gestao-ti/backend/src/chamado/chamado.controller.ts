@@ -366,6 +366,13 @@ export class ChamadoController {
     return this.service.listarApoiadoresSac();
   }
 
+  // SAC (Fase 1) — ids dos departamentos-workspace de SAC (têm equipe apoioSac).
+  // O frontend usa para detectar se o chamado em aberto é SAC.
+  @Get('sac/departamentos')
+  listarDepartamentosSac() {
+    return this.service.listarDepartamentosSac();
+  }
+
   // === Agrupamento (decidido em 13/05/2026) ===
   // Apenas TI agrupa/desagrupa. Validacao detalhada no service.
 

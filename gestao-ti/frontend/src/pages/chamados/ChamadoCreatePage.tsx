@@ -4,7 +4,7 @@ import { ACCEPT_ANEXO } from '../../constants/anexo';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
-import { chamadoService } from '../../services/chamado.service';
+import { chamadoService, type ApoiadorSac } from '../../services/chamado.service';
 import { protheusService } from '../../services/protheus.service';
 import { equipeService } from '../../services/equipe.service';
 import { catalogoService } from '../../services/catalogo.service';
@@ -189,6 +189,17 @@ export function ChamadoCreatePage() {
   const [copiaBusca, setCopiaBusca] = useState('');
   const [copiaDropdownOpen, setCopiaDropdownOpen] = useState(false);
 
+  // SAC (Fase 1) — detecção do workspace SAC + dados do cliente externo.
+  const [sacDeptoIds, setSacDeptoIds] = useState<string[]>([]);
+  const [apoiadoresSac, setApoiadoresSac] = useState<ApoiadorSac[]>([]);
+  const [clienteNome, setClienteNome] = useState('');
+  const [clienteContato, setClienteContato] = useState('');
+  const [canalOrigem, setCanalOrigem] = useState<'' | 'BALCAO' | 'TELEFONE' | 'EMAIL' | 'OUTRO'>('');
+  // É um chamado de SAC se o depto-destino é workspace de SAC (tem equipe apoioSac).
+  const ehSac = !!deptoDestinoId && sacDeptoIds.includes(deptoDestinoId);
+  // No SAC o seletor de cópia vem do ROSTER (apoiadores); fora, dos não-TI.
+  const candidatosCopia: { id: string; nome: string; username: string }[] = ehSac ? apoiadoresSac : usuariosNaoTI;
+
   // Anexos
   const [arquivos, setArquivos] = useState<File[]>([]);
 
@@ -254,6 +265,17 @@ export function ChamadoCreatePage() {
       setUsuariosNaoTI(users.filter((u) => u.id !== usuario?.id && !isUsuarioTI(u)));
     }).catch(() => setUsuariosNaoTI([]));
   }, [usuario?.id]);
+
+  // SAC (Fase 1) — depts que são workspace de SAC (detecção "este chamado é SAC?")
+  useEffect(() => {
+    chamadoService.listarDepartamentosSac().then(setSacDeptoIds).catch(() => setSacDeptoIds([]));
+  }, []);
+
+  // SAC (Fase 1) — roster de apoiadores (fonte do seletor de cópia), só quando SAC.
+  useEffect(() => {
+    if (!ehSac) { setApoiadoresSac([]); return; }
+    chamadoService.listarApoiadoresSac().then(setApoiadoresSac).catch(() => setApoiadoresSac([]));
+  }, [ehSac]);
 
   useEffect(() => {
     if (softwareId) {
@@ -335,6 +357,10 @@ export function ChamadoCreatePage() {
         nomeColaborador: isUsuarioPadrao && nomeColaborador ? nomeColaborador.trim() : undefined,
         senhaColaborador: isUsuarioPadrao && matriculaColaborador && senhaColaborador ? senhaColaborador : undefined,
         copiasUsuariosIds: copiasIds.length > 0 ? copiasIds : undefined,
+        // SAC (Fase 1) — dados do cliente só quando o workspace é SAC.
+        clienteNome: ehSac && clienteNome.trim() ? clienteNome.trim() : undefined,
+        clienteContato: ehSac && clienteContato.trim() ? clienteContato.trim() : undefined,
+        canalOrigem: ehSac && canalOrigem ? canalOrigem : undefined,
       });
 
       // Upload dos anexos
@@ -763,17 +789,53 @@ export function ChamadoCreatePage() {
             </div>
           </div>
 
+          {/* SAC (Fase 1) — dados do cliente externo (o colaborador registra em nome dele) */}
+          {ehSac && (
+            <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4 space-y-3">
+              <p className="text-sm font-semibold text-sky-800">Dados do cliente (SAC)</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Nome do cliente</label>
+                  <input type="text" value={clienteNome} maxLength={150}
+                    onChange={(e) => { setClienteNome(e.target.value); setDirty(true); }}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" />
+                </div>
+                <div className="sm:col-span-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Contato (e-mail/telefone)</label>
+                  <input type="text" value={clienteContato} maxLength={150}
+                    onChange={(e) => { setClienteContato(e.target.value); setDirty(true); }}
+                    placeholder="ex.: cliente@email.com / (38) 9...."
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" />
+                </div>
+                <div className="sm:col-span-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Canal de origem</label>
+                  <select value={canalOrigem} onChange={(e) => { setCanalOrigem(e.target.value as typeof canalOrigem); setDirty(true); }}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600">
+                    <option value="">— Selecione —</option>
+                    <option value="BALCAO">Balcão</option>
+                    <option value="TELEFONE">Telefone</option>
+                    <option value="EMAIL">E-mail</option>
+                    <option value="OUTRO">Outro</option>
+                  </select>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">O cliente não é usuário do sistema — estes dados ficam registrados no chamado para o responsável do SAC responder.</p>
+            </div>
+          )}
+
           {/* Em cópia */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Em cópia (opcional)</label>
             <p className="text-xs text-slate-500 mb-2">
-              Pessoas adicionadas em cópia recebem notificações e podem comentar. Equipe T.I. não pode ser colocada em cópia.
+              {ehSac
+                ? 'No SAC, só os apoiadores cadastrados na Equipe de Apoio SAC podem ser incluídos em cópia (eles veem só este chamado).'
+                : 'Pessoas adicionadas em cópia recebem notificações e podem comentar. Equipe T.I. não pode ser colocada em cópia.'}
             </p>
             {/* Chips dos selecionados */}
             {copiasIds.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-2">
                 {copiasIds.map((cid) => {
-                  const u = usuariosNaoTI.find((x) => x.id === cid);
+                  const u = candidatosCopia.find((x) => x.id === cid);
                   if (!u) return null;
                   return (
                     <span key={cid} className="inline-flex items-center gap-1 bg-capul-100 text-capul-700 text-xs px-2 py-1 rounded-full">
@@ -801,7 +863,7 @@ export function ChamadoCreatePage() {
               />
               {copiaDropdownOpen && (() => {
                 const termo = copiaBusca.trim().toLowerCase();
-                const disponiveis = usuariosNaoTI
+                const disponiveis = candidatosCopia
                   .filter((u) => !copiasIds.includes(u.id))
                   .filter((u) => !termo || u.nome.toLowerCase().includes(termo) || u.username.toLowerCase().includes(termo))
                   .slice(0, 15);
