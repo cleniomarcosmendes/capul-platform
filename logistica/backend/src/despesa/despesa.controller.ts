@@ -5,7 +5,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
-import { DespesaService, type ReciboBinario } from './despesa.service.js';
+import { DespesaService, type FiltroAnalise, type ReciboBinario } from './despesa.service.js';
 import {
   CriarTipoDespesaDto, AtualizarTipoDespesaDto, LancarDespesaDto,
   LancarDespesaViagemDto, ContestarDespesaDto, ListarDespesasQuery,
@@ -18,6 +18,19 @@ const reciboDe = (f?: Express.Multer.File): ReciboBinario | undefined =>
   f ? { buffer: f.buffer, mimetype: f.mimetype, size: f.size } : undefined;
 
 const roleLogistica = (user: JwtPayload) => user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
+
+/** Extrai os filtros opcionais da Análise da Frota dos query params (ignora vazios). */
+function filtroDe(q: Record<string, string>): FiltroAnalise {
+  const f: FiltroAnalise = {};
+  if (q.veiculoId) f.veiculoId = q.veiculoId;
+  if (q.tipoDespesaId) f.tipoDespesaId = q.tipoDespesaId;
+  if (q.departamentoId) f.departamentoId = q.departamentoId;
+  if (q.finalidade) f.finalidade = q.finalidade;
+  if (q.porte) f.porte = q.porte;
+  if (q.propriedade) f.propriedade = q.propriedade;
+  if (q.normalidade === 'normal' || q.normalidade === 'anormal') f.normalidade = q.normalidade;
+  return f;
+}
 
 // Controle de acesso real (gestor x supervisor) é enforced no service; o @Roles
 // aqui só barra quem não opera frota. ADMIN sempre passa (RolesGuard).
@@ -76,9 +89,9 @@ export class DespesaController {
 
   /** Análise — total agrupado por veículo/tipo/fornecedor/departamento (manchete + grupos). */
   @Get('indicadores/analitico')
-  indicadoresAnalitico(@CurrentUser() user: JwtPayload, @Query('mes') mes: string, @Query('ano') ano: string) {
+  indicadoresAnalitico(@CurrentUser() user: JwtPayload, @Query('mes') mes: string, @Query('ano') ano: string, @Query() q: Record<string, string>) {
     const now = new Date();
-    return this.despesas.indicadoresAnalitico(user, roleLogistica(user), Number(mes) || now.getUTCMonth() + 1, Number(ano) || now.getUTCFullYear());
+    return this.despesas.indicadoresAnalitico(user, roleLogistica(user), Number(mes) || now.getUTCMonth() + 1, Number(ano) || now.getUTCFullYear(), filtroDe(q));
   }
 
   /** Análise — despesas que compõem um grupo (drill-down). */
@@ -87,9 +100,10 @@ export class DespesaController {
     @CurrentUser() user: JwtPayload,
     @Query('mes') mes: string, @Query('ano') ano: string,
     @Query('dimensao') dimensao: string, @Query('chave') chave: string,
+    @Query() q: Record<string, string>,
   ) {
     const now = new Date();
-    return this.despesas.indicadoresDocumentos(user, roleLogistica(user), Number(mes) || now.getUTCMonth() + 1, Number(ano) || now.getUTCFullYear(), dimensao, chave);
+    return this.despesas.indicadoresDocumentos(user, roleLogistica(user), Number(mes) || now.getUTCMonth() + 1, Number(ano) || now.getUTCFullYear(), dimensao, chave, filtroDe(q));
   }
 
   /** Lançamento direto (supervisor/gestor) → APROVADA. Recibo (foto/PDF) opcional. */

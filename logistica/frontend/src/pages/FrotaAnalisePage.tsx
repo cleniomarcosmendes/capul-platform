@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { AlertTriangle, Banknote, Building2, Car, ChevronLeft, ChevronRight, Gauge, KeyRound, Layers, Loader2, RefreshCw, Tag, Target, X } from 'lucide-react';
-import { logisticaApi } from '../services/api';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { AlertTriangle, Banknote, Building2, Car, ChevronLeft, ChevronRight, Filter, Gauge, KeyRound, Layers, Loader2, RefreshCw, Tag, Target, X } from 'lucide-react';
+import { coreApi, logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 
 // Análise das despesas da frota (apresentação à gestão): custo do mês AGRUPADO
@@ -27,6 +27,13 @@ const errMsg = (e: unknown, fb: string) => {
   return Array.isArray(m) ? m.join(', ') : (typeof m === 'string' ? m : fb);
 };
 
+interface VeiculoOpt { id: string; placa: string; modelo?: string | null }
+interface CoreItem { id: string; nome: string }
+const FINALIDADES: [string, string][] = [['ENTREGA', 'Entrega'], ['PASSEIO', 'Passeio'], ['SERVICO', 'Serviço']];
+const PORTES: [string, string][] = [['PESADO', 'Pesado'], ['LEVE', 'Leve']];
+const PROPRIEDADES: [string, string][] = [['PROPRIO', 'Próprio'], ['ALUGADO', 'Alugado']];
+const selCls = 'rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 focus:border-sky-500 focus:outline-none';
+
 export function FrotaAnalisePage() {
   const { toast } = useToast();
   const agora = new Date();
@@ -38,24 +45,56 @@ export function FrotaAnalisePage() {
   const [rows, setRows] = useState<Doc[] | null>(null);
   const [rowsLoading, setRowsLoading] = useState(false);
 
+  // Filtros (estreitam o conjunto; o total e os cards reconciliam com o recorte).
+  const [fVeiculo, setFVeiculo] = useState('');
+  const [fTipo, setFTipo] = useState('');
+  const [fDepto, setFDepto] = useState('');
+  const [fFinalidade, setFFinalidade] = useState('');
+  const [fPorte, setFPorte] = useState('');
+  const [fPropriedade, setFPropriedade] = useState('');
+  const [fNormalidade, setFNormalidade] = useState('');
+  const [veiculos, setVeiculos] = useState<VeiculoOpt[]>([]);
+  const [tipos, setTipos] = useState<CoreItem[]>([]);
+  const [departamentos, setDepartamentos] = useState<CoreItem[]>([]);
+
+  useEffect(() => {
+    logisticaApi.get<VeiculoOpt[]>('/veiculos').then((r) => setVeiculos(r.data)).catch(() => { /* opções são conveniência */ });
+    logisticaApi.get<CoreItem[]>('/despesas/tipos').then((r) => setTipos(r.data)).catch(() => { /* idem */ });
+    coreApi.get<CoreItem[]>('/departamentos').then((r) => setDepartamentos(r.data)).catch(() => { /* idem */ });
+  }, []);
+
+  const filtros = useMemo(() => ({
+    veiculoId: fVeiculo || undefined,
+    tipoDespesaId: fTipo || undefined,
+    departamentoId: fDepto || undefined,
+    finalidade: fFinalidade || undefined,
+    porte: fPorte || undefined,
+    propriedade: fPropriedade || undefined,
+    normalidade: fNormalidade || undefined,
+  }), [fVeiculo, fTipo, fDepto, fFinalidade, fPorte, fPropriedade, fNormalidade]);
+  const qtdFiltros = Object.values(filtros).filter(Boolean).length;
+  const limparFiltros = () => { setFVeiculo(''); setFTipo(''); setFDepto(''); setFFinalidade(''); setFPorte(''); setFPropriedade(''); setFNormalidade(''); };
+
   const noMesAtual = ano === agora.getFullYear() && mes === agora.getMonth() + 1;
   const passoMes = (delta: number) => { const d = new Date(ano, mes - 1 + delta, 1); setMes(d.getMonth() + 1); setAno(d.getFullYear()); };
 
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await logisticaApi.get<Analitico>('/despesas/indicadores/analitico', { params: { mes, ano } });
+      const { data } = await logisticaApi.get<Analitico>('/despesas/indicadores/analitico', { params: { mes, ano, ...filtros } });
       setData(data);
     } catch (e) {
       toast('error', errMsg(e, 'Falha ao carregar a análise.'));
     } finally { setLoading(false); }
-  }, [mes, ano, toast]);
+  }, [mes, ano, filtros, toast]);
   useEffect(() => { void carregar(); }, [carregar]);
+  // Filtro mudou enquanto um drill estava aberto → fecha (o conteúdo ficaria defasado).
+  useEffect(() => { setDrill(null); }, [filtros]);
 
   function abrirDrill(dimensao: string, titulo: string, grupo: Grupo) {
     setDrill({ dimensao, titulo, grupo });
     setRows(null); setRowsLoading(true);
-    logisticaApi.get<Doc[]>('/despesas/indicadores/documentos', { params: { mes, ano, dimensao, chave: grupo.id } })
+    logisticaApi.get<Doc[]>('/despesas/indicadores/documentos', { params: { mes, ano, dimensao, chave: grupo.id, ...filtros } })
       .then((r) => setRows(r.data)).catch(() => setRows([])).finally(() => setRowsLoading(false));
   }
 
@@ -79,10 +118,51 @@ export function FrotaAnalisePage() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3">
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"><Filter className="h-3.5 w-3.5" /> Filtros</span>
+        <select value={fVeiculo} onChange={(e) => setFVeiculo(e.target.value)} className={selCls}>
+          <option value="">Todos os veículos</option>
+          {veiculos.map((v) => <option key={v.id} value={v.id}>{v.placa}{v.modelo ? ` — ${v.modelo}` : ''}</option>)}
+        </select>
+        <select value={fFinalidade} onChange={(e) => setFFinalidade(e.target.value)} className={selCls}>
+          <option value="">Qualquer uso</option>
+          {FINALIDADES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+        <select value={fPorte} onChange={(e) => setFPorte(e.target.value)} className={selCls}>
+          <option value="">Qualquer porte</option>
+          {PORTES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+        <select value={fPropriedade} onChange={(e) => setFPropriedade(e.target.value)} className={selCls}>
+          <option value="">Próprio + Alugado</option>
+          {PROPRIEDADES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+        <select value={fDepto} onChange={(e) => setFDepto(e.target.value)} className={selCls}>
+          <option value="">Todos os departamentos</option>
+          {departamentos.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
+        </select>
+        <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} className={selCls}>
+          <option value="">Todos os tipos de despesa</option>
+          {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+        </select>
+        <select value={fNormalidade} onChange={(e) => setFNormalidade(e.target.value)} className={selCls}>
+          <option value="">Normal + Anormalidade</option>
+          <option value="normal">Só normais</option>
+          <option value="anormal">Só anormalidades</option>
+        </select>
+        {qtdFiltros > 0 && (
+          <button onClick={limparFiltros} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
+            <X className="h-3.5 w-3.5" /> Limpar ({qtdFiltros})
+          </button>
+        )}
+      </div>
+
       {loading ? (
         <div className="flex items-center justify-center gap-2 py-20 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
       ) : vazio ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-400">Sem despesas aprovadas em {MESES[mes - 1]} / {ano}.</div>
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-400">
+          Sem despesas aprovadas em {MESES[mes - 1]} / {ano}{qtdFiltros > 0 ? ' para os filtros aplicados' : ''}.
+          {qtdFiltros > 0 && <button onClick={limparFiltros} className="ml-1 text-sky-600 hover:underline">Limpar filtros</button>}
+        </div>
       ) : data && (
         <div className="space-y-5">
           <div className="rounded-2xl border border-sky-200 bg-sky-50 p-5">

@@ -19,6 +19,17 @@ const ehGestor = (role?: string) => role === 'GESTOR_FROTA' || role === 'ADMIN';
 /** Rótulos de finalidade do veículo (Análise da Frota). */
 const FINALIDADE_LABEL: Record<string, string> = { ENTREGA: 'Entrega', PASSEIO: 'Passeio', SERVICO: 'Serviço' };
 
+/** Filtros opcionais da Análise da Frota (estreitam o conjunto; total reconcilia). */
+export interface FiltroAnalise {
+  veiculoId?: string;
+  tipoDespesaId?: string;
+  departamentoId?: string;
+  finalidade?: string;
+  porte?: string;
+  propriedade?: string;
+  normalidade?: 'normal' | 'anormal';
+}
+
 /** Recibo (foto/PDF do cupom) anexado no lançamento — binário p/ o object store. */
 export type ReciboBinario = { buffer: Buffer; mimetype?: string; size: number };
 
@@ -525,17 +536,36 @@ export class DespesaService {
 
   // ---------- Análise (manchete + grupos + drill-down) ----------
   /** Despesas APROVADAS do mês (escopo de gestão) com tudo p/ agrupar/detalhar. */
-  private async despesasDoMes(user: JwtPayload, role: string | undefined, mes: number, ano: number) {
+  private async despesasDoMes(user: JwtPayload, role: string | undefined, mes: number, ano: number, filtro?: FiltroAnalise) {
     const where: Prisma.DespesaVeiculoWhereInput = {
       filialId: user.filialId,
       situacao: StatusDespesa.APROVADA,
       dataDespesa: { gte: new Date(Date.UTC(ano, mes - 1, 1)), lt: new Date(Date.UTC(ano, mes, 1)) },
     };
+
+    // Filtros diretos / por relação (estreitam o conjunto antes do agrupamento).
+    if (filtro?.tipoDespesaId) where.tipoDespesaId = filtro.tipoDespesaId;
+    if (filtro?.normalidade) where.anormalidade = filtro.normalidade === 'anormal';
+    if (filtro?.departamentoId) where.viagem = { departamentoSolicitanteId: filtro.departamentoId };
+    const veicCond: Prisma.VeiculoWhereInput = {};
+    if (filtro?.finalidade) veicCond.finalidade = filtro.finalidade as Prisma.VeiculoWhereInput['finalidade'];
+    if (filtro?.porte) veicCond.porte = filtro.porte as Prisma.VeiculoWhereInput['porte'];
+    if (filtro?.propriedade) veicCond.propriedade = filtro.propriedade as Prisma.VeiculoWhereInput['propriedade'];
+    if (Object.keys(veicCond).length) where.veiculo = veicCond;
+
+    // Escopo de veículo: supervisor (RBAC) ∩ filtro de veículo específico.
+    let allowed: string[] | null = null;
     if (!ehGestor(role)) {
-      const ids = await this.veiculosDoSupervisor(user.filialId!, user.sub);
-      if (ids.length === 0) return [];
-      where.veiculoId = { in: ids };
+      allowed = await this.veiculosDoSupervisor(user.filialId!, user.sub);
+      if (allowed.length === 0) return [];
     }
+    if (filtro?.veiculoId) {
+      if (allowed && !allowed.includes(filtro.veiculoId)) return [];
+      where.veiculoId = filtro.veiculoId;
+    } else if (allowed) {
+      where.veiculoId = { in: allowed };
+    }
+
     return this.prisma.despesaVeiculo.findMany({
       where,
       include: {
@@ -563,8 +593,8 @@ export class DespesaService {
     }
   }
 
-  async indicadoresAnalitico(user: JwtPayload, role: string | undefined, mes: number, ano: number) {
-    const despesas = await this.despesasDoMes(user, role, mes, ano);
+  async indicadoresAnalitico(user: JwtPayload, role: string | undefined, mes: number, ano: number, filtro?: FiltroAnalise) {
+    const despesas = await this.despesasDoMes(user, role, mes, ano, filtro);
     const total = despesas.reduce((s, d) => s + Number(d.valor), 0);
     // Manchete secundária: quanto do custo é anormalidade (mau uso).
     const anormais = despesas.filter((d) => d.anormalidade);
@@ -600,8 +630,8 @@ export class DespesaService {
   }
 
   /** Documentos (despesas) que compõem um grupo da Análise — drill-down. */
-  async indicadoresDocumentos(user: JwtPayload, role: string | undefined, mes: number, ano: number, dimensao: string, chave: string) {
-    const despesas = await this.despesasDoMes(user, role, mes, ano);
+  async indicadoresDocumentos(user: JwtPayload, role: string | undefined, mes: number, ano: number, dimensao: string, chave: string, filtro?: FiltroAnalise) {
+    const despesas = await this.despesasDoMes(user, role, mes, ano, filtro);
     return despesas
       .filter((d) => this.chaveDim(d, dimensao) === chave)
       .map((d) => ({
