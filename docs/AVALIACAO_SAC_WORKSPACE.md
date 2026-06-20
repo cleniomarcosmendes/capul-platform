@@ -60,10 +60,26 @@ Requisito do Clenio: *"o apoiador vê só o SAC em que foi incluído, não todos
 
 ---
 
-## 5. O ponto mais importante NÃO considerado 🔑 — o cliente não é usuário do sistema
+## 5. O cliente não é usuário — mas o ponto de ENTRADA primário é o colaborador (decisão 20/06)
 
-- O Chamado hoje assume **`solicitante = usuário do core`** (login interno). No SAC, o solicitante é um **cliente EXTERNO** (e-mail/nome, sem login). Sem um conceito de **"solicitante externo"**, não há como atribuir, responder, nem manter histórico por cliente. **É a maior mudança estrutural.**
-- Lado bom: o cliente **não precisa de acesso ao sistema** — o "portal" dele é o **e-mail**. Simplifica (sem login de cliente), mas exige modelar o solicitante externo.
+**Reenquadramento do Clenio (20/06):** o ponto de entrada primário do SAC **não** é o cliente
+mandando e-mail — é o **colaborador da filial** que recebe o SAC no balcão/telefone e **registra
+o chamado na plataforma** em nome do cliente, repassando as infos pro responsável do SAC responder.
+
+Isso **muda a antiga conclusão** ("o cliente não ser usuário é a maior mudança estrutural"):
+- Com entrada via colaborador, o **solicitante é um usuário real** (login, filial, RBAC — tudo
+  que o Chamado já tem). O **cliente vira um conjunto de CAMPOS** no chamado (nome / contato /
+  produto / filial de origem), **não uma nova identidade**. Trivial (alguns campos opcionais no
+  workspace SAC), não um subsistema.
+- O **"solicitante externo"** (cliente sem login) deixa de ser bloqueador do núcleo. Ele **só
+  reaparece** num canal específico: **e-mail de ENTRADA que cria chamado sozinho** (cliente manda
+  e-mail sem colaborador no meio) — Fase 3, opcional e aditivo. Ver §6.1.
+
+**Decisão de arquitetura (20/06):** **reaproveitar o Chamado** (não construir do zero). Os ajustes
+são pontuais (a cláusula `copias` no `findAll` + campos SAC), e o reenquadramento elimina o gap que
+justificaria um módulo próprio. Só reavaliar "do zero / ferramenta dedicada" se o SAC virar
+**omnichannel** (e-mail + WhatsApp + chat + portal do cliente com login + CSAT externo). Dá pra
+começar no Chamado e extrair depois se crescer.
 
 ---
 
@@ -73,6 +89,27 @@ Requisito do Clenio: *"o apoiador vê só o SAC em que foi incluído, não todos
 - **Saída (resposta ao cliente)** — NÃO existe como e-mail externo. Precisa de uma **interação tipo "Resposta SAC"**: externa/pública, dispara e-mail ao cliente (com **anexo**), mantém threading.
 - **Ponto técnico ✅ CONFIRMADO (20/06) — é um GAP real:** "em cópia" garante acesso no **detalhe** (`chamado-core.service.ts` findOne, ~L603 `isCopiado`), mas no **`findAll` (listagem) NÃO existe cláusula para `copias`** (o OR de visibilidade, ~L472-478, só tem solicitante/técnico/colaborador/`equipeAtualId`/depto-staff). Logo, o SAC em cópia **não aparece na lista** do apoiador — só por link direto. **Ajuste necessário na Fase 1:** adicionar `{ copias: { some: { usuarioId: user.sub } } }` ao OR do `findAll`.
 - **Regra de elegibilidade da cópia ✅ CONFIRMADA (20/06):** `adicionarCopias` chama `assertNaoSeTI` (~L826) → **só usuários NÃO-T.I.** entram em cópia. Bom para o SAC (apoiadores são de outros setores). Limite: apoiador que seja staff de T.I. não entra por cópia (usaria Colaborador, T.I.-only).
+
+### 6.1 Arquitetura multicanal — o e-mail NÃO é excluído (decisão 20/06)
+
+Entrada via colaborador é o ponto de partida, mas **não fecha a porta do e-mail**. Os canais
+**convivem** sobre o MESMO chamado/workspace SAC (o chamado é o registro canônico; cada canal só
+cria ou adiciona interação nele):
+
+| Canal | O que faz | Fase | Precisa de |
+|-------|-----------|------|-----------|
+| **Colaborador registra** (plataforma) | colaborador da filial abre o SAC em nome do cliente | 1 (MVP) | nada novo — solicitante é usuário real |
+| **E-mail de SAÍDA** (resposta ao cliente) | interação "Resposta SAC" dispara e-mail ao contato do cliente (com anexo) | 2 | contato do cliente salvo no chamado |
+| **E-mail de ENTRADA** (cliente manda direto) | e-mail do cliente cria/atualiza o chamado | 3 (opcional) | threading + dedupe + anti-loop + **solicitante externo** (§5) |
+
+**Barato agora pra não doer depois — a Fase 1 já deve prever 2-3 campos** que deixam o e-mail virar
+um "plug-in de canal" sem refazer o núcleo:
+1. **Contato do cliente** (e-mail/telefone) → habilita o e-mail de **saída**.
+2. **Canal/origem** do SAC (balcão / telefone / e-mail) → rastreia como entrou.
+3. **Token de threading** no assunto (`[SAC-123]`) → pré-condição pro e-mail de **entrada** casar a resposta no chamado certo.
+
+> Conclusão: começar pelo colaborador é o MVP barato e de baixo risco; o e-mail (saída → entrada)
+> entra como **canais adicionais** no roadmap, **não cortado**.
 
 ---
 
@@ -87,13 +124,13 @@ Requisito do Clenio: *"o apoiador vê só o SAC em que foi incluído, não todos
 
 ## 8. Veredito de viabilidade + fases sugeridas
 
-- **Núcleo** (SAC como workspace + apoiadores em cópia + visibilidade por chamado): **viável**, encaixa bem — com a correção de usar **Em cópia**, não "equipe".
-- **E-mail in/out + solicitante externo**: é o **trabalho de verdade** (porte médio-alto) — é o que transforma o Chamado interno num SAC externo.
+- **Núcleo** (workspace SAC + entrada via colaborador + apoiadores em cópia + visibilidade por chamado + campos do cliente): **viável e barato** — reaproveita o Chamado, ajustes pontuais (a cláusula `copias` no `findAll` + 2-3 campos SAC). O reenquadramento de 20/06 (§5) **tira o "cliente externo" do caminho crítico**.
+- **E-mail in/out**: deixa de ser o que "viabiliza" o SAC e vira **canal adicional** (§6.1). Saída (Fase 2) é leve; entrada que cria chamado sozinho (Fase 3, opcional) é a única que reintroduz o **solicitante externo**.
 
-**Fases sugeridas:**
-1. **Modelo de cliente externo** (solicitante sem login) + workspace SAC + regra de visibilidade por cópia (+ ajuste da listagem do §6).
-2. **Saída por e-mail** (resposta ao cliente com anexo + threading).
-3. **Entrada por e-mail** (IMAP/webhook + dedupe + anti-loop + threading).
+**Fases sugeridas (revisadas 20/06):**
+1. **Núcleo:** workspace SAC + entrada via **colaborador** + **campos do cliente/canal/token** (§6.1) + visibilidade (em cópia + rosters + equipe restrita) + **fix da listagem `copias`** (§6).
+2. **Saída por e-mail** (interação "Resposta SAC" ao contato do cliente, com anexo).
+3. **Entrada por e-mail** (IMAP/webhook + dedupe + anti-loop + threading + **solicitante externo**) — opcional.
 4. **Relatórios/templates/SLA de SAC.**
 
 ---
@@ -121,13 +158,13 @@ roteamento (`equipeAtualId`) de um SAC — senão a visibilidade vira "fila inte
 (camada 2/equipe), o oposto do desejado. Elas existem só para popular o seletor de cópia.
 
 **Trabalho de código do núcleo (Fase 1), em ordem:**
-1. **Cliente externo** (solicitante sem login) + **workspace SAC** (camada 1).
+1. **Workspace SAC** + **entrada via colaborador** (solicitante = usuário real) + **campos do cliente** (contato), **canal/origem** e **token `[SAC-123]`** (§6.1) — camada 1, sem identidade externa.
 2. **`findAll`:** adicionar `{ copias: { some: { usuarioId } } }` ao OR de visibilidade (camada 5).
 3. **Seletor de cópia do SAC** restrito aos rosters (camada 3) + **guard "roster não é roteável"** (regra de ouro).
 4. Equipe SAC marcada `restritaVisibilidade` (camada 2 — só configuração, já existe no código).
 
-> O peso real do projeto continua sendo **cliente externo + e-mail (Fases 2-3)**, não a
-> visibilidade — o único ajuste estrutural de visibilidade é a cláusula da cópia no `findAll`.
+> O núcleo (Fase 1) é **barato** — reaproveita o Chamado, sem identidade externa. O peso real fica no
+> **e-mail (Fases 2-3, §6.1)**; e o único ajuste estrutural de visibilidade é a cláusula da cópia no `findAll`.
 
 ---
 
