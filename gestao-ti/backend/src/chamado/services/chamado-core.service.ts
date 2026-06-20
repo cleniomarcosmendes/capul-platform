@@ -823,7 +823,9 @@ export class ChamadoCoreService {
     for (const usuarioId of usuariosIds) {
       if (jaCopiados.has(usuarioId)) continue;
       try {
-        await this.helpers.assertNaoSeTI(usuarioId);
+        // Em cópia = QUALQUER usuário cadastrado (sem restrição de "não-TI"). A
+        // regra antiga (assertNaoSeTI) era herança do tempo em que só existia o
+        // workspace de T.I.; com Workspace multi-departamento ela não se aplica.
         // Garantir que o usuario existe (defensive)
         const u = await this.prisma.usuario.findUnique({ where: { id: usuarioId }, select: { id: true } });
         if (!u) {

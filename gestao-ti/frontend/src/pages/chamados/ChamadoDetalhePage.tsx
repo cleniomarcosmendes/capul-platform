@@ -15,16 +15,11 @@ import { coreService } from '../../services/core.service';
 import { useToast } from '../../components/Toast';
 import type { Chamado, Equipe, AnexoChamado, StatusChamado, ChamadoColaborador, ChamadoCopiaResumo, RegistroTempoChamado, UsuarioCore } from '../../types';
 
-const ROLES_TI_SET = new Set(['ADMIN', 'GESTOR', 'SUPORTE']);
-function isUsuarioTI(u: UsuarioCore): boolean {
-  return (u.permissoes ?? []).some((p) => isWorkspaceModulo(p.modulo.codigo) && ROLES_TI_SET.has(p.roleModulo.codigo));
-}
 import { MentionInput } from '../../components/MentionInput';
 import { ChatBubbleList, type ChatEvent } from '../../components/ChatBubbleList';
 import { ComentarioTexto } from '../../components/ComentarioTexto';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { abrirAnexoOuBaixar } from '../../utils/anexo';
-import { isWorkspaceModulo } from '../../lib/workspace-modulo';
 
 const statusLabels: Record<StatusChamado, string> = {
   ABERTO: 'Aberto', EM_ATENDIMENTO: 'Em Atendimento', PENDENTE: 'Pendente',
@@ -216,7 +211,7 @@ export function ChamadoDetalhePage() {
     chamadoService.listarRegistrosTempo(id).then(setRegistrosTempo).catch(() => {});
     coreService.listarUsuarios().then((users) => {
       setUsuariosMencao(users);
-      setUsuariosNaoTI(users.filter((u) => u.id !== usuario?.id && !isUsuarioTI(u)));
+      setUsuariosNaoTI(users.filter((u) => u.id !== usuario?.id));
     }).catch(() => {});
   }, [id, usuario?.id]);
 
@@ -1214,7 +1209,7 @@ export function ChamadoDetalhePage() {
                   {showAddCopia && (
                     <div className="mb-4 space-y-2">
                       <p className="text-xs text-slate-500">
-                        Equipe T.I. não pode ser colocada em cópia. Adicionados recebem notificações e podem comentar.
+                        Adicionados recebem notificações e podem comentar.
                       </p>
                       {copiaIdsParaAdicionar.length > 0 && (
                         <div className="flex flex-wrap gap-2">
