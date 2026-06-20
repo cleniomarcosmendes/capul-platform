@@ -384,9 +384,9 @@ export function DespesaNovaPage() {
               onChange={(e) => setNumeroDocumento(e.target.value)} placeholder="ex.: 12345 ou nota de débito"
               className={`${inp} disabled:bg-slate-100 disabled:text-slate-500`} />
             {!rateio && (
-              <label className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
-                <input type="checkbox" checked={semNota} onChange={(e) => { setSemNota(e.target.checked); if (e.target.checked) setNumeroDocumento(''); }} className="h-3.5 w-3.5 accent-sky-600" />
-                Sem nota fiscal (ex.: nota de débito, sem documento)
+              <label className="mt-2 flex items-center gap-2 text-sm text-slate-600">
+                <input type="checkbox" checked={semNota} onChange={(e) => { setSemNota(e.target.checked); if (e.target.checked) setNumeroDocumento(''); }} className="h-4 w-4 accent-sky-600" />
+                Sem nota fiscal <span className="text-xs text-slate-400">(ex.: nota de débito, sem documento)</span>
               </label>
             )}
           </div>
