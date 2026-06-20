@@ -11,6 +11,7 @@ import {
   CriarTipoDespesaDto, AtualizarTipoDespesaDto, LancarDespesaDto,
   LancarDespesaViagemDto, ContestarDespesaDto, ListarDespesasQuery,
   CriarFornecedorDespesaDto, AtualizarFornecedorDespesaDto, AtualizarDespesaDto,
+  MarcarAnormalidadeDto,
 } from './dto.js';
 
 const ehGestor = (role?: string) => role === 'GESTOR_FROTA' || role === 'ADMIN';
@@ -69,7 +70,13 @@ export class DespesaService {
   async criarTipo(dto: CriarTipoDespesaDto) {
     const existe = await this.prisma.tipoDespesa.findUnique({ where: { nome: dto.nome.trim() } });
     if (existe) throw new BadRequestException('Já existe um tipo de despesa com esse nome.');
-    return this.prisma.tipoDespesa.create({ data: { nome: dto.nome.trim(), descricao: dto.descricao?.trim() || null } });
+    return this.prisma.tipoDespesa.create({
+      data: {
+        nome: dto.nome.trim(),
+        descricao: dto.descricao?.trim() || null,
+        requerAprovacao: dto.requerAprovacao ?? true,
+      },
+    });
   }
 
   async atualizarTipo(id: string, dto: AtualizarTipoDespesaDto) {
@@ -80,6 +87,7 @@ export class DespesaService {
       data: {
         nome: dto.nome?.trim() ?? undefined,
         descricao: dto.descricao !== undefined ? (dto.descricao.trim() || null) : undefined,
+        requerAprovacao: dto.requerAprovacao ?? undefined,
         ativo: dto.ativo ?? undefined,
       },
     });
@@ -162,6 +170,7 @@ export class DespesaService {
       valor: Number(d.valor), dataDespesa: d.dataDespesa, fornecedor: d.fornecedor,
       observacao: d.observacao, autorNome: d.autorNome, autorMatricula: d.autorMatricula,
       aprovadoEm: d.aprovadoEm, motivoContestacao: d.motivoContestacao,
+      anormalidade: d.anormalidade, motivoAnormalidade: d.motivoAnormalidade,
       temComprovante: !!d.comprovanteObjectKey,
     }));
   }
@@ -220,6 +229,9 @@ export class DespesaService {
       if (ja) return ja;
     }
 
+    // Tipo sem exigência de aprovação (ex.: Abastecimento) entra direto APROVADA;
+    // os demais nascem PENDENTE e aguardam o supervisor/gestor.
+    const autoAprova = !tipo.requerAprovacao;
     const despesa = await this.prisma.despesaVeiculo.create({
       data: {
         filialId: v.filialId,
@@ -231,7 +243,8 @@ export class DespesaService {
         fornecedorId: dto.fornecedorId || null,
         fornecedor: dto.fornecedor?.trim() || null,
         observacao: dto.observacao?.trim() || null,
-        situacao: StatusDespesa.PENDENTE,
+        situacao: autoAprova ? StatusDespesa.APROVADA : StatusDespesa.PENDENTE,
+        aprovadoEm: autoAprova ? new Date() : null, // auto-aprovada: sem aprovadoPorId (não houve revisor)
         autorMatricula: v.condutorMatricula,
         autorNome: v.condutorNome,
         criadoPorId: user.sub,
@@ -272,6 +285,24 @@ export class DespesaService {
     });
   }
 
+  /**
+   * Marca/desmarca a despesa como ANORMALIDADE (mau uso). Só o GESTOR da frota
+   * (ou ADMIN) decide isso — é um juízo de gestão, não do supervisor. Aplica-se
+   * em qualquer situação (é uma classificação, não muda o status).
+   */
+  async marcarAnormalidade(id: string, dto: MarcarAnormalidadeDto, user: JwtPayload, role?: string) {
+    if (!ehGestor(role)) throw new ForbiddenException('Apenas o gestor da frota pode sinalizar anormalidade (mau uso).');
+    const d = await this.prisma.despesaVeiculo.findUnique({ where: { id } });
+    if (!d || d.filialId !== user.filialId) throw new NotFoundException('Despesa não encontrada nesta filial.');
+    return this.prisma.despesaVeiculo.update({
+      where: { id },
+      data: {
+        anormalidade: dto.anormalidade,
+        motivoAnormalidade: dto.anormalidade ? (dto.motivo?.trim() || null) : null,
+      },
+    });
+  }
+
   /** Uma despesa (todos os dados) — escopo de gestão. Usado na tela de edição/detalhe. */
   async obter(id: string, user: JwtPayload, role?: string) {
     const d = await this.prisma.despesaVeiculo.findUnique({
@@ -290,6 +321,7 @@ export class DespesaService {
       tipoDespesaId: d.tipoDespesaId, tipo: d.tipoDespesa?.nome ?? '—',
       valor: Number(d.valor), dataDespesa: d.dataDespesa,
       fornecedorId: d.fornecedorId, fornecedor: d.fornecedor, observacao: d.observacao,
+      anormalidade: d.anormalidade, motivoAnormalidade: d.motivoAnormalidade,
       temComprovante: !!d.comprovanteObjectKey,
       // Contexto (read-only) p/ a tela mostrar "todas as informações".
       autorNome: d.autorNome, autorMatricula: d.autorMatricula,
@@ -411,7 +443,7 @@ export class DespesaService {
   }
 
   // Chave/rótulo de cada despesa por dimensão (usados no agrupamento e no drill).
-  private chaveDim(d: { veiculoId: string; tipoDespesaId: string; fornecedorId: string | null; fornecedor: string | null; viagem?: { departamentoSolicitanteId: string | null } | null; veiculo?: { propriedade?: string | null; porte?: string | null; finalidade?: string | null } | null }, dim: string): string {
+  private chaveDim(d: { veiculoId: string; tipoDespesaId: string; fornecedorId: string | null; fornecedor: string | null; anormalidade?: boolean; viagem?: { departamentoSolicitanteId: string | null } | null; veiculo?: { propriedade?: string | null; porte?: string | null; finalidade?: string | null } | null }, dim: string): string {
     switch (dim) {
       case 'veiculo': return d.veiculoId;
       case 'tipo': return d.tipoDespesaId;
@@ -420,6 +452,7 @@ export class DespesaService {
       case 'propriedade': return d.veiculo?.propriedade ?? '__sem';
       case 'porte': return d.veiculo?.porte ?? '__sem';
       case 'finalidade': return d.veiculo?.finalidade ?? '__sem';
+      case 'normalidade': return d.anormalidade ? 'anormal' : 'normal';
       default: return '__sem';
     }
   }
@@ -427,6 +460,9 @@ export class DespesaService {
   async indicadoresAnalitico(user: JwtPayload, role: string | undefined, mes: number, ano: number) {
     const despesas = await this.despesasDoMes(user, role, mes, ano);
     const total = despesas.reduce((s, d) => s + Number(d.valor), 0);
+    // Manchete secundária: quanto do custo é anormalidade (mau uso).
+    const anormais = despesas.filter((d) => d.anormalidade);
+    const anormal = { valor: anormais.reduce((s, d) => s + Number(d.valor), 0), qtd: anormais.length };
 
     // Resolve nomes de departamento (uma vez) p/ os rótulos do grupo.
     const deptoIds = [...new Set(despesas.map((d) => d.viagem?.departamentoSolicitanteId).filter(Boolean) as string[])];
@@ -445,6 +481,7 @@ export class DespesaService {
 
     return {
       total,
+      anormal,
       porVeiculo: agrupar('veiculo', (d) => d.veiculo?.placa ? `${d.veiculo.placa}${d.veiculo.modelo ? ` · ${d.veiculo.modelo}` : ''}` : '—'),
       porTipo: agrupar('tipo', (d) => d.tipoDespesa?.nome ?? '—'),
       porFornecedor: agrupar('fornecedor', (d) => d.fornecedorRef?.nome ?? d.fornecedor ?? 'NÃO DEFINIDO'),
@@ -452,6 +489,7 @@ export class DespesaService {
       porPropriedade: agrupar('propriedade', (d) => (d.veiculo?.propriedade === 'ALUGADO' ? 'Alugado' : d.veiculo?.propriedade === 'PROPRIO' ? 'Próprio' : 'Não informado')),
       porPorte: agrupar('porte', (d) => (d.veiculo?.porte === 'PESADO' ? 'Pesado' : d.veiculo?.porte === 'LEVE' ? 'Leve' : 'Não informado')),
       porFinalidade: agrupar('finalidade', (d) => (FINALIDADE_LABEL[d.veiculo?.finalidade ?? ''] ?? 'Não informado')),
+      porNormalidade: agrupar('normalidade', (d) => (d.anormalidade ? 'Anormalidade (mau uso)' : 'Normal')),
     };
   }
 

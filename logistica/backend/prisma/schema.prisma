@@ -233,6 +233,10 @@ model TipoDespesa {
   nome      String           @unique
   descricao String?
   ativo     Boolean          @default(true)
+  // Se true, a despesa lançada pelo motorista na viagem nasce PENDENTE e exige
+  // validação do supervisor/gestor. Se false (ex.: Abastecimento), entra direto
+  // APROVADA. Lançamento direto por supervisor/gestor já é APROVADA de qualquer forma.
+  requerAprovacao Boolean    @default(true) @map("requer_aprovacao")
   criadoEm  DateTime         @default(now()) @map("criado_em")
   despesas  DespesaVeiculo[]
 
@@ -277,6 +281,11 @@ model DespesaVeiculo {
   fornecedor    String?
   observacao    String?
   situacao      StatusDespesa @default(PENDENTE)
+  // Anormalidade (mau uso): o GESTOR da frota sinaliza quando a despesa decorre
+  // de uso indevido do veículo. Destaca/segrega esse custo na Análise para não
+  // distorcer a leitura de um veículo que "estourou" por um evento atípico.
+  anormalidade       Boolean @default(false)
+  motivoAnormalidade String? @map("motivo_anormalidade")
   // Foto do recibo/cupom (lastro da aprovação). O binário vive no object store
   // (MinIO, reusa o CofreStorageService); aqui ficam só a chave + hash + mime.
   comprovanteObjectKey String? @map("comprovante_object_key")

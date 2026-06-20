@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Banknote, Image as ImageIcon, Loader2, Paperclip, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Banknote, Image as ImageIcon, Loader2, Paperclip, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
+import { useAuth } from '../contexts/AuthContext';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { maskMoeda, parseMoeda, moedaParaInput } from '../utils/format';
 
@@ -19,6 +20,7 @@ interface DespesaInfo {
   autorNome?: string | null; autorMatricula?: string | null;
   criadoEm?: string | null; aprovadoEm?: string | null; motivoContestacao?: string | null;
   viagemId?: string | null; viagemNumero?: number | null; viagemFinalidade?: string | null; viagemCondutor?: string | null;
+  anormalidade?: boolean; motivoAnormalidade?: string | null;
   temComprovante?: boolean;
 }
 
@@ -55,6 +57,12 @@ export function DespesaNovaPage() {
   const [preview, setPreview] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [info, setInfo] = useState<DespesaInfo | null>(null); // contexto read-only (edição)
+  // Anormalidade (mau uso) — só gestor; salva à parte (endpoint próprio).
+  const { logisticaRole } = useAuth();
+  const ehGestor = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN';
+  const [anormal, setAnormal] = useState(false);
+  const [motivoAnormal, setMotivoAnormal] = useState('');
+  const [salvandoAnormal, setSalvandoAnormal] = useState(false);
 
   const [dirty, setDirty] = useState(false);
   const { ConfirmDialog: DirtyDialog, guardedNavigate } = useUnsavedChanges(dirty);
@@ -93,6 +101,8 @@ export function DespesaNovaPage() {
         setFornecedorId(d.fornecedorId ?? '');
         setFornecedor(d.fornecedor ?? '');
         setObservacao(d.observacao ?? '');
+        setAnormal(!!d.anormalidade);
+        setMotivoAnormal(d.motivoAnormalidade ?? '');
         setInfo(d);
       } catch (e) {
         toast('error', errMsg(e, 'Despesa não encontrada.'));
@@ -108,6 +118,17 @@ export function DespesaNovaPage() {
       const { data } = await logisticaApi.get(`/despesas/${edicaoId}/comprovante`, { responseType: 'blob' });
       window.open(URL.createObjectURL(data as Blob), '_blank', 'noopener');
     } catch (e) { toast('error', errMsg(e, 'Falha ao abrir o recibo.')); }
+  };
+
+  const salvarAnormalidade = async () => {
+    if (!edicaoId) return;
+    setSalvandoAnormal(true);
+    try {
+      await logisticaApi.patch(`/despesas/${edicaoId}/anormalidade`, { anormalidade: anormal, motivo: anormal ? motivoAnormal.trim() || undefined : undefined });
+      setInfo((prev) => (prev ? { ...prev, anormalidade: anormal, motivoAnormalidade: anormal ? motivoAnormal.trim() : null } : prev));
+      toast('success', anormal ? 'Despesa sinalizada como anormalidade.' : 'Anormalidade removida.');
+    } catch (e) { toast('error', errMsg(e, 'Falha ao salvar a anormalidade.')); }
+    finally { setSalvandoAnormal(false); }
   };
 
   const escolherRecibo = (f: File | null) => {
@@ -225,6 +246,27 @@ export function DespesaNovaPage() {
                   </button>
                 ) : <p className="font-medium text-slate-500">Sem recibo</p>}
               </div>
+            </div>
+          </div>
+        )}
+
+        {modoEdicao && ehGestor && (
+          <div className={`rounded-lg border p-4 ${anormal ? 'border-orange-300 bg-orange-50/70' : 'border-slate-200 bg-slate-50/70'}`}>
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <input type="checkbox" checked={anormal} onChange={(e) => setAnormal(e.target.checked)} className="h-4 w-4 accent-orange-600" />
+              <AlertTriangle className={`h-4 w-4 ${anormal ? 'text-orange-600' : 'text-slate-400'}`} />
+              Anormalidade (mau uso do veículo)
+            </label>
+            <p className="mt-1 text-xs text-slate-400">Marque quando a despesa decorre de uso indevido — fica destacada e segregada na Análise da Frota, sem distorcer o custo normal do veículo.</p>
+            {anormal && (
+              <input value={motivoAnormal} onChange={(e) => setMotivoAnormal(e.target.value)} maxLength={255} placeholder="Motivo (opcional) — ex.: avaria por imprudência"
+                className="mt-2 w-full rounded-lg border border-orange-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none" />
+            )}
+            <div className="mt-2">
+              <button type="button" onClick={() => void salvarAnormalidade()} disabled={salvandoAnormal}
+                className="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-white px-3 py-1.5 text-sm font-medium text-orange-700 hover:bg-orange-100 disabled:opacity-50">
+                {salvandoAnormal ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />} Salvar anormalidade
+              </button>
             </div>
           </div>
         )}

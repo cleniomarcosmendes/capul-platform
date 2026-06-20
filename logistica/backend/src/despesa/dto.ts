@@ -10,6 +10,10 @@ export class CriarTipoDespesaDto {
 
   @IsOptional() @IsString() @MaxLength(255)
   descricao?: string;
+
+  // Default true (no service) — só Abastecimento e afins entram como false.
+  @IsOptional() @IsBoolean()
+  requerAprovacao?: boolean;
 }
 
 export class AtualizarTipoDespesaDto {
@@ -18,6 +22,9 @@ export class AtualizarTipoDespesaDto {
 
   @IsOptional() @IsString() @MaxLength(255)
   descricao?: string;
+
+  @IsOptional() @IsBoolean()
+  requerAprovacao?: boolean;
 
   @IsOptional() @IsBoolean()
   ativo?: boolean;
@@ -95,6 +102,15 @@ export class LancarDespesaViagemDto {
 export class ContestarDespesaDto {
   @IsString() @IsNotEmpty() @MaxLength(255)
   motivo!: string;
+}
+
+// ---- Anormalidade (mau uso) — só o gestor da frota marca/desmarca ----
+export class MarcarAnormalidadeDto {
+  @IsBoolean()
+  anormalidade!: boolean;
+
+  @IsOptional() @IsString() @MaxLength(255)
+  motivo?: string;
 }
 
 // ---- Edição de uma despesa (gestor de frota / supervisor do veículo) ----

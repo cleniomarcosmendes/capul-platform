@@ -10,6 +10,7 @@ import {
   CriarTipoDespesaDto, AtualizarTipoDespesaDto, LancarDespesaDto,
   LancarDespesaViagemDto, ContestarDespesaDto, ListarDespesasQuery,
   CriarFornecedorDespesaDto, AtualizarFornecedorDespesaDto, AtualizarDespesaDto,
+  MarcarAnormalidadeDto,
 } from './dto.js';
 
 /** Converte o arquivo do multer no binário do recibo (ou undefined). */
@@ -141,6 +142,13 @@ export class DespesaController {
   @Patch(':id/contestar')
   contestar(@Param('id') id: string, @Body() dto: ContestarDespesaDto, @CurrentUser() user: JwtPayload) {
     return this.despesas.contestar(id, dto, user, roleLogistica(user));
+  }
+
+  /** Sinaliza/remove anormalidade (mau uso) — só gestor de frota (enforced no service). */
+  @Patch(':id/anormalidade')
+  @Roles('GESTOR_FROTA')
+  marcarAnormalidade(@Param('id') id: string, @Body() dto: MarcarAnormalidadeDto, @CurrentUser() user: JwtPayload) {
+    return this.despesas.marcarAnormalidade(id, dto, user, roleLogistica(user));
   }
 
   // :id genérico por último — não captura tipos/fornecedores/indicadores (literais

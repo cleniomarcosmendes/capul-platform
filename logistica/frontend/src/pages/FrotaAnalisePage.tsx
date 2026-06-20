@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Banknote, Building2, Car, ChevronLeft, ChevronRight, Gauge, KeyRound, Layers, Loader2, RefreshCw, Tag, Target, X } from 'lucide-react';
+import { AlertTriangle, Banknote, Building2, Car, ChevronLeft, ChevronRight, Gauge, KeyRound, Layers, Loader2, RefreshCw, Tag, Target, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 
@@ -11,8 +11,9 @@ import { useToast } from '../components/Toast';
 interface Grupo { id: string; label: string; valor: number; qtd: number }
 interface Analitico {
   total: number;
+  anormal: { valor: number; qtd: number };
   porVeiculo: Grupo[]; porTipo: Grupo[]; porFornecedor: Grupo[]; porDepartamento: Grupo[]; porPropriedade: Grupo[];
-  porPorte: Grupo[]; porFinalidade: Grupo[];
+  porPorte: Grupo[]; porFinalidade: Grupo[]; porNormalidade: Grupo[];
 }
 interface Doc { id: string; principal: string; secundario: string; terciario?: string; data: string | null; valor: number }
 interface DrillSel { dimensao: string; titulo: string; grupo: Grupo }
@@ -90,6 +91,11 @@ export function FrotaAnalisePage() {
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-sky-700">Custo total no mês</p>
                 <p className="text-3xl font-bold text-slate-800">{BRL(data.total)}</p>
+                {data.anormal && data.anormal.valor > 0 && (
+                  <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
+                    <AlertTriangle className="h-3 w-3" /> dos quais {BRL(data.anormal.valor)} em anormalidades ({data.anormal.qtd})
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -101,6 +107,7 @@ export function FrotaAnalisePage() {
             <CardGrupo titulo="Por departamento solicitante" dimensao="departamento" icone={<Layers className="h-4 w-4 text-sky-600" />} itens={data.porDepartamento} total={data.total} onSelect={abrirDrill} />
             <CardGrupo titulo="Por porte (pesado × leve)" dimensao="porte" icone={<Gauge className="h-4 w-4 text-sky-600" />} itens={data.porPorte} total={data.total} onSelect={abrirDrill} />
             <CardGrupo titulo="Por finalidade (entrega × passeio × serviço)" dimensao="finalidade" icone={<Target className="h-4 w-4 text-sky-600" />} itens={data.porFinalidade} total={data.total} onSelect={abrirDrill} />
+            <CardGrupo titulo="Normal × Anormalidade (mau uso)" dimensao="normalidade" icone={<AlertTriangle className="h-4 w-4 text-sky-600" />} itens={data.porNormalidade} total={data.total} onSelect={abrirDrill} />
             <CardGrupo titulo="Por tipo de veículo (próprio × alugado)" dimensao="propriedade" icone={<KeyRound className="h-4 w-4 text-sky-600" />} itens={data.porPropriedade} total={data.total} onSelect={abrirDrill} />
           </div>
           <p className="text-xs text-slate-400">Clique num item para ver as despesas que o compõem. A soma reconcilia com o total; linhas em cinza são valores sem a dimensão (ex.: sem departamento).</p>

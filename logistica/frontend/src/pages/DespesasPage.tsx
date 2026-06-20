@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowDown, ArrowUp, ArrowUpDown, Banknote, Check, Loader2, Paperclip, Pencil, Plus, Printer, Tag, Trash2, X } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Banknote, Check, Loader2, Paperclip, Pencil, Plus, Printer, Tag, Trash2, X } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 // já entra APROVADA; lançamento do motorista (matrícula+senha, na tela de Frota)
 // entra PENDENTE e exige validação aqui.
 
-interface TipoDespesa { id: string; nome: string; descricao?: string | null; ativo: boolean }
+interface TipoDespesa { id: string; nome: string; descricao?: string | null; ativo: boolean; requerAprovacao: boolean }
 interface FornecedorDespesa { id: string; nome: string; ativo: boolean }
 interface LocalParada { id: string; nome: string; ativo: boolean; filialId?: string | null; departamentoId?: string | null; veiculoId?: string | null }
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
@@ -20,6 +20,7 @@ interface Despesa {
   tipo: string; valor: number; dataDespesa: string; fornecedor?: string | null;
   observacao?: string | null; autorNome?: string | null; aprovadoEm?: string | null;
   motivoContestacao?: string | null; temComprovante?: boolean;
+  anormalidade?: boolean; motivoAnormalidade?: string | null;
 }
 const SIT_META: Record<string, { label: string; cls: string }> = {
   PENDENTE: { label: 'Pendente', cls: 'bg-amber-100 text-amber-700' },
@@ -335,8 +336,15 @@ function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
         </td>
         <td className="px-4 py-2 text-slate-600"><span className="block max-w-[12rem] truncate" title={d.autorNome ?? ''}>{d.autorNome ?? '—'}</span></td>
         <td className="px-4 py-2">
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${sit.cls}`}>{sit.label}</span>
-          {d.situacao === 'CONTESTADA' && d.motivoContestacao && <span className="ml-1 text-xs text-rose-500" title={d.motivoContestacao}>ⓘ</span>}
+          <div className="flex flex-wrap items-center gap-1">
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${sit.cls}`}>{sit.label}</span>
+            {d.situacao === 'CONTESTADA' && d.motivoContestacao && <span className="text-xs text-rose-500" title={d.motivoContestacao}>ⓘ</span>}
+            {d.anormalidade && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700" title={d.motivoAnormalidade ?? 'Anormalidade (mau uso)'}>
+                <AlertTriangle className="h-3 w-3" /> Anormal
+              </span>
+            )}
+          </div>
         </td>
         <td className="px-4 py-2 text-right">
           <div className="flex justify-end gap-2">
@@ -703,10 +711,12 @@ function TiposTab() {
   const [showForm, setShowForm] = useState(false);
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
+  const [requerAprovacao, setRequerAprovacao] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editNome, setEditNome] = useState('');
   const [editDescricao, setEditDescricao] = useState('');
+  const [editRequer, setEditRequer] = useState(true);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const carregar = async () => {
@@ -720,12 +730,12 @@ function TiposTab() {
     e.preventDefault();
     if (!nome.trim()) { toast('warning', 'Informe o nome.'); return; }
     setSalvando(true);
-    try { await logisticaApi.post('/despesas/tipos', { nome: nome.trim(), descricao: descricao.trim() || undefined }); setNome(''); setDescricao(''); setShowForm(false); toast('success', 'Tipo de despesa criado.'); await carregar(); }
+    try { await logisticaApi.post('/despesas/tipos', { nome: nome.trim(), descricao: descricao.trim() || undefined, requerAprovacao }); setNome(''); setDescricao(''); setRequerAprovacao(true); setShowForm(false); toast('success', 'Tipo de despesa criado.'); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao criar tipo.')); } finally { setSalvando(false); }
   };
   const salvarEdicao = async () => {
     if (!editId || !editNome.trim()) return;
-    try { await logisticaApi.patch(`/despesas/tipos/${editId}`, { nome: editNome.trim(), descricao: editDescricao.trim() || undefined }); toast('success', 'Tipo atualizado.'); setEditId(null); await carregar(); }
+    try { await logisticaApi.patch(`/despesas/tipos/${editId}`, { nome: editNome.trim(), descricao: editDescricao.trim() || undefined, requerAprovacao: editRequer }); toast('success', 'Tipo atualizado.'); setEditId(null); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao atualizar.')); }
   };
   const toggle = async (t: TipoDespesa) => {
@@ -761,6 +771,11 @@ function TiposTab() {
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
             </div>
           </div>
+          <label className="mb-4 flex items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" checked={requerAprovacao} onChange={(e) => setRequerAprovacao(e.target.checked)} className="h-4 w-4 accent-sky-600" />
+            Exige aprovação do supervisor/gestor
+            <span className="text-xs text-slate-400">— desmarque para tipos que entram automáticos (ex.: Abastecimento)</span>
+          </label>
           <div className="flex gap-3">
             <button type="submit" disabled={salvando} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar'}</button>
             <button type="button" onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
@@ -782,6 +797,7 @@ function TiposTab() {
               <tr className="bg-slate-50">
                 <th className={thCad}><button onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')} className={btnSortCad}>Nome <SortIcon active dir={sortDir} /></button></th>
                 <th className={thCad}>Descrição</th>
+                <th className={thCad}>Aprovação</th>
                 <th className={thCad}>Status</th>
                 <th className={thCad}>Ações</th>
               </tr>
@@ -793,6 +809,7 @@ function TiposTab() {
                     <>
                       <td className="px-6 py-3"><input value={editNome} onChange={(e) => setEditNome(e.target.value)} maxLength={60} className="w-full rounded border border-slate-300 px-2 py-1 text-sm" /></td>
                       <td className="px-6 py-3"><input value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)} maxLength={255} className="w-full rounded border border-slate-300 px-2 py-1 text-sm" /></td>
+                      <td className="px-6 py-3"><label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" checked={editRequer} onChange={(e) => setEditRequer(e.target.checked)} className="h-4 w-4 accent-sky-600" /> Exige</label></td>
                       <td className="px-6 py-3"><span className={pill(t.ativo)}>{t.ativo ? 'Ativo' : 'Inativo'}</span></td>
                       <td className="px-6 py-3">
                         <div className="flex items-center gap-2">
@@ -804,13 +821,18 @@ function TiposTab() {
                   ) : (
                     <>
                       <td className="px-6 py-4">
-                        <button onClick={() => { setEditId(t.id); setEditNome(t.nome); setEditDescricao(t.descricao ?? ''); }} className="text-left font-medium text-sky-700 hover:underline">{t.nome}</button>
+                        <button onClick={() => { setEditId(t.id); setEditNome(t.nome); setEditDescricao(t.descricao ?? ''); setEditRequer(t.requerAprovacao); }} className="text-left font-medium text-sky-700 hover:underline">{t.nome}</button>
                       </td>
                       <td className="px-6 py-4 text-slate-500">{t.descricao ?? '—'}</td>
+                      <td className="px-6 py-4">
+                        {t.requerAprovacao
+                          ? <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700">Exige aprovação</span>
+                          : <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700">Automática</span>}
+                      </td>
                       <td className="px-6 py-4"><span className={pill(t.ativo)}>{t.ativo ? 'Ativo' : 'Inativo'}</span></td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <button onClick={() => { setEditId(t.id); setEditNome(t.nome); setEditDescricao(t.descricao ?? ''); }} className="flex items-center gap-1 text-xs text-sky-600 hover:underline"><Pencil className="h-3.5 w-3.5" /> Editar</button>
+                          <button onClick={() => { setEditId(t.id); setEditNome(t.nome); setEditDescricao(t.descricao ?? ''); setEditRequer(t.requerAprovacao); }} className="flex items-center gap-1 text-xs text-sky-600 hover:underline"><Pencil className="h-3.5 w-3.5" /> Editar</button>
                           <button onClick={() => void toggle(t)} className="text-xs text-sky-600 hover:underline">{t.ativo ? 'Inativar' : 'Ativar'}</button>
                         </div>
                       </td>
