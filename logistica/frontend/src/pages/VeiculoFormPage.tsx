@@ -1,11 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Gauge, Loader2, Truck, Wrench } from 'lucide-react';
+import { ArrowLeft, Loader2, Truck, Wrench } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { maskPlaca } from '../utils/format';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useToast } from '../components/Toast';
-import { HodometroVeiculo } from '../components/HodometroVeiculo';
 
 // Form de veículo (padrão FormPage do workspace): /veiculos/novo e
 // /veiculos/:id/editar no MESMO componente.
@@ -187,15 +186,6 @@ export function VeiculoFormPage() {
           </div>
           <p className="mt-2 text-xs text-slate-400">A próxima revisão é recalculada ao registrar a manutenção no Monitor da Frota (última + intervalo).</p>
         </div>
-
-        {modoEdicao && id && (
-          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-            <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <Gauge className="h-3.5 w-3.5" /> Linha do KM (viagens × não apontadas)
-            </p>
-            <HodometroVeiculo veiculoId={id} />
-          </div>
-        )}
 
         <div className="flex items-center justify-end gap-2">
           <Link to="/veiculos" className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancelar</Link>

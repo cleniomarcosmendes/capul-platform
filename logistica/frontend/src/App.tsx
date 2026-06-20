@@ -23,6 +23,7 @@ import { DespesasPage } from './pages/DespesasPage';
 import { DespesaNovaPage } from './pages/DespesaNovaPage';
 import { PainelFrotaPage } from './pages/PainelFrotaPage';
 import { FrotaAnalisePage } from './pages/FrotaAnalisePage';
+import { LinhaKmPage } from './pages/LinhaKmPage';
 import { EntregaAnalisePage } from './pages/EntregaAnalisePage';
 
 function Protected() {
@@ -64,6 +65,7 @@ function Protected() {
               <Route path="/despesas/:id/editar" element={<DespesaNovaPage />} />
               <Route path="/frota/painel" element={<PainelFrotaPage />} />
               <Route path="/frota/analise" element={<FrotaAnalisePage />} />
+              <Route path="/frota/linha-km" element={<LinhaKmPage />} />
               <Route path="/veiculos" element={<VeiculosPage />} />
               <Route path="/veiculos/novo" element={<VeiculoFormPage />} />
               <Route path="/veiculos/:id/editar" element={<VeiculoFormPage />} />

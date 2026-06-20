@@ -87,10 +87,10 @@ export class FrotaController {
     return this.frota.registrarManutencao(id, dto, user, roleLogistica(user));
   }
 
-  /** Linha do KM (hodômetro) do veículo: segmentos por viagem + lacunas "não apontadas". */
-  @Get('veiculos/:id/hodometro')
-  hodometro(@Param('id') id: string, @CurrentUser() user: JwtPayload, @Query('mes') mes?: string, @Query('ano') ano?: string) {
-    return this.frota.hodometro(id, user, mes ? parseInt(mes, 10) : undefined, ano ? parseInt(ano, 10) : undefined);
+  /** Linha do KM (hodômetro) da frota no mês: uma linha por veículo (ou de um só). Página /frota/linha-km. */
+  @Get('hodometro')
+  hodometro(@CurrentUser() user: JwtPayload, @Query('mes') mes?: string, @Query('ano') ano?: string, @Query('veiculoId') veiculoId?: string) {
+    return this.frota.hodometroFrota(user, mes ? parseInt(mes, 10) : undefined, ano ? parseInt(ano, 10) : undefined, veiculoId || undefined);
   }
 
   /** Painel tempo real da frota (monitoramento) — gestores. */

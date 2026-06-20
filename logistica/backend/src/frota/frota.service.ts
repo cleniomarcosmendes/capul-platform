@@ -312,25 +312,16 @@ export class FrotaService {
 
   // ---- Linha do KM (hodômetro) — segmentos por viagem + lacunas "não apontadas" ----
   /**
-   * Monta a "linha do KM" do veículo: cada viagem (kmInicial→kmFinal) vira um
-   * segmento rotulado (finalidade) e as lacunas de KM entre uma viagem e a
-   * próxima (e até o KM atual) viram "não apontadas" — prestação de contas do
-   * odômetro. Leitura, qualquer papel da logística (escopo de filial).
+   * Monta a "linha do KM" de UM veículo a partir das suas viagens (já filtradas
+   * por mês, se for o caso): cada viagem (kmInicial→kmFinal) vira um segmento
+   * rotulado e as lacunas de KM entre viagens (e até o KM atual, só no mês
+   * corrente) viram "não apontadas" — prestação de contas do odômetro.
    */
-  async hodometro(veiculoId: string, user: JwtPayload, mes?: number, ano?: number) {
-    const filialId = user.filialId;
-    if (!filialId) throw new BadRequestException('Usuário sem filial definida.');
-    const veiculo = await this.prisma.veiculo.findFirst({ where: { id: veiculoId, filialId } });
-    if (!veiculo) throw new NotFoundException('Veículo não encontrado nesta filial.');
-
-    const where: Prisma.ViagemWhereInput = { veiculoId, filialId, kmInicial: { not: null }, kmFinal: { not: null } };
-    if (mes && ano) where.dataHoraSaida = { gte: new Date(Date.UTC(ano, mes - 1, 1)), lt: new Date(Date.UTC(ano, mes, 1)) };
-    const viagens = await this.prisma.viagem.findMany({
-      where,
-      select: { numero: true, kmInicial: true, kmFinal: true, observacoesSaida: true, dataHoraSaida: true, condutorNome: true, tipo: true },
-      orderBy: { kmInicial: 'asc' },
-    });
-
+  private montarLinhaKm(
+    veiculo: { id: string; placa: string; modelo: string | null; kmAtual: number },
+    viagens: Array<{ numero: number; kmInicial: number | null; kmFinal: number | null; observacoesSaida: string | null; dataHoraSaida: Date | null; condutorNome: string | null }>,
+    incluirAteKmAtual: boolean,
+  ) {
     type Seg = { tipo: 'viagem' | 'gap'; kmInicio: number; kmFim: number; km: number; label: string; viagemNumero?: number; data?: string | null; condutor?: string | null };
     const segViagens: Seg[] = viagens
       .filter((v) => v.kmInicial != null && v.kmFinal != null && v.kmFinal > v.kmInicial)
@@ -350,8 +341,8 @@ export class FrotaService {
       segmentos.push(s);
       cursor = Math.max(cursor ?? s.kmFim, s.kmFim);
     }
-    // Lacuna final: do último kmFinal até o KM atual do veículo.
-    if (cursor != null && veiculo.kmAtual > cursor) {
+    // Lacuna final (do último kmFinal até o KM atual) só faz sentido no mês corrente.
+    if (incluirAteKmAtual && cursor != null && veiculo.kmAtual > cursor) {
       segmentos.push({ tipo: 'gap', kmInicio: cursor, kmFim: veiculo.kmAtual, km: veiculo.kmAtual - cursor, label: 'Não apontadas (até o KM atual)' });
       cursor = veiculo.kmAtual;
     }
@@ -360,8 +351,43 @@ export class FrotaService {
     const kmMax = segmentos.length ? cursor! : veiculo.kmAtual;
     const kmViagens = segmentos.filter((s) => s.tipo === 'viagem').reduce((a, s) => a + s.km, 0);
     const kmNaoApontadas = segmentos.filter((s) => s.tipo === 'gap').reduce((a, s) => a + s.km, 0);
+    const qtdViagens = segViagens.length;
 
-    return { placa: veiculo.placa, modelo: veiculo.modelo, kmAtual: veiculo.kmAtual, kmMin, kmMax, kmViagens, kmNaoApontadas, segmentos };
+    return { veiculoId: veiculo.id, placa: veiculo.placa, modelo: veiculo.modelo, kmAtual: veiculo.kmAtual, kmMin, kmMax, kmViagens, kmNaoApontadas, qtdViagens, segmentos };
+  }
+
+  /**
+   * Linha do KM da FROTA no mês: uma linha por veículo da filial (ou de um
+   * veículo específico). Page dedicada `/frota/linha-km`. Leitura (escopo de
+   * filial). Sem mês → considera todas as viagens e inclui a lacuna até o KM
+   * atual; com mês passado, recorta no mês e não projeta até o KM atual.
+   */
+  async hodometroFrota(user: JwtPayload, mes?: number, ano?: number, veiculoId?: string) {
+    const filialId = user.filialId;
+    if (!filialId) throw new BadRequestException('Usuário sem filial definida.');
+
+    const veiculos = await this.prisma.veiculo.findMany({
+      where: { filialId, ...(veiculoId ? { id: veiculoId } : {}) },
+      select: { id: true, placa: true, modelo: true, kmAtual: true },
+      orderBy: { placa: 'asc' },
+    });
+
+    const agora = new Date();
+    const semMes = !mes || !ano;
+    const mesCorrente = semMes || (mes === agora.getMonth() + 1 && ano === agora.getFullYear());
+
+    const linhas = [];
+    for (const v of veiculos) {
+      const where: Prisma.ViagemWhereInput = { veiculoId: v.id, filialId, kmInicial: { not: null }, kmFinal: { not: null } };
+      if (mes && ano) where.dataHoraSaida = { gte: new Date(Date.UTC(ano, mes - 1, 1)), lt: new Date(Date.UTC(ano, mes, 1)) };
+      const viagens = await this.prisma.viagem.findMany({
+        where,
+        select: { numero: true, kmInicial: true, kmFinal: true, observacoesSaida: true, dataHoraSaida: true, condutorNome: true },
+        orderBy: { kmInicial: 'asc' },
+      });
+      linhas.push(this.montarLinhaKm(v, viagens, mesCorrente));
+    }
+    return { mes: mes ?? null, ano: ano ?? null, veiculos: linhas };
   }
 
   // ---- Painel tempo real da frota (monitoramento com recorte interno) ----
