@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Car, ChevronLeft, ChevronRight, Gauge, Loader2, Printer, RefreshCw } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
-import { LinhaKmBarra, fmtKm, HACHURA, type LinhaKm } from '../components/LinhaKmBarra';
+import { LinhaKmBarra, coresPorSegmento, fmtKm, HACHURA, type LinhaKm } from '../components/LinhaKmBarra';
 
 // Página dedicada "Linha do KM" (prestação de contas do odômetro). Espelha o
 // layout do Acompanhamento do Workspace: filtro de mês + veículo (um ou todos)
@@ -78,7 +78,10 @@ export function LinhaKmPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
-        <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded bg-sky-500" /> Viagens (KM apontado)</span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="flex"><span className="h-2.5 w-2 rounded-l bg-sky-500" /><span className="h-2.5 w-2 bg-indigo-500" /><span className="h-2.5 w-2 rounded-r bg-emerald-500" /></span>
+          Viagens (cores alternam por viagem)
+        </span>
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded" style={{ backgroundImage: HACHURA }} /> Não apontadas (lacuna de odômetro)</span>
         {noMesAtual && <span className="text-slate-400">A faixa inclui a lacuna até o KM atual do veículo.</span>}
       </div>
@@ -110,15 +113,17 @@ export function LinhaKmPage() {
                     <tr><th className="px-3 py-2">Trecho</th><th className="px-3 py-2">Data</th><th className="px-3 py-2">Condutor</th><th className="px-3 py-2 text-right">Faixa de KM</th><th className="px-3 py-2 text-right">KM</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {l.segmentos.map((s, i) => (
+                    {(() => coresPorSegmento(l.segmentos))().map((cor, i) => { const s = l.segmentos[i]; return (
                       <tr key={i} className={s.tipo === 'gap' ? 'bg-slate-50/60' : 'hover:bg-slate-50'}>
-                        <td className="px-3 py-2">{s.tipo === 'gap' ? <span className="italic text-slate-400">{s.label}</span> : <span className="font-medium text-slate-700">Viagem #{s.viagemNumero}</span>}</td>
+                        <td className="px-3 py-2">{s.tipo === 'gap'
+                          ? <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded" style={{ backgroundImage: HACHURA }} /><span className="italic text-slate-400">{s.label}</span></span>
+                          : <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded" style={{ backgroundColor: cor! }} /><span className="font-medium text-slate-700">Viagem #{s.viagemNumero}</span></span>}</td>
                         <td className="px-3 py-2 text-slate-500">{s.tipo === 'gap' ? '—' : fmtDate(s.data)}</td>
                         <td className="px-3 py-2 text-slate-500">{s.tipo === 'gap' ? '—' : (s.condutor ?? '—')}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-slate-600">{fmtKm(s.kmInicio)} – {fmtKm(s.kmFim)}</td>
                         <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-800">{fmtKm(s.km)} km</td>
                       </tr>
-                    ))}
+                    ); })}
                   </tbody>
                 </table>
               )}
@@ -143,17 +148,19 @@ function abrirRelatorioLinhaKm(linhas: LinhaKm[], periodo: string, veicLabel: st
 
   const blocos = linhas.map((l) => {
     const span = Math.max(l.kmMax - l.kmMin, 1);
-    const segs = l.segmentos.map((s) => {
+    const cores = coresPorSegmento(l.segmentos);
+    const segs = l.segmentos.map((s, i) => {
       const left = ((s.kmInicio - l.kmMin) / span) * 100;
       const width = Math.max((s.km / span) * 100, 0.5);
-      return `<div class="seg ${s.tipo}" style="left:${left}%;width:${width}%" title="${esc(s.label)}"></div>`;
+      const cor = cores[i] ? `background:${cores[i]};box-shadow:inset 0 0 0 1px rgba(255,255,255,.65)` : '';
+      return `<div class="seg ${s.tipo}" style="left:${left}%;width:${width}%;${cor}" title="${esc(s.label)}"></div>`;
     }).join('');
     const tabela = umVeiculo ? `
       <table class="trechos">
         <thead><tr><th>Trecho</th><th>Data</th><th>Condutor</th><th class="r">Faixa de KM</th><th class="r">KM</th></tr></thead>
-        <tbody>${l.segmentos.map((s) => `
+        <tbody>${l.segmentos.map((s, i) => `
           <tr class="${s.tipo}">
-            <td>${s.tipo === 'gap' ? `<i>${esc(s.label)}</i>` : `Viagem #${esc(s.viagemNumero)}`}</td>
+            <td>${s.tipo === 'gap' ? `<span class="dot gap"></span><i>${esc(s.label)}</i>` : `<span class="dot" style="background:${cores[i]}"></span>Viagem #${esc(s.viagemNumero)}`}</td>
             <td>${s.tipo === 'gap' ? '—' : esc(dt(s.data))}</td>
             <td>${s.tipo === 'gap' ? '—' : esc(s.condutor ?? '—')}</td>
             <td class="r num">${esc(fmtKm(s.kmInicio))} – ${esc(fmtKm(s.kmFim))}</td>
@@ -189,13 +196,14 @@ function abrirRelatorioLinhaKm(linhas: LinhaKm[], periodo: string, veicLabel: st
   .vhead .muted{color:#64748b;font-weight:400}
   .vhead .tot{float:right;font-size:11px;color:#475569}
   .bar{position:relative;height:22px;background:#f1f5f9;border-radius:4px;overflow:hidden}
-  .seg{position:absolute;top:2px;bottom:2px;border-radius:3px}
-  .seg.viagem{background:#0ea5e9}
+  .seg{position:absolute;top:2px;bottom:2px;border-radius:3px;background:#0ea5e9}
   .seg.gap{background-image:repeating-linear-gradient(45deg,#cbd5e1,#cbd5e1 4px,#e2e8f0 4px,#e2e8f0 8px)}
   .kmlabels{display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:3px}
   table.trechos{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}
   table.trechos th{background:#0f172a;color:#fff;text-align:left;padding:5px 8px;font-size:9px;text-transform:uppercase;letter-spacing:.5px}
   table.trechos td{padding:4px 8px;border-bottom:1px solid #e2e8f0}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:middle}
+  .dot.gap{background-image:repeating-linear-gradient(45deg,#cbd5e1,#cbd5e1 4px,#e2e8f0 4px,#e2e8f0 8px)}
   table.trechos tr.gap td{background:#f8fafc;color:#64748b}
   .r{text-align:right}.num{font-variant-numeric:tabular-nums}
   @media print{@page{size:A4 landscape;margin:10mm}}
