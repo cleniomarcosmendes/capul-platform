@@ -306,6 +306,8 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
   const [fornecedorId, setFornecedorId] = useState('');
   const [valor, setValor] = useState('');
   const [fornecedor, setFornecedor] = useState('');
+  const [numeroDocumento, setNumeroDocumento] = useState('');
+  const [semNota, setSemNota] = useState(false);
   const [fotoUri, setFotoUri] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
@@ -326,7 +328,7 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
   async function lancar() {
     if (!podeLancar) return;
     setSalvando(true);
-    const payload = { viagemId: viagem.id, tipoDespesaId: tipoId, valor: parseMoeda(valor), fornecedorId: fornecedorId || undefined, fornecedor: fornecedor.trim() || undefined, idempotencyKey: uuid() };
+    const payload = { viagemId: viagem.id, tipoDespesaId: tipoId, valor: parseMoeda(valor), fornecedorId: fornecedorId || undefined, fornecedor: fornecedor.trim() || undefined, numeroDocumento: semNota ? undefined : (numeroDocumento.trim() || undefined), semNota: semNota || undefined, idempotencyKey: uuid() };
     try {
       await lancarDespesaViagem(payload, fotoUri ?? undefined);
       Alert.alert('Despesa lançada', 'Entrou como pendente de validação do supervisor.', [{ text: 'OK', onPress: onPronto }]);
@@ -368,6 +370,14 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
       )}
       <Text style={styles.label}>Fornecedor (livre, se não cadastrado)</Text>
       <TextInput style={styles.input} value={fornecedor} onChangeText={setFornecedor} maxLength={120} editable={!salvando} />
+
+      <Text style={styles.label}>Nº nota / documento</Text>
+      <TextInput style={styles.input} value={semNota ? 'S/N' : numeroDocumento} onChangeText={setNumeroDocumento}
+        editable={!salvando && !semNota} maxLength={60} placeholder="ex.: 12345 ou nota de débito" />
+      <TouchableOpacity style={[styles.chip, semNota && styles.chipOn, { alignSelf: 'flex-start', marginTop: 6 }]}
+        onPress={() => { setSemNota((v) => !v); setNumeroDocumento(''); }} disabled={salvando}>
+        <Text style={[styles.chipTxt, semNota && styles.chipTxtOn]}>Sem nota fiscal (S/N)</Text>
+      </TouchableOpacity>
 
       <Text style={styles.label}>Foto do cupom (opcional)</Text>
       {fotoUri ? (

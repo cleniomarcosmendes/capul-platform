@@ -147,6 +147,10 @@ export interface DespesaViagemPayload {
   fornecedorId?: string;
   fornecedor?: string;
   observacao?: string;
+  // Nota fiscal / documento (ex.: nota de débito da borracharia). semNota=true
+  // → lançamento sem nota (documento fica vazio).
+  numeroDocumento?: string;
+  semNota?: boolean;
   idempotencyKey?: string;
 }
 
@@ -163,6 +167,8 @@ export async function lancarDespesaViagem(p: DespesaViagemPayload, fotoUri?: str
   if (p.fornecedorId) form.append('fornecedorId', p.fornecedorId);
   if (p.fornecedor) form.append('fornecedor', p.fornecedor);
   if (p.observacao) form.append('observacao', p.observacao);
+  if (p.semNota) form.append('semNota', 'true');
+  else if (p.numeroDocumento) form.append('numeroDocumento', p.numeroDocumento);
   if (p.idempotencyKey) form.append('idempotencyKey', p.idempotencyKey);
   if (fotoUri) {
     const isPng = fotoUri.toLowerCase().endsWith('.png');
