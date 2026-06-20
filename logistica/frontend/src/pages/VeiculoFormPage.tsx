@@ -16,7 +16,7 @@ const labelCore = (i: CoreItem) => i.nomeFantasia || i.nome || i.codigo || i.id.
 const TIPOS = ['CARRO', 'UTILITARIO', 'CAMINHAO', 'OUTRO'];
 const PROPRIEDADES: [string, string][] = [['PROPRIO', 'Próprio'], ['ALUGADO', 'Alugado']];
 const PORTES: [string, string][] = [['', '—'], ['PESADO', 'Pesado'], ['LEVE', 'Leve']];
-const FINALIDADES: [string, string][] = [['', '—'], ['ENTREGA', 'Entrega (supermercado)'], ['PASSEIO', 'Passeio'], ['SERVICO', 'Serviço']];
+const FINALIDADES: [string, string][] = [['', '—'], ['ENTREGA', 'Entrega'], ['PASSEIO', 'Passeio'], ['SERVICO', 'Serviço']];
 const SITUACOES = ['DISPONIVEL', 'EM_USO', 'EM_MANUTENCAO', 'BAIXADO'];
 
 export function VeiculoFormPage() {
