@@ -43,6 +43,21 @@ export class ChamadoColaboradorService {
     if (jaExiste) {
       throw new BadRequestException('Usuario ja e colaborador deste chamado');
     }
+    // Colaborador é restrito ao WORKSPACE (departamento) do chamado: precisa ser
+    // membro ativo de alguma equipe do depto-dono. Defesa em profundidade — o
+    // picker já filtra, mas o backend revalida contra request manipulado (antes
+    // não havia guard e qualquer usuarioId era aceito, inclusive de outro depto).
+    const elegivel = await this.prisma.membroEquipe.findFirst({
+      where: {
+        usuarioId,
+        status: 'ATIVO',
+        equipe: { is: { status: 'ATIVO', departamentoId: chamado.departamentoId } },
+      },
+      select: { id: true },
+    });
+    if (!elegivel) {
+      throw new BadRequestException('Colaborador deve ser membro de uma equipe do workspace (departamento) do chamado.');
+    }
     const colaborador = await this.prisma.chamadoColaborador.create({
       data: { chamadoId, usuarioId },
       include: { usuario: { select: { id: true, nome: true, username: true } } },
@@ -57,6 +72,36 @@ export class ChamadoColaboradorService {
     ).catch((err) => console.error('Notificacao error:', err.message));
 
     return colaborador;
+  }
+
+  /**
+   * Colaboradores elegíveis = membros ativos de equipes do WORKSPACE (depto-dono)
+   * do chamado, exceto o técnico responsável, o solicitante e quem já é colaborador.
+   * Fonte do seletor "+ Adicionar colaborador" (restrito ao workspace do chamado).
+   */
+  async listarColaboradoresElegiveis(chamadoId: string) {
+    const chamado = await this.helpers.getChamadoOrFail(chamadoId);
+    const membros = await this.prisma.membroEquipe.findMany({
+      where: {
+        status: 'ATIVO',
+        equipe: { is: { status: 'ATIVO', departamentoId: chamado.departamentoId } },
+      },
+      select: { usuario: { select: { id: true, nome: true, username: true } } },
+      orderBy: { usuario: { nome: 'asc' } },
+    });
+    const jaColabs = await this.prisma.chamadoColaborador.findMany({
+      where: { chamadoId },
+      select: { usuarioId: true },
+    });
+    const excluir = new Set<string>([chamado.tecnicoId, chamado.solicitanteId, ...jaColabs.map((c) => c.usuarioId)].filter(Boolean) as string[]);
+    const vistos = new Set<string>();
+    const elegiveis: { id: string; nome: string; username: string }[] = [];
+    for (const m of membros) {
+      if (!m.usuario || excluir.has(m.usuario.id) || vistos.has(m.usuario.id)) continue;
+      vistos.add(m.usuario.id);
+      elegiveis.push(m.usuario);
+    }
+    return elegiveis;
   }
 
   async removerColaborador(chamadoId: string, colaboradorId: string, user: JwtPayload, role: string) {

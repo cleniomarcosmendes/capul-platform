@@ -327,6 +327,12 @@ export class ChamadoController {
     return this.service.listarColaboradores(id);
   }
 
+  // Elegíveis a colaborador = membros de equipes do workspace (depto) do chamado.
+  @Get(':id/colaboradores-elegiveis')
+  listarColaboradoresElegiveis(@Param('id') id: string) {
+    return this.service.listarColaboradoresElegiveis(id);
+  }
+
   @Post(':id/colaboradores')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   adicionarColaborador(
