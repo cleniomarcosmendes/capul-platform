@@ -82,6 +82,23 @@ enum PropriedadeVeiculo {
   @@schema("logistica")
 }
 
+// Porte do veículo (eixo de classificação, independente da finalidade).
+enum PorteVeiculo {
+  PESADO
+  LEVE
+  @@schema("logistica")
+}
+
+// Finalidade de uso (eixo de classificação). Leves se dividem em entrega do
+// supermercado × passeio; SERVICO cobre apoio/manutenção. Cruzado com porte na
+// Análise da Frota (ex.: custo dos leves de entrega × dos de passeio).
+enum FinalidadeVeiculo {
+  ENTREGA
+  PASSEIO
+  SERVICO
+  @@schema("logistica")
+}
+
 // Governança de despesas (Fase 2): motorista lança PENDENTE → supervisor/gestor
 // aprova (entra nos indicadores) ou contesta. Lançamento direto por
 // supervisor/gestor já nasce APROVADA.
@@ -165,6 +182,9 @@ model Veiculo {
   cor                   String?
   tipo                  TipoVeiculo     @default(CARRO)
   propriedade           PropriedadeVeiculo @default(PROPRIO)
+  // Classificação (2 eixos, opcionais — gestor classifica o cadastro existente).
+  porte                 PorteVeiculo?
+  finalidade            FinalidadeVeiculo?
   kmAtual               Int             @default(0) @map("km_atual")
   capacidadeCarga       String?         @map("capacidade_carga")
   situacao              SituacaoVeiculo @default(DISPONIVEL)
