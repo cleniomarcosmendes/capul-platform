@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ACCEPT_ANEXO } from '../../constants/anexo';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
-import { chamadoService } from '../../services/chamado.service';
+import { chamadoService, type ApoiadorSac } from '../../services/chamado.service';
 import { equipeService } from '../../services/equipe.service';
 import {
   ArrowLeft, UserPlus, ArrowRightLeft, CheckCircle,
@@ -145,6 +145,9 @@ export function ChamadoDetalhePage() {
   const [copias, setCopias] = useState<ChamadoCopiaResumo[]>([]);
   const [showAddCopia, setShowAddCopia] = useState(false);
   const [usuariosNaoTI, setUsuariosNaoTI] = useState<UsuarioCore[]>([]);
+  // SAC (Fase 1) — no SAC o picker de cópia vem do ROSTER, não de todos os não-TI.
+  const [sacDeptoIds, setSacDeptoIds] = useState<string[]>([]);
+  const [apoiadoresSac, setApoiadoresSac] = useState<ApoiadorSac[]>([]);
   const [copiaBusca, setCopiaBusca] = useState('');
   const [copiaIdsParaAdicionar, setCopiaIdsParaAdicionar] = useState<string[]>([]);
   const [copiaSalvando, setCopiaSalvando] = useState(false);
@@ -190,6 +193,10 @@ export function ChamadoDetalhePage() {
   const isGestor = ['ADMIN', 'GESTOR'].includes(gestaoTiRole || '');
   const isSolicitante = chamado?.solicitanteId === usuario?.id;
   const isTecnicoAtribuido = chamado?.tecnicoId === usuario?.id;
+  // SAC (Fase 1): chamado é SAC se o depto-dono é workspace SAC (tem equipe apoioSac).
+  const ehSac = !!chamado?.departamentoId && sacDeptoIds.includes(chamado.departamentoId);
+  // No SAC, candidatos a "em cópia" = só o roster de apoiadores.
+  const candidatosCopia: { id: string; nome: string; username: string }[] = ehSac ? apoiadoresSac : usuariosNaoTI;
   const canEditHeader = isSolicitante || isGestor;
   const [editingHeader, setEditingHeader] = useState(false);
   const [editTitulo, setEditTitulo] = useState('');
@@ -218,7 +225,15 @@ export function ChamadoDetalhePage() {
       setUsuariosMencao(users);
       setUsuariosNaoTI(users.filter((u) => u.id !== usuario?.id && !isUsuarioTI(u)));
     }).catch(() => {});
+    // SAC (Fase 1) — quais deptos são workspace SAC (detecção do chamado).
+    chamadoService.listarDepartamentosSac().then(setSacDeptoIds).catch(() => setSacDeptoIds([]));
   }, [id, usuario?.id]);
+
+  // SAC (Fase 1) — roster de apoiadores (fonte do picker de cópia), só quando SAC.
+  useEffect(() => {
+    if (!ehSac) { setApoiadoresSac([]); return; }
+    chamadoService.listarApoiadoresSac().then(setApoiadoresSac).catch(() => setApoiadoresSac([]));
+  }, [ehSac]);
 
   const [membrosEquipeDestino, setMembrosEquipeDestino] = useState<Equipe | null>(null);
   const [tecnicoEquipeDestinoId, setTecnicoEquipeDestinoId] = useState('');
@@ -1242,7 +1257,7 @@ export function ChamadoDetalhePage() {
                       {copiaIdsParaAdicionar.length > 0 && (
                         <div className="flex flex-wrap gap-2">
                           {copiaIdsParaAdicionar.map((cid) => {
-                            const u = usuariosNaoTI.find((x) => x.id === cid);
+                            const u = candidatosCopia.find((x) => x.id === cid);
                             if (!u) return null;
                             return (
                               <span key={cid} className="inline-flex items-center gap-1 bg-capul-100 text-capul-700 text-xs px-2 py-1 rounded-full">
@@ -1267,7 +1282,7 @@ export function ChamadoDetalhePage() {
                         {(() => {
                           const termo = copiaBusca.trim().toLowerCase();
                           const idsJa = new Set([...copias.map((c) => c.usuarioId), ...copiaIdsParaAdicionar]);
-                          const disponiveis = usuariosNaoTI
+                          const disponiveis = candidatosCopia
                             .filter((u) => !idsJa.has(u.id))
                             .filter((u) => !termo || u.nome.toLowerCase().includes(termo) || u.username.toLowerCase().includes(termo))
                             .slice(0, 12);
