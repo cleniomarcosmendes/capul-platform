@@ -152,6 +152,23 @@ export function DespesaNovaPage() {
     if (e.key === 'Enter' && alvo.tagName !== 'TEXTAREA') e.preventDefault();
   }
 
+  // Liga/desliga o rateio carregando o que já foi digitado, para não "sumir" o
+  // valor: ao ligar, tipo+valor viram a 1ª linha; ao desligar, a 1ª linha volta
+  // para os campos simples.
+  function toggleRateio(on: boolean) {
+    if (on) {
+      setSemNota(false);
+      if (tipoDespesaId || valor) setLinhas([{ tipoDespesaId, valor }]);
+    } else {
+      const primeira = linhas[0];
+      if (primeira && (primeira.tipoDespesaId || primeira.valor)) {
+        setTipoDespesaId(primeira.tipoDespesaId);
+        setValor(primeira.valor);
+      }
+    }
+    setRateio(on);
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!veiculoId) { toast('warning', 'Selecione o veículo.'); return; }
@@ -392,7 +409,7 @@ export function DespesaNovaPage() {
 
         {!modoEdicao && (
           <label className="flex items-center gap-2 text-sm text-slate-600">
-            <input type="checkbox" checked={rateio} onChange={(e) => { setRateio(e.target.checked); if (e.target.checked) setSemNota(false); }} className="h-4 w-4 accent-sky-600" />
+            <input type="checkbox" checked={rateio} onChange={(e) => toggleRateio(e.target.checked)} className="h-4 w-4 accent-sky-600" />
             Ratear esta nota em vários tipos de despesa
             <span className="text-xs text-slate-400">— ex.: uma nota com pneu + alinhamento no mesmo veículo</span>
           </label>
