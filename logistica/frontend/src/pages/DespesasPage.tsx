@@ -226,7 +226,9 @@ function DespesasTab() {
 // não aplica <style> dinâmico; gerar o documento bruto evita o problema). Respeita os
 // filtros atuais do grid e a ordenação corrente. Inclui subtotal por tipo de despesa.
 function abrirRelatorioDespesas(despesas: Despesa[], filtros: string[], total: number) {
-  const esc = (s: unknown) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
+  // Escapa também aspas (defesa em profundidade): hoje só interpola em texto, mas mantém o helper
+  // seguro caso algum valor passe a cair em atributo HTML no relatório de impressão.
+  const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
   const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   // Subtotais por tipo (desc por valor).
   const porTipo = new Map<string, number>();

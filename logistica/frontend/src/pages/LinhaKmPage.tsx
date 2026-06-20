@@ -143,7 +143,9 @@ export function LinhaKmPage() {
 // Desenha a faixa de cada veículo (viagens × não apontadas) e, num veículo só,
 // a tabela de trechos. Respeita o mês e o veículo selecionados.
 function abrirRelatorioLinhaKm(linhas: LinhaKm[], periodo: string, veicLabel: string, umVeiculo: boolean, mesCorrente: boolean) {
-  const esc = (s: unknown) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
+  // Escapa também aspas: o `title="..."` da faixa interpola texto livre (finalidade da viagem)
+  // dentro de atributo — sem escapar " o conteúdo poderia injetar atributos (defesa em profundidade).
+  const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
   const dt = (s?: string | null) => (s ? new Date(s).toLocaleDateString('pt-BR') : '—');
 
   const blocos = linhas.map((l) => {
