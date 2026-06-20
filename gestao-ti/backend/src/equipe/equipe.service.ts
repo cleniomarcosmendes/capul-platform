@@ -181,6 +181,7 @@ export class EquipeService {
         icone: dto.icone,
         privada: dto.privada,
         restritaVisibilidade: dto.restritaVisibilidade,
+        apoioSac: dto.apoioSac,
         emailEquipe: dto.emailEquipe,
         ordem: dto.ordem,
         departamentoId,

@@ -15,6 +15,7 @@ interface FormData {
   icone: string;
   privada: boolean;
   restritaVisibilidade: boolean;
+  apoioSac: boolean;
   emailEquipe: string;
   ordem: number;
   /** Workspace Onda 2 C2.8 — depto-dono explícito no form (antes vinha
@@ -30,6 +31,7 @@ const initialForm: FormData = {
   icone: 'users',
   privada: false,
   restritaVisibilidade: false,
+  apoioSac: false,
   emailEquipe: '',
   ordem: 0,
   departamentoId: '',
@@ -69,6 +71,7 @@ export function EquipeFormPage() {
             icone: equipe.icone || 'users',
             privada: equipe.privada,
             restritaVisibilidade: equipe.restritaVisibilidade ?? false,
+            apoioSac: equipe.apoioSac ?? false,
             emailEquipe: equipe.emailEquipe || '',
             ordem: equipe.ordem,
             departamentoId: equipe.departamentoId ?? '',
@@ -283,6 +286,25 @@ export function EquipeFormPage() {
                 chamados dela na listagem — nem o SUPORTE do departamento (não
                 membro) os vê. O <b>gestor do workspace</b> e o solicitante/
                 técnico/colaborador do chamado seguem vendo normalmente.
+              </span>
+            </label>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              id="apoioSac"
+              checked={form.apoioSac}
+              onChange={(e) => handleChange('apoioSac', e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded border-slate-300 text-capul-600 focus:ring-capul-600"
+            />
+            <label htmlFor="apoioSac" className="text-sm text-slate-700">
+              Equipe de apoio ao SAC (catálogo de apoiadores)
+              <span className="block text-xs text-slate-500">
+                Quando marcada, os <b>membros</b> desta equipe ficam disponíveis
+                para serem incluídos <b>em cópia</b> nos chamados do SAC (apoio de
+                outros setores). Esta equipe é só catálogo — <b>não recebe
+                chamados</b> (não pode ser destino de abertura/transferência).
               </span>
             </label>
           </div>

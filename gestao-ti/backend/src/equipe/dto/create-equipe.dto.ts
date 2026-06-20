@@ -46,6 +46,13 @@ export class CreateEquipeDto {
   @IsBoolean()
   restritaVisibilidade?: boolean;
 
+  // SAC (Fase 1) — equipe-catálogo de apoiadores (roster). true => os membros
+  // são os elegíveis a serem puxados "em cópia" num SAC; a equipe NÃO recebe
+  // chamados (guard "roster não roteável"). Default false.
+  @IsOptional()
+  @IsBoolean()
+  apoioSac?: boolean;
+
   @IsOptional()
   @IsString()
   @MaxLength(255)

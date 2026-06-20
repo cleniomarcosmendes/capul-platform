@@ -54,6 +54,8 @@ export interface Equipe {
   privada: boolean;
   // Visibilidade na listagem: true => só membros veem os chamados da equipe.
   restritaVisibilidade?: boolean;
+  // SAC (Fase 1): equipe-catálogo de apoiadores (roster) — não recebe chamados.
+  apoioSac?: boolean;
   emailEquipe: string | null;
   ordem: number;
   status: 'ATIVO' | 'INATIVO';
