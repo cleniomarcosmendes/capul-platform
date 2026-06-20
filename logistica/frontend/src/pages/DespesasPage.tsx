@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowDown, ArrowUp, ArrowUpDown, Banknote, Check, Loader2, Paperclip, Pencil, Plus, Tag, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Banknote, Check, Loader2, Paperclip, Pencil, Plus, Printer, Tag, Trash2, X } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
@@ -69,6 +69,8 @@ export function DespesasPage() {
 }
 
 // ---- Aba Despesas ----
+type SortCol = 'data' | 'veiculo' | 'tipo' | 'valor' | 'fornecedor' | 'autor' | 'situacao';
+
 function DespesasTab() {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -79,6 +81,8 @@ function DespesasTab() {
   const [ano, setAno] = useState(hoje.getFullYear());
   const [situacao, setSituacao] = useState('');
   const [veiculoFiltro, setVeiculoFiltro] = useState('');
+  const [sortCol, setSortCol] = useState<SortCol>('data');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const carregar = async () => {
     setLoading(true);
@@ -100,6 +104,52 @@ function DespesasTab() {
   };
   useEffect(() => { void carregar(); /* eslint-disable-next-line */ }, [mes, ano, situacao, veiculoFiltro]);
 
+  const toggleSort = (col: SortCol) => {
+    if (col === sortCol) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortCol(col); setSortDir(col === 'data' || col === 'valor' ? 'desc' : 'asc'); }
+  };
+  const ordenadas = useMemo(() => {
+    const val = (d: Despesa): string | number => {
+      switch (sortCol) {
+        case 'data': return new Date(d.dataDespesa).getTime();
+        case 'veiculo': return d.placa ?? '';
+        case 'tipo': return d.tipo ?? '';
+        case 'valor': return d.valor ?? 0;
+        case 'fornecedor': return d.fornecedor ?? '';
+        case 'autor': return d.autorNome ?? '';
+        case 'situacao': return d.situacao ?? '';
+      }
+    };
+    const arr = [...despesas].sort((a, b) => {
+      const va = val(a), vb = val(b);
+      const cmp = typeof va === 'number' && typeof vb === 'number'
+        ? va - vb
+        : String(va).localeCompare(String(vb), 'pt-BR');
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return arr;
+  }, [despesas, sortCol, sortDir]);
+
+  const totalPeriodo = useMemo(() => despesas.reduce((s, d) => s + Number(d.valor || 0), 0), [despesas]);
+
+  const periodoLabel = mes
+    ? `${new Date(2000, mes - 1, 1).toLocaleString('pt-BR', { month: 'long' })} / ${ano}`
+    : 'Todos os meses';
+  const imprimir = () => {
+    const filtros: string[] = [`Período: ${periodoLabel}`];
+    if (veiculoFiltro) filtros.push(`Veículo: ${veiculos.find((v) => v.id === veiculoFiltro)?.placa ?? '—'}`);
+    if (situacao) filtros.push(`Situação: ${SIT_META[situacao]?.label ?? situacao}`);
+    abrirRelatorioDespesas(ordenadas, filtros, totalPeriodo);
+  };
+
+  const Th = ({ col, children, right }: { col: SortCol; children: React.ReactNode; right?: boolean }) => (
+    <th className={`px-4 py-2 ${right ? 'text-right' : ''}`}>
+      <button onClick={() => toggleSort(col)} className={`flex items-center gap-1 hover:text-slate-700 ${right ? 'ml-auto' : ''}`}>
+        {children} <SortIcon active={sortCol === col} dir={sortDir} />
+      </button>
+    </th>
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -119,7 +169,11 @@ function DespesasTab() {
           <option value="">Todos veículos</option>
           {veiculos.map((v) => <option key={v.id} value={v.id}>{v.placa}</option>)}
         </select>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <button onClick={imprimir} disabled={despesas.length === 0}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+            <Printer className="h-4 w-4" /> Imprimir
+          </button>
           <button onClick={() => navigate('/despesas/nova')} className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700">
             <Plus className="h-4 w-4" /> Lançar despesa
           </button>
@@ -135,26 +189,97 @@ function DespesasTab() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
-                <th className="px-4 py-2">Data</th>
-                <th className="px-4 py-2">Veículo</th>
-                <th className="px-4 py-2">Tipo</th>
-                <th className="px-4 py-2 text-right">Valor</th>
-                <th className="px-4 py-2">Fornecedor</th>
-                <th className="px-4 py-2">Autor</th>
-                <th className="px-4 py-2">Situação</th>
+                <Th col="data">Data</Th>
+                <Th col="veiculo">Veículo</Th>
+                <Th col="tipo">Tipo</Th>
+                <Th col="valor" right>Valor</Th>
+                <Th col="fornecedor">Fornecedor</Th>
+                <Th col="autor">Autor</Th>
+                <Th col="situacao">Situação</Th>
                 <th className="px-4 py-2"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {despesas.map((d) => (
+              {ordenadas.map((d) => (
                 <LinhaDespesa key={d.id} d={d} onChanged={carregar} />
               ))}
             </tbody>
+            <tfoot>
+              <tr className="border-t border-slate-200 bg-slate-50 font-semibold text-slate-700">
+                <td className="px-4 py-2" colSpan={3}>Total ({despesas.length} despesa{despesas.length === 1 ? '' : 's'})</td>
+                <td className="px-4 py-2 text-right tabular-nums">{BRL(totalPeriodo)}</td>
+                <td className="px-4 py-2" colSpan={4}></td>
+              </tr>
+            </tfoot>
           </table>
         )}
       </div>
     </div>
   );
+}
+
+// Relatório de despesas para impressão — abre nova janela com HTML inline (React 19
+// não aplica <style> dinâmico; gerar o documento bruto evita o problema). Respeita os
+// filtros atuais do grid e a ordenação corrente. Inclui subtotal por tipo de despesa.
+function abrirRelatorioDespesas(despesas: Despesa[], filtros: string[], total: number) {
+  const esc = (s: unknown) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
+  const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  // Subtotais por tipo (desc por valor).
+  const porTipo = new Map<string, number>();
+  for (const d of despesas) porTipo.set(d.tipo, (porTipo.get(d.tipo) ?? 0) + Number(d.valor || 0));
+  const subtotais = [...porTipo.entries()].sort((a, b) => b[1] - a[1]);
+  const linhas = despesas.map((d) => `
+    <tr>
+      <td>${esc(fmtDate(d.dataDespesa))}</td>
+      <td>${esc(d.placa)}${d.modelo ? ` · ${esc(d.modelo)}` : ''}</td>
+      <td>${esc(d.tipo)}</td>
+      <td class="r num">${esc(brl(Number(d.valor || 0)))}</td>
+      <td>${esc(d.fornecedor ?? '—')}</td>
+      <td>${esc(d.autorNome ?? '—')}</td>
+      <td>${esc(SIT_META[d.situacao]?.label ?? d.situacao)}</td>
+    </tr>`).join('');
+  const subRows = subtotais.map(([t, v]) => `<tr><td>${esc(t)}</td><td class="r num">${esc(brl(v))}</td></tr>`).join('');
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório de Despesas — Frota</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,sans-serif;color:#0f172a;margin:24px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  h1{font-size:20px;font-weight:800;margin:0 0 2px}
+  .sub{color:#475569;font-size:12px;margin:0 0 14px}
+  .filtros{font-size:12px;color:#334155;margin:0 0 14px}
+  .filtros span{display:inline-block;background:#f1f5f9;border-radius:6px;padding:2px 8px;margin-right:6px}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:18px}
+  th{background:#0f172a;color:#fff;text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+  td{padding:5px 8px;border-bottom:1px solid #e2e8f0}
+  .r{text-align:right}
+  .num{font-variant-numeric:tabular-nums}
+  tfoot td{font-weight:800;border-top:2px solid #0f172a;background:#f8fafc}
+  .grid2{display:flex;gap:24px;align-items:flex-start}
+  .box{flex:0 0 auto;min-width:280px}
+  .box h2{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#475569;margin:0 0 6px}
+  @media print{@page{size:A4 landscape;margin:10mm}.noprint{display:none}}
+</style></head><body>
+  <h1>Relatório de Despesas — Frota</h1>
+  <p class="sub">CAPUL · Logística · gerado em ${new Date().toLocaleString('pt-BR')}</p>
+  <div class="filtros">${filtros.map((f) => `<span>${esc(f)}</span>`).join('')}</div>
+  <table>
+    <thead><tr><th>Data</th><th>Veículo</th><th>Tipo</th><th class="r">Valor</th><th>Fornecedor</th><th>Autor</th><th>Situação</th></tr></thead>
+    <tbody>${linhas}</tbody>
+    <tfoot><tr><td colspan="3">Total — ${despesas.length} despesa(s)</td><td class="r num">${esc(brl(total))}</td><td colspan="3"></td></tr></tfoot>
+  </table>
+  <div class="grid2">
+    <div class="box">
+      <h2>Subtotais por tipo de despesa</h2>
+      <table><tbody>${subRows}</tbody>
+      <tfoot><tr><td>Total</td><td class="r num">${esc(brl(total))}</td></tr></tfoot></table>
+    </div>
+  </div>
+  <script>window.onload=function(){window.print()}</script>
+</body></html>`;
+  const w = window.open('', '_blank', 'noopener,width=1000,height=700');
+  if (!w) return;
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
 }
 
 function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
