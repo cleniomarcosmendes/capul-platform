@@ -141,7 +141,6 @@ export function ChamadoDetalhePage() {
   const [showAddCopia, setShowAddCopia] = useState(false);
   const [usuariosNaoTI, setUsuariosNaoTI] = useState<UsuarioCore[]>([]);
   const [copiaBusca, setCopiaBusca] = useState('');
-  const [copiaIdsParaAdicionar, setCopiaIdsParaAdicionar] = useState<string[]>([]);
   const [copiaSalvando, setCopiaSalvando] = useState(false);
 
   // Agrupamento (decidido em 13/05/2026)
@@ -1199,7 +1198,7 @@ export function ChamadoDetalhePage() {
                       <Users className="w-4 h-4" /> Em cópia ({copias.length})
                     </h4>
                     {podeAdicionarCopia && (
-                      <button onClick={() => { setShowAddCopia(!showAddCopia); setCopiaIdsParaAdicionar([]); setCopiaBusca(''); }}
+                      <button onClick={() => { setShowAddCopia(!showAddCopia); setCopiaBusca(''); }}
                         className="text-sm text-capul-600 hover:underline font-medium">
                         {showAddCopia ? 'Cancelar' : '+ Adicionar'}
                       </button>
@@ -1209,25 +1208,8 @@ export function ChamadoDetalhePage() {
                   {showAddCopia && (
                     <div className="mb-4 space-y-2">
                       <p className="text-xs text-slate-500">
-                        Adicionados recebem notificações e podem comentar.
+                        Clique no usuário para adicioná-lo em cópia — entra na hora. Recebem notificações e podem comentar.
                       </p>
-                      {copiaIdsParaAdicionar.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {copiaIdsParaAdicionar.map((cid) => {
-                            const u = usuariosNaoTI.find((x) => x.id === cid);
-                            if (!u) return null;
-                            return (
-                              <span key={cid} className="inline-flex items-center gap-1 bg-capul-100 text-capul-700 text-xs px-2 py-1 rounded-full">
-                                {u.nome}
-                                <button type="button" onClick={() => setCopiaIdsParaAdicionar(copiaIdsParaAdicionar.filter((i) => i !== cid))}
-                                  className="ml-1 text-capul-500 hover:text-capul-700">
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
                       <input
                         type="text"
                         value={copiaBusca}
@@ -1238,7 +1220,7 @@ export function ChamadoDetalhePage() {
                       <div className="border border-slate-200 rounded-lg max-h-48 overflow-y-auto">
                         {(() => {
                           const termo = copiaBusca.trim().toLowerCase();
-                          const idsJa = new Set([...copias.map((c) => c.usuarioId), ...copiaIdsParaAdicionar]);
+                          const idsJa = new Set(copias.map((c) => c.usuarioId));
                           const disponiveis = usuariosNaoTI
                             .filter((u) => !idsJa.has(u.id))
                             .filter((u) => !termo || u.nome.toLowerCase().includes(termo) || u.username.toLowerCase().includes(termo))
@@ -1248,41 +1230,33 @@ export function ChamadoDetalhePage() {
                             <button
                               key={u.id}
                               type="button"
-                              onClick={() => { setCopiaIdsParaAdicionar([...copiaIdsParaAdicionar, u.id]); setCopiaBusca(''); }}
-                              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between border-b border-slate-100 last:border-b-0"
+                              disabled={copiaSalvando}
+                              onClick={async () => {
+                                // Adiciona em cópia NA HORA (sem etapa de "chip" + botão separado).
+                                setCopiaSalvando(true);
+                                try {
+                                  const res = await chamadoService.adicionarCopias(chamado.id, [u.id]);
+                                  setCopias(await chamadoService.listarCopias(chamado.id));
+                                  setCopiaBusca('');
+                                  if (res.erros.length > 0) {
+                                    toast('error', res.erros[0]?.motivo || 'Não foi possível adicionar em cópia');
+                                  } else {
+                                    toast('success', `${u.nome} adicionado em cópia`);
+                                  }
+                                } catch (err: unknown) {
+                                  const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+                                  toast('error', msg || 'Erro ao adicionar em cópia');
+                                } finally {
+                                  setCopiaSalvando(false);
+                                }
+                              }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between border-b border-slate-100 last:border-b-0 disabled:opacity-50"
                             >
                               <span className="text-slate-700">{u.nome}</span>
                               <span className="text-xs text-slate-400">{u.username}</span>
                             </button>
                           ));
                         })()}
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          disabled={copiaIdsParaAdicionar.length === 0 || copiaSalvando}
-                          onClick={async () => {
-                            setCopiaSalvando(true);
-                            try {
-                              const res = await chamadoService.adicionarCopias(chamado.id, copiaIdsParaAdicionar);
-                              const novas = await chamadoService.listarCopias(chamado.id);
-                              setCopias(novas);
-                              setShowAddCopia(false);
-                              setCopiaIdsParaAdicionar([]);
-                              if (res.erros.length > 0) {
-                                toast('error', `${res.erros.length} usuario(s) nao foram adicionados (T.I.?)`);
-                              } else {
-                                toast('success', `${res.adicionados.length} usuario(s) adicionado(s) em copia`);
-                              }
-                            } catch (err: unknown) {
-                              const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-                              toast('error', msg || 'Erro ao adicionar copias');
-                            }
-                            setCopiaSalvando(false);
-                          }}
-                          className="bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50"
-                        >
-                          {copiaSalvando ? 'Adicionando...' : `Adicionar ${copiaIdsParaAdicionar.length > 0 ? `(${copiaIdsParaAdicionar.length})` : ''}`}
-                        </button>
                       </div>
                     </div>
                   )}
