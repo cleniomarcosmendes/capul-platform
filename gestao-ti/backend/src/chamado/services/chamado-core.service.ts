@@ -661,6 +661,12 @@ export class ChamadoCoreService {
     });
     if (!equipe) throw new BadRequestException('Equipe nao encontrada');
 
+    // SAC (Fase 1) — guard "roster não roteável": equipe de apoio SAC é só
+    // catálogo de apoiadores (puxados em cópia), nunca recebe chamado.
+    if (equipe.apoioSac) {
+      throw new BadRequestException('Equipe de apoio SAC é catálogo de apoiadores — não recebe chamados. Selecione a equipe operadora.');
+    }
+
     // Equipe PRIVADA: só staff (ADMIN/GESTOR/SUPORTE) do PRÓPRIO departamento
     // — ou quem tem OVERSIGHT_PLATAFORMA — pode abrir chamado direto. Usuário
     // final/chave/terceirizado e staff de outros deptos passam pela equipe de
@@ -900,6 +906,27 @@ export class ChamadoCoreService {
     });
   }
 
+  /**
+   * SAC (Fase 1) — apoiadores elegíveis: membros ATIVOS de qualquer equipe
+   * `apoioSac` (o "roster"/catálogo). É a fonte do seletor de "em cópia" do SAC.
+   * Dedup por usuário (alguém pode estar em mais de uma equipe de apoio).
+   */
+  async listarApoiadoresSac() {
+    const membros = await this.prisma.membroEquipe.findMany({
+      where: { status: 'ATIVO', equipe: { is: { apoioSac: true, status: 'ATIVO' } } },
+      select: { usuario: { select: { id: true, nome: true, username: true, email: true } } },
+      orderBy: { usuario: { nome: 'asc' } },
+    });
+    const vistos = new Set<string>();
+    const apoiadores: { id: string; nome: string; username: string; email: string | null }[] = [];
+    for (const m of membros) {
+      if (!m.usuario || vistos.has(m.usuario.id)) continue;
+      vistos.add(m.usuario.id);
+      apoiadores.push(m.usuario);
+    }
+    return apoiadores;
+  }
+
   private prefixoAutor(user: JwtPayload): string {
     const nome = (user as { nome?: string }).nome || (user as { username?: string }).username;
     return nome ? `${nome} ` : '';
@@ -990,6 +1017,12 @@ export class ChamadoCoreService {
       where: { id: dto.equipeDestinoId },
     });
     if (!equipeDestino) throw new BadRequestException('Equipe destino nao encontrada');
+
+    // SAC (Fase 1) — guard "roster não roteável": não transferir chamado para
+    // uma equipe de apoio SAC (catálogo de apoiadores, nunca recebe chamado).
+    if (equipeDestino.apoioSac) {
+      throw new BadRequestException('Equipe de apoio SAC é catálogo de apoiadores — não recebe chamados.');
+    }
 
     // Se indicou tecnico destino, validar que pertence a equipe destino
     if (dto.tecnicoDestinoId) {

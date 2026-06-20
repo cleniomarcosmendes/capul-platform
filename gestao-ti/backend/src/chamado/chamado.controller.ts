@@ -358,6 +358,14 @@ export class ChamadoController {
     return this.service.listarCopias(id);
   }
 
+  // SAC (Fase 1) — apoiadores elegíveis (membros das equipes de apoio SAC):
+  // fonte do seletor de "em cópia" do SAC. Rota literal de 2 segmentos (não
+  // colide com :id). Sem @Roles próprio — herda o guard do controller.
+  @Get('sac/apoiadores')
+  listarApoiadoresSac() {
+    return this.service.listarApoiadoresSac();
+  }
+
   // === Agrupamento (decidido em 13/05/2026) ===
   // Apenas TI agrupa/desagrupa. Validacao detalhada no service.
 

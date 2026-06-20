@@ -134,6 +134,12 @@ describe('ChamadoService', () => {
       expect(createCall.data.dataLimiteSla).toBeInstanceOf(Date);
     });
 
+    it('bloqueia abrir chamado para equipe de apoio SAC (roster não roteável) — Fase 1', async () => {
+      prisma.equipe.findUnique.mockResolvedValue({ id: 'eq-roster', privada: false, departamentoId: 'dep-sac', apoioSac: true });
+      const dto = { titulo: 'T', descricao: 'D', equipeAtualId: 'eq-roster' };
+      await expect(service.create(dto as any, mockUser as any, 'SUPORTE')).rejects.toThrow(BadRequestException);
+    });
+
     it('lanca ForbiddenException ao abrir p/ equipe PRIVADA sem ser staff do depto', async () => {
       // mockUser nao tem modulos WORKSPACE => getDeptosOndeStaff = [] e
       // hasCapability(OVERSIGHT) = false => bloqueado para equipe privada,
@@ -244,6 +250,14 @@ describe('ChamadoService', () => {
         }),
       );
       expect(result.equipeAtualId).toBe('eq-2');
+    });
+
+    it('bloqueia transferir para equipe de apoio SAC (roster não roteável) — Fase 1', async () => {
+      prisma.chamado.findUnique.mockResolvedValue(baseChamado({ status: 'EM_ATENDIMENTO' }));
+      prisma.equipe.findUnique.mockResolvedValue({ id: 'eq-roster', apoioSac: true });
+      await expect(
+        service.transferirEquipe('ch-1', { equipeDestinoId: 'eq-roster' } as any, mockUser as any, 'ADMIN'),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

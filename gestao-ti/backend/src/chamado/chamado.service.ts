@@ -128,6 +128,11 @@ export class ChamadoService {
     return this.core.listarCopias(chamadoId);
   }
 
+  // SAC (Fase 1) — apoiadores elegíveis (membros das equipes de apoio SAC).
+  async listarApoiadoresSac() {
+    return this.core.listarApoiadoresSac();
+  }
+
   async adicionarCopias(chamadoId: string, usuariosIds: string[], user: JwtPayload, role: string) {
     return this.core.adicionarCopiasComCheck(chamadoId, usuariosIds, user, role);
   }

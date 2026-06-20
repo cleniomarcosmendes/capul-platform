@@ -187,6 +187,11 @@ model Equipe {
   // Solicitante/técnico/colaborador do chamado e ADMIN seguem vendo (carve-out
   // aplicado SÓ na cláusula de visibilidade por departamento).
   restritaVisibilidade Boolean     @default(false) @map("restrita_visibilidade")
+  // SAC (Fase 1) — equipe-CATÁLOGO de apoiadores: seus membros são os elegíveis
+  // a serem puxados "em cópia" num SAC. NÃO é fila: equipe apoioSac NUNCA pode
+  // ser equipeAtual de um chamado (guard "roster não roteável") — por isso ser
+  // membro dela não dá visibilidade de fila (a cláusula equipeAtualId nunca casa).
+  apoioSac             Boolean     @default(false) @map("apoio_sac")
   emailEquipe          String?     @map("email_equipe")
   ordem                Int         @default(0)
   status               StatusGeral @default(ATIVO)
