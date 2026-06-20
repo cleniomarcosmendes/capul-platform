@@ -58,8 +58,11 @@ export class ChamadoHelpersService {
    * service revalida para defender contra request manipulado.
    */
   async assertNaoSeTI(usuarioId: string) {
+    // "É T.I." = membro ativo de uma equipe REAL (que recebe chamados). Equipe de
+    // apoio SAC (`apoioSac`) é só catálogo de apoiadores não-TI — ser membro dela
+    // NÃO torna o usuário T.I. (senão nenhum apoiador do SAC poderia ir em cópia).
     const membroAtivo = await this.prisma.membroEquipe.findFirst({
-      where: { usuarioId, status: 'ATIVO' },
+      where: { usuarioId, status: 'ATIVO', equipe: { is: { apoioSac: false } } },
       select: { id: true },
     });
     if (membroAtivo) {

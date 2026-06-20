@@ -914,13 +914,23 @@ export class ChamadoCoreService {
   async listarApoiadoresSac() {
     const membros = await this.prisma.membroEquipe.findMany({
       where: { status: 'ATIVO', equipe: { is: { apoioSac: true, status: 'ATIVO' } } },
-      select: { usuario: { select: { id: true, nome: true, username: true, email: true } } },
+      select: { usuarioId: true, usuario: { select: { id: true, nome: true, username: true, email: true } } },
       orderBy: { usuario: { nome: 'asc' } },
     });
+    const ids = membros.map((m) => m.usuarioId);
+    // Exclui quem TAMBÉM é membro de equipe real (T.I.): não pode ir em cópia
+    // (assertNaoSeTI) — não faz sentido oferecê-lo no seletor do SAC.
+    const ti = ids.length
+      ? await this.prisma.membroEquipe.findMany({
+          where: { status: 'ATIVO', usuarioId: { in: ids }, equipe: { is: { apoioSac: false } } },
+          select: { usuarioId: true },
+        })
+      : [];
+    const ehTI = new Set(ti.map((m) => m.usuarioId));
     const vistos = new Set<string>();
     const apoiadores: { id: string; nome: string; username: string; email: string | null }[] = [];
     for (const m of membros) {
-      if (!m.usuario || vistos.has(m.usuario.id)) continue;
+      if (!m.usuario || ehTI.has(m.usuario.id) || vistos.has(m.usuario.id)) continue;
       vistos.add(m.usuario.id);
       apoiadores.push(m.usuario);
     }

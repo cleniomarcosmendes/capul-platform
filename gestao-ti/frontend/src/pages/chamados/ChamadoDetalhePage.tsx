@@ -1141,8 +1141,9 @@ export function ChamadoDetalhePage() {
               </div>
             )}
 
-            {/* Colaboradores */}
-            {podeMovimentar && (
+            {/* Colaboradores — T.I.-only (técnicos que atuam na solução). Escondido
+                no SAC: ali o apoio é via "Em cópia" (roster), não colaborador T.I. */}
+            {podeMovimentar && !ehSac && (
               <div className="bg-white rounded-xl border border-slate-200 p-5">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
