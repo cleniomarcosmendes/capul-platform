@@ -2,7 +2,7 @@ import {
   IsArray, IsBoolean, IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString,
   MaxLength, Min, ValidateNested,
 } from 'class-validator';
-import { Transform, Type } from 'class-transformer';
+import { plainToInstance, Transform, Type } from 'class-transformer';
 
 // ---- Tipos de despesa (cadastro, gestor de frota) ----
 export class CriarTipoDespesaDto {
@@ -192,8 +192,13 @@ export class RatearDespesaDto {
   @IsOptional() @IsString() @MaxLength(255)
   observacao?: string;
 
-  // Em multipart (com recibo) chega como string JSON — converte antes de validar.
-  @Transform(({ value }) => (typeof value === 'string' ? JSON.parse(value) : value))
+  // No multipart (com recibo) chega como string JSON. Além de parsear, precisa
+  // virar instância de RateioItemDto — senão o @Transform "atropela" o @Type e o
+  // @ValidateNested não reconhece as props (whitelist rejeita tudo).
+  @Transform(({ value }) => {
+    const arr = typeof value === 'string' ? JSON.parse(value) : value;
+    return Array.isArray(arr) ? plainToInstance(RateioItemDto, arr) : arr;
+  })
   @IsArray() @ValidateNested({ each: true }) @Type(() => RateioItemDto)
   itens!: RateioItemDto[];
 }
