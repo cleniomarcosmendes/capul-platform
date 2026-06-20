@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, MapPin, Package, RefreshCw, Tag, TrendingUp, Users, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { ChevronLeft, ChevronRight, Filter, Loader2, MapPin, Package, RefreshCw, Tag, TrendingUp, Users, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/Toast';
 
@@ -26,6 +26,10 @@ const errMsg = (e: unknown, fb: string) => {
   return Array.isArray(m) ? m.join(', ') : (typeof m === 'string' ? m : fb);
 };
 
+const ORIGENS: [string, string][] = [['PRESENCIAL', 'Presencial'], ['TELE_VENDA', 'Tele-venda'], ['OUTRO', 'Outro'], ['NAO_INFORMADO', 'Não informado']];
+const STATUSES: [string, string][] = [['PENDENTE', 'Pendente'], ['EM_VIAGEM', 'Em viagem'], ['ENTREGUE', 'Entregue'], ['NAO_ENTREGUE', 'Não entregue']];
+const selCls = 'rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 focus:border-sky-500 focus:outline-none';
+
 export function EntregaAnalisePage() {
   const { toast } = useToast();
   const agora = new Date();
@@ -37,24 +41,49 @@ export function EntregaAnalisePage() {
   const [rows, setRows] = useState<Doc[] | null>(null);
   const [rowsLoading, setRowsLoading] = useState(false);
 
+  // Filtros (estreitam o conjunto; total e cards reconciliam com o recorte).
+  const [fOrigem, setFOrigem] = useState('');
+  const [fStatus, setFStatus] = useState('');
+  const [fMotorista, setFMotorista] = useState('');
+  const [fBairro, setFBairro] = useState('');
+  // Opções de motorista/bairro vêm do mês SEM filtro (para não encolherem ao filtrar).
+  const [opcoes, setOpcoes] = useState<{ motoristas: Grupo[]; bairros: Grupo[] }>({ motoristas: [], bairros: [] });
+
+  const filtros = useMemo(() => ({
+    origem: fOrigem || undefined,
+    status: fStatus || undefined,
+    motoristaId: fMotorista || undefined,
+    bairro: fBairro || undefined,
+  }), [fOrigem, fStatus, fMotorista, fBairro]);
+  const qtdFiltros = Object.values(filtros).filter(Boolean).length;
+  const limparFiltros = () => { setFOrigem(''); setFStatus(''); setFMotorista(''); setFBairro(''); };
+
   const noMesAtual = ano === agora.getFullYear() && mes === agora.getMonth() + 1;
   const passoMes = (delta: number) => { const d = new Date(ano, mes - 1 + delta, 1); setMes(d.getMonth() + 1); setAno(d.getFullYear()); };
+
+  // Opções estáveis (motorista/bairro do mês inteiro), independentes dos filtros.
+  useEffect(() => {
+    logisticaApi.get<Analitico>('/painel/indicadores/analitico', { params: { mes, ano } })
+      .then((r) => setOpcoes({ motoristas: r.data.porMotorista, bairros: r.data.porBairro }))
+      .catch(() => { /* opções são conveniência */ });
+  }, [mes, ano]);
 
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await logisticaApi.get<Analitico>('/painel/indicadores/analitico', { params: { mes, ano } });
+      const { data } = await logisticaApi.get<Analitico>('/painel/indicadores/analitico', { params: { mes, ano, ...filtros } });
       setData(data);
     } catch (e) {
       toast('error', errMsg(e, 'Falha ao carregar a análise.'));
     } finally { setLoading(false); }
-  }, [mes, ano, toast]);
+  }, [mes, ano, filtros, toast]);
   useEffect(() => { void carregar(); }, [carregar]);
+  useEffect(() => { setDrill(null); }, [filtros]); // filtro mudou → fecha drill defasado
 
   function abrirDrill(dimensao: string, titulo: string, grupo: Grupo) {
     setDrill({ dimensao, titulo, grupo });
     setRows(null); setRowsLoading(true);
-    logisticaApi.get<Doc[]>('/painel/indicadores/documentos', { params: { mes, ano, dimensao, chave: grupo.id } })
+    logisticaApi.get<Doc[]>('/painel/indicadores/documentos', { params: { mes, ano, dimensao, chave: grupo.id, ...filtros } })
       .then((r) => setRows(r.data)).catch(() => setRows([])).finally(() => setRowsLoading(false));
   }
 
@@ -78,10 +107,38 @@ export function EntregaAnalisePage() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3">
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"><Filter className="h-3.5 w-3.5" /> Filtros</span>
+        <select value={fOrigem} onChange={(e) => setFOrigem(e.target.value)} className={selCls}>
+          <option value="">Todas as origens</option>
+          {ORIGENS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+        <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className={selCls}>
+          <option value="">Todos os status</option>
+          {STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+        <select value={fMotorista} onChange={(e) => setFMotorista(e.target.value)} className={selCls}>
+          <option value="">Todos os motoristas</option>
+          {opcoes.motoristas.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+        </select>
+        <select value={fBairro} onChange={(e) => setFBairro(e.target.value)} className={selCls}>
+          <option value="">Todos os bairros</option>
+          {opcoes.bairros.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+        </select>
+        {qtdFiltros > 0 && (
+          <button onClick={limparFiltros} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
+            <X className="h-3.5 w-3.5" /> Limpar ({qtdFiltros})
+          </button>
+        )}
+      </div>
+
       {loading ? (
         <div className="flex items-center justify-center gap-2 py-20 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
       ) : vazio ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-400">Sem entregas em {MESES[mes - 1]} / {ano}.</div>
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-400">
+          Sem entregas em {MESES[mes - 1]} / {ano}{qtdFiltros > 0 ? ' para os filtros aplicados' : ''}.
+          {qtdFiltros > 0 && <button onClick={limparFiltros} className="ml-1 text-sky-600 hover:underline">Limpar filtros</button>}
+        </div>
       ) : data && (
         <div className="space-y-5">
           <div className="rounded-2xl border border-sky-200 bg-sky-50 p-5">

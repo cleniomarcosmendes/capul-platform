@@ -9,6 +9,15 @@ import { CoreLookupService } from '../core/core-lookup.service.js';
  * motorista (da montagem). Tudo read-only (count/groupBy + um $queryRaw pro
  * recorte por dia, que o groupBy não cobre). Filtro opcional por filial.
  */
+
+/** Filtros opcionais da Análise de Entregas (estreitam o conjunto; total reconcilia). */
+export interface FiltroEntrega {
+  origem?: string;       // origemVenda (ou 'NAO_INFORMADO')
+  status?: string;
+  motoristaId?: string;  // chave da dimensão 'motorista'
+  bairro?: string;       // bairroKey normalizado
+}
+
 @Injectable()
 export class PainelService {
   constructor(
@@ -364,7 +373,7 @@ export class PainelService {
     return s.trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   }
 
-  private async entregasDoMes(filialId: string | undefined, mes: number, ano: number) {
+  private async entregasDoMes(filialId: string | undefined, mes: number, ano: number, filtro?: FiltroEntrega) {
     const ini = new Date(Date.UTC(ano, mes - 1, 1));
     const fim = new Date(Date.UTC(ano, mes, 1));
     const entregas = await this.prisma.entrega.findMany({
@@ -377,12 +386,20 @@ export class PainelService {
       },
       orderBy: { criadoEm: 'desc' },
     });
-    return entregas.map((e) => ({
+    const mapped = entregas.map((e) => ({
       ...e,
       valor: e.cupons.reduce((s, c) => s + Number(c.valor), 0),
       motoristaId: e.parada?.viagem?.motoristaId ?? null,
       bairroKey: e.endBairro ? this.deaccentUpper(`${e.endBairro}|${e.endCidade ?? ''}`) : '__sem',
     }));
+    if (!filtro) return mapped;
+    // Filtra em memória pelas mesmas chaves de dimensão (motorista vem de relação
+    // e bairro é chave normalizada — mais simples e consistente que no banco).
+    return mapped.filter((e) =>
+      (!filtro.origem || this.chaveEntrega(e, 'origem') === filtro.origem)
+      && (!filtro.status || e.status === filtro.status)
+      && (!filtro.motoristaId || this.chaveEntrega(e, 'motorista') === filtro.motoristaId)
+      && (!filtro.bairro || e.bairroKey === filtro.bairro));
   }
 
   private chaveEntrega(e: { origemVenda: string | null; status: string; motoristaId: string | null; bairroKey: string }, dim: string): string {
@@ -395,8 +412,8 @@ export class PainelService {
     }
   }
 
-  async analiseEntregas(filialId: string | undefined, mes: number, ano: number) {
-    const entregas = await this.entregasDoMes(filialId, mes, ano);
+  async analiseEntregas(filialId: string | undefined, mes: number, ano: number, filtro?: FiltroEntrega) {
+    const entregas = await this.entregasDoMes(filialId, mes, ano, filtro);
     const totalEntregas = entregas.length;
     const valorTotal = entregas.reduce((s, e) => s + e.valor, 0);
 
@@ -423,8 +440,8 @@ export class PainelService {
     };
   }
 
-  async analiseEntregasDocumentos(filialId: string | undefined, mes: number, ano: number, dimensao: string, chave: string) {
-    const entregas = await this.entregasDoMes(filialId, mes, ano);
+  async analiseEntregasDocumentos(filialId: string | undefined, mes: number, ano: number, dimensao: string, chave: string, filtro?: FiltroEntrega) {
+    const entregas = await this.entregasDoMes(filialId, mes, ano, filtro);
     return entregas
       .filter((e) => this.chaveEntrega(e, dimensao) === chave)
       .map((e) => ({
