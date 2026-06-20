@@ -114,6 +114,10 @@ export class ChamadoService {
     return this.colaboradores.listarColaboradores(chamadoId);
   }
 
+  async listarColaboradoresElegiveis(chamadoId: string) {
+    return this.colaboradores.listarColaboradoresElegiveis(chamadoId);
+  }
+
   async adicionarColaborador(chamadoId: string, usuarioId: string, user: JwtPayload, role: string) {
     return this.colaboradores.adicionarColaborador(chamadoId, usuarioId, user, role);
   }

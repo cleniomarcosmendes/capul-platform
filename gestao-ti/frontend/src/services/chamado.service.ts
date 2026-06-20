@@ -241,6 +241,12 @@ export const chamadoService = {
     return data;
   },
 
+  // Elegíveis a colaborador = membros de equipes do workspace (depto) do chamado.
+  async listarColaboradoresElegiveis(id: string): Promise<{ id: string; nome: string; username: string }[]> {
+    const { data } = await gestaoApi.get(`/chamados/${id}/colaboradores-elegiveis`);
+    return data;
+  },
+
   async adicionarColaborador(id: string, usuarioId: string): Promise<ChamadoColaborador> {
     const { data } = await gestaoApi.post(`/chamados/${id}/colaboradores`, { usuarioId });
     return data;

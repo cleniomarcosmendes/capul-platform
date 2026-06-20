@@ -1118,15 +1118,11 @@ export function ChamadoDetalhePage() {
                     <button onClick={() => {
                       setShowAddColab(!showAddColab);
                       if (!showAddColab && usuariosDisponiveis.length === 0) {
-                        // Filtra apenas staff de TI — colaboradores de chamado devem ser
-                        // técnicos atuando, não usuários finais (mesma lógica de OS).
-                        coreService.listarUsuarios().then((users) => {
-                          const rolesStaff = ['ADMIN', 'GESTOR', 'SUPORTE'];
-                          const staff = users.filter((u: any) =>
-                            u.permissoes?.some((p: any) => isWorkspaceModulo(p.modulo?.codigo) && rolesStaff.includes(p.roleModulo?.codigo))
-                          );
-                          setUsuariosDisponiveis(staff);
-                        }).catch(() => {});
+                        // Colaboradores = membros das equipes do WORKSPACE (departamento)
+                        // do chamado — restrito ao depto-dono (não staff de outros deptos).
+                        chamadoService.listarColaboradoresElegiveis(chamado.id)
+                          .then((u) => setUsuariosDisponiveis(u as unknown as UsuarioCore[]))
+                          .catch(() => {});
                       }
                     }} className="text-sm text-capul-600 hover:underline font-medium">
                       {showAddColab ? 'Cancelar' : '+ Adicionar'}
