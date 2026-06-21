@@ -131,7 +131,7 @@ export function EquipeFormPage() {
     <>
       {ConfirmDialog}
       <Header title={isEdit ? 'Editar Equipe' : 'Nova Equipe'} />
-      <div className="p-6 mx-auto max-w-2xl" onChange={() => setDirty(true)}>
+      <div className="p-6 mx-auto max-w-3xl" onChange={() => setDirty(true)}>
         <button
           onClick={() => guardedNavigate('/gestao-ti/equipes')}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-6"

@@ -170,7 +170,7 @@ export function ParadaFormPage() {
     <>
       {ConfirmDialog}
       <Header title={isEdit ? 'Editar Parada' : 'Nova Parada'} />
-      <div className="p-6 mx-auto max-w-3xl" onChange={() => setDirty(true)}>
+      <div className="p-6 mx-auto max-w-4xl" onChange={() => setDirty(true)}>
         <button
           onClick={() => guardedNavigate(-1)}
           className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 mb-4"

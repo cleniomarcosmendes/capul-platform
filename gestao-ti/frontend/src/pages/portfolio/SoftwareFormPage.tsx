@@ -106,7 +106,7 @@ export function SoftwareFormPage() {
     <>
       {ConfirmDialog}
       <Header title={isEdit ? 'Editar Software' : 'Novo Software'} />
-      <div className="p-6 mx-auto max-w-3xl" onChange={() => setDirty(true)}>
+      <div className="p-6 mx-auto max-w-4xl" onChange={() => setDirty(true)}>
         <button
           onClick={() => guardedNavigate(isEdit ? `/gestao-ti/softwares/${id}` : '/gestao-ti/softwares')}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-6"

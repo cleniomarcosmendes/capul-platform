@@ -215,7 +215,7 @@ export function ProjetoFormPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-slate-200 p-6 max-w-3xl mx-auto shadow-sm">
+        <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-slate-200 p-6 max-w-4xl mx-auto shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Workspace (departamento) — só pra projeto RAIZ. Subprojeto herda do pai.
                 Em edição, depto fica fixo (preserva tracking + evita migrar dados cross-depto). */}

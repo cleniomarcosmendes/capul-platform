@@ -164,7 +164,7 @@ export function HorariosTrabalhoPage() {
   return (
     <>
       <Header title="Horarios de Trabalho" />
-      <main className="p-6 space-y-6 max-w-4xl">
+      <main className="p-6 space-y-6 mx-auto max-w-4xl">
         {msg && (
           <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded-lg text-sm">
             {msg}
