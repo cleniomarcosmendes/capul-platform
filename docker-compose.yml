@@ -400,6 +400,13 @@ services:
       # cliente real. Sem nenhum dos dois: mock (apenas loga).
       SAC_EMAIL_EXTERNO_ENABLED: ${SAC_EMAIL_EXTERNO_ENABLED:-false}
       SAC_EMAIL_DEV_REDIRECT: ${SAC_EMAIL_DEV_REDIRECT:-}
+      # SAC Fase 3 — conexão IMAP de ENTRADA (segredo via ambiente, como SMTP_*).
+      # Caixa dedicada (ex.: sac@capul.com.br). Sem isso, "Testar conexão" avisa.
+      SAC_IMAP_HOST: ${SAC_IMAP_HOST:-}
+      SAC_IMAP_PORT: ${SAC_IMAP_PORT:-993}
+      SAC_IMAP_USER: ${SAC_IMAP_USER:-}
+      SAC_IMAP_PASSWORD: ${SAC_IMAP_PASSWORD:-}
+      SAC_IMAP_TLS: ${SAC_IMAP_TLS:-true}
     # Porta NAO exposta — acesso via Nginx reverse proxy
     volumes:
       - uploads_data:/app/uploads

@@ -267,6 +267,33 @@ enum CanalOrigemSac {
   @@schema("gestao_ti")
 }
 
+// SAC Fase 3 (e-mail de ENTRADA) — config OPERACIONAL do poller IMAP. Singleton
+// (sempre id=1). A CONEXÃO IMAP (host/porta/usuário/senha/TLS) vem do AMBIENTE
+// (vars SAC_IMAP_*, espelhando SMTP_*) — segredo NÃO fica no banco. Aqui só o
+// estado/toggles que o admin gerencia pela tela + a observabilidade (último
+// status). Pra não ser black-box.
+model SacEmailConfig {
+  id                  Int       @id @default(1)
+  // Liga/desliga o consumo automático (poller agendado — efetivo só na 3d).
+  enabled             Boolean   @default(false)
+  // Freio de mão: pausa o ciclo sem perder a config.
+  pauseSync           Boolean   @default(false) @map("pause_sync")
+  // Pasta IMAP a varrer e frequência do poll.
+  mailboxFolder       String    @default("INBOX") @map("mailbox_folder")
+  pollIntervalMinutes Int       @default(5) @map("poll_interval_minutes")
+  // Observabilidade (preenchidos pelo serviço): último ciclo + erro + total.
+  lastPollAt          DateTime? @map("last_poll_at")
+  lastStatus          String?   @map("last_status")
+  lastError           String?   @map("last_error")
+  processadosTotal    Int       @default(0) @map("processados_total")
+  // Auditoria da edição da config.
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  updatedBy           String?   @map("updated_by")
+
+  @@map("sac_email_config")
+  @@schema("gestao_ti")
+}
+
 enum StatusChamado {
   ABERTO
   EM_ATENDIMENTO

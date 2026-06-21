@@ -36,6 +36,7 @@ import {
   PieChart,
   Globe2,
   Flame,
+  Inbox,
   X,
 } from 'lucide-react';
 
@@ -85,6 +86,7 @@ const menuItems: MenuItem[] = [
   { label: 'Ativos', icon: Server, path: '/gestao-ti/ativos', roles: STAFF, funcionalidade: 'ATIVO' },
   { section: 'CONFIGURACOES', roles: MANAGERS },
   { label: 'Conf. Equipes', icon: Users, path: '/gestao-ti/equipes', roles: MANAGERS, funcionalidade: 'EQUIPE' },
+  { label: 'SAC — E-mail de entrada', icon: Inbox, path: '/gestao-ti/sac-email', roles: MANAGERS },
   { label: 'Catalogo de Servicos', icon: BookOpen, path: '/gestao-ti/catalogo', roles: MANAGERS, funcionalidade: 'CATALOGO_SERVICO' },
   { label: 'SLA', icon: Clock, path: '/gestao-ti/sla', roles: MANAGERS, funcionalidade: 'SLA' },
   { label: 'Horarios de Trabalho', icon: Timer, path: '/gestao-ti/horarios-trabalho', roles: MANAGERS, funcionalidade: 'HORARIO_TRABALHO' },
