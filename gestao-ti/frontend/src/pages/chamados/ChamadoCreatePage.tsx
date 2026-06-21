@@ -17,6 +17,16 @@ import { coreService } from '../../services/core.service';
 import { ArrowLeft, FolderKanban, Paperclip, X, CheckCircle, Users2 } from 'lucide-react';
 import PasswordInput from '../../components/PasswordInput';
 import type { Equipe, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento, Ativo, UsuarioCore } from '../../types';
+
+// Máscara de telefone BR (progressiva): (38) 9999-9999 ou (38) 99999-9999.
+function maskTelefone(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 2) return d.replace(/^(\d*)/, '($1');
+  if (d.length <= 6) return d.replace(/^(\d{2})(\d*)/, '($1) $2');
+  if (d.length <= 10) return d.replace(/^(\d{2})(\d{4})(\d*)/, '($1) $2-$3');
+  return d.replace(/^(\d{2})(\d{5})(\d*)/, '($1) $2-$3');
+}
+
 export function ChamadoCreatePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -801,9 +811,9 @@ export function ChamadoCreatePage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Telefone do cliente</label>
-                  <input type="text" value={clienteTelefone} maxLength={40}
-                    onChange={(e) => { setClienteTelefone(e.target.value); setDirty(true); }}
-                    placeholder="ex.: (38) 9...."
+                  <input type="text" inputMode="tel" value={clienteTelefone} maxLength={16}
+                    onChange={(e) => { setClienteTelefone(maskTelefone(e.target.value)); setDirty(true); }}
+                    placeholder="(38) 99999-9999"
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" />
                 </div>
                 <div>
