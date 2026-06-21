@@ -60,4 +60,15 @@ export class SacEmailController {
   descartarTriagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.service.descartarTriagem(id, user.sub);
   }
+
+  // SAC 4a.2 — equipes de SAC (opções) + abrir novo chamado a partir do e-mail.
+  @Get('equipes-sac')
+  listarEquipesSac() {
+    return this.service.listarEquipesSac();
+  }
+
+  @Post('triagem/:id/abrir')
+  abrirTriagem(@Param('id') id: string, @Body('equipeId') equipeId: string, @CurrentUser() user: JwtPayload) {
+    return this.service.abrirTriagem(id, equipeId, user.sub, user.filialId);
+  }
 }

@@ -9,8 +9,9 @@ import {
   type SacEmailIngestao,
   type ResultadoIngestaoSac,
   type SacEmailTriagemItem,
+  type SacEquipe,
 } from '../../services/sacEmail.service';
-import { Inbox, Plug, Save, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Download, Link2, Trash2, Paperclip } from 'lucide-react';
+import { Inbox, Plug, Save, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Download, Link2, Trash2, Paperclip, PlusCircle } from 'lucide-react';
 
 /**
  * SAC Fase 3 (3a) — config OPERACIONAL do e-mail de ENTRADA. Admin/Gestor.
@@ -29,6 +30,8 @@ export function SacEmailConfigPage() {
   const [triagem, setTriagem] = useState<SacEmailTriagemItem[]>([]);
   const [vincNum, setVincNum] = useState<Record<string, string>>({});
   const [triando, setTriando] = useState<string | null>(null);
+  const [equipesSac, setEquipesSac] = useState<SacEquipe[]>([]);
+  const [abrirEq, setAbrirEq] = useState<Record<string, string>>({});
 
   // Form local (toggles).
   const [enabled, setEnabled] = useState(false);
@@ -47,6 +50,25 @@ export function SacEmailConfigPage() {
   function carregarIngestoes() {
     sacEmailService.listarIngestoes().then(setIngestoes).catch(() => undefined);
     sacEmailService.listarTriagem().then(setTriagem).catch(() => undefined);
+  }
+
+  async function abrirChamado(item: SacEmailTriagemItem) {
+    const eq = abrirEq[item.id] || equipesSac[0]?.id;
+    if (!eq) {
+      toast('error', 'Nenhuma equipe de SAC disponível.');
+      return;
+    }
+    setTriando(item.id);
+    try {
+      const r = await sacEmailService.abrirTriagem(item.id, eq);
+      toast('success', `Chamado de SAC #${r.numero} aberto${r.anexos ? ` (+${r.anexos} anexo[s])` : ''}.`);
+      carregarIngestoes();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast('error', msg || 'Falha ao abrir chamado.');
+    } finally {
+      setTriando(null);
+    }
   }
 
   async function vincular(item: SacEmailTriagemItem) {
@@ -88,6 +110,7 @@ export function SacEmailConfigPage() {
       .catch(() => toast('error', 'Falha ao carregar a configuração do SAC e-mail.'))
       .finally(() => setLoading(false));
     carregarIngestoes();
+    sacEmailService.listarEquipesSac().then(setEquipesSac).catch(() => undefined);
   }, [toast]);
 
   async function buscarAgora() {
@@ -258,6 +281,27 @@ export function SacEmailConfigPage() {
                             className="inline-flex items-center gap-1.5 bg-white border border-slate-300 text-slate-600 px-3 py-1.5 rounded-lg text-sm hover:bg-slate-50 disabled:opacity-50"
                           >
                             <Trash2 className="w-4 h-4" /> Descartar
+                          </button>
+                        </div>
+                        {/* 4a.2 — abrir novo chamado (contato sem chamado) */}
+                        <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-slate-100">
+                          <span className="text-xs text-slate-500">ou abrir novo na equipe</span>
+                          <select
+                            value={abrirEq[it.id] ?? ''}
+                            onChange={(e) => setAbrirEq((m) => ({ ...m, [it.id]: e.target.value }))}
+                            className="border border-slate-300 rounded-lg px-2 py-1 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-capul-600"
+                          >
+                            {equipesSac.length === 0 && <option value="">— sem equipe SAC —</option>}
+                            {equipesSac.map((e) => (
+                              <option key={e.id} value={e.id}>{e.sigla ? `${e.sigla} — ` : ''}{e.nome}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => abrirChamado(it)}
+                            disabled={triando === it.id || equipesSac.length === 0}
+                            className="inline-flex items-center gap-1.5 bg-white border border-capul-300 text-capul-700 px-3 py-1.5 rounded-lg text-sm hover:bg-capul-50 disabled:opacity-50"
+                          >
+                            <PlusCircle className="w-4 h-4" /> Abrir novo chamado
                           </button>
                         </div>
                       </div>

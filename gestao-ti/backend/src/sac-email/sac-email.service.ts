@@ -501,6 +501,78 @@ export class SacEmailService {
     return { ok: true, chamadoId: chamado.id, anexos: ing.anexos.length };
   }
 
+  /** Equipes de ATENDIMENTO ao SAC (atendeSac) — opções do "abrir novo chamado". */
+  async listarEquipesSac() {
+    return this.prisma.equipe.findMany({
+      where: { atendeSac: true, status: 'ATIVO' },
+      select: { id: true, nome: true, sigla: true, departamentoId: true },
+      orderBy: { nome: 'asc' },
+    });
+  }
+
+  /**
+   * Abre um NOVO chamado de SAC a partir de um e-mail de triagem (contato novo
+   * sem chamado). Solicitante = usuário-sistema; corpo do e-mail vira a descrição;
+   * anexos preservados entram no chamado. Marca a triagem como RESOLVIDA.
+   */
+  async abrirTriagem(ingestaoId: string, equipeId: string, userId: string, filialId: string) {
+    const ing = await this.prisma.sacEmailIngestao.findUnique({ where: { id: ingestaoId }, include: { anexos: true } });
+    if (!ing) throw new NotFoundException('Item de triagem não encontrado.');
+    if (ing.triagemStatus !== 'PENDENTE') throw new BadRequestException('Este item já foi tratado.');
+    if (!filialId) throw new BadRequestException('Operador sem filial — não dá para abrir o chamado.');
+
+    const equipe = await this.prisma.equipe.findUnique({ where: { id: equipeId }, select: { id: true, departamentoId: true, atendeSac: true, status: true } });
+    if (!equipe || equipe.status !== 'ATIVO') throw new BadRequestException('Equipe inválida.');
+    if (!equipe.atendeSac) throw new BadRequestException('A equipe escolhida não é de atendimento ao SAC.');
+
+    const sistemaId = await this.getSistemaSacUserId();
+    if (!sistemaId) throw new BadRequestException('Usuário de sistema do SAC ausente — rode o seed.');
+
+    const chamado = await this.prisma.chamado.create({
+      data: {
+        titulo: (ing.subject ?? '').slice(0, 200) || 'SAC por e-mail',
+        descricao: (ing.corpoTexto ?? '').trim() || '(sem corpo)',
+        solicitanteId: sistemaId,
+        equipeAtualId: equipe.id,
+        departamentoId: equipe.departamentoId,
+        filialId,
+        clienteEmail: ing.fromAddr,
+        canalOrigem: 'EMAIL',
+      },
+      select: { id: true, numero: true },
+    });
+
+    await this.prisma.historicoChamado.create({
+      data: {
+        tipo: 'ABERTURA',
+        descricao: `Chamado de SAC aberto a partir de e-mail de ${ing.fromAddr ?? 'desconhecido'} (triagem).`,
+        publico: true,
+        chamadoId: chamado.id,
+        usuarioId: sistemaId,
+      },
+    });
+
+    for (const a of ing.anexos) {
+      await this.prisma.anexoChamado.create({
+        data: {
+          nomeOriginal: a.nomeOriginal,
+          nomeArquivo: a.nomeArquivo,
+          mimeType: a.mimeType,
+          tamanho: a.tamanho,
+          descricao: 'Anexo do cliente (SAC e-mail — triagem)',
+          chamadoId: chamado.id,
+          usuarioId: sistemaId,
+        },
+      });
+    }
+
+    await this.prisma.sacEmailIngestao.update({
+      where: { id: ingestaoId },
+      data: { triagemStatus: 'RESOLVIDO', triadoEm: new Date(), triadoPor: userId, chamadoVinculadoId: chamado.id, resultado: 'MATCHED', chamadoId: chamado.id, sacNumero: chamado.numero },
+    });
+    return { ok: true, chamadoId: chamado.id, numero: chamado.numero, anexos: ing.anexos.length };
+  }
+
   /** Descarta um e-mail de triagem (spam/irrelevante). */
   async descartarTriagem(ingestaoId: string, userId: string) {
     const ing = await this.prisma.sacEmailIngestao.findUnique({ where: { id: ingestaoId }, select: { id: true, triagemStatus: true } });

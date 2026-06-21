@@ -99,6 +99,13 @@ export interface SacEmailTriagemItem {
   anexos: SacEmailTriagemAnexo[];
 }
 
+export interface SacEquipe {
+  id: string;
+  nome: string;
+  sigla: string | null;
+  departamentoId: string;
+}
+
 export const sacEmailService = {
   async getConfig(): Promise<SacEmailConfigResp> {
     const { data } = await gestaoApi.get('/sac-email/config');
@@ -140,6 +147,17 @@ export const sacEmailService = {
 
   async descartarTriagem(id: string): Promise<{ ok: boolean }> {
     const { data } = await gestaoApi.post(`/sac-email/triagem/${id}/descartar`, {});
+    return data;
+  },
+
+  // SAC 4a.2 — abrir novo chamado de SAC a partir do e-mail.
+  async listarEquipesSac(): Promise<SacEquipe[]> {
+    const { data } = await gestaoApi.get('/sac-email/equipes-sac');
+    return data;
+  },
+
+  async abrirTriagem(id: string, equipeId: string): Promise<{ ok: boolean; numero: number; anexos: number }> {
+    const { data } = await gestaoApi.post(`/sac-email/triagem/${id}/abrir`, { equipeId });
     return data;
   },
 };
