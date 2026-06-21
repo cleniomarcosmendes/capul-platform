@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum, MaxLength, IsArray, IsUUID, ArrayMaxSize } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsEmail, MaxLength, IsArray, IsUUID, ArrayMaxSize } from 'class-validator';
 import { CanalOrigemSac, Prioridade, Visibilidade } from '@prisma/client';
 
 export class CreateChamadoDto {
@@ -94,8 +94,10 @@ export class CreateChamadoDto {
   @MaxLength(150)
   clienteNome?: string;
 
+  // Vira destinatário do e-mail de resposta do SAC — valida formato no cadastro
+  // (senão um e-mail inválido só estoura silenciosamente na hora de responder).
   @IsOptional()
-  @IsString()
+  @IsEmail()
   @MaxLength(150)
   clienteEmail?: string;
 

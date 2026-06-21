@@ -290,6 +290,13 @@ describe('SacEmailService (SAC Fase 3)', () => {
     expect(r.sacNumero).toBe(999);
   });
 
+  it('classificar: [SAC-n] gigante (> Int4) → UNMATCHED sem consultar chamado (não estoura)', async () => {
+    const r = await (service as any).classificar(mail({ from: 'cli@x.com', subject: '[SAC-9999999999] forjado' }));
+    expect(r.resultado).toBe('UNMATCHED');
+    expect(r.sacNumero).toBeNull();
+    expect(prisma.chamado.findUnique).not.toHaveBeenCalled(); // nem tenta — evitaria o throw do Prisma
+  });
+
   it('classificar: [SAC-n] de chamado que NÃO é de SAC → UNMATCHED (não threada)', async () => {
     prisma.chamado.findUnique.mockResolvedValue({ id: 'ch-normal', equipeAtualId: 'eq-ti' });
     prisma.equipe.findUnique.mockResolvedValue({ atendeSac: false });

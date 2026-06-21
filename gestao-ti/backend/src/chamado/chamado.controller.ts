@@ -366,8 +366,10 @@ export class ChamadoController {
 
   // SAC (Fase 1) — apoiadores elegíveis (membros das equipes de apoio SAC):
   // fonte do seletor de "em cópia" do SAC. Rota literal de 2 segmentos (não
-  // colide com :id). Sem @Roles próprio — herda o guard do controller.
+  // colide com :id). Roster de apoiadores expõe nome/username/e-mail (PII) —
+  // restrito a staff (não pode ficar aberto a qualquer perfil com CHAMADO).
   @Get('sac/apoiadores')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   listarApoiadoresSac() {
     return this.service.listarApoiadoresSac();
   }

@@ -428,6 +428,19 @@ describe('ChamadoService', () => {
       );
     });
 
+    it('envio FALHOU (sent:false, mock:false) → histórico marca FALHA (não afirma "enviado")', async () => {
+      prisma.chamado.findUnique.mockResolvedValue(sacChamado);
+      prisma.equipe.findUnique.mockResolvedValue({ atendeSac: true });
+      prisma.historicoChamado.create.mockResolvedValue({ id: 'h1' });
+      emailEnvolvidos.enviarExterno.mockResolvedValueOnce({ sent: false, mock: false, redirected: false });
+
+      await core.responderSac('ch-1', 'segue resposta', mockUser as any, 'GESTOR');
+
+      expect(prisma.historicoChamado.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ descricao: expect.stringContaining('FALHA') }) }),
+      );
+    });
+
     it('com anexo: registra AnexoChamado e cita o anexo no histórico/e-mail', async () => {
       prisma.chamado.findUnique.mockResolvedValue(sacChamado);
       prisma.equipe.findUnique.mockResolvedValue({ atendeSac: true });

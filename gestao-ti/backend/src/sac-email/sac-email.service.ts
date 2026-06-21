@@ -135,7 +135,12 @@ export class SacEmailService {
   /** Extrai o número do protocolo `[SAC-123]` do assunto, se houver. */
   private parseSacNumero(subject: string | undefined): number | null {
     const m = /\[SAC-(\d+)\]/i.exec(subject ?? '');
-    return m ? Number(m[1]) : null;
+    if (!m) return null;
+    const n = Number(m[1]);
+    // chamado.numero é Int4 — um número forjado/gigante faria o Prisma estourar
+    // (e o e-mail seria perdido). Fora da faixa → trata como sem-match (triagem).
+    if (!Number.isSafeInteger(n) || n < 1 || n > 2_147_483_647) return null;
+    return n;
   }
 
   /** Dedupe-key estável: Message-ID; se ausente, hash de from+subject+date. */
@@ -199,66 +204,93 @@ export class SacEmailService {
         resumo.capped = uids.length > MAX;
         for (const uid of slice) {
           resumo.buscados++;
+          // Só marca \Seen quando a mensagem foi REGISTRADA (linha de ingestão
+          // criada) ou confirmada duplicada — nunca num erro transitório, senão
+          // o e-mail do cliente sumiria (lido e sem registro → nunca reprocessa).
+          let tratado = false;
           try {
             const msg = await client.fetchOne(uid, { source: true }, { uid: true });
-            const parsed = await simpleParser((msg as { source: Buffer }).source);
-            const key = this.messageKey(parsed);
-
-            // Dedupe: já processado → conta e segue (sem nova linha).
-            const ja = await this.prisma.sacEmailIngestao.findUnique({ where: { messageId: key }, select: { id: true } });
-            if (ja) {
-              resumo.duplicate++;
+            const source = msg && (msg as { source?: Buffer }).source;
+            if (!source) {
+              // Sumiu/movida entre o search e o fetch — re-tenta no próximo ciclo.
+              this.logger.warn(`SAC ingestão: uid ${uid} sem conteúdo (movida/expurgada?) — re-tenta`);
             } else {
-              const r = await this.classificar(parsed);
-              let resultado = r.resultado as 'MATCHED' | 'UNMATCHED' | 'SKIPPED_AUTO' | 'SKIPPED_OWN' | 'ERROR';
-              let motivo = r.motivo;
+              const parsed = await simpleParser(source);
+              const key = this.messageKey(parsed);
 
-              // 3c — MATCHED entra no chamado (comentário público + anexos +
-              // notifica). Falha na ingestão vira ERROR (visível no log).
-              if (r.resultado === 'MATCHED' && r.chamadoId) {
+              const ja = await this.prisma.sacEmailIngestao.findUnique({ where: { messageId: key }, select: { id: true } });
+              if (ja) {
+                resumo.duplicate++;
+                tratado = true;
+              } else {
+                const r = await this.classificar(parsed);
+                const ehTriagem = r.resultado === 'UNMATCHED';
+
+                // Reivindica o messageId PRIMEIRO (constraint unique = dedupe
+                // atômico) — antes dos efeitos colaterais, pra um "Buscar agora"
+                // concorrente com o poller não duplicar comentário/anexos.
+                let nova: { id: string } | null = null;
                 try {
-                  const ing = await this.ingerirNoChamado(r.chamadoId, parsed, sistemaId);
-                  motivo = `comentário criado${ing.anexos ? ` (+${ing.anexos} anexo[s])` : ''}`;
+                  nova = await this.prisma.sacEmailIngestao.create({
+                    data: {
+                      messageId: key,
+                      fromAddr: parsed.from?.value?.[0]?.address ?? null,
+                      subject: (parsed.subject ?? '').slice(0, 500) || null,
+                      sacNumero: r.sacNumero,
+                      chamadoId: r.chamadoId,
+                      resultado: r.resultado,
+                      motivo: r.motivo,
+                      recebidoEm: parsed.date ?? null,
+                      corpoTexto: ehTriagem ? this.corpoDoEmail(parsed) || null : null,
+                      triagemStatus: ehTriagem ? 'PENDENTE' : null,
+                    },
+                    select: { id: true },
+                  });
                 } catch (err) {
-                  resultado = 'ERROR';
-                  motivo = `falha ao ingerir no chamado: ${(err as Error).message}`;
+                  // Corrida: outro ciclo já reivindicou o messageId (unique) → dup.
+                  if ((err as { code?: string }).code === 'P2002') {
+                    resumo.duplicate++;
+                    tratado = true;
+                  } else {
+                    throw err;
+                  }
+                }
+
+                if (nova) {
+                  // Donos do messageId — efeitos colaterais agora são seguros.
+                  let resultado = r.resultado as 'MATCHED' | 'UNMATCHED' | 'SKIPPED_AUTO' | 'SKIPPED_OWN' | 'ERROR';
+                  let motivo = r.motivo;
+                  if (r.resultado === 'MATCHED' && r.chamadoId) {
+                    try {
+                      const ing = await this.ingerirNoChamado(r.chamadoId, parsed, sistemaId);
+                      motivo = `comentário criado${ing.anexos ? ` (+${ing.anexos} anexo[s])` : ''}`;
+                    } catch (err) {
+                      resultado = 'ERROR';
+                      motivo = `falha ao ingerir no chamado: ${(err as Error).message}`;
+                    }
+                    await this.prisma.sacEmailIngestao.update({ where: { id: nova.id }, data: { resultado, motivo } });
+                  } else if (ehTriagem) {
+                    await this.salvarAnexosTriagem(nova.id, parsed);
+                  }
+                  if (resultado === 'MATCHED') resumo.matched++;
+                  else if (resultado === 'UNMATCHED') resumo.unmatched++;
+                  else if (resultado === 'SKIPPED_AUTO') resumo.skippedAuto++;
+                  else if (resultado === 'SKIPPED_OWN') resumo.skippedOwn++;
+                  else if (resultado === 'ERROR') resumo.erro++;
+                  tratado = true;
                 }
               }
-
-              // UNMATCHED entra na CAIXA DE TRIAGEM — preserva corpo + anexos
-              // pra ação de vincular/abrir depois (o e-mail já foi marcado lido).
-              const ehTriagem = resultado === 'UNMATCHED';
-              const nova = await this.prisma.sacEmailIngestao.create({
-                data: {
-                  messageId: key,
-                  fromAddr: parsed.from?.value?.[0]?.address ?? null,
-                  subject: (parsed.subject ?? '').slice(0, 500) || null,
-                  sacNumero: r.sacNumero,
-                  chamadoId: r.chamadoId,
-                  resultado,
-                  motivo,
-                  recebidoEm: parsed.date ?? null,
-                  corpoTexto: ehTriagem ? this.corpoDoEmail(parsed) || null : null,
-                  triagemStatus: ehTriagem ? 'PENDENTE' : null,
-                },
-                select: { id: true },
-              });
-              if (ehTriagem) await this.salvarAnexosTriagem(nova.id, parsed);
-              if (resultado === 'MATCHED') resumo.matched++;
-              else if (resultado === 'UNMATCHED') resumo.unmatched++;
-              else if (resultado === 'SKIPPED_AUTO') resumo.skippedAuto++;
-              else if (resultado === 'SKIPPED_OWN') resumo.skippedOwn++;
-              else if (resultado === 'ERROR') resumo.erro++;
             }
           } catch (err) {
             resumo.erro++;
             this.logger.warn(`SAC ingestão: falha no uid ${uid}: ${(err as Error).message}`);
-          } finally {
-            // Marca como lida pra não reaparecer (o dedupe é a garantia real).
+            // tratado=false → NÃO marca lida → re-tenta no próximo ciclo.
+          }
+          if (tratado) {
             try {
               await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
             } catch {
-              /* ignora */
+              /* ignora — o dedupe garante que não reprocessa */
             }
           }
         }

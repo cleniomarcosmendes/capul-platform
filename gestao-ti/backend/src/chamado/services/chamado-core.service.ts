@@ -988,17 +988,6 @@ export class ChamadoCoreService {
       }
     }
 
-    const historico = await this.prisma.historicoChamado.create({
-      data: {
-        tipo: 'COMENTARIO',
-        descricao: `↩️ Resposta ao cliente (e-mail para ${chamado.clienteEmail}):\n${corpo}`
-          + (anexoRegistro ? `\n📎 Anexo: ${anexoRegistro.nomeOriginal}` : ''),
-        publico: true,
-        chamadoId: id,
-        usuarioId: user.sub,
-      },
-    });
-
     const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
     const html = '<div style="font-family:system-ui,-apple-system,sans-serif;color:#0f172a">'
       + `<p style="margin:0 0 12px">${esc(corpo).replace(/\n/g, '<br>')}</p>`
@@ -1006,12 +995,30 @@ export class ChamadoCoreService {
       + '<hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0">'
       + `<p style="font-size:12px;color:#64748b;margin:0">CAPUL — Atendimento ao Cliente (SAC) · Protocolo <strong>[SAC-${chamado.numero}]</strong>. Responda este e-mail para falar com o SAC.</p>`
       + '</div>';
+    // Envia ANTES de gravar o histórico, pra o registro refletir o resultado
+    // REAL (não afirmar "enviado" quando o envio falhou/foi mockado).
     const email = await this.emailEnvolvidos.enviarExterno(
       chamado.clienteEmail,
       `[SAC-${chamado.numero}] ${chamado.titulo}`,
       html,
       anexoEmail,
     );
+
+    const statusTxt = email.sent
+      ? (email.redirected ? '↩️ Resposta ao cliente (e-mail DEV→teste)' : '↩️ Resposta ao cliente (e-mail enviado)')
+      : email.mock
+        ? '↩️ Resposta ao cliente (e-mail MOCKADO em DEV — NÃO enviado)'
+        : '⚠️ FALHA ao enviar a resposta ao cliente (e-mail NÃO entregue — tente novamente)';
+    const historico = await this.prisma.historicoChamado.create({
+      data: {
+        tipo: 'COMENTARIO',
+        descricao: `${statusTxt} para ${chamado.clienteEmail}:\n${corpo}`
+          + (anexoRegistro ? `\n📎 Anexo: ${anexoRegistro.nomeOriginal}` : ''),
+        publico: true,
+        chamadoId: id,
+        usuarioId: user.sub,
+      },
+    });
 
     return { historico, anexo: anexoRegistro, email };
   }

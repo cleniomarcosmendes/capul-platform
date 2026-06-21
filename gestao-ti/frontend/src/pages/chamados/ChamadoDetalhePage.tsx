@@ -214,11 +214,17 @@ export function ChamadoDetalhePage() {
       setChamado(await chamadoService.buscar(chamado.id));
       setRespostaCliente('');
       setRespostaAnexo(null);
-      toast('success', res.email.mock
-        ? 'Resposta registrada (e-mail mockado em DEV — não enviado).'
-        : res.email.redirected
-          ? 'Resposta enviada (DEV: redirecionada para o e-mail de teste).'
-          : 'Resposta enviada ao cliente por e-mail.');
+      // Reflete o resultado REAL do envio (não dizer "enviada" quando falhou).
+      const e = res.email;
+      if (!e.sent && !e.mock) {
+        toast('error', 'Resposta registrada, mas o e-mail NÃO foi entregue ao cliente — tente novamente.');
+      } else {
+        toast('success', e.mock
+          ? 'Resposta registrada (e-mail mockado em DEV — não enviado).'
+          : e.redirected
+            ? 'Resposta enviada (DEV: redirecionada para o e-mail de teste).'
+            : 'Resposta enviada ao cliente por e-mail.');
+      }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast('error', msg || 'Falha ao responder o cliente.');

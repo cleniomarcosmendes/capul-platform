@@ -129,8 +129,18 @@ export class EmailEnvolvidosService {
       return { sent: false, mock: true, redirected: false };
     }
 
+    // Precedência de SEGURANÇA: um redirect configurado SEMPRE vence — nunca
+    // enviamos ao cliente real quando há redirect, mesmo que ENABLED=true tenha
+    // vazado pro DEV (ex.: restore PROD→DEV). Cliente real só com enabled E sem
+    // redirect. NODE_ENV não serve de guarda (é "production" também em DEV).
+    const paraClienteReal = enabled && !redirect;
     const realTo = redirect || dest;
-    const realSubject = redirect ? `[DEV→${dest}] ${subject}` : subject;
+    // Cap em 200 — limite do subject no gateway (o prefixo [DEV→…] + título longo
+    // estouraria e o e-mail seria recusado com 400).
+    const realSubject = (redirect ? `[DEV→${dest}] ${subject}` : subject).slice(0, 200);
+    if (paraClienteReal) {
+      this.logger.warn(`[SAC e-mail externo] ENVIANDO AO CLIENTE REAL "${dest}" (subject="${subject.slice(0, 80)}", anexos=${anexos.length})`);
+    }
     try {
       const res = await fetch(`${AUTH_GATEWAY_URL}/api/v1/internal/email/send`, {
         method: 'POST',
