@@ -1082,3 +1082,24 @@ da viagem: KM na **saída** (despachar → kmInicial) e na **chegada** (concluir
 kmFinal). Benefícios: KM real por motorista/veículo + mantém `veiculo.kmAtual`
 atualizado de quebra. Custo: 2 inputs no despachar/concluir + 2 indicadores no
 Painel (KM por motorista, KM por veículo, e KM/entrega como eficiência de rota).
+
+---
+
+## 🌙 Modo Escuro (Dark Mode) opcional — Workspace/plataforma
+
+**Origem (Clenio, 21/06):** ao padronizar o layout do Workspace (telas brancas
+em card centralizado), surgiu a dúvida sobre fadiga ocular das telas claras.
+
+**Avaliação:** o tema claro **está correto** pro uso da CAPUL (escritório, luz
+diurna) — fundo já é `#F8FAFC` (não branco puro) + texto slate (não preto puro),
+e o layout em card **reduz** o "muro branco" da tela full-width antiga. Dark mode
+ajuda em **pouca luz**, mas em escritório iluminado pode piorar pra quem tem
+astigmatismo (halo). Por isso fica como **opção do usuário**, não default.
+
+**Escopo (feature à parte — sistema de temas):**
+- Toggle por usuário (persistir em `usuario.preferencias`, já existe a coluna).
+- Paleta dark (tokens via CSS vars `--bg-main`/`--bg-sidebar`/texto — `index.css`
+  já usa vars, facilita) + classe `dark` no root (Tailwind `darkMode: 'class'`).
+- Revisar contraste WCAG AA em todos os componentes (cards, badges, inputs).
+- **Não** é um passo de layout — é projeto próprio. Avaliar prioridade depois do
+  rollout de layout do Workspace.
