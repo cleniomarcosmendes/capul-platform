@@ -156,8 +156,10 @@ export class SacEmailService {
     if (!info.configurada) {
       return { ok: false, error: 'Conexão IMAP não configurada no ambiente (SAC_IMAP_HOST/USER/PASSWORD).' };
     }
+    // Obs.: o "Buscar agora" é uma ação MANUAL do admin — NÃO respeita o
+    // pauseSync (freio de mão), que governa só o poller automático (3d). Quem
+    // clica quer buscar agora, mesmo com o automático pausado.
     const row = await this.getConfigRow();
-    if (row.pauseSync) return { ok: false, error: 'Consumo pausado (freio de mão). Despause para buscar.' };
 
     const folder = row.mailboxFolder || 'INBOX';
     const MAX = 50; // teto por ciclo — o excedente fica pro próximo (logado).

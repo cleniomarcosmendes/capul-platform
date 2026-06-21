@@ -149,8 +149,8 @@ export function SacEmailConfigPage() {
                   </button>
                   <button
                     onClick={buscarAgora}
-                    disabled={buscando || !conexao?.configurada || pauseSync}
-                    title={pauseSync ? 'Despause o consumo para buscar' : 'Busca e classifica as não-lidas (sem criar histórico ainda)'}
+                    disabled={buscando || !conexao?.configurada}
+                    title="Busca e classifica as não-lidas (manual — não respeita o freio de mão; sem criar histórico ainda)"
                     className="inline-flex items-center gap-2 bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50"
                   >
                     <Download className={`w-4 h-4 ${buscando ? 'animate-pulse' : ''}`} /> {buscando ? 'Buscando…' : 'Buscar agora'}
@@ -182,7 +182,7 @@ export function SacEmailConfigPage() {
                 />
                 <Toggle
                   label="Pausar (freio de mão)"
-                  hint="Pausa o ciclo sem perder a configuração."
+                  hint="Pausa só o consumo AUTOMÁTICO (poller). Não afeta o “Buscar agora” manual."
                   checked={pauseSync}
                   onChange={setPauseSync}
                 />

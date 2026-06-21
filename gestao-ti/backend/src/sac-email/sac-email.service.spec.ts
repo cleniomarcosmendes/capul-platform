@@ -64,14 +64,16 @@ describe('SacEmailService (SAC Fase 3a)', () => {
     expect(r.error).toMatch(/não configurada|nao configurada/i);
   });
 
-  it('buscarAgora: pausado (freio de mão) → ok:false', async () => {
-    process.env.SAC_IMAP_HOST = 'h';
+  it('buscarAgora: ação MANUAL ignora o freio de mão (não barra por pauseSync)', async () => {
+    // Host inválido → falha graciosa de conexão (ok:false), mas o motivo NÃO é
+    // "pausado": a busca manual tenta conectar mesmo com pauseSync=true.
+    process.env.SAC_IMAP_HOST = 'host-invalido.invalid';
     process.env.SAC_IMAP_USER = 'u';
     process.env.SAC_IMAP_PASSWORD = 'p';
     prisma.sacEmailConfig.upsert.mockResolvedValue({ id: 1, mailboxFolder: 'INBOX', pauseSync: true });
     const r = await service.buscarAgora();
     expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/pausad/i);
+    expect(r.error ?? '').not.toMatch(/pausad/i);
   });
 
   // classificar é privado — exercitado via (service as any) com ParsedMail fake.
