@@ -16,6 +16,7 @@ import { ChamadosListPage } from './pages/chamados/ChamadosListPage';
 import { ChamadoCreatePage } from './pages/chamados/ChamadoCreatePage';
 import { ChamadoDetalhePage } from './pages/chamados/ChamadoDetalhePage';
 import { OrdensServicoPage } from './pages/ordens-servico/OrdensServicoPage';
+import { OrdemServicoFormPage } from './pages/ordens-servico/OrdemServicoFormPage';
 
 import { CatalogoServicosPage } from './pages/catalogo/CatalogoServicosPage';
 import { SlaPage } from './pages/sla/SlaPage';
@@ -127,6 +128,7 @@ function AppRoutes() {
         <Route path="chamados/:id" element={<ChamadoDetalhePage />} />
         <Route path="chamados/:id/relatorio" element={<RelatorioChamadoPage />} />
         <Route path="ordens-servico" element={<OrdensServicoPage />} />
+        <Route path="ordens-servico/nova" element={<OrdemServicoFormPage />} />
 
         <Route path="equipes" element={<EquipesListPage />} />
         <Route path="sac-email" element={<SacEmailConfigPage />} />

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
@@ -13,7 +14,7 @@ import {
   Clock, CheckCircle, Users, FileText, Download, MessageSquare, Send,
   Edit3, Check, Search,
 } from 'lucide-react';
-import type { OrdemServico, StatusOS, UsuarioCore, Chamado, StatusChamado, FilialResumo } from '../../types';
+import type { OrdemServico, StatusOS, UsuarioCore, Chamado, StatusChamado } from '../../types';
 import { isWorkspaceModulo } from '../../lib/workspace-modulo';
 
 const statusLabels: Record<StatusOS, string> = {
@@ -42,6 +43,7 @@ function formatDuracao(inicio: string, fim: string | null): string {
 }
 
 export function OrdensServicoPage() {
+  const navigate = useNavigate();
   const { usuario, gestaoTiRole } = useAuth();
   const { toast, confirm } = useToast();
   const isTecnico = ['ADMIN', 'GESTOR', 'SUPORTE'].includes(gestaoTiRole || '');
@@ -61,18 +63,9 @@ export function OrdensServicoPage() {
   const [editingHistoricoId, setEditingHistoricoId] = useState<string | null>(null);
   const [editingTexto, setEditingTexto] = useState('');
 
-  // Create form
-  const [showForm, setShowForm] = useState(false);
+  // Técnicos atribuíveis (usado no detalhe — adicionar técnico). A criação de OS
+  // virou página dedicada (OrdemServicoFormPage).
   const [tecnicos, setTecnicos] = useState<UsuarioCore[]>([]);
-  const [filiais, setFiliais] = useState<FilialResumo[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [titulo, setTitulo] = useState('');
-  const [descricao, setDescricao] = useState('');
-  const [filialId, setFilialId] = useState(usuario?.filialAtual?.id || '');
-  const [tecnicoId, setTecnicoId] = useState('');
-  const [dataAgendamento, setDataAgendamento] = useState('');
-  const [observacoes, setObservacoes] = useState('');
 
   // Modal vincular chamados
   const [showModalChamados, setShowModalChamados] = useState(false);
@@ -106,7 +99,7 @@ export function OrdensServicoPage() {
   useEffect(() => { setPage(1); }, [filterStatus, pageSize]);
 
   useEffect(() => {
-    if ((showForm || showAddTecnico) && tecnicos.length === 0) {
+    if (showAddTecnico && tecnicos.length === 0) {
       // Filtra apenas staff de TI (ADMIN, GESTOR_TI, SUPORTE_TI) — outros usuários
       // não devem ser atribuíveis como técnico de OS. Mesma lógica de ChamadosListPage.
       coreService.listarUsuarios().then((users) => {
@@ -117,15 +110,7 @@ export function OrdensServicoPage() {
         setTecnicos(staff);
       }).catch(() => {});
     }
-    if (showForm && filiais.length === 0) {
-      const isStaff = gestaoTiRole && ['ADMIN', 'GESTOR'].includes(gestaoTiRole);
-      if (isStaff) {
-        coreService.listarFiliais().then(setFiliais).catch(() => {});
-      } else if (usuario?.filiais?.length) {
-        setFiliais(usuario.filiais.map((f) => ({ id: f.id, codigo: f.codigo, nomeFantasia: f.nome })));
-      }
-    }
-  }, [showForm, showAddTecnico, tecnicos.length, filiais.length]);
+  }, [showAddTecnico, tecnicos.length]);
 
   function openDetalhe(os: OrdemServico) {
     setOsDetalhe(os);
@@ -137,27 +122,6 @@ export function OrdensServicoPage() {
     loadOrdens();
   }
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true); setError('');
-    try {
-      const created = await ordemServicoService.criar({
-        titulo,
-        descricao: descricao || undefined,
-        filialId,
-        tecnicoId: tecnicoId || undefined,
-        dataAgendamento: dataAgendamento ? new Date(dataAgendamento).toISOString() : undefined,
-        observacoes: observacoes || undefined,
-      });
-      setShowForm(false);
-      setTitulo(''); setDescricao(''); setFilialId(usuario?.filialAtual?.id || ''); setTecnicoId(''); setDataAgendamento(''); setObservacoes('');
-      loadOrdens();
-      openDetalhe(created);
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg || 'Erro ao criar OS');
-    } finally { setSaving(false); }
-  }
 
   // Workflow actions
   async function handleIniciar() {
@@ -713,68 +677,14 @@ export function OrdensServicoPage() {
               <Download className="w-4 h-4" /> Exportar Excel
             </button>
             {isTecnico && (
-              <button onClick={() => setShowForm(!showForm)}
+              <button onClick={() => navigate('/gestao-ti/ordens-servico/nova')}
                 className="flex items-center gap-2 bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 transition-colors">
-                {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                {showForm ? 'Cancelar' : 'Nova OS'}
+                <Plus className="w-4 h-4" /> Nova OS
               </button>
             )}
           </div>
         </div>
 
-        {showForm && (
-          <form onSubmit={handleCreate} className="bg-white rounded-xl border border-slate-200 p-6 mb-6 space-y-4 mx-auto max-w-3xl shadow-sm">
-            {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Titulo *</label>
-                <input value={titulo} onChange={(e) => setTitulo(e.target.value)} required maxLength={200}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Filial *</label>
-                <select value={filialId} onChange={(e) => setFilialId(e.target.value)} required
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-                  <option value="">Selecione a filial...</option>
-                  {filiais.map((f) => <option key={f.id} value={f.id}>{f.codigo} — {f.nomeFantasia}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Tecnico Responsavel</label>
-                <select value={tecnicoId} onChange={(e) => setTecnicoId(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-                  <option value="">Selecione (adicionar depois)</option>
-                  {tecnicos.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Descricao</label>
-              <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Data Agendamento</label>
-                <input type="datetime-local" value={dataAgendamento} onChange={(e) => setDataAgendamento(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Observacoes</label>
-                <input value={observacoes} onChange={(e) => setObservacoes(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="(opcional)" />
-              </div>
-            </div>
-
-            <button type="submit" disabled={saving}
-              className="bg-capul-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-capul-700 disabled:opacity-50">
-              {saving ? 'Criando...' : 'Criar OS'}
-            </button>
-          </form>
-        )}
 
         {loading ? (
           <p className="text-slate-500">Carregando...</p>
