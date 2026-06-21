@@ -35,7 +35,12 @@ export type FuncionalidadeWorkspace =
   | 'SLA'
   | 'HORARIO_TRABALHO'
   | 'IMPORTAR_DADOS'
-  | 'CHAMADO_EXTERNO';
+  | 'CHAMADO_EXTERNO'
+  // SAC — telas de SAC
+  | 'SAC_TRIAGEM'
+  | 'SAC_INDICADOR'
+  | 'SAC_TEMPLATE'
+  | 'SAC_EMAIL_CONFIG';
 
 export type FuncionalidadeSecao =
   | 'OPERACAO'
@@ -47,7 +52,9 @@ export type FuncionalidadeSecao =
   | 'CADASTROS'
   // S16.5 — Novas seções
   | 'ANALISE'
-  | 'CONFIGURACAO';
+  | 'CONFIGURACAO'
+  // SAC
+  | 'SAC';
 
 export interface FuncionalidadeMeta {
   codigo: FuncionalidadeWorkspace;
@@ -86,7 +93,12 @@ export interface FuncionalidadeMeta {
     | 'BookOpen'
     | 'Clock'
     | 'Upload'
-    | 'Globe2';
+    | 'Globe2'
+    // SAC
+    | 'Inbox'
+    | 'PieChart'
+    | 'MessageSquareText'
+    | 'Settings';
 }
 
 export const SECOES: { id: FuncionalidadeSecao; rotulo: string }[] = [
@@ -99,6 +111,7 @@ export const SECOES: { id: FuncionalidadeSecao; rotulo: string }[] = [
   { id: 'SUSTENTACAO', rotulo: 'Sustentação' },
   { id: 'CONFIGURACAO', rotulo: 'Configuração' },
   { id: 'CADASTROS', rotulo: 'Cadastros' },
+  { id: 'SAC', rotulo: 'SAC' },
 ];
 
 export const TODAS_FUNCIONALIDADES: FuncionalidadeMeta[] = [
@@ -145,6 +158,11 @@ export const TODAS_FUNCIONALIDADES: FuncionalidadeMeta[] = [
   { codigo: 'CADASTRO_CATEGORIA_LICENCA', rotulo: 'Categorias de Licença', descricao: 'Classificação de licenças de software', secao: 'CADASTROS', icone: 'Tag' },
   // S16.5 fix: Chamados Externos está em CADASTROS no menu, drawer espelha
   { codigo: 'CHAMADO_EXTERNO', rotulo: 'Chamados Externos', descricao: 'Lançamentos mensais de chamados por software (KPI externo)', secao: 'CADASTROS', icone: 'Globe2' },
+  // SAC — Serviço de Atendimento ao Cliente
+  { codigo: 'SAC_TRIAGEM', rotulo: 'SAC — Triagem', descricao: 'Buscar e tratar e-mails de entrada do SAC (vincular/abrir/descartar). Libera SUPORTE.', secao: 'SAC', icone: 'Inbox' },
+  { codigo: 'SAC_INDICADOR', rotulo: 'SAC — Indicadores', descricao: 'Volume, canal, SLA e estatística de e-mail do SAC', secao: 'SAC', icone: 'PieChart' },
+  { codigo: 'SAC_TEMPLATE', rotulo: 'SAC — Respostas prontas', descricao: 'Templates reutilizáveis para responder o cliente', secao: 'SAC', icone: 'MessageSquareText' },
+  { codigo: 'SAC_EMAIL_CONFIG', rotulo: 'SAC — Configuração de e-mail', descricao: 'Conexão IMAP e poller do e-mail de entrada do SAC', secao: 'SAC', icone: 'Settings' },
 ];
 
 export interface FuncionalidadeStatus {

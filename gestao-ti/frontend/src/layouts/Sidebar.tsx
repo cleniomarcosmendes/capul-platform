@@ -38,6 +38,7 @@ import {
   Flame,
   Inbox,
   MessageSquareText,
+  Settings,
   X,
 } from 'lucide-react';
 
@@ -85,10 +86,11 @@ const menuItems: MenuItem[] = [
   { label: 'Painel de Gestão', icon: ListChecks, path: '/gestao-ti/painel-projetos', roles: [...STAFF, 'USUARIO_CHAVE', 'TERCEIRIZADO'], funcionalidade: 'PAINEL_GESTAO_PROJETO' },
   { section: 'INFRAESTRUTURA', roles: STAFF },
   { label: 'Ativos', icon: Server, path: '/gestao-ti/ativos', roles: STAFF, funcionalidade: 'ATIVO' },
-  { section: 'SAC', roles: MANAGERS },
-  { label: 'Indicadores', icon: PieChart, path: '/gestao-ti/sac-indicadores', roles: MANAGERS },
-  { label: 'E-mail de entrada', icon: Inbox, path: '/gestao-ti/sac-email', roles: MANAGERS },
-  { label: 'Respostas prontas', icon: MessageSquareText, path: '/gestao-ti/sac-templates', roles: MANAGERS },
+  { section: 'SAC', roles: STAFF },
+  { label: 'Triagem', icon: Inbox, path: '/gestao-ti/sac-triagem', roles: STAFF, funcionalidade: 'SAC_TRIAGEM' },
+  { label: 'Indicadores', icon: PieChart, path: '/gestao-ti/sac-indicadores', roles: MANAGERS, funcionalidade: 'SAC_INDICADOR' },
+  { label: 'Respostas prontas', icon: MessageSquareText, path: '/gestao-ti/sac-templates', roles: MANAGERS, funcionalidade: 'SAC_TEMPLATE' },
+  { label: 'Configuração de e-mail', icon: Settings, path: '/gestao-ti/sac-email', roles: MANAGERS, funcionalidade: 'SAC_EMAIL_CONFIG' },
   { section: 'CONFIGURACOES', roles: MANAGERS },
   { label: 'Conf. Equipes', icon: Users, path: '/gestao-ti/equipes', roles: MANAGERS, funcionalidade: 'EQUIPE' },
   { label: 'Catalogo de Servicos', icon: BookOpen, path: '/gestao-ti/catalogo', roles: MANAGERS, funcionalidade: 'CATALOGO_SERVICO' },

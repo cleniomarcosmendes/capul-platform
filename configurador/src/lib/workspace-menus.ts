@@ -67,6 +67,11 @@ export const WORKSPACE_MENUS: WorkspaceMenuItem[] = [
   { label: 'Tipos de Projeto', path: '/gestao-ti/tipos-projeto', roles: MANAGERS },
   { label: 'Cat. Licencas', path: '/gestao-ti/categorias-licenca', roles: MANAGERS },
   { label: 'Chamados Externos', path: '/gestao-ti/chamados-externos', roles: MANAGERS, funcionalidade: 'INDICADOR_ESTRATEGICO' },
+  { section: 'SAC', roles: STAFF },
+  { label: 'Triagem', path: '/gestao-ti/sac-triagem', roles: STAFF, funcionalidade: 'SAC_TRIAGEM' },
+  { label: 'Indicadores', path: '/gestao-ti/sac-indicadores', roles: MANAGERS, funcionalidade: 'SAC_INDICADOR' },
+  { label: 'Respostas prontas', path: '/gestao-ti/sac-templates', roles: MANAGERS, funcionalidade: 'SAC_TEMPLATE' },
+  { label: 'Configuração de e-mail', path: '/gestao-ti/sac-email', roles: MANAGERS, funcionalidade: 'SAC_EMAIL_CONFIG' },
 ];
 
 /**

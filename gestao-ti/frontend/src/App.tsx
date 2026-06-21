@@ -6,6 +6,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { EquipesListPage } from './pages/equipes/EquipesListPage';
 import { EquipeFormPage } from './pages/equipes/EquipeFormPage';
 import { SacEmailConfigPage } from './pages/sac-email/SacEmailConfigPage';
+import { SacTriagemPage } from './pages/sac-email/SacTriagemPage';
 import { SacTemplatesPage } from './pages/sac-email/SacTemplatesPage';
 import { SacIndicadoresPage } from './pages/sac-email/SacIndicadoresPage';
 import { EquipeDetalhePage } from './pages/equipes/EquipeDetalhePage';
@@ -129,6 +130,7 @@ function AppRoutes() {
 
         <Route path="equipes" element={<EquipesListPage />} />
         <Route path="sac-email" element={<SacEmailConfigPage />} />
+        <Route path="sac-triagem" element={<SacTriagemPage />} />
         <Route path="sac-templates" element={<SacTemplatesPage />} />
         <Route path="sac-indicadores" element={<SacIndicadoresPage />} />
         <Route path="equipes/nova" element={<EquipeFormPage />} />

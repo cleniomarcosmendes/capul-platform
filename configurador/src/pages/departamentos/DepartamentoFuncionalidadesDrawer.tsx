@@ -9,6 +9,8 @@ import {
   // S16.5 — ícones do sweep total
   LayoutDashboard, Gauge, Timer, Search, BookMarked, BookOpen,
   Clock, Upload, Globe2,
+  // SAC
+  Inbox, PieChart, MessageSquareText, Settings,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -39,6 +41,8 @@ const ICONES: Record<FuncionalidadeMeta['icone'], LucideIcon> = {
   // S16.5 — sweep total
   LayoutDashboard, Gauge, Timer, Search, BookMarked, BookOpen,
   Clock, Upload, Globe2,
+  // SAC
+  Inbox, PieChart, MessageSquareText, Settings,
 };
 
 /**

@@ -33,41 +33,46 @@ export class SacEmailController {
     return this.service.testConnection();
   }
 
-  // SAC 3b — busca + classifica as não-lidas (sem criar histórico ainda).
+  // SAC 3b/4a — TRABALHO do dia a dia (busca + triagem): libera SUPORTE também
+  // (a tela "SAC — Triagem" é dos atendentes; a Configuração fica em admin/gestor).
   @Post('buscar-agora')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   buscarAgora() {
     return this.service.buscarAgora();
   }
 
-  // SAC 3b — log das últimas ingestões (matched/unmatched/skipped/dup).
   @Get('ingestoes')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   listarIngestoes() {
     return this.service.listarIngestoes();
   }
 
-  // SAC 4a — Caixa de Triagem (e-mails UNMATCHED pendentes).
   @Get('triagem')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   listarTriagem() {
     return this.service.listarTriagem();
   }
 
   @Post('triagem/:id/vincular')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   vincularTriagem(@Param('id') id: string, @Body('numero') numero: number, @CurrentUser() user: JwtPayload) {
     return this.service.vincularTriagem(id, Number(numero), user.sub);
   }
 
   @Post('triagem/:id/descartar')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   descartarTriagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.service.descartarTriagem(id, user.sub);
   }
 
-  // SAC 4a.2 — equipes de SAC (opções) + abrir novo chamado a partir do e-mail.
   @Get('equipes-sac')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   listarEquipesSac() {
     return this.service.listarEquipesSac();
   }
 
   @Post('triagem/:id/abrir')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
   abrirTriagem(@Param('id') id: string, @Body('equipeId') equipeId: string, @CurrentUser() user: JwtPayload) {
     return this.service.abrirTriagem(id, equipeId, user.sub, user.filialId);
   }

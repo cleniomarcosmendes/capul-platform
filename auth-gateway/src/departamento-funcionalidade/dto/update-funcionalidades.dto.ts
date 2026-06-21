@@ -50,6 +50,11 @@ export enum FuncionalidadeWorkspaceDto {
   HORARIO_TRABALHO = 'HORARIO_TRABALHO',
   IMPORTAR_DADOS = 'IMPORTAR_DADOS',
   CHAMADO_EXTERNO = 'CHAMADO_EXTERNO',
+  // SAC — telas de SAC
+  SAC_TRIAGEM = 'SAC_TRIAGEM',
+  SAC_INDICADOR = 'SAC_INDICADOR',
+  SAC_TEMPLATE = 'SAC_TEMPLATE',
+  SAC_EMAIL_CONFIG = 'SAC_EMAIL_CONFIG',
 }
 
 export class FuncionalidadeStatusDto {

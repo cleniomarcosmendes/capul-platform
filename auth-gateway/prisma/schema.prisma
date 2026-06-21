@@ -332,6 +332,10 @@ enum FuncionalidadeWorkspace {
   HORARIO_TRABALHO
   IMPORTAR_DADOS
   CHAMADO_EXTERNO
+  SAC_TRIAGEM
+  SAC_INDICADOR
+  SAC_TEMPLATE
+  SAC_EMAIL_CONFIG
 
   @@schema("core")
 }
