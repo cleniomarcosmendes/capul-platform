@@ -336,6 +336,22 @@ model SacEmailIngestao {
   @@schema("gestao_ti")
 }
 
+// 4b — Respostas prontas (templates) do SAC. Inseridas no card "Responder ao
+// cliente" pra agilizar respostas recorrentes. Geridas por admin/gestor.
+model SacRespostaTemplate {
+  id        String   @id @default(uuid())
+  titulo    String
+  corpo     String
+  ativo     Boolean  @default(true)
+  ordem     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([ativo, ordem])
+  @@map("sac_resposta_template")
+  @@schema("gestao_ti")
+}
+
 // 4a — anexos preservados de um e-mail UNMATCHED (pra carregar pro chamado na
 // hora de vincular/abrir). Arquivo no mesmo UPLOADS_DIR do chamado.
 model SacEmailAnexo {

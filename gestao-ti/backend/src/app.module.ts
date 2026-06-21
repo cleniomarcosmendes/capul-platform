@@ -30,6 +30,7 @@ import { HorarioModule } from './horario/horario.module.js';
 import { CompraModule } from './compra/compra.module.js';
 import { ProtheusModule } from './protheus/protheus.module.js';
 import { SacEmailModule } from './sac-email/sac-email.module.js';
+import { SacTemplateModule } from './sac-template/sac-template.module.js';
 import { JwtStrategy } from './common/strategies/jwt.strategy.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { HealthModule } from './health/health.module.js';
@@ -98,6 +99,7 @@ import { IdempotencyModule } from './common/idempotency/idempotency.module.js';
     CompraModule,
     ProtheusModule,
     SacEmailModule,
+    SacTemplateModule,
     DashboardModule,
     HealthModule,
     IdempotencyModule,

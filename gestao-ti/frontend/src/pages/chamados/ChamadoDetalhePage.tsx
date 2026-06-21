@@ -4,6 +4,7 @@ import { ACCEPT_ANEXO } from '../../constants/anexo';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { chamadoService, type ApoiadorSac } from '../../services/chamado.service';
+import { sacTemplateService, type SacTemplate } from '../../services/sacTemplate.service';
 import { equipeService } from '../../services/equipe.service';
 import {
   ArrowLeft, UserPlus, ArrowRightLeft, CheckCircle,
@@ -147,6 +148,7 @@ export function ChamadoDetalhePage() {
   // SAC (Fase 2) — resposta ao cliente por e-mail.
   const [respostaCliente, setRespostaCliente] = useState('');
   const [respostaAnexo, setRespostaAnexo] = useState<File | null>(null);
+  const [respostasProntas, setRespostasProntas] = useState<SacTemplate[]>([]);
   const [respondendoSac, setRespondendoSac] = useState(false);
 
   // Agrupamento (decidido em 13/05/2026)
@@ -250,6 +252,12 @@ export function ChamadoDetalhePage() {
   useEffect(() => {
     if (!ehSac) { setApoiadoresSac([]); return; }
     chamadoService.listarApoiadoresSac().then(setApoiadoresSac).catch(() => setApoiadoresSac([]));
+  }, [ehSac]);
+
+  // SAC 4b — respostas prontas (templates ativos) p/ o card de resposta.
+  useEffect(() => {
+    if (!ehSac) { setRespostasProntas([]); return; }
+    sacTemplateService.listarAtivos().then(setRespostasProntas).catch(() => setRespostasProntas([]));
   }, [ehSac]);
 
   const [membrosEquipeDestino, setMembrosEquipeDestino] = useState<Equipe | null>(null);
@@ -1259,6 +1267,24 @@ export function ChamadoDetalhePage() {
                 <p className="text-xs text-slate-500 mb-2">
                   Envia um e-mail para <strong>{chamado.clienteEmail}</strong> e registra na timeline. Protocolo [SAC-{chamado.numero}].
                 </p>
+                {respostasProntas.length > 0 && (
+                  <div className="mb-2">
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const t = respostasProntas.find((r) => r.id === e.target.value);
+                        if (!t) return;
+                        setRespostaCliente((prev) => (prev.trim() ? `${prev}\n${t.corpo}` : t.corpo));
+                      }}
+                      className="text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-capul-600"
+                    >
+                      <option value="">+ Inserir resposta pronta…</option>
+                      {respostasProntas.map((r) => (
+                        <option key={r.id} value={r.id}>{r.titulo}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <textarea
                   value={respostaCliente}
                   onChange={(e) => setRespostaCliente(e.target.value)}
