@@ -213,7 +213,9 @@ export function ChamadoDetalhePage() {
       setRespostaCliente('');
       toast('success', res.email.mock
         ? 'Resposta registrada (e-mail mockado em DEV — não enviado).'
-        : 'Resposta enviada ao cliente por e-mail.');
+        : res.email.redirected
+          ? 'Resposta enviada (DEV: redirecionada para o e-mail de teste).'
+          : 'Resposta enviada ao cliente por e-mail.');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast('error', msg || 'Falha ao responder o cliente.');

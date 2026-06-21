@@ -395,6 +395,11 @@ services:
       # Integração Compras → Fiscal (14/05/2026) — vincular chave NF-e no
       # cadastro de NF de Compras. URL interna container-to-container.
       FISCAL_API_URL: http://fiscal-backend:3002/api/v1/fiscal
+      # SAC Fase 2 — e-mail de saída ao cliente. ENABLED=true só em PROD (dispara
+      # de verdade); DEV_REDIRECT (DEV) envia pra um endereço de teste em vez do
+      # cliente real. Sem nenhum dos dois: mock (apenas loga).
+      SAC_EMAIL_EXTERNO_ENABLED: ${SAC_EMAIL_EXTERNO_ENABLED:-false}
+      SAC_EMAIL_DEV_REDIRECT: ${SAC_EMAIL_DEV_REDIRECT:-}
     # Porta NAO exposta — acesso via Nginx reverse proxy
     volumes:
       - uploads_data:/app/uploads

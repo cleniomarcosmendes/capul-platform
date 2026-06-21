@@ -107,31 +107,41 @@ export class EmailEnvolvidosService {
    * `SAC_EMAIL_EXTERNO_ENABLED=true` (PROD). Em DEV (flag ausente) NÃO envia —
    * apenas loga o que seria enviado, para evitar e-mail real a clientes em dev.
    */
-  async enviarExterno(to: string, subject: string, html: string): Promise<{ sent: boolean; mock: boolean }> {
+  async enviarExterno(to: string, subject: string, html: string): Promise<{ sent: boolean; mock: boolean; redirected: boolean }> {
     const dest = (to ?? '').trim();
-    if (!dest) return { sent: false, mock: false };
+    if (!dest) return { sent: false, mock: false, redirected: false };
 
-    if (process.env.SAC_EMAIL_EXTERNO_ENABLED !== 'true') {
-      this.logger.log(`[SAC e-mail externo MOCK] (SAC_EMAIL_EXTERNO_ENABLED!=true) NÃO enviado → to="${dest}" subject="${subject}"`);
-      return { sent: false, mock: true };
+    // DEV: redireciona o e-mail externo pra um endereço de teste (envia de
+    // verdade, mas NÃO vai pro cliente real). O destinatário original fica no
+    // assunto para conferência.
+    const redirect = (process.env.SAC_EMAIL_DEV_REDIRECT ?? '').trim();
+    const enabled = process.env.SAC_EMAIL_EXTERNO_ENABLED === 'true';
+
+    // Sem envio habilitado (PROD) e sem redirect (DEV) → mock: só loga.
+    if (!enabled && !redirect) {
+      this.logger.log(`[SAC e-mail externo MOCK] (sem ENABLED/REDIRECT) NÃO enviado → to="${dest}" subject="${subject}"`);
+      return { sent: false, mock: true, redirected: false };
     }
 
+    const realTo = redirect || dest;
+    const realSubject = redirect ? `[DEV→${dest}] ${subject}` : subject;
     try {
       const res = await fetch(`${AUTH_GATEWAY_URL}/api/v1/internal/email/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: [dest], subject, html }),
+        body: JSON.stringify({ to: [realTo], subject: realSubject, html }),
         signal: AbortSignal.timeout(15_000),
       });
       if (!res.ok) {
         const body = await res.text().catch(() => '');
         this.logger.warn(`Auth Gateway recusou e-mail externo SAC (HTTP ${res.status}): ${body.slice(0, 200)}`);
-        return { sent: false, mock: false };
+        return { sent: false, mock: false, redirected: !!redirect };
       }
-      return { sent: true, mock: false };
+      this.logger.log(`[SAC e-mail externo] enviado → ${realTo}${redirect ? ` (redirect; cliente real: ${dest})` : ''}`);
+      return { sent: true, mock: false, redirected: !!redirect };
     } catch (err) {
       this.logger.error(`Falha ao enviar e-mail externo SAC: ${(err as Error).message}`);
-      return { sent: false, mock: false };
+      return { sent: false, mock: false, redirected: !!redirect };
     }
   }
 }
