@@ -838,7 +838,9 @@ export class ChamadoCoreService {
     for (const usuarioId of usuariosIds) {
       if (jaCopiados.has(usuarioId)) continue;
       try {
-        await this.helpers.assertNaoSeTI(usuarioId);
+        // Em cópia = QUALQUER usuário cadastrado (sem restrição de "não-TI"). A
+        // regra antiga (assertNaoSeTI) era herança do tempo em que só existia o
+        // workspace de T.I.; com Workspace multi-departamento ela não se aplica.
         // Garantir que o usuario existe (defensive)
         const u = await this.prisma.usuario.findUnique({ where: { id: usuarioId }, select: { id: true } });
         if (!u) {
@@ -912,25 +914,18 @@ export class ChamadoCoreService {
    * Dedup por usuário (alguém pode estar em mais de uma equipe de apoio).
    */
   async listarApoiadoresSac() {
+    // Reconciliação 20/06: como "em cópia = qualquer usuário" (assertNaoSeTI
+    // removido), o roster inclui TODOS os membros das equipes apoioSac —
+    // inclusive quem também é T.I. (não há mais bloqueio de T.I. na cópia).
     const membros = await this.prisma.membroEquipe.findMany({
       where: { status: 'ATIVO', equipe: { is: { apoioSac: true, status: 'ATIVO' } } },
-      select: { usuarioId: true, usuario: { select: { id: true, nome: true, username: true, email: true } } },
+      select: { usuario: { select: { id: true, nome: true, username: true, email: true } } },
       orderBy: { usuario: { nome: 'asc' } },
     });
-    const ids = membros.map((m) => m.usuarioId);
-    // Exclui quem TAMBÉM é membro de equipe real (T.I.): não pode ir em cópia
-    // (assertNaoSeTI) — não faz sentido oferecê-lo no seletor do SAC.
-    const ti = ids.length
-      ? await this.prisma.membroEquipe.findMany({
-          where: { status: 'ATIVO', usuarioId: { in: ids }, equipe: { is: { apoioSac: false } } },
-          select: { usuarioId: true },
-        })
-      : [];
-    const ehTI = new Set(ti.map((m) => m.usuarioId));
     const vistos = new Set<string>();
     const apoiadores: { id: string; nome: string; username: string; email: string | null }[] = [];
     for (const m of membros) {
-      if (!m.usuario || ehTI.has(m.usuario.id) || vistos.has(m.usuario.id)) continue;
+      if (!m.usuario || vistos.has(m.usuario.id)) continue;
       vistos.add(m.usuario.id);
       apoiadores.push(m.usuario);
     }

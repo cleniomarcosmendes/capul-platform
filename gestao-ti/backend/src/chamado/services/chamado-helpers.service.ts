@@ -1,6 +1,5 @@
 import {
   Injectable,
-  BadRequestException,
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
@@ -47,28 +46,4 @@ export class ChamadoHelpersService {
     throw new ForbiddenException('Apenas o tecnico atribuido ou colaboradores podem realizar esta acao');
   }
 
-  /**
-   * Valida que o usuario nao eh "pessoal T.I." para adicionar em copia.
-   * Regra (decidida em 13/05/2026): copia eh para usuarios externos ao T.I.
-   * — se for membro ativo de qualquer EquipeTI, ja eh elegivel para virar
-   * ChamadoColaborador (conceito T.I.-only); adicionar como copia burlaria
-   * a regra "TI escolhe quem atende".
-   *
-   * Defense in depth: o frontend ja filtra TI no select de adicao, mas o
-   * service revalida para defender contra request manipulado.
-   */
-  async assertNaoSeTI(usuarioId: string) {
-    // "É T.I." = membro ativo de uma equipe REAL (que recebe chamados). Equipe de
-    // apoio SAC (`apoioSac`) é só catálogo de apoiadores não-TI — ser membro dela
-    // NÃO torna o usuário T.I. (senão nenhum apoiador do SAC poderia ir em cópia).
-    const membroAtivo = await this.prisma.membroEquipe.findFirst({
-      where: { usuarioId, status: 'ATIVO', equipe: { is: { apoioSac: false } } },
-      select: { id: true },
-    });
-    if (membroAtivo) {
-      throw new BadRequestException(
-        'Membros de Equipe T.I. nao podem ser adicionados em copia (usar Colaboradores).',
-      );
-    }
-  }
 }

@@ -17,13 +17,6 @@ import { coreService } from '../../services/core.service';
 import { ArrowLeft, FolderKanban, Paperclip, X, CheckCircle, Users2 } from 'lucide-react';
 import PasswordInput from '../../components/PasswordInput';
 import type { Equipe, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento, Ativo, UsuarioCore } from '../../types';
-import { isWorkspaceModulo } from '../../lib/workspace-modulo';
-
-const ROLES_TI_SET = new Set(['ADMIN', 'GESTOR', 'SUPORTE']);
-function isUsuarioTI(u: UsuarioCore): boolean {
-  return (u.permissoes ?? []).some((p) => isWorkspaceModulo(p.modulo.codigo) && ROLES_TI_SET.has(p.roleModulo.codigo));
-}
-
 export function ChamadoCreatePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -259,10 +252,11 @@ export function ChamadoCreatePage() {
     }
   }, [isUsuarioFinal, filialId]);
 
-  // Carregar usuarios elegiveis a serem postos em copia (filtra TI fora)
+  // Em cópia = QUALQUER usuário cadastrado (menos o próprio). Sem restrição de
+  // "não-TI" — regra antiga, herança de quando só existia o workspace de T.I.
   useEffect(() => {
     coreService.listarUsuarios().then((users) => {
-      setUsuariosNaoTI(users.filter((u) => u.id !== usuario?.id && !isUsuarioTI(u)));
+      setUsuariosNaoTI(users.filter((u) => u.id !== usuario?.id));
     }).catch(() => setUsuariosNaoTI([]));
   }, [usuario?.id]);
 
@@ -829,7 +823,7 @@ export function ChamadoCreatePage() {
             <p className="text-xs text-slate-500 mb-2">
               {ehSac
                 ? 'No SAC, só os apoiadores cadastrados na Equipe de Apoio SAC podem ser incluídos em cópia (eles veem só este chamado).'
-                : 'Pessoas adicionadas em cópia recebem notificações e podem comentar. Equipe T.I. não pode ser colocada em cópia.'}
+                : 'Pessoas adicionadas em cópia recebem notificações e podem comentar.'}
             </p>
             {/* Chips dos selecionados */}
             {copiasIds.length > 0 && (
