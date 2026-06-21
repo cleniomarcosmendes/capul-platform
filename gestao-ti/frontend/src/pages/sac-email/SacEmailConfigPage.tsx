@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useToast } from '../../components/Toast';
 import {
@@ -258,7 +259,15 @@ export function SacEmailConfigPage() {
                             <td className="py-2 pr-3"><BadgeResultado r={it.resultado} /></td>
                             <td className="py-2 pr-3 text-slate-600">{it.fromAddr ?? '—'}</td>
                             <td className="py-2 pr-3 text-slate-600 max-w-xs truncate" title={it.subject ?? ''}>{it.subject ?? '—'}</td>
-                            <td className="py-2 pr-3 text-slate-600">{it.sacNumero ? `#${it.sacNumero}` : '—'}</td>
+                            <td className="py-2 pr-3 text-slate-600">
+                              {it.chamadoId ? (
+                                <Link to={`/gestao-ti/chamados/${it.chamadoId}`} className="text-capul-600 hover:underline">#{it.sacNumero}</Link>
+                              ) : it.sacNumero ? (
+                                `#${it.sacNumero}`
+                              ) : (
+                                '—'
+                              )}
+                            </td>
                             <td className="py-2 text-slate-400">{it.motivo ?? '—'}</td>
                           </tr>
                         ))}

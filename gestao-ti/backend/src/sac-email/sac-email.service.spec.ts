@@ -1,11 +1,13 @@
 import { Test } from '@nestjs/testing';
 import { SacEmailService } from './sac-email.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificacaoService } from '../notificacao/notificacao.service';
 import { createPrismaMock } from '../common/testing/prisma-mock';
 
-describe('SacEmailService (SAC Fase 3a)', () => {
+describe('SacEmailService (SAC Fase 3)', () => {
   let service: SacEmailService;
   let prisma: ReturnType<typeof createPrismaMock>;
+  let notificacao: { criarParaUsuario: jest.Mock; criarParaUsuarios: jest.Mock };
 
   // Limpa as envs IMAP entre testes pra controlar o "configurada".
   const ENV = ['SAC_IMAP_HOST', 'SAC_IMAP_USER', 'SAC_IMAP_PASSWORD', 'SAC_IMAP_PORT', 'SAC_IMAP_TLS'];
@@ -13,8 +15,13 @@ describe('SacEmailService (SAC Fase 3a)', () => {
     ENV.forEach((k) => delete process.env[k]);
     prisma = createPrismaMock();
     prisma.sacEmailConfig.upsert.mockResolvedValue({ id: 1, mailboxFolder: 'INBOX', enabled: false });
+    notificacao = { criarParaUsuario: jest.fn().mockResolvedValue({}), criarParaUsuarios: jest.fn().mockResolvedValue(undefined) };
     const module = await Test.createTestingModule({
-      providers: [SacEmailService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        SacEmailService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: NotificacaoService, useValue: notificacao },
+      ],
     }).compile();
     service = module.get(SacEmailService);
   });
@@ -71,9 +78,51 @@ describe('SacEmailService (SAC Fase 3a)', () => {
     process.env.SAC_IMAP_USER = 'u';
     process.env.SAC_IMAP_PASSWORD = 'p';
     prisma.sacEmailConfig.upsert.mockResolvedValue({ id: 1, mailboxFolder: 'INBOX', pauseSync: true });
+    prisma.usuario.findFirst.mockResolvedValue({ id: 'sys-1' }); // usuário de sistema presente
     const r = await service.buscarAgora();
     expect(r.ok).toBe(false);
     expect(r.error ?? '').not.toMatch(/pausad/i);
+  });
+
+  it('buscarAgora: sem usuário de sistema (sistema_sac) → ok:false claro', async () => {
+    process.env.SAC_IMAP_HOST = 'h';
+    process.env.SAC_IMAP_USER = 'u';
+    process.env.SAC_IMAP_PASSWORD = 'p';
+    prisma.usuario.findFirst.mockResolvedValue(null);
+    const r = await service.buscarAgora();
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/sistema do SAC ausente/i);
+  });
+
+  it('ingerirNoChamado (3c): cria comentário público do usuário-sistema + notifica o técnico', async () => {
+    prisma.chamado.findUnique.mockResolvedValue({ id: 'ch-1', numero: 7, tecnicoId: 'tec-1' });
+    prisma.historicoChamado.create.mockResolvedValue({ id: 'h1' });
+    const parsed = {
+      from: { value: [{ address: 'cliente@ex.com' }] },
+      subject: 'Re: [SAC-7] obrigado',
+      text: 'Perfeito, pode fechar!',
+      attachments: [],
+    };
+    const r = await (service as any).ingerirNoChamado('ch-1', parsed, 'sys-1');
+    expect(r.anexos).toBe(0);
+    expect(prisma.historicoChamado.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tipo: 'COMENTARIO',
+          publico: true,
+          usuarioId: 'sys-1',
+          chamadoId: 'ch-1',
+          descricao: expect.stringContaining('respondeu por e-mail'),
+        }),
+      }),
+    );
+    expect(notificacao.criarParaUsuario).toHaveBeenCalledWith(
+      'tec-1',
+      'CHAMADO_ATUALIZADO',
+      expect.stringContaining('SAC #7'),
+      expect.any(String),
+      { chamadoId: 'ch-1' },
+    );
   });
 
   // classificar é privado — exercitado via (service as any) com ParsedMail fake.
@@ -106,8 +155,9 @@ describe('SacEmailService (SAC Fase 3a)', () => {
     expect(r.sacNumero).toBeNull();
   });
 
-  it('classificar: [SAC-n] de chamado existente → MATCHED', async () => {
-    prisma.chamado.findUnique.mockResolvedValue({ id: 'ch-9' });
+  it('classificar: [SAC-n] de chamado de SAC existente → MATCHED', async () => {
+    prisma.chamado.findUnique.mockResolvedValue({ id: 'ch-9', equipeAtualId: 'eq-sac' });
+    prisma.equipe.findUnique.mockResolvedValue({ atendeSac: true });
     const r = await (service as any).classificar(mail({ from: 'cli@x.com', subject: 'Re: [SAC-42] pedido' }));
     expect(r.resultado).toBe('MATCHED');
     expect(r.sacNumero).toBe(42);
@@ -119,5 +169,13 @@ describe('SacEmailService (SAC Fase 3a)', () => {
     const r = await (service as any).classificar(mail({ from: 'cli@x.com', subject: '[SAC-999] x' }));
     expect(r.resultado).toBe('UNMATCHED');
     expect(r.sacNumero).toBe(999);
+  });
+
+  it('classificar: [SAC-n] de chamado que NÃO é de SAC → UNMATCHED (não threada)', async () => {
+    prisma.chamado.findUnique.mockResolvedValue({ id: 'ch-normal', equipeAtualId: 'eq-ti' });
+    prisma.equipe.findUnique.mockResolvedValue({ atendeSac: false });
+    const r = await (service as any).classificar(mail({ from: 'cli@x.com', subject: '[SAC-5] x' }));
+    expect(r.resultado).toBe('UNMATCHED');
+    expect(r.motivo).toMatch(/não é um chamado de SAC/i);
   });
 });

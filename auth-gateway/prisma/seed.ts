@@ -259,6 +259,30 @@ async function main() {
     console.log(`Admin existente: ${admin.username}`);
   }
 
+  // 6b. Usuario de SISTEMA do SAC (find or create). Autor dos comentarios que
+  // entram por e-mail (Fase 3c) — HistoricoChamado.usuarioId e NOT NULL e nao
+  // ha como atribuir a um usuario real (o cliente nao tem login). status
+  // INATIVO + senha aleatoria: nunca loga, so existe para a referencia (FK).
+  const sistemaSac = await prisma.usuario.findFirst({ where: { username: 'sistema_sac' } });
+  if (!sistemaSac) {
+    const senhaAleatoria = await bcrypt.hash(`sac-${Math.random().toString(36).slice(2)}-${Date.now()}`, 10);
+    await prisma.usuario.create({
+      data: {
+        username: 'sistema_sac',
+        email: 'sac-sistema@capul.com.br',
+        nome: 'SAC (e-mail)',
+        senha: senhaAleatoria,
+        status: 'INATIVO', // nunca loga
+        primeiroAcesso: false,
+        filialPrincipalId: filial.id,
+        departamentoId: deptoTI.id,
+      },
+    });
+    console.log('Usuario de sistema do SAC criado: sistema_sac (INATIVO)');
+  } else {
+    console.log('Usuario de sistema do SAC existente: sistema_sac');
+  }
+
   // 7. Integracao PROTHEUS (upsert por codigo unico)
   //
   // Cada endpoint tem um `modulo` que identifica o consumidor

@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
 import { SacEmailController } from './sac-email.controller.js';
 import { SacEmailService } from './sac-email.service.js';
+import { NotificacaoModule } from '../notificacao/notificacao.module.js';
 
 /**
  * SAC Fase 3 — módulo do e-mail de ENTRADA. PrismaModule é @Global (não importa).
- * Na 3a só config + teste de conexão; o poller/ingestão entra nas 3b-3d.
+ * 3c usa o NotificacaoService p/ avisar o técnico quando o cliente responde.
  */
 @Module({
+  imports: [NotificacaoModule],
   controllers: [SacEmailController],
   providers: [SacEmailService],
   exports: [SacEmailService],

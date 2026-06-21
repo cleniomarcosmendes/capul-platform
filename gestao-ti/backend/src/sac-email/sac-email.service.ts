@@ -1,9 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ImapFlow } from 'imapflow';
 import { simpleParser, type ParsedMail } from 'mailparser';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
+import * as path from 'path';
+import * as fs from 'fs';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { NotificacaoService } from '../notificacao/notificacao.service.js';
 import { UpdateSacEmailConfigDto } from './dto.js';
+import { UPLOADS_DIR } from '../chamado/services/chamado.constants.js';
+import { isAnexoPermitido } from '../common/constants/anexo-mime.constant.js';
 
 /**
  * SAC Fase 3 (e-mail de ENTRADA) — sub-fase 3a (fundações).
@@ -15,8 +20,20 @@ import { UpdateSacEmailConfigDto } from './dto.js';
 @Injectable()
 export class SacEmailService {
   private readonly logger = new Logger(SacEmailService.name);
+  private sistemaSacUserId: string | null = null;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificacao: NotificacaoService,
+  ) {}
+
+  /** ID do usuário de sistema do SAC (autor dos comentários de entrada). Cacheado. */
+  private async getSistemaSacUserId(): Promise<string | null> {
+    if (this.sistemaSacUserId) return this.sistemaSacUserId;
+    const u = await this.prisma.usuario.findFirst({ where: { username: 'sistema_sac' }, select: { id: true } });
+    this.sistemaSacUserId = u?.id ?? null;
+    return this.sistemaSacUserId;
+  }
 
   /** Garante e retorna a linha singleton (id=1). */
   private async getConfigRow() {
@@ -161,6 +178,13 @@ export class SacEmailService {
     // clica quer buscar agora, mesmo com o automático pausado.
     const row = await this.getConfigRow();
 
+    // 3c — autor dos comentários de entrada. Sem ele não dá pra ingerir os
+    // MATCHED (FK NOT NULL). Falha o ciclo com mensagem clara (nada é tocado).
+    const sistemaId = await this.getSistemaSacUserId();
+    if (!sistemaId) {
+      return { ok: false, error: 'Usuário de sistema do SAC ausente — rode o seed do auth-gateway (cria "sistema_sac").' };
+    }
+
     const folder = row.mailboxFolder || 'INBOX';
     const MAX = 50; // teto por ciclo — o excedente fica pro próximo (logado).
     const resumo = { buscados: 0, matched: 0, unmatched: 0, skippedAuto: 0, skippedOwn: 0, duplicate: 0, erro: 0, capped: false };
@@ -185,6 +209,21 @@ export class SacEmailService {
               resumo.duplicate++;
             } else {
               const r = await this.classificar(parsed);
+              let resultado = r.resultado as 'MATCHED' | 'UNMATCHED' | 'SKIPPED_AUTO' | 'SKIPPED_OWN' | 'ERROR';
+              let motivo = r.motivo;
+
+              // 3c — MATCHED entra no chamado (comentário público + anexos +
+              // notifica). Falha na ingestão vira ERROR (visível no log).
+              if (r.resultado === 'MATCHED' && r.chamadoId) {
+                try {
+                  const ing = await this.ingerirNoChamado(r.chamadoId, parsed, sistemaId);
+                  motivo = `comentário criado${ing.anexos ? ` (+${ing.anexos} anexo[s])` : ''}`;
+                } catch (err) {
+                  resultado = 'ERROR';
+                  motivo = `falha ao ingerir no chamado: ${(err as Error).message}`;
+                }
+              }
+
               await this.prisma.sacEmailIngestao.create({
                 data: {
                   messageId: key,
@@ -192,15 +231,16 @@ export class SacEmailService {
                   subject: (parsed.subject ?? '').slice(0, 500) || null,
                   sacNumero: r.sacNumero,
                   chamadoId: r.chamadoId,
-                  resultado: r.resultado,
-                  motivo: r.motivo,
+                  resultado,
+                  motivo,
                   recebidoEm: parsed.date ?? null,
                 },
               });
-              if (r.resultado === 'MATCHED') resumo.matched++;
-              else if (r.resultado === 'UNMATCHED') resumo.unmatched++;
-              else if (r.resultado === 'SKIPPED_AUTO') resumo.skippedAuto++;
-              else if (r.resultado === 'SKIPPED_OWN') resumo.skippedOwn++;
+              if (resultado === 'MATCHED') resumo.matched++;
+              else if (resultado === 'UNMATCHED') resumo.unmatched++;
+              else if (resultado === 'SKIPPED_AUTO') resumo.skippedAuto++;
+              else if (resultado === 'SKIPPED_OWN') resumo.skippedOwn++;
+              else if (resultado === 'ERROR') resumo.erro++;
             }
           } catch (err) {
             resumo.erro++;
@@ -262,11 +302,109 @@ export class SacEmailService {
     if (numero == null) {
       return { resultado: 'UNMATCHED', motivo: 'sem protocolo [SAC-n] no assunto', sacNumero: null, chamadoId: null };
     }
-    const chamado = await this.prisma.chamado.findUnique({ where: { numero }, select: { id: true } });
+    const chamado = await this.prisma.chamado.findUnique({ where: { numero }, select: { id: true, equipeAtualId: true } });
     if (!chamado) {
       return { resultado: 'UNMATCHED', motivo: `chamado nº ${numero} inexistente`, sacNumero: numero, chamadoId: null };
     }
+    // Só threada em chamados que SÃO de SAC (equipe atendeSac) — evita injetar
+    // comentário num chamado normal via [SAC-n] forjado/equivocado.
+    const equipe = chamado.equipeAtualId
+      ? await this.prisma.equipe.findUnique({ where: { id: chamado.equipeAtualId }, select: { atendeSac: true } })
+      : null;
+    if (!equipe?.atendeSac) {
+      return { resultado: 'UNMATCHED', motivo: `nº ${numero} não é um chamado de SAC`, sacNumero: numero, chamadoId: null };
+    }
     return { resultado: 'MATCHED', motivo: undefined, sacNumero: numero, chamadoId: chamado.id };
+  }
+
+  /** Texto do corpo do e-mail (prefere text/plain; senão tira tags do HTML). */
+  private corpoDoEmail(parsed: ParsedMail): string {
+    const txt = (parsed.text ?? '').trim();
+    if (txt) return txt.slice(0, 5000);
+    const html = parsed.html || '';
+    return html
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<br\s*\/?>(?=)/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .trim()
+      .slice(0, 5000);
+  }
+
+  /**
+   * 3c — registra o e-mail do cliente NO chamado: comentário público (autoria
+   * do usuário de sistema), anexos (whitelist + 10MB) e notifica o técnico.
+   * NÃO altera o status (sem reabrir automático — decisão de 3d/Fase 4).
+   */
+  private async ingerirNoChamado(
+    chamadoId: string,
+    parsed: ParsedMail,
+    sistemaId: string,
+  ): Promise<{ anexos: number }> {
+    const chamado = await this.prisma.chamado.findUnique({
+      where: { id: chamadoId },
+      select: { id: true, numero: true, tecnicoId: true },
+    });
+    if (!chamado) throw new Error('chamado sumiu durante a ingestão');
+
+    const fromAddr = parsed.from?.value?.[0]?.address ?? 'desconhecido';
+    const corpo = this.corpoDoEmail(parsed) || '(sem corpo)';
+
+    await this.prisma.historicoChamado.create({
+      data: {
+        tipo: 'COMENTARIO',
+        descricao: `📨 Cliente (${fromAddr}) respondeu por e-mail:\n${corpo}`,
+        publico: true,
+        chamadoId,
+        usuarioId: sistemaId,
+      },
+    });
+
+    // Anexos do e-mail → AnexoChamado (mesma whitelist/teto do chamado).
+    let anexos = 0;
+    const MAX_BYTES = 10 * 1024 * 1024;
+    for (const att of parsed.attachments ?? []) {
+      const originalname = att.filename || 'anexo';
+      const mimetype = att.contentType || 'application/octet-stream';
+      const buf = att.content;
+      if (!buf || buf.length === 0 || buf.length > MAX_BYTES) continue;
+      if (!isAnexoPermitido({ mimetype, originalname })) continue;
+      try {
+        if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+        const nomeArquivo = `${randomUUID()}${path.extname(originalname)}`;
+        fs.writeFileSync(path.join(UPLOADS_DIR, nomeArquivo), buf);
+        await this.prisma.anexoChamado.create({
+          data: {
+            nomeOriginal: originalname,
+            nomeArquivo,
+            mimeType: mimetype,
+            tamanho: buf.length,
+            descricao: 'Anexo recebido do cliente (SAC e-mail)',
+            chamadoId,
+            usuarioId: sistemaId,
+          },
+        });
+        anexos++;
+      } catch (err) {
+        this.logger.warn(`SAC: anexo "${originalname}" não pôde ser salvo: ${(err as Error).message}`);
+      }
+    }
+
+    // Notifica o técnico responsável (se houver) — não é o usuário de sistema.
+    if (chamado.tecnicoId && chamado.tecnicoId !== sistemaId) {
+      await this.notificacao
+        .criarParaUsuario(
+          chamado.tecnicoId,
+          'CHAMADO_ATUALIZADO',
+          `SAC #${chamado.numero}: cliente respondeu por e-mail`,
+          corpo.slice(0, 200),
+          { chamadoId },
+        )
+        .catch(() => undefined);
+    }
+
+    return { anexos };
   }
 
   /** Últimas ingestões (log da tela). */
