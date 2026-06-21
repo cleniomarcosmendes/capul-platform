@@ -32,4 +32,16 @@ export class SacEmailController {
   testConnection() {
     return this.service.testConnection();
   }
+
+  // SAC 3b — busca + classifica as não-lidas (sem criar histórico ainda).
+  @Post('buscar-agora')
+  buscarAgora() {
+    return this.service.buscarAgora();
+  }
+
+  // SAC 3b — log das últimas ingestões (matched/unmatched/skipped/dup).
+  @Get('ingestoes')
+  listarIngestoes() {
+    return this.service.listarIngestoes();
+  }
 }

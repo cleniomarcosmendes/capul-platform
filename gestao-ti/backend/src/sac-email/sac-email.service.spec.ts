@@ -55,4 +55,67 @@ describe('SacEmailService (SAC Fase 3a)', () => {
       }),
     );
   });
+
+  // ===== 3b — busca/classificação =====
+
+  it('buscarAgora: sem conexão configurada → ok:false (não tenta IMAP)', async () => {
+    const r = await service.buscarAgora();
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/não configurada|nao configurada/i);
+  });
+
+  it('buscarAgora: pausado (freio de mão) → ok:false', async () => {
+    process.env.SAC_IMAP_HOST = 'h';
+    process.env.SAC_IMAP_USER = 'u';
+    process.env.SAC_IMAP_PASSWORD = 'p';
+    prisma.sacEmailConfig.upsert.mockResolvedValue({ id: 1, mailboxFolder: 'INBOX', pauseSync: true });
+    const r = await service.buscarAgora();
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/pausad/i);
+  });
+
+  // classificar é privado — exercitado via (service as any) com ParsedMail fake.
+  function mail({ from, subject, headers = {} }: { from?: string; subject?: string; headers?: Record<string, string> }) {
+    const h = new Map(Object.entries(headers));
+    return {
+      from: from ? { value: [{ address: from }] } : undefined,
+      subject,
+      headers: h,
+      date: null,
+      messageId: '<x@y>',
+    };
+  }
+
+  it('classificar: remetente próprio (SMTP_FROM) → SKIPPED_OWN', async () => {
+    process.env.SMTP_FROM = 'sac@capul.com.br';
+    const r = await (service as any).classificar(mail({ from: 'SAC@capul.com.br', subject: '[SAC-1] oi' }));
+    expect(r.resultado).toBe('SKIPPED_OWN');
+    delete process.env.SMTP_FROM;
+  });
+
+  it('classificar: auto-resposta (Auto-Submitted) → SKIPPED_AUTO', async () => {
+    const r = await (service as any).classificar(mail({ from: 'cli@x.com', subject: '[SAC-1] re', headers: { 'auto-submitted': 'auto-replied' } }));
+    expect(r.resultado).toBe('SKIPPED_AUTO');
+  });
+
+  it('classificar: sem [SAC-n] no assunto → UNMATCHED', async () => {
+    const r = await (service as any).classificar(mail({ from: 'cli@x.com', subject: 'dúvida qualquer' }));
+    expect(r.resultado).toBe('UNMATCHED');
+    expect(r.sacNumero).toBeNull();
+  });
+
+  it('classificar: [SAC-n] de chamado existente → MATCHED', async () => {
+    prisma.chamado.findUnique.mockResolvedValue({ id: 'ch-9' });
+    const r = await (service as any).classificar(mail({ from: 'cli@x.com', subject: 'Re: [SAC-42] pedido' }));
+    expect(r.resultado).toBe('MATCHED');
+    expect(r.sacNumero).toBe(42);
+    expect(r.chamadoId).toBe('ch-9');
+  });
+
+  it('classificar: [SAC-n] inexistente → UNMATCHED (com número)', async () => {
+    prisma.chamado.findUnique.mockResolvedValue(null);
+    const r = await (service as any).classificar(mail({ from: 'cli@x.com', subject: '[SAC-999] x' }));
+    expect(r.resultado).toBe('UNMATCHED');
+    expect(r.sacNumero).toBe(999);
+  });
 });

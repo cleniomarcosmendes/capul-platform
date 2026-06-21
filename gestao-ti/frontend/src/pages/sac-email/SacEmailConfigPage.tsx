@@ -5,8 +5,10 @@ import {
   sacEmailService,
   type SacEmailConfigResp,
   type SacEmailTesteResp,
+  type SacEmailIngestao,
+  type ResultadoIngestaoSac,
 } from '../../services/sacEmail.service';
-import { Inbox, Plug, Save, RefreshCw, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { Inbox, Plug, Save, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Download } from 'lucide-react';
 
 /**
  * SAC Fase 3 (3a) — config OPERACIONAL do e-mail de ENTRADA. Admin/Gestor.
@@ -20,6 +22,8 @@ export function SacEmailConfigPage() {
   const [salvando, setSalvando] = useState(false);
   const [testando, setTestando] = useState(false);
   const [teste, setTeste] = useState<SacEmailTesteResp | null>(null);
+  const [buscando, setBuscando] = useState(false);
+  const [ingestoes, setIngestoes] = useState<SacEmailIngestao[]>([]);
 
   // Form local (toggles).
   const [enabled, setEnabled] = useState(false);
@@ -35,13 +39,39 @@ export function SacEmailConfigPage() {
     setPollIntervalMinutes(r.config.pollIntervalMinutes);
   }
 
+  function carregarIngestoes() {
+    sacEmailService.listarIngestoes().then(setIngestoes).catch(() => undefined);
+  }
+
   useEffect(() => {
     sacEmailService
       .getConfig()
       .then(aplicar)
       .catch(() => toast('error', 'Falha ao carregar a configuração do SAC e-mail.'))
       .finally(() => setLoading(false));
+    carregarIngestoes();
   }, [toast]);
+
+  async function buscarAgora() {
+    setBuscando(true);
+    try {
+      const r = await sacEmailService.buscarAgora();
+      if (!r.ok) {
+        toast('error', r.error || 'Falha ao buscar e-mails.');
+      } else {
+        const s = r.resumo!;
+        toast('success', `${s.buscados} buscado(s): ${s.matched} casado(s), ${s.unmatched} triagem, ${s.skippedAuto + s.skippedOwn} ignorado(s), ${s.duplicate} dup.${s.capped ? ' (teto atingido)' : ''}`);
+      }
+      // recarrega config (último ciclo) + log
+      const cfg = await sacEmailService.getConfig();
+      aplicar(cfg);
+      carregarIngestoes();
+    } catch {
+      toast('error', 'Erro inesperado ao buscar e-mails.');
+    } finally {
+      setBuscando(false);
+    }
+  }
 
   async function salvar() {
     setSalvando(true);
@@ -116,6 +146,14 @@ export function SacEmailConfigPage() {
                     className="inline-flex items-center gap-2 bg-slate-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-800 disabled:opacity-50"
                   >
                     <RefreshCw className={`w-4 h-4 ${testando ? 'animate-spin' : ''}`} /> Testar conexão
+                  </button>
+                  <button
+                    onClick={buscarAgora}
+                    disabled={buscando || !conexao?.configurada || pauseSync}
+                    title={pauseSync ? 'Despause o consumo para buscar' : 'Busca e classifica as não-lidas (sem criar histórico ainda)'}
+                    className="inline-flex items-center gap-2 bg-capul-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50"
+                  >
+                    <Download className={`w-4 h-4 ${buscando ? 'animate-pulse' : ''}`} /> {buscando ? 'Buscando…' : 'Buscar agora'}
                   </button>
                   {teste && (
                     <span
@@ -192,12 +230,63 @@ export function SacEmailConfigPage() {
                   <Info label="Último erro" value={resp?.config.lastError ?? '—'} />
                 </div>
               </div>
+
+              {/* Log de ingestão (3b) */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-semibold text-slate-700 text-sm mb-3">
+                  Últimas ingestões <span className="text-slate-400 font-normal">({ingestoes.length})</span>
+                </h3>
+                {ingestoes.length === 0 ? (
+                  <p className="text-sm text-slate-400">Nenhuma ingestão ainda. Use “Buscar agora” para varrer a caixa.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs text-slate-400 border-b border-slate-100">
+                          <th className="py-2 pr-3">Quando</th>
+                          <th className="py-2 pr-3">Resultado</th>
+                          <th className="py-2 pr-3">De</th>
+                          <th className="py-2 pr-3">Assunto</th>
+                          <th className="py-2 pr-3">SAC</th>
+                          <th className="py-2">Motivo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ingestoes.map((it) => (
+                          <tr key={it.id} className="border-b border-slate-50">
+                            <td className="py-2 pr-3 whitespace-nowrap text-slate-500">{new Date(it.processadoEm).toLocaleString('pt-BR')}</td>
+                            <td className="py-2 pr-3"><BadgeResultado r={it.resultado} /></td>
+                            <td className="py-2 pr-3 text-slate-600">{it.fromAddr ?? '—'}</td>
+                            <td className="py-2 pr-3 text-slate-600 max-w-xs truncate" title={it.subject ?? ''}>{it.subject ?? '—'}</td>
+                            <td className="py-2 pr-3 text-slate-600">{it.sacNumero ? `#${it.sacNumero}` : '—'}</td>
+                            <td className="py-2 text-slate-400">{it.motivo ?? '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>
       </div>
     </>
   );
+}
+
+const RESULTADO_STYLE: Record<ResultadoIngestaoSac, { label: string; cls: string }> = {
+  MATCHED: { label: 'Casado', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  UNMATCHED: { label: 'Triagem', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  SKIPPED_AUTO: { label: 'Auto/bounce', cls: 'bg-slate-100 text-slate-500 border-slate-200' },
+  SKIPPED_OWN: { label: 'Próprio', cls: 'bg-slate-100 text-slate-500 border-slate-200' },
+  DUPLICATE: { label: 'Duplicado', cls: 'bg-slate-100 text-slate-500 border-slate-200' },
+  ERROR: { label: 'Erro', cls: 'bg-red-50 text-red-600 border-red-200' },
+};
+
+function BadgeResultado({ r }: { r: ResultadoIngestaoSac }) {
+  const s = RESULTADO_STYLE[r];
+  return <span className={`inline-block px-2 py-0.5 rounded-full text-xs border ${s.cls}`}>{s.label}</span>;
 }
 
 function Info({ label, value }: { label: string; value: string }) {

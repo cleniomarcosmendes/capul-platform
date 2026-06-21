@@ -294,6 +294,38 @@ model SacEmailConfig {
   @@schema("gestao_ti")
 }
 
+// SAC Fase 3 (3b) — classificação de cada e-mail buscado. Dedupe por messageId
+// (sintético quando o e-mail não traz Message-ID). Na 3b só CLASSIFICA e LOGA;
+// a criação do histórico no chamado (MATCHED) é a 3c.
+enum ResultadoIngestaoSac {
+  MATCHED       // [SAC-n] casou com um chamado existente
+  UNMATCHED     // sem [SAC-n] ou número inexistente → triagem
+  SKIPPED_AUTO  // auto-resposta/bounce (anti-loop)
+  SKIPPED_OWN   // veio do nosso próprio remetente (SMTP_FROM)
+  DUPLICATE     // messageId já processado
+  ERROR         // falha ao processar a mensagem
+
+  @@schema("gestao_ti")
+}
+
+model SacEmailIngestao {
+  id           String               @id @default(uuid())
+  // Chave de dedupe (Message-ID; sintético se ausente).
+  messageId    String               @unique @map("message_id")
+  fromAddr     String?              @map("from_addr")
+  subject      String?
+  sacNumero    Int?                 @map("sac_numero")
+  chamadoId    String?              @map("chamado_id")
+  resultado    ResultadoIngestaoSac
+  motivo       String?
+  recebidoEm   DateTime?            @map("recebido_em")
+  processadoEm DateTime             @default(now()) @map("processado_em")
+
+  @@index([processadoEm])
+  @@map("sac_email_ingestao")
+  @@schema("gestao_ti")
+}
+
 enum StatusChamado {
   ABERTO
   EM_ATENDIMENTO
