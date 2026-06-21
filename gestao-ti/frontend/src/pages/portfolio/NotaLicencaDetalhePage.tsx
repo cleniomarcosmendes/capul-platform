@@ -102,7 +102,7 @@ export function NotaLicencaDetalhePage() {
   return (
     <>
       <Header title={`Nota de Licenças ${nota.semNota ? 'S/N' : nota.numero}`} />
-      <div className="p-6 max-w-5xl">
+      <div className="p-6 mx-auto max-w-5xl">
         <button onClick={() => navigate('/gestao-ti/licencas')} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4">
           <ArrowLeft className="w-4 h-4" /> Voltar
         </button>

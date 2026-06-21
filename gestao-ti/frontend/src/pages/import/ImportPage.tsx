@@ -65,7 +65,7 @@ export function ImportPage() {
   return (
     <>
       <Header title="Importar Dados" />
-      <div className="p-6 max-w-4xl">
+      <div className="p-6 mx-auto max-w-4xl">
         {/* Steps indicator */}
         <div className="flex items-center gap-3 mb-6">
           {['Upload', 'Preview', 'Resultado'].map((label, idx) => {

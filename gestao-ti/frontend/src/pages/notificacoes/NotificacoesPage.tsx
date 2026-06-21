@@ -111,7 +111,7 @@ export function NotificacoesPage() {
   return (
     <>
       <Header title="Notificacoes" />
-      <div className="p-6 max-w-3xl">
+      <div className="p-6 mx-auto max-w-3xl">
         <div className="flex items-center justify-between mb-4">
           <div className="flex gap-2">
             {filtros.map((f) => (
