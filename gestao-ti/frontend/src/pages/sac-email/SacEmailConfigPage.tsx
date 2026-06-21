@@ -78,7 +78,7 @@ export function SacEmailConfigPage() {
     <>
       <Header title="SAC — Configuração de e-mail" />
       <div className="p-6">
-        <div className="max-w-3xl mx-auto space-y-6">
+        <div className="max-w-6xl mx-auto space-y-6">
           {loading ? (
             <div className="text-slate-500 text-sm">Carregando…</div>
           ) : (
@@ -88,6 +88,7 @@ export function SacEmailConfigPage() {
                 (buscar e tratar e-mails) fica em <Link to="/gestao-ti/sac-triagem" className="text-capul-600 hover:underline">SAC — Triagem</Link>.
               </p>
 
+              <div className="grid lg:grid-cols-2 items-start gap-6">
               {/* Conexão (vem do ambiente) */}
               <div className="bg-white rounded-xl border border-slate-200 p-5">
                 <h3 className="font-semibold text-slate-700 text-sm flex items-center gap-2 mb-3">
@@ -173,6 +174,7 @@ export function SacEmailConfigPage() {
                     <Save className="w-4 h-4" /> {salvando ? 'Salvando…' : 'Salvar'}
                   </button>
                 </div>
+              </div>
               </div>
             </>
           )}

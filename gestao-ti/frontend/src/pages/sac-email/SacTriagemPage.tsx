@@ -114,7 +114,7 @@ export function SacTriagemPage() {
     <>
       <Header title="SAC — Triagem" />
       <div className="p-6">
-        <div className="max-w-3xl mx-auto space-y-6">
+        <div className="space-y-6">
           {/* Ação de busca + último ciclo */}
           <div className="bg-white rounded-xl border border-slate-200 p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -139,7 +139,7 @@ export function SacTriagemPage() {
                 <span>Conexão IMAP não configurada. Peça a um gestor para ajustar em <Link to="/gestao-ti/sac-email" className="underline">Configuração de e-mail</Link>.</span>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm mt-4 pt-4 border-t border-slate-100">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 text-sm mt-4 pt-4 border-t border-slate-100">
               <Info label="Último poll" value={resp?.config.lastPollAt ? new Date(resp.config.lastPollAt).toLocaleString('pt-BR') : '— (sem ciclo ainda)'} />
               <Info label="Status" value={resp?.config.lastStatus ?? '—'} />
               <Info label="Processados (total)" value={String(resp?.config.processadosTotal ?? 0)} />
@@ -241,7 +241,7 @@ export function SacTriagemPage() {
                         <td className="py-2 pr-3 whitespace-nowrap text-slate-500">{new Date(it.processadoEm).toLocaleString('pt-BR')}</td>
                         <td className="py-2 pr-3"><BadgeResultado r={it.resultado} /></td>
                         <td className="py-2 pr-3 text-slate-600">{it.fromAddr ?? '—'}</td>
-                        <td className="py-2 pr-3 text-slate-600 max-w-xs truncate" title={it.subject ?? ''}>{it.subject ?? '—'}</td>
+                        <td className="py-2 pr-3 text-slate-600 max-w-md truncate" title={it.subject ?? ''}>{it.subject ?? '—'}</td>
                         <td className="py-2 pr-3 text-slate-600">
                           {it.chamadoId ? (
                             <Link to={`/gestao-ti/chamados/${it.chamadoId}`} className="text-capul-600 hover:underline">#{it.sacNumero}</Link>

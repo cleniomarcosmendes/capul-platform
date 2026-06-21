@@ -69,7 +69,7 @@ export function SacTemplatesPage() {
     <>
       <Header title="SAC — Respostas prontas" />
       <div className="p-6">
-        <div className="max-w-3xl mx-auto space-y-6">
+        <div className="max-w-5xl mx-auto space-y-6">
           <div className="flex items-center justify-between">
             <p className="text-sm text-slate-500">
               Respostas reutilizáveis inseridas no card “Responder ao cliente” do chamado de SAC.
@@ -125,9 +125,9 @@ export function SacTemplatesPage() {
             ) : itens.length === 0 ? (
               <p className="text-sm text-slate-400">Nenhuma resposta cadastrada.</p>
             ) : (
-              <div className="divide-y divide-slate-100">
+              <div className="grid sm:grid-cols-2 gap-3">
                 {itens.map((t) => (
-                  <div key={t.id} className="py-3 flex items-start justify-between gap-3">
+                  <div key={t.id} className="border border-slate-200 rounded-lg p-3 flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="text-sm text-slate-700 font-medium flex items-center gap-2">
                         {t.titulo}
