@@ -29,6 +29,14 @@ export class ProtheusController {
     return { encontrado: true, ...resultado };
   }
 
+  // SAC — busca o CLIENTE (cooperado) na SA1 por matrícula, para autofill.
+  @Get('cliente-sac/:matricula')
+  async buscarClienteSac(@Param('matricula') matricula: string) {
+    const r = await this.service.buscarClienteSac(matricula);
+    if (!r) return { encontrado: false, matricula, nome: null };
+    return { encontrado: true, ...r };
+  }
+
   /**
    * Valida matrícula+senha no portal RH (loginPortal). Usado na abertura de
    * Chamado por usuário PADRAO. Quando válida, já devolve o nome do colaborador

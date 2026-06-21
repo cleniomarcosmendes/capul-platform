@@ -198,11 +198,37 @@ export function ChamadoCreatePage() {
   const [clienteEmail, setClienteEmail] = useState('');
   const [clienteTelefone, setClienteTelefone] = useState('');
   const [canalOrigem, setCanalOrigem] = useState<'' | 'BALCAO' | 'TELEFONE' | 'EMAIL' | 'OUTRO'>('');
+  // SAC — busca do cliente (cooperado) por MATRÍCULA na SA1 (autofill nome/telefone).
+  const [clienteMatricula, setClienteMatricula] = useState('');
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
+  const [clienteBuscaMsg, setClienteBuscaMsg] = useState<{ ok: boolean; texto: string } | null>(null);
   // Chamado é SAC se a EQUIPE escolhida atende SAC (não o departamento — um
   // workspace pode ter equipe de SAC e equipe de chamado normal).
   const ehSac = equipes.find((e) => e.id === equipeAtualId)?.atendeSac ?? false;
   // No SAC o seletor de cópia vem do ROSTER (apoiadores); fora, dos não-TI.
   const candidatosCopia: { id: string; nome: string; username: string }[] = ehSac ? apoiadoresSac : usuariosNaoTI;
+
+  // SAC — busca o cliente pela matrícula (SA1) e preenche nome/telefone. E-mail é
+  // sempre manual (a SA1 não devolve). Não encontrado → digita tudo manualmente.
+  async function buscarClientePorMatricula() {
+    const mat = clienteMatricula.trim();
+    if (!mat || buscandoCliente) return;
+    setBuscandoCliente(true);
+    setClienteBuscaMsg(null);
+    try {
+      const r = await protheusService.buscarClienteSac(mat);
+      if (r.encontrado && r.nome) {
+        setClienteNome(r.nome);
+        if (r.telefone) setClienteTelefone(maskTelefone(r.telefone));
+        setDirty(true);
+        setClienteBuscaMsg({ ok: true, texto: `Cliente: ${r.nome}${r.cpfCnpj ? ` · ${r.cpfCnpj}` : ''}. Informe o e-mail.` });
+      } else {
+        setClienteBuscaMsg({ ok: false, texto: 'Matrícula não encontrada — preencha os dados manualmente.' });
+      }
+    } finally {
+      setBuscandoCliente(false);
+    }
+  }
 
   // Anexos
   const [arquivos, setArquivos] = useState<File[]>([]);
@@ -794,6 +820,24 @@ export function ChamadoCreatePage() {
           {ehSac && (
             <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4 space-y-3">
               <p className="text-sm font-semibold text-sky-800">Dados do cliente (SAC)</p>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Matrícula do cliente (cooperado)</label>
+                <div className="flex gap-2">
+                  <input type="text" value={clienteMatricula}
+                    onChange={(e) => { setClienteMatricula(e.target.value.toUpperCase()); setClienteBuscaMsg(null); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void buscarClientePorMatricula(); } }}
+                    placeholder="ex.: A00086"
+                    className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" />
+                  <button type="button" onClick={() => void buscarClientePorMatricula()} disabled={!clienteMatricula.trim() || buscandoCliente}
+                    className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+                    {buscandoCliente ? 'Buscando...' : 'Buscar'}
+                  </button>
+                </div>
+                {clienteBuscaMsg && (
+                  <span className={`block text-xs mt-1 ${clienteBuscaMsg.ok ? 'text-emerald-600' : 'text-amber-600'}`}>{clienteBuscaMsg.texto}</span>
+                )}
+                <span className="block text-xs text-slate-400 mt-0.5">Busca o cadastro do cooperado e preenche nome/telefone. Sem matrícula? Preencha abaixo manualmente.</span>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Nome do cliente</label>

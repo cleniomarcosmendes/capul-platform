@@ -298,4 +298,33 @@ export class ProtheusService {
       .map((f) => this.mapFuncionario(f as Record<string, unknown>))
       .filter((f): f is { matricula: string; nome: string; cc: string | null } => f !== null);
   }
+
+  /**
+   * SAC — busca o CLIENTE (cooperado) na SA1 por MATRÍCULA, para autofill no
+   * formulário do SAC. Reusa o endpoint SA1 (operação `clienteSac` no Configurador,
+   * que aponta para o mesmo `clienteEndereco` da logística). Devolve nome +
+   * telefone + CPF/CNPJ (a SA1 NÃO traz e-mail — esse fica manual). Read-only.
+   * A SA1 devolve 1 item por endereço; pegamos o 1º com nome.
+   */
+  async buscarClienteSac(
+    matricula: string,
+  ): Promise<{ matricula: string; nome: string; telefone: string | null; cpfCnpj: string | null } | null> {
+    const ep = await this.resolveEndpoint('clienteSac');
+    if (!ep) return null;
+
+    const mat = (matricula || '').trim().toUpperCase();
+    if (!mat) return null;
+    const url = `${ep.baseUrl}?MATRICULA=${encodeURIComponent(mat)}`;
+    this.logger.log(`Buscando cliente SAC (SA1) matricula ${mat} (ambiente: ${ep.ambiente})`);
+
+    const data = await this.requestJson(url, ep.authHeader, ep.timeoutMs);
+    if (!data) return null;
+    const itens = Array.isArray(data.itens) ? (data.itens as Array<Record<string, unknown>>) : [];
+    const norm = (v: unknown) => String(v ?? '').trim();
+    const it = itens.find((x) => norm(x.nome));
+    if (!it) return null;
+    const contatos = Array.isArray(it.contatos) ? (it.contatos as Array<Record<string, unknown>>) : [];
+    const telefone = contatos.map((c) => norm(c.numero)).find((n) => n) ?? null;
+    return { matricula: norm(it.matricula) || mat, nome: norm(it.nome), telefone, cpfCnpj: norm(it.cpfcnpj) || null };
+  }
 }

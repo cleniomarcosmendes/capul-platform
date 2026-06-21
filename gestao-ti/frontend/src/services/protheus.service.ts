@@ -23,7 +23,34 @@ export interface ValidacaoColaborador {
   cc?: string | null;
 }
 
+export interface ClienteSacProtheus {
+  encontrado: boolean;
+  matricula: string;
+  nome: string | null;
+  telefone?: string | null;
+  cpfCnpj?: string | null;
+}
+
 export const protheusService = {
+  /**
+   * SAC — busca o CLIENTE (cooperado) na SA1 por matrícula, para autofill do
+   * formulário do SAC (nome + telefone). A SA1 não traz e-mail — esse fica
+   * manual. `encontrado:false` quando inválida/sem acesso → digita manual.
+   * Nunca lança.
+   */
+  async buscarClienteSac(matricula: string): Promise<ClienteSacProtheus> {
+    const m = (matricula || '').trim();
+    if (!m) return { encontrado: false, matricula: '', nome: null };
+    try {
+      const { data } = await gestaoApi.get<ClienteSacProtheus>(
+        `/protheus/cliente-sac/${encodeURIComponent(m)}`,
+      );
+      return data;
+    } catch {
+      return { encontrado: false, matricula: m, nome: null };
+    }
+  },
+
   /**
    * Busca o funcionário (nome + centro de custo) por matrícula no Protheus
    * (operação `infoFuncionario` / portal RH). Retorna `encontrado:false`
