@@ -33,11 +33,17 @@ describe('SacIndicadoresService (SAC 4c)', () => {
       .mockResolvedValueOnce([{ canalOrigem: 'EMAIL', _count: { _all: 6 } }, { canalOrigem: null, _count: { _all: 4 } }]) // canal
       .mockResolvedValueOnce([{ equipeAtualId: 'eq-sac', _count: { _all: 10 } }]) // equipe
       .mockResolvedValueOnce([{ status: 'ABERTO', _count: { _all: 5 } }]); // status
-    // 2 resolvidos: 2h e 4h → média 3h
-    prisma.chamado.findMany.mockResolvedValue([
-      { createdAt: new Date('2026-06-01T10:00:00Z'), dataResolucao: new Date('2026-06-01T12:00:00Z') },
-      { createdAt: new Date('2026-06-02T10:00:00Z'), dataResolucao: new Date('2026-06-02T14:00:00Z') },
-    ]);
+    // 2 resolvidos: 2h e 4h → média 3h. 1º cumpriu o SLA, 2º estourou.
+    prisma.chamado.findMany
+      .mockResolvedValueOnce([
+        { createdAt: new Date('2026-06-01T10:00:00Z'), dataResolucao: new Date('2026-06-01T12:00:00Z'), dataLimiteSla: new Date('2026-06-01T18:00:00Z') }, // cumprido
+        { createdAt: new Date('2026-06-02T10:00:00Z'), dataResolucao: new Date('2026-06-02T14:00:00Z'), dataLimiteSla: new Date('2026-06-02T11:00:00Z') }, // estourado
+      ])
+      // backlog: 1 vencido (limite no passado) + 1 sem SLA
+      .mockResolvedValueOnce([
+        { createdAt: new Date('2020-01-01T00:00:00Z'), dataLimiteSla: new Date('2020-01-02T00:00:00Z') },
+        { createdAt: new Date('2026-06-10T00:00:00Z'), dataLimiteSla: null },
+      ]);
     prisma.sacEmailIngestao.groupBy.mockResolvedValue([
       { resultado: 'MATCHED', _count: { _all: 6 } },
       { resultado: 'UNMATCHED', _count: { _all: 3 } },
@@ -50,5 +56,8 @@ describe('SacIndicadoresService (SAC 4c)', () => {
     expect(r.porCanal[0]).toEqual({ canal: 'EMAIL', total: 6 });
     expect(r.porCanal.find((c) => c.canal === 'NAO_INFORMADO')?.total).toBe(4);
     expect(r.email).toMatchObject({ ingeridosNoMes: 9, casados: 6, triagem: 3, triagemPendente: 2 });
+    // SLA: backlog 1 vencido + 1 sem SLA; mês 1 cumprido + 1 estourado (50%).
+    expect(r.sla.backlog).toMatchObject({ vencidos: 1, semSla: 1 });
+    expect(r.sla.mes).toMatchObject({ cumpridos: 1, estourados: 1, percentualCumprimento: 50 });
   });
 });

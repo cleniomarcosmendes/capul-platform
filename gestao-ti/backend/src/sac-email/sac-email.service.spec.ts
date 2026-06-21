@@ -157,6 +157,20 @@ describe('SacEmailService (SAC Fase 3)', () => {
     );
   });
 
+  it('abrirTriagem: aplica a SLA da equipe (slaDefinicaoId + dataLimiteSla)', async () => {
+    prisma.sacEmailIngestao.findUnique.mockResolvedValue({ id: 'ing-1', triagemStatus: 'PENDENTE', subject: 'x', corpoTexto: 'y', fromAddr: 'a@b.com', anexos: [] });
+    prisma.equipe.findUnique.mockResolvedValue({ id: 'eq-sac', departamentoId: 'dep', atendeSac: true, status: 'ATIVO' });
+    prisma.usuario.findFirst.mockResolvedValue({ id: 'sys-1' });
+    prisma.slaDefinicao.findUnique.mockResolvedValue({ id: 'sla-1', horasResolucao: 24 });
+    prisma.chamado.create.mockResolvedValue({ id: 'ch-new', numero: 1600 });
+
+    await service.abrirTriagem('ing-1', 'eq-sac', 'user-1', 'fil-1');
+    const data = prisma.chamado.create.mock.calls[0][0].data;
+    expect(data.slaDefinicaoId).toBe('sla-1');
+    expect(data.dataLimiteSla).toBeInstanceOf(Date);
+    expect(data.prioridade).toBe('MEDIA');
+  });
+
   it('abrirTriagem: equipe não é de SAC → erro', async () => {
     prisma.sacEmailIngestao.findUnique.mockResolvedValue({ id: 'ing-1', triagemStatus: 'PENDENTE', anexos: [] });
     prisma.equipe.findUnique.mockResolvedValue({ id: 'eq-ti', departamentoId: 'dep-ti', atendeSac: false, status: 'ATIVO' });

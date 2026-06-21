@@ -528,16 +528,27 @@ export class SacEmailService {
     const sistemaId = await this.getSistemaSacUserId();
     if (!sistemaId) throw new BadRequestException('Usuário de sistema do SAC ausente — rode o seed.');
 
+    // SLA (4d): mesmo lookup do create normal — por equipe + prioridade (MEDIA).
+    // Sem SLA cadastrada pra equipe, fica sem prazo (igual chamado sem SLA).
+    const sla = await this.prisma.slaDefinicao.findUnique({
+      where: { equipeId_prioridade: { equipeId: equipe.id, prioridade: 'MEDIA' } },
+      select: { id: true, horasResolucao: true },
+    });
+    const dataLimiteSla = sla ? new Date(Date.now() + sla.horasResolucao * 3_600_000) : null;
+
     const chamado = await this.prisma.chamado.create({
       data: {
         titulo: (ing.subject ?? '').slice(0, 200) || 'SAC por e-mail',
         descricao: (ing.corpoTexto ?? '').trim() || '(sem corpo)',
+        prioridade: 'MEDIA',
         solicitanteId: sistemaId,
         equipeAtualId: equipe.id,
         departamentoId: equipe.departamentoId,
         filialId,
         clienteEmail: ing.fromAddr,
         canalOrigem: 'EMAIL',
+        slaDefinicaoId: sla?.id ?? null,
+        dataLimiteSla,
       },
       select: { id: true, numero: true },
     });

@@ -27,7 +27,7 @@ export class SacIndicadoresService {
     const baseSac = { equipeAtualId: { in: equipeIds } };
     const noMes = { gte: inicio, lt: fim };
 
-    const [abertosNoMes, resolvidosNoMes, backlogAtual, porCanalRaw, porEquipeRaw, porStatusRaw, resolvidos, emailRaw, triagemPendente] =
+    const [abertosNoMes, resolvidosNoMes, backlogAtual, porCanalRaw, porEquipeRaw, porStatusRaw, resolvidos, emailRaw, triagemPendente, backlogRows] =
       await Promise.all([
         this.prisma.chamado.count({ where: { ...baseSac, createdAt: noMes } }),
         this.prisma.chamado.count({ where: { ...baseSac, dataResolucao: noMes } }),
@@ -35,9 +35,10 @@ export class SacIndicadoresService {
         this.prisma.chamado.groupBy({ by: ['canalOrigem'], where: { ...baseSac, createdAt: noMes }, _count: { _all: true } }),
         this.prisma.chamado.groupBy({ by: ['equipeAtualId'], where: { ...baseSac, createdAt: noMes }, _count: { _all: true } }),
         this.prisma.chamado.groupBy({ by: ['status'], where: { ...baseSac, createdAt: noMes }, _count: { _all: true } }),
-        this.prisma.chamado.findMany({ where: { ...baseSac, dataResolucao: noMes }, select: { createdAt: true, dataResolucao: true } }),
+        this.prisma.chamado.findMany({ where: { ...baseSac, dataResolucao: noMes }, select: { createdAt: true, dataResolucao: true, dataLimiteSla: true } }),
         this.prisma.sacEmailIngestao.groupBy({ by: ['resultado'], where: { processadoEm: noMes }, _count: { _all: true } }),
         this.prisma.sacEmailIngestao.count({ where: { triagemStatus: 'PENDENTE' } }),
+        this.prisma.chamado.findMany({ where: { ...baseSac, status: { notIn: FINALIZADOS as never[] } }, select: { createdAt: true, dataLimiteSla: true } }),
       ]);
 
     // Tempo médio de resolução (horas) dos resolvidos no mês.
@@ -46,6 +47,27 @@ export class SacIndicadoresService {
       const somaMs = resolvidos.reduce((acc, c) => acc + (c.dataResolucao!.getTime() - c.createdAt.getTime()), 0);
       tempoResolucaoMedioHoras = Math.round((somaMs / resolvidos.length / 3_600_000) * 10) / 10;
     }
+
+    // SLA (4d): backlog atual por situação + cumprimento dos resolvidos no mês.
+    const agora = Date.now();
+    const slaBacklog = { vencidos: 0, emRisco: 0, noPrazo: 0, semSla: 0 };
+    for (const c of backlogRows) {
+      if (!c.dataLimiteSla) { slaBacklog.semSla++; continue; }
+      const limite = c.dataLimiteSla.getTime();
+      if (limite < agora) { slaBacklog.vencidos++; continue; }
+      const total = limite - c.createdAt.getTime();
+      const consumido = agora - c.createdAt.getTime();
+      if (total > 0 && consumido / total >= 0.8) slaBacklog.emRisco++;
+      else slaBacklog.noPrazo++;
+    }
+    const slaMes = { cumpridos: 0, estourados: 0, semSla: 0 };
+    for (const c of resolvidos) {
+      if (!c.dataLimiteSla) { slaMes.semSla++; continue; }
+      if (c.dataResolucao!.getTime() <= c.dataLimiteSla.getTime()) slaMes.cumpridos++;
+      else slaMes.estourados++;
+    }
+    const comSlaMes = slaMes.cumpridos + slaMes.estourados;
+    const percentualCumprimento = comSlaMes > 0 ? Math.round((slaMes.cumpridos / comSlaMes) * 100) : null;
 
     const porCanal = porCanalRaw
       .map((r) => ({ canal: r.canalOrigem ?? 'NAO_INFORMADO', total: r._count._all }))
@@ -71,6 +93,7 @@ export class SacIndicadoresService {
       periodo: { mes, ano },
       volume: { abertosNoMes, resolvidosNoMes, backlogAtual },
       tempoResolucaoMedioHoras,
+      sla: { backlog: slaBacklog, mes: { ...slaMes, percentualCumprimento } },
       porCanal,
       porEquipe,
       porStatus,
@@ -83,6 +106,7 @@ export class SacIndicadoresService {
       periodo: { mes, ano },
       volume: { abertosNoMes: 0, resolvidosNoMes: 0, backlogAtual: 0 },
       tempoResolucaoMedioHoras: null as number | null,
+      sla: { backlog: { vencidos: 0, emRisco: 0, noPrazo: 0, semSla: 0 }, mes: { cumpridos: 0, estourados: 0, semSla: 0, percentualCumprimento: null as number | null } },
       porCanal: [] as { canal: string; total: number }[],
       porEquipe: [] as { equipeId: string; nome: string; total: number }[],
       porStatus: [] as { status: string; total: number }[],

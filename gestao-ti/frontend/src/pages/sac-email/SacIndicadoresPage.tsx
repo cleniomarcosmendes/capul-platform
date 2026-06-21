@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { useToast } from '../../components/Toast';
 import { sacIndicadoresService, type SacIndicadores } from '../../services/sacIndicadores.service';
-import { ChevronLeft, ChevronRight, Ticket, CheckCircle2, Layers, Clock, Mail, Inbox } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Ticket, CheckCircle2, Layers, Clock, Mail, Inbox, Timer, AlertTriangle } from 'lucide-react';
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const CANAL_LABEL: Record<string, string> = { BALCAO: 'Balcão', TELEFONE: 'Telefone', EMAIL: 'E-mail', OUTRO: 'Outro', NAO_INFORMADO: 'Não informado' };
@@ -61,6 +62,35 @@ export function SacIndicadoresPage() {
               <Card icon={<Layers className="w-5 h-5 text-amber-600" />} label="Em aberto (backlog)" value={data.volume.backlogAtual} />
               <Card icon={<Clock className="w-5 h-5 text-slate-600" />} label="Tempo médio resolução"
                 value={data.tempoResolucaoMedioHoras != null ? `${data.tempoResolucaoMedioHoras} h` : '—'} />
+            </div>
+
+            {/* SLA */}
+            <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                  <Timer className="w-4 h-4 text-capul-600" /> SLA (resolução)
+                </h3>
+                <Link to="/gestao-ti/sla" className="text-xs text-capul-600 hover:underline">Configurar SLA por equipe →</Link>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Mini label="Vencidos (backlog)" value={data.sla.backlog.vencidos} destaque={data.sla.backlog.vencidos > 0} icon={<AlertTriangle className="w-4 h-4" />} />
+                <Mini label="Em risco (≥80%)" value={data.sla.backlog.emRisco} />
+                <Mini label="No prazo" value={data.sla.backlog.noPrazo} />
+                <Mini label="Sem SLA" value={data.sla.backlog.semSla} />
+              </div>
+              <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-x-8 gap-y-2">
+                <div>
+                  <div className="text-xs text-slate-500">Cumprimento no mês</div>
+                  <div className="text-2xl font-semibold text-slate-800">
+                    {data.sla.mes.percentualCumprimento != null ? `${data.sla.mes.percentualCumprimento}%` : '—'}
+                  </div>
+                </div>
+                <div className="text-sm text-slate-600">
+                  <span className="text-emerald-700 font-medium">{data.sla.mes.cumpridos}</span> no prazo ·{' '}
+                  <span className="text-red-600 font-medium">{data.sla.mes.estourados}</span> estourados
+                  {data.sla.mes.semSla > 0 && <> · <span className="text-slate-400">{data.sla.mes.semSla} sem SLA</span></>}
+                </div>
+              </div>
             </div>
 
             {/* Breakdowns */}
