@@ -723,7 +723,7 @@ export function OrdensServicoPage() {
         </div>
 
         {showForm && (
-          <form onSubmit={handleCreate} className="bg-white rounded-xl border border-slate-200 p-6 mb-6 space-y-4">
+          <form onSubmit={handleCreate} className="bg-white rounded-xl border border-slate-200 p-6 mb-6 space-y-4 mx-auto max-w-3xl shadow-sm">
             {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
