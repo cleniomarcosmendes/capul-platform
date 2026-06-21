@@ -53,6 +53,12 @@ export class CreateEquipeDto {
   @IsBoolean()
   apoioSac?: boolean;
 
+  // SAC — equipe de ATENDIMENTO ao SAC (recebe os chamados de SAC). É o que marca
+  // um chamado como "SAC" (por equipe, não por depto). Default false.
+  @IsOptional()
+  @IsBoolean()
+  atendeSac?: boolean;
+
   @IsOptional()
   @IsString()
   @MaxLength(255)

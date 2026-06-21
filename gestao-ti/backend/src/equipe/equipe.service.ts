@@ -182,6 +182,7 @@ export class EquipeService {
         privada: dto.privada,
         restritaVisibilidade: dto.restritaVisibilidade,
         apoioSac: dto.apoioSac,
+        atendeSac: dto.atendeSac,
         emailEquipe: dto.emailEquipe,
         ordem: dto.ordem,
         departamentoId,

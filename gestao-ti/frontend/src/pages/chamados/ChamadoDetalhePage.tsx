@@ -140,8 +140,7 @@ export function ChamadoDetalhePage() {
   const [copias, setCopias] = useState<ChamadoCopiaResumo[]>([]);
   const [showAddCopia, setShowAddCopia] = useState(false);
   const [usuariosNaoTI, setUsuariosNaoTI] = useState<UsuarioCore[]>([]);
-  // SAC (Fase 1) — no SAC o picker de cópia vem do ROSTER, não de todos os não-TI.
-  const [sacDeptoIds, setSacDeptoIds] = useState<string[]>([]);
+  // SAC — no SAC o picker de cópia vem do ROSTER, não de todos os não-TI.
   const [apoiadoresSac, setApoiadoresSac] = useState<ApoiadorSac[]>([]);
   const [copiaBusca, setCopiaBusca] = useState('');
   const [copiaSalvando, setCopiaSalvando] = useState(false);
@@ -190,8 +189,8 @@ export function ChamadoDetalhePage() {
   const isGestor = ['ADMIN', 'GESTOR'].includes(gestaoTiRole || '');
   const isSolicitante = chamado?.solicitanteId === usuario?.id;
   const isTecnicoAtribuido = chamado?.tecnicoId === usuario?.id;
-  // SAC (Fase 1): chamado é SAC se o depto-dono é workspace SAC (tem equipe apoioSac).
-  const ehSac = !!chamado?.departamentoId && sacDeptoIds.includes(chamado.departamentoId);
+  // SAC: chamado é SAC se a EQUIPE que o atende tem atendeSac (não o departamento).
+  const ehSac = chamado?.equipeAtual?.atendeSac ?? false;
   // No SAC, candidatos a "em cópia" = só o roster de apoiadores.
   const candidatosCopia: { id: string; nome: string; username: string }[] = ehSac ? apoiadoresSac : usuariosNaoTI;
   const canEditHeader = isSolicitante || isGestor;
@@ -243,11 +242,9 @@ export function ChamadoDetalhePage() {
       setUsuariosMencao(users);
       setUsuariosNaoTI(users.filter((u) => u.id !== usuario?.id));
     }).catch(() => {});
-    // SAC (Fase 1) — quais deptos são workspace SAC (detecção do chamado).
-    chamadoService.listarDepartamentosSac().then(setSacDeptoIds).catch(() => setSacDeptoIds([]));
   }, [id, usuario?.id]);
 
-  // SAC (Fase 1) — roster de apoiadores (fonte do picker de cópia), só quando SAC.
+  // SAC — roster de apoiadores (fonte do picker de cópia), só quando SAC.
   useEffect(() => {
     if (!ehSac) { setApoiadoresSac([]); return; }
     chamadoService.listarApoiadoresSac().then(setApoiadoresSac).catch(() => setApoiadoresSac([]));

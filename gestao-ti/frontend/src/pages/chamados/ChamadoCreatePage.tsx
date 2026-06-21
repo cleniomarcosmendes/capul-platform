@@ -182,14 +182,14 @@ export function ChamadoCreatePage() {
   const [copiaBusca, setCopiaBusca] = useState('');
   const [copiaDropdownOpen, setCopiaDropdownOpen] = useState(false);
 
-  // SAC (Fase 1) — detecção do workspace SAC + dados do cliente externo.
-  const [sacDeptoIds, setSacDeptoIds] = useState<string[]>([]);
+  // SAC — dados do cliente externo + roster.
   const [apoiadoresSac, setApoiadoresSac] = useState<ApoiadorSac[]>([]);
   const [clienteNome, setClienteNome] = useState('');
   const [clienteContato, setClienteContato] = useState('');
   const [canalOrigem, setCanalOrigem] = useState<'' | 'BALCAO' | 'TELEFONE' | 'EMAIL' | 'OUTRO'>('');
-  // É um chamado de SAC se o depto-destino é workspace de SAC (tem equipe apoioSac).
-  const ehSac = !!deptoDestinoId && sacDeptoIds.includes(deptoDestinoId);
+  // Chamado é SAC se a EQUIPE escolhida atende SAC (não o departamento — um
+  // workspace pode ter equipe de SAC e equipe de chamado normal).
+  const ehSac = equipes.find((e) => e.id === equipeAtualId)?.atendeSac ?? false;
   // No SAC o seletor de cópia vem do ROSTER (apoiadores); fora, dos não-TI.
   const candidatosCopia: { id: string; nome: string; username: string }[] = ehSac ? apoiadoresSac : usuariosNaoTI;
 
@@ -260,12 +260,7 @@ export function ChamadoCreatePage() {
     }).catch(() => setUsuariosNaoTI([]));
   }, [usuario?.id]);
 
-  // SAC (Fase 1) — depts que são workspace de SAC (detecção "este chamado é SAC?")
-  useEffect(() => {
-    chamadoService.listarDepartamentosSac().then(setSacDeptoIds).catch(() => setSacDeptoIds([]));
-  }, []);
-
-  // SAC (Fase 1) — roster de apoiadores (fonte do seletor de cópia), só quando SAC.
+  // SAC — roster de apoiadores (fonte do seletor de cópia), só quando SAC.
   useEffect(() => {
     if (!ehSac) { setApoiadoresSac([]); return; }
     chamadoService.listarApoiadoresSac().then(setApoiadoresSac).catch(() => setApoiadoresSac([]));

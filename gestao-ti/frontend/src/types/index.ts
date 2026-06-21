@@ -56,6 +56,8 @@ export interface Equipe {
   restritaVisibilidade?: boolean;
   // SAC (Fase 1): equipe-catálogo de apoiadores (roster) — não recebe chamados.
   apoioSac?: boolean;
+  // SAC: equipe de ATENDIMENTO ao SAC (recebe os chamados de SAC) — marca o chamado como SAC.
+  atendeSac?: boolean;
   emailEquipe: string | null;
   ordem: number;
   status: 'ATIVO' | 'INATIVO';
@@ -203,6 +205,8 @@ export interface EquipeResumo {
   nome: string;
   sigla: string;
   cor: string | null;
+  // SAC: a equipe que atende o chamado é de atendimento ao SAC? (detecção no detalhe)
+  atendeSac?: boolean;
 }
 
 export interface FilialResumo {

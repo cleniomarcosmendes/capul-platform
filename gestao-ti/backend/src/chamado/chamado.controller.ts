@@ -372,13 +372,6 @@ export class ChamadoController {
     return this.service.listarApoiadoresSac();
   }
 
-  // SAC (Fase 1) — ids dos departamentos-workspace de SAC (têm equipe apoioSac).
-  // O frontend usa para detectar se o chamado em aberto é SAC.
-  @Get('sac/departamentos')
-  listarDepartamentosSac() {
-    return this.service.listarDepartamentosSac();
-  }
-
   // SAC (Fase 2) — responder o cliente por e-mail (saída). Staff/operador.
   @Post(':id/responder-sac')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')

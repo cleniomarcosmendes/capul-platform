@@ -407,12 +407,12 @@ describe('ChamadoService', () => {
   describe('responderSac (SAC Fase 2)', () => {
     const sacChamado = {
       id: 'ch-1', numero: 42, titulo: 'Reclamação', status: 'EM_ATENDIMENTO',
-      departamentoId: 'dep-sac', clienteContato: 'cliente@ex.com', solicitanteId: 's', tecnicoId: 't',
+      equipeAtualId: 'eq-sac', clienteContato: 'cliente@ex.com', solicitanteId: 's', tecnicoId: 't',
     };
 
     it('responde o cliente: cria histórico público + dispara e-mail externo [SAC-n]', async () => {
       prisma.chamado.findUnique.mockResolvedValue(sacChamado);
-      prisma.equipe.findFirst.mockResolvedValue({ id: 'eq-apoio' }); // depto é SAC (tem equipe apoioSac)
+      prisma.equipe.findUnique.mockResolvedValue({ atendeSac: true }); // equipe do chamado atende SAC
       prisma.historicoChamado.create.mockResolvedValue({ id: 'h1' });
 
       await core.responderSac('ch-1', '  Olá, seu pedido foi resolvido  ', mockUser as any, 'GESTOR');
@@ -427,15 +427,15 @@ describe('ChamadoService', () => {
       );
     });
 
-    it('bloqueia se o chamado não é de workspace SAC', async () => {
+    it('bloqueia se a equipe do chamado não atende SAC', async () => {
       prisma.chamado.findUnique.mockResolvedValue(sacChamado);
-      prisma.equipe.findFirst.mockResolvedValue(null); // sem equipe apoioSac no depto
+      prisma.equipe.findUnique.mockResolvedValue({ atendeSac: false }); // equipe normal
       await expect(core.responderSac('ch-1', 'oi', mockUser as any, 'GESTOR')).rejects.toThrow(BadRequestException);
     });
 
     it('bloqueia se o cliente não tem contato', async () => {
       prisma.chamado.findUnique.mockResolvedValue({ ...sacChamado, clienteContato: null });
-      prisma.equipe.findFirst.mockResolvedValue({ id: 'eq-apoio' });
+      prisma.equipe.findUnique.mockResolvedValue({ atendeSac: true });
       await expect(core.responderSac('ch-1', 'oi', mockUser as any, 'GESTOR')).rejects.toThrow(BadRequestException);
     });
   });

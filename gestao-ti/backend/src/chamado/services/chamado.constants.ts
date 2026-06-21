@@ -3,7 +3,7 @@ import * as path from 'path';
 export const chamadoInclude = {
   solicitante: { select: { id: true, nome: true, username: true, email: true } },
   tecnico: { select: { id: true, nome: true, username: true, email: true } },
-  equipeAtual: { select: { id: true, nome: true, sigla: true, cor: true } },
+  equipeAtual: { select: { id: true, nome: true, sigla: true, cor: true, atendeSac: true } },
   filial: { select: { id: true, codigo: true, nomeFantasia: true } },
   departamento: { select: { id: true, nome: true } },
   catalogoServico: { select: { id: true, nome: true } },

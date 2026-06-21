@@ -137,11 +137,6 @@ export class ChamadoService {
     return this.core.listarApoiadoresSac();
   }
 
-  // SAC (Fase 1) — departamentos que são workspace de SAC (têm equipe apoioSac).
-  async listarDepartamentosSac() {
-    return this.core.listarDepartamentosSac();
-  }
-
   // SAC (Fase 2) — resposta ao cliente por e-mail.
   async responderSac(id: string, texto: string, user: JwtPayload, role: string) {
     return this.core.responderSac(id, texto, user, role);

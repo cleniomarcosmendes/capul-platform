@@ -131,12 +131,6 @@ export const chamadoService = {
     return data;
   },
 
-  // SAC (Fase 1) — ids dos departamentos-workspace de SAC (detecção no form).
-  async listarDepartamentosSac(): Promise<string[]> {
-    const { data } = await gestaoApi.get('/chamados/sac/departamentos');
-    return data;
-  },
-
   // SAC (Fase 2) — responde o cliente por e-mail. Retorna { historico, email:{sent,mock} }.
   async responderSac(id: string, texto: string): Promise<{ email: { sent: boolean; mock: boolean; redirected: boolean } }> {
     const { data } = await gestaoApi.post(`/chamados/${id}/responder-sac`, { texto });

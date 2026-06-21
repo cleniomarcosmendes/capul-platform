@@ -16,6 +16,7 @@ interface FormData {
   privada: boolean;
   restritaVisibilidade: boolean;
   apoioSac: boolean;
+  atendeSac: boolean;
   emailEquipe: string;
   ordem: number;
   /** Workspace Onda 2 C2.8 — depto-dono explícito no form (antes vinha
@@ -32,6 +33,7 @@ const initialForm: FormData = {
   privada: false,
   restritaVisibilidade: false,
   apoioSac: false,
+  atendeSac: false,
   emailEquipe: '',
   ordem: 0,
   departamentoId: '',
@@ -72,6 +74,7 @@ export function EquipeFormPage() {
             privada: equipe.privada,
             restritaVisibilidade: equipe.restritaVisibilidade ?? false,
             apoioSac: equipe.apoioSac ?? false,
+            atendeSac: equipe.atendeSac ?? false,
             emailEquipe: equipe.emailEquipe || '',
             ordem: equipe.ordem,
             departamentoId: equipe.departamentoId ?? '',
@@ -305,6 +308,24 @@ export function EquipeFormPage() {
                 para serem incluídos <b>em cópia</b> nos chamados do SAC (apoio de
                 outros setores). Esta equipe é só catálogo — <b>não recebe
                 chamados</b> (não pode ser destino de abertura/transferência).
+              </span>
+            </label>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              id="atendeSac"
+              checked={form.atendeSac}
+              onChange={(e) => handleChange('atendeSac', e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded border-slate-300 text-capul-600 focus:ring-capul-600"
+            />
+            <label htmlFor="atendeSac" className="text-sm text-slate-700">
+              Equipe de atendimento ao SAC (recebe os chamados de SAC)
+              <span className="block text-xs text-slate-500">
+                Quando marcada, os <b>chamados abertos para esta equipe são tratados como SAC</b>
+                (mostram os dados do cliente e o "responder ao cliente"). Use numa equipe
+                dedicada — assim o mesmo workspace pode ter equipe de SAC e equipe de chamado normal.
               </span>
             </label>
           </div>

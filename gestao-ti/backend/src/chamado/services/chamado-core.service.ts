@@ -933,20 +933,6 @@ export class ChamadoCoreService {
   }
 
   /**
-   * SAC (Fase 1) — departamentos que SÃO workspace de SAC = os que contêm ao
-   * menos uma equipe `apoioSac` (catálogo). O frontend usa para detectar "este
-   * chamado é SAC?" (mostrar campos do cliente + picker do roster). Sem flag no
-   * core (read-only): o marcador é derivado da equipe de apoio.
-   */
-  async listarDepartamentosSac(): Promise<string[]> {
-    const equipes = await this.prisma.equipe.findMany({
-      where: { apoioSac: true, status: 'ATIVO' },
-      select: { departamentoId: true },
-    });
-    return [...new Set(equipes.map((e) => e.departamentoId).filter(Boolean) as string[])];
-  }
-
-  /**
    * SAC Fase 2 — resposta ao CLIENTE por e-mail. Cria um histórico público
    * (timeline) marcando a resposta e dispara o e-mail externo (assunto
    * `[SAC-<numero>]` para preparar o threading da Fase 3). Só em chamado de
@@ -958,11 +944,13 @@ export class ChamadoCoreService {
     if (['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status)) {
       throw new BadRequestException('Chamado finalizado — reabra para responder o cliente.');
     }
-    const sacDept = await this.prisma.equipe.findFirst({
-      where: { apoioSac: true, status: 'ATIVO', departamentoId: chamado.departamentoId },
-      select: { id: true },
+    // "Chamado é SAC" = a EQUIPE que o atende tem atendeSac (não o departamento —
+    // um workspace pode ter equipe de SAC E de chamado normal).
+    const equipe = await this.prisma.equipe.findUnique({
+      where: { id: chamado.equipeAtualId },
+      select: { atendeSac: true },
     });
-    if (!sacDept) throw new BadRequestException('Este chamado não é de um workspace de SAC.');
+    if (!equipe?.atendeSac) throw new BadRequestException('Este chamado não é de uma equipe de atendimento ao SAC.');
     if (!chamado.clienteContato) {
       throw new BadRequestException('Cliente sem e-mail/contato cadastrado — não dá para responder por e-mail.');
     }
