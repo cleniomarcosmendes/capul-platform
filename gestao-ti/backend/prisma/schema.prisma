@@ -393,11 +393,12 @@ model Chamado {
   ipMaquina            String?       @map("ip_maquina")
   matriculaColaborador String?       @map("matricula_colaborador")
   nomeColaborador      String?       @map("nome_colaborador")
-  // SAC (Fase 1) — dados do CLIENTE externo (o colaborador registra em nome
-  // dele; o cliente não é usuário do sistema). Nullable: só preenchidos nos
-  // chamados do workspace SAC. `clienteContato` habilita o e-mail de saída (F2).
+  // SAC — dados do CLIENTE externo (o colaborador registra em nome dele; o
+  // cliente não é usuário do sistema). Nullable: só preenchidos nos chamados SAC.
+  // `clienteEmail` habilita o e-mail de saída (Fase 2); telefone é contato à parte.
   clienteNome          String?         @map("cliente_nome")
-  clienteContato       String?         @map("cliente_contato")
+  clienteEmail         String?         @map("cliente_email")
+  clienteTelefone      String?         @map("cliente_telefone")
   canalOrigem          CanalOrigemSac? @map("canal_origem")
   createdAt            DateTime      @default(now()) @map("created_at")
   updatedAt          DateTime      @updatedAt @map("updated_at")

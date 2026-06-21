@@ -185,7 +185,8 @@ export function ChamadoCreatePage() {
   // SAC — dados do cliente externo + roster.
   const [apoiadoresSac, setApoiadoresSac] = useState<ApoiadorSac[]>([]);
   const [clienteNome, setClienteNome] = useState('');
-  const [clienteContato, setClienteContato] = useState('');
+  const [clienteEmail, setClienteEmail] = useState('');
+  const [clienteTelefone, setClienteTelefone] = useState('');
   const [canalOrigem, setCanalOrigem] = useState<'' | 'BALCAO' | 'TELEFONE' | 'EMAIL' | 'OUTRO'>('');
   // Chamado é SAC se a EQUIPE escolhida atende SAC (não o departamento — um
   // workspace pode ter equipe de SAC e equipe de chamado normal).
@@ -348,7 +349,8 @@ export function ChamadoCreatePage() {
         copiasUsuariosIds: copiasIds.length > 0 ? copiasIds : undefined,
         // SAC (Fase 1) — dados do cliente só quando o workspace é SAC.
         clienteNome: ehSac && clienteNome.trim() ? clienteNome.trim() : undefined,
-        clienteContato: ehSac && clienteContato.trim() ? clienteContato.trim() : undefined,
+        clienteEmail: ehSac && clienteEmail.trim() ? clienteEmail.trim() : undefined,
+        clienteTelefone: ehSac && clienteTelefone.trim() ? clienteTelefone.trim() : undefined,
         canalOrigem: ehSac && canalOrigem ? canalOrigem : undefined,
       });
 
@@ -782,21 +784,29 @@ export function ChamadoCreatePage() {
           {ehSac && (
             <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4 space-y-3">
               <p className="text-sm font-semibold text-sky-800">Dados do cliente (SAC)</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Nome do cliente</label>
                   <input type="text" value={clienteNome} maxLength={150}
                     onChange={(e) => { setClienteNome(e.target.value); setDirty(true); }}
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" />
                 </div>
-                <div className="sm:col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Contato (e-mail/telefone)</label>
-                  <input type="text" value={clienteContato} maxLength={150}
-                    onChange={(e) => { setClienteContato(e.target.value); setDirty(true); }}
-                    placeholder="ex.: cliente@email.com / (38) 9...."
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">E-mail do cliente</label>
+                  <input type="email" value={clienteEmail} maxLength={150}
+                    onChange={(e) => { setClienteEmail(e.target.value); setDirty(true); }}
+                    placeholder="ex.: cliente@email.com"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" />
+                  <span className="block text-xs text-slate-400 mt-0.5">Usado para responder o cliente por e-mail.</span>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Telefone do cliente</label>
+                  <input type="text" value={clienteTelefone} maxLength={40}
+                    onChange={(e) => { setClienteTelefone(e.target.value); setDirty(true); }}
+                    placeholder="ex.: (38) 9...."
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600" />
                 </div>
-                <div className="sm:col-span-1">
+                <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Canal de origem</label>
                   <select value={canalOrigem} onChange={(e) => { setCanalOrigem(e.target.value as typeof canalOrigem); setDirty(true); }}
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600">

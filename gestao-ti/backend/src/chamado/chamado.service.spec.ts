@@ -105,7 +105,7 @@ describe('ChamadoService', () => {
 
       const dto = {
         titulo: 'Cliente reclamou do produto', descricao: 'Detalhes', equipeAtualId: 'eq-1',
-        clienteNome: '  Maria Silva  ', clienteContato: 'maria@cliente.com', canalOrigem: 'TELEFONE',
+        clienteNome: '  Maria Silva  ', clienteEmail: 'maria@cliente.com', canalOrigem: 'TELEFONE',
       };
       await service.create(dto as any, mockUser as any, 'SUPORTE');
 
@@ -113,7 +113,7 @@ describe('ChamadoService', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             clienteNome: 'Maria Silva',            // trim aplicado
-            clienteContato: 'maria@cliente.com',
+            clienteEmail: 'maria@cliente.com',
             canalOrigem: 'TELEFONE',
           }),
         }),
@@ -407,7 +407,7 @@ describe('ChamadoService', () => {
   describe('responderSac (SAC Fase 2)', () => {
     const sacChamado = {
       id: 'ch-1', numero: 42, titulo: 'Reclamação', status: 'EM_ATENDIMENTO',
-      equipeAtualId: 'eq-sac', clienteContato: 'cliente@ex.com', solicitanteId: 's', tecnicoId: 't',
+      equipeAtualId: 'eq-sac', clienteEmail: 'cliente@ex.com', solicitanteId: 's', tecnicoId: 't',
     };
 
     it('responde o cliente: cria histórico público + dispara e-mail externo [SAC-n]', async () => {
@@ -434,7 +434,7 @@ describe('ChamadoService', () => {
     });
 
     it('bloqueia se o cliente não tem contato', async () => {
-      prisma.chamado.findUnique.mockResolvedValue({ ...sacChamado, clienteContato: null });
+      prisma.chamado.findUnique.mockResolvedValue({ ...sacChamado, clienteEmail: null });
       prisma.equipe.findUnique.mockResolvedValue({ atendeSac: true });
       await expect(core.responderSac('ch-1', 'oi', mockUser as any, 'GESTOR')).rejects.toThrow(BadRequestException);
     });

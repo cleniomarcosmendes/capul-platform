@@ -97,7 +97,12 @@ export class CreateChamadoDto {
   @IsOptional()
   @IsString()
   @MaxLength(150)
-  clienteContato?: string;
+  clienteEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  clienteTelefone?: string;
 
   @IsOptional()
   @IsEnum(CanalOrigemSac)

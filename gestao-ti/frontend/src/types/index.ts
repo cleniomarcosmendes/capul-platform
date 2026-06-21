@@ -278,7 +278,8 @@ export interface Chamado {
   nomeColaborador: string | null;
   // SAC (Fase 1) — dados do cliente externo (preenchidos só no workspace SAC).
   clienteNome?: string | null;
-  clienteContato?: string | null;
+  clienteEmail?: string | null;
+  clienteTelefone?: string | null;
   canalOrigem?: 'BALCAO' | 'TELEFONE' | 'EMAIL' | 'OUTRO' | null;
   createdAt: string;
   updatedAt: string;

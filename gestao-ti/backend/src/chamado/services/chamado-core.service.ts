@@ -783,9 +783,10 @@ export class ChamadoCoreService {
         ipMaquina: dto.ipMaquina,
         matriculaColaborador: dto.matriculaColaborador,
         nomeColaborador: dto.nomeColaborador?.trim() || undefined,
-        // SAC (Fase 1) — dados do cliente externo (só preenchidos no workspace SAC).
+        // SAC — dados do cliente externo (só preenchidos no workspace SAC).
         clienteNome: dto.clienteNome?.trim() || undefined,
-        clienteContato: dto.clienteContato?.trim() || undefined,
+        clienteEmail: dto.clienteEmail?.trim() || undefined,
+        clienteTelefone: dto.clienteTelefone?.trim() || undefined,
         canalOrigem: dto.canalOrigem,
         slaDefinicaoId: sla?.id,
         dataLimiteSla,
@@ -951,8 +952,8 @@ export class ChamadoCoreService {
       select: { atendeSac: true },
     });
     if (!equipe?.atendeSac) throw new BadRequestException('Este chamado não é de uma equipe de atendimento ao SAC.');
-    if (!chamado.clienteContato) {
-      throw new BadRequestException('Cliente sem e-mail/contato cadastrado — não dá para responder por e-mail.');
+    if (!chamado.clienteEmail) {
+      throw new BadRequestException('Cliente sem e-mail cadastrado — não dá para responder por e-mail.');
     }
     const corpo = (texto ?? '').trim();
     if (!corpo) throw new BadRequestException('Escreva a resposta ao cliente.');
@@ -960,7 +961,7 @@ export class ChamadoCoreService {
     const historico = await this.prisma.historicoChamado.create({
       data: {
         tipo: 'COMENTARIO',
-        descricao: `↩️ Resposta ao cliente (e-mail para ${chamado.clienteContato}):\n${corpo}`,
+        descricao: `↩️ Resposta ao cliente (e-mail para ${chamado.clienteEmail}):\n${corpo}`,
         publico: true,
         chamadoId: id,
         usuarioId: user.sub,
@@ -974,7 +975,7 @@ export class ChamadoCoreService {
       + `<p style="font-size:12px;color:#64748b;margin:0">CAPUL — Atendimento ao Cliente (SAC) · Protocolo <strong>[SAC-${chamado.numero}]</strong>. Responda este e-mail para falar com o SAC.</p>`
       + '</div>';
     const email = await this.emailEnvolvidos.enviarExterno(
-      chamado.clienteContato,
+      chamado.clienteEmail,
       `[SAC-${chamado.numero}] ${chamado.titulo}`,
       html,
     );

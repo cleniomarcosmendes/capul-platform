@@ -54,7 +54,8 @@ interface CreateChamadoPayload {
   copiasUsuariosIds?: string[];
   /** SAC (Fase 1) — dados do cliente externo (só no workspace SAC). */
   clienteNome?: string;
-  clienteContato?: string;
+  clienteEmail?: string;
+  clienteTelefone?: string;
   canalOrigem?: 'BALCAO' | 'TELEFONE' | 'EMAIL' | 'OUTRO';
 }
 

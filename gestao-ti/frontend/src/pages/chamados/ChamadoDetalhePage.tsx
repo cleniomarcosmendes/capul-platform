@@ -774,9 +774,14 @@ export function ChamadoDetalhePage() {
                   <span className="text-xs text-slate-600 font-medium">{chamado.clienteNome}</span>
                 </InfoRow>
               )}
-              {chamado.clienteContato && (
-                <InfoRow label="Contato">
-                  <span className="text-xs text-slate-600">{chamado.clienteContato}</span>
+              {chamado.clienteEmail && (
+                <InfoRow label="E-mail">
+                  <span className="text-xs text-slate-600">{chamado.clienteEmail}</span>
+                </InfoRow>
+              )}
+              {chamado.clienteTelefone && (
+                <InfoRow label="Telefone">
+                  <span className="text-xs text-slate-600">{chamado.clienteTelefone}</span>
                 </InfoRow>
               )}
               {chamado.canalOrigem && (
@@ -1243,14 +1248,14 @@ export function ChamadoDetalhePage() {
             )}
 
             {/* SAC (Fase 2) — Responder ao cliente por e-mail */}
-            {ehSac && chamado.clienteContato && podeMovimentar
+            {ehSac && chamado.clienteEmail && podeMovimentar
               && !['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status) && (
               <div className="bg-white rounded-xl border border-sky-200 p-5">
                 <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2 mb-1">
                   <Mail className="w-4 h-4 text-sky-600" /> Responder ao cliente (SAC)
                 </h4>
                 <p className="text-xs text-slate-500 mb-2">
-                  Envia um e-mail para <strong>{chamado.clienteContato}</strong> e registra na timeline. Protocolo [SAC-{chamado.numero}].
+                  Envia um e-mail para <strong>{chamado.clienteEmail}</strong> e registra na timeline. Protocolo [SAC-{chamado.numero}].
                 </p>
                 <textarea
                   value={respostaCliente}
