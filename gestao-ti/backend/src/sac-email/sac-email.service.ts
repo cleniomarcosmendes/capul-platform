@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { ImapFlow } from 'imapflow';
 import { simpleParser, type ParsedMail } from 'mailparser';
@@ -225,7 +225,10 @@ export class SacEmailService {
                 }
               }
 
-              await this.prisma.sacEmailIngestao.create({
+              // UNMATCHED entra na CAIXA DE TRIAGEM — preserva corpo + anexos
+              // pra ação de vincular/abrir depois (o e-mail já foi marcado lido).
+              const ehTriagem = resultado === 'UNMATCHED';
+              const nova = await this.prisma.sacEmailIngestao.create({
                 data: {
                   messageId: key,
                   fromAddr: parsed.from?.value?.[0]?.address ?? null,
@@ -235,8 +238,12 @@ export class SacEmailService {
                   resultado,
                   motivo,
                   recebidoEm: parsed.date ?? null,
+                  corpoTexto: ehTriagem ? this.corpoDoEmail(parsed) || null : null,
+                  triagemStatus: ehTriagem ? 'PENDENTE' : null,
                 },
+                select: { id: true },
               });
+              if (ehTriagem) await this.salvarAnexosTriagem(nova.id, parsed);
               if (resultado === 'MATCHED') resumo.matched++;
               else if (resultado === 'UNMATCHED') resumo.unmatched++;
               else if (resultado === 'SKIPPED_AUTO') resumo.skippedAuto++;
@@ -364,32 +371,23 @@ export class SacEmailService {
 
     // Anexos do e-mail → AnexoChamado (mesma whitelist/teto do chamado).
     let anexos = 0;
-    const MAX_BYTES = 10 * 1024 * 1024;
     for (const att of parsed.attachments ?? []) {
       const originalname = att.filename || 'anexo';
       const mimetype = att.contentType || 'application/octet-stream';
-      const buf = att.content;
-      if (!buf || buf.length === 0 || buf.length > MAX_BYTES) continue;
-      if (!isAnexoPermitido({ mimetype, originalname })) continue;
-      try {
-        if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-        const nomeArquivo = `${randomUUID()}${path.extname(originalname)}`;
-        fs.writeFileSync(path.join(UPLOADS_DIR, nomeArquivo), buf);
-        await this.prisma.anexoChamado.create({
-          data: {
-            nomeOriginal: originalname,
-            nomeArquivo,
-            mimeType: mimetype,
-            tamanho: buf.length,
-            descricao: 'Anexo recebido do cliente (SAC e-mail)',
-            chamadoId,
-            usuarioId: sistemaId,
-          },
-        });
-        anexos++;
-      } catch (err) {
-        this.logger.warn(`SAC: anexo "${originalname}" não pôde ser salvo: ${(err as Error).message}`);
-      }
+      const g = this.gravarAnexoBuffer(originalname, mimetype, att.content);
+      if (!g) continue;
+      await this.prisma.anexoChamado.create({
+        data: {
+          nomeOriginal: originalname,
+          nomeArquivo: g.nomeArquivo,
+          mimeType: mimetype,
+          tamanho: att.content.length,
+          descricao: 'Anexo recebido do cliente (SAC e-mail)',
+          chamadoId,
+          usuarioId: sistemaId,
+        },
+      });
+      anexos++;
     }
 
     // Notifica o técnico responsável (se houver) — não é o usuário de sistema.
@@ -406,6 +404,113 @@ export class SacEmailService {
     }
 
     return { anexos };
+  }
+
+  /** Valida (whitelist + 10MB) e grava um buffer no UPLOADS_DIR. null se inválido. */
+  private gravarAnexoBuffer(originalname: string, mimetype: string, buf: Buffer | undefined): { nomeArquivo: string } | null {
+    const MAX_BYTES = 10 * 1024 * 1024;
+    if (!buf || buf.length === 0 || buf.length > MAX_BYTES) return null;
+    if (!isAnexoPermitido({ mimetype, originalname })) return null;
+    try {
+      if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+      const nomeArquivo = `${randomUUID()}${path.extname(originalname)}`;
+      fs.writeFileSync(path.join(UPLOADS_DIR, nomeArquivo), buf);
+      return { nomeArquivo };
+    } catch (err) {
+      this.logger.warn(`SAC: anexo "${originalname}" não pôde ser salvo: ${(err as Error).message}`);
+      return null;
+    }
+  }
+
+  /** Preserva os anexos de um e-mail UNMATCHED (pra carregar pro chamado na triagem). */
+  private async salvarAnexosTriagem(ingestaoId: string, parsed: ParsedMail): Promise<void> {
+    for (const att of parsed.attachments ?? []) {
+      const originalname = att.filename || 'anexo';
+      const mimetype = att.contentType || 'application/octet-stream';
+      const g = this.gravarAnexoBuffer(originalname, mimetype, att.content);
+      if (!g) continue;
+      await this.prisma.sacEmailAnexo.create({
+        data: { ingestaoId, nomeOriginal: originalname, nomeArquivo: g.nomeArquivo, mimeType: mimetype, tamanho: att.content.length },
+      });
+    }
+  }
+
+  // ===== SAC Fase 4a — Caixa de Triagem (UNMATCHED) =====
+
+  /** Lista os e-mails pendentes de triagem (UNMATCHED ainda não tratados). */
+  async listarTriagem() {
+    return this.prisma.sacEmailIngestao.findMany({
+      where: { triagemStatus: 'PENDENTE' },
+      include: { anexos: { select: { id: true, nomeOriginal: true, mimeType: true, tamanho: true } } },
+      orderBy: { processadoEm: 'desc' },
+      take: 200,
+    });
+  }
+
+  /**
+   * Vincula um e-mail de triagem a um chamado de SAC existente: cria o comentário
+   * (corpo preservado, autoria do usuário-sistema) + leva os anexos preservados
+   * pro chamado e marca a triagem como RESOLVIDA.
+   */
+  async vincularTriagem(ingestaoId: string, numero: number, userId: string) {
+    const ing = await this.prisma.sacEmailIngestao.findUnique({
+      where: { id: ingestaoId },
+      include: { anexos: true },
+    });
+    if (!ing) throw new NotFoundException('Item de triagem não encontrado.');
+    if (ing.triagemStatus !== 'PENDENTE') throw new BadRequestException('Este item já foi tratado.');
+
+    const chamado = await this.prisma.chamado.findUnique({ where: { numero }, select: { id: true, equipeAtualId: true } });
+    if (!chamado) throw new BadRequestException(`Chamado nº ${numero} inexistente.`);
+    const equipe = chamado.equipeAtualId
+      ? await this.prisma.equipe.findUnique({ where: { id: chamado.equipeAtualId }, select: { atendeSac: true } })
+      : null;
+    if (!equipe?.atendeSac) throw new BadRequestException(`Chamado nº ${numero} não é de uma equipe de SAC.`);
+
+    const sistemaId = await this.getSistemaSacUserId();
+    if (!sistemaId) throw new BadRequestException('Usuário de sistema do SAC ausente — rode o seed.');
+
+    const corpo = (ing.corpoTexto ?? '').trim() || '(sem corpo)';
+    await this.prisma.historicoChamado.create({
+      data: {
+        tipo: 'COMENTARIO',
+        descricao: `📨 Cliente (${ing.fromAddr ?? 'desconhecido'}) respondeu por e-mail (via triagem):\n${corpo}`,
+        publico: true,
+        chamadoId: chamado.id,
+        usuarioId: sistemaId,
+      },
+    });
+    // Leva os anexos preservados pro chamado (mesmo arquivo no disco).
+    for (const a of ing.anexos) {
+      await this.prisma.anexoChamado.create({
+        data: {
+          nomeOriginal: a.nomeOriginal,
+          nomeArquivo: a.nomeArquivo,
+          mimeType: a.mimeType,
+          tamanho: a.tamanho,
+          descricao: 'Anexo do cliente (SAC e-mail — triagem)',
+          chamadoId: chamado.id,
+          usuarioId: sistemaId,
+        },
+      });
+    }
+    await this.prisma.sacEmailIngestao.update({
+      where: { id: ingestaoId },
+      data: { triagemStatus: 'RESOLVIDO', triadoEm: new Date(), triadoPor: userId, chamadoVinculadoId: chamado.id, resultado: 'MATCHED', chamadoId: chamado.id },
+    });
+    return { ok: true, chamadoId: chamado.id, anexos: ing.anexos.length };
+  }
+
+  /** Descarta um e-mail de triagem (spam/irrelevante). */
+  async descartarTriagem(ingestaoId: string, userId: string) {
+    const ing = await this.prisma.sacEmailIngestao.findUnique({ where: { id: ingestaoId }, select: { id: true, triagemStatus: true } });
+    if (!ing) throw new NotFoundException('Item de triagem não encontrado.');
+    if (ing.triagemStatus !== 'PENDENTE') throw new BadRequestException('Este item já foi tratado.');
+    await this.prisma.sacEmailIngestao.update({
+      where: { id: ingestaoId },
+      data: { triagemStatus: 'DESCARTADO', triadoEm: new Date(), triadoPor: userId },
+    });
+    return { ok: true };
   }
 
   // ===== SAC Fase 3d — poller AUTOMÁTICO (supervisionado) =====

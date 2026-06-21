@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
 import { SacEmailService } from './sac-email.service.js';
 import { UpdateSacEmailConfigDto } from './dto.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
@@ -43,5 +43,21 @@ export class SacEmailController {
   @Get('ingestoes')
   listarIngestoes() {
     return this.service.listarIngestoes();
+  }
+
+  // SAC 4a — Caixa de Triagem (e-mails UNMATCHED pendentes).
+  @Get('triagem')
+  listarTriagem() {
+    return this.service.listarTriagem();
+  }
+
+  @Post('triagem/:id/vincular')
+  vincularTriagem(@Param('id') id: string, @Body('numero') numero: number, @CurrentUser() user: JwtPayload) {
+    return this.service.vincularTriagem(id, Number(numero), user.sub);
+  }
+
+  @Post('triagem/:id/descartar')
+  descartarTriagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.service.descartarTriagem(id, user.sub);
   }
 }

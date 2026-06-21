@@ -8,8 +8,9 @@ import {
   type SacEmailTesteResp,
   type SacEmailIngestao,
   type ResultadoIngestaoSac,
+  type SacEmailTriagemItem,
 } from '../../services/sacEmail.service';
-import { Inbox, Plug, Save, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Download } from 'lucide-react';
+import { Inbox, Plug, Save, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Download, Link2, Trash2, Paperclip } from 'lucide-react';
 
 /**
  * SAC Fase 3 (3a) — config OPERACIONAL do e-mail de ENTRADA. Admin/Gestor.
@@ -25,6 +26,9 @@ export function SacEmailConfigPage() {
   const [teste, setTeste] = useState<SacEmailTesteResp | null>(null);
   const [buscando, setBuscando] = useState(false);
   const [ingestoes, setIngestoes] = useState<SacEmailIngestao[]>([]);
+  const [triagem, setTriagem] = useState<SacEmailTriagemItem[]>([]);
+  const [vincNum, setVincNum] = useState<Record<string, string>>({});
+  const [triando, setTriando] = useState<string | null>(null);
 
   // Form local (toggles).
   const [enabled, setEnabled] = useState(false);
@@ -42,6 +46,39 @@ export function SacEmailConfigPage() {
 
   function carregarIngestoes() {
     sacEmailService.listarIngestoes().then(setIngestoes).catch(() => undefined);
+    sacEmailService.listarTriagem().then(setTriagem).catch(() => undefined);
+  }
+
+  async function vincular(item: SacEmailTriagemItem) {
+    const num = Number((vincNum[item.id] ?? '').trim());
+    if (!num) {
+      toast('error', 'Informe o número do chamado de SAC.');
+      return;
+    }
+    setTriando(item.id);
+    try {
+      const r = await sacEmailService.vincularTriagem(item.id, num);
+      toast('success', `Vinculado ao chamado #${num}${r.anexos ? ` (+${r.anexos} anexo[s])` : ''}.`);
+      carregarIngestoes();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast('error', msg || 'Falha ao vincular.');
+    } finally {
+      setTriando(null);
+    }
+  }
+
+  async function descartar(item: SacEmailTriagemItem) {
+    setTriando(item.id);
+    try {
+      await sacEmailService.descartarTriagem(item.id);
+      toast('success', 'Item descartado.');
+      carregarIngestoes();
+    } catch {
+      toast('error', 'Falha ao descartar.');
+    } finally {
+      setTriando(null);
+    }
   }
 
   useEffect(() => {
@@ -167,6 +204,66 @@ export function SacEmailConfigPage() {
                     </span>
                   )}
                 </div>
+              </div>
+
+              {/* Caixa de Triagem (4a) — UNMATCHED pendentes */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-semibold text-slate-700 text-sm flex items-center gap-2 mb-1">
+                  <AlertTriangle className="w-4 h-4 text-amber-500" /> Caixa de Triagem
+                  {triagem.length > 0 && (
+                    <span className="inline-block px-2 py-0.5 rounded-full text-xs border bg-amber-50 text-amber-700 border-amber-200">{triagem.length}</span>
+                  )}
+                </h3>
+                <p className="text-xs text-slate-500 mb-3">
+                  E-mails que não casaram com um chamado (sem <code>[SAC-n]</code> ou número inexistente). Vincule a um chamado de SAC ou descarte.
+                </p>
+                {triagem.length === 0 ? (
+                  <p className="text-sm text-slate-400">Nada pendente. 🎉</p>
+                ) : (
+                  <div className="space-y-3">
+                    {triagem.map((it) => (
+                      <div key={it.id} className="border border-slate-200 rounded-lg p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm text-slate-700 font-medium truncate">{it.subject || '(sem assunto)'}</div>
+                            <div className="text-xs text-slate-500">De: {it.fromAddr ?? '—'} · {new Date(it.processadoEm).toLocaleString('pt-BR')}</div>
+                          </div>
+                          {it.anexos.length > 0 && (
+                            <span className="inline-flex items-center gap-1 text-xs text-slate-500 shrink-0">
+                              <Paperclip className="w-3 h-3" /> {it.anexos.length}
+                            </span>
+                          )}
+                        </div>
+                        {it.corpoTexto && (
+                          <p className="text-xs text-slate-500 mt-2 whitespace-pre-wrap line-clamp-3 bg-slate-50 rounded p-2">{it.corpoTexto.slice(0, 400)}</p>
+                        )}
+                        <div className="flex flex-wrap items-center gap-2 mt-3">
+                          <span className="text-xs text-slate-500">Vincular ao chamado nº</span>
+                          <input
+                            value={vincNum[it.id] ?? ''}
+                            onChange={(e) => setVincNum((m) => ({ ...m, [it.id]: e.target.value.replace(/\D/g, '') }))}
+                            placeholder="ex.: 1405"
+                            className="w-24 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600"
+                          />
+                          <button
+                            onClick={() => vincular(it)}
+                            disabled={triando === it.id}
+                            className="inline-flex items-center gap-1.5 bg-capul-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50"
+                          >
+                            <Link2 className="w-4 h-4" /> Vincular
+                          </button>
+                          <button
+                            onClick={() => descartar(it)}
+                            disabled={triando === it.id}
+                            className="inline-flex items-center gap-1.5 bg-white border border-slate-300 text-slate-600 px-3 py-1.5 rounded-lg text-sm hover:bg-slate-50 disabled:opacity-50"
+                          >
+                            <Trash2 className="w-4 h-4" /> Descartar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Toggles operacionais */}

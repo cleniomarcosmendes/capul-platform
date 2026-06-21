@@ -321,8 +321,35 @@ model SacEmailIngestao {
   recebidoEm   DateTime?            @map("recebido_em")
   processadoEm DateTime             @default(now()) @map("processado_em")
 
+  // 4a — Triagem dos UNMATCHED. corpoTexto/anexos preservados p/ a ação de
+  // vincular/abrir; triagemStatus = PENDENTE|RESOLVIDO|DESCARTADO (só UNMATCHED).
+  corpoTexto         String?            @map("corpo_texto")
+  triagemStatus      String?            @map("triagem_status")
+  triadoEm           DateTime?          @map("triado_em")
+  triadoPor          String?            @map("triado_por")
+  chamadoVinculadoId String?            @map("chamado_vinculado_id")
+  anexos             SacEmailAnexo[]
+
   @@index([processadoEm])
+  @@index([triagemStatus])
   @@map("sac_email_ingestao")
+  @@schema("gestao_ti")
+}
+
+// 4a — anexos preservados de um e-mail UNMATCHED (pra carregar pro chamado na
+// hora de vincular/abrir). Arquivo no mesmo UPLOADS_DIR do chamado.
+model SacEmailAnexo {
+  id           String           @id @default(uuid())
+  ingestaoId   String           @map("ingestao_id")
+  ingestao     SacEmailIngestao @relation(fields: [ingestaoId], references: [id], onDelete: Cascade)
+  nomeOriginal String           @map("nome_original")
+  nomeArquivo  String           @map("nome_arquivo")
+  mimeType     String           @map("mime_type")
+  tamanho      Int
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  @@index([ingestaoId])
+  @@map("sac_email_anexo")
   @@schema("gestao_ti")
 }
 

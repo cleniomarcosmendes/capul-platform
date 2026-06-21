@@ -81,6 +81,24 @@ export interface SacEmailBuscaResp {
   };
 }
 
+export interface SacEmailTriagemAnexo {
+  id: string;
+  nomeOriginal: string;
+  mimeType: string;
+  tamanho: number;
+}
+
+export interface SacEmailTriagemItem {
+  id: string;
+  fromAddr: string | null;
+  subject: string | null;
+  corpoTexto: string | null;
+  motivo: string | null;
+  recebidoEm: string | null;
+  processadoEm: string;
+  anexos: SacEmailTriagemAnexo[];
+}
+
 export const sacEmailService = {
   async getConfig(): Promise<SacEmailConfigResp> {
     const { data } = await gestaoApi.get('/sac-email/config');
@@ -106,6 +124,22 @@ export const sacEmailService = {
 
   async listarIngestoes(): Promise<SacEmailIngestao[]> {
     const { data } = await gestaoApi.get('/sac-email/ingestoes');
+    return data;
+  },
+
+  // SAC 4a — Caixa de Triagem (UNMATCHED pendentes).
+  async listarTriagem(): Promise<SacEmailTriagemItem[]> {
+    const { data } = await gestaoApi.get('/sac-email/triagem');
+    return data;
+  },
+
+  async vincularTriagem(id: string, numero: number): Promise<{ ok: boolean; chamadoId: string; anexos: number }> {
+    const { data } = await gestaoApi.post(`/sac-email/triagem/${id}/vincular`, { numero });
+    return data;
+  },
+
+  async descartarTriagem(id: string): Promise<{ ok: boolean }> {
+    const { data } = await gestaoApi.post(`/sac-email/triagem/${id}/descartar`, {});
     return data;
   },
 };

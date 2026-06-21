@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { BadRequestException } from '@nestjs/common';
 import { SacEmailService } from './sac-email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificacaoService } from '../notificacao/notificacao.service';
@@ -92,6 +93,52 @@ describe('SacEmailService (SAC Fase 3)', () => {
     const r = await service.buscarAgora();
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/sistema do SAC ausente/i);
+  });
+
+  // ===== 4a — Caixa de Triagem =====
+
+  it('vincularTriagem: cria comentário (via triagem) + leva anexos + marca RESOLVIDO', async () => {
+    prisma.sacEmailIngestao.findUnique.mockResolvedValue({
+      id: 'ing-1', triagemStatus: 'PENDENTE', fromAddr: 'cli@ex.com', corpoTexto: 'oi sem protocolo',
+      anexos: [{ id: 'a1', nomeOriginal: 'foto.jpg', nomeArquivo: 'uuid.jpg', mimeType: 'image/jpeg', tamanho: 10 }],
+    });
+    prisma.chamado.findUnique.mockResolvedValue({ id: 'ch-1', equipeAtualId: 'eq-sac' });
+    prisma.equipe.findUnique.mockResolvedValue({ atendeSac: true });
+    prisma.usuario.findFirst.mockResolvedValue({ id: 'sys-1' });
+
+    const r = await service.vincularTriagem('ing-1', 1405, 'user-1');
+    expect(r.ok).toBe(true);
+    expect(r.anexos).toBe(1);
+    expect(prisma.historicoChamado.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ publico: true, usuarioId: 'sys-1', chamadoId: 'ch-1', descricao: expect.stringContaining('via triagem') }) }),
+    );
+    expect(prisma.anexoChamado.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ nomeArquivo: 'uuid.jpg', chamadoId: 'ch-1' }) }),
+    );
+    expect(prisma.sacEmailIngestao.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'ing-1' }, data: expect.objectContaining({ triagemStatus: 'RESOLVIDO', chamadoVinculadoId: 'ch-1', triadoPor: 'user-1' }) }),
+    );
+  });
+
+  it('vincularTriagem: chamado que não é de SAC → erro', async () => {
+    prisma.sacEmailIngestao.findUnique.mockResolvedValue({ id: 'ing-1', triagemStatus: 'PENDENTE', anexos: [] });
+    prisma.chamado.findUnique.mockResolvedValue({ id: 'ch-x', equipeAtualId: 'eq-ti' });
+    prisma.equipe.findUnique.mockResolvedValue({ atendeSac: false });
+    await expect(service.vincularTriagem('ing-1', 10, 'user-1')).rejects.toThrow(BadRequestException);
+  });
+
+  it('vincularTriagem: item já tratado → erro', async () => {
+    prisma.sacEmailIngestao.findUnique.mockResolvedValue({ id: 'ing-1', triagemStatus: 'RESOLVIDO', anexos: [] });
+    await expect(service.vincularTriagem('ing-1', 10, 'user-1')).rejects.toThrow(BadRequestException);
+  });
+
+  it('descartarTriagem: marca DESCARTADO', async () => {
+    prisma.sacEmailIngestao.findUnique.mockResolvedValue({ id: 'ing-1', triagemStatus: 'PENDENTE' });
+    const r = await service.descartarTriagem('ing-1', 'user-1');
+    expect(r.ok).toBe(true);
+    expect(prisma.sacEmailIngestao.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ triagemStatus: 'DESCARTADO', triadoPor: 'user-1' }) }),
+    );
   });
 
   it('ingerirNoChamado (3c): cria comentário público do usuário-sistema + notifica o técnico', async () => {
