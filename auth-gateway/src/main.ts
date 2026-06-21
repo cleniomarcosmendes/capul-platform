@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import helmet from 'helmet';
+import { json, urlencoded } from 'express';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
@@ -8,8 +9,16 @@ import { globalValidationPipe } from './common/pipes/validation.pipe';
 async function bootstrap() {
   // bufferLogs garante que toda saida (incluindo bootstrap) passe pelo Pino logger
   // configurado no AppModule. Auditoria observabilidade 26/04/2026 #1.
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  // bodyParser:false — controlamos os limites manualmente abaixo (SAC anexos).
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, bodyParser: false });
   app.useLogger(app.get(Logger));
+
+  // Limite de corpo JSON: só a rota interna de e-mail aceita anexos grandes
+  // (base64 de até ~15MB). Login e demais endpoints ficam no limite modesto —
+  // sem ampliar a superfície de payload do resto da API.
+  app.use('/api/v1/internal/email/send', json({ limit: '16mb' }));
+  app.use(json({ limit: '1mb' }));
+  app.use(urlencoded({ extended: true, limit: '1mb' }));
 
   // Helmet — headers de seguranca (defesa em profundidade alem do Nginx)
   app.use(

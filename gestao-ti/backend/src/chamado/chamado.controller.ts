@@ -373,15 +373,22 @@ export class ChamadoController {
   }
 
   // SAC (Fase 2) — responder o cliente por e-mail (saída). Staff/operador.
+  // Multipart: `texto` + `anexo` opcional (reusa o multer/whitelist do chamado;
+  // o arquivo vira AnexoChamado e segue anexado ao e-mail ao cliente).
   @Post(':id/responder-sac')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
+  @UseInterceptors(FileInterceptor('anexo', createUploadConfig({
+    uploadsDir: UPLOADS_DIR,
+    loggerName: 'ChamadoUploads',
+  })))
   responderSac(
     @Param('id') id: string,
     @Body('texto') texto: string,
+    @UploadedFile() anexo: Express.Multer.File | undefined,
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.responderSac(id, texto, user, role);
+    return this.service.responderSac(id, texto, user, role, anexo);
   }
 
   // === Agrupamento (decidido em 13/05/2026) ===

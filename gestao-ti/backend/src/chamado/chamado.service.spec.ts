@@ -424,6 +424,33 @@ describe('ChamadoService', () => {
         'cliente@ex.com',
         expect.stringContaining('[SAC-42]'),
         expect.any(String),
+        undefined, // sem anexo
+      );
+    });
+
+    it('com anexo: registra AnexoChamado e cita o anexo no histórico/e-mail', async () => {
+      prisma.chamado.findUnique.mockResolvedValue(sacChamado);
+      prisma.equipe.findUnique.mockResolvedValue({ atendeSac: true });
+      prisma.historicoChamado.create.mockResolvedValue({ id: 'h1' });
+      prisma.anexoChamado.create.mockResolvedValue({ id: 'a1', nomeOriginal: 'doc.pdf' });
+
+      // Arquivo do multer (caminho fictício — a leitura do disco falha e é
+      // tratada; o registro do anexo e a citação no histórico/e-mail são o foco).
+      const file = { originalname: 'doc.pdf', filename: 'uuid.pdf', mimetype: 'application/pdf', size: 7 } as any;
+      await core.responderSac('ch-1', 'segue o comprovante', mockUser as any, 'GESTOR', file);
+
+      expect(prisma.anexoChamado.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ nomeOriginal: 'doc.pdf', chamadoId: 'ch-1' }) }),
+      );
+      // Histórico público cita o anexo (📎) e o e-mail externo é disparado.
+      expect(prisma.historicoChamado.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ descricao: expect.stringContaining('doc.pdf') }) }),
+      );
+      expect(emailEnvolvidos.enviarExterno).toHaveBeenCalledWith(
+        'cliente@ex.com',
+        expect.stringContaining('[SAC-42]'),
+        expect.stringContaining('doc.pdf'),
+        undefined, // leitura do disco falhou no teste → sem base64 (caminho tratado)
       );
     });
 

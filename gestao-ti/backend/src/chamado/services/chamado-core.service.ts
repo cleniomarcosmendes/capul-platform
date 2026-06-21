@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CreateChamadoDto } from '../dto/create-chamado.dto.js';
@@ -19,7 +20,7 @@ import { ChamadoHelpersService } from './chamado-helpers.service.js';
 import { ChamadoAgrupamentoService } from './chamado-agrupamento.service.js';
 import { ChamadoTempoService } from './chamado-tempo.service.js';
 import { ProtheusService } from '../../protheus/protheus.service.js';
-import { chamadoInclude } from './chamado.constants.js';
+import { chamadoInclude, UPLOADS_DIR } from './chamado.constants.js';
 import { isGestor, isTI, hasStaffPerfilEmTI, getDeptosOndeStaff, getDeptosOndeGestor, getRoleNoDepto } from '../../common/constants/roles.constant.js';
 import { hasCapability } from '../../common/helpers/capability.helper.js';
 import { Prisma, StatusChamado, Visibilidade } from '@prisma/client';
@@ -49,6 +50,8 @@ function extrairTrecho(texto: string, termo: string, contexto = 60): string {
 
 @Injectable()
 export class ChamadoCoreService {
+  private readonly logger = new Logger(ChamadoCoreService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificacaoService: NotificacaoService,
@@ -939,7 +942,7 @@ export class ChamadoCoreService {
    * `[SAC-<numero>]` para preparar o threading da Fase 3). Só em chamado de
    * workspace SAC, com contato do cliente. Em DEV o envio é mockado (logado).
    */
-  async responderSac(id: string, texto: string, user: JwtPayload, role: string) {
+  async responderSac(id: string, texto: string, user: JwtPayload, role: string, file?: Express.Multer.File) {
     await this.helpers.assertTecnicoOuColaborador(id, user.sub, role);
     const chamado = await this.helpers.getChamadoOrFail(id);
     if (['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status)) {
@@ -958,10 +961,38 @@ export class ChamadoCoreService {
     const corpo = (texto ?? '').trim();
     if (!corpo) throw new BadRequestException('Escreva a resposta ao cliente.');
 
+    // Anexo (opcional): o multer já gravou em disco. Registra como AnexoChamado
+    // (lastro/auditoria do SAC — fica baixável no chamado) e carrega o conteúdo
+    // em base64 pra anexar no e-mail ao cliente.
+    let anexoRegistro: { id: string; nomeOriginal: string } | null = null;
+    let anexoEmail: { filename: string; contentBase64: string; contentType?: string }[] | undefined;
+    if (file) {
+      const registro = await this.prisma.anexoChamado.create({
+        data: {
+          nomeOriginal: file.originalname,
+          nomeArquivo: file.filename,
+          mimeType: file.mimetype,
+          tamanho: file.size,
+          descricao: 'Anexo da resposta ao cliente (SAC)',
+          chamadoId: id,
+          usuarioId: user.sub,
+        },
+        select: { id: true, nomeOriginal: true },
+      });
+      anexoRegistro = registro;
+      try {
+        const buf = fs.readFileSync(path.join(UPLOADS_DIR, file.filename));
+        anexoEmail = [{ filename: file.originalname, contentBase64: buf.toString('base64'), contentType: file.mimetype }];
+      } catch (err) {
+        this.logger.warn(`SAC: anexo ${file.filename} salvo mas não pôde ser lido pro e-mail: ${(err as Error).message}`);
+      }
+    }
+
     const historico = await this.prisma.historicoChamado.create({
       data: {
         tipo: 'COMENTARIO',
-        descricao: `↩️ Resposta ao cliente (e-mail para ${chamado.clienteEmail}):\n${corpo}`,
+        descricao: `↩️ Resposta ao cliente (e-mail para ${chamado.clienteEmail}):\n${corpo}`
+          + (anexoRegistro ? `\n📎 Anexo: ${anexoRegistro.nomeOriginal}` : ''),
         publico: true,
         chamadoId: id,
         usuarioId: user.sub,
@@ -971,6 +1002,7 @@ export class ChamadoCoreService {
     const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
     const html = '<div style="font-family:system-ui,-apple-system,sans-serif;color:#0f172a">'
       + `<p style="margin:0 0 12px">${esc(corpo).replace(/\n/g, '<br>')}</p>`
+      + (anexoRegistro ? `<p style="font-size:13px;color:#475569;margin:0 0 12px">📎 Anexo: ${esc(anexoRegistro.nomeOriginal)}</p>` : '')
       + '<hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0">'
       + `<p style="font-size:12px;color:#64748b;margin:0">CAPUL — Atendimento ao Cliente (SAC) · Protocolo <strong>[SAC-${chamado.numero}]</strong>. Responda este e-mail para falar com o SAC.</p>`
       + '</div>';
@@ -978,9 +1010,10 @@ export class ChamadoCoreService {
       chamado.clienteEmail,
       `[SAC-${chamado.numero}] ${chamado.titulo}`,
       html,
+      anexoEmail,
     );
 
-    return { historico, email };
+    return { historico, anexo: anexoRegistro, email };
   }
 
   private prefixoAutor(user: JwtPayload): string {

@@ -107,9 +107,15 @@ export class EmailEnvolvidosService {
    * `SAC_EMAIL_EXTERNO_ENABLED=true` (PROD). Em DEV (flag ausente) NÃO envia —
    * apenas loga o que seria enviado, para evitar e-mail real a clientes em dev.
    */
-  async enviarExterno(to: string, subject: string, html: string): Promise<{ sent: boolean; mock: boolean; redirected: boolean }> {
+  async enviarExterno(
+    to: string,
+    subject: string,
+    html: string,
+    attachments?: { filename: string; contentBase64: string; contentType?: string }[],
+  ): Promise<{ sent: boolean; mock: boolean; redirected: boolean }> {
     const dest = (to ?? '').trim();
     if (!dest) return { sent: false, mock: false, redirected: false };
+    const anexos = (attachments ?? []).filter((a) => a?.filename && a?.contentBase64);
 
     // DEV: redireciona o e-mail externo pra um endereço de teste (envia de
     // verdade, mas NÃO vai pro cliente real). O destinatário original fica no
@@ -119,7 +125,7 @@ export class EmailEnvolvidosService {
 
     // Sem envio habilitado (PROD) e sem redirect (DEV) → mock: só loga.
     if (!enabled && !redirect) {
-      this.logger.log(`[SAC e-mail externo MOCK] (sem ENABLED/REDIRECT) NÃO enviado → to="${dest}" subject="${subject}"`);
+      this.logger.log(`[SAC e-mail externo MOCK] (sem ENABLED/REDIRECT) NÃO enviado → to="${dest}" subject="${subject}" anexos=${anexos.length}`);
       return { sent: false, mock: true, redirected: false };
     }
 
@@ -129,8 +135,9 @@ export class EmailEnvolvidosService {
       const res = await fetch(`${AUTH_GATEWAY_URL}/api/v1/internal/email/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: [realTo], subject: realSubject, html }),
-        signal: AbortSignal.timeout(15_000),
+        body: JSON.stringify({ to: [realTo], subject: realSubject, html, attachments: anexos.length ? anexos : undefined }),
+        // Anexos em base64 podem deixar o POST mais pesado — timeout maior.
+        signal: AbortSignal.timeout(anexos.length ? 30_000 : 15_000),
       });
       if (!res.ok) {
         const body = await res.text().catch(() => '');

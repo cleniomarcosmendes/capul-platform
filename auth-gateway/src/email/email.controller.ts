@@ -7,9 +7,27 @@ import {
   IsString,
   MaxLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { Public } from '../common/decorators/public.decorator';
 import { EmailService } from './email.service';
+
+class EmailAttachmentDto {
+  @IsString()
+  @MaxLength(255)
+  filename!: string;
+
+  // base64 de até ~15MB de arquivo (≈ 20M chars). Limita o payload por anexo.
+  @IsString()
+  @MaxLength(21_000_000)
+  contentBase64!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  contentType?: string;
+}
 
 class SendEmailDto {
   @IsArray()
@@ -35,6 +53,13 @@ class SendEmailDto {
   @IsOptional()
   @IsEmail()
   replyTo?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @ValidateNested({ each: true })
+  @Type(() => EmailAttachmentDto)
+  attachments?: EmailAttachmentDto[];
 }
 
 /**

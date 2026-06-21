@@ -132,9 +132,13 @@ export const chamadoService = {
     return data;
   },
 
-  // SAC (Fase 2) — responde o cliente por e-mail. Retorna { historico, email:{sent,mock} }.
-  async responderSac(id: string, texto: string): Promise<{ email: { sent: boolean; mock: boolean; redirected: boolean } }> {
-    const { data } = await gestaoApi.post(`/chamados/${id}/responder-sac`, { texto });
+  // SAC (Fase 2) — responde o cliente por e-mail (com anexo opcional, multipart).
+  // Retorna { historico, anexo, email:{sent,mock,redirected} }.
+  async responderSac(id: string, texto: string, anexo?: File | null): Promise<{ email: { sent: boolean; mock: boolean; redirected: boolean } }> {
+    const form = new FormData();
+    form.append('texto', texto);
+    if (anexo) form.append('anexo', anexo);
+    const { data } = await gestaoApi.post(`/chamados/${id}/responder-sac`, form);
     return data;
   },
 

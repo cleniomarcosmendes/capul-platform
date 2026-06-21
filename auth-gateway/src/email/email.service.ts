@@ -13,12 +13,22 @@ import * as nodemailer from 'nodemailer';
  *  - Controller é @Public mas só acessível pela rede docker
  *  - Truncamos `to` a 50 endereços por chamada pra evitar abuso
  */
+export interface SendEmailAttachment {
+  /** Nome do arquivo como aparece no e-mail (ex.: "comprovante.pdf"). */
+  filename: string;
+  /** Conteúdo do arquivo codificado em base64. */
+  contentBase64: string;
+  /** MIME (ex.: "application/pdf"). Opcional — nodemailer infere pela extensão. */
+  contentType?: string;
+}
+
 export interface SendEmailPayload {
   to: string | string[];
   subject: string;
   html?: string;
   text?: string;
   replyTo?: string;
+  attachments?: SendEmailAttachment[];
 }
 
 export interface SendEmailResult {
@@ -52,6 +62,14 @@ export class EmailService {
 
     try {
       const transporter = this.getTransporter();
+      // Anexos: chegam em base64 (JSON) — decodifica pra Buffer pro nodemailer.
+      const attachments = (payload.attachments ?? [])
+        .filter((a) => a?.filename && a?.contentBase64)
+        .map((a) => ({
+          filename: a.filename,
+          content: Buffer.from(a.contentBase64, 'base64'),
+          contentType: a.contentType,
+        }));
       const info = await transporter.sendMail({
         from: process.env.SMTP_FROM || process.env.SMTP_USER || 'plataforma@capul.com.br',
         to: recipients,
@@ -59,6 +77,7 @@ export class EmailService {
         html: payload.html,
         text: payload.text ?? this.htmlToText(payload.html ?? ''),
         replyTo: payload.replyTo,
+        attachments: attachments.length ? attachments : undefined,
         // Força UTF-8 — sem isso quoted-printable corrompe glyphs Unicode
         // como → ↩ • no fallback text/plain (auditado via MailHog).
         encoding: 'base64',
