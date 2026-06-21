@@ -159,7 +159,7 @@ export function MotivosParadaPage() {
             <p className="text-slate-500">Nenhum motivo cadastrado</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">

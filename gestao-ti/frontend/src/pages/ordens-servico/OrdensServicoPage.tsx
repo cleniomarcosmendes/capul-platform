@@ -256,7 +256,7 @@ export function OrdensServicoPage() {
     return (
       <>
         <Header title={`OS #${os.numero}`} />
-        <div className="p-6 max-w-5xl">
+        <div className="p-6 mx-auto max-w-5xl">
           <button onClick={() => setOsDetalhe(null)} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4">
             <ArrowLeft className="w-4 h-4" /> Voltar
           </button>

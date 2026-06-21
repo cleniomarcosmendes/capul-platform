@@ -199,7 +199,7 @@ export function AtivosListPage() {
         ) : ativos.length === 0 ? (
           <div className="text-center py-12 text-slate-400">Nenhum ativo encontrado</div>
         ) : (
-          <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-left text-xs text-slate-500 uppercase tracking-wider">
                 <tr>

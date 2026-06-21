@@ -215,7 +215,7 @@ export function SoftwaresListPage() {
             <p className="text-slate-500">Nenhum software encontrado</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
