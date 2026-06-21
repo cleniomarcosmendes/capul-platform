@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Interval } from '@nestjs/schedule';
 import { ImapFlow } from 'imapflow';
 import { simpleParser, type ParsedMail } from 'mailparser';
 import { createHash, randomUUID } from 'crypto';
@@ -405,6 +406,48 @@ export class SacEmailService {
     }
 
     return { anexos };
+  }
+
+  // ===== SAC Fase 3d — poller AUTOMÁTICO (supervisionado) =====
+
+  private polling = false;
+
+  /**
+   * Decide se o ciclo automático deve rodar agora. Respeita enabled + pauseSync
+   * + conexão configurada, e o intervalo desde o último poll. Puro/testável.
+   */
+  deveAgendar(
+    row: { enabled: boolean; pauseSync: boolean; pollIntervalMinutes: number; lastPollAt: Date | null },
+    configurada: boolean,
+    agoraMs: number,
+  ): boolean {
+    if (!configurada || !row.enabled || row.pauseSync) return false;
+    if (!row.lastPollAt) return true; // nunca rodou
+    const intervaloMs = Math.max(1, row.pollIntervalMinutes) * 60_000;
+    return agoraMs - new Date(row.lastPollAt).getTime() >= intervaloMs;
+  }
+
+  /**
+   * Tick de 1 min: dispara o buscarAgora quando dá o intervalo configurado e o
+   * automático está ligado e não pausado. Diferente do "Buscar agora" manual,
+   * AQUI o freio de mão (pauseSync) e o enabled valem. Guarda contra sobreposição.
+   */
+  @Interval(60_000)
+  async pollAgendado(): Promise<void> {
+    if (this.polling) return;
+    try {
+      const row = await this.getConfigRow();
+      const info = this.conexaoInfo();
+      if (!this.deveAgendar(row, info.configurada, Date.now())) return;
+      this.polling = true;
+      this.logger.log(`SAC poll automático disparando (intervalo ${row.pollIntervalMinutes} min)`);
+      const r = await this.buscarAgora();
+      if (!r.ok) this.logger.warn(`SAC poll automático: ${r.error}`);
+    } catch (err) {
+      this.logger.warn(`SAC poll automático falhou: ${(err as Error).message}`);
+    } finally {
+      this.polling = false;
+    }
   }
 
   /** Últimas ingestões (log da tela). */

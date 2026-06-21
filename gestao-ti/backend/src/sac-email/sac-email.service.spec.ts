@@ -125,6 +125,33 @@ describe('SacEmailService (SAC Fase 3)', () => {
     );
   });
 
+  // ===== 3d — agendamento automático (deveAgendar) =====
+  describe('deveAgendar', () => {
+    const base = { enabled: true, pauseSync: false, pollIntervalMinutes: 5, lastPollAt: null as Date | null };
+    const now = 1_000_000_000_000;
+
+    it('nunca rodou (lastPollAt null) + ligado + configurada → true', () => {
+      expect(service.deveAgendar({ ...base }, true, now)).toBe(true);
+    });
+    it('conexão não configurada → false', () => {
+      expect(service.deveAgendar({ ...base }, false, now)).toBe(false);
+    });
+    it('automático desligado → false', () => {
+      expect(service.deveAgendar({ ...base, enabled: false }, true, now)).toBe(false);
+    });
+    it('pausado (freio de mão) → false', () => {
+      expect(service.deveAgendar({ ...base, pauseSync: true }, true, now)).toBe(false);
+    });
+    it('último poll recente (< intervalo) → false', () => {
+      const lastPollAt = new Date(now - 2 * 60_000); // 2 min atrás, intervalo 5
+      expect(service.deveAgendar({ ...base, lastPollAt }, true, now)).toBe(false);
+    });
+    it('último poll antigo (>= intervalo) → true', () => {
+      const lastPollAt = new Date(now - 6 * 60_000); // 6 min atrás, intervalo 5
+      expect(service.deveAgendar({ ...base, lastPollAt }, true, now)).toBe(true);
+    });
+  });
+
   // classificar é privado — exercitado via (service as any) com ParsedMail fake.
   function mail({ from, subject, headers = {} }: { from?: string; subject?: string; headers?: Record<string, string> }) {
     const h = new Map(Object.entries(headers));
