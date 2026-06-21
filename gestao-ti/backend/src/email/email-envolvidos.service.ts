@@ -98,4 +98,40 @@ export class EmailEnvolvidosService {
       return { sent: 0, skipped: skipped + destinos.length, reason: (err as Error).message };
     }
   }
+
+  /**
+   * SAC Fase 2 — e-mail para endereço EXTERNO (cliente que NÃO é usuário do
+   * sistema): envia direto pro `to` informado, sem lookup de usuário/preferência.
+   *
+   * ⚠️ Salvaguarda outward-facing: só dispara de verdade com
+   * `SAC_EMAIL_EXTERNO_ENABLED=true` (PROD). Em DEV (flag ausente) NÃO envia —
+   * apenas loga o que seria enviado, para evitar e-mail real a clientes em dev.
+   */
+  async enviarExterno(to: string, subject: string, html: string): Promise<{ sent: boolean; mock: boolean }> {
+    const dest = (to ?? '').trim();
+    if (!dest) return { sent: false, mock: false };
+
+    if (process.env.SAC_EMAIL_EXTERNO_ENABLED !== 'true') {
+      this.logger.log(`[SAC e-mail externo MOCK] (SAC_EMAIL_EXTERNO_ENABLED!=true) NÃO enviado → to="${dest}" subject="${subject}"`);
+      return { sent: false, mock: true };
+    }
+
+    try {
+      const res = await fetch(`${AUTH_GATEWAY_URL}/api/v1/internal/email/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: [dest], subject, html }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        this.logger.warn(`Auth Gateway recusou e-mail externo SAC (HTTP ${res.status}): ${body.slice(0, 200)}`);
+        return { sent: false, mock: false };
+      }
+      return { sent: true, mock: false };
+    } catch (err) {
+      this.logger.error(`Falha ao enviar e-mail externo SAC: ${(err as Error).message}`);
+      return { sent: false, mock: false };
+    }
+  }
 }

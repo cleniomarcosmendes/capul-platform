@@ -142,6 +142,11 @@ export class ChamadoService {
     return this.core.listarDepartamentosSac();
   }
 
+  // SAC (Fase 2) — resposta ao cliente por e-mail.
+  async responderSac(id: string, texto: string, user: JwtPayload, role: string) {
+    return this.core.responderSac(id, texto, user, role);
+  }
+
   async adicionarCopias(chamadoId: string, usuariosIds: string[], user: JwtPayload, role: string) {
     return this.core.adicionarCopiasComCheck(chamadoId, usuariosIds, user, role);
   }

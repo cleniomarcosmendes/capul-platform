@@ -946,6 +946,54 @@ export class ChamadoCoreService {
     return [...new Set(equipes.map((e) => e.departamentoId).filter(Boolean) as string[])];
   }
 
+  /**
+   * SAC Fase 2 — resposta ao CLIENTE por e-mail. Cria um histórico público
+   * (timeline) marcando a resposta e dispara o e-mail externo (assunto
+   * `[SAC-<numero>]` para preparar o threading da Fase 3). Só em chamado de
+   * workspace SAC, com contato do cliente. Em DEV o envio é mockado (logado).
+   */
+  async responderSac(id: string, texto: string, user: JwtPayload, role: string) {
+    await this.helpers.assertTecnicoOuColaborador(id, user.sub, role);
+    const chamado = await this.helpers.getChamadoOrFail(id);
+    if (['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status)) {
+      throw new BadRequestException('Chamado finalizado — reabra para responder o cliente.');
+    }
+    const sacDept = await this.prisma.equipe.findFirst({
+      where: { apoioSac: true, status: 'ATIVO', departamentoId: chamado.departamentoId },
+      select: { id: true },
+    });
+    if (!sacDept) throw new BadRequestException('Este chamado não é de um workspace de SAC.');
+    if (!chamado.clienteContato) {
+      throw new BadRequestException('Cliente sem e-mail/contato cadastrado — não dá para responder por e-mail.');
+    }
+    const corpo = (texto ?? '').trim();
+    if (!corpo) throw new BadRequestException('Escreva a resposta ao cliente.');
+
+    const historico = await this.prisma.historicoChamado.create({
+      data: {
+        tipo: 'COMENTARIO',
+        descricao: `↩️ Resposta ao cliente (e-mail para ${chamado.clienteContato}):\n${corpo}`,
+        publico: true,
+        chamadoId: id,
+        usuarioId: user.sub,
+      },
+    });
+
+    const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
+    const html = '<div style="font-family:system-ui,-apple-system,sans-serif;color:#0f172a">'
+      + `<p style="margin:0 0 12px">${esc(corpo).replace(/\n/g, '<br>')}</p>`
+      + '<hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0">'
+      + `<p style="font-size:12px;color:#64748b;margin:0">CAPUL — Atendimento ao Cliente (SAC) · Protocolo <strong>[SAC-${chamado.numero}]</strong>. Responda este e-mail para falar com o SAC.</p>`
+      + '</div>';
+    const email = await this.emailEnvolvidos.enviarExterno(
+      chamado.clienteContato,
+      `[SAC-${chamado.numero}] ${chamado.titulo}`,
+      html,
+    );
+
+    return { historico, email };
+  }
+
   private prefixoAutor(user: JwtPayload): string {
     const nome = (user as { nome?: string }).nome || (user as { username?: string }).username;
     return nome ? `${nome} ` : '';

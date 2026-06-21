@@ -379,6 +379,18 @@ export class ChamadoController {
     return this.service.listarDepartamentosSac();
   }
 
+  // SAC (Fase 2) — responder o cliente por e-mail (saída). Staff/operador.
+  @Post(':id/responder-sac')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
+  responderSac(
+    @Param('id') id: string,
+    @Body('texto') texto: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.responderSac(id, texto, user, role);
+  }
+
   // === Agrupamento (decidido em 13/05/2026) ===
   // Apenas TI agrupa/desagrupa. Validacao detalhada no service.
 
