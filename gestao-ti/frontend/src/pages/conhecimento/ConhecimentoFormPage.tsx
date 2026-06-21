@@ -107,12 +107,12 @@ export function ConhecimentoFormPage() {
     <>
       {ConfirmDialog}
       <Header title={isEdit ? 'Editar Artigo' : 'Novo Artigo'} />
-      <div className="p-6 max-w-4xl" onChange={() => setDirty(true)}>
+      <div className="p-6 mx-auto max-w-4xl" onChange={() => setDirty(true)}>
         <button onClick={() => guardedNavigate(isEdit ? `/gestao-ti/conhecimento/${id}` : '/gestao-ti/conhecimento')} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4">
           <ArrowLeft className="w-4 h-4" /> Voltar
         </button>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6 rounded-xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
           {erro && <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm">{erro}</div>}
 
           <div className="bg-white rounded-lg border border-slate-200 p-5 space-y-4">

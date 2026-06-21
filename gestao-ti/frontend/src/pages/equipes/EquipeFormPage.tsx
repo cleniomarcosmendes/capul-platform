@@ -131,7 +131,7 @@ export function EquipeFormPage() {
     <>
       {ConfirmDialog}
       <Header title={isEdit ? 'Editar Equipe' : 'Nova Equipe'} />
-      <div className="p-6 max-w-2xl" onChange={() => setDirty(true)}>
+      <div className="p-6 mx-auto max-w-2xl" onChange={() => setDirty(true)}>
         <button
           onClick={() => guardedNavigate('/gestao-ti/equipes')}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-6"
@@ -146,7 +146,7 @@ export function EquipeFormPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-slate-200 p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-slate-200 p-6 space-y-5 shadow-sm">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Nome *</label>

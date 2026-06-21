@@ -170,7 +170,7 @@ export function ParadaFormPage() {
     <>
       {ConfirmDialog}
       <Header title={isEdit ? 'Editar Parada' : 'Nova Parada'} />
-      <div className="p-6 max-w-3xl" onChange={() => setDirty(true)}>
+      <div className="p-6 mx-auto max-w-3xl" onChange={() => setDirty(true)}>
         <button
           onClick={() => guardedNavigate(-1)}
           className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 mb-4"
@@ -182,7 +182,7 @@ export function ParadaFormPage() {
           <div className="bg-red-50 text-red-700 px-4 py-3 rounded-lg text-sm mb-4">{error}</div>
         )}
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-slate-200 p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-slate-200 p-6 space-y-5 shadow-sm">
           <DepartamentoField
             value={departamentoId}
             onChange={setDepartamentoId}
