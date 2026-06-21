@@ -59,10 +59,15 @@ Plataforma corporativa modular com microservicos independentes:
 - Navegacao entre modulos autorizados
 - Dashboard inicial do usuario
 
-### 3. Gestao TI (`/gestao-ti`)
-- Sistema completo de gestao de TI
+### 3. Gestao TI / Workspace (`/gestao-ti`)
+- Sistema completo de gestao de TI (Workspace multi-departamento)
 - Chamados, contratos, projetos, CMDB
 - 16 controllers, ~145 endpoints
+- **SAC** (sobre o Workspace/Chamado, branch `feat/sac`): atendimento ao cliente
+  com e-mail de entrada (poller IMAP supervisionado + triagem), e-mail de saida,
+  respostas prontas, indicadores e SLA. Telas gateadas por funcionalidade
+  (`SAC_TRIAGEM`/`SAC_INDICADOR`/`SAC_TEMPLATE`/`SAC_EMAIL_CONFIG`). Ver
+  `docs/AVALIACAO_SAC_WORKSPACE.md` e `docs/PLANO_SAC_FASE3_EMAIL_ENTRADA.md`.
 - Docs: `gestao-ti/docs/documentacao-tecnica-v1.md`
 
 ### 4. Inventario (`/inventario`)
@@ -263,4 +268,4 @@ Este arquivo serve como ponto de entrada para o Claude Code entender a estrutura
 
 ---
 
-*Ultima atualizacao: 20/06/2026*
+*Ultima atualizacao: 21/06/2026*
