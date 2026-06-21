@@ -9,7 +9,7 @@ import {
   ArrowLeft, UserPlus, ArrowRightLeft, CheckCircle,
   XCircle, RotateCcw, Lock, Star, Users,
   Paperclip, Download, Trash2, FileText, Image, FileSpreadsheet, File,
-  Play, Square, Edit3, Check, X, Clock, Copy, Printer, Bell, Layers, Unlink, Search,
+  Play, Square, Edit3, Check, X, Clock, Copy, Printer, Bell, Layers, Unlink, Search, Mail,
 } from 'lucide-react';
 import { coreService } from '../../services/core.service';
 import { useToast } from '../../components/Toast';
@@ -145,6 +145,9 @@ export function ChamadoDetalhePage() {
   const [apoiadoresSac, setApoiadoresSac] = useState<ApoiadorSac[]>([]);
   const [copiaBusca, setCopiaBusca] = useState('');
   const [copiaSalvando, setCopiaSalvando] = useState(false);
+  // SAC (Fase 2) — resposta ao cliente por e-mail.
+  const [respostaCliente, setRespostaCliente] = useState('');
+  const [respondendoSac, setRespondendoSac] = useState(false);
 
   // Agrupamento (decidido em 13/05/2026)
   // Modo "este vira filho" — busca pai pra agrupar
@@ -199,6 +202,25 @@ export function ChamadoDetalhePage() {
   const isColaborador = colaboradores.some((c) => c.usuarioId === usuario?.id);
   // Pode movimentar: gestor (override), tecnico atribuido, ou colaborador
   const podeMovimentar = isGestor || isTecnicoAtribuido || isColaborador;
+
+  // SAC (Fase 2) — envia a resposta ao cliente por e-mail e recarrega a timeline.
+  async function enviarRespostaSac() {
+    if (!chamado || !respostaCliente.trim()) return;
+    setRespondendoSac(true);
+    try {
+      const res = await chamadoService.responderSac(chamado.id, respostaCliente.trim());
+      setChamado(await chamadoService.buscar(chamado.id));
+      setRespostaCliente('');
+      toast('success', res.email.mock
+        ? 'Resposta registrada (e-mail mockado em DEV — não enviado).'
+        : 'Resposta enviada ao cliente por e-mail.');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast('error', msg || 'Falha ao responder o cliente.');
+    } finally {
+      setRespondendoSac(false);
+    }
+  }
   // Em cópia (13/05/2026): usuario tem "papel de solicitante" — pode ver,
   // comentar, anexar, adicionar mais copias. Backend ja libera; frontend
   // precisa expor os botoes (senao role USUARIO_FINAL em copia nao consegue
@@ -1218,6 +1240,35 @@ export function ChamadoDetalhePage() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* SAC (Fase 2) — Responder ao cliente por e-mail */}
+            {ehSac && chamado.clienteContato && podeMovimentar
+              && !['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status) && (
+              <div className="bg-white rounded-xl border border-sky-200 p-5">
+                <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2 mb-1">
+                  <Mail className="w-4 h-4 text-sky-600" /> Responder ao cliente (SAC)
+                </h4>
+                <p className="text-xs text-slate-500 mb-2">
+                  Envia um e-mail para <strong>{chamado.clienteContato}</strong> e registra na timeline. Protocolo [SAC-{chamado.numero}].
+                </p>
+                <textarea
+                  value={respostaCliente}
+                  onChange={(e) => setRespostaCliente(e.target.value)}
+                  rows={4}
+                  placeholder="Escreva a resposta ao cliente..."
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600"
+                />
+                <div className="flex justify-end mt-2">
+                  <button
+                    disabled={!respostaCliente.trim() || respondendoSac}
+                    onClick={enviarRespostaSac}
+                    className="inline-flex items-center gap-2 bg-sky-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-sky-700 disabled:opacity-50"
+                  >
+                    <Mail className="w-4 h-4" /> {respondendoSac ? 'Enviando...' : 'Enviar ao cliente'}
+                  </button>
+                </div>
               </div>
             )}
 

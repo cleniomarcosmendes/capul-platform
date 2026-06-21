@@ -137,6 +137,12 @@ export const chamadoService = {
     return data;
   },
 
+  // SAC (Fase 2) — responde o cliente por e-mail. Retorna { historico, email:{sent,mock} }.
+  async responderSac(id: string, texto: string): Promise<{ email: { sent: boolean; mock: boolean } }> {
+    const { data } = await gestaoApi.post(`/chamados/${id}/responder-sac`, { texto });
+    return data;
+  },
+
   async atualizarCabecalho(id: string, payload: { titulo?: string; descricao?: string }): Promise<Chamado> {
     const { data } = await gestaoApi.patch(`/chamados/${id}/cabecalho`, payload);
     return data;
