@@ -440,7 +440,7 @@ export function ChamadoCreatePage() {
       )}
 
       <Header title="Novo Chamado" />
-      <div className="p-6 max-w-3xl" onChange={() => setDirty(true)}>
+      <div className="p-6 mx-auto max-w-5xl" onChange={() => setDirty(true)}>
         <button
           onClick={() => guardedNavigate('/gestao-ti/chamados')}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-6"
@@ -462,7 +462,7 @@ export function ChamadoCreatePage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
           {isUsuarioPadrao && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
               <div>
