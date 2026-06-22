@@ -163,8 +163,8 @@ export function AtivoFormPage() {
           {erro && <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm">{erro}</div>}
 
           {/* Identificacao */}
-          <fieldset className="bg-white rounded-lg border border-slate-200 p-5 space-y-4">
-            <legend className="text-sm font-semibold text-slate-700 px-2">Identificacao</legend>
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-slate-700">Identificacao</h3>
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Tag *</label>
@@ -208,11 +208,11 @@ export function AtivoFormPage() {
               <label className="block text-xs font-medium text-slate-600 mb-1">Descricao</label>
               <textarea name="descricao" value={form.descricao} onChange={handleChange} rows={2} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>
-          </fieldset>
+          </div>
 
           {/* Localizacao */}
-          <fieldset className="bg-white rounded-lg border border-slate-200 p-5 space-y-4">
-            <legend className="text-sm font-semibold text-slate-700 px-2">Localizacao e Responsavel</legend>
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-slate-700">Localizacao e Responsavel</h3>
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Filial *</label>
@@ -251,11 +251,11 @@ export function AtivoFormPage() {
                 <input name="dataGarantia" type="date" value={form.dataGarantia} onChange={handleChange} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
               </div>
             </div>
-          </fieldset>
+          </div>
 
           {/* Info Tecnica */}
-          <fieldset className="bg-white rounded-lg border border-slate-200 p-5 space-y-4">
-            <legend className="text-sm font-semibold text-slate-700 px-2">Informacoes Tecnicas</legend>
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-slate-700">Informacoes Tecnicas</h3>
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Processador</label>
@@ -288,7 +288,7 @@ export function AtivoFormPage() {
               <label className="block text-xs font-medium text-slate-600 mb-1">Observacoes</label>
               <textarea name="observacoes" value={form.observacoes} onChange={handleChange} rows={3} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>
-          </fieldset>
+          </div>
 
           {/* Botoes */}
           <div className="flex gap-3">
