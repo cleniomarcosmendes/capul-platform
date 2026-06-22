@@ -101,7 +101,7 @@ export function ConhecimentoDetalhePage() {
   return (
     <>
       <Header title="Artigo" />
-      <div className="p-6 mx-auto max-w-4xl">
+      <div className="p-6">
         <button onClick={() => navigate('/gestao-ti/conhecimento')} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4">
           <ArrowLeft className="w-4 h-4" /> Voltar
         </button>

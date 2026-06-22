@@ -161,7 +161,7 @@ export function NotaFiscalDetalhePage() {
   return (
     <>
       <Header title={`NF ${nf.numero}`} />
-      <div className="p-6 mx-auto max-w-6xl">
+      <div className="p-6">
         <div className="flex items-center justify-between mb-4">
           <Link to="/gestao-ti/notas-fiscais"
             className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
