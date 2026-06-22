@@ -521,11 +521,7 @@ export function ChamadosListPage() {
                       Solicitante <SortIcon col="solicitante" />
                     </button>
                   </th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">
-                    <button onClick={() => toggleSort('departamento')} className="flex items-center hover:text-slate-800">
-                      Depto <SortIcon col="departamento" />
-                    </button>
-                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600" title="Departamento de quem abriu o chamado">Depto</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">
                     <button onClick={() => toggleSort('createdAt')} className="flex items-center hover:text-slate-800">
                       Data <SortIcon col="createdAt" />
@@ -569,7 +565,7 @@ export function ChamadosListPage() {
                       {c.nomeColaborador || c.solicitante.nome}
                       {c.matriculaColaborador && <span className="text-xs text-slate-400 ml-1">({c.matriculaColaborador})</span>}
                     </td>
-                    <td className="px-4 py-3 text-slate-500 text-xs">{c.departamento?.nome || '—'}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs">{departamentos.find((d) => d.id === c.solicitante.departamentoId)?.nome || '—'}</td>
                     <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
                       {new Date(c.createdAt).toLocaleDateString('pt-BR')}
                     </td>

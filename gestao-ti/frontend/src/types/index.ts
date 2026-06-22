@@ -87,6 +87,9 @@ export interface UsuarioResumo {
   username: string;
   nome: string;
   email: string | null;
+  /** Depto principal do usuário (core.usuarios.departamento_id). Usado na lista
+   *  de chamados para exibir o depto de quem ABRIU o chamado (não o do workspace). */
+  departamentoId?: string | null;
 }
 
 export interface UsuarioCore {
