@@ -1,1 +1,16 @@
 @import "tailwindcss";
+
+/* Paleta CAPUL — alinhada ao tema do Workspace (gestao-ti) para consistência
+   de marca no módulo Logística. Verde principal #006838. */
+@theme {
+  --color-capul-50: #f0fdf4;
+  --color-capul-100: #dcfce7;
+  --color-capul-200: #bbf7d0;
+  --color-capul-300: #8fce6b;
+  --color-capul-400: #72BF44;
+  --color-capul-500: #4a9e2f;
+  --color-capul-600: #006838;
+  --color-capul-700: #004d2a;
+  --color-capul-800: #003d1f;
+  --color-capul-900: #002914;
+}
