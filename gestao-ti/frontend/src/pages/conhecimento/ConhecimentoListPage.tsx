@@ -135,7 +135,7 @@ export function ConhecimentoListPage() {
               <Link
                 key={a.id}
                 to={`/gestao-ti/conhecimento/${a.id}`}
-                className="bg-white rounded-lg border border-slate-200 p-5 hover:border-amber-300 hover:shadow-sm transition-all"
+                className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:border-amber-300 hover:shadow-md transition-all"
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-1.5">

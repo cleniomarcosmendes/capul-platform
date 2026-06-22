@@ -324,7 +324,7 @@ export function NotaFiscalFormPage() {
 
         <form onSubmit={handleSubmit}>
           {/* Cabecalho da NF */}
-          <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mb-6">
             <h3 className="text-sm font-semibold text-slate-700 uppercase mb-4">Dados da Nota Fiscal</h3>
             <div className="mb-4">
               <DepartamentoField
@@ -464,7 +464,7 @@ export function NotaFiscalFormPage() {
           </div>
 
           {/* Itens da NF */}
-          <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-slate-700 uppercase">Itens da Nota Fiscal</h3>
               <button type="button" onClick={addItem}

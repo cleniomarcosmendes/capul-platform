@@ -140,7 +140,7 @@ export function NotaLicencaFormPage() {
       <Header title="Nova Nota de Licenças" />
       <div className="p-6 mx-auto max-w-5xl">
         {/* Cabeçalho */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-slate-700 uppercase flex items-center gap-2">
               <KeyRound className="w-4 h-4 text-capul-500" /> Dados da Nota Fiscal de compra
@@ -199,7 +199,7 @@ export function NotaLicencaFormPage() {
         </div>
 
         {/* Itens = Licenças */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-slate-700 uppercase">Licenças (itens da nota)</h3>
             <button type="button" onClick={addItem} className="flex items-center gap-1 text-sm text-capul-600 hover:text-capul-700">
