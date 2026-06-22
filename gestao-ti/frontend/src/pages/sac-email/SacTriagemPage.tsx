@@ -163,51 +163,57 @@ export function SacTriagemPage() {
             ) : (
               <div className="space-y-3">
                 {triagem.map((it) => (
-                  <div key={it.id} className="border border-slate-200 rounded-lg p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm text-slate-700 font-medium truncate">{it.subject || '(sem assunto)'}</div>
-                        <div className="text-xs text-slate-500">De: {it.fromAddr ?? '—'} · {new Date(it.processadoEm).toLocaleString('pt-BR')}</div>
+                  <div key={it.id} className="border border-slate-200 rounded-lg p-3 lg:flex lg:items-stretch lg:gap-4">
+                    {/* Conteúdo do e-mail (esquerda em telas grandes) */}
+                    <div className="min-w-0 lg:flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm text-slate-700 font-medium truncate">{it.subject || '(sem assunto)'}</div>
+                          <div className="text-xs text-slate-500">De: {it.fromAddr ?? '—'} · {new Date(it.processadoEm).toLocaleString('pt-BR')}</div>
+                        </div>
+                        {it.anexos.length > 0 && (
+                          <span className="inline-flex items-center gap-1 text-xs text-slate-500 shrink-0">
+                            <Paperclip className="w-3 h-3" /> {it.anexos.length}
+                          </span>
+                        )}
                       </div>
-                      {it.anexos.length > 0 && (
-                        <span className="inline-flex items-center gap-1 text-xs text-slate-500 shrink-0">
-                          <Paperclip className="w-3 h-3" /> {it.anexos.length}
-                        </span>
+                      {it.corpoTexto && (
+                        <p className="text-xs text-slate-500 mt-2 whitespace-pre-wrap line-clamp-3 lg:line-clamp-4 bg-slate-50 rounded p-2">{it.corpoTexto.slice(0, 400)}</p>
                       )}
                     </div>
-                    {it.corpoTexto && (
-                      <p className="text-xs text-slate-500 mt-2 whitespace-pre-wrap line-clamp-3 bg-slate-50 rounded p-2">{it.corpoTexto.slice(0, 400)}</p>
-                    )}
-                    <div className="flex flex-wrap items-center gap-2 mt-3">
-                      <span className="text-xs text-slate-500">Vincular ao chamado nº</span>
-                      <input
-                        value={vincNum[it.id] ?? ''}
-                        onChange={(e) => setVincNum((m) => ({ ...m, [it.id]: e.target.value.replace(/\D/g, '') }))}
-                        placeholder="ex.: 1405"
-                        className="w-24 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600"
-                      />
-                      <button onClick={() => vincular(it)} disabled={triando === it.id}
-                        className="inline-flex items-center gap-1.5 bg-capul-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
-                        <Link2 className="w-4 h-4" /> Vincular
-                      </button>
-                      <button onClick={() => descartar(it)} disabled={triando === it.id}
-                        className="inline-flex items-center gap-1.5 bg-white border border-slate-300 text-slate-600 px-3 py-1.5 rounded-lg text-sm hover:bg-slate-50 disabled:opacity-50">
-                        <Trash2 className="w-4 h-4" /> Descartar
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-slate-100">
-                      <span className="text-xs text-slate-500">ou abrir novo na equipe</span>
-                      <select value={abrirEq[it.id] ?? ''} onChange={(e) => setAbrirEq((m) => ({ ...m, [it.id]: e.target.value }))}
-                        className="border border-slate-300 rounded-lg px-2 py-1 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-capul-600">
-                        {equipesSac.length === 0 && <option value="">— sem equipe SAC —</option>}
-                        {equipesSac.map((e) => (
-                          <option key={e.id} value={e.id}>{e.sigla ? `${e.sigla} — ` : ''}{e.nome}</option>
-                        ))}
-                      </select>
-                      <button onClick={() => abrirChamado(it)} disabled={triando === it.id || equipesSac.length === 0}
-                        className="inline-flex items-center gap-1.5 bg-white border border-capul-300 text-capul-700 px-3 py-1.5 rounded-lg text-sm hover:bg-capul-50 disabled:opacity-50">
-                        <PlusCircle className="w-4 h-4" /> Abrir novo chamado
-                      </button>
+                    {/* Ações (direita em telas grandes; empilha embaixo no mobile) */}
+                    <div className="mt-3 lg:mt-0 lg:w-96 lg:shrink-0 lg:border-l lg:border-slate-100 lg:pl-4 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-slate-500">Vincular ao chamado nº</span>
+                        <input
+                          value={vincNum[it.id] ?? ''}
+                          onChange={(e) => setVincNum((m) => ({ ...m, [it.id]: e.target.value.replace(/\D/g, '') }))}
+                          placeholder="ex.: 1405"
+                          className="w-24 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600"
+                        />
+                        <button onClick={() => vincular(it)} disabled={triando === it.id}
+                          className="inline-flex items-center gap-1.5 bg-capul-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
+                          <Link2 className="w-4 h-4" /> Vincular
+                        </button>
+                        <button onClick={() => descartar(it)} disabled={triando === it.id}
+                          className="inline-flex items-center gap-1.5 bg-white border border-slate-300 text-slate-600 px-3 py-1.5 rounded-lg text-sm hover:bg-slate-50 disabled:opacity-50">
+                          <Trash2 className="w-4 h-4" /> Descartar
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+                        <span className="text-xs text-slate-500">ou abrir novo na equipe</span>
+                        <select value={abrirEq[it.id] ?? ''} onChange={(e) => setAbrirEq((m) => ({ ...m, [it.id]: e.target.value }))}
+                          className="border border-slate-300 rounded-lg px-2 py-1 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-capul-600">
+                          {equipesSac.length === 0 && <option value="">— sem equipe SAC —</option>}
+                          {equipesSac.map((e) => (
+                            <option key={e.id} value={e.id}>{e.sigla ? `${e.sigla} — ` : ''}{e.nome}</option>
+                          ))}
+                        </select>
+                        <button onClick={() => abrirChamado(it)} disabled={triando === it.id || equipesSac.length === 0}
+                          className="inline-flex items-center gap-1.5 bg-white border border-capul-300 text-capul-700 px-3 py-1.5 rounded-lg text-sm hover:bg-capul-50 disabled:opacity-50">
+                          <PlusCircle className="w-4 h-4" /> Abrir novo chamado
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -241,7 +247,7 @@ export function SacTriagemPage() {
                         <td className="py-2 pr-3 whitespace-nowrap text-slate-500">{new Date(it.processadoEm).toLocaleString('pt-BR')}</td>
                         <td className="py-2 pr-3"><BadgeResultado r={it.resultado} /></td>
                         <td className="py-2 pr-3 text-slate-600">{it.fromAddr ?? '—'}</td>
-                        <td className="py-2 pr-3 text-slate-600 max-w-md truncate" title={it.subject ?? ''}>{it.subject ?? '—'}</td>
+                        <td className="py-2 pr-3 text-slate-600 max-w-2xl truncate" title={it.subject ?? ''}>{it.subject ?? '—'}</td>
                         <td className="py-2 pr-3 text-slate-600">
                           {it.chamadoId ? (
                             <Link to={`/gestao-ti/chamados/${it.chamadoId}`} className="text-capul-600 hover:underline">#{it.sacNumero}</Link>
