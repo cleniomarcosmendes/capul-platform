@@ -24,8 +24,11 @@ from app.core.config import settings
 from app.core.constants import VALID_SYNC_TABLES
 from app.core.protheus_config import get_protheus_config
 
-# Controle de verificacao SSL via variavel de ambiente
-SSL_VERIFY = os.getenv("SSL_VERIFY", "true").lower() != "false"
+# Controle de verificacao SSL via variavel de ambiente.
+# Le PROTHEUS_INVENTARIO_VERIFY_SSL (default false) — o Protheus interno e
+# acessado por IP com cert de hostname; todos os modulos (gestao-ti/fiscal/
+# logistica) usam rejectUnauthorized:false. O compose ja passa essa env.
+SSL_VERIFY = os.getenv("PROTHEUS_INVENTARIO_VERIFY_SSL", "false").lower() != "false"
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

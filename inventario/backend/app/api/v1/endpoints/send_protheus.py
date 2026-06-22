@@ -29,8 +29,9 @@ from app.core.security import get_current_user
 from app.core.exceptions import safe_error_response
 from app.core.protheus_config import get_protheus_config
 
-# Controle de verificacao SSL via variavel de ambiente
-SSL_VERIFY = os.getenv("SSL_VERIFY", "true").lower() != "false"
+# Controle de verificacao SSL via variavel de ambiente.
+# Le PROTHEUS_INVENTARIO_VERIFY_SSL (default false) — ver sync_protheus.py.
+SSL_VERIFY = os.getenv("PROTHEUS_INVENTARIO_VERIFY_SSL", "false").lower() != "false"
 
 logger = logging.getLogger(__name__)
 
