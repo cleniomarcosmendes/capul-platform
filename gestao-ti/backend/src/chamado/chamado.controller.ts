@@ -19,6 +19,7 @@ import { RequiresFuncionalidade } from '../common/decorators/requires-funcionali
 import { FuncionalidadeGuard } from '../common/guards/funcionalidade.guard.js';
 import { CreateChamadoDto, AddChamadoCopiasDto } from './dto/create-chamado.dto.js';
 import { UpdateChamadoHeaderDto } from './dto/update-chamado-header.dto.js';
+import { UpdateClienteSacDto } from './dto/update-cliente-sac.dto.js';
 import { TransferirEquipeDto, TransferirTecnicoDto } from './dto/transferir-chamado.dto.js';
 import { ComentarioChamadoDto } from './dto/comentario-chamado.dto.js';
 import { ResolverChamadoDto, ReabrirChamadoDto, CsatDto } from './dto/resolver-chamado.dto.js';
@@ -391,6 +392,20 @@ export class ChamadoController {
     @GestaoTiRole() role: string,
   ) {
     return this.service.responderSac(id, texto, user, role, anexo);
+  }
+
+  // SAC (Fase 1) — editar dados do cliente externo de um chamado SAC já aberto.
+  // Resolve o caso do chamado aberto sem e-mail (a matrícula não traz e-mail),
+  // que impedia responder o cliente. Staff/operador, só em chamado de SAC.
+  @Patch(':id/dados-cliente-sac')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
+  atualizarDadosClienteSac(
+    @Param('id') id: string,
+    @Body() dto: UpdateClienteSacDto,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.atualizarDadosClienteSac(id, dto, user, role);
   }
 
   // === Agrupamento (decidido em 13/05/2026) ===

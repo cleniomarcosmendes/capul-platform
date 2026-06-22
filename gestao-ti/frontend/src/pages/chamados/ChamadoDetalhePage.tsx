@@ -149,6 +149,12 @@ export function ChamadoDetalhePage() {
   const [respostaCliente, setRespostaCliente] = useState('');
   const [respostaAnexo, setRespostaAnexo] = useState<File | null>(null);
   const [respostasProntas, setRespostasProntas] = useState<SacTemplate[]>([]);
+  // SAC — edição inline dos dados do cliente (nome/e-mail/telefone)
+  const [editandoCliente, setEditandoCliente] = useState(false);
+  const [salvandoCliente, setSalvandoCliente] = useState(false);
+  const [cliNome, setCliNome] = useState('');
+  const [cliEmail, setCliEmail] = useState('');
+  const [cliTel, setCliTel] = useState('');
   const [respondendoSac, setRespondendoSac] = useState(false);
 
   // Agrupamento (decidido em 13/05/2026)
@@ -204,6 +210,35 @@ export function ChamadoDetalhePage() {
   const isColaborador = colaboradores.some((c) => c.usuarioId === usuario?.id);
   // Pode movimentar: gestor (override), tecnico atribuido, ou colaborador
   const podeMovimentar = isGestor || isTecnicoAtribuido || isColaborador;
+
+  // SAC (Fase 1) — abre/edita os dados do cliente externo (nome/e-mail/telefone).
+  function iniciarEdicaoCliente() {
+    if (!chamado) return;
+    setCliNome(chamado.clienteNome ?? '');
+    setCliEmail(chamado.clienteEmail ?? '');
+    setCliTel(chamado.clienteTelefone ?? '');
+    setEditandoCliente(true);
+  }
+
+  async function salvarDadosCliente() {
+    if (!chamado) return;
+    setSalvandoCliente(true);
+    try {
+      await chamadoService.atualizarDadosClienteSac(chamado.id, {
+        clienteNome: cliNome.trim(),
+        clienteEmail: cliEmail.trim(),
+        clienteTelefone: cliTel.trim(),
+      });
+      setChamado(await chamadoService.buscar(chamado.id));
+      setEditandoCliente(false);
+      toast('success', 'Dados do cliente atualizados.');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+      toast('error', Array.isArray(msg) ? msg.join(' ') : (msg || 'Falha ao atualizar os dados do cliente.'));
+    } finally {
+      setSalvandoCliente(false);
+    }
+  }
 
   // SAC (Fase 2) — envia a resposta ao cliente por e-mail e recarrega a timeline.
   async function enviarRespostaSac() {
@@ -784,21 +819,60 @@ export function ChamadoDetalhePage() {
                 </InfoRow>
               )}
 
-              {/* SAC (Fase 1) — dados do cliente externo, quando preenchidos. */}
-              {chamado.clienteNome && (
-                <InfoRow label="Cliente (SAC)">
-                  <span className="text-xs text-slate-600 font-medium">{chamado.clienteNome}</span>
-                </InfoRow>
-              )}
-              {chamado.clienteEmail && (
-                <InfoRow label="E-mail">
-                  <span className="text-xs text-slate-600">{chamado.clienteEmail}</span>
-                </InfoRow>
-              )}
-              {chamado.clienteTelefone && (
-                <InfoRow label="Telefone">
-                  <span className="text-xs text-slate-600">{chamado.clienteTelefone}</span>
-                </InfoRow>
+              {/* SAC (Fase 1) — dados do cliente externo. Em chamado de SAC, staff
+                  pode EDITAR (inclusive ADICIONAR o e-mail, que a busca por matrícula
+                  não traz — sem ele não dá pra responder o cliente). */}
+              {ehSac ? (
+                <>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Cliente (SAC)</span>
+                    {podeMovimentar && !editandoCliente && (
+                      <button onClick={iniciarEdicaoCliente} className="inline-flex items-center gap-1 text-xs text-capul-600 hover:underline">
+                        <Edit3 className="w-3 h-3" /> Editar
+                      </button>
+                    )}
+                  </div>
+                  {editandoCliente ? (
+                    <div className="space-y-2 mt-1">
+                      <input value={cliNome} onChange={(e) => setCliNome(e.target.value)} maxLength={200} placeholder="Nome do cliente"
+                        className="w-full border border-slate-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-capul-600" />
+                      <input type="email" value={cliEmail} onChange={(e) => setCliEmail(e.target.value)} maxLength={150} placeholder="E-mail do cliente"
+                        className="w-full border border-slate-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-capul-600" />
+                      <input value={cliTel} onChange={(e) => setCliTel(e.target.value)} maxLength={40} placeholder="Telefone"
+                        className="w-full border border-slate-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-capul-600" />
+                      <div className="flex gap-2">
+                        <button onClick={salvarDadosCliente} disabled={salvandoCliente}
+                          className="inline-flex items-center gap-1 bg-capul-600 text-white px-3 py-1 rounded-lg text-xs hover:bg-capul-700 disabled:opacity-50">
+                          <Check className="w-3 h-3" /> Salvar
+                        </button>
+                        <button onClick={() => setEditandoCliente(false)} disabled={salvandoCliente}
+                          className="inline-flex items-center gap-1 bg-white border border-slate-300 text-slate-600 px-3 py-1 rounded-lg text-xs hover:bg-slate-50">
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <InfoRow label="Nome"><span className="text-xs text-slate-600 font-medium">{chamado.clienteNome || '—'}</span></InfoRow>
+                      <InfoRow label="E-mail">{chamado.clienteEmail
+                        ? <span className="text-xs text-slate-600">{chamado.clienteEmail}</span>
+                        : <span className="text-xs text-amber-600">sem e-mail — necessário p/ responder</span>}</InfoRow>
+                      <InfoRow label="Telefone"><span className="text-xs text-slate-600">{chamado.clienteTelefone || '—'}</span></InfoRow>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  {chamado.clienteNome && (
+                    <InfoRow label="Cliente (SAC)"><span className="text-xs text-slate-600 font-medium">{chamado.clienteNome}</span></InfoRow>
+                  )}
+                  {chamado.clienteEmail && (
+                    <InfoRow label="E-mail"><span className="text-xs text-slate-600">{chamado.clienteEmail}</span></InfoRow>
+                  )}
+                  {chamado.clienteTelefone && (
+                    <InfoRow label="Telefone"><span className="text-xs text-slate-600">{chamado.clienteTelefone}</span></InfoRow>
+                  )}
+                </>
               )}
               {chamado.canalOrigem && (
                 <InfoRow label="Canal">

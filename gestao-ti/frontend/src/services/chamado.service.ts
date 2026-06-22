@@ -142,6 +142,12 @@ export const chamadoService = {
     return data;
   },
 
+  // SAC — edita dados do cliente externo (nome/e-mail/telefone) num chamado SAC aberto.
+  async atualizarDadosClienteSac(id: string, dados: { clienteNome?: string; clienteEmail?: string; clienteTelefone?: string }): Promise<Chamado> {
+    const { data } = await gestaoApi.patch(`/chamados/${id}/dados-cliente-sac`, dados);
+    return data;
+  },
+
   async atualizarCabecalho(id: string, payload: { titulo?: string; descricao?: string }): Promise<Chamado> {
     const { data } = await gestaoApi.patch(`/chamados/${id}/cabecalho`, payload);
     return data;

@@ -6,6 +6,7 @@ import { ChamadoAnexoService } from './services/chamado-anexo.service.js';
 import { ChamadoAgrupamentoService } from './services/chamado-agrupamento.service.js';
 import { CreateChamadoDto } from './dto/create-chamado.dto.js';
 import { UpdateChamadoHeaderDto } from './dto/update-chamado-header.dto.js';
+import { UpdateClienteSacDto } from './dto/update-cliente-sac.dto.js';
 import { TransferirEquipeDto, TransferirTecnicoDto } from './dto/transferir-chamado.dto.js';
 import { ComentarioChamadoDto } from './dto/comentario-chamado.dto.js';
 import { ResolverChamadoDto, ReabrirChamadoDto, CsatDto } from './dto/resolver-chamado.dto.js';
@@ -140,6 +141,10 @@ export class ChamadoService {
   // SAC (Fase 2) — resposta ao cliente por e-mail.
   async responderSac(id: string, texto: string, user: JwtPayload, role: string, file?: Express.Multer.File) {
     return this.core.responderSac(id, texto, user, role, file);
+  }
+
+  async atualizarDadosClienteSac(id: string, dto: UpdateClienteSacDto, user: JwtPayload, role: string) {
+    return this.core.atualizarDadosClienteSac(id, dto, user, role);
   }
 
   async adicionarCopias(chamadoId: string, usuariosIds: string[], user: JwtPayload, role: string) {

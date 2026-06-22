@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CreateChamadoDto } from '../dto/create-chamado.dto.js';
 import { UpdateChamadoHeaderDto } from '../dto/update-chamado-header.dto.js';
+import { UpdateClienteSacDto } from '../dto/update-cliente-sac.dto.js';
 import { TransferirEquipeDto, TransferirTecnicoDto } from '../dto/transferir-chamado.dto.js';
 import { ComentarioChamadoDto } from '../dto/comentario-chamado.dto.js';
 import { ResolverChamadoDto, ReabrirChamadoDto, CsatDto } from '../dto/resolver-chamado.dto.js';
@@ -1050,6 +1051,41 @@ export class ChamadoCoreService {
       data,
       include: chamadoInclude,
     });
+  }
+
+  /**
+   * SAC — edita os dados do cliente externo (nome/e-mail/telefone) de um chamado
+   * de SAC já aberto. Permissão = staff/operador do chamado (igual ao responderSac),
+   * NÃO o "solicitante ou gestor" do updateHeader (o atendente costuma não ser o
+   * solicitante). Guard: só em chamado cuja EQUIPE atende SAC. Não gateia em
+   * clienteEmail — é justamente o que pode estar faltando.
+   */
+  async atualizarDadosClienteSac(id: string, dto: UpdateClienteSacDto, user: JwtPayload, role: string) {
+    await this.helpers.assertTecnicoOuColaborador(id, user.sub, role);
+    const chamado = await this.helpers.getChamadoOrFail(id);
+    const equipe = await this.prisma.equipe.findUnique({
+      where: { id: chamado.equipeAtualId },
+      select: { atendeSac: true },
+    });
+    if (!equipe?.atendeSac) throw new BadRequestException('Este chamado não é de uma equipe de atendimento ao SAC.');
+
+    const data: Record<string, string | null> = {};
+    if (dto.clienteNome !== undefined) data.clienteNome = dto.clienteNome.trim() || null;
+    if (dto.clienteEmail !== undefined) data.clienteEmail = dto.clienteEmail.trim() || null;
+    if (dto.clienteTelefone !== undefined) data.clienteTelefone = dto.clienteTelefone.trim() || null;
+    if (Object.keys(data).length === 0) throw new BadRequestException('Nenhum dado do cliente para atualizar.');
+
+    const updated = await this.prisma.chamado.update({ where: { id }, data, include: chamadoInclude });
+    await this.prisma.historicoChamado.create({
+      data: {
+        tipo: 'COMENTARIO',
+        descricao: 'Dados do cliente (SAC) atualizados.',
+        publico: false,
+        chamadoId: id,
+        usuarioId: user.sub,
+      },
+    });
+    return updated;
   }
 
   async assumir(id: string, user: JwtPayload) {
