@@ -955,10 +955,10 @@ class SBM010(Base):
 
     # Chave primária composta
     bm_filial = Column(String(10), primary_key=True, default='')  # Filial
-    bm_grupo = Column(String(4), primary_key=True)               # Código do Grupo
+    bm_grupo = Column(String(20), primary_key=True)              # Código do Grupo (PROD usa 6 dígitos)
     
     # Campos da SBM010
-    bm_desc = Column(String(30), nullable=False)                 # Descrição do Grupo
+    bm_desc = Column(String(100), nullable=False)                # Descrição do Grupo
     
     # Campos de controle
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -972,10 +972,10 @@ class SZD010(Base):
 
     # Chave primária composta
     zd_filial = Column(String(10), primary_key=True, default='')  # Filial
-    zd_xcod = Column(String(4), primary_key=True)                # Código da Categoria
+    zd_xcod = Column(String(20), primary_key=True)               # Código da Categoria (PROD usa 6 dígitos)
     
     # Campos da SZD010
-    zd_xdesc = Column(String(30), nullable=False)                # Descrição da Categoria
+    zd_xdesc = Column(String(100), nullable=False)               # Descrição da Categoria
     
     # Campos de controle
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -989,10 +989,10 @@ class SZE010(Base):
 
     # Chave primária composta
     ze_filial = Column(String(10), primary_key=True, default='')  # Filial
-    ze_xcod = Column(String(4), primary_key=True)                # Código da Subcategoria
+    ze_xcod = Column(String(20), primary_key=True)               # Código da Subcategoria (PROD usa 6 dígitos)
     
     # Campos da SZE010
-    ze_xdesc = Column(String(30), nullable=False)                # Descrição da Subcategoria
+    ze_xdesc = Column(String(100), nullable=False)               # Descrição da Subcategoria
     
     # Campos de controle
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -1006,10 +1006,10 @@ class SZF010(Base):
 
     # Chave primária composta
     zf_filial = Column(String(10), primary_key=True, default='')  # Filial
-    zf_xcod = Column(String(4), primary_key=True)                # Código do Segmento
+    zf_xcod = Column(String(20), primary_key=True)               # Código do Segmento (PROD usa 6 dígitos)
     
     # Campos da SZF010
-    zf_xdesc = Column(String(30), nullable=False)                # Descrição do Segmento
+    zf_xdesc = Column(String(100), nullable=False)               # Descrição do Segmento
     
     # Campos de controle
     created_at = Column(DateTime(timezone=True), server_default=func.now())
