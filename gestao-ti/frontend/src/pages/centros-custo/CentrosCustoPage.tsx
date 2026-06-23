@@ -189,6 +189,11 @@ export function CentrosCustoPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
+                {busca.trim() && sorted.length === 0 && (
+                  <tr>
+                    <td colSpan={isAdmin ? 4 : 3} className="text-center py-12 text-slate-500">Nenhum resultado para "{busca}".</td>
+                  </tr>
+                )}
                 {sorted.map((cc) => (
                   <tr key={cc.id} className="hover:bg-slate-50">
                     {editId === cc.id ? (

@@ -198,6 +198,11 @@ export function CategoriaLicencaPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
+                {busca.trim() && sorted.length === 0 && (
+                  <tr>
+                    <td colSpan={canManage ? 5 : 4} className="text-center py-12 text-slate-500">Nenhum resultado para "{busca}".</td>
+                  </tr>
+                )}
                 {sorted.map((cat) => (
                   <tr key={cat.id} className="hover:bg-slate-50">
                     {editId === cat.id ? (

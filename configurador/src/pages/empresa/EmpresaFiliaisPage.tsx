@@ -312,6 +312,11 @@ export function EmpresaFiliaisPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
+                    {busca.trim() && sortedFiliais.length === 0 && (
+                      <tr>
+                        <td colSpan={canEdit ? 6 : 5} className="px-6 py-12 text-center text-slate-400">Nenhum resultado para "{busca}".</td>
+                      </tr>
+                    )}
                     {sortedFiliais.map((filial) => (
                       <tr key={filial.id} className="hover:bg-slate-50">
                         <td className="px-6 py-4 text-sm font-medium text-slate-700">

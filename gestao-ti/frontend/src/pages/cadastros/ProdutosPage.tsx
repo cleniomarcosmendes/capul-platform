@@ -191,6 +191,13 @@ export function ProdutosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
+                {busca.trim() && sorted.length === 0 && (
+                  <tr>
+                    <td colSpan={canManage ? 5 : 4} className="px-6 py-12 text-center text-slate-500">
+                      Nenhum resultado para "{busca}".
+                    </td>
+                  </tr>
+                )}
                 {sorted.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50">
                     {editId === p.id ? (

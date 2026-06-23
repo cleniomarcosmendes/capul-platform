@@ -198,6 +198,11 @@ export function DepartamentosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
+                {busca.trim() && sorted.length === 0 && (
+                  <tr>
+                    <td colSpan={isAdmin ? 5 : 4} className="text-center py-12 text-slate-500">Nenhum resultado para "{busca}".</td>
+                  </tr>
+                )}
                 {sorted.map((depto) => (
                   <tr key={depto.id} className="hover:bg-slate-50">
                     {editId === depto.id ? (

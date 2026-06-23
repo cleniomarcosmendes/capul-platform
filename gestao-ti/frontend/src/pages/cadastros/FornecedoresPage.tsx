@@ -177,6 +177,13 @@ export function FornecedoresPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
+                {busca.trim() && sorted.length === 0 && (
+                  <tr>
+                    <td colSpan={canManage ? 5 : 4} className="px-6 py-12 text-center text-slate-500">
+                      Nenhum resultado para "{busca}".
+                    </td>
+                  </tr>
+                )}
                 {sorted.map((f) => (
                   <tr key={f.id} className="hover:bg-slate-50">
                     {editId === f.id ? (
