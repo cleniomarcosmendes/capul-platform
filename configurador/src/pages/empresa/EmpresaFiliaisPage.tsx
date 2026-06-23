@@ -3,7 +3,7 @@ import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { empresaService } from '../../services/empresa.service';
 import { filialService } from '../../services/filial.service';
-import { Building2, Plus, Pencil, X, Save, Star, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Building2, Plus, Pencil, X, Save, Star, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { Empresa, Filial } from '../../types';
 
 type SortKey = 'codigo' | 'nomeFantasia' | 'cidade' | 'status';
@@ -16,6 +16,7 @@ export function EmpresaFiliaisPage() {
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
   const [filiais, setFiliais] = useState<Filial[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busca, setBusca] = useState('');
 
   // Edicao empresa
   const [editEmpresa, setEditEmpresa] = useState(false);
@@ -45,7 +46,11 @@ export function EmpresaFiliaisPage() {
     return sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-emerald-600" /> : <ArrowDown className="w-3 h-3 text-emerald-600" />;
   }
   const sortedFiliais = useMemo(() => {
-    return [...filiais].sort((a, b) => {
+    const termo = busca.trim().toLowerCase();
+    const base = termo
+      ? filiais.filter((f) => [f.codigo, f.nomeFantasia, f.razaoSocial, f.cnpj].some((v) => (v ?? '').toString().toLowerCase().includes(termo)))
+      : filiais;
+    return [...base].sort((a, b) => {
       let va: string, vb: string;
       if (sortKey === 'cidade') {
         va = [a.cidade, a.estado].filter(Boolean).join(' ').toLowerCase();
@@ -57,7 +62,7 @@ export function EmpresaFiliaisPage() {
       const cmp = va.localeCompare(vb);
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [filiais, sortKey, sortDir]);
+  }, [filiais, sortKey, sortDir, busca]);
 
   useEffect(() => {
     carregar();
@@ -280,6 +285,12 @@ export function EmpresaFiliaisPage() {
                   Nova Filial
                 </button>
               )}
+            </div>
+
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <input type="text" placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)}
+                className="pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm w-full max-w-md focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent" />
             </div>
 
             {filiais.length === 0 ? (

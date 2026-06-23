@@ -5,7 +5,7 @@ import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { extractApiError } from '../../utils/errors';
 import { tipoDepartamentoService } from '../../services/tipo-departamento.service';
-import { Plus, Pencil, Trash2, Layers, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Pencil, Trash2, Layers, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { TipoDepartamento } from '../../types';
 
 type SortKey = 'ordem' | 'nome' | 'status';
@@ -19,6 +19,7 @@ export function TiposDepartamentoPage() {
 
   const [tipos, setTipos] = useState<TipoDepartamento[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busca, setBusca] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [nome, setNome] = useState('');
@@ -55,7 +56,11 @@ export function TiposDepartamentoPage() {
   }
 
   const sorted = useMemo(() => {
-    return [...tipos].sort((a, b) => {
+    const termo = busca.trim().toLowerCase();
+    const base = termo
+      ? tipos.filter((t) => [t.nome, t.descricao].some((v) => (v ?? '').toString().toLowerCase().includes(termo)))
+      : tipos;
+    return [...base].sort((a, b) => {
       if (sortKey === 'ordem') {
         const cmp = (a.ordem || 0) - (b.ordem || 0);
         return sortDir === 'asc' ? cmp : -cmp;
@@ -65,7 +70,7 @@ export function TiposDepartamentoPage() {
       const cmp = va.localeCompare(vb);
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [tipos, sortKey, sortDir]);
+  }, [tipos, sortKey, sortDir, busca]);
 
   function iniciarNovo() {
     setEditingId(null);
@@ -145,6 +150,12 @@ export function TiposDepartamentoPage() {
               <Plus className="w-4 h-4" /> Novo Tipo
             </button>
           )}
+        </div>
+
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+          <input type="text" placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)}
+            className="pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm w-full max-w-md focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent" />
         </div>
 
         {showForm && canEdit && (

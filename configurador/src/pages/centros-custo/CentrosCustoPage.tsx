@@ -6,7 +6,7 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import { extractApiError } from '../../utils/errors';
 import { centroCustoService } from '../../services/centro-custo.service';
 import { filialService } from '../../services/filial.service';
-import { Plus, Wallet, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Wallet, Pencil, Trash2, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { CentroCusto, FilialOption } from '../../types';
 
 type SortKey = 'codigo' | 'nome' | 'status';
@@ -22,6 +22,7 @@ export function CentrosCustoPage() {
   const [filiais, setFiliais] = useState<FilialOption[]>([]);
   const [filialId, setFilialId] = useState('');
   const [loading, setLoading] = useState(true);
+  const [busca, setBusca] = useState('');
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -48,13 +49,17 @@ export function CentrosCustoPage() {
   }
 
   const sorted = useMemo(() => {
-    return [...centrosCusto].sort((a, b) => {
+    const termo = busca.trim().toLowerCase();
+    const base = termo
+      ? centrosCusto.filter((cc) => [cc.codigo, cc.nome, cc.descricao].some((v) => (v ?? '').toString().toLowerCase().includes(termo)))
+      : centrosCusto;
+    return [...base].sort((a, b) => {
       const va = (a[sortKey] || '').toString().toLowerCase();
       const vb = (b[sortKey] || '').toString().toLowerCase();
       const cmp = va.localeCompare(vb);
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [centrosCusto, sortKey, sortDir]);
+  }, [centrosCusto, sortKey, sortDir, busca]);
 
   useEffect(() => {
     filialService.listar().then((data) => {
@@ -157,6 +162,12 @@ export function CentrosCustoPage() {
               Novo Centro de Custo
             </button>
           )}
+        </div>
+
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+          <input type="text" placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)}
+            className="pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm w-full max-w-md focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent" />
         </div>
 
         {showForm && canEdit && (

@@ -7,7 +7,7 @@ import { extractApiError } from '../../utils/errors';
 import { departamentoService } from '../../services/departamento.service';
 import { filialService } from '../../services/filial.service';
 import { tipoDepartamentoService } from '../../services/tipo-departamento.service';
-import { Plus, Building, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Boxes } from 'lucide-react';
+import { Plus, Building, Pencil, Trash2, Search, ArrowUpDown, ArrowUp, ArrowDown, Boxes } from 'lucide-react';
 import { DepartamentoFuncionalidadesDrawer } from './DepartamentoFuncionalidadesDrawer';
 import type { Departamento, FilialOption, TipoDepartamento } from '../../types';
 
@@ -25,6 +25,7 @@ export function DepartamentosPage() {
   const [tiposDepartamento, setTiposDepartamento] = useState<TipoDepartamento[]>([]);
   const [filialId, setFilialId] = useState('');
   const [loading, setLoading] = useState(true);
+  const [busca, setBusca] = useState('');
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -54,7 +55,11 @@ export function DepartamentosPage() {
   }
 
   const sorted = useMemo(() => {
-    return [...departamentos].sort((a, b) => {
+    const termo = busca.trim().toLowerCase();
+    const base = termo
+      ? departamentos.filter((d) => [d.nome, d.tipoDepartamento?.nome, d.descricao].some((v) => (v ?? '').toString().toLowerCase().includes(termo)))
+      : departamentos;
+    return [...base].sort((a, b) => {
       let va: string, vb: string;
       if (sortKey === 'tipo') {
         va = (a.tipoDepartamento?.nome || '').toLowerCase();
@@ -66,7 +71,7 @@ export function DepartamentosPage() {
       const cmp = va.localeCompare(vb);
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [departamentos, sortKey, sortDir]);
+  }, [departamentos, sortKey, sortDir, busca]);
 
   useEffect(() => {
     filialService.listar().then((data) => {
@@ -173,6 +178,12 @@ export function DepartamentosPage() {
               Novo Departamento
             </button>
           )}
+        </div>
+
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+          <input type="text" placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)}
+            className="pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm w-full max-w-md focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent" />
         </div>
 
         {showForm && canEdit && (

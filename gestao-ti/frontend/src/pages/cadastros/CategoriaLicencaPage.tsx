@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { licencaService } from '../../services/licenca.service';
-import { Plus, Tag, Pencil, Check, X, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Tag, Pencil, Check, X, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Search } from 'lucide-react';
 import type { CategoriaLicenca } from '../../types';
 import { useToast } from '../../components/Toast';
 
@@ -15,6 +15,7 @@ export function CategoriaLicencaPage() {
   const { toast, confirm } = useToast();
 
   const [categorias, setCategorias] = useState<CategoriaLicenca[]>([]);
+  const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [codigo, setCodigo] = useState('');
@@ -42,13 +43,17 @@ export function CategoriaLicencaPage() {
   }
 
   const sorted = useMemo(() => {
-    return [...categorias].sort((a, b) => {
+    const termo = busca.trim().toLowerCase();
+    const base = termo
+      ? categorias.filter((c) => [c.codigo, c.nome, c.descricao, c.status].some((v) => (v ?? '').toString().toLowerCase().includes(termo)))
+      : categorias;
+    return [...base].sort((a, b) => {
       const va = (a[sortKey] || '').toString().toLowerCase();
       const vb = (b[sortKey] || '').toString().toLowerCase();
       const cmp = va.localeCompare(vb);
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [categorias, sortKey, sortDir]);
+  }, [categorias, busca, sortKey, sortDir]);
 
   function SortIcon({ col }: { col: SortKey }) {
     if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300" />;
@@ -163,6 +168,14 @@ export function CategoriaLicencaPage() {
               <button type="button" onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
             </div>
           </form>
+        )}
+
+        {!loading && categorias.length > 0 && (
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+            <input type="text" placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)}
+              className="pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm w-full max-w-md focus:outline-none focus:ring-2 focus:ring-capul-600 focus:border-transparent" />
+          </div>
         )}
 
         {loading ? (

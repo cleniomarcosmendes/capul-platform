@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Header } from '../../layouts/Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { compraService } from '../../services/compra.service';
-import { Plus, Tag, Pencil, Check, X, ArrowUpDown, ArrowUp, ArrowDown, Trash2 } from 'lucide-react';
+import { Plus, Tag, Pencil, Check, X, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Search } from 'lucide-react';
 import type { TipoProduto } from '../../types';
 import { useToast } from '../../components/Toast';
 
@@ -20,6 +20,7 @@ export function TiposProdutoPage() {
   const [codigo, setCodigo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [saving, setSaving] = useState(false);
+  const [busca, setBusca] = useState('');
 
   const [editId, setEditId] = useState<string | null>(null);
   const [editCodigo, setEditCodigo] = useState('');
@@ -47,13 +48,17 @@ export function TiposProdutoPage() {
   }
 
   const sorted = useMemo(() => {
-    return [...tipos].sort((a, b) => {
+    const termo = busca.trim().toLowerCase();
+    const base = termo
+      ? tipos.filter((x) => [x.codigo, x.descricao].some((v) => (v ?? '').toString().toLowerCase().includes(termo)))
+      : tipos;
+    return [...base].sort((a, b) => {
       const va = (a[sortKey] || '').toString().toLowerCase();
       const vb = (b[sortKey] || '').toString().toLowerCase();
       const cmp = va.localeCompare(vb);
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [tipos, sortKey, sortDir]);
+  }, [tipos, sortKey, sortDir, busca]);
 
   function SortIcon({ col }: { col: SortKey }) {
     if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300" />;
@@ -135,6 +140,12 @@ export function TiposProdutoPage() {
             </div>
           </form>
         )}
+
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+          <input type="text" placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)}
+            className="pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm w-full max-w-md focus:outline-none focus:ring-2 focus:ring-capul-600 focus:border-transparent" />
+        </div>
 
         {loading ? (
           <div className="text-center py-12 text-slate-500">Carregando...</div>
