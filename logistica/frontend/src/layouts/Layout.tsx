@@ -52,7 +52,7 @@ export function Layout({ children }: { children: ReactNode }) {
   });
 
   return (
-    <div className="flex min-h-screen bg-slate-50 text-slate-800">
+    <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-800">
       <aside className="flex w-60 flex-col bg-slate-800 text-slate-100">
         <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-700">
           <Truck className="h-6 w-6 text-capul-400" />
