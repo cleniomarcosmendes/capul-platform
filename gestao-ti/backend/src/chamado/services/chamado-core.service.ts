@@ -466,7 +466,9 @@ export class ChamadoCoreService {
             {
               OR: [
                 { equipeAtual: { is: { restritaVisibilidade: false } } },
-                { equipeAtualId: null },
+                // (removido `{ equipeAtualId: null }` — equipeAtualId é NÃO-nulável;
+                //  além de inútil, o Prisma rejeitava com "Argument `equipeAtualId`
+                //  is missing" → 500 na listagem pra SUPORTE não-gestor de um depto.)
                 ...(equipeIds.length > 0 ? [{ equipeAtualId: { in: equipeIds } }] : []),
               ],
             },
